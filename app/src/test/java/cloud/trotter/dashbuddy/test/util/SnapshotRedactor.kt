@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
@@ -38,8 +39,12 @@ object SnapshotRedactor {
     // The full rationale for each shape (receipts, trade-offs) moved with it; read it there.
     // ---------------------------------------------------------------------------------------
 
-    /** Resource-id suffixes whose text value is always customer PII → fully masked. */
-    internal val PII_ID_SUFFIXES: Set<String> = PiiShapes.PII_ID_SUFFIXES
+    /**
+     * Resource-id suffixes whose text value is always customer PII → fully masked. #1160 review AL3
+     * (deliberate): DERIVED from the runtime `CustomerTextMarkers.ID_MARKER_TABLE` — ONE list, matched by
+     * `endsWith` (ignoring case), a widening toward privacy over the old exact-last-segment rule.
+     */
+    internal val PII_ID_SUFFIXES: Set<String> = CustomerTextMarkers.ID_MARKER_SUFFIXES
 
     /** Unconditional customer lead-ins (see [PiiShapes.NAME_PREFIXES]). Use [customerLeadIn]. */
     internal val NAME_PREFIXES: List<String> = PiiShapes.NAME_PREFIXES
@@ -91,7 +96,7 @@ object SnapshotRedactor {
     }
 
     private fun collectNode(o: JsonObject, repl: MutableMap<String, String>) {
-        val piiById = PiiShapes.hasPiiIdSuffix(o["id"]?.takeIf { it is JsonPrimitive }?.jsonPrimitive?.content)
+        val piiById = CustomerTextMarkers.idMarkerFor(o["id"]?.takeIf { it is JsonPrimitive }?.jsonPrimitive?.content) != null
         // #835: iterate the production UiNodeTextField wire-name SSOT instead of
         // hand-listing text/desc/state, so a string field added to UiNodeDto is
         // scrubbed on the commit path automatically.

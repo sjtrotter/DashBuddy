@@ -148,9 +148,9 @@ object CustomerTextMarkers {
      * an id REUSED for other people but never chrome (`user_name`, also the merchant's and the dasher's
      * name): exact value only for text, plus a whole-value id/class run when it reads as a person's name
      * (#1160 reviews PP6, SS1, XX3). The intake list
-     * (`PiiShapes.PII_ID_SUFFIXES`) holds EVERY suffix of this table (a guard test pins the subset) plus
-     * other instruction/content ids (message bodies, maneuver/road text, instruction bodies), so the two
-     * never disagree on a PII id (#1160 reviews NN2, PP6, UU3). The runtime backstop scrubs on EVERY suffix exactly as
+     * is DERIVED from this table ([ID_MARKER_SUFFIXES], review AL3): the intake-only ids (message bodies,
+     * maneuver/road text, instruction bodies) are CONTENT rows with `runtimeScrub = NEVER`, so the two can
+     * never disagree on a PII id (#1160 reviews NN2, PP6, UU3, AL3). The runtime backstop scrubs on EVERY suffix exactly as
      * before; only the census's frame-wide duplicate rule reads the kind: a NAME seeds its exact value
      * and its letter runs, an ADDRESS its exact value only (address vocabulary — "Road", "View", "San" —
      * is common English), CONTENT seeds nothing.
@@ -225,7 +225,34 @@ object CustomerTextMarkers {
         // structure.
         IdMarker("tvTitle", IdentityKind.EXACT, idProtect = true),
         IdMarker("tvLastMessage", IdentityKind.EXACT),
+        // #1160 review AL3: the INTAKE-ONLY ids (formerly `PiiShapes.PII_ID_SUFFIXES`, a second hand list with
+        // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
+        // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
+        // UNKNOWN scrub keeps its deliberate set; the census withholds their own field and seeds nothing
+        // (CONTENT). Kept LAST so a first-match lookup never shadows a runtime row above.
+        // The embedded Google-Nav maneuver cluster (#886): a number-LESS destination street carries no
+        // digits, so no address shape catches it — ids are the only handle.
+        IdMarker("primaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("subManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("secondaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("roadNameView", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Chat bodies and inputs.
+        IdMarker("message_self_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("message_other_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("message_input", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("chat_input_text_field", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Bottom-sheet address/instruction blocks (the address lines also end in an ADDRESS row above).
+        IdMarker("bottom_sheet_address_line_1", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("bottom_sheet_address_line_2", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("bottom_sheet_instructions", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // Instruction bodies.
+        IdMarker("step_description", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("instructions_list", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        IdMarker("instruction_text", IdentityKind.CONTENT, RuntimeScrub.NEVER),
     )
+
+    /** Every table suffix — the commit-path intake list, DERIVED (review AL3; `SnapshotRedactor`). */
+    val ID_MARKER_SUFFIXES: Set<String> = ID_MARKER_TABLE.map { it.suffix }.toSet()
 
     /**
      * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 reviews SS9, TT1, ZZ1) says whether the runtime UNKNOWN
@@ -381,15 +408,11 @@ object CustomerTextMarkers {
      * (#1160 reviews SS9, TT1, ZZ1): an ALWAYS row matches on the id alone, a NEVER row never. The census
      * filter (ADR-0011 §2 step 1) calls [idMarkerFor] over the whole table.
      */
-    fun idMarkerSuffix(id: String?): String? = idMarkerSuffix(id, ID_MARKER_TABLE)
-
-    /**
-     * Test seam over an explicit [table] (review UU4): the runtime mode is applied BEFORE the first match,
-     * so a census-only row ordered ahead of an overlapping runtime row can never switch the scrub off.
-     */
-    internal fun idMarkerSuffix(id: String?, table: List<IdMarker>): String? {
+    fun idMarkerSuffix(id: String?): String? {
+        // UU4: the runtime mode is applied BEFORE the first match, so a NEVER row can never switch an
+        // overlapping ALWAYS row's scrub off.
         if (id.isNullOrEmpty()) return null
-        return table.firstOrNull { row ->
+        return ID_MARKER_TABLE.firstOrNull { row ->
             row.runtimeScrub == RuntimeScrub.ALWAYS && id.endsWith(row.suffix, ignoreCase = true)
         }?.suffix
     }

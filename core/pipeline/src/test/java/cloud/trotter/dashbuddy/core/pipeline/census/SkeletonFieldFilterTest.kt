@@ -62,14 +62,14 @@ class SkeletonFieldFilterTest : SkeletonBuilderTestBase() {
 
     @Test
     fun `step 1 - a table id or an intake-only id withholds its own field`() {
-        // `order_cx_name` / `tvTitle` are ID_MARKER_TABLE rows now (NN2, PP6); `message_input` and
-        // `primaryManeuverText` are INTAKE-ONLY (`PII_ID_SUFFIXES` only) — the union is used for step 1.
+        // `order_cx_name` / `tvTitle` are ID_MARKER_TABLE rows (NN2, PP6); `message_input` and
+        // `primaryManeuverText` are the table's intake-only CONTENT/NEVER rows (AL3).
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/order_cx_name"))
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/tvTitle"))
     }
 
     @Test
-    fun `step 1 - an INTAKE_ONLY id withholds its own field and seeds nothing (review SS6)`() {
+    fun `step 1 - an intake-only CONTENT id withholds its own field and seeds nothing (reviews SS6, AL3)`() {
         listOf("message_input", "primaryManeuverText").forEach { suffix ->
             val out = SkeletonBuilder.build(
                 UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
@@ -86,8 +86,10 @@ class SkeletonFieldFilterTest : SkeletonBuilderTestBase() {
     @Test
     fun `step 1 - negative - a chrome id hashes`() {
         assertEquals(words(1, "Accept"), slot("Accept", "com.x:id/accept_button"))
-        // PII_ID_SUFFIXES is EXACT after the last slash, so a longer id ending differently is chrome.
+        // The table matches by SUFFIX (AL3), so a longer id ending differently is chrome …
         assertEquals(words(1, "Accept"), slot("Accept", "com.x:id/tvTitleLabel"))
+        // … and an id that merely ENDS in a PII suffix is withheld (the widening toward privacy).
+        assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/header_step_description"))
     }
 
     @Test

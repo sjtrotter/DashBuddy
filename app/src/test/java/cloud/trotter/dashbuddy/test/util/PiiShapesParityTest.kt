@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.test.util
 
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -90,7 +91,8 @@ class PiiShapesParityTest {
 
     @Test
     fun `every SnapshotRedactor shape delegates to the PiiShapes object`() {
-        assertSame(PiiShapes.PII_ID_SUFFIXES, SnapshotRedactor.PII_ID_SUFFIXES)
+        // #1160 review AL3 (deliberate): the intake id list is DERIVED from the runtime table, not PiiShapes.
+        assertSame(CustomerTextMarkers.ID_MARKER_SUFFIXES, SnapshotRedactor.PII_ID_SUFFIXES)
         assertSame(PiiShapes.NAME_PREFIXES, SnapshotRedactor.NAME_PREFIXES)
         assertSame(PiiShapes.GATED_NAME_PREFIXES, SnapshotRedactor.GATED_NAME_PREFIXES)
         assertSame(PiiShapes.PHONE, SnapshotRedactor.PHONE)
@@ -128,7 +130,8 @@ class PiiShapesParityTest {
         }
         assertEquals(ORIGINAL_FIRST_LAST_INITIAL_PATTERN, PiiShapes.FIRST_LAST_INITIAL_PATTERN)
         assertEquals(setOf(RegexOption.IGNORE_CASE), PiiShapes.FIRST_LAST_INITIAL.options)
-        assertEquals(ORIGINAL_PII_ID_SUFFIXES, PiiShapes.PII_ID_SUFFIXES) // pre-#1145 + the UU3 additions
+        // AL3 (deliberate): the same SET of suffixes, now the table's rows; only the match widened (endsWith).
+        assertEquals(ORIGINAL_PII_ID_SUFFIXES, CustomerTextMarkers.ID_MARKER_SUFFIXES) // pre-#1145 + the UU3 additions
         assertEquals(ORIGINAL_NAME_PREFIXES, PiiShapes.NAME_PREFIXES)
         assertEquals(setOf("Return "), PiiShapes.GATED_NAME_PREFIXES.keys)
     }

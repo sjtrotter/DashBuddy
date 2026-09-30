@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
-import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -404,7 +403,8 @@ class CustomerTextMarkersTest {
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
             ),
-            CustomerTextMarkers.ID_MARKER_TABLE.associate { it.suffix to it.kind },
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
+                .associate { it.suffix to it.kind },
         )
     }
 
@@ -417,8 +417,12 @@ class CustomerTextMarkersTest {
 
     @Test
     fun `tvTitle and tvLastMessage always scrub at runtime (reviews SS9, TT1, ZZ1)`() {
-        CustomerTextMarkers.ID_MARKER_TABLE.forEach {
-            assertEquals(it.suffix, CustomerTextMarkers.RuntimeScrub.ALWAYS, it.runtimeScrub)
+        // AL3: every RUNTIME row is ALWAYS; the NEVER rows are exactly the intake-only CONTENT ids.
+        assertEquals(CustomerTextMarkers.RuntimeScrub.ALWAYS, CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvTitle" }.runtimeScrub)
+        assertEquals(CustomerTextMarkers.RuntimeScrub.ALWAYS, CustomerTextMarkers.ID_MARKER_TABLE.single { it.suffix == "tvLastMessage" }.runtimeScrub)
+        CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.NEVER }.forEach {
+            assertEquals(it.suffix, CustomerTextMarkers.IdentityKind.CONTENT, it.kind)
+            assertTrue(it.suffix, !it.idProtect)
         }
         listOf("Riley", "李明", "محمد", "de la Cruz", "RILEY S", "Pick up order").forEach {
             val node = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = it)
@@ -429,19 +433,15 @@ class CustomerTextMarkersTest {
     }
 
     @Test
-    fun `every ID_MARKER_TABLE suffix is in the intake list (review UU3)`() {
-        val missing = CustomerTextMarkers.ID_MARKER_TABLE.map { it.suffix }.toSet() - PiiShapes.PII_ID_SUFFIXES
-        assertEquals(emptySet<String>(), missing)
-    }
-
-    @Test
-    fun `the runtime mode is applied before the first match (review UU4)`() {
-        val table = listOf(
-            CustomerTextMarkers.IdMarker("name", CustomerTextMarkers.IdentityKind.EXACT, CustomerTextMarkers.RuntimeScrub.NEVER),
-            CustomerTextMarkers.IdMarker("customer_name", CustomerTextMarkers.IdentityKind.NAME),
-        )
-        assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", table))
-        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", table))
+    fun `the runtime mode is applied before the first match, on the real table (reviews UU4, AL3)`() {
+        // An intake-only NEVER row never scrubs at runtime …
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/message_input"))
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/primaryManeuverText"))
+        // … and never switches an overlapping ALWAYS row off.
+        assertEquals("address_line_1", CustomerTextMarkers.idMarkerSuffix("com.x:id/bottom_sheet_address_line_1"))
+        // The intake list IS the table (one list), and the census sees every row.
+        assertEquals(CustomerTextMarkers.ID_MARKER_TABLE.map { it.suffix }.toSet(), CustomerTextMarkers.ID_MARKER_SUFFIXES)
+        assertEquals(CustomerTextMarkers.IdentityKind.CONTENT, CustomerTextMarkers.idMarkerFor("com.x:id/step_description")?.kind)
     }
 
     @Test

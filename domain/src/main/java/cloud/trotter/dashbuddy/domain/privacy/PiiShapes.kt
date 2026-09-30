@@ -41,41 +41,6 @@ object PiiShapes {
         }
     }
 
-    /** Resource-id suffixes whose text value is always customer PII → fully masked. */
-    val PII_ID_SUFFIXES = setOf(
-        "user_name", "customer_name", "address_line_1", "address_line_2",
-        "address_subpremise_line", "primaryManeuverText",
-        // #886: the rest of the embedded Google-Nav maneuver cluster, which the runtime redact
-        // on `dropoff_navigation` / `navigation_generic` declares customer PII. Kept in sync with
-        // that block deliberately — a number-LESS destination street ("Canyon Golf Road ") carries
-        // no digits, so STREET / FULL_ADDRESS / CITY_STATE_ZIP / BARE_STREET all structurally miss
-        // it and a future committed nav fixture would ship the customer's street raw on the
-        // commit path. Ids, not shapes, are the only handle here.
-        "subManeuverText", "secondaryManeuverText", "roadNameView",
-        // #993: DoorDash's OWN nav arrival banner. `arriving_at_title` restates the destination,
-        // which on every dropoff-phase surface is the customer's full street address (the fielded
-        // 08-02 frame carried "<street>, Apt <n>, <City>, <ST> <zip>, USA"). The runtime redact now
-        // declares it on every dropoff rule + the two nav rules; without the id here the COMMIT
-        // path stayed open, because the value is one fused line whose city/ST/ZIP tail the address
-        // shapes would mask while leaving the house number + street standing.
-        "arriving_at_title",
-        "message_self_message", "message_other_message", "message_input",
-        "chat_input_text_field", "bottom_sheet_address_line_1", "bottom_sheet_address_line_2",
-        "tvTitle", "tvLastMessage",
-        "bottom_sheet_instructions", "step_description", "instructions_list", "instruction_text",
-        // #549: the dropoff-arrival card's free instruction text carries the customer's gate code +
-        // note ("Leave at my door: Gate code 883423# …") — never parsed by any rule; masked here so
-        // the committed corpus fixture can't leak it.
-        "dasher_instruction_content_collapsed",
-        // GoPuff (DoorDash Drive) batch screens (#501): the per-order customer name on the
-        // bin-scan/pickup-steps screens.
-        "order_cx_name",
-        // #1160 review UU3: the two instruction-body ids the runtime `ID_MARKER_TABLE` carries — the intake
-        // list holds EVERY table suffix (guard test), so an instruction body is masked on the commit path
-        // exactly as it is on the runtime UNKNOWN path.
-        "description_text_view", "dasher_instruction_content_expanded",
-    )
-
     /**
      * Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked
      * **unconditionally** — every one of them is a lead-in whose tail is customer data on every
@@ -158,7 +123,7 @@ object PiiShapes {
      * The canonical **id-less first-name + last-initial** customer-name shape, e.g. "Brandon C" /
      * "Gilberto U." / "José R" / "O'Brien M" / "Mary-Jo K" / "McKenna B" — the line on the
      * multi-order drop-off confirm card (#501), whose name node ships **no viewId** so it escapes
-     * [PII_ID_SUFFIXES] and carries **no** "Deliver to "/"Message from " marker so the
+     * the intake id list (`CustomerTextMarkers.ID_MARKER_SUFFIXES`) and carries **no** "Deliver to "/"Message from " marker so the
      * [NAME_PREFIXES] pass and the runtime CustomerTextMarkers backstop both miss it (the
      * documented split-node residual).
      *
@@ -340,11 +305,4 @@ object PiiShapes {
 
     /** True when [value] contains any [MASK_LITERALS] entry anywhere (case-insensitive). */
     fun containsMask(value: String): Boolean = MASK_LITERALS.any { value.contains(it, ignoreCase = true) }
-
-    /**
-     * True when the part of [id] after its last `/` is exactly a [PII_ID_SUFFIXES] entry — the
-     * `SnapshotRedactor` rule (exact membership, NOT the `endsWith` semantics of the runtime
-     * `CustomerTextMarkers.ID_MARKERS`; the census unions the two, ADR-0011 §2 step 1).
-     */
-    fun hasPiiIdSuffix(id: String?): Boolean = (id ?: "").substringAfterLast('/') in PII_ID_SUFFIXES
 }

@@ -18,9 +18,6 @@ internal enum class IdClass {
     /** An `ID_MARKER_TABLE` row: its node's own fields are withheld; what it seeds is its kind's. */
     PII_MARKER,
 
-    /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
-    INTAKE_ONLY,
-
     NONE,
 }
 
@@ -119,11 +116,8 @@ internal class FrameFilter(
         if (node.isChecked !in 0..2) throw SkeletonBuilder.InvalidTree("isChecked outside the 0/1/2 tri-state")
         // AD7: the marker row is looked up ONCE per node.
         val marker = CustomerTextMarkers.idMarkerFor(node.viewIdResourceName)
-        val idClass = when {
-            marker != null -> IdClass.PII_MARKER
-            PiiShapes.hasPiiIdSuffix(node.viewIdResourceName) -> IdClass.INTAKE_ONLY
-            else -> IdClass.NONE
-        }
+        // AL3: ONE list — the intake-only ids are CONTENT/NEVER rows of the same table.
+        val idClass = if (marker != null) IdClass.PII_MARKER else IdClass.NONE
         val fields = ArrayList<Pair<String, Field>>()
         var textField: Field? = null
         var descField: Field? = null
