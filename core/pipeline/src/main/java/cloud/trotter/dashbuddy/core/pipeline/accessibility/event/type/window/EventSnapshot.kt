@@ -64,7 +64,7 @@ internal fun AccessibilitySource.snapshotForEvent(
             eventPackage in Platform.overlayPackages && isEnabled(eventPackage) &&
             windowId >= 0 && windowId != activeRoot.windowId
         ) {
-            overlayAboveActive(windowId, isEnabled)
+            overlayAboveActive(windowId, activeRoot.windowId, isEnabled)
         } else {
             null
         }

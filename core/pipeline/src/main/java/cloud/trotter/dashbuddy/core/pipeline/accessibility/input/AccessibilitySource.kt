@@ -326,28 +326,30 @@ class AccessibilitySource @Inject constructor(
     /**
      * #1152 D5 — the ONE legitimate "event's own window" read: the window [windowId] a content/state
      * event came from, when it is an ENABLED platform offer overlay ([isOverlayCandidate]) drawn
-     * ABOVE the active window (its `layer` is greater, or no window is flagged active, or the
-     * flagged-active window is our own). The overlay is on top by construction, so this is never
-     * the hidden-activity shape #1148 F1 removed (an activity beneath a sheet is never
-     * `TYPE_SYSTEM`, never above the active window). The overlay being the ACTIVE window itself →
-     * null (the active-root path already reads it). Null on any failure — the caller falls through
-     * to the shipped order. One enumeration; the package is re-verified on the root that is mapped.
+     * ABOVE the active window — its `layer` strictly greater than the layer of [activeWindowId]'s
+     * window (the window of the ALREADY-FETCHED active root). The overlay is on top by construction,
+     * so this is never the hidden-activity shape #1148 F1 removed (an activity beneath a sheet is
+     * never `TYPE_SYSTEM`, never above the active window).
+     *
+     * PR #1155 review BB2 — the active identity is RECONCILED, never assumed: the active root's
+     * window must be in this enumeration AND be the one (and only) window flagged active. Absent, or
+     * the flags disagree (focus moved between the two reads, e.g. to our bubble) → null: the ordering
+     * cannot be verified, so the ordinary active-root path / foreground policy decides. The overlay
+     * being the active window itself → null (the active-root path reads it). Null on any failure.
+     * One enumeration; the package is re-verified on the root that is mapped.
      */
-    fun overlayAboveActive(windowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? {
-        if (windowId < 0) return null
+    fun overlayAboveActive(windowId: Int, activeWindowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? {
+        if (windowId < 0 || windowId == activeWindowId) return null
         return try {
             val windows = getWindows()
             val w = windows.firstOrNull { it.id == windowId } ?: return null
             if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM) return null // cheap: skip the metrics read
             val probe = overlayProbe(w, displayArea(windows)) as? OverlayProbe.Candidate ?: return null
             if (!isEnabled(probe.packageName)) return null
-            val active = windows.firstOrNull { it.isActive }
-            if (active != null) {
-                if (active.id == w.id) return null // the overlay has focus → the active-root path
-                val ownPkg = ownPackage()
-                val activeIsOwn = ownPkg != null && packageOf(active) == ownPkg
-                if (!activeIsOwn && w.layer <= active.layer) return null // beneath the active window
-            }
+            val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
+            val flagged = windows.filter { it.isActive }
+            if (flagged.size != 1 || flagged.single().id != active.id) return null // unverifiable ordering
+            if (w.layer <= active.layer) return null // beneath (or level with) the active window
             val root = probe.root ?: w.root ?: return null
             val livePkg = root.packageName?.toString()
             if (livePkg !in Platform.overlayPackages || !isEnabled(livePkg)) return null
@@ -408,14 +410,6 @@ class AccessibilitySource @Inject constructor(
     private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe): OverlayProbe {
         stats.onOverlayRejected(reason)
         return outcome
-    }
-
-    /** [w]'s owning package through the cache (a miss fetches the root once); null if unreadable. */
-    private fun packageOf(w: AccessibilityWindowInfo): String? {
-        packageCache.get(w.id)?.let { return it }
-        val pkg = w.root?.packageName?.toString() ?: return null
-        packageCache.put(w.id, pkg)
-        return pkg
     }
 
     /**
