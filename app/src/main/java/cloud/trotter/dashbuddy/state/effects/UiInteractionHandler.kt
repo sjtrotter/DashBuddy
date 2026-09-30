@@ -489,17 +489,25 @@ class UiInteractionHandler @Inject constructor(
                 owners.add(owner); members.add(mutableListOf(i)); ownerIndexOf[i] = owners.size - 1
             }
         }
-        val refText = ref.text?.takeIf { it.isNotBlank() }
         val targets = owners.mapIndexed { j, owner ->
             val group = members[j].map { candidates[it] }
             // #1149 review T5: the evidence slot is chosen AFTER a refresh — a stale matched node must not
             // win it (on its cached stored text) over a sibling that currently carries that text. If none
             // refreshes, the first member stands in and fails its own J1 refresh (stale).
             val fresh = group.filter { it.node == owner || it.node.refresh() }
-            val evidence = fresh.firstOrNull { refText != null && it.node.text?.toString()?.take(50) == refText }
-                ?: fresh.firstOrNull { it.boundsDerived && !it.relaxed }
-                ?: fresh.firstOrNull()
-                ?: group.first()
+            // #1149 review W1: the owner's evidence is its STRONGEST fresh member under the SAME ranking the
+            // cross-owner ranker applies (exact stored text, then max overlap with the captured rect), so
+            // owners compete strongest-vs-strongest — never "whichever member came first in tree order".
+            val evidence = if (fresh.isEmpty()) group.first() else {
+                val facts = fresh.map { m ->
+                    val r = Rect()
+                    m.node.getBoundsInScreen(r)
+                    ClickCandidateRanker.CandidateFacts(text = m.node.text?.toString(), labels = emptyList(), bounds = r.toBoundingBox())
+                }
+                val ranked = ClickCandidateRanker.rank(ref, facts)
+                if (ranked.tier != ClickCandidateRanker.Tier.UNRESOLVED) fresh[ranked.index]
+                else fresh.firstOrNull { it.boundsDerived && !it.relaxed } ?: fresh.first()
+            }
             OwnedTarget(
                 index = j,
                 owner = owner,

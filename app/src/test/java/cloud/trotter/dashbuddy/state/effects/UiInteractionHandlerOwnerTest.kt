@@ -257,4 +257,26 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
         assertFalse(expand(handler(windowRoot(row)), legacy))
         row.neverClicked()
     }
+
+    /**
+     * W1: owner A has TWO members carrying the stored text — A1 far from the captured rect and the bound A2
+     * exactly on it — while owner B's member overlaps the rect a little. A's evidence must be its STRONGEST
+     * member (A2), so A wins strongest-vs-strongest; in BOTH child orders.
+     */
+    @Test
+    fun `an owner's evidence is its strongest member in either child order`() = runTest {
+        for (a2First in listOf(false, true)) {
+            val a1 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 100, 1000, 220))
+            val a2 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 2000, 1000, 2120))
+            val ownerA = view(clickable = true, children = if (a2First) listOf(a2, a1) else listOf(a1, a2))
+            val b1 = view(cls = "android.widget.TextView", text = "Decline offer", bounds = Rect(40, 2100, 1000, 2220))
+            val ownerB = view(clickable = true, children = listOf(b1))
+            val byId = if (a2First) listOf(a2, a1, b1) else listOf(a1, a2, b1)
+            val root = windowRoot(ownerA, ownerB, byId = byId)
+            val ref = idRef.copy(text = "Decline offer", boundsInScreen = BoundingBox(40, 2000, 1000, 2120))
+            assertTrue("a2First=$a2First", confirmDecline(handler(root), ref))
+            ownerA.clicks(1)
+            ownerB.neverClicked()
+        }
+    }
 }
