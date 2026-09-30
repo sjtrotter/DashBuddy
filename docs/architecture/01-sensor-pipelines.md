@@ -408,9 +408,11 @@ then fired, and were answered with the window beneath). The shipped rules:
   WINDOW's layer — it never needs the root — so it runs for Enabled AND Unknown(window): an enabled
   overlay in front is the frame either way. When it finds none: Enabled → the active window is mapped
   through the one window builder (`getWindowSnapshot` — a focused overlay, the card IS the active
-  window, is therefore counted and carries its `WindowContext`, review HH5); Unknown(window) → the
-  frame is SKIPPED `FRONT_UNREADABLE` (the topology path emits nothing for the same list,
-  `topologySkip{FRONT_UNREADABLE}`); Unknown(none) → the one fallback, `rootInActiveWindow` with NO
+  window, is therefore counted and carries its `WindowContext`, review HH5); Unknown(window) → ONE
+  `rootInActiveWindow` read stands in only if it provably IS that window (same non-negative window id)
+  and its package is enabled — mapped through the one window builder (review II1: the frame the
+  pre-#1152 code read); any mismatch → the frame is SKIPPED `FRONT_UNREADABLE` (the topology path
+  emits nothing for Unknown(window), `topologySkip{FRONT_UNREADABLE}`); Unknown(none) → the one fallback, `rootInActiveWindow` with NO
   overlay scan (pre-#1152); NotEnabled → the front-window read (D4) over the same list. With no overlay
   platform enabled the #1148 path is unchanged (no enumeration, H4). **Taps keep #1149 U2's fail-closed
   rule** (review HH2): ≥ 2 flagged active windows give `getLiveWindowRoots` NO active root (keep-all

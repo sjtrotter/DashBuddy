@@ -404,13 +404,38 @@ class WindowsChangedOverlayTest : WindowResolverTestBase() {
     }
 
     @Test
-    fun `HH1 - unreadable flagged active root, NO overlay above - the event path skips, the topology path emits nothing`() {
-        val dd = node(ddPkg, "dd")
-        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, null, active = true), window(4, 2, node(ddPkg, "dd-below"))))
+    fun `HH1, II1 - unreadable flagged active root, NO overlay, MATCHING native root - the event path reads it, topology emits nothing`() {
+        Kind.entries.forEach { kind ->
+            val dd = node(ddPkg, "dd", windowId = 3) // rootInActiveWindow IS window 3
+            val h = harness(activeRoot = dd, windows = listOf(window(3, 5, null, active = true), window(4, 2, node(ddPkg, "dd-below"))))
 
-        assertTrue("never the rootInActiveWindow fallback while a flagged window is unreadable", collect(h, Kind.STATE, windowId = 3).isEmpty())
-        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
-        assertTrue(topologyFrames(h).isEmpty())
-        assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+            val frames = collect(h, kind, windowId = 3)
+            assertEquals(listOf("dd"), frames.map { it.tree.text })
+            assertEquals(3, frames.single().windowContext?.windowId) // mapped through the window builder
+            assertTrue(topologyFrames(h).isEmpty())
+            assertEquals(1L, h.stats.topologySkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+        }
+    }
+
+    @Test
+    fun `II1 - unreadable flagged active root, NO overlay, MISMATCHED native root - the event path refuses`() {
+        Kind.entries.forEach { kind ->
+            val stray = node(ddPkg, "dd-stray", windowId = 42) // not the flagged window
+            val h = harness(activeRoot = stray, windows = listOf(window(3, 5, null, active = true), window(4, 2, node(ddPkg, "dd-below"))))
+
+            assertTrue("never a root that is not provably the flagged window", collect(h, kind, windowId = 3).isEmpty())
+            h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        }
+    }
+
+    @Test
+    fun `II1 - matching native root of a NOT-enabled package - refused`() {
+        Kind.entries.forEach { kind ->
+            val launcher = node("com.android.launcher3", "home", windowId = 3)
+            val h = harness(activeRoot = launcher, windows = listOf(window(3, 5, null, active = true)))
+
+            assertTrue(collect(h, kind, windowId = 3).isEmpty())
+            h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+        }
     }
 }

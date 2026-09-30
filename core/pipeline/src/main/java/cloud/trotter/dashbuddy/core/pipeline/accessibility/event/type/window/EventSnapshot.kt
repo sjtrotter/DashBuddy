@@ -95,10 +95,19 @@ internal fun AccessibilitySource.snapshotForEvent(
                     // WindowContext like every other overlay frame.
                     is AccessibilitySource.ActiveWindow.Enabled -> getWindowSnapshot(resolution.window, resolution.root, list.size)
                     else -> {
-                        // HH1: the flagged active window's root is unreadable and no overlay is in
-                        // front — skip (the topology path emits nothing for the same case).
-                        Timber.tag("Pipeline").v("🚫 Skip: active window root unreadable, no overlay in front (event window=%d)", windowId)
-                        return EventSnapshot.Skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+                        // PR #1155 review II1: the flagged window's own root was unreadable and no
+                        // overlay is in front — ONE rootInActiveWindow read may stand in for it, but
+                        // only if it provably IS that window (same, non-negative window id) and its
+                        // package is enabled; mapped through the one window builder. Any mismatch →
+                        // skip (the topology path emits nothing for the same case).
+                        val native = getLiveNativeRoot()
+                        val matches = native != null && native.windowId >= 0 &&
+                            native.windowId == activeWindow.id && isEnabled(native.packageName?.toString())
+                        if (native == null || !matches) {
+                            Timber.tag("Pipeline").v("🚫 Skip: active window root unreadable, no overlay in front (event window=%d)", windowId)
+                            return EventSnapshot.Skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+                        }
+                        getWindowSnapshot(activeWindow, native, list.size)
                     }
                 }
             }
