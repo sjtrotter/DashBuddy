@@ -12,34 +12,26 @@ import kotlin.random.Random
  * #1160 reviews NN5/PP5/RR1/UU8 — the sensitive scan's TWO normal forms, each pinned:
  * - `normalizePreserving` (`TextFold.foldGlyphsPreservingSupplementary`) — byte-for-byte the pre-#1160
  *   normalizer, against the VERBATIM old loop;
- * - `normalize` (`TextFold.foldForCensus`) — FORMAT stripped by code point first (tag chars U+E0020–E007F,
- *   U+E0001, U+1D173–1D17A included), then NFKC, then dashes — against a reference of that order.
+ * - `normalize` — the preserving form minus its supplementary FORMAT code points (tag chars U+E0020–E007F,
+ *   U+E0001, U+1D173–1D17A), no second NFKC (review WW1) — against a reference built from the verbatim loop.
  * `findMarker` drops on a hit in EITHER form, so the change only widens detection (toward privacy).
  */
 class SensitiveTextMarkersNormalizePinTest {
 
     /**
-     * The reference for the fully STRIPPED form (reviews PP5, UU8): FORMAT stripped by code point FIRST,
-     * then NFKC, then the dash fold — the census fold — then whitespace → space and ROOT lowercase.
+     * The reference for the fully STRIPPED form (reviews RR1, WW1): the pre-#1160 normalizer ([legacyNormalize],
+     * verbatim) with its supplementary-plane FORMAT code points removed — no further NFKC.
      */
     private fun referenceNormalize(s: String): String {
-        val stripped = StringBuilder(s.length)
+        val legacy = legacyNormalize(s)
+        val sb = StringBuilder(legacy.length)
         var i = 0
-        while (i < s.length) {
-            val cp = s.codePointAt(i)
-            if (Character.getType(cp) != Character.FORMAT.toInt()) stripped.appendCodePoint(cp)
+        while (i < legacy.length) {
+            val cp = legacy.codePointAt(i)
+            if (!(cp >= 0x10000 && Character.getType(cp) == Character.FORMAT.toInt())) sb.appendCodePoint(cp)
             i += Character.charCount(cp)
         }
-        val nfkc = Normalizer.normalize(stripped, Normalizer.Form.NFKC)
-        val sb = StringBuilder(nfkc.length)
-        for (ch in nfkc) {
-            when {
-                ch in '\u2010'..'\u2015' || ch == '\u2212' -> sb.append('-')
-                ch == '\u001F' || ch.isWhitespace() -> sb.append(' ')
-                else -> sb.append(ch)
-            }
-        }
-        return sb.toString().lowercase(Locale.ROOT)
+        return sb.toString()
     }
 
     @Test
@@ -103,5 +95,33 @@ class SensitiveTextMarkersNormalizePinTest {
             assertTrue(text, SensitiveTextMarkers.findMarker(text) != null)
             assertTrue(text, SensitiveTextMarkers.findMarker(UiNode(text = text)) != null)
         }
+    }
+
+    @Test
+    fun `the two forms differ ONLY when a supplementary FORMAT char is present, so the scan skip is exact (review WW3)`() {
+        val rnd = Random(0x1160_0010L)
+        val bmpPool = listOf("a", "Z", "1", "-", " ", "\u00A0", "\u200B", "\u200D", "\u0301", "\uFF21", "\u2013", "\uD83D\uDE97")
+        repeat(2000) {
+            val s = buildString { repeat(rnd.nextInt(0, 24)) { append(bmpPool[rnd.nextInt(bmpPool.size)]) } }
+            assertEquals(s, SensitiveTextMarkers.normalizePreserving(s), SensitiveTextMarkers.normalize(s))
+        }
+        // A combining mark after an SSN / PAN: both forms agree without a tag char…
+        listOf("123-45-6789a\u200D\u0301", "4111 1111 1111 1111a\u200D\u0301").forEach {
+            assertEquals(SensitiveTextMarkers.normalizePreserving(it), SensitiveTextMarkers.normalize(it))
+        }
+        // …and with one they differ, and the union still hits.
+        listOf("123-45-6789\uDB40\uDC20\u0301", "4111 1111 1111 1111\uDB40\uDC20\u0301", "Vis\uDB40\uDC20a\u200D\u0301").forEach {
+            assertTrue(it, SensitiveTextMarkers.normalizePreserving(it) != SensitiveTextMarkers.normalize(it))
+            assertTrue(it, SensitiveTextMarkers.findMarker(it) != null)
+        }
+    }
+
+    @Test
+    fun `every keyword and shape pattern is ASCII - the coupling the scan skip relies on (review XX8)`() {
+        // The skip in `scanBothForms` is exact because the stripped form is the preserving form minus its
+        // supplementary FORMAT code points; ASCII keywords/shapes make that independent of any other fold
+        // difference. A non-ASCII entry must make this coupling visible, not silently weaken the skip.
+        SensitiveTextMarkers.KEYWORDS.forEach { assertTrue(it, it.all { c -> c.code < 0x80 }) }
+        SensitiveTextMarkers.SHAPE_PATTERNS.forEach { assertTrue(it.pattern, it.pattern.all { c -> c.code < 0x80 }) }
     }
 }

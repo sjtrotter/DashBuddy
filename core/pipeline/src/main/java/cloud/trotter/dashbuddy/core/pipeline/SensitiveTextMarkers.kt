@@ -212,7 +212,25 @@ object SensitiveTextMarkers {
      *    (so the scan can use a plain, allocation-light `contains`).
      * Single allocation pass over the NFKC output; NFKC itself is O(n).
      */
-    internal fun normalize(s: String): String = spaceAndLower(TextFold.foldForCensus(s))
+    /**
+     * The fully STRIPPED normal form (#1160 reviews RR1, WW1): EXACTLY the boundary-preserving form
+     * ([normalizePreserving], the pre-#1160 normalizer) with its supplementary-plane FORMAT code points
+     * removed — "old normalizer + strip", no further NFKC. (A second NFKC pass — the census fold — composed
+     * `Vis<tag>a<ZWJ><U+0301>` into `visá` and lost the `visa` keyword both forms must see.) The census
+     * canonical fold (`TextFold.foldForCensus`) is the builder's own and is NOT a sensitive-scan form.
+     */
+    internal fun normalize(s: String): String = stripSupplementaryFormat(normalizePreserving(s))
+
+    private fun stripSupplementaryFormat(s: String): String {
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            if (!(cp >= 0x10000 && Character.getType(cp) == Character.FORMAT.toInt())) sb.appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
 
     /**
      * The BOUNDARY-PRESERVING normal form — byte-for-byte the pre-#1160 normalizer (supplementary-plane
@@ -231,11 +249,10 @@ object SensitiveTextMarkers {
     }
 
     /**
-     * Scan both normal forms; the first hit wins (review RR1). The fully stripped form can change a MATCH
-     * only when the text carries a supplementary-plane FORMAT char (every keyword and shape is ASCII, so the
-     * BMP-FORMAT / composition-order differences between the two folds cannot), so the second
-     * normalization + scan runs ONLY then (review UU2) — the LogScrubber and CaptureWriter hot paths scan
-     * once.
+     * Scan both normal forms; the first hit wins (review RR1). Since the stripped form is the preserving
+     * form minus its supplementary-plane FORMAT code points (review WW1), the two strings are IDENTICAL
+     * unless such a code point is present — so skipping the second scan when there is none is exact, not
+     * an approximation (reviews UU2, WW3). The LogScrubber and CaptureWriter hot paths scan once.
      */
     private fun scanBothForms(text: String): String? =
         scan(normalizePreserving(text)) ?: if (hasSupplementaryFormat(text)) scan(normalize(text)) else null
