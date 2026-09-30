@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 
 /**
  * App-owned, rules-independent backstop for the CUSTOMER-PII redaction pledge
@@ -143,8 +144,10 @@ object CustomerTextMarkers {
      * address lines, `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold
      * customer text but is also reused for app copy (the free-text instruction bodies;
      * `description_text_view`, which this file documents as generic DoorDash chrome); `EXACT` — a value
-     * that may be PII or chrome, or an id REUSED for other people (`user_name`, also the merchant's and the
-     * dasher's name; `tvTitle`, `tvLastMessage`): seeds its exact value only (#1160 reviews PP6, SS1). The intake list
+     * that may be PII or chrome (`tvTitle`, `tvLastMessage`): seeds its exact value only; `PERSON_OR_MERCHANT` —
+     * an id REUSED for other people but never chrome (`user_name`, also the merchant's and the dasher's
+     * name): exact value only for text, plus a whole-value id/class run when it reads as a person's name
+     * (#1160 reviews PP6, SS1, XX3). The intake list
      * (`PiiShapes.PII_ID_SUFFIXES`) holds EVERY suffix of this table (a guard test pins the subset) plus
      * other instruction/content ids (message bodies, maneuver/road text, instruction bodies), so the two
      * never disagree on a PII id (#1160 reviews NN2, PP6, UU3). The runtime backstop scrubs on EVERY suffix exactly as
@@ -162,7 +165,7 @@ object CustomerTextMarkers {
         // → `the`; "Jack in the Box" → `in`/`box` would withhold chrome and, through the class/id check,
         // null `TextView`-class wrappers per store). EXACT still withholds an exact duplicate of a
         // customer's first name; a merchant name costs nothing (recognition never anchors on one).
-        IdMarker("user_name", IdentityKind.EXACT),
+        IdMarker("user_name", IdentityKind.PERSON_OR_MERCHANT),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         IdMarker("address_line_1", IdentityKind.ADDRESS),
         IdMarker("address_line_2", IdentityKind.ADDRESS),
@@ -246,18 +249,12 @@ object CustomerTextMarkers {
     }
 
     /**
-     * Name-like (#1160 review TT1): at most two whitespace tokens, each Capitalized and made only of letters,
-     * apostrophes and hyphens — "Riley", "Riley S", "O'Brien" yes; "Pick up order", "Order details",
-     * "Riley's order" no.
+     * Name-like for the runtime `WHEN_NAME_LIKE` scrub — the ONE predicate `PiiShapes.isPersonName` (#1160
+     * reviews TT1, WW2, XX1). Accepted residual (WW5): title-case two-word chrome ("Pick Up", "Order
+     * Details") also reads as a name and is scrubbed in debug triage — privacy first, so a full "Riley
+     * Smith" header never persists.
      */
-    fun isNameLike(value: String?): Boolean {
-        val tokens = value?.trim()?.split(Regex("\\s+"))?.filter { it.isNotEmpty() } ?: return false
-        if (tokens.isEmpty() || tokens.size > 2) return false
-        return tokens.all { token ->
-            Character.isUpperCase(token.codePointAt(0)) &&
-                token.codePoints().allMatch { Character.isLetter(it) || it == '\''.code || it == '\u2019'.code || it == '-'.code }
-        }
-    }
+    fun isNameLike(value: String?): Boolean = PiiShapes.isPersonName(value)
 
     /** What an [IdMarker]'s node value IS (#1160 review LL1). */
     enum class IdentityKind {
@@ -272,9 +269,17 @@ object CustomerTextMarkers {
 
         /**
          * A value that may be PII or chrome (a chat header is a name, a sheet title is "Pick up order"):
-         * withheld on its own field and seeding its EXACT value only — no runs (#1160 review PP6).
+         * withheld on its own field and seeding its EXACT value only — no runs (#1160 review PP6). For the
+         * id/class check it adds a whole-value run only for the two-token name shape ("Riley S").
          */
         EXACT,
+
+        /**
+         * A value that is a person OR a merchant, never chrome (`user_name`, #1160 review XX3): EXACT-seeded
+         * for text, and for the id/class check a whole-value run whenever it reads as a person's name
+         * (`PiiShapes.isPersonName`, a single token included — "Riley" protects `chipRiley`).
+         */
+        PERSON_OR_MERCHANT,
     }
 
     /**
@@ -368,10 +373,12 @@ object CustomerTextMarkers {
      * re-scrubs a mask.
      */
     fun unredactedIdMarker(node: UiNode): String? {
-        val marker = idMarkerSuffix(node.viewIdResourceName, node.scrubbableStrings().map { it.second }) ?: return null
+        // Review XX6: WHEN_NAME_LIKE judges the RENDERED value only (text / content description) — a #1147
+        // role "Heading" must not make a chrome title name-like.
+        val marker = idMarkerSuffix(node.viewIdResourceName, listOf(node.text, node.contentDescription)) ?: return null
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
-        // must still be scrubbed.
+        // must still be scrubbed. (XX7: one pass over the fields.)
         val carriesRaw = node.scrubbableStrings()
             .any { (_, value) -> !value.isNullOrEmpty() && !value.contains(REDACTED_MARK) }
         return if (carriesRaw) marker else null

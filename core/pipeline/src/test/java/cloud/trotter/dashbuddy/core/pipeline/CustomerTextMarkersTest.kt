@@ -389,7 +389,7 @@ class CustomerTextMarkersTest {
         assertEquals(
             mapOf(
                 "customer_name" to CustomerTextMarkers.IdentityKind.NAME,
-                "user_name" to CustomerTextMarkers.IdentityKind.EXACT,
+                "user_name" to CustomerTextMarkers.IdentityKind.PERSON_OR_MERCHANT,
                 "address_line_1" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
@@ -424,8 +424,10 @@ class CustomerTextMarkersTest {
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(name).text)
         val message = UiNode(viewIdResourceName = "com.x:id/tvLastMessage", text = "My gate code is 2468")
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(message).text)
-        listOf("Riley", "Riley S", "O'Brien", "Mary-Jo K").forEach { assertTrue(it, CustomerTextMarkers.isNameLike(it)) }
-        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "").forEach {
+        listOf("Riley", "Riley S", "Riley S.", "O'Brien", "Mary-Jo K", "Mary Jo", "Mary Jo S").forEach {
+            assertTrue(it, CustomerTextMarkers.isNameLike(it))
+        }
+        listOf("Pick up order", "Order details", "riley", "Riley's order x", "R2", "", "TAB B", "RILEY").forEach {
             assertTrue(it, !CustomerTextMarkers.isNameLike(it))
         }
     }
@@ -444,5 +446,12 @@ class CustomerTextMarkersTest {
         )
         assertEquals("customer_name", CustomerTextMarkers.idMarkerSuffix("com.x:id/customer_name", emptyList(), table))
         assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/pane_name", emptyList(), table))
+    }
+
+    @Test
+    fun `WHEN_NAME_LIKE judges the rendered value only, never a role (review XX6)`() {
+        val chrome = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order", roleDescription = "Heading")
+        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(chrome).text)
+        assertNull(CustomerTextMarkers.unredactedIdMarker(chrome))
     }
 }

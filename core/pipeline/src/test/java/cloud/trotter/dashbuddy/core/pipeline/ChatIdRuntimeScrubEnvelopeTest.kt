@@ -59,4 +59,54 @@ class ChatIdRuntimeScrubEnvelopeTest {
         )
         assertTrue(chrome, chrome.contains("Pick up order"))
     }
+
+    @Test
+    fun `a first-name last-initial header with a period is masked (review WW2)`() {
+        val envelope = capture(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = "Riley S."),
+        )
+        assertTrue(envelope, !envelope.contains("Riley"))
+    }
+
+    @Test
+    fun `title-case two-word chrome is masked, sentence-case chrome is kept - the accepted trade (review WW5)`() {
+        val titleCase = capture(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = "Pick Up"),
+        )
+        assertTrue(titleCase, !titleCase.contains("Pick Up"))
+        val sentence = capture(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = "Pick up order"),
+        )
+        assertTrue(sentence, sentence.contains("Pick up order"))
+    }
+
+    @Test
+    fun `a tag char and a combining mark cannot hide a sensitive keyword from the capture (review WW1)`() {
+        val before = bus.envelopes.size
+        val tree = UiNode(className = "android.widget.LinearLayout", children = listOf(
+            UiNode(className = "android.widget.TextView", text = "Vis\uDB40\uDC20a\u200D\u0301 ending 6222"),
+        )).restoreParents()
+        writer.captureScreen(
+            Observation.Screen(
+                timestamp = 1_000L, captureId = null, ruleId = null, metadata = ReplayMetadata.EMPTY,
+                flow = null, modeHint = null, parsed = ParsedFields.None, target = UNKNOWN_TARGET,
+            ),
+            PipelineEvent.Screen(
+                timestamp = 1_000L, tree = tree,
+                snapshot = TreeSnapshot(tree = tree, packageName = "com.doordash.driverapp"),
+                packageName = "com.doordash.driverapp",
+            ),
+        )
+        assertTrue("the sensitive frame must be dropped", bus.envelopes.size == before)
+    }
+
+    @Test
+    fun `every person-name header shape is masked through captureScreen (review XX1)`() {
+        listOf("Riley", "Riley S.", "Mary Jo S", "Mary Jo").forEach { header ->
+            val envelope = capture(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/tvTitle", text = header),
+            )
+            assertTrue("$header: $envelope", !envelope.contains(header))
+        }
+    }
 }
