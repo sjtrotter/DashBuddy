@@ -624,7 +624,7 @@ class UiInteractionHandlerOwnerTest {
      * MAX_LABEL_HINTS + 1 was truncated at bind — no 2b, strategy 3 still runs at the captured rect.
      */
     @Test
-    fun `exactly MAX_LABEL_HINTS labels is provable; one more is truncated and skips 2b`() = runTest {
+    fun `exactly MAX_LABEL_HINTS labels is provable and one more is truncated and skips 2b`() = runTest {
         val words = listOf("This offer", "Expand", "Base pay", "Tip", "Peak pay", "Details", "Adjustments")
         fun rowOf(n: Int, top: Int) = view(clickable = true, bounds = Rect(36, top, 1044, top + 126),
             children = words.take(n).map { view(cls = "android.widget.TextView", text = it) })
