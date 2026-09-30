@@ -153,8 +153,19 @@ private fun convert(
         )
     }
 
+    val hasClick = node.hasClickAction()
     val bounds = Rect()
     node.getBoundsInScreen(bounds)
+
+    // #1147: the ACTION_CLICK label is read only when the bitmask says a click action exists, so
+    // the per-node actionList materialization #1149 P6 avoided stays off the common path.
+    val clickLabel = if (hasClick) {
+        node.actionList
+            ?.firstOrNull { it.id == AccessibilityNodeInfo.ACTION_CLICK }
+            ?.label?.toString()?.capText()
+    } else null
+    val collection = node.collectionInfo
+    val item = node.collectionItemInfo
 
     return UiNode(
         text = node.text?.toString()?.capText(),
@@ -162,13 +173,24 @@ private fun convert(
         stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             node.stateDescription?.toString()?.capText()
         } else null,
+        // #1147 (TalkBack study win 3): every new string is capText()-bounded and joins the #835
+        // scrub contract through UiNodeTextField; none reaches UiNode.allText.
+        paneTitle = node.paneTitle?.toString()?.capText(),
+        roleDescription = node.roleDescriptionOrNull()?.capText(),
+        hintText = node.hintText?.toString()?.capText(),
+        tooltipText = node.tooltipText?.toString()?.capText(),
+        errorText = node.error?.toString()?.capText(),
+        clickActionLabel = clickLabel,
+        uniqueId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            node.uniqueId?.capText()
+        } else null,
         viewIdResourceName = node.viewIdResourceName?.capText(),
         className = node.className?.toString()?.capText(),
         isClickable = node.isClickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
         // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
-        hasClickAction = node.hasClickAction(), // P6: the one live definition (NodeClick.kt)
+        hasClickAction = hasClick, // P6: the one live definition (NodeClick.kt)
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
         // the executor's package-scoped label scan, which never reads such a subtree).
         foreignPackage = foreign,
@@ -176,7 +198,31 @@ private fun convert(
         // depth refusal, node-budget exhaustion or the loop cap — so a bind over such a node cannot
         // certify its label set complete.
         unreadableChildren = (childCount - children.size).coerceAtLeast(0),
+        isVisibleToUser = node.isVisibleToUser,
+        isFocusable = node.isFocusable,
+        isScreenReaderFocusable = node.isScreenReaderFocusable,
+        isCheckable = node.isCheckable,
+        isSelected = node.isSelected,
+        isHeading = node.isHeading,
+        liveRegion = node.liveRegion,
+        collectionRows = collection?.rowCount ?: -1,
+        collectionCols = collection?.columnCount ?: -1,
+        itemRow = item?.rowIndex ?: -1,
+        itemCol = item?.columnIndex ?: -1,
         boundsInScreen = bounds.toBoundingBox(),
         children = children,
     )
 }
+
+/**
+ * #1147: the role description a control publishes through the AndroidX
+ * `AccessibilityNodeInfoCompat.setRoleDescription` extra (Compose sets it for Button/Tab/…). Read
+ * straight off the framework extras by key so `:core:pipeline` takes no androidx dependency. The
+ * key is the AndroidX constant's value, not a platform literal.
+ */
+private const val ROLE_DESCRIPTION_EXTRA_KEY = "AccessibilityNodeInfo.roleDescription"
+
+private fun AccessibilityNodeInfo.roleDescriptionOrNull(): String? =
+    // The extras Bundle is third-party data unparcelled on first read; a malformed one must cost only
+    // this field, never the frame (the mapper never throws on hostile input — #590).
+    runCatching { extras?.getCharSequence(ROLE_DESCRIPTION_EXTRA_KEY)?.toString() }.getOrNull()
