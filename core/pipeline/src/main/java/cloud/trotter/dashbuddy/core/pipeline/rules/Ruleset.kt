@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.NodeRef
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
@@ -166,7 +167,11 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                 // #1093: an OPTIONAL bind that resolved nothing rides the same sink — the target
                 // anchor can rot exactly like a parse anchor, and an optional bind is the one
                 // place a rot leaves no trace at all (a mandatory one skips the rule).
-                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings)?.let(sink) }
+                // #1149 review R1/R7: the bind references are built HERE (pure) so the census sees them:
+                // a REFUSED bind emits no reference and counts as unresolved; an action target whose
+                // fingerprint is unprovable is counted as such.
+                val bindRefs = buildBindRefs(allBindings)
+                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings, bindRefs)?.let(sink) }
 
                 // Phase 5: Validate
                 var branchSkip = false
@@ -208,9 +213,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                 // Expose resolved bindings as named targets (#425) —
                 // recognition-layer data for the app-owned action registry.
                 val targets = buildMap {
-                    for ((name, node) in allBindings) {
-                        if (node != null) put(name, buildNodeRef(node))
-                    }
+                    for ((name, ref) in bindRefs) if (ref != null) put(name, ref)
                 }
 
                 return RuleMatchResult(
@@ -250,6 +253,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         branch: CompiledBranch<TInput>,
         rawFields: Map<String, Any?>,
         bindings: Bindings,
+        bindRefs: Map<String, NodeRef?>,
     ): ParseShortfall? {
         val evidence = branch.parseEvidenceFields
         val allNull = evidence.isNotEmpty() &&
@@ -257,13 +261,20 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         val nullRequired = branch.requiredParseFields.filter { rawFields[it] == null }
         // Only an OPTIONAL bind can be present-and-null here: a mandatory miss already skipped
         // the rule in resolveBindings (#1093).
-        val unresolvedBinds = bindings.filterValues { it == null }.keys.sorted()
-        if (!allNull && nullRequired.isEmpty() && unresolvedBinds.isEmpty()) return null
+        // R1: a refused ACTION-target bind (resolved a node, but no reference) is unresolved too.
+        val refusedTargets = bindRefs.filter { (name, ref) -> ref == null && name in RuleAction.byTargetBindName }.keys
+        val unresolvedBinds = (bindings.filterValues { it == null }.keys + refusedTargets).sorted()
+        // R7: an action target whose bind-time fingerprint is unprovable (never 2b).
+        val unprovable = bindRefs.filter { (name, ref) ->
+            ref != null && !ref.labelHintsComplete && name in RuleAction.byTargetBindName
+        }.keys.sorted()
+        if (!allNull && nullRequired.isEmpty() && unresolvedBinds.isEmpty() && unprovable.isEmpty()) return null
         return ParseShortfall(
             ruleId = ruleId,
             allNullFieldCount = if (allNull) evidence.size else 0,
             nullRequiredFields = nullRequired,
             unresolvedOptionalBindings = unresolvedBinds,
+            unprovableBindings = unprovable,
         )
     }
 
@@ -379,7 +390,13 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             .take(MAX_TEMPLATE_VALUE_LENGTH)
     }
 
-    private fun buildNodeRef(node: UiNode): NodeRef {
+    /** Every resolved bind's reference; a REFUSED bind (R1) maps to null — it emits no reference. */
+    private fun buildBindRefs(bindings: Bindings): Map<String, NodeRef?> = buildMap {
+        for ((name, node) in bindings) if (node != null) put(name, buildNodeRef(node))
+    }
+
+    /** #1149 review R1: null when the bind is REFUSED (foreign / no owner) — no reference, nothing tappable. */
+    private fun buildNodeRef(node: UiNode): NodeRef? {
         val pathParts = mutableListOf<String>()
         var current: UiNode? = node
         var depth = 0
@@ -393,6 +410,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         // #1149 review L2: the fingerprint is the bound node's ACTION OWNER's (as at fire time), over the
         // shared label horizon (I2), with completeness (J3) and the owner's class (the 2b filter).
         val hints = NodeRef.bindHintsOf(node)
+        if (hints.refused) return null
         return NodeRef(
             viewIdSuffix = node.viewIdResourceName,
             text = node.text?.take(50),

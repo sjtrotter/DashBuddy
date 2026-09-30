@@ -769,4 +769,58 @@ class ActuationBindingResolutionTest {
         assertTrue(r.decisive)
         assertTrue(r.resolved === innerRow)
     }
+
+    // =========================================================================
+    // #1149 review R1 / R7 — a refused bind emits NO reference; the census sees it
+    // =========================================================================
+
+    /** Rebuild [tree] with [mark] applied to the node [target] and its whole subtree (the UiNode tree is immutable). */
+    private fun rebuild(node: UiNode, target: UiNode, inside: Boolean = false, mark: (UiNode) -> UiNode): UiNode {
+        val here = inside || node === target
+        val kids = node.children.map { rebuild(it, target, here, mark) }
+        val copy = node.copy(children = kids)
+        return if (here) mark(copy) else copy
+    }
+
+    /**
+     * R1 end-to-end on the real settled receipt: the id-less expand row is FOREIGN (an embedded subtree
+     * of another package). The rule still matches, but the bind is refused — NO `expandButton` reference
+     * exists, so no strategy (not even strategy 3's exact-bounds arm, which would tap a same-class
+     * control at the captured rect on this expectation-less action) can fire. The census counts it.
+     */
+    @Test
+    fun `a refused foreign bind emits no reference and rides the bind census`() {
+        val (tree, _) = settledReceipt()
+        val row = rowOf(tree)
+        val foreignRow = rebuild(tree, row) { it.copy(foreignPackage = true) }.restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall>()
+        val match = TestRulesetFactory.screenRuleset.matchFirst(foreignRow, onParseShortfall = { shortfalls += it })
+        assertNotNull("the receipt still matches", match)
+        assertNull("a refused bind emits NO reference", match!!.targets[RuleAction.EXPAND_EARNINGS.targetBindName])
+        assertTrue("the refusal rides the #1093 bind census",
+            shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unresolvedOptionalBindings })
+    }
+
+    /** R7: an action target bound over a node with an unreadable child is counted as unprovable. */
+    @Test
+    fun `an unprovable action-target bind is reported to the census`() {
+        val (tree, _) = settledReceipt()
+        val row = rowOf(tree)
+        // Mark ONLY the row itself as having an advertised child the mapper could not read (L4/N6).
+        val unreadable = rebuild(tree, row) { it }.let { copyTree ->
+            fun only(n: UiNode): UiNode {
+                val c = n.copy(children = n.children.map(::only))
+                return if (n.isClickable && n.boundsInScreen == row.boundsInScreen && subtreeHasText(n, "This offer")) {
+                    c.copy(unreadableChildren = 1)
+                } else c
+            }
+            only(copyTree)
+        }.restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall>()
+        val match = TestRulesetFactory.screenRuleset.matchFirst(unreadable, onParseShortfall = { shortfalls += it })
+        val ref = match!!.targets[RuleAction.EXPAND_EARNINGS.targetBindName]
+        assertNotNull("the reference still exists (strategies 1–3 remain)", ref)
+        assertFalse(ref!!.labelHintsComplete)
+        assertTrue(shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unprovableBindings })
+    }
 }

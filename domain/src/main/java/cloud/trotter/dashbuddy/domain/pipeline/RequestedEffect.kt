@@ -153,7 +153,7 @@ data class NodeRef(
             // N5: a foreign node is never an owner and is never crossed. A bound node that is itself
             // foreign, or whose owner walk would reach/cross a foreign node, yields NO hints and is
             // never complete (no 2b) — the executor would never read or tap there anyway.
-            val none = BindHints(emptyList(), complete = false, ownerClassHint = null)
+            val none = BindHints(emptyList(), complete = false, ownerClassHint = null, refused = true)
             if (bound.foreignPackage) return none
             var owner: cloud.trotter.dashbuddy.domain.model.accessibility.UiNode = bound
             var steps = 0
@@ -173,6 +173,8 @@ data class NodeRef(
                 distinct.take(MAX_LABEL_HINTS),
                 complete = found != null && scan.complete && distinct.size <= MAX_LABEL_HINTS,
                 ownerClassHint = found?.className,
+                // R1: no owner → nothing a tap could land on; the bind emits NO reference.
+                refused = found == null,
             )
         }
 
@@ -205,7 +207,17 @@ data class NodeRef(
     }
 }
 /** #1149 review L2 — the bind-time fingerprint of the bound node's action owner ([NodeRef.bindHintsOf]). */
-data class BindHints(val labelHintHashes: List<String>, val complete: Boolean, val ownerClassHint: String?)
+data class BindHints(
+    val labelHintHashes: List<String>,
+    val complete: Boolean,
+    val ownerClassHint: String?,
+    /**
+     * #1149 review R1 — the bind is REFUSED (a foreign bound node or owner walk, or no owner at all):
+     * `Ruleset.buildNodeRef` emits NO reference for it, so no strategy can tap anything for this bind —
+     * it is an unresolved bind (the #1093 census).
+     */
+    val refused: Boolean = false,
+)
 
 
 /**

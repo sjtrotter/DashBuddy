@@ -107,6 +107,10 @@ class PipelineStats @Inject constructor(
     /** Keys that already WARNed this process (one WARN per rule+bind, like the parse WARN). */
     private val bindShortfallWarned = ConcurrentHashMap.newKeySet<Pair<String, String>>()
 
+    /** #1149 review R7 — action-target binds whose bind-time fingerprint was unprovable, keyed (ruleId, bind). */
+    private val bindUnprovableByKey = ConcurrentHashMap<Pair<String, String>, AtomicLong>()
+    private val bindUnprovableWarned = ConcurrentHashMap.newKeySet<Pair<String, String>>()
+
     val droppedSensitiveCount: Long get() = droppedSensitive.get()
     val droppedNoiseCount: Long get() = droppedNoise.get()
     val droppedDisabledPlatformCount: Long get() = droppedDisabledPlatform.get()
@@ -227,6 +231,7 @@ class PipelineStats @Inject constructor(
                 )
             }
         }
+        for (bind in shortfall.unprovableBindings) onBindUnprovable(shortfall.ruleId, bind)
         if (!shortfall.hasParseTrigger) return parseShortfallCount(shortfall.ruleId)
         val count = parseShortfallByRule.computeIfAbsent(shortfall.ruleId) { AtomicLong() }
             .incrementAndGet()
@@ -242,6 +247,26 @@ class PipelineStats @Inject constructor(
 
     /** This rule's running parse-shortfall count for the process (#1036); 0 if it never tripped. */
     fun parseShortfallCount(ruleId: String): Long = parseShortfallByRule[ruleId]?.get() ?: 0L
+
+    /**
+     * #1149 review R7 — a matched rule bound an ACTION target whose bind-time label fingerprint is
+     * unprovable (unreadable children, more than MAX_LABEL_HINTS labels): the tap can never use the
+     * label re-find (2b). Census on the summary (`bindUnprovable{…}`), ONE WARN per rule+bind per
+     * process under the `Pipeline` tag. Rule id and bind name only (ours) — PII-free.
+     */
+    fun onBindUnprovable(ruleId: String, bind: String): Long {
+        val key = ruleId to bind
+        val n = bindUnprovableByKey.computeIfAbsent(key) { AtomicLong() }.incrementAndGet()
+        if (bindUnprovableWarned.add(key)) {
+            Timber.tag("Pipeline").w(
+                "Rule %s bound '%s' with an unprovable label fingerprint — no label re-find for this target (#1149)",
+                ruleId, bind,
+            )
+        }
+        return n
+    }
+
+    fun bindUnprovableCount(ruleId: String, bind: String): Long = bindUnprovableByKey[ruleId to bind]?.get() ?: 0L
 
     /** This rule+bind's running unresolved-optional-bind count (#1093); 0 if it never tripped. */
     fun bindShortfallCount(ruleId: String, bind: String): Long =
@@ -317,6 +342,7 @@ class PipelineStats @Inject constructor(
             platformAppVersionsSuffix() +
             parseShortfallSuffix() +
             bindShortfallSuffix() +
+            bindUnprovableSuffix() +
             foregroundSkipSuffix()
 
     /**
@@ -375,6 +401,10 @@ class PipelineStats @Inject constructor(
      *  occur in either name, so the render is unambiguous). */
     private fun bindShortfallSuffix(): String =
         shortfallSuffix("bindShortfall", bindShortfallByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
+
+    /** `" bindUnprovable{<rule>#<bind>=n,…}"` (#1149 review R7) — same bound, clamp and ordering. */
+    private fun bindUnprovableSuffix(): String =
+        shortfallSuffix("bindUnprovable", bindUnprovableByKey) { (rule, bind) -> "${escapeKey(rule)}#${escapeKey(bind)}" }
 
     /** `#` is the pair separator in the render; a `#` INSIDE a component is escaped so two distinct
      *  pairs can never read as one (review round 3 — rule ids and bind names are not validated
