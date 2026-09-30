@@ -133,7 +133,14 @@ class PiiShapesParityTest {
     fun `both name variants derive from the one body`() {
         val body = PiiShapes.FIRST_LAST_INITIAL_BODY
         assertEquals("^\\s{0,8}" + body + "\\s{0,8}$", PiiShapes.FIRST_LAST_INITIAL_PATTERN)
-        assertEquals("(?<![\\p{L}])" + body + "(?![\\p{L}])", PiiShapes.FIRST_LAST_INITIAL_EMBEDDED)
+        val tokens = PiiShapes.FIRST_LAST_INITIAL_TOKENS
+        assertEquals(tokens + "[A-Z]\\.?", body)
+        // Review AA3: the embedded variant shares the tokens verbatim; only its INITIAL is case-sensitive.
+        assertEquals("(?<![\\p{L}])" + tokens + "(?-i:[A-Z])\\.?" + "(?![\\p{L}])", PiiShapes.FIRST_LAST_INITIAL_EMBEDDED)
+        listOf("Take a photo", "Report a problem", "Start a Dash").forEach {
+            assertTrue(it, !PiiShapes.hasNameShape(it))
+        }
+        assertTrue(PiiShapes.hasNameShape("jordan t"))
         assertEquals(setOf(RegexOption.IGNORE_CASE), PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX.options)
         // The anchored variant misses an embedded name; the embedded one catches it (ADR §2 step 7).
         val sentence = "Jane S is waiting at the door"

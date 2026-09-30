@@ -163,6 +163,14 @@ object PiiShapes {
      */
     val BARE_STREET = Regex("""^\d{2,6}\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z0-9.'-]+){0,3}$""")
     /**
+     * The name tokens and the separator before the initial — the part of [FIRST_LAST_INITIAL_BODY]
+     * both variants share verbatim. Only the INITIAL differs between them (see
+     * [FIRST_LAST_INITIAL_EMBEDDED]).
+     */
+    const val FIRST_LAST_INITIAL_TOKENS =
+        "[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}"
+
+    /**
      * The canonical **id-less first-name + last-initial** customer-name shape, e.g. "Brandon C" /
      * "Gilberto U." / "José R" / "O'Brien M" / "Mary-Jo K" / "McKenna B" — the line on the
      * multi-order drop-off confirm card (#501), whose name node ships **no viewId** so it escapes
@@ -208,8 +216,7 @@ object PiiShapes {
      * customer name is the dangerous, silent failure. The `hasNoId` conjunct on the rule side and
      * the whole-value anchoring here keep the surface small.
      */
-    const val FIRST_LAST_INITIAL_BODY =
-        "[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?"
+    const val FIRST_LAST_INITIAL_BODY = FIRST_LAST_INITIAL_TOKENS + "[A-Z]\\.?"
 
     /**
      * The ANCHORED whole-value variant — byte-identical to the pre-#1145 constant and to every rule-side
@@ -219,17 +226,33 @@ object PiiShapes {
 
     /**
      * The BOUNDARY-DELIMITED substring variant (ADR-0011 §2 step 7) that the census runs with
-     * `containsMatchIn` + `IGNORE_CASE`. Searching [FIRST_LAST_INITIAL_PATTERN] would still reject
+     * `containsMatchIn`. Searching [FIRST_LAST_INITIAL_PATTERN] would still reject
      * `Jane S is waiting at the door` — its anchors survive `containsMatchIn` — so the census needs
-     * its own delimiters: no letter immediately before or after the shape. Over-withholding a chrome
-     * sentence (`Tap a store`) is the accepted cost.
+     * its own delimiters: no letter immediately before or after the shape.
+     *
+     * The INITIAL is CASE-SENSITIVE (`(?-i:[A-Z])`) even though the regex compiles `IGNORE_CASE`
+     * (#1160 review AA3): case-insensitively the single-letter "initial" matched the English words
+     * "a"/"i", so every `<word> a <word>` chrome phrase ("Take a photo", "Report a problem") was
+     * withheld — a systematic recall hole. A lowercase WHOLE-VALUE name ("jordan t") is still caught,
+     * by the anchored [FIRST_LAST_INITIAL] in [hasNameShape]. Residual over-withholding: a capital
+     * "I" mid-sentence ("Can I help") still reads as an initial.
      */
-    const val FIRST_LAST_INITIAL_EMBEDDED = "(?<![\\p{L}])" + FIRST_LAST_INITIAL_BODY + "(?![\\p{L}])"
+    const val FIRST_LAST_INITIAL_EMBEDDED =
+        "(?<![\\p{L}])" + FIRST_LAST_INITIAL_TOKENS + "(?-i:[A-Z])\\.?" + "(?![\\p{L}])"
 
     val FIRST_LAST_INITIAL = Regex(FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE)
 
-    /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` — the census step-7 matcher. */
+    /** [FIRST_LAST_INITIAL_EMBEDDED], compiled `IGNORE_CASE` (the initial stays case-sensitive). */
     val FIRST_LAST_INITIAL_EMBEDDED_REGEX = Regex(FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)
+
+    /**
+     * The census step-7 predicate (ADR-0011 §2): the WHOLE value is the anchored redact-side name
+     * shape (so everything the commit path masks as a name is withheld), OR the boundary-delimited
+     * embedded shape occurs anywhere in it.
+     */
+    fun hasNameShape(value: String): Boolean =
+        FIRST_LAST_INITIAL.matches(value) || FIRST_LAST_INITIAL_EMBEDDED_REGEX.containsMatchIn(value)
+
     val APT = Regex("""(?i)\b(apt|suite|ste|unit|bldg|building|gate code|gate)\b[:#\s]*[A-Za-z0-9\-]+""")
     /**
      * A residence-entry PIN, e.g. "pin 4821" / "PIN: 4821" / "pin:4821" / "Pin4821"
