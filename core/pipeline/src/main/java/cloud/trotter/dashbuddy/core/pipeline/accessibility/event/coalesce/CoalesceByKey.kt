@@ -152,13 +152,11 @@ private class KeyedCoalescer<T, K, A : Any>(
      */
     private fun sendWithPermitLocked(value: A): Boolean {
         if (!permits.tryAcquire()) return false
-        scope.launch {
-            try {
-                scope.send(value)
-            } finally {
-                permits.release()
-            }
-        }
+        // The permit is released from the job's COMPLETION handler, not a `finally` in its body:
+        // a body that never starts (the collector is cancelled while the sender is still queued)
+        // runs no `finally`, and the permit would leak with it (PR #1150 review round 4).
+        // `invokeOnCompletion` fires on every terminal state, including cancel-before-start.
+        scope.launch { scope.send(value) }.invokeOnCompletion { permits.release() }
         return true
     }
 
