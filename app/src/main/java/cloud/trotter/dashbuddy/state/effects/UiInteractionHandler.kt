@@ -190,15 +190,28 @@ class UiInteractionHandler @Inject constructor(
         // alongside it — the ranker below wants them too (for WARN diagnostics), so this avoids
         // walking each subtree twice (collectLabels is bounded but not free).
         var geometryRejected = 0
+        var staleEvidence = 0
         val labeledCandidates = owned.targets.mapNotNull { target ->
+            // #1149 review J1: evidence labels must be as fresh and as scoped as the owner's. When the
+            // matched node is not the owner, it is refreshed FIRST (a title rebinding Decline → Accept
+            // between the id query and now is read as Accept), must belong to the scoped package, and
+            // must still resolve to THIS owner (bounded walk, `==`) — else the target is dropped as
+            // stale. Refreshing before the owner scan also means that scan reads the new text.
+            val separateEvidence = target.evidence != target.owner
+            if (separateEvidence && (
+                    !target.evidence.refresh() ||
+                        target.evidence.packageName?.toString() != expectedPackage ||
+                        AccNodeUtils.resolveActionOwner(target.evidence) != target.owner
+                    )
+            ) { staleEvidence++; return@mapNotNull null }
             val scan = scanLabels(target.owner, expectedPackage)
-            // #1149 review I8: the MATCHED node's own text/contentDescription always count — the owner
-            // may sit more than LABEL_SCAN_DEPTH levels (or LABEL_SCAN_NODES fetches) above it, and a
-            // viewId/text match that verified pre-#1149 must not fail for that. Consistent with I3:
-            // the evidence node is inside the owner and not itself clickable (else it would BE the
-            // owner). Only the lenient expectation/ranking set grows; the semantic fingerprint below
-            // reads the owner scan alone (for a 2b hit, evidence IS the owner).
-            val evidenceLabels = if (target.evidence == target.owner) emptyList() else listOfNotNull(
+            // #1149 review I8: the MATCHED node's own (refreshed, in-package — J1) text/contentDescription
+            // always count — the owner may sit more than LABEL_SCAN_DEPTH levels (or LABEL_SCAN_NODES
+            // fetches) above it, and a viewId/text match that verified pre-#1149 must not fail for that.
+            // Consistent with I3: the evidence node is inside the owner and not itself clickable (else it
+            // would BE the owner). Only the lenient expectation/ranking set grows; the semantic
+            // fingerprint below reads the owner scan alone (for a 2b hit, evidence IS the owner).
+            val evidenceLabels = if (!separateEvidence) emptyList() else listOfNotNull(
                 target.evidence.text?.toString()?.takeIf { it.isNotBlank() },
                 target.evidence.contentDescription?.toString()?.takeIf { it.isNotBlank() },
             )
@@ -218,6 +231,12 @@ class UiInteractionHandler @Inject constructor(
             }
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
             target to labels
+        }
+        if (staleEvidence > 0) {
+            Timber.tag("Effects").w(
+                "%d candidate(s) for %s dropped: the matched node went stale, left the package or no longer resolves to its owner (#1149)",
+                staleEvidence, description,
+            )
         }
         if (labeledCandidates.isEmpty()) {
             Timber.tag("Effects").w(

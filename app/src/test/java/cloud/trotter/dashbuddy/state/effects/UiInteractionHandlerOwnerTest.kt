@@ -206,6 +206,32 @@ class UiInteractionHandlerOwnerTest {
         button.clicks(1)
     }
 
+    /** Review J1: a SEPARATE matched title that rebinds Decline → Accept on refresh is read as Accept — not clicked. */
+    @Test
+    fun `a matched title that rebinds on refresh is read fresh and not clicked`() = runTest {
+        var label = "Decline offer"
+        val title = view(cls = "android.widget.TextView")
+        whenever(title.text).thenAnswer { label }
+        whenever(title.refresh()).thenAnswer { label = "Accept"; true }
+        val button = view(clickable = true, children = listOf(title))
+        val root = windowRoot(button, byId = listOf(title))
+
+        assertFalse(confirmDecline(handler(root)))
+        verify(title, times(1)).refresh()
+        button.neverClicked()
+    }
+
+    /** Review J1: a foreign-package matched node lends its label to nothing. */
+    @Test
+    fun `a foreign-package matched node lends no label to its owner`() = runTest {
+        val title = view(cls = "android.widget.TextView", text = "Decline offer", packageName = "com.example.other")
+        val button = view(clickable = true, children = listOf(title))
+        val root = windowRoot(button, byId = listOf(title))
+
+        assertFalse(confirmDecline(handler(root)))
+        button.neverClicked()
+    }
+
     // ---------------------------------------------------------------- strategy 2b (D2)
 
     private val rowRect = Rect(36, 1774, 1044, 1900)
