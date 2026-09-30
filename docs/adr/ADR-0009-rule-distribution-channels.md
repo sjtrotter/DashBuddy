@@ -5,7 +5,8 @@ now the production default: `matchers/rules/*.json5` is the SOLE rule source, ca
 included `matchers` build (kotlinx-serialization, replacing the spike text-stripper) into
 **generated** `assets/rules/*.json` consumed by both the APK and the tests. The composite build is
 un-guarded (no `-PuseLocalMatchers`); the committed `assets/rules/*.json` are deleted. Milestone 2
-(OTA/CDN) remains greenfield.
+(OTA/CDN) remains greenfield. **Amended 2026-09-30 (#1144):** the authoring model is drafted-and-reviewed,
+not hand-authored — see the Amendment section at the end; ADR-0011 holds the census privacy model.
 **Issue:** Sub-RFC of Epic #192 (matchers split); gated on #246 (licensing)
 **Date:** 2026-07-03
 **Builds on:** ADR-0001 (matcher rule format), ADR-0003 (versioning and API contracts)
@@ -276,3 +277,34 @@ loop into the actual test corpus is migration work, not spike work.
 - Wire the canonical artifact into `JsonRuleInterpreter` asset loading and `TestRulesetFactory`
   (migration steps 3–4).
 - OTA/CDN as Milestone 2 (#416, #419).
+
+---
+
+## Amendment (2026-09-30, #1144): the authoring model — drafted and reviewed, not hand-authored
+
+This ADR and Epic #192 assumed that **community members hand-write JSON5 rules** and a zero-trust CI
+vets them (open question 7 — who reviews; Phase C — CONTRIBUTING + moderation). The UNKNOWN-screen
+census (#1138, ADR-0011) changes who does what while leaving every gate in place:
+
+- **Rules are drafted, not authored.** A cluster of unrecognized screen shapes crosses a threshold
+  on the census server → a shape bundle (skeleton + chrome vocabulary) → a drafting agent proposes a
+  rule, a synthetic positive fixture (the skeleton re-inflated with vocabulary tokens and pseudonym
+  placeholders — the corpus tools already accept hand-pseudonymized fixtures) and a negative
+  fixture → a matchers PR.
+- **The human role becomes classifying and reviewing.** A person classifies a cluster (which intent
+  is this; is it a sensitive surface; is it noise) and reviews a drafted rule's anchors and its
+  `redact` block. That is a narrower, more checkable job than writing a rule from a raw capture, and
+  it is the job the parked 2026-07-29 "tester UNKNOWN-review mockup tool" was sketching; #192's
+  Phase C becomes a **review queue + classification UI** rather than a contributor guide.
+- **The CI gates are unchanged and are what makes a drafted rule safe**: `AllMatchersSuite` (golden
+  guard, negative corpus, sensitive-screen invariant, redact parity, `ParseOutputGoldenTest`),
+  schema validation, canonicalization, signature (#641). A drafted rule that over-matches forges
+  state; a drafted rule with a wrong redact ships PII to every phone; both are caught only here plus
+  a reader, so **human approval before signing is structural** (ADR-0011 §9). A fully automatic push
+  is out of scope by design; a canary ring keyed on the install id can widen a rollout later.
+- **The single local dev loop is unchanged.** The matchers included build, the canonicalizer and the
+  generated assets are exactly as decided above; a drafted rule lands as an ordinary JSON5 edit under
+  `matchers/rules/`.
+
+Consequence for the split (#192/#637): the separate repo's contributor surface is a review queue and
+a fixture corpus, not a rule-authoring guide; its CI is the same suite, run on drafted PRs.
