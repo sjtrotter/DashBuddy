@@ -239,8 +239,13 @@ filter over every text field of the frame (tree + window title) and SEEDS:
   grammar checks only its syntax), so it is checked against customer-name runs ONLY — the runs of a
   class-guarding kind (NAME: `com.x.RileyButton` beside `customer_name` "Riley" is absent) — never a
   title or merchant word (a `SearchView` class beside `tvTitle` "Search" stays), and never a KNOWN
-  framework class — an exact binary name in `FrameworkClasses.KNOWN` (every framework-prefixed class the
-  committed corpus renders, pinned by a corpus guard, plus the wrapper set and Material's `Chip`), so
+  framework class — an exact binary name in `FrameworkClasses.KNOWN`: the pinned inventory
+  `core/pipeline/src/main/resources/census/framework-classes.txt` (every public class under
+  `android.view.`/`android.widget.`/`android.webkit.` in the SDK `android.jar` and under `androidx.` /
+  `com.google.android.material.` in the artifacts the build resolves — Kotlin facades and the Compose icon
+  tables excluded — regenerated from the unit-test classpath and diffed by `FrameworkClassInventoryTest`,
+  review round 15) ∪ every framework-prefixed class the committed corpus renders (pinned by a corpus
+  guard) ∪ the wrapper set and Material's `Chip`, so
   "Chip" never nulls `…material.chip.Chip` and forks the fingerprint per customer, and wrapper
   eligibility cannot depend on the customer. A framework PREFIX is not proof: an app can name its own
   class `androidx.RileyButton`, and any unlisted class is judged like an app class (review rounds 11–14).

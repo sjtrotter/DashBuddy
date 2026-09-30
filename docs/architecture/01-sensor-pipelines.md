@@ -638,8 +638,9 @@ side-effect-free half.
   (`row_mc_kenna`), replaces a node's static id with the reserved sentinel `~` (`chipAdam` beside
   `customer_name` "Adam", `search_bar` beside `tvTitle` "Search") so the fingerprint's STRUCTURE never
   depends on the customer; a class carrying a customer-NAME run is absent (`com.x.RileyButton`,
-  `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names,
-  corpus-pinned). `IdPathJudgement.isStaticId` is
+  `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
+  classpath-generated inventory `census/framework-classes.txt`, diffed by `:app`'s
+  `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
   classification cannot be verified, #1160 round 13). On the id path the PII judgement is stricter-to-trigger: a
