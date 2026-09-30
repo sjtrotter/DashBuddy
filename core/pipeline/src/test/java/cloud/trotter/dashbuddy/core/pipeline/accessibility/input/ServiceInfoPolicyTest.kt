@@ -80,4 +80,13 @@ class ServiceInfoPolicyTest {
         assertFalse(ServiceInfoPolicy.shouldWarnUnreliable(EventReceiptConsent.DECLINED, 30, alreadyWarned = false))
         assertFalse(ServiceInfoPolicy.shouldWarnUnreliable(EventReceiptConsent.UNDECIDED, 30, alreadyWarned = false))
     }
+
+    @Test
+    fun `isWide is a faithful dedup key for the policy output (NN4)`() {
+        for (a in EventReceiptConsent.entries) for (b in EventReceiptConsent.entries) {
+            val sameOutput = ServiceInfoPolicy.packageNamesFor(a, watched)
+                .contentEquals(ServiceInfoPolicy.packageNamesFor(b, watched))
+            assertEquals("$a vs $b", sameOutput, ServiceInfoPolicy.isWide(a) == ServiceInfoPolicy.isWide(b))
+        }
+    }
 }

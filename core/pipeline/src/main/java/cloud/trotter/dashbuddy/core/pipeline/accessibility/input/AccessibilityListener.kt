@@ -16,7 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -165,10 +165,11 @@ class AccessibilityListener : AccessibilityService() {
         serviceScope = scope
         scope.launch {
             // null = the store is not read yet (or unreadable) ⇒ UNDECIDED, the filtered footprint.
-            // MM8: map BEFORE dedup, so null → UNDECIDED → UNDECIDED applies (and logs) once.
+            // MM8/NN4: dedup on the policy OUTPUT (wide or the one filtered list), so null,
+            // UNDECIDED and DECLINED — the same package list — apply (and log) once per connect.
             eventReceiptPreferences.consent
                 .map { it ?: EventReceiptConsent.UNDECIDED }
-                .distinctUntilChanged()
+                .distinctUntilChangedBy { ServiceInfoPolicy.isWide(it) }
                 .collect { consent -> eventReceiptApplier.onConsent(consent) }
         }
 
