@@ -4,57 +4,63 @@ import cloud.trotter.dashbuddy.core.datastore.settings.EventReceiptConsentDataSo
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * THE owner of the wide-event-receipt consent (#1151). Eagerly materialized for the app's lifetime
+ * THE owner of the wide-event-receipt consent (#1151). Materialized once for the app's lifetime
  * (the [PlatformPreferencesRepository] pattern, #356): the accessibility listener, the Dashboard
  * prompt and the Settings switch all read this one [StateFlow].
  *
  * **Fail-closed decode:** nothing saved, or an unrecognized stored name, reads as
- * [EventReceiptConsent.UNDECIDED] — the filtered footprint. Only an explicit ALLOWED widens. The
- * pre-read / unreadable value is `null`, which every consumer treats as UNDECIDED.
+ * [EventReceiptConsent.UNDECIDED] — the filtered footprint. Only an explicit ALLOWED widens.
+ *
+ * **Value meanings (review NN2):** `null` means ONLY "not read yet". A failed read is retried with
+ * bounded backoff ([RETRY_BASE_MS] × attempt, at most [MAX_RETRIES] per failure episode, one ERROR
+ * per episode) while the value keeps what it had; when the retries are exhausted the value becomes
+ * [EventReceiptConsent.UNDECIDED] — filtered, but USABLE: the prompt shows and the switch works. A
+ * successful [set] is observed immediately and restarts a reader that had given up.
  */
 @Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
     private val dataSource: EventReceiptConsentDataSource,
-    @ApplicationScope scope: CoroutineScope,
+    @ApplicationScope private val scope: CoroutineScope,
 ) : EventReceiptPreferences {
 
-    /**
-     * THE materialization: `null` until the first read. **Fails closed, loud, and recovers (review
-     * LL7/MM5):** a failed read emits `null` (filtered footprint, no prompt) and is RETRIED with
-     * bounded backoff ([RETRY_BASE_MS] × attempt, at most [MAX_RETRIES] per failure episode), so a
-     * transient I/O error cannot freeze the value for the process lifetime. One ERROR per episode; a
-     * successful read ends the episode. Only when the retries are exhausted does the flow settle on
-     * `null` for good.
-     */
-    override val consent: StateFlow<EventReceiptConsent?> = consentFlow()
-        .stateIn(scope, SharingStarted.Eagerly, null)
+    private val _consent = MutableStateFlow<EventReceiptConsent?>(null)
+    override val consent: StateFlow<EventReceiptConsent?> = _consent.asStateFlow()
 
-    private fun consentFlow(): Flow<EventReceiptConsent?> {
+    @Volatile
+    private var reader: Job = startReader()
+
+    private fun startReader(): Job = scope.launch {
+        readFlow().collect { _consent.value = it }
+    }
+
+    private fun readFlow(): Flow<EventReceiptConsent> {
         var failuresInEpisode = 0
         return dataSource.consent
-            .map<String?, EventReceiptConsent?> { decode(it) }
+            .map { decode(it) }
             .onEach { failuresInEpisode = 0 }
             .retryWhen { cause, _ ->
                 if (failuresInEpisode == 0) {
-                    Timber.tag("Data").e(cause, "event-receipt consent unreadable — treating as undecided")
+                    Timber.tag("Data").e(cause, "event-receipt consent unreadable — retrying")
                 }
                 failuresInEpisode++
-                emit(null)
                 if (failuresInEpisode > MAX_RETRIES) {
                     false
                 } else {
@@ -62,11 +68,30 @@ class EventReceiptPreferencesRepository @Inject constructor(
                     true
                 }
             }
-            .catch { emit(null) } // retries exhausted: stay fail-closed (already logged)
+            .catch {
+                // Retries exhausted (already logged): settle on the usable fail-closed value.
+                Timber.tag("Data").e("event-receipt consent still unreadable — treating as undecided")
+                emit(EventReceiptConsent.UNDECIDED)
+            }
     }
 
-    override suspend fun set(consent: EventReceiptConsent) {
-        dataSource.setConsent(consent.name)
+    /**
+     * Persist a decision (review NN3): never throws a storage failure — it is logged (ERROR, tag
+     * `Data`) and reported as `false`, the value unchanged. On success the value is observed at once
+     * (the store now holds exactly [consent]) and a reader that had given up is restarted.
+     */
+    override suspend fun set(consent: EventReceiptConsent): Boolean {
+        try {
+            dataSource.setConsent(consent.name)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag("Data").e(e, "event-receipt consent write failed — decision not saved")
+            return false
+        }
+        _consent.value = consent
+        if (!reader.isActive) reader = startReader()
+        return true
     }
 
     companion object {

@@ -52,13 +52,16 @@ enum class EventReceiptConsent {
 interface EventReceiptPreferences {
 
     /**
-     * The persisted decision, materialized once (#356). `null` means the store has not been read
-     * yet (or could not be read) — enforcement treats it as [EventReceiptConsent.UNDECIDED] (the
+     * The persisted decision, materialized once (#356). `null` means ONLY that the store has not
+     * been read yet (an unreadable store settles on UNDECIDED, review NN2) — enforcement treats it as [EventReceiptConsent.UNDECIDED] (the
      * filtered, fail-closed footprint), while the prompt waits for a non-null value so a decided
      * dasher never sees it flash. ONE flow, so the two can never disagree for a frame.
      */
     val consent: StateFlow<EventReceiptConsent?>
 
-    /** Persist a decision. */
-    suspend fun set(consent: EventReceiptConsent)
+    /**
+     * Persist a decision. Never throws a storage failure: returns `false` (logged by the
+     * implementation) and leaves [consent] unchanged.
+     */
+    suspend fun set(consent: EventReceiptConsent): Boolean
 }

@@ -53,7 +53,7 @@ class FrontDoorFirstChoiceTest {
     private class UndecidedReceipt : EventReceiptPreferences {
         override val consent: StateFlow<EventReceiptConsent?> =
             MutableStateFlow(EventReceiptConsent.UNDECIDED)
-        override suspend fun set(consent: EventReceiptConsent) = error("unused")
+        override suspend fun set(consent: EventReceiptConsent): Boolean = error("unused")
     }
 
     @Test

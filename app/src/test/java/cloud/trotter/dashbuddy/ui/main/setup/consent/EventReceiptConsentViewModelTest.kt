@@ -33,9 +33,10 @@ class EventReceiptConsentViewModelTest {
         val consentFlow = MutableStateFlow(initial)
         override val consent: StateFlow<EventReceiptConsent?> = consentFlow
         val setCalls = mutableListOf<EventReceiptConsent>()
-        override suspend fun set(consent: EventReceiptConsent) {
+        override suspend fun set(consent: EventReceiptConsent): Boolean {
             setCalls += consent
             consentFlow.value = consent
+            return true
         }
     }
 

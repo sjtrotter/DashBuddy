@@ -64,6 +64,7 @@ class CapabilityConsentViewModel @Inject constructor(
     /** #1151 — on ⇒ ALLOWED, off ⇒ a durable DECLINED (an explicit act, never back to UNDECIDED). */
     fun setEventReceiptAllowed(allowed: Boolean) {
         viewModelScope.launch {
+            // NN3: a failed write is logged by the repository; the switch reads back the old value.
             eventReceipt.set(EventReceiptConsent.of(allowed))
         }
     }

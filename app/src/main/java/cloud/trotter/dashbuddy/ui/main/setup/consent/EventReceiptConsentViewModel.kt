@@ -45,6 +45,7 @@ class EventReceiptConsentViewModel internal constructor(
      */
     fun onDecision(allow: Boolean) {
         viewModelScope.launch {
+            // NN3: a failed write is logged by the repository; the prompt simply stays up.
             preferences.set(EventReceiptConsent.of(allow))
         }
     }

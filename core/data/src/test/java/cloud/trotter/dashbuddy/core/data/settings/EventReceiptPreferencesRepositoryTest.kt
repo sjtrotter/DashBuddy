@@ -19,7 +19,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -30,7 +32,8 @@ import java.io.IOException
  * #1151 — the event-receipt consent over a REAL Preferences DataStore: UNDECIDED by default (the
  * filtered footprint), a decision round-trips through the one [StateFlow] every consumer reads, a
  * corrupt stored name fails closed to UNDECIDED, the value is null until the store was read, and an
- * unreadable store fails closed to null (LL7) instead of terminating the shared flow.
+ * unreadable store settles on a usable UNDECIDED (NN2) instead of a frozen null, and a failed write
+ * never throws (NN3).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventReceiptPreferencesRepositoryTest {
@@ -57,17 +60,57 @@ class EventReceiptPreferencesRepositoryTest {
     }
 
     @Test
-    fun `an unreadable store fails closed to null instead of killing the flow`() = runTest {
+    fun `an always-unreadable store settles on a USABLE UNDECIDED, and a later write is observed`() = runTest {
         val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "e.preferences_pb") },
+        )
+        var readable = false
         val broken = object : DataStore<Preferences> {
-            override val data: Flow<Preferences> = flow { throw IOException("corrupt") }
+            override val data: Flow<Preferences> = flow {
+                if (!readable) throw IOException("corrupt")
+                emitAll(real.data)
+            }
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
-                throw IOException("corrupt")
+                real.updateData(transform)
         }
         val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(broken), storeScope)
-        advanceUntilIdle()
+        runCurrent()
+        assertNull("not read yet", repo.consent.value)
 
-        assertNull("unreadable ⇒ null (filtered footprint, no prompt)", repo.consent.value)
+        advanceUntilIdle() // every retry exhausted
+        assertEquals(
+            "exhausted ⇒ UNDECIDED (prompt + switch usable), never a frozen null",
+            EventReceiptConsent.UNDECIDED,
+            repo.consent.value,
+        )
+
+        readable = true
+        assertTrue(repo.set(EventReceiptConsent.ALLOWED))
+        advanceUntilIdle()
+        assertEquals("a successful write is observed", EventReceiptConsent.ALLOWED, repo.consent.value)
+    }
+
+    @Test
+    fun `a failed write never throws, reports false, and leaves the value unchanged`() = runTest {
+        val storeScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val real = PreferenceDataStoreFactory.create(
+            scope = storeScope,
+            produceFile = { File(tmp.root, "f.preferences_pb") },
+        )
+        val readOnly = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = real.data
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                throw IOException("disk full")
+        }
+        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(readOnly), storeScope)
+        advanceUntilIdle()
+        assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
+
+        assertFalse(repo.set(EventReceiptConsent.ALLOWED))
+        advanceUntilIdle()
+        assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
     }
 
     @Test
