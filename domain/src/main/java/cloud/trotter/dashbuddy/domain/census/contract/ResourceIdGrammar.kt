@@ -57,6 +57,8 @@ object ResourceIdGrammar {
      * shape; the PII judgement is client-side.
      */
     fun isStaticShape(id: String): Boolean {
+        // Review NN6: bound the input BEFORE the regex (the class grammar's order): prefix + ":id/" + name.
+        if (id.length > MAX_PACKAGE_LENGTH + 4 + MAX_NAME_LENGTH) return false
         val m = SHAPE.matchEntire(id) ?: return false
         val pkg = m.groupValues[1]
         val name = m.groupValues[2]
