@@ -837,7 +837,7 @@
     <string name="playbook_heatmap_plan_outline_caption">Outlined cells are the hours this week\'s plan picked.</string>
     <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
     <string name="debug_event_receipt_block_title">Wide event receipt is off</string>
-    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt to capture offer overlays. Allow it in Settings → Data &amp; Privacy to keep using the app.</string>
-    <string name="debug_event_receipt_block_open_settings">Open Data &amp; Privacy</string>
+    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt to capture offer overlays. Allow it in %1$s to keep using the app.</string>
+    <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
 </resources>

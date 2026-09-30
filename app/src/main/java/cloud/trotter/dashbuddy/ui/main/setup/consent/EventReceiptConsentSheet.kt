@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
+import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
 
 /**
  * The wide-event-receipt consent prompt (#1151) — the `ConsentPromptSheet` rhythm for a FEATURE
@@ -75,7 +76,7 @@ fun EventReceiptConsentSheet(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = stringResource(SettingsR.string.event_receipt_body),
+                text = eventReceiptDisclosure(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
