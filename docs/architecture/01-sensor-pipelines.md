@@ -336,64 +336,84 @@ then fired, and were answered with the window beneath). The shipped rules:
   `false`) and the derived `Platform.overlayPackages`. `:core:pipeline` names no platform; adding an
   overlay platform is flipping one flag (principle 8).
 - **D2 — candidacy is TYPE → SIZE → PACKAGE, cheapest first** (`AccessibilitySource.overlayProbe`, the
-  one seam; `isOverlayCandidate` is an internal test seam, review BB11): `TYPE_SYSTEM` and not PiP;
-  bounds ≥ `MIN_OVERLAY_AREA_FRACTION` (0.25) of the display area — the service's display metrics
-  ONLY (review BB4: no window-bounds fallback — the largest application window can be a small PiP,
-  which would make the puck "half the display"); an unknown area admits NOTHING (`NO_DISPLAY_AREA`).
-  The puck (~0.8 %), status bar (~5 %), heads-up notifications and toasts fail on size WITHOUT a root
-  fetch; then the root's package ∈ `overlayPackages` — the expanded shade passes on size and fails
-  here. The outcome is THREE-valued (review BB1): `Candidate` / `NotCandidate` / `Unreadable` (a
-  LARGE system window whose root cannot be read — its owner is unverifiable, and it may be an
-  offer overlay). Refusals are counted once per DECISION, by first failed check,
-  `overlayRejected{NO_DISPLAY_AREA,TOO_SMALL,UNREADABLE,NOT_OVERLAY_PLATFORM}`. A candidate is READ
-  only if its package is ENABLED, and the package is re-verified on the freshly-fetched root that is
-  mapped. A **DISABLED** overlay platform's overlay is NOT a candidate (review BB6) — skipped on every
-  path, so an ignored platform's offer never blanks the enabled window beneath it.
-- **D3 — `WindowVerdictCache`** (review BB7; `windowId → (packageName?, verdict)`, LRU 64, package names
-  and enums only — never a node): the package is filled on every root fetch that resolves one
-  (application AND system windows); a DECIDED system-window verdict (`CANDIDATE`, `TOO_SMALL`,
-  `NOT_OVERLAY_PLATFORM`) is memoized, so each status bar / nav bar / puck is probed — bounds read,
-  counted — ONCE per window id, not per frame; `UNREADABLE` and `NO_DISPLAY_AREA` are never memoized
-  (retried). `foregroundWindow` reads it before fetching a root (a cached own/non-enabled application
+  ONE seam — the Boolean `isOverlayCandidate` was deleted, review CC11, since it lost the
+  unreadable distinction): `TYPE_SYSTEM` and not PiP; bounds ≥ `MIN_OVERLAY_AREA_FRACTION` (0.25) of
+  the display area — the service's display metrics ONLY (review BB4: no window-bounds fallback — the
+  largest application window can be a small PiP, which would make the puck "half the display"),
+  memoized per topology generation (review CC9); an unknown area admits NOTHING (`NO_DISPLAY_AREA`,
+  checked before any memo). The puck (~0.8 %), status bar (~5 %), heads-up notifications and toasts
+  fail on size WITHOUT a root fetch; then the root's package ∈ `overlayPackages` — the expanded shade
+  passes on size and fails here. The outcome is sealed (review BB1/CC5): `Candidate` /
+  `NotCandidate` / `Unreadable` (a LARGE system window whose root cannot be read — its owner is
+  unverifiable, and it may be an offer overlay) / `BudgetExhausted`. Refusals are counted once per
+  DECISION, by first failed check,
+  `overlayRejected{NO_DISPLAY_AREA,TOO_SMALL,UNREADABLE,NOT_OVERLAY_PLATFORM,PACKAGE_CHANGED}`. A
+  candidate is READ only if its package is ENABLED, and the package is re-verified on the
+  freshly-fetched root that is mapped; a memoized CANDIDATE whose fresh root names another package is
+  CORRECTED in the memo and counted `PACKAGE_CHANGED` (review CC10) — never a `FRONT_NOT_ENABLED`
+  refusal. A **DISABLED** overlay platform's overlay is NOT a candidate (review BB6) — skipped on
+  every path, so an ignored platform's offer never blanks the enabled window beneath it.
+- **D3 — `WindowVerdictCache`** (review BB7/CC1; `windowId → (packageName?, verdict, bounds)`, LRU 64,
+  package names, enums and four ints only — never a node): the package is filled on every root fetch
+  that resolves one (application AND system windows); a DECIDED system-window verdict (`CANDIDATE`,
+  `TOO_SMALL`, `NOT_OVERLAY_PLATFORM`) is memoized so each status bar / nav bar / puck costs no root
+  fetch and is counted ONCE per window id; `UNREADABLE`, `NO_DISPLAY_AREA` and budget exhaustion are
+  never memoized (retried). The memo is **geometry- and generation-checked** (review CC1): EVERY
+  memoized verdict stores the bounds it was decided on and is honoured only while the window's
+  CURRENT bounds are equal (a resized window keeps its id — a puck that grew into a card is
+  re-probed); `AccessibilitySource.emit` CLEARS the cache on every `TYPE_WINDOWS_CHANGED` and bumps a
+  topology generation, and every write carries the generation its caller read BEFORE probing — a
+  collector paused in a root fetch (or iterating an older window list) across a clear has its write
+  DISCARDED. `foregroundWindow` reads it before fetching a root (a cached own/non-enabled application
   window decides without a fetch), and the topology path's "is the active window ours" reads through
-  it (`packageOf`, review BB10). CLEARED by `AccessibilitySource.emit` on every `TYPE_WINDOWS_CHANGED`
-  (a resize fires one, so memoized bounds cannot go stale) before the event reaches a collector;
-  window ids are allocated monotonically, so an entry written by a collector that read the old list
-  only describes a window that no longer exists.
-- **D4 — foreground.** `foregroundWindow`'s candidates are the application windows (as shipped) ∪
-  ENABLED overlay candidates, by `layer`; the first decides exactly as before (readable-top-or-refuse).
-  A LARGE unreadable system window on top refuses `FRONT_UNREADABLE` (review BB1 — never read the
-  window beneath what may be an offer overlay; a small one is skipped without a fetch). A cached
-  overlay whose root vanished → `FRONT_UNREADABLE`. `LocatedWindow.isOverlay` marks the result. A
+  it (`packageOf`, review BB10).
+- **D4 — the front window: ONE readable-top-or-refuse walk** (`frontOf`, behind `foregroundWindow` and
+  `frontAbove`). Candidates are the application windows (as shipped, own and PiP skipped) ∪ ENABLED
+  overlay candidates, over EVERY window type by `layer`; the first decides. A LARGE unreadable system
+  window refuses `FRONT_UNREADABLE` (review BB1 — never read the window beneath what may be an offer
+  overlay; a small one is skipped without a fetch); a cached overlay whose root vanished →
+  `FRONT_UNREADABLE`. **Root-fetch budget** (review CC5): at most `MAX_SCAN_ROOT_FETCHES` = 8 discovery
+  root fetches per walk; exhaustion refuses `SCAN_BUDGET` (counted in `foregroundSkip{…}` on every
+  path), never falls through — dozens of large readable non-overlay system windows cannot make every
+  frame fetch them all and thrash the 64-entry cache. `LocatedWindow.isOverlay` marks the result. A
   DoorDash toast is never a candidate (DoorDash has no `offerOverlay`); an Uber toast/puck fails size.
-- **D5 — an enabled overlay on top IS the frame (review BB5, superseding the event's-own-window
-  branch).** In `snapshotForEvent`, when the ACTIVE root is an enabled package and any overlay platform
-  is enabled (the cheap pre-gate — a DoorDash-only dasher never enumerates), ONE enumeration looks for
-  the topmost ENABLED overlay candidate whose `layer` is strictly greater than the active window's
-  (`AccessibilitySource.overlayAboveActive`) — whichever window fired. While one is up, EVERY
-  content/state resolution reads the overlay: two bursts (the covered map's and the overlay's) can
+- **D5 — an enabled overlay on top IS the frame (review BB5).** In `snapshotForEvent`, when the ACTIVE
+  root is an enabled package and any overlay platform is enabled, ONE enumeration walks the windows
+  ABOVE the active one (`AccessibilitySource.overlayAboveActive` → `frontAbove`, every window type —
+  review CC4: an application window, not ours and not PiP, above the overlay means the overlay is not
+  frontmost and the active root is read) — whichever window fired. While an enabled overlay is the
+  front, EVERY content/state resolution reads it: the covered window's bursts and the overlay's can
   never alternate and flap R0 offer ↔ map (the #1148 F1 class); `FrameGate`'s identity dedup
-  collapses the repeats. **Trade-off, accepted:** while an enabled overlay covers the active window,
-  that window's own transitions are NOT read (the dasher is looking at the overlay; the field item
-  watches for missed transitions). Safe by construction: the overlay is ON TOP, so this is never the
-  hidden-activity shape F1 removed. The active identity is RECONCILED (review BB2): the active root's
-  window must be in the enumeration and be the one window flagged active — absent, or the flags
-  disagree (focus moved, e.g. to our bubble) → no overlay, the active root is read. An unreadable
-  large system window above the active one stops the scan (never reach past an unverifiable window).
+  collapses the repeats. An unreadable LARGE system window above the active one refuses the frame
+  `FRONT_UNREADABLE` (review CC7 — the same as the bubble path; otherwise the covered window would
+  interleave with the overlay across its animate-in / tear-down frames); budget exhaustion refuses
+  `SCAN_BUDGET`. Safe by construction: the overlay is ON TOP, so this is never the hidden-activity
+  shape F1 removed. The active identity is RECONCILED (review BB2): the active root's window must be
+  in the enumeration and be the one window flagged active — else no overlay, the active root is read.
   An overlay that IS the active window is left to the active-root path. An overlay that fails to map
-  (tearing down mid-walk) falls back to the active root, never `MAP_FAILED` (review BB9). When the
-  active window is NOT enabled (our bubble, the launcher), the overlay is reached by step 3's
-  `foregroundWindow` (D4) under readable-top-or-refuse. Every overlay frame is counted,
-  `overlaySnapshots=n` (`EventSnapshot.Resolved.viaOverlay`, counted by both callers). No new skip
-  reason; the post-map check and `TreeSnapshot.Trigger` are unchanged. Belt-and-braces (review BB3):
-  the content coalescer gives each overlay-platform package its OWN burst key (one burst per overlay
-  platform + one for everything else), so a DoorDash → overlay → DoorDash sequence can never fold the
-  overlay's event into a DoorDash burst.
-- **D6 — topology.** `WindowsChangedPipeline`'s above-the-active-window loop admits `TYPE_APPLICATION`
-  (as shipped) OR ENABLED overlay candidates; the bubble-active branch already emits the
-  `foregroundWindow` result, which may now be an overlay. Emitted overlays are counted the same way.
-  The DEBUG window-list line adds `area%=<int>` (the window's share of the display — what D2 reads;
-  `-1` when unknown) beside `titleLen` — no text.
+  (tearing down) falls back to the active root, never `MAP_FAILED` (review BB9). When the active
+  window is NOT enabled (our bubble, the launcher), the overlay is reached by step 3's
+  `foregroundWindow` (D4). Every overlay frame is counted, `overlaySnapshots=n`; every scan is counted,
+  `overlayScans=n` (review CC9). **Cost, accepted (CC9):** with an overlay platform enabled, every
+  event-path resolution pays one `getWindows()` enumeration (memoized verdicts keep root fetches
+  out of it). There is no safe pre-gate: in release the verdict cache never clears until #1151 lands
+  the topology stream, so a cached "no overlay above" verdict could hide a new card. The content
+  coalescer stays ONE burst (review CC8 reverted BB3's per-platform key: the resolver never reads
+  the burst's package/window, so a second key only mapped the same overlay twice per burst pair).
+  **State-machine consequence, accepted (review CC12):** while an enabled CROSS-platform overlay is
+  on top (an Uber card over a DoorDash dash), R0 follows the overlay's platform — the covered dash's
+  transitions are unobserved for the card's lifetime and its settle park (§3) is dropped when R0
+  leaves its surface. Two platforms visible at once is the multiplatform problem tracked in
+  [#251](https://github.com/sjtrotter/DashBuddy/issues/251) /
+  [#826](https://github.com/sjtrotter/DashBuddy/issues/826), deliberately not solved here.
+- **D6 — topology emits ONE front window** (review CC2/CC3). `WindowsChangedPipeline` emits exactly the
+  window `frontAbove` picks above the active window (an enabled application window OR an enabled
+  overlay), or nothing: an overlay over a covered DoorDash sheet emits the overlay only (never both —
+  that re-opened the interleaving); an unreadable window above is a BARRIER (nothing beneath it is
+  emitted); a foreign application window on top emits nothing. The bubble-active branch emits the
+  `foregroundWindow` result. Emitted overlays are counted the same way. The DEBUG window-list line
+  adds `area%=<int>` (the window's share of the display; `-1` when unknown) beside `titleLen` — no
+  text.
 - **Not in #1152:** release `packageNames` consent (#1151 — the topology path stays debug-only until it
   lands; D5 works in release because the overlay's own package is on the framework list);
   state-machine acceptance of a background-platform offer (#251/#826); any rule change. Nothing new
