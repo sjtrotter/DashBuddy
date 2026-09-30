@@ -83,4 +83,16 @@ class ServiceInfoPolicyTest {
             assertEquals("$a vs $b", sameOutput, ServiceInfoPolicy.isWide(a) == ServiceInfoPolicy.isWide(b))
         }
     }
+
+    @Test
+    fun `only a debug build that DECLINED disables its own service (QQ3)`() {
+        for (consent in EventReceiptConsent.entries) {
+            assertFalse("release never disables ($consent)", ServiceInfoPolicy.shouldDisableSelf(consent, isDebugBuild = false))
+            assertEquals(
+                "debug $consent",
+                consent == EventReceiptConsent.DECLINED,
+                ServiceInfoPolicy.shouldDisableSelf(consent, isDebugBuild = true),
+            )
+        }
+    }
 }

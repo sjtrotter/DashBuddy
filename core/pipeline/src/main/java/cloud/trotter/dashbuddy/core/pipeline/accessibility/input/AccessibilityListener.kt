@@ -18,7 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -49,6 +49,9 @@ class AccessibilityListener : AccessibilityService() {
      */
     @Inject
     lateinit var eventReceiptPreferences: EventReceiptPreferences
+
+    /** QQ3 — `disableSelf()` is called at most once per service instance. */
+    private var disabledSelf = false
 
     /** Service-scoped; created in [onServiceConnected], cancelled in [onUnbind] / [onDestroy]. */
     private var serviceScope: CoroutineScope? = null
@@ -114,9 +117,9 @@ class AccessibilityListener : AccessibilityService() {
     /**
      * #1151 — apply the consent to the live subscription. `eventTypes` keeps the debug-only
      * widening to every type (unhandled-type logging); `packageNames` is governed ONLY by the
-     * consent, in every build type. Never throws (PP3).
+     * consent, in every build type. Never throws (PP3); returns whether the apply took effect.
      */
-    private fun applyEventReceipt(consent: EventReceiptConsent) {
+    private fun applyEventReceipt(consent: EventReceiptConsent): Boolean {
         // PP3: an apply can never take sensing down — any failure (a RemoteException rethrown by
         // getServiceInfo, setServiceInfo on a torn-down connection, the LL9 refusal) is ONE log line
         // and the manifest's filtered footprint stays in force.
@@ -125,14 +128,14 @@ class AccessibilityListener : AccessibilityService() {
             // onServiceConnected re-applies on reconnect.
             val info = serviceInfo ?: run {
                 Timber.tag("Pipeline").w("Event receipt: no serviceInfo (not connected) — apply skipped")
-                return
+                return false
             }
             val packageNames = try {
                 ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
             } catch (e: IllegalArgumentException) {
                 // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
                 Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")
-                return
+                return false
             }
             if (BuildConfig.DEBUG) {
                 info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
@@ -147,9 +150,11 @@ class AccessibilityListener : AccessibilityService() {
                     )
                 }
             }
+            return true
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             Timber.tag("Pipeline").w(t, "Event receipt: apply failed — sensing continues on the manifest footprint")
+            return false
         }
     }
 
@@ -172,12 +177,25 @@ class AccessibilityListener : AccessibilityService() {
         serviceScope = scope
         scope.launch {
             // null = the store is not read yet (or unreadable) ⇒ UNDECIDED, the filtered footprint.
-            // MM8/NN4: dedup on the policy OUTPUT (wide or the one filtered list), so null,
-            // UNDECIDED and DECLINED — the same package list — apply (and log) once per connect.
+            // MM8/NN4: the APPLY dedups on the policy OUTPUT (wide or the one filtered list), so
+            // null, UNDECIDED and DECLINED — the same package list — apply (and log) once per
+            // connect. QQ3 needs every distinct consent (UNDECIDED → DECLINED is not an output
+            // change), so the collect sees each value and the output dedup lives here.
+            var appliedWide: Boolean? = null
             eventReceiptPreferences.consent
                 .map { it ?: EventReceiptConsent.UNDECIDED }
-                .distinctUntilChangedBy { ServiceInfoPolicy.isWide(it) }
-                .collect { consent -> applyEventReceipt(consent) }
+                .distinctUntilChanged()
+                .collect { consent ->
+                    val wide = ServiceInfoPolicy.isWide(consent)
+                    if (wide != appliedWide && applyEventReceipt(consent)) appliedWide = wide
+                    if (!disabledSelf && ServiceInfoPolicy.shouldDisableSelf(consent, BuildConfig.DEBUG)) {
+                        disabledSelf = true
+                        Timber.tag("Pipeline").i(
+                            "event receipt declined on a debug build — disabling the accessibility service",
+                        )
+                        disableSelf()
+                    }
+                }
         }
 
         // Register with the source

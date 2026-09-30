@@ -42,6 +42,15 @@ object ServiceInfoPolicy {
     fun shouldWarnUnreliable(consent: EventReceiptConsent, sdkInt: Int, alreadyWarned: Boolean): Boolean =
         !alreadyWarned && isWide(consent) && !EventReceiptConsent.isWideReceiptReliable(sdkInt)
 
+    /**
+     * #1151 review QQ3 (dev re-sequencing, 2026-09-30) — a DEBUG build whose dasher DECLINED wide
+     * receipt turns its own accessibility service off (`disableSelf()`), so recognition and the HUD
+     * stop even when the service had been granted before the decline; re-allowing sends the dasher
+     * back through the permission chain. A release build never disables itself.
+     */
+    fun shouldDisableSelf(consent: EventReceiptConsent, isDebugBuild: Boolean): Boolean =
+        isDebugBuild && consent == EventReceiptConsent.DECLINED
+
     /** True when [packageNamesFor] widens to every package — the one fact the INFO line reports. */
     fun isWide(consent: EventReceiptConsent): Boolean = consent == EventReceiptConsent.ALLOWED
 }
