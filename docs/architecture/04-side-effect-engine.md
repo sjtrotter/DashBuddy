@@ -151,8 +151,8 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   up front (review I1)** and dropped if the refresh fails, so every scan and verification reads its CURRENT
   state (a recycled row that rebinds Decline → Accept is verified as Accept); `clickNodeStrict(owner, pkg)` then
   clicks with NO second refresh — it only re-checks that the owner still takes a click in the scoped package.
-  Labels are verified on the OWNER's bounded subtree plus the matched node's OWN bounded subtree through the same
-  `LabelHorizon` rule (review I8/Y1 — a title, or a container whose label sits on its child, more than 3 levels
+  Labels are verified on the OWNER's bounded subtree plus EVERY fresh matched member's bounded subtree through the
+  same `LabelHorizon` rule — so the evidence choice never decides verification (review I8/Y1/Z1 — a title, or a container whose label sits on its child, more than 3 levels
   below its button still verifies; the semantic fingerprint stays owner-scoped). An owner's evidence is its STRONGEST fresh member under the cross-owner
   ranker's own tiers — exact stored text, then max overlap with the captured rect (review W1) — so owners compete
   strongest-vs-strongest, independent of child order; a tie INSIDE one owner keeps a tied-strongest member

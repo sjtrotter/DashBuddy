@@ -340,4 +340,28 @@ class UiInteractionHandlerOwnerTest : UiInteractionHandlerTapTestKit() {
         ownerA.clicks(1)
         ownerB.neverClicked()
     }
+
+    /**
+     * Z1: owner A and its non-clickable descendant C share the id, null text and identical bounds; C (four
+     * levels down) holds "Accept" on its child; competitor B shares the id with "Accept". The verification set is
+     * the union over EVERY fresh member, so the evidence choice (A or C) never decides — A in both orders.
+     */
+    @Test
+    fun `verification labels are the union over all fresh members`() = runTest {
+        for (cFirst in listOf(false, true)) {
+            val rect = Rect(40, 2000, 1000, 2120)
+            val c = view(bounds = rect, children = listOf(view(cls = "android.widget.TextView", text = "Accept")))
+            var chain: AccessibilityNodeInfo = c
+            repeat(3) { chain = view(children = listOf(chain)) }
+            val a = view(clickable = true, bounds = rect, children = listOf(chain))
+            val bTitle = view(cls = "android.widget.TextView", text = "Accept")
+            val b = view(clickable = true, bounds = Rect(40, 2100, 1000, 2220), children = listOf(bTitle))
+            val byId = if (cFirst) listOf(c, a, b) else listOf(a, c, b)
+            val root = windowRoot(a, b, byId = byId)
+            val ref = idRef.copy(boundsInScreen = BoundingBox(rect.left, rect.top, rect.right, rect.bottom))
+            assertTrue("cFirst=$cFirst", accept(handler(root), ref))
+            a.clicks(1)
+            b.neverClicked()
+        }
+    }
 }

@@ -241,7 +241,9 @@ class UiInteractionHandler @Inject constructor(
             // (LabelHorizon — same depth/slot horizon, package and nested-clickable boundaries, capped): a
             // bound container whose "Accept" sits on its own child, deeper than the owner scan reaches, still
             // verifies. Expectation verification only — the semantic fingerprint stays OWNER-scoped.
-            val evidenceLabels = if (!separateEvidence) emptyList() else scanLabels(target.evidence, expectedPackage).labels
+            // Z1: the union over EVERY fresh member (each bounded by the shared horizon; a group is a handful
+            // of nodes), so evidence selection affects only the ranker's text/bounds facts, never verification.
+            val evidenceLabels = target.freshMembers.flatMap { scanLabels(it, expectedPackage).labels }.distinct()
             val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
@@ -439,6 +441,8 @@ class UiInteractionHandler @Inject constructor(
         val ancestors: Set<Int>,
         /** T5: [evidence] (when it is not the owner) was refreshed successfully while choosing it. */
         val evidenceFresh: Boolean = true,
+        /** Z1: every FRESH matched member of this owner's group other than the owner itself. */
+        val freshMembers: List<AccessibilityNodeInfo> = emptyList(),
     )
 
     private class OwnerResolution(val targets: List<OwnedTarget>, val orphaned: Int, val stale: Int, val staleSemantic: Int)
@@ -522,6 +526,7 @@ class UiInteractionHandler @Inject constructor(
                 ancestors = members[j].flatMap { candidates[it].ancestors }
                     .mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet(),
                 evidenceFresh = evidence in fresh,
+                freshMembers = fresh.map { it.node }.filter { it != owner },
             )
         }
         return OwnerResolution(targets, orphaned, stale, staleSemantic)
