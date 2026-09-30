@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.model.accessibility
 
+import cloud.trotter.dashbuddy.domain.census.contract.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.pipeline.NO_ID_FALLBACK
 import java.util.Locale
 
@@ -636,10 +637,9 @@ private fun computeStableHash(node: UiNode): Int {
     return result
 }
 
-private fun String?.isAnonymousWrapper(): Boolean = when (this) {
-    "android.view.View",
-    "android.view.ViewGroup",
-    "android.widget.FrameLayout",
-    "android.widget.LinearLayout" -> true
-    else -> false
-}
+/**
+ * The wrapper CLASS SET is shared with the census fingerprint (ADR-0011 §8) through ONE constant,
+ * [AnonymousWrappers.WRAPPER_CLASSES]; the algorithm here (fold as a nested group, never splice) is
+ * deliberately unchanged.
+ */
+private fun String?.isAnonymousWrapper(): Boolean = this != null && this in AnonymousWrappers.WRAPPER_CLASSES
