@@ -104,7 +104,7 @@ class OverlayCandidateTest {
         assertFalse(src.isOverlayCandidate(shade, display))
         assertFalse(src.isOverlayCandidate(shade, display))
         verify(shade, times(1)).root
-        assertEquals(2L, stats.overlayRejectedCount(OverlayRejectReason.NOT_OVERLAY_PLATFORM))
+        assertEquals("BB7: counted once per decision, not per frame", 1L, stats.overlayRejectedCount(OverlayRejectReason.NOT_OVERLAY_PLATFORM))
     }
 
     @Test
