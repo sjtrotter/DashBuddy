@@ -104,7 +104,7 @@
          shape #1138 M3 will reuse. -->
     <string name="event_receipt_title">Let DashBuddy notice windows from other apps</string>
     <string name="event_receipt_settings_path">Settings → Data &amp; Privacy → Automation &amp; Consent</string>
-    <string name="event_receipt_body">Right now DashBuddy\'s accessibility service receives screen events only from the supported delivery apps. If you allow this, it will receive events from every app on your phone, so an offer drawn on top of whatever you\'re doing (like a rideshare offer popup) can be noticed. Only windows from a delivery app you enabled are ever inspected or captured; other windows are identified by app name only, and nothing from them is stored. If you have offer screenshots turned on in Settings → Data &amp; Privacy, a picture of the whole screen may be saved when an offer appears, whatever app is behind it. You can turn this off any time in %1$s.</string>
+    <string name="event_receipt_body">If you allow this, DashBuddy\'s accessibility service receives events from every app on your phone, not only from the supported delivery apps, so an offer drawn on top of whatever you\'re doing (like a rideshare offer popup) can be noticed. Only windows from a delivery app you enabled are ever inspected or captured; other windows are identified by app name only, and nothing from them is stored. If you have offer screenshots turned on in Settings → Data &amp; Privacy, a picture of the whole screen may be saved when an offer appears, whatever app is behind it. You can turn this off any time in %1$s.</string>
     <string name="event_receipt_allow">Allow</string>
     <string name="event_receipt_deny">Don\'t allow</string>
     <string name="event_receipt_not_now">Not now</string>
