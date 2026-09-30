@@ -135,7 +135,18 @@ class SkeletonCorpusTest {
     private fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
         SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY)
 
-    private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy { corpus.map { it to build(it) } }
+    /** ONE build per fixture (review EE5); [builtJson] reuses the JSON the builder already measured. */
+    private val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> by lazy {
+        corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY) }
+    }
+
+    private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy {
+        outcomes.map { (f, o) -> f to (o as? SkeletonBuilder.Outcome.Built)?.skeleton }
+    }
+
+    private val builtJson: Map<String, String> by lazy {
+        outcomes.mapNotNull { (f, o) -> (o as? SkeletonBuilder.Outcome.Built)?.let { f.path to it.json } }.toMap()
+    }
 
     /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
     private fun slotOf(value: String): TextSlot? =
@@ -197,12 +208,13 @@ class SkeletonCorpusTest {
         }
         for ((f, item) in built) {
             item ?: continue
-            val json = Json.parseToJsonElement(SkeletonSchema.serialize(item)).jsonObject
+            val text = builtJson.getValue(f.path)
+            val json = Json.parseToJsonElement(text).jsonObject
             if (!ENVELOPE_KEYS.containsAll(json.keys)) problems += "${f.path}: envelope keys ${json.keys - ENVELOPE_KEYS}"
             json["windowTitle"]?.let { slot("${f.path}.windowTitle", it) }
             node("${f.path}.root", json.getValue("root"))
-            if (SkeletonSchema.serialize(item).contains("bounds")) problems += "${f.path}: bounds"
-            if (SkeletonSchema.serialize(item).contains("NEVER_IN_A_SKELETON")) problems += "${f.path}: device fingerprint"
+            if (text.contains("bounds")) problems += "${f.path}: bounds"
+            if (text.contains("NEVER_IN_A_SKELETON")) problems += "${f.path}: device fingerprint"
         }
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
     }
@@ -305,16 +317,22 @@ class SkeletonCorpusTest {
         var decoys = 0
         var exempt = 0
         val problems = mutableListOf<String>()
-        val intakeOnlyValues = HashSet<String>()
-        val piiIdValues = HashSet<String>()
+        // Values the intake propagates document-wide (a `PII_ID_SUFFIXES` id carries them) but the census
+        // does NOT seed frame-wide, vs values the census DOES seed from an id (an identity id's rendered
+        // text/desc — reviews CC3, EE1). Canonical form, as the builder keys them (review EE2).
+        val propagatedNotSeeded = HashSet<String>()
+        val idSeeded = HashSet<String>()
         walkNodes(tree) { n ->
             val id = n.viewIdResourceName
-            val bucket = when {
-                CustomerTextMarkers.hasIdMarkerSuffix(id) -> piiIdValues
-                PiiShapes.hasPiiIdSuffix(id) -> intakeOnlyValues
-                else -> null
+            val identity = CustomerTextMarkers.idMarkerFor(id)?.valueIsPii == true
+            n.scrubbableStrings().forEach { (field, v) ->
+                if (v.isNullOrBlank()) return@forEach
+                val seeds = identity && (field == UiNodeTextField.TEXT || field == UiNodeTextField.CONTENT_DESCRIPTION)
+                when {
+                    seeds -> idSeeded += CensusHash.canonical(v)
+                    PiiShapes.hasPiiIdSuffix(id) -> propagatedNotSeeded += CensusHash.canonical(v)
+                }
             }
-            bucket?.let { b -> n.scrubbableStrings().forEach { (_, v) -> if (!v.isNullOrBlank()) b += v.trim() } }
         }
         fun walk(o: UiNode, r: UiNode, s: UiSkeletonNodeDto) {
             val redactedValues = r.scrubbableStrings().toMap()
@@ -323,16 +341,15 @@ class SkeletonCorpusTest {
                 rewritten++
                 if (CorpusDecoys.isDecoy(value)) decoys++
                 if (s.text[field.wire]?.h == null) continue
-                // ADR-0011 §2 frame-level rule (review CC3): an INTAKE-ONLY PII id (`PII_ID_SUFFIXES`,
-                // not `ID_MARKERS`) withholds its own field but does not seed the frame, so a chrome value
-                // it shares with an id-less node may be rewritten document-wide by the intake yet hashed
-                // by the census. Exempt exactly that case: the value survives redaction in isolation, and
-                // its only document-wide cause is an intake-only id.
-                // Review DD1: "ONLY cause" is verified — no ID_MARKERS occurrence and no value-judging step
-                // anywhere in the frame; otherwise the value must have been withheld and this is a problem.
-                val trimmed = value.trim()
+                // ADR-0011 §2 frame-level rule (reviews CC3, EE1): a PII id that does not SEED the frame —
+                // an intake-only id, a content id, or a non-text field of an identity id — withholds its
+                // own field only, so a chrome value it shares with an id-less node may be rewritten
+                // document-wide by the intake yet hashed by the census. Exempt exactly that case: the
+                // value survives redaction in isolation, and such a field is its ONLY cause (review DD1:
+                // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
+                val trimmed = CensusHash.canonical(value)
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    trimmed in intakeOnlyValues && trimmed !in piiIdValues && !valueJudged(trimmed)
+                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed)
                 ) {
                     exempt++
                     continue
@@ -460,7 +477,8 @@ class SkeletonCorpusTest {
             val again = build(f)
             if (item != again) problems += "${f.path}: not deterministic"
             if (item != null) {
-                val json = SkeletonSchema.serialize(item)
+                val json = builtJson.getValue(f.path)
+                if (SkeletonSchema.serialize(item) != json) problems += "${f.path}: Built.json is not the item's serialization"
                 if (SkeletonSchema.serialize(SkeletonSchema.deserialize(json)) != json) problems += "${f.path}: not canonical"
                 if (SkeletonSchema.deserialize(json) != item) problems += "${f.path}: does not round-trip"
             }
@@ -468,7 +486,8 @@ class SkeletonCorpusTest {
             // everything the intake would rewrite is already withheld.
             val reRedacted = UiNodeSchema.deserialize(SnapshotRedactor.redact(UiNodeSchema.serialize(f.tree)))
             reRedacted.restoreParents()
-            if (build(f, reRedacted) != item) problems += "${f.path}: re-redaction changed the skeleton${diff(item, build(f, reRedacted))}"
+            val rebuilt = build(f, reRedacted)
+            if (rebuilt != item) problems += "${f.path}: re-redaction changed the skeleton${diff(item, rebuilt)}"
         }
         assertTrue(problems.take(20).joinToString("\n"), problems.isEmpty())
     }
@@ -502,7 +521,7 @@ class SkeletonCorpusTest {
             PiiShapes.FIRST_LAST_INITIAL + PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX
         var piiSeen = 0
         checkAll(PropSeeds.samples(500), PropSeeds.config(SEED), valueArb) { value ->
-            val trimmed = value.trim()
+            val trimmed = CensusHash.canonical(value) // the value steps 7/8 see (review EE2)
             // A sensitive fragment ("Visa ••••…") refuses the whole one-node frame — nothing to check.
             val slot = slotOf(value) ?: return@checkAll
             if (shapes.any { it.containsMatchIn(trimmed) }) {
