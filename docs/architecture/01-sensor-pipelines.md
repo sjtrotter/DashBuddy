@@ -408,7 +408,13 @@ why the WARN is a once-per-process breadcrumb rather than an alarm; **#1093 adde
 branch (`ParseShortfall.unresolvedOptionalBindings`, sorted bind names — a mandatory miss already
 skipped the rule), and `PipelineStats.onParseShortfall` counts those under their own
 `bindShortfall{<ruleId>.<bind>=n}` suffix with one WARN per rule+bind per process, leaving the parse
-count untouched (`ParseShortfall.hasParseTrigger` is the split). The receipt is the receipt: DoorDash
+count untouched (`ParseShortfall.hasParseTrigger` is the split). Two sibling censuses joined in #1149, both for
+`RuleAction` target binds that DID resolve a node, computed from the returned branch only:
+`bindUnprovable{<ruleId>#<bind>=n}` (`ParseShortfall.unprovableBindings` + `unprovableReasons` — unreadable
+children, more than 6 labels, or no letter-bearing label: the executor's label re-find can never run) and
+`bindRefused{<ruleId>#<bind>=n}` (`ParseShortfall.refusedBindings` — no clickable owner in the package, or a
+foreign bound node / owner walk: no `NodeRef` is emitted, the target is withheld); one WARN per rule+bind per
+process each, tag `ParseHealth`, bind names and our own reason wording only. The receipt is the receipt: DoorDash
 8.93.7 removed `expandable_view`, `delivery_summary_collapsed`'s optional `expandButton` resolved
 nothing, and `EffectMap.diffExpandAction` — which emits only on a bound target — went silent for
 weeks with no line of any kind (the dev noticed the manual tap). The rule now carries a second,

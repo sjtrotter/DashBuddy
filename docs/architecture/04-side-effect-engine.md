@@ -231,6 +231,13 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   - **Semantic twins abort, unconditionally (review I5/R8).** ≥ 2 2b survivors after owner dedupe and #788
     scoping abort to manual (WARN, counts) — the overlap tier would pick by the captured rect, the very evidence
     2b distrusts. There is no stored-text tie-break (the round-5 one was dead by construction and was removed).
+  - **A vanished candidate is stale, not an orphan (review S1):** an id/text candidate whose owner walk fails
+    because the node itself is gone (parent chain null, and its own refresh fails) counts as STALE, so R6's
+    abort fires instead of handing the tap to a lower window's twin.
+  - **A cut ACTIVE bounds walk aborts (review S2):** the mirror of L1 for strategy 3 — if the active platform
+    window's bounds walk is cut by `TreeLimits`, a background window's control never becomes the sole survivor.
+  - **Evidence labels are capped (review S3):** the matched node's own text/description join the owner's labels
+    through the same `UiTextBounds` cap-then-blank-filter as every other label.
   - **A stale target among several aborts (review R6):** in the id/text arms too, a target dropped because its
     owner or matched node failed `refresh()` aborts the tap when ≥ 2 targets existed — otherwise the drop would
     also un-scope #788 and hand the tap to another window's twin. A lone stale target is simply not clicked.
@@ -255,7 +262,9 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   `Observation.identity()` is the dedup SSOT and does not change; with 2b a slid control is re-found by labels,
   so the frozen-bounds problem is fixed where it bites. #1102's throttle semantics and the capability gates
   (#417/#425) are unchanged — this changes HOW a target is re-found, never WHAT may be tapped.
-- **Residuals.** (0) **A null child in the deciding window makes a lone hit inconclusive for THAT frame —
+- **Residuals.** (−1) **Accepted bounded cost:** when 2b falls through (no hit in the deciding set), strategy 3
+  re-walks the windows 2b already walked — each walk is bounded by `TreeLimits`, so the worst case is two
+  budgeted walks per tap. (0) **A null child in the deciding window makes a lone hit inconclusive for THAT frame —
   ACCEPTED (review N9).** The tap aborts and is retried on the next admitted frame (the #1102 throttle restore);
   the field item watches the `semantic re-find inconclusive` WARN rate. (1) **The accessibility rebind race —
   ACCEPTED (review L9).** After an owner `refresh()`, the
