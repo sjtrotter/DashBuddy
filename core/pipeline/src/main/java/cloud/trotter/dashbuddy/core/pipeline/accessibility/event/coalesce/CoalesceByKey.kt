@@ -27,13 +27,14 @@ internal const val COALESCE_MAX_KEYS = 64
  * - After a close the next event opens a new burst, so a continuing flood emits at most every
  *   [maxWaitMs], and the final quiet always yields a trailing emission (the guaranteed trailing
  *   refresh).
- * - Leading edge (opt-in, [leadingEdge], #1148 review F5): a burst that opens on a key with NO
- *   close in the last [maxWaitMs] emits its opening event IMMEDIATELY (an accumulator of one), so
- *   the first frame of a transition after idle carries no quiet/max delay. Its later quiet/max
- *   flush then emits only if more events merged in — a lone event yields ONE emission, never a
- *   duplicate. A burst opening within [maxWaitMs] of the key's previous close (a continuing flood)
- *   gets no leading emission. The cooldown is a per-key `delay(maxWaitMs)` job in a map bounded
- *   at [maxKeys]. Off by default.
+ * - Leading edge (opt-in, [leadingEdge], #1148 review F5/G3/G4): a burst that opens on a key
+ *   with NO emission in the last [maxWaitMs] emits its opening event IMMEDIATELY (an accumulator
+ *   of one), so the first frame of a transition after idle carries no quiet/max delay. The
+ *   burst's accumulator then restarts EMPTY, so its later quiet/max flush carries only the events
+ *   merged after the lead and emits only if there are any — a lone event yields ONE emission, and
+ *   the emitted counts always sum to the raw event count. The cooldown is anchored on the key's
+ *   last EMISSION (a lead, a flush that emits, an eviction that emits); a silent close starts
+ *   none. It is a per-key `delay(maxWaitMs)` job in a map bounded at [maxKeys]. Off by default.
  *
  * Timing uses only coroutine [delay] — monotonic, and virtual-time testable under `runTest`; the
  * operator never reads a wall clock. The open-burst map is bounded at [maxKeys]: admitting a new
@@ -73,17 +74,15 @@ private class KeyedCoalescer<T, K, A : Any>(
     private val leadingEdge: Boolean,
     private val merge: (A?, T) -> A,
 ) {
-    private inner class Burst(var acc: A, val leadingEmitted: Boolean) {
+    /**
+     * An open burst. [acc] is null only for a leading burst with nothing merged since its lead
+     * (G4) — closing it then emits nothing.
+     */
+    private inner class Burst(var acc: A?) {
         /** Bumped per event; a quiet timer only fires if no event arrived after it was armed. */
         var quietGen = 0L
         var quietJob: Job? = null
         var maxJob: Job? = null
-
-        /** Events merged after the leading emission — a closing flush emits only if > 0. */
-        var mergedSinceLeading = 0
-
-        /** What a close should emit: null when the leading emission already covered it. */
-        fun closingValue(): A? = if (leadingEmitted && mergedSinceLeading == 0) null else acc
     }
 
     private val lock = Mutex()
@@ -94,8 +93,8 @@ private class KeyedCoalescer<T, K, A : Any>(
     /** Access-ordered: iteration starts at the least-recently-touched open burst. */
     private val bursts = LinkedHashMap<K, Burst>(16, 0.75f, true)
 
-    /** Keys closed within the last [maxWaitMs] (leading-edge cooldown, F5); insertion-ordered. */
-    private val recentlyClosed = LinkedHashMap<K, Job>()
+    /** Keys that EMITTED within the last [maxWaitMs] (leading-edge cooldown, G3); insertion-ordered. */
+    private val recentlyEmitted = LinkedHashMap<K, Job>()
     private var evictionWarned = false
 
     suspend fun onEvent(key: K, value: T) {
@@ -105,10 +104,14 @@ private class KeyedCoalescer<T, K, A : Any>(
             val burst = bursts[key]
             if (burst == null) {
                 if (bursts.size >= maxKeys) evicted = evictOldestLocked()
-                val acc = merge(null, value)
-                val lead = leadingEdge && key !in recentlyClosed
-                if (lead) leading = acc
-                val opened = Burst(acc, leadingEmitted = lead)
+                val first = merge(null, value)
+                val opened = if (leadingEdge && key !in recentlyEmitted) {
+                    leading = first
+                    markEmittedLocked(key)
+                    Burst(acc = null) // G4: the trailing flush carries only post-lead events
+                } else {
+                    Burst(acc = first)
+                }
                 bursts[key] = opened
                 opened.maxJob = scope.launch {
                     delay(maxWaitMs)
@@ -117,7 +120,6 @@ private class KeyedCoalescer<T, K, A : Any>(
                 armQuietLocked(key, opened)
             } else {
                 burst.acc = merge(burst.acc, value)
-                if (burst.leadingEmitted) burst.mergedSinceLeading++
                 burst.quietJob?.cancel()
                 armQuietLocked(key, burst)
             }
@@ -149,8 +151,7 @@ private class KeyedCoalescer<T, K, A : Any>(
                 if (quietGen != null && burst.quietGen != quietGen) return
                 bursts.remove(key)
                 if (quietGen == null) burst.quietJob?.cancel() else burst.maxJob?.cancel()
-                markClosedLocked(key)
-                burst.closingValue()
+                burst.acc?.also { markEmittedLocked(key) } // a silent close starts no cooldown (G3)
             } ?: return
             scope.send(value)
         } finally {
@@ -158,20 +159,20 @@ private class KeyedCoalescer<T, K, A : Any>(
         }
     }
 
-    /** Starts [key]'s leading-edge cooldown (F5); a no-op when the leading edge is off. */
-    private fun markClosedLocked(key: K) {
+    /** (Re)starts [key]'s leading-edge cooldown at an EMISSION (G3); a no-op when leading is off. */
+    private fun markEmittedLocked(key: K) {
         if (!leadingEdge) return
-        recentlyClosed.remove(key)?.cancel()
-        if (recentlyClosed.size >= maxKeys) {
-            val oldest = recentlyClosed.keys.first()
-            recentlyClosed.remove(oldest)?.cancel()
+        recentlyEmitted.remove(key)?.cancel()
+        if (recentlyEmitted.size >= maxKeys) {
+            val oldest = recentlyEmitted.keys.first()
+            recentlyEmitted.remove(oldest)?.cancel()
         }
         lateinit var cooldown: Job
         cooldown = scope.launch {
             delay(maxWaitMs)
-            lock.withLock { if (recentlyClosed[key] === cooldown) recentlyClosed.remove(key) }
+            lock.withLock { if (recentlyEmitted[key] === cooldown) recentlyEmitted.remove(key) }
         }
-        recentlyClosed[key] = cooldown
+        recentlyEmitted[key] = cooldown
     }
 
     private fun evictOldestLocked(): A? {
@@ -179,7 +180,7 @@ private class KeyedCoalescer<T, K, A : Any>(
         bursts.remove(oldestKey)
         oldest.quietJob?.cancel()
         oldest.maxJob?.cancel()
-        markClosedLocked(oldestKey)
+        oldest.acc?.let { markEmittedLocked(oldestKey) }
         if (!evictionWarned) {
             evictionWarned = true
             Timber.tag("Pipeline").w(
@@ -187,6 +188,6 @@ private class KeyedCoalescer<T, K, A : Any>(
                 maxKeys,
             )
         }
-        return oldest.closingValue()
+        return oldest.acc
     }
 }
