@@ -239,7 +239,9 @@ class AccessibilitySource @Inject constructor(
      * The FIRST candidate decides — readable-top-or-refuse: a null root → [Foreground.Refused]
      * `FRONT_UNREADABLE` (fail closed: we cannot verify what is on top, so never fall through to a
      * lower readable window); a package that fails [isEnabled] → `FRONT_NOT_ENABLED` (another app is
-     * in front — a DISABLED overlay platform's offer included); else [Foreground.Found]. No
+     * in front); else [Foreground.Found]. A DISABLED overlay platform's overlay is NOT a candidate
+     * (PR #1155 review BB6 — skipped, the window beneath is read); a LARGE system window whose owner
+     * cannot be read refuses `FRONT_UNREADABLE` (BB1). No
      * candidate at all → `NO_CANDIDATE`. A cached package lets an own/non-enabled application window
      * decide without a root fetch; a window that is READ always has its package re-checked on the
      * freshly-fetched root.
@@ -272,7 +274,12 @@ class AccessibilitySource @Inject constructor(
                     // offer overlay — readable-top-or-refuse, exactly like an unreadable application
                     // window. Never read the window beneath it.
                     OverlayProbe.Unreadable -> verdict = Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-                    is OverlayProbe.Candidate -> verdict = decideOverlay(w, probe, windows.size, isEnabled)
+                    is OverlayProbe.Candidate -> {
+                        // PR #1155 review BB6: a DISABLED overlay platform's overlay is not a candidate
+                        // — the dasher chose to ignore that platform; read what is beneath it.
+                        if (!isEnabled(probe.packageName)) continue
+                        verdict = decideOverlay(w, probe, windows.size)
+                    }
                 }
                 break // the first candidate (or an unverifiable one) decides
             }
@@ -304,20 +311,18 @@ class AccessibilitySource @Inject constructor(
     }
 
     /**
-     * The verdict for an overlay candidate that is the top candidate: non-enabled → refuse; its
-     * root (reused from the probe, else fetched once) null → refuse; else found — with the package
-     * RE-VERIFIED on the root that will be mapped (a cache hit is never trusted for a read).
+     * The verdict for an ENABLED overlay candidate that is the top candidate: its root (reused from
+     * the probe, else fetched once) null → refuse unreadable; else found — with the package
+     * RE-VERIFIED on the root that will be mapped (a memoized verdict is never trusted for a read):
+     * a root that now names a different package cannot be verified → refuse.
      */
     private fun decideOverlay(
         w: AccessibilityWindowInfo,
         probe: OverlayProbe.Candidate,
         total: Int,
-        isEnabled: (String?) -> Boolean,
     ): Foreground {
-        if (!isEnabled(probe.packageName)) return Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
         val root = probe.root ?: w.root ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
-        val livePkg = root.packageName?.toString()
-        if (livePkg !in Platform.overlayPackages || !isEnabled(livePkg)) {
+        if (root.packageName?.toString() != probe.packageName) {
             return Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
         }
         return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))

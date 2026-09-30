@@ -514,7 +514,8 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `bubble active, a DISABLED platform's overlay above DoorDash - refused, another app is in front`() = bothKinds { kind ->
+    fun `BB6 - bubble active, a DISABLED platform's overlay above DoorDash is skipped - DoorDash is read`() = bothKinds { kind ->
+        // The dasher chose to ignore that platform: its offer must not blank DoorDash for its lifetime.
         val bubble = node(ownPkg, "bubble")
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(
@@ -523,9 +524,9 @@ class WindowSpecificSnapshotTest {
             enabled = setOf(ddPkg),
         )
 
-        assertTrue("never read the window hidden beneath a foreign overlay", collect(h, kind).isEmpty())
-        h.nothingMapped()
-        h.skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
+        assertEquals(listOf("dd"), collect(h, kind).map { it.tree.text })
+        assertEquals(0L, h.stats.overlaySnapshotCount())
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_NOT_ENABLED))
     }
 
     @Test
