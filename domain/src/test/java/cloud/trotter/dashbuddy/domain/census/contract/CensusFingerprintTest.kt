@@ -84,6 +84,36 @@ class CensusFingerprintTest {
     }
 
     @Test
+    fun `the lone-surrogate collision pair is refused, not encoded (review BB1)`() {
+        // toByteArray(UTF_8) replaces an unpaired surrogate with '?', so these two classes encode to
+        // identical bytes — the pair is kept out of the byte form by refusing malformed UTF-16.
+        val lone = CensusFingerprint.Shape("", null, listOf(CensusFingerprint.Shape("\uD800", null, emptyList())))
+        val question = CensusFingerprint.Shape("", null, listOf(CensusFingerprint.Shape("?", null, emptyList())))
+        assertTrue(CensusFingerprint.canonicalBytes(lone).contentEquals(CensusFingerprint.canonicalBytes(question)))
+        assertTrue(!WireStrings.isWellFormed("\uD800"))
+        assertTrue(WireStrings.isWellFormed("?"))
+        UiSkeletonNodeDto(className = "?")
+        listOf(
+            { UiSkeletonNodeDto(className = "\uD800") },
+            { UiSkeletonNodeDto(className = "a\uDC00b") },
+            { UiSkeletonNodeDto(id = "x:id/\uD800") },
+        ).forEach { make ->
+            try {
+                make(); fail("malformed UTF-16 must be refused")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+        try {
+            SkeletonSchema.json.decodeFromString(UiSkeletonNodeDto.serializer(), "{\"class\":\"\\ud800\"}")
+            fail("malformed UTF-16 must be refused on decode")
+        } catch (_: IllegalArgumentException) {
+        }
+        // A well-formed supplementary-plane character is fine.
+        assertTrue(WireStrings.isWellFormed("\uD801\uDC00"))
+        UiSkeletonNodeDto(className = "\uD801\uDC00")
+    }
+
+    @Test
     fun `a class or id carrying U+0000 is refused at construction and on decode`() {
         listOf(
             { UiSkeletonNodeDto(className = "a\u0000b") },

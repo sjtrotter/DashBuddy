@@ -350,7 +350,9 @@ delimiter-only form let a value that mimics the framing collide two different tr
 the class's UTF-8 byte length as ASCII decimal + `0x00` + the class UTF-8 (`""` when null) + (`"I"` + the
 id's byte length as ASCII decimal + `0x00` + the id UTF-8, or the single byte `"N"` when the id is null —
 so a null id and an empty id differ) + the spliced child count as ASCII decimal + `0x00`, then the
-children in order. A class or id carrying U+0000 is refused at construction and on decode. Transparent wrappers are removed first (wrapper-to-forest
+children in order. class/id must be well-formed UTF-16 with no U+0000 (`WireStrings.isWellFormed` — a
+lone surrogate would otherwise UTF-8-encode as `?` and collide); a violating class or id is refused at
+construction, on decode, and by the builder (checked on the RAW id, before the resource-name gate). Transparent wrappers are removed first (wrapper-to-forest
 normalization): a wrapper's children are spliced into its parent, an EMPTY wrapper contributes
 nothing (the parent's count drops), and the normalized forest ALWAYS hangs under one synthetic root
 (class `""`, null id, the spliced count) — whether or not the original root was a wrapper — so
