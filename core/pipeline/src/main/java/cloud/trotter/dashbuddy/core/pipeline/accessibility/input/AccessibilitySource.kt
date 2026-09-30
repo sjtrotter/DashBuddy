@@ -306,7 +306,7 @@ class AccessibilitySource @Inject constructor(
                         if (!isEnabled(probe.packageName)) continue
                         // CC10: null → the memo was stale (the fresh root names another package) —
                         // corrected; this window is not an overlay after all, keep walking.
-                        verdict = decideOverlay(w, probe, total, gen) ?: continue
+                        verdict = decideOverlay(w, probe, total, gen, budget) ?: continue
                     }
                 }
                 break // the first candidate (or an unverifiable one) decides
@@ -358,8 +358,14 @@ class AccessibilitySource @Inject constructor(
         probe: OverlayProbe.Candidate,
         total: Int,
         gen: Long,
+        budget: ScanBudget,
     ): Foreground? {
-        val root = probe.root ?: w.root ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
+        // PR #1155 review DD4: EVERY root fetch in a walk is charged — a memoized CANDIDATE carries
+        // no root, so its revalidation fetch counts against the budget too.
+        val root = probe.root ?: run {
+            if (!budget.take()) return Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
+            w.root
+        } ?: return Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
         val live = root.packageName?.toString()
         if (live != probe.packageName) {
             stats.onOverlayRejected(OverlayRejectReason.PACKAGE_CHANGED)

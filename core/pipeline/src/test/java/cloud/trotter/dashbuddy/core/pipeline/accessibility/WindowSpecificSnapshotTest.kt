@@ -749,4 +749,27 @@ class WindowSpecificSnapshotTest {
         assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
         verify(overlay, times(2)).root // corrected memo: the next frame does not re-fetch
     }
+
+    @Test
+    fun `DD4 - a memoized CANDIDATE's revalidation fetch is charged - over budget it refuses SCAN_BUDGET`() {
+        val bubble = node(ownPkg, "bubble")
+        val dd = node(ddPkg, "dd")
+        val uber = node(uberPkg, "uber-offer")
+        val overlay = uberOverlay(9, 9, uber)
+        val bubbleWindow = window(1, 50, bubble, active = true)
+        val ddWindow = window(3, 2, dd)
+        val h = harness(activeRoot = bubble, windows = listOf(bubbleWindow, overlay, ddWindow))
+        assertEquals(listOf("uber-offer"), collect(h, Kind.STATE).map { it.tree.text }) // memo: CANDIDATE, bubble: own
+
+        // Mixed cache: 8 COLD large readable non-overlay windows above the memoized overlay spend the
+        // whole budget; the overlay's revalidation fetch must not be free.
+        val shade = node(systemUiPkg, "big")
+        val cold = (0 until AccessibilitySource.MAX_SCAN_ROOT_FETCHES).map { i ->
+            window(100 + i, 20 + i, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+        }
+        whenever(h.service.windows).thenReturn(listOf(bubbleWindow) + cold + listOf(overlay, ddWindow))
+
+        assertTrue(collect(h, Kind.STATE).isEmpty())
+        h.skipped(ForegroundSkipReason.SCAN_BUDGET)
+    }
 }
