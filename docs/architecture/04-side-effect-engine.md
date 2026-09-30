@@ -174,7 +174,7 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   "takes a click" is ONE predicate on both sides: `UiNode.takesClick` (`isClickable || hasClickAction` — the
   #1147 field brought forward; `clickAction` in the DTO, default false and omitted, so fixtures are unchanged; set
   by the mapper from the action list; not in `allText` or any content hash) mirrors
-  `AccNodeUtils.isActionClickable`. Otherwise an action-only descendant was absorbed at bind time and excluded at
+  the live `AccessibilityNodeInfo.takesClick()` (one extension, #1149 T7). Otherwise an action-only descendant was absorbed at bind time and excluded at
   fire time, and a twin could become the sole survivor. **The bind side fingerprints the ACTION OWNER (review L2):**
   `NodeRef.bindHintsOf` walks from the bound node to its nearest `takesClick` self-or-ancestor (`MAX_OWNER_WALK`,
   owned by `NodeRef`) and hashes THAT region, as fire time does; the owner's class rides the ref as
@@ -226,7 +226,7 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
     EXPECTATION stays lenient: a found label suffices, and since I3 no collected label comes from a nested
     control.
   - **Strategy 3 shares the predicate (review J7) and is bounded (review R5):** the bounds walk uses
-    `isActionClickable`, so an action-only Compose control at the exact rect is found, and it applies the
+    `takesClick()`, so an action-only Compose control at the exact rect is found, and it applies the
     mapper's `TreeLimits` (depth + fetch budget, nulls counted) — a cut walk takes NO candidates from that root.
   - **Semantic twins abort, unconditionally (review I5/R8).** ≥ 2 2b survivors after owner dedupe and #788
     scoping abort to manual (WARN, counts) — the overlap tier would pick by the captured rect, the very evidence

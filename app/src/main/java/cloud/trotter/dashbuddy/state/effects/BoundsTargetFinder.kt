@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
@@ -79,7 +80,7 @@ internal inline fun visitBounds(
     val classOk = className == null || node.className?.toString() == className
     // #1149 review J7: the same clickability predicate as everywhere else — a Compose control that
     // only ADVERTISES ACTION_CLICK at the exact rect is otherwise invisible to the bounds walk.
-    val hit = classOk && AccNodeUtils.isActionClickable(node) && (
+    val hit = classOk && node.takesClick() && (
         live == targetBounds || ClickCandidateRanker.boundsIoU(live, targetBounds) >= RELAXED_BOUNDS_IOU
     )
     if (hit) {

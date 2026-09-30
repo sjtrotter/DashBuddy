@@ -12,7 +12,7 @@ fun AccessibilityNodeInfo.hasClickAction(): Boolean = (actions and Accessibility
 
 /**
  * #1149 review P6 — THE live "this node takes a click" predicate: `isClickable` OR an advertised
- * click action. One definition for the mapper and the executor (`AccNodeUtils.isActionClickable`);
+ * click action. One definition for the mapper and the executor (`AccNodeUtils`, the finders and the label adapters);
  * its bind-time mirror is `UiNode.takesClick` (`isClickable || hasClickAction`).
  */
 fun AccessibilityNodeInfo.takesClick(): Boolean = isClickable || hasClickAction()

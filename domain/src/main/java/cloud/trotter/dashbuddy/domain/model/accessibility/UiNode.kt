@@ -73,7 +73,7 @@ data class UiNode(
     /**
      * #1149 review J2 — THE bind-time "this node takes a click" predicate: [isClickable] OR an
      * advertised click action ([hasClickAction]). Its live mirror is
-     * `AccNodeUtils.isActionClickable` (`isClickable` OR `ACTION_CLICK` in the action list), so the
+     * the live `AccessibilityNodeInfo.takesClick()` (`isClickable` OR `ACTION_CLICK` in the action list), so the
      * label horizon's clickable-descendant ownership is decided identically on both sides.
      */
     val takesClick: Boolean get() = isClickable || hasClickAction

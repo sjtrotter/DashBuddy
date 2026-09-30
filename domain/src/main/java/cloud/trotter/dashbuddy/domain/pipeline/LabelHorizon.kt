@@ -21,7 +21,7 @@ interface LabelNode {
     /** This node's own text and contentDescription, raw (non-null), in that order — [LabelHorizon] caps and blank-filters them (R2). */
     val ownLabels: List<String>
 
-    /** `UiNode.takesClick` / `AccNodeUtils.isActionClickable` — a descendant that does is its own control. */
+    /** `UiNode.takesClick` / the live `takesClick()` — a descendant that does is its own control. */
     val takesClick: Boolean
 
     /** Belongs to another package than the scanned window: spends its slot, never read. */

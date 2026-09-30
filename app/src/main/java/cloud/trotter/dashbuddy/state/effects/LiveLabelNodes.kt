@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.domain.pipeline.LabelNode
 import cloud.trotter.dashbuddy.util.AccNodeUtils
@@ -14,7 +15,7 @@ internal class LiveLabelNode(private val node: AccessibilityNodeInfo, private va
     override val foreign: Boolean by lazy { node.packageName?.toString() != expectedPackage }
     // P4: a foreign node's text/description is never touched.
     override val ownLabels: List<String> by lazy { if (foreign) emptyList() else ownLabelsOf(node) }
-    override val takesClick: Boolean get() = AccNodeUtils.isActionClickable(node)
+    override val takesClick: Boolean get() = node.takesClick()
     override val unreadableChildren: Int get() = 0
     override fun children(): List<LabelNode?> = object : AbstractList<LabelNode?>() {
         override val size: Int = node.childCount.coerceAtLeast(0)

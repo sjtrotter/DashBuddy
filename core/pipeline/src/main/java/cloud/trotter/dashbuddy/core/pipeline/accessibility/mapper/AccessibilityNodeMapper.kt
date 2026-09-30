@@ -163,7 +163,7 @@ private fun convert(
         isClickable = node.isClickable,
         isEnabled = node.isEnabled,
         isChecked = node.checked,
-        // #1149 review J2: the advertised click action (the live `AccNodeUtils.isActionClickable` half).
+        // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
         hasClickAction = node.hasClickAction(), // P6: the one live definition (NodeClick.kt)
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
         // the executor's package-scoped label scan, which never reads such a subtree).

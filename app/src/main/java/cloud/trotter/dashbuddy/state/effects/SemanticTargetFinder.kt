@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.takesClick
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.domain.pipeline.LabelHorizon
@@ -72,7 +73,7 @@ internal class SemanticHit(val node: AccessibilityNodeInfo, val pre: Int, val la
 
 /**
  * Strategy 2b (#1149): every same-package node of [root] that takes a click
- * ([AccNodeUtils.isActionClickable]), matches the bind's owner class (when it has one) and whose
+ * (`takesClick()`), matches the bind's owner class (when it has one) and whose
  * COMPLETE label horizon is the ref's EXACT fingerprint ([NodeRef.fingerprintMatches] — no
  * superset, #1102 review constraint 1). No geometric entrance test. Hits record their nesting
  * (pre-order intervals), so a wrapper carrying its own copy of the labels around the row stays
@@ -106,7 +107,7 @@ internal fun findNodeBySemantics(root: AccessibilityNodeInfo, ref: NodeRef, expe
         // unreadable (and the window incomplete).
         val capacity = minOf(count, (TreeLimits.MAX_TREE_NODES - fetched).coerceAtLeast(0))
         val self = WalkNode(
-            node, foreign = false, takesClick = AccNodeUtils.isActionClickable(node),
+            node, foreign = false, takesClick = node.takesClick(),
             slots = arrayOfNulls(capacity), unreadableChildren = count - capacity,
         )
         if (count > capacity) incomplete = true

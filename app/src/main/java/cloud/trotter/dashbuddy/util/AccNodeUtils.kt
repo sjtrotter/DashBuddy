@@ -17,18 +17,8 @@ object AccNodeUtils {
     const val MAX_OWNER_WALK = cloud.trotter.dashbuddy.domain.pipeline.NodeRef.MAX_OWNER_WALK // one owner, shared with bind time (#1149 L2)
 
     /**
-     * #1149 — the one definition of "this node takes a click": `isClickable`, OR an advertised
-     * [AccessibilityNodeInfo.ACTION_CLICK] in its action list (Compose and custom views often
-     * advertise the action without setting the flag — TalkBack's own test). Its bind-time mirror is
-     * `UiNode.takesClick` (`isClickable || hasClickAction`, #1149 review J2): the two MUST stay the
-     * same predicate, or bind and fire disagree on which labels a control owns. Delegates to the ONE
-     * live definition, `AccessibilityNodeInfo.takesClick()` in the mapper package (#1149 review P6).
-     */
-    fun isActionClickable(node: AccessibilityNodeInfo): Boolean = node.takesClick()
-
-    /**
      * #1149 — the ACTION OWNER of [node]: the first of self → parent → … that
-     * [isActionClickable], within [MAX_OWNER_WALK] steps, with a cycle guard (`==` on the visited
+     * `takesClick()` (the mapper package's one live predicate, #1149 P6/T7), within [MAX_OWNER_WALK] steps, with a cycle guard (`==` on the visited
      * nodes — [AccessibilityNodeInfo.equals] is window + source-node identity). Null when no owner
      * is reachable inside the bound; the caller must not tap anything then.
      *
@@ -48,7 +38,7 @@ object AccNodeUtils {
         while (current != null && steps < MAX_OWNER_WALK) {
             if (current.packageName?.toString() != expectedPackage) return null
             if (visited.any { it == current }) return null
-            if (isActionClickable(current)) return current
+            if (current.takesClick()) return current
             visited.add(current)
             current = current.parent
             steps++
@@ -73,7 +63,7 @@ object AccNodeUtils {
             Timber.tag("Effects").w("Cannot click: node is null.")
             return false
         }
-        if (!isActionClickable(owner) || owner.packageName?.toString() != expectedPackage) {
+        if (!owner.takesClick() || owner.packageName?.toString() != expectedPackage) {
             Timber.tag("Effects").w("Strict click: refusing — the target no longer takes a click in the scoped package (no sibling fallback).")
             return false
         }
