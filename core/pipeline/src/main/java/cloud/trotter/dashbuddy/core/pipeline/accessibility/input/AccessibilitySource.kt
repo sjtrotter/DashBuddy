@@ -459,6 +459,20 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
+    ): OverlayScan = try {
+        overlayFrontUnguarded(windows, active, isEnabled)
+    } catch (_: Exception) {
+        // PR #1155 review DD7: an exception during the scan (a stale AccessibilityWindowInfo, a
+        // throwing isEnabled) means "no overlay" — the already-fetched active root is read (the
+        // pre-#1152 behaviour), never a dropped frame. (frontOf's own catch yields a non-overlay
+        // FRONT_UNREADABLE, which maps to None below for the same reason.)
+        OverlayScan.None
+    }
+
+    private fun overlayFrontUnguarded(
+        windows: List<AccessibilityWindowInfo>,
+        active: AccessibilityWindowInfo,
+        isEnabled: (String?) -> Boolean,
     ): OverlayScan {
         return when (val front = frontAbove(windows, active, isEnabled)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None

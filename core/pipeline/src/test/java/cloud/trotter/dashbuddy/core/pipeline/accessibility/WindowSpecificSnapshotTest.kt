@@ -796,4 +796,26 @@ class WindowSpecificSnapshotTest {
         assertTrue(collect(h, kind, windowId = 3).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
     }
+
+    @Test
+    fun `DD7 - a window that throws during the overlay scan - no overlay - the active DoorDash frame`() = bothKinds { kind ->
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val stale = uberOverlay(9, 9, node(uberPkg, "uber-offer"))
+        whenever(stale.isInPictureInPictureMode).thenThrow(IllegalStateException("stale window"))
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true), stale))
+
+        assertEquals(listOf("dd"), collect(h, kind, windowId = 3).map { it.tree.text })
+        assertEquals(0L, h.stats.foregroundSkipCount(ForegroundSkipReason.FRONT_UNREADABLE))
+    }
+
+    @Test
+    fun `DD7 - bubble path unchanged - a window that throws refuses the frame`() = bothKinds { kind ->
+        val bubble = node(ownPkg, "bubble")
+        val stale = uberOverlay(9, 9, node(uberPkg, "uber-offer"))
+        whenever(stale.isInPictureInPictureMode).thenThrow(IllegalStateException("stale window"))
+        val h = harness(activeRoot = bubble, windows = listOf(window(1, 10, bubble, active = true), stale, window(3, 2, node(ddPkg, "dd"))))
+
+        assertTrue(collect(h, kind).isEmpty())
+        h.skipped(ForegroundSkipReason.FRONT_UNREADABLE)
+    }
 }
