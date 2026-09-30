@@ -37,6 +37,15 @@ class MainShellViewModelTest {
     }
 
     @Test
+    fun `a later offer after a delivery still reaches the flow`() {
+        val vm = MainShellViewModel(SavedStateHandle())
+        vm.offer("analytics")
+        vm.deliver(navigable = true) {}
+        vm.offer("analytics")
+        assertEquals("analytics", vm.pendingRoute.value)
+    }
+
+    @Test
     fun `a failed navigation keeps the route parked`() {
         val vm = MainShellViewModel(SavedStateHandle())
         vm.offer("settings")

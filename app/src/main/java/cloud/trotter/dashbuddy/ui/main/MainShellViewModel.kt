@@ -33,7 +33,9 @@ class MainShellViewModel @Inject constructor(
         if (!navigable) return false
         val route = handle.get<String>(KEY_PENDING_ROUTE) ?: return false
         navigate(route)
-        handle.remove<String>(KEY_PENDING_ROUTE)
+        // Set to null, never remove(): remove() detaches the getStateFlow above, so later offers
+        // would stop reaching the collector.
+        handle[KEY_PENDING_ROUTE] = null
         return true
     }
 
