@@ -63,7 +63,14 @@ internal fun AccessibilitySource.snapshotForEvent(
         // BB5: the check is independent of which window fired. Its cheap pre-gate: no enumeration at
         // all unless some overlay platform is enabled (a DoorDash-only dasher pays nothing).
         val overlay = if (Platform.overlayPackages.any(isEnabled)) {
-            overlayAboveActive(activeRoot.windowId, isEnabled)
+            when (val scan = overlayAboveActive(activeRoot.windowId, isEnabled)) {
+                AccessibilitySource.OverlayScan.None -> null
+                is AccessibilitySource.OverlayScan.Overlay -> scan.located
+                is AccessibilitySource.OverlayScan.Refused -> {
+                    Timber.tag("Pipeline").v("🚫 Skip: overlay scan refused %s (event window=%d)", scan.reason, windowId)
+                    return EventSnapshot.Skipped(scan.reason)
+                }
+            }
         } else {
             null
         }

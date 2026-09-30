@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
@@ -100,8 +101,10 @@ class WindowsChangedPipeline @Inject constructor(
                 when (val front = source.foregroundWindow(windows) { it in enabled }) {
                     is AccessibilitySource.Foreground.Found ->
                         snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
-                    is AccessibilitySource.Foreground.Refused ->
+                    is AccessibilitySource.Foreground.Refused -> {
+                        if (front.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(front.reason) // CC5
                         Timber.tag("Pipeline").v("🚫 Windows: our window active, foreground refused %s", front.reason)
+                    }
                 }
                 return@transform
             }
@@ -114,8 +117,11 @@ class WindowsChangedPipeline @Inject constructor(
             when (val front = source.frontAbove(windows, active) { it in enabled }) {
                 is AccessibilitySource.Foreground.Found ->
                     snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
-                is AccessibilitySource.Foreground.Refused ->
+                is AccessibilitySource.Foreground.Refused -> {
+                    // CC5: a budget refusal is a gate decision worth sizing in the field pull.
+                    if (front.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(front.reason)
                     Timber.tag("Pipeline").v("🚫 Windows: nothing emitted above the active window (%s)", front.reason)
+                }
             }
         }
 }

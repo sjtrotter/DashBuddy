@@ -709,4 +709,24 @@ class WindowSpecificSnapshotTest {
         assertTrue(collect(h, kind).isEmpty())
         h.skipped(ForegroundSkipReason.FRONT_NOT_ENABLED)
     }
+
+    @Test
+    fun `CC5 - 65 large readable non-overlay system windows above DoorDash - bounded fetches per scan, refused`() {
+        val dd = node(ddPkg, "dd", windowId = 3)
+        val shadeRoot = node(systemUiPkg, "big")
+        var fetches = 0
+        val bigs = (0 until 65).map { i ->
+            val w = window(100 + i, 20 + i, null, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+            whenever(w.root).thenAnswer { fetches++; shadeRoot }
+            w
+        }
+        val h = harness(activeRoot = dd, windows = listOf(window(3, 5, dd, active = true)) + bigs)
+
+        repeat(3) { scan ->
+            val before = fetches
+            assertTrue("scan $scan refused", collect(h, Kind.STATE, windowId = 3).isEmpty())
+            assertTrue("scan $scan fetched ${fetches - before} roots", fetches - before <= AccessibilitySource.MAX_SCAN_ROOT_FETCHES)
+        }
+        assertEquals(3L, h.stats.foregroundSkipCount(ForegroundSkipReason.SCAN_BUDGET))
+    }
 }

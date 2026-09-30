@@ -25,6 +25,13 @@ enum class ForegroundSkipReason {
      */
     POST_MAP_MISMATCH,
 
+    /**
+     * The front-window walk ran out of its root-fetch budget (PR #1155 review CC5,
+     * `AccessibilitySource.MAX_SCAN_ROOT_FETCHES`) before it could verify what is on top — refused,
+     * never fallen through.
+     */
+    SCAN_BUDGET,
+
     /** The chosen root failed to map (the tree mapper threw or returned nothing). */
     MAP_FAILED,
 }

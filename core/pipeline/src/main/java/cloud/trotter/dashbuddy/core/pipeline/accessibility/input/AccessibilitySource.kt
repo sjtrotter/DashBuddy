@@ -286,12 +286,16 @@ class AccessibilitySource @Inject constructor(
             .sortedByDescending { it.layer }
         var area: Long? = null // measured lazily — only when a system-layer window is inspected
         val gen = packageCache.generation // CC1: read BEFORE any fetch; stale writes are discarded
+        // CC5: at most MAX_SCAN_ROOT_FETCHES discovery root fetches per walk; exhaustion refuses.
+        val budget = ScanBudget(MAX_SCAN_ROOT_FETCHES)
         var verdict: Foreground = Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
         for (w in ordered) {
             if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
                 val displayArea = area ?: displayArea().also { area = it }
-                when (val probe = overlayProbe(w, displayArea)) {
+                when (val probe = overlayProbe(w, displayArea, budget)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
+                    // CC5: out of root fetches — the rest is unverifiable; never fall through.
+                    OverlayProbe.BudgetExhausted -> verdict = Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
                     // PR #1155 review BB1: a LARGE system window whose owner cannot be read may be an
                     // offer overlay — readable-top-or-refuse, exactly like an unreadable application
                     // window. Never read the window beneath it.
@@ -310,6 +314,10 @@ class AccessibilitySource @Inject constructor(
             if (cached != null && ownPkg != null && cached == ownPkg) continue
             if (cached != null && !isEnabled(cached)) {
                 verdict = Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
+                break
+            }
+            if (!budget.take()) { // CC5
+                verdict = Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
                 break
             }
             val root = w.root
@@ -372,26 +380,36 @@ class AccessibilitySource @Inject constructor(
      * path reads it). Null on any failure. One enumeration; memoized verdicts (BB7) make the scan
      * cheap; the package is re-verified on the root that is mapped.
      */
-    fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): LocatedWindow? = try {
+    fun overlayAboveActive(activeWindowId: Int, isEnabled: (String?) -> Boolean): OverlayScan = try {
         overlayAboveActive(getWindows(), activeWindowId, isEnabled)
     } catch (_: Exception) {
-        null
+        OverlayScan.None
+    }
+
+    /** [overlayAboveActive]'s verdict: the overlay to read, nothing (read the active root), or refuse the frame. */
+    sealed interface OverlayScan {
+        data object None : OverlayScan
+        data class Overlay(val located: LocatedWindow) : OverlayScan
+        data class Refused(val reason: ForegroundSkipReason) : OverlayScan
     }
 
     private fun overlayAboveActive(
         windows: List<AccessibilityWindowInfo>,
         activeWindowId: Int,
         isEnabled: (String?) -> Boolean,
-    ): LocatedWindow? {
-        val active = windows.firstOrNull { it.id == activeWindowId } ?: return null
+    ): OverlayScan {
+        val active = windows.firstOrNull { it.id == activeWindowId } ?: return OverlayScan.None
         val flagged = windows.filter { it.isActive }
-        if (flagged.size != 1 || flagged.single().id != active.id) return null // unverifiable ordering
+        if (flagged.size != 1 || flagged.single().id != active.id) return OverlayScan.None // unverifiable ordering
         // CC4: EVERY window type above the active one, by layer — an application window (not ours,
-        // not PiP) above the overlay means the overlay is not frontmost (→ null: the ordinary
-        // active-root rule decides); an unreadable large system window is a barrier (→ null).
+        // not PiP) above the overlay means the overlay is not frontmost (→ None: the ordinary
+        // active-root rule decides). CC5: a walk out of root fetches refuses the frame.
         return when (val front = frontAbove(windows, active, isEnabled)) {
-            is Foreground.Found -> front.located.takeIf { it.isOverlay }
-            is Foreground.Refused -> null
+            is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
+            is Foreground.Refused -> when (front.reason) {
+                ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
+                else -> OverlayScan.None
+            }
         }
     }
 
@@ -406,6 +424,15 @@ class AccessibilitySource @Inject constructor(
         class Candidate(val packageName: String, val root: AccessibilityNodeInfo?) : OverlayProbe
         data object NotCandidate : OverlayProbe
         data object Unreadable : OverlayProbe
+
+        /** CC5: the walk's root-fetch budget ran out before this window's owner could be read. */
+        data object BudgetExhausted : OverlayProbe
+    }
+
+    /** PR #1155 review CC5 — a per-walk root-fetch allowance. Not thread-shared (one per walk). */
+    internal class ScanBudget(private var left: Int) {
+        /** Consumes one fetch; false when none is left. */
+        fun take(): Boolean = if (left > 0) { left--; true } else false
     }
 
     /**
@@ -426,7 +453,7 @@ class AccessibilitySource @Inject constructor(
         overlayProbe(w, displayArea) is OverlayProbe.Candidate
 
     /** [isOverlayCandidate] carrying the verified package (and the root, if fetched); counts every refusal. */
-    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long): OverlayProbe {
+    internal fun overlayProbe(w: AccessibilityWindowInfo, displayArea: Long, budget: ScanBudget? = null): OverlayProbe {
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached
         // CANDIDATE is never honoured without a measurable display. Not memoized (it can become known).
@@ -449,6 +476,7 @@ class AccessibilitySource @Inject constructor(
         }
         var root: AccessibilityNodeInfo? = null
         val pkg: String = entry?.packageName ?: run {
+            if (budget != null && !budget.take()) return OverlayProbe.BudgetExhausted // CC5
             // Not memoized: an unreadable root is retried next frame.
             val fetched = w.root ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
             root = fetched
@@ -551,6 +579,14 @@ class AccessibilitySource @Inject constructor(
          * toasts ≤ 10 %.
          */
         const val MIN_OVERLAY_AREA_FRACTION = 0.25
+
+        /**
+         * PR #1155 review CC5: discovery root fetches (binder round-trips) allowed per front-window
+         * walk. A normal screen needs 1–4; a layout that needs more (e.g. dozens of large readable
+         * non-overlay system windows) is refused `SCAN_BUDGET` rather than fetched and thrashing the
+         * 64-entry verdict cache.
+         */
+        const val MAX_SCAN_ROOT_FETCHES = 8
     }
 
     /** The ONE [TreeSnapshot.WindowContext] builder (#1148 D4), used by every snapshot path. */
