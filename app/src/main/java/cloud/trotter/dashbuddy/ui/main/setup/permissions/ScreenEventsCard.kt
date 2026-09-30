@@ -18,11 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptDisclosure
 import cloud.trotter.dashbuddy.feature.settings.eventReceiptRequirementNote
-import cloud.trotter.dashbuddy.feature.settings.eventReceiptSettingsPath
 
 /**
  * #1151 (dev re-sequencing, 2026-09-30) — the permission chain's FIRST step, before the
@@ -69,45 +67,6 @@ fun ScreenEventsCard(onDecision: (allow: Boolean) -> Unit) {
                 onClick = { onDecision(true) },
                 modifier = Modifier.weight(1f),
             ) { Text(stringResource(SettingsR.string.event_receipt_allow)) }
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-/**
- * #1151 — on a DEBUG build that declined, this stands IN PLACE of the accessibility step: the grant
- * is never offered while declined. (The shell-level `DebugEventReceiptShell` normally covers the
- * whole app first; this is the chain's own answer.)
- */
-@Composable
-fun ScreenEventsDeclinedCard(
-    onOpenConsentSettings: () -> Unit,
-    onExit: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.debug_event_receipt_block_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.debug_event_receipt_block_body, eventReceiptSettingsPath()),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onOpenConsentSettings, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.debug_event_receipt_block_open_settings))
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.debug_event_receipt_block_exit))
         }
         Spacer(Modifier.height(16.dp))
     }

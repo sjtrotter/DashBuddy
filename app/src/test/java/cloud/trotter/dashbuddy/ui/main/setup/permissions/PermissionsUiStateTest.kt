@@ -34,7 +34,7 @@ class PermissionsUiStateTest {
         val missing = poll()
 
         assertEquals(emptyList<PermissionType>(), missing)
-        assertTrue(PermissionsUiState(missing).allGranted)
+        assertTrue(PermissionsUiState(missing, consentRead = true).allGranted)
     }
 
     @Test
@@ -59,7 +59,7 @@ class PermissionsUiStateTest {
         )
         // The head is the card the sheet shows first.
         assertEquals(PermissionType.Accessibility, missing.first())
-        assertFalse(PermissionsUiState(missing).allGranted)
+        assertFalse(PermissionsUiState(missing, consentRead = true).allGranted)
     }
 
     @Test
@@ -83,8 +83,9 @@ class PermissionsUiStateTest {
     }
 
     @Test
-    fun `state defaults to nothing missing`() {
-        assertTrue(PermissionsUiState().allGranted)
+    fun `state defaults to nothing missing - but never all-granted before the consent is read (#1151 TT4)`() {
+        assertFalse(PermissionsUiState().allGranted)
         assertEquals(emptyList<PermissionType>(), PermissionsUiState().missing)
+        assertTrue(PermissionsUiState(consentRead = true).allGranted)
     }
 }

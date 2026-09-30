@@ -13,7 +13,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -50,7 +49,7 @@ class ScreenEventsStepTest {
         for (consent in listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED)) {
             val s = buildPermissionsUiState(nothingGranted, consent, isDebugBuild = false)
             assertEquals(PermissionStep.Os(PermissionType.Accessibility), s.steps.first())
-            assertNull(s.screenEvents)
+            assertFalse(s.screenEventsDue)
         }
     }
 
@@ -61,18 +60,28 @@ class ScreenEventsStepTest {
     }
 
     @Test
-    fun `debug DECLINED - the notice stands in place of the accessibility step, never the grant`() {
+    fun `debug DECLINED withholds the accessibility grant`() {
         val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.DECLINED, isDebugBuild = true)
-        assertEquals(PermissionStep.ScreenEventsDebugDeclined, s.steps.first())
         assertFalse(PermissionType.Accessibility in s.missing)
+        assertFalse(accessibilityOffered(EventReceiptConsent.DECLINED, isDebugBuild = true))
     }
 
     @Test
-    fun `before the consent is read nothing about it is shown and the grant is withheld`() {
-        val s = buildPermissionsUiState(nothingGranted, null, isDebugBuild = false)
-        assertNull(s.screenEvents)
-        assertFalse(PermissionType.Accessibility in s.missing)
-        assertFalse(accessibilityOffered(null, isDebugBuild = true))
+    fun `before the consent is read the queue is EMPTY and nothing is all-granted (TT4)`() {
+        for (debug in listOf(true, false)) {
+            val s = buildPermissionsUiState(nothingGranted, null, isDebugBuild = debug)
+            assertTrue("no OS card may lead before the read", s.steps.isEmpty())
+            assertFalse(s.allGranted)
+            assertFalse(PermissionType.Accessibility in s.missing)
+        }
+    }
+
+    @Test
+    fun `once read, Screen-events heads the queue before every OS card (TT4)`() {
+        val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.UNDECIDED, isDebugBuild = false)
+        assertEquals(PermissionStep.ScreenEvents, s.steps.first())
+        assertTrue(s.steps.drop(1).all { it is PermissionStep.Os })
+        assertEquals(5, s.steps.size) // Screen-events + the four non-accessibility OS cards
     }
 
     // ---- ViewModel ------------------------------------------------------------------------
