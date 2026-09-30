@@ -105,15 +105,29 @@ class WindowsChangedOverlayTest {
     }
 
     @Test
-    fun `an enabled application window above the active DoorDash window is emitted`() {
+    fun `DD3 - an enabled application window above an ENABLED active window is NOT emitted`() {
+        // The event path owns the enabled active window and never reads a non-active application
+        // window above it; emitting it here would interleave the two.
         val out = emitted(
             listOf(
                 window(3, 2, node(ddPkg, "dd"), active = true),
-                window(9, 9, node(uberPkg, "uber-offer")),
+                window(9, 9, node(uberPkg, "uber-app")),
             ),
             enabled = setOf(ddPkg, uberPkg),
         )
-        assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `an enabled application window above a NON-enabled active window is emitted (the single front winner)`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node("com.android.launcher3", "home"), active = true),
+                window(9, 9, node(uberPkg, "uber-app")),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-app"), out.map { it.tree.text })
         assertEquals(TreeSnapshot.Trigger.Reason.WINDOWS, out.single().trigger?.reason)
     }
 
@@ -238,12 +252,25 @@ class WindowsChangedOverlayTest {
     }
 
     @Test
-    fun `a DoorDash sheet above the active DoorDash activity - only the sheet (shipped behaviour)`() {
+    fun `DD3 - a non-active DoorDash sheet above the active DoorDash activity - nothing (the event path reads the activity)`() {
         val out = emitted(
             listOf(window(3, 2, node(ddPkg, "dd-activity"), active = true), window(7, 5, node(ddPkg, "dd-sheet"))),
             enabled = setOf(ddPkg, uberPkg),
         )
-        assertEquals(listOf("dd-sheet"), out.map { it.tree.text })
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `DD3 - activity 2, Uber overlay 5, NON-active DoorDash sheet 9 - nothing emitted (agrees with the event path)`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd-activity"), active = true),
+                system(9, 5, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+                window(7, 9, node(ddPkg, "dd-sheet")),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
     }
 
     @Test

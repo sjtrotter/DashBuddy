@@ -648,7 +648,8 @@ class WindowSpecificSnapshotTest {
     }
 
     @Test
-    fun `CC4 - an enabled application sheet ABOVE the overlay - the overlay is not frontmost - the active root`() = bothKinds { kind ->
+    fun `CC4, DD3 - activity 2, overlay 5, NON-active DoorDash sheet 9 - the event path reads the active activity`() = bothKinds { kind ->
+        // The same layout WindowsChangedOverlayTest's DD3 case pins at "nothing emitted".
         val dd = node(ddPkg, "dd", windowId = 3)
         val h = harness(
             activeRoot = dd,

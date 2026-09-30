@@ -420,10 +420,26 @@ class AccessibilitySource @Inject constructor(
         val active = windows.firstOrNull { it.id == activeWindowId } ?: return OverlayScan.None
         val flagged = windows.filter { it.isActive }
         if (flagged.size != 1 || flagged.single().id != active.id) return OverlayScan.None // unverifiable ordering
-        // CC4: EVERY window type above the active one, by layer — an application window (not ours,
-        // not PiP) above the overlay means the overlay is not frontmost (→ None: the ordinary
-        // active-root rule decides). CC5/CC7: a walk out of root fetches, or an unreadable window
-        // on top, refuses the frame.
+        return overlayFront(windows, active, isEnabled)
+    }
+
+    /**
+     * PR #1155 review DD3 — the ONE "is an enabled overlay the front above an ENABLED active window"
+     * rule, shared by the event path ([overlayAboveActive]) and the topology path, so the two can
+     * never disagree: only an OVERLAY winner is returned. The event path owns the active window and
+     * never reads a non-active application window, so a non-active application window in front (a
+     * DoorDash sheet above its activity) is [OverlayScan.None] on BOTH paths — the topology path must
+     * not emit it, or it interleaves with the activity the event path reads.
+     *
+     * CC4: EVERY window type above the active one, by layer — an application window (not ours, not
+     * PiP) above the overlay means the overlay is not frontmost (→ None). CC5/CC7: a walk out of root
+     * fetches, or an unreadable window on top, refuses the frame.
+     */
+    internal fun overlayFront(
+        windows: List<AccessibilityWindowInfo>,
+        active: AccessibilityWindowInfo,
+        isEnabled: (String?) -> Boolean,
+    ): OverlayScan {
         return when (val front = frontAbove(windows, active, isEnabled)) {
             is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
             is Foreground.Refused -> when (front.reason) {

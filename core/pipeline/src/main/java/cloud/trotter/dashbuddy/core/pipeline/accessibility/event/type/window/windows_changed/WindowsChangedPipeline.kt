@@ -108,12 +108,26 @@ class WindowsChangedPipeline @Inject constructor(
                 }
                 return@transform
             }
-            // PR #1155 review CC2/CC3: ONE winner, the same one the event path would pick — the
-            // readable-top-or-refuse walk over every window ABOVE the active one
-            // ([AccessibilitySource.frontAbove]). An enabled overlay over a covered DoorDash sheet
-            // emits the overlay only (never both — that re-opened the interleaving); an unreadable
-            // window (application, or a LARGE system window) above is a BARRIER — nothing beneath it
-            // is emitted; a foreign application window on top emits nothing.
+            // PR #1155 review CC2/CC3/DD3: at most ONE window, chosen by the SAME rules the event
+            // path applies, so the two paths never disagree:
+            // - active window ENABLED → the event path owns it (and never reads a non-active
+            //   application window above it), so only an OVERLAY winner is emitted
+            //   ([AccessibilitySource.overlayFront], the helper the event path calls);
+            // - active window not enabled (and not ours) → `frontAbove`'s single winner.
+            // Either way an unreadable window above is a BARRIER and a foreign app on top emits nothing.
+            if (source.packageOf(active) in enabled) {
+                when (val scan = source.overlayFront(windows, active) { it in enabled }) {
+                    is AccessibilitySource.OverlayScan.Overlay ->
+                        snapshotOf(scan.located.window, scan.located.root, overlay = true)?.let { emit(it) }
+                    is AccessibilitySource.OverlayScan.Refused -> {
+                        if (scan.reason == ForegroundSkipReason.SCAN_BUDGET) stats.onForegroundSkip(scan.reason) // CC5
+                        Timber.tag("Pipeline").v("🚫 Windows: overlay scan refused %s", scan.reason)
+                    }
+                    AccessibilitySource.OverlayScan.None ->
+                        Timber.tag("Pipeline").v("🚫 Windows: enabled active window, no overlay in front — nothing emitted")
+                }
+                return@transform
+            }
             when (val front = source.frontAbove(windows, active) { it in enabled }) {
                 is AccessibilitySource.Foreground.Found ->
                     snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
