@@ -91,10 +91,26 @@ class SkeletonBuilderTest {
     }
 
     @Test
-    fun `step 1 - a PII_ID_SUFFIXES exact suffix withholds`() {
-        // `order_cx_name` and `tvTitle` are PII_ID_SUFFIXES only (not ID_MARKERS) — the union is used.
+    fun `step 1 - a table id or an intake-only id withholds its own field`() {
+        // `order_cx_name` / `tvTitle` are ID_MARKER_TABLE rows now (NN2, PP6); `message_input` and
+        // `primaryManeuverText` are INTAKE-ONLY (`PII_ID_SUFFIXES` only) — the union is used for step 1.
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/order_cx_name"))
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/tvTitle"))
+    }
+
+    @Test
+    fun `step 1 - an INTAKE_ONLY id withholds its own field and seeds nothing (review SS6)`() {
+        listOf("message_input", "primaryManeuverText").forEach { suffix ->
+            val out = SkeletonBuilder.build(
+                UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                    UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/$suffix", text = "Turn right"),
+                    UiNode(className = "android.widget.TextView", text = "Turn right"),
+                )),
+                null, meta, platform, day,
+            )!!.root.children
+            assertEquals(suffix, TextSlot.WITHHELD, out[0].text.getValue("text"))
+            assertEquals(suffix, words(2, "Turn right"), out[1].text.getValue("text"))
+        }
     }
 
     @Test
@@ -752,7 +768,7 @@ class SkeletonBuilderTest {
     }
 
     @Test
-    fun `NN1 NN2 - user_name and order_cx_name are NAME ids that seed the frame`() {
+    fun `NN1 NN2 SS1 - order_cx_name seeds runs, user_name seeds its exact value only`() {
         fun frame(id: String) = UiNode(
             className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                 UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/$id", text = "Riley"),
@@ -760,11 +776,13 @@ class SkeletonBuilderTest {
                 UiNode(className = "android.widget.TextView", text = "Call Riley"),
             ),
         )
-        listOf("user_name", "order_cx_name").forEach { id ->
-            val out = SkeletonBuilder.build(frame(id), null, meta, platform, day)!!.root.children
-            assertEquals(id, TextSlot.WITHHELD, out[1].text.getValue("text"))
-            assertEquals(id, TextSlot.WITHHELD, out[2].text.getValue("text"))
-        }
+        val cx = SkeletonBuilder.build(frame("order_cx_name"), null, meta, platform, day)!!.root.children
+        assertEquals(TextSlot.WITHHELD, cx[1].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, cx[2].text.getValue("text"))
+        // SS1: user_name is EXACT — its exact duplicate is withheld, its words never seed.
+        val user = SkeletonBuilder.build(frame("user_name"), null, meta, platform, day)!!.root.children
+        assertEquals(TextSlot.WITHHELD, user[1].text.getValue("text"))
+        assertEquals(words(2, "Call Riley"), user[2].text.getValue("text"))
     }
 
     @Test
@@ -856,18 +874,30 @@ class SkeletonBuilderTest {
     }
 
     @Test
-    fun `PP8 - a caller-supplied tree verdict is honoured, a failed scan is BUILD_FAILED`() {
+    fun `PP8 SS2 - a caller verdict is honoured only for its own tree`() {
         val clean = tree("Continue")
         assertEquals(
             Outcome.Refused(Refusal.SENSITIVE_FRAME),
-            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Hit("shape:x")),
+            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Hit(clean, "shape:x")),
         )
         assertEquals(
             Outcome.Refused(Refusal.BUILD_FAILED),
-            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.ScanFailed),
+            SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.ScanFailed(clean)),
         )
-        assertTrue(SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Clear) is Outcome.Built)
-        assertEquals(SkeletonBuilder.SensitiveVerdict.Clear, SkeletonBuilder.SensitiveVerdict.of(null))
+        assertTrue(SkeletonBuilder.outcome(clean, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Clear(clean)) is Outcome.Built)
+        assertEquals(SkeletonBuilder.SensitiveVerdict.Clear(clean), SkeletonBuilder.SensitiveVerdict.of(clean, null))
+        // SS2: a `Clear` computed on ANOTHER tree (even a structurally identical one) is ignored — the
+        // builder scans the banking tree itself and refuses it.
+        val banking = tree("Transfer out")
+        val lookalike = tree("Transfer out")
+        assertEquals(
+            Outcome.Refused(Refusal.SENSITIVE_FRAME),
+            SkeletonBuilder.outcome(banking, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Clear(clean)),
+        )
+        assertEquals(
+            Outcome.Refused(Refusal.SENSITIVE_FRAME),
+            SkeletonBuilder.outcome(banking, null, meta, platform, day, SkeletonBuilder.SensitiveVerdict.Clear(lookalike)),
+        )
         // With no verdict, the builder scans the tree itself.
         assertEquals(Outcome.Refused(Refusal.SENSITIVE_FRAME), SkeletonBuilder.outcome(tree("Transfer out"), null, meta, platform, day, null))
     }
@@ -889,5 +919,32 @@ class SkeletonBuilderTest {
         // bounded RAW pass still sees the boundary, so the STREET shape withholds it.
         assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20123 Main St"))
         assertEquals(TextSlot.WITHHELD, slot("x\uDB40\uDC20Jane S is here"))
+    }
+
+    // ---- #1160 review round 8 (code review) ---------------------------------------------------------
+
+    @Test
+    fun `SS3 - the id path withholds only name-like lead-in tails and capitalized name shapes`() {
+        listOf("deliver_to_Sam", "deliverToSam", "pickupForSam", "chip_Adam_S", "chipAdamS", "com.x:id/row_Deliver_to_Sam")
+            .forEach { assertTrue(it, !SkeletonBuilder.isStaticId(it)) }
+        listOf("deliver_to_label", "order_for_header", "pickup_for_title", "tabB", "optionA", "tab_B", "option_a", "icon_x")
+            .forEach { assertTrue(it, SkeletonBuilder.isStaticId(it)) }
+    }
+
+    @Test
+    fun `SS1 - a merchant name under user_name suppresses no chrome and no class`() {
+        val out = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/user_name", text = "Jack in the Box"),
+                UiNode(className = "android.widget.TextView", text = "Head to the store"),
+                UiNode(className = "android.widget.TextView", text = "Sign in"),
+                UiNode(className = "android.view.View", viewIdResourceName = "com.x:id/boxView", text = "Total"),
+            )),
+            null, meta, platform, day,
+        )!!.root.children
+        assertEquals(words(4, "Head to the store"), out[1].text.getValue("text"))
+        assertEquals(words(2, "Sign in"), out[2].text.getValue("text"))
+        assertEquals("android.view.View", out[3].className)
+        assertEquals("com.x:id/boxView", out[3].id)
     }
 }

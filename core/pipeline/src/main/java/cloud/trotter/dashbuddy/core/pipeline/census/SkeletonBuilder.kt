@@ -15,6 +15,7 @@ import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.LocalDate
@@ -163,22 +164,30 @@ object SkeletonBuilder {
         sensitive: SensitiveVerdict?,
     ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep), sensitive)
 
-    /** A tree's sensitive-marker verdict, as `SensitiveTextMarkers.findMarker` reports it (review PP8). */
+    /**
+     * A tree's sensitive-marker verdict, as `SensitiveTextMarkers.findMarker` reports it (reviews PP8, SS2).
+     * BOUND to the exact tree it was computed on ([tree], referential identity): the builder honours a
+     * verdict only for that same `UiNode` instance, and otherwise scans itself — a stale or mismatched
+     * `Clear` can never skip the whole-frame drop (fail closed on the argument).
+     */
     sealed interface SensitiveVerdict {
-        data object Clear : SensitiveVerdict
+        /** The scanned tree (identity-compared). */
+        val tree: UiNode
+
+        data class Clear(override val tree: UiNode) : SensitiveVerdict
 
         /** A marker hit. [markerId] is the marker's log id — never frame text. */
-        data class Hit(val markerId: String) : SensitiveVerdict
+        data class Hit(override val tree: UiNode, val markerId: String) : SensitiveVerdict
 
         /** The scan itself failed (its fail-closed sentinel) — a build failure, not a sensitive frame. */
-        data object ScanFailed : SensitiveVerdict
+        data class ScanFailed(override val tree: UiNode) : SensitiveVerdict
 
         companion object {
-            /** Map a `SensitiveTextMarkers.findMarker` result to a verdict. */
-            fun of(marker: String?): SensitiveVerdict = when (marker) {
-                null -> Clear
-                SensitiveTextMarkers.NORMALIZE_FAILED -> ScanFailed
-                else -> Hit(marker)
+            /** Map a `SensitiveTextMarkers.findMarker(tree)` result to a verdict bound to [tree]. */
+            fun of(tree: UiNode, marker: String?): SensitiveVerdict = when (marker) {
+                null -> Clear(tree)
+                SensitiveTextMarkers.NORMALIZE_FAILED -> ScanFailed(tree)
+                else -> Hit(tree, marker)
             }
         }
     }
@@ -232,10 +241,11 @@ object SkeletonBuilder {
         // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built. A scan
         // that FAILED (the marker scan's own fail-closed sentinel) is a build failure, not a banking
         // screen — review GG3: #1146's counters must not report a normalizer defect as a sensitive frame.
-        when (sensitive ?: SensitiveVerdict.of(SensitiveTextMarkers.findMarker(tree))) {
-            SensitiveVerdict.Clear -> Unit
+        val verdict = sensitive?.takeIf { it.tree === tree } ?: SensitiveVerdict.of(tree, SensitiveTextMarkers.findMarker(tree))
+        when (verdict) {
+            is SensitiveVerdict.Clear -> Unit
             is SensitiveVerdict.Hit -> return Outcome.Refused(Refusal.SENSITIVE_FRAME)
-            SensitiveVerdict.ScanFailed -> return Outcome.Refused(Refusal.BUILD_FAILED)
+            is SensitiveVerdict.ScanFailed -> return Outcome.Refused(Refusal.BUILD_FAILED)
         }
         if (!windowTitle.isNullOrBlank()) {
             sensitivity(SensitiveTextMarkers.findMarker(windowTitle), Refusal.SENSITIVE_TITLE)?.let { return Outcome.Refused(it) }
@@ -310,14 +320,19 @@ object SkeletonBuilder {
         // Review PP1: camelCase segments are words too (`deliverToSam` → "deliver To Sam"), by the same
         // rule the frame-level check uses. Review PP4: only the CASE-SENSITIVE-initial name shape runs on
         // the id path — the IGNORE_CASE anchored variant nulled every `option_a` / `tab_b` chrome id.
+        // Review SS3 (id path only): the name shape is FULLY case-sensitive (a Capitalized first token and an
+        // uppercase initial — `tab B` / `option A` are chrome), and a marker / lead-in withholds only when the
+        // token AFTER it is Capitalized (a name): `deliver_to_Sam` is absent, `deliver_to_label` travels.
+        // SS8: an id with no canonical form is not static.
         val spoken = CensusHash.canonical(
             ResourceIdGrammar.namePart(id).split(ID_SEPARATORS).joinToString(" ") { camelSegments(it).joinToString(" ") },
-        )
-        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX.containsMatchIn(spoken)) return false
+        ) ?: return false
+        if (PiiShapes.containsMask(spoken) || PiiShapes.FIRST_LAST_INITIAL_CAPITALIZED_REGEX.containsMatchIn(spoken)) return false
         val tokens = spoken.split(' ')
         return tokens.indices.none { i ->
             val tail = tokens.subList(i, tokens.size).joinToString(" ")
-            CustomerTextMarkers.unredactedMarker(tail) != null || PiiShapes.customerLeadIn(tail) != null
+            val prefix = CustomerTextMarkers.unredactedMarker(tail) ?: PiiShapes.customerLeadIn(tail)
+            prefix != null && tail.length > prefix.length && tail[prefix.length].isUpperCase()
         }
     }
 
@@ -361,7 +376,7 @@ object SkeletonBuilder {
      * One non-blank field after pass 1: its RAW trimmed value (the verdict memo key), its canonical value
      * (the hash/grammar input and the frame-wide key), and whether its own id withholds it.
      */
-    internal class Field(val trimmed: String, val canonical: String, val idWithholds: Boolean)
+    internal class Field(val trimmed: String, val canonical: String, val idWithholds: Boolean, val converged: Boolean = true)
 
     /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
     internal class Pending(
@@ -404,6 +419,14 @@ object SkeletonBuilder {
         /** Letter runs (≥ [MIN_IDENTITY_RUN] letters, folded) of NAME identity ids' text/desc (GG1, LL1). */
         private val identityRuns = HashSet<String>()
 
+        /** Canonical form per raw trimmed value, memoized per frame (review SS7); null = no fixed point. */
+        private val canonicals = HashMap<String, Canon>()
+
+        /** A memoized canonical form, wrapped so a stored null ("no fixed point") is not read as absent. */
+        private class Canon(val canonical: String?)
+
+        private fun canonicalOf(trimmed: String): String? = canonicals.getOrPut(trimmed) { Canon(CensusHash.canonical(trimmed)) }.canonical
+
         fun scan(node: UiNode): Pending {
             // Reviews BB1/BB2/CC1/II6: validate the RAW input BEFORE the grammar gates, which would
             // otherwise drop a malformed value to null unseen. The ONLY source of INVALID_TREE (II5).
@@ -412,10 +435,15 @@ object SkeletonBuilder {
             if (node.isChecked !in 0..2) throw InvalidTree("isChecked outside the 0/1/2 tri-state")
             val idClass = idClassOf(node.viewIdResourceName)
             val fields = ArrayList<Pair<String, Field>>()
+            var textField: Field? = null
+            var descField: Field? = null
             for ((field, value) in node.scrubbableStrings()) {
-                field(value, idClass)?.let { fields += field.wire to it }
+                val f = field(value, idClass) ?: continue
+                fields += field.wire to f
+                if (field == UiNodeTextField.TEXT) textField = f
+                if (field == UiNodeTextField.CONTENT_DESCRIPTION) descField = f
             }
-            seedIdentity(node, idClass)
+            seedIdentity(textField, descField, idClass)
             return Pending(
                 className = ClassNameGrammar.staticOrNull(node.className),
                 id = node.viewIdResourceName?.takeIf { raw -> staticIds.getOrPut(raw) { isStaticId(raw) } },
@@ -438,9 +466,10 @@ object SkeletonBuilder {
             if (value.isNullOrBlank()) return null
             val trimmed = value.trim()
             // Review OO1: a value whose canonical form does not reach a fixed point is withheld outright
-            // (never judged on one form and hashed on another) and seeds nothing.
-            val canonical = CensusHash.canonicalOrNull(value)
-                ?: return Field(trimmed, CensusHash.canonical(value), idWithholds = true)
+            // (never judged on one form and hashed on another) and seeds nothing; SS7: its placeholder
+            // canonical is the trimmed value (nothing reads it).
+            val canonical = canonicalOf(trimmed)
+                ?: return Field(trimmed, trimmed, idWithholds = true, converged = false)
             val step = valueStep(trimmed, canonical)
             if (step != null && step != FilterStep.LENGTH_CAP && !PiiShapes.containsMask(canonical)) caught += canonical
             return Field(trimmed, canonical, idWithholds = idClass != IdClass.NONE)
@@ -455,15 +484,15 @@ object SkeletonBuilder {
          *   while a TalkBack desc "Customer name Adam" beside text "Adam" seeds no `customer`/`name`.
          * ADDRESS and EXACT never seed runs (address vocabulary and sheet titles are common English).
          */
-        private fun seedIdentity(node: UiNode, idClass: IdClass) {
+        private fun seedIdentity(textField: Field?, descField: Field?, idClass: IdClass) {
             if (idClass != IdClass.PII_NAME && idClass != IdClass.PII_ADDRESS && idClass != IdClass.PII_EXACT) return
-            val text = node.text?.takeIf { it.isNotBlank() }?.let { CensusHash.canonicalOrNull(it) }?.takeIf { !PiiShapes.containsMask(it) }
-            val desc = node.contentDescription?.takeIf { it.isNotBlank() }?.let { CensusHash.canonicalOrNull(it) }
-                ?.takeIf { !PiiShapes.containsMask(it) }
+            // SS7: the already-built Fields' canonicals — never re-canonicalized.
+            val text = textField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
+            val desc = descField?.takeIf { it.converged }?.canonical?.takeIf { !PiiShapes.containsMask(it) }
             text?.let { caught += it }
             desc?.let { caught += it }
             if (idClass != IdClass.PII_NAME) return
-            val runSource = if (!node.text.isNullOrBlank()) text else desc
+            val runSource = if (textField != null) text else desc
             runSource?.let { identityRuns += runsOf(it, minLetters = MIN_IDENTITY_RUN) }
         }
 
