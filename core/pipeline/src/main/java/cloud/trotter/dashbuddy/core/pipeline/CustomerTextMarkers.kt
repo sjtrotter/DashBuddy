@@ -138,13 +138,13 @@ object CustomerTextMarkers {
      * absent, so a replayed UNKNOWN frame keeps its shape for triage.
      *
      * The table carries, per suffix, the KIND of value the node holds (#1160 reviews EE1, LL1):
-     * `NAME` — a person's name (`customer_name`, `order_cx_name`, and `user_name` — which is also reused
-     * for the merchant's and the dasher's own name; withholding a store name costs the census nothing,
-     * since recognition never anchors on merchant names, #1160 review NN1); `ADDRESS` — a place (the
+     * `NAME` — an id whose value is ONLY ever a person's name (`customer_name`, `order_cx_name`): seeds
+     * its exact value and its letter runs; `ADDRESS` — a place (the
      * address lines, `arriving_at_title`, `address_subpremise_line`); `CONTENT` — a node that can hold
      * customer text but is also reused for app copy (the free-text instruction bodies;
      * `description_text_view`, which this file documents as generic DoorDash chrome); `EXACT` — a value
-     * that may be PII or chrome (`tvTitle`, `tvLastMessage`: seeds its exact value only). The intake list
+     * that may be PII or chrome, or an id REUSED for other people (`user_name`, also the merchant's and the
+     * dasher's name; `tvTitle`, `tvLastMessage`): seeds its exact value only (#1160 reviews PP6, SS1). The intake list
      * (`PiiShapes.PII_ID_SUFFIXES`) holds only instruction/content ids (message bodies, maneuver/road
      * text, instruction bodies) plus this table's suffixes, so the two never disagree on a PII id
      * (#1160 reviews NN2, PP6). The runtime backstop scrubs on EVERY suffix exactly as
@@ -157,12 +157,12 @@ object CustomerTextMarkers {
         IdMarker("customer_name", IdentityKind.NAME),
         // DoorDash drop-off + pickup contact blocks -> customer name (the node the
         // "Delivery for" label sibling names; #910 V5).
-        // A NAME for the census (#1160 review NN1, reversing GG5): the class KDoc records it is REUSED for
-        // the MERCHANT on pickup cards and for the dasher's own name, so a store header may be withheld
-        // frame-wide on a pickup frame — not a loss: recognition never anchors on a merchant name
-        // (platform chrome only), so a store name is not vocabulary the census needs, while a customer's
-        // bare first name under this id must never hash where the contact block repeats it id-less.
-        IdMarker("user_name", IdentityKind.NAME),
+        // EXACT for the census (#1160 review SS1): the class KDoc records it is REUSED for the MERCHANT on
+        // pickup cards and for the dasher's own name, so its letter runs must never seed ("The Home Depot"
+        // → `the`; "Jack in the Box" → `in`/`box` would withhold chrome and, through the class/id check,
+        // null `TextView`-class wrappers per store). EXACT still withholds an exact duplicate of a
+        // customer's first name; a merchant name costs nothing (recognition never anchors on one).
+        IdMarker("user_name", IdentityKind.EXACT),
         // DoorDash address block -> street line and city/ST/ZIP line (#910 V1/V5).
         IdMarker("address_line_1", IdentityKind.ADDRESS),
         IdMarker("address_line_2", IdentityKind.ADDRESS),
@@ -216,13 +216,18 @@ object CustomerTextMarkers {
         // generic id other surfaces use for a sheet title such as "Pick up order") and last-message
         // preview (`tvLastMessage` — the customer's own text). EXACT: withheld on their own field and
         // seeding their EXACT value frame-wide, never runs, so a chrome sheet title cannot suppress chrome
-        // words. Promoted from the intake list; the runtime UNKNOWN scrub widens by these two suffixes.
-        IdMarker("tvTitle", IdentityKind.EXACT),
-        IdMarker("tvLastMessage", IdentityKind.EXACT),
+        // words. CENSUS-only (#1160 review SS9): `runtimeScrub = false`, so the UNKNOWN debug capture keeps
+        // a generic sheet title — the one triage line that names a new surface; the corpus intake still
+        // masks both via `PiiShapes.PII_ID_SUFFIXES`.
+        IdMarker("tvTitle", IdentityKind.EXACT, runtimeScrub = false),
+        IdMarker("tvLastMessage", IdentityKind.EXACT, runtimeScrub = false),
     )
 
-    /** One [ID_MARKER_TABLE] row. */
-    data class IdMarker(val suffix: String, val kind: IdentityKind)
+    /**
+     * One [ID_MARKER_TABLE] row. [runtimeScrub] (#1160 review SS9) says whether the runtime UNKNOWN
+     * scrub ([ID_MARKERS]) covers the suffix; a census-only row (a value that may be chrome) sets it false.
+     */
+    data class IdMarker(val suffix: String, val kind: IdentityKind, val runtimeScrub: Boolean = true)
 
     /** What an [IdMarker]'s node value IS (#1160 review LL1). */
     enum class IdentityKind {
@@ -242,8 +247,11 @@ object CustomerTextMarkers {
         EXACT,
     }
 
-    /** The suffix list — DERIVED from [ID_MARKER_TABLE], unchanged in content and order (pinned). */
-    val ID_MARKERS: List<String> = ID_MARKER_TABLE.map { it.suffix }
+    /**
+     * The runtime-scrub suffix list — the [ID_MARKER_TABLE] rows with `runtimeScrub`, in table order
+     * (pinned). The table is the one owner of "what kind of value an id carries"; this is its projection.
+     */
+    val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub }.map { it.suffix }
 
     /** Substring that classifies a node's text as already-redacted (VET V1). */
     private const val REDACTED_MARK = "[redacted"
@@ -290,10 +298,11 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
-     * The [ID_MARKERS] entry [id] ends with, or null — [idMarkerFor]'s suffix. The UNKNOWN-envelope scan
-     * below calls it; the census filter (ADR-0011 §2 step 1) calls [idMarkerFor] for the flag.
+     * The [ID_MARKERS] (runtime-scrub) entry [id] ends with, or null — the UNKNOWN-envelope scan's
+     * predicate. Census-only rows (`runtimeScrub = false`, #1160 review SS9) never match here; the census
+     * filter (ADR-0011 §2 step 1) calls [idMarkerFor] over the whole table.
      */
-    fun idMarkerSuffix(id: String?): String? = idMarkerFor(id)?.suffix
+    fun idMarkerSuffix(id: String?): String? = idMarkerFor(id)?.takeIf { it.runtimeScrub }?.suffix
 
     /**
      * The [ID_MARKER_TABLE] row [id] ends with (case-insensitive SUFFIX match on the FULL resource id —

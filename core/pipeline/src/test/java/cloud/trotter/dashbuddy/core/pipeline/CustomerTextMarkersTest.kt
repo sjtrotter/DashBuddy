@@ -379,15 +379,13 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
-                // #1160 review PP6 — deliberately ADDED: the chat header and last-message preview.
-                "tvTitle", "tvLastMessage",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
         assertEquals(
             mapOf(
                 "customer_name" to CustomerTextMarkers.IdentityKind.NAME,
-                "user_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "user_name" to CustomerTextMarkers.IdentityKind.EXACT,
                 "address_line_1" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
@@ -408,5 +406,15 @@ class CustomerTextMarkersTest {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Morgan")
         assertEquals("order_cx_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `the census-only rows stay out of the runtime scrub (review SS9)`() {
+        assertEquals(
+            setOf("tvTitle", "tvLastMessage"),
+            CustomerTextMarkers.ID_MARKER_TABLE.filter { !it.runtimeScrub }.map { it.suffix }.toSet(),
+        )
+        val title = UiNode(viewIdResourceName = "com.x:id/tvTitle", text = "Pick up order")
+        assertEquals("Pick up order", CustomerTextMarkers.scrubUnknown(title).text)
     }
 }
