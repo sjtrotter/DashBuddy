@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
+import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.util.zip.GZIPInputStream
 
 /**
@@ -32,15 +35,35 @@ object FrameworkClasses {
 
     /**
      * The inventory in [gzipped], or EMPTY when it is missing or corrupt — which only shrinks [KNOWN], so the
-     * class check withholds MORE (fail closed). Internal so a test can feed a corrupt stream.
+     * class check withholds MORE (fail closed). Review AK5: strict — the bytes are decoded as UTF-8 with
+     * `CodingErrorAction.REPORT` (a malformed byte is corruption, never a U+FFFD entry), the decompressed size
+     * is bounded ([MAX_INVENTORY_BYTES]), and EVERY entry must pass `ClassNameGrammar`; any failure — a bad
+     * entry, a truncated stream, a mid-stream exception — discards the whole resource. Internal so a test can
+     * feed corrupt streams.
      */
     internal fun parseInventory(gzipped: InputStream?): Set<String> = try {
-        gzipped?.let { GZIPInputStream(it) }?.bufferedReader(Charsets.UTF_8)
-            ?.useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toSet() }
-            ?: emptySet()
+        if (gzipped == null) {
+            emptySet()
+        } else {
+            val bytes = GZIPInputStream(gzipped).use { it.readNBytes(MAX_INVENTORY_BYTES + 1) }
+            if (bytes.size > MAX_INVENTORY_BYTES) {
+                emptySet()
+            } else {
+                val text = Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes))
+                    .toString()
+                val entries = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+                if (entries.all { ClassNameGrammar.isStatic(it) }) entries.toSet() else emptySet()
+            }
+        }
     } catch (_: Exception) {
         emptySet()
     }
+
+    /** The decompressed inventory's size bound (review AK5): far above the ~0.5 MB list, far below a bomb. */
+    internal const val MAX_INVENTORY_BYTES = 4 * 1024 * 1024
 
     /**
      * Every [PACKAGES] class the committed corpus renders (a corpus guard fails on an unlisted one), the

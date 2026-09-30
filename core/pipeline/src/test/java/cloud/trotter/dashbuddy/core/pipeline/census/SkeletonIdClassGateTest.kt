@@ -413,4 +413,25 @@ class SkeletonIdClassGateTest : SkeletonBuilderTestBase() {
         assertEquals(IdPathJudgement.IdVerdict.STATIC, IdPathJudgement.verdict("com.x:id/chip_Gold"))
         assertTrue(IdPathJudgement.isStaticId("com.x:id/chip_Gold"))
     }
+
+    @Test
+    fun `AK5 - a malformed, truncated, failing or invalid inventory is discarded whole`() {
+        fun gz(bytes: ByteArray) = java.io.ByteArrayOutputStream().also { out ->
+            java.util.zip.GZIPOutputStream(out).use { it.write(bytes) }
+        }.toByteArray()
+        val good = gz("android.widget.GridLayout\nandroid.widget.TextView\n".toByteArray())
+        assertEquals(setOf("android.widget.GridLayout", "android.widget.TextView"), FrameworkClasses.parseInventory(good.inputStream()))
+        // Malformed UTF-8.
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(gz(byteArrayOf(0x61, 0xC3.toByte(), 0x28, 0x0A)).inputStream()))
+        // Truncated gzip.
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(good.copyOf(good.size / 2).inputStream()))
+        // A mid-stream exception.
+        val failing = object : java.io.InputStream() {
+            var i = 0
+            override fun read(): Int = if (i < good.size / 2) good[i++].toInt() and 0xFF else throw java.io.IOException("boom")
+        }
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(failing))
+        // One entry that is not a static class name spoils the whole resource.
+        assertEquals(emptySet<String>(), FrameworkClasses.parseInventory(gz("android.widget.TextView\nnot a class!\n".toByteArray()).inputStream()))
+    }
 }
