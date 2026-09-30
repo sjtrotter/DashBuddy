@@ -49,18 +49,43 @@ object CensusHash {
     const val HEX_LENGTH: Int = 16
 
     /**
-     * The CANONICAL value (ADR-0011 §2 "Inputs and predicates", §3; #1160 reviews EE2, NN5): the shared
-     * [TextFold.foldGlyphs] (NFKC, FORMAT strip, dash fold), then every run of code
-     * points the classifier treats as whitespace (`Character.isWhitespace || isSpaceChar` — NBSP, thin
-     * space, tab, newline…) collapsed to ONE ASCII space, then trimmed. Every filter step, the grammar
-     * and the hash run on this, so the JVM (whose regex `\s` excludes NBSP) and ART/ICU (whose `\s`
-     * includes `\p{Z}`) take the same decision and produce the same hash. Idempotent.
+     * The CANONICAL value (ADR-0011 §2 "Inputs and predicates", §3; #1160 reviews EE2, NN5, OO1): the
+     * census glyph fold ([TextFold.foldForCensus]: FORMAT strip FIRST, then NFKC, then the dash fold),
+     * then every run of code points the classifier treats as whitespace (`Character.isWhitespace ||
+     * isSpaceChar` — NBSP, thin space, tab, newline…) collapsed to ONE ASCII space, then trimmed. Every
+     * filter step, the grammar and the hash run on this, so the JVM (whose regex `\s` excludes NBSP) and
+     * ART/ICU (whose `\s` includes `\p{Z}`) take the same decision and produce the same hash.
+     *
+     * A FIXED POINT (review OO1): `canonical(canonical(x)) == canonical(x)`. Stripping FORMAT before NFKC
+     * lets a combining mark behind a zero-width joiner compose in the ONE NFKC pass (`A\u200D\u030Adam`
+     * → `Ådam`); the pass is re-applied until stable, bounded at [MAX_PASSES] — [canonicalOrNull] reports a
+     * value that does not converge so the builder can withhold it.
      */
-    fun canonical(text: String): String {
-        // Review NN5: the shared glyph fold first (NFKC, FORMAT strip, dash fold), so a zero-width space
-        // inside a marker or a fullwidth letter cannot defeat the filter and a fullwidth chrome word
-        // hashes equal to its plain twin.
-        val folded = TextFold.foldGlyphs(text)
+    fun canonical(text: String): String = canonicalOrNull(text) ?: repeatPass(text, MAX_PASSES)
+
+    /** [canonical], or null when the pass does not reach a fixed point within [MAX_PASSES]. */
+    fun canonicalOrNull(text: String): String? {
+        var current = canonicalPass(text)
+        repeat(MAX_PASSES - 1) {
+            val next = canonicalPass(current)
+            if (next == current) return current
+            current = next
+        }
+        return if (canonicalPass(current) == current) current else null
+    }
+
+    /** Passes applied before a value is declared non-convergent. */
+    const val MAX_PASSES: Int = 3
+
+    private fun repeatPass(text: String, times: Int): String {
+        var s = text
+        repeat(times) { s = canonicalPass(s) }
+        return s
+    }
+
+    /** One canonicalization pass (glyph fold + whitespace collapse + trim). */
+    internal fun canonicalPass(text: String): String {
+        val folded = TextFold.foldForCensus(text)
         val sb = StringBuilder(folded.length)
         var pendingSpace = false
         var i = 0
@@ -78,15 +103,25 @@ object CensusHash {
         return sb.toString()
     }
 
-    /** The census hash of [text]'s [canonical] form, or null. */
-    fun of(text: String): String? = of(text, ::sha256OrNull)
+    /** The census hash of [text]'s [canonical] form, or null — for callers holding RAW text. */
+    fun of(text: String): String? = ofCanonical(canonical(text))
+
+    /**
+     * The census hash of an ALREADY-canonical value, WITHOUT re-canonicalizing (review OO1): the builder
+     * hashes exactly the string its filter judged, so the judged form and the hashed form can never
+     * differ.
+     */
+    fun ofCanonical(canonical: String): String? = ofCanonical(canonical, ::sha256OrNull)
 
     /** Test seam: the same computation over an injected digest, so the null path is provable. */
-    internal fun of(text: String, digest: (String) -> String?): String? {
-        val hex = digest(PREFIX + canonical(text)) ?: return null
+    internal fun ofCanonical(canonical: String, digest: (String) -> String?): String? {
+        val hex = digest(PREFIX + canonical) ?: return null
         if (hex.length < HEX_LENGTH) return null
         return hex.substring(0, HEX_LENGTH)
     }
+
+    /** Test seam over raw text (kept for the digest-failure tests). */
+    internal fun of(text: String, digest: (String) -> String?): String? = ofCanonical(canonical(text), digest)
 
     /** True when [h] has the wire shape of a census hash: exactly [HEX_LENGTH] lowercase hex. */
     fun isWellFormed(h: String): Boolean = WireStrings.isLowerHex(h, HEX_LENGTH)
