@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility.event.coalesce
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -161,5 +163,45 @@ class CoalesceByKeyTest {
         assertTrue(job.isCancelled)
         assertTrue("no per-key job outlives the collector", job.children.none())
         assertEquals("upstream subscription released", 0, upstream.subscriptionCount.value)
+    }
+
+    private fun Job.activeDescendants(): Int =
+        children.sumOf { (if (it.isActive) 1 else 0) + it.activeDescendants() }
+
+    @Test
+    fun `a stalled consumer keeps bursts open and merging - live jobs bounded, nothing lost`() = runTest {
+        val bursts = 300
+        // One event every 400 ms (each its own burst while the consumer keeps up).
+        val upstream = flow {
+            repeat(bursts) {
+                delay(400)
+                emit(Ev(key = 1, bits = 1, at = 0))
+            }
+        }
+        val gate = CompletableDeferred<Unit>()
+        val out = mutableListOf<Acc>()
+        val job = launch {
+            upstream
+                .coalesceByKey(keyOf = { it.key }, merge = ::mergeEv, maxKeys = 1)
+                .collect { gate.await(); out += it } // stalls on the very first emission
+        }
+        runCurrent()
+        val baseline = job.activeDescendants()
+
+        var peak = 0
+        repeat(bursts) {
+            advanceTimeBy(400)
+            runCurrent()
+            peak = maxOf(peak, job.activeDescendants() - baseline)
+        }
+
+        assertTrue("live coroutines beyond the operator's own must stay <= 3 x maxKeys, was $peak", peak <= 3)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        job.join()
+
+        assertEquals("every event is delivered once the consumer resumes", bursts, out.sumOf { it.count })
+        assertTrue("the stalled period collapsed into merged bursts", out.size < bursts)
     }
 }

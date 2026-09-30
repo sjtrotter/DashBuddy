@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 
@@ -32,6 +33,13 @@ internal const val COALESCE_MAX_KEYS = 64
  * key at the cap FLUSHES (emits early, never drops) the least-recently-touched burst, with one
  * WARN per collection. Every timer is a child of the collecting scope, so cancelling the
  * collector cancels them all.
+ *
+ * Backpressure (#1148 review F2): a timer must take one of [maxKeys] EMISSION PERMITS before it
+ * closes its burst, and holds it until its `send` returns. With a stalled consumer the permits run
+ * out, so a due burst stays OPEN and keeps MERGING (its timers wait on a permit) instead of being
+ * removed and replaced by a fresh burst with fresh timers — live coroutines stay ≤ 3 × [maxKeys]
+ * (a sender blocked in `send` + the open burst's two timers, per key) and no event is lost: when
+ * the consumer resumes, the merged burst carries every event that arrived meanwhile.
  */
 fun <T, K, A : Any> Flow<T>.coalesceByKey(
     quietMs: Long = 150L,
@@ -63,6 +71,9 @@ private class KeyedCoalescer<T, K, A : Any>(
     }
 
     private val lock = Mutex()
+
+    /** Emission permits: bounds the flushes in flight (#1148 review F2). */
+    private val permits = Semaphore(maxKeys)
 
     /** Access-ordered: iteration starts at the least-recently-touched open burst. */
     private val bursts = LinkedHashMap<K, Burst>(16, 0.75f, true)
@@ -100,18 +111,24 @@ private class KeyedCoalescer<T, K, A : Any>(
 
     /**
      * Emits [burst] if it is still the open burst for [key] (and, for a quiet timer, no event
-     * arrived since it was armed). Only the OTHER timer is cancelled — the caller is one of them
-     * and must not cancel itself before `send`.
+     * arrived since it was armed). The emission permit is taken BEFORE the burst is removed, so
+     * under a stalled consumer the burst stays open and merging (F2). Only the OTHER timer is
+     * cancelled — the caller is one of them and must not cancel itself before `send`.
      */
     private suspend fun flush(key: K, burst: Burst, quietGen: Long?) {
-        val acc = lock.withLock {
-            if (bursts[key] !== burst) return
-            if (quietGen != null && burst.quietGen != quietGen) return
-            bursts.remove(key)
-            if (quietGen == null) burst.quietJob?.cancel() else burst.maxJob?.cancel()
-            burst.acc
+        permits.acquire()
+        try {
+            val acc = lock.withLock {
+                if (bursts[key] !== burst) return
+                if (quietGen != null && burst.quietGen != quietGen) return
+                bursts.remove(key)
+                if (quietGen == null) burst.quietJob?.cancel() else burst.maxJob?.cancel()
+                burst.acc
+            }
+            scope.send(acc)
+        } finally {
+            permits.release()
         }
-        scope.send(acc)
     }
 
     private fun evictOldestLocked(): A {
