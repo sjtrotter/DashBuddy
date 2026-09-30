@@ -370,8 +370,8 @@ class PipelineStats @Inject constructor(
     fun topologySkipCount(reason: ForegroundSkipReason): Long = topologySkips.getValue(reason).get()
 
     /**
-     * A frame was read from a platform offer overlay (#1152 D4–D6) — the event resolver's own
-     * overlay branch, a foreground read that landed on an overlay, or a topology emission. Rendered
+     * A frame was read from a platform offer overlay (#1152 D4–D6), counted in ONE place — the shared
+     * `AccessibilitySource.getWindowSnapshot` builder (PR #1155 review FF6), on every window path. Rendered
      * as `overlaySnapshots=n` so a field pull can see overlays being captured at all.
      */
     fun onOverlaySnapshot() {

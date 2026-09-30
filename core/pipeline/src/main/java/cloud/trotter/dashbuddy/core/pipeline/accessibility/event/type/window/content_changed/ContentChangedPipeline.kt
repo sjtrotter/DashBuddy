@@ -101,10 +101,7 @@ class ContentChangedPipeline @Inject constructor(
                 it in platformPreferences.enabledPackages.value
             }
             val snapshot = when (resolved) {
-                is EventSnapshot.Resolved -> {
-                    if (resolved.viaOverlay) stats.onOverlaySnapshot() // #1152
-                    resolved.snapshot
-                }
+                is EventSnapshot.Resolved -> resolved.snapshot
                 is EventSnapshot.Skipped -> {
                     stats.onForegroundSkip(resolved.reason) // #1148 review H3
                     return@mapNotNull null

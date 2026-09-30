@@ -223,8 +223,6 @@ class AccessibilitySource @Inject constructor(
         val window: AccessibilityWindowInfo,
         val root: AccessibilityNodeInfo,
         val totalWindowCount: Int,
-        /** A platform offer overlay (a11y `TYPE_SYSTEM`, #1152 D2), not an application window. */
-        val isOverlay: Boolean = false,
     )
 
     /** [foregroundWindow]'s verdict: the window in front, or why none is read (#1148 review H3). */
@@ -433,11 +431,11 @@ class AccessibilitySource @Inject constructor(
             // overlay platform's, this IS the overlay in front (never read beneath a live overlay).
             // The fetch that found it was already charged (DD4).
             if (corrected == WindowVerdictCache.Verdict.CANDIDATE && isEnabled(live)) {
-                return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
+                return Foreground.Found(LocatedWindow(w, root, total))
             }
             return null
         }
-        return Foreground.Found(LocatedWindow(w, root, total, isOverlay = true))
+        return Foreground.Found(LocatedWindow(w, root, total))
     }
 
     /**
@@ -518,7 +516,9 @@ class AccessibilitySource @Inject constructor(
         display: Lazy<Long>,
     ): OverlayScan {
         return when (val front = frontAbove(windows, active, isEnabled, display, overlayOnly = true)) {
-            is Foreground.Found -> if (front.located.isOverlay) OverlayScan.Overlay(front.located) else OverlayScan.None
+            // FF6: the only system-layer windows the walk ever finds are overlay candidates.
+            is Foreground.Found ->
+                if (front.located.window.type == AccessibilityWindowInfo.TYPE_SYSTEM) OverlayScan.Overlay(front.located) else OverlayScan.None
             is Foreground.Refused -> when {
                 front.reason == ForegroundSkipReason.SCAN_BUDGET -> OverlayScan.Refused(front.reason)
                 // CC7/DD6: a possible overlay we cannot verify refuses (reading the covered window
@@ -679,6 +679,10 @@ class AccessibilitySource @Inject constructor(
         } catch (_: Exception) {
             null
         } ?: return null
+        // PR #1155 review FF6: overlay frames are counted in ONE place — this shared builder. The only
+        // system-layer windows ever mapped are platform offer overlays (every walk admits a
+        // TYPE_SYSTEM window only as an overlay candidate).
+        if (window.type == AccessibilityWindowInfo.TYPE_SYSTEM) stats.onOverlaySnapshot()
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),

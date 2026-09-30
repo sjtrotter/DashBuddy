@@ -7,11 +7,7 @@ import timber.log.Timber
 
 /** The resolver's verdict (#1148 review H3): a frame, or a counted reason for none. */
 internal sealed interface EventSnapshot {
-    /** [viaOverlay]: read from a platform offer overlay (#1152) — the caller counts it. */
-    data class Resolved(
-        val snapshot: AccessibilitySource.RootSnapshot,
-        val viaOverlay: Boolean = false,
-    ) : EventSnapshot
+    data class Resolved(val snapshot: AccessibilitySource.RootSnapshot) : EventSnapshot
     data class Skipped(val reason: ForegroundSkipReason) : EventSnapshot
 }
 
@@ -76,7 +72,6 @@ internal fun AccessibilitySource.snapshotForEvent(
         return EventSnapshot.Skipped(ForegroundSkipReason.NO_ACTIVE_ROOT)
     }
     val activePkg = activeRoot.packageName?.toString()
-    var viaOverlay = false
     val snapshot = if (isEnabled(activePkg)) {
         val overlay = if (windows != null && activeWindow != null && enumeratedRoot != null) {
             onOverlayScan()
@@ -96,7 +91,6 @@ internal fun AccessibilitySource.snapshotForEvent(
             // not prove it left, and reading the covered window beneath would re-open the interleave.
             // The frame is skipped `MAP_FAILED` (retried on the next); "no overlay selected" is the
             // only case that reads the active root.
-            viaOverlay = true
             getWindowSnapshot(overlay.window, overlay.root, overlay.totalWindowCount)
         } else {
             getCurrentRootSnapshot(activeRoot)
@@ -112,10 +106,8 @@ internal fun AccessibilitySource.snapshotForEvent(
                 )
                 return EventSnapshot.Skipped(front.reason)
             }
-            is AccessibilitySource.Foreground.Found -> {
-                viaOverlay = front.located.isOverlay
+            is AccessibilitySource.Foreground.Found ->
                 getWindowSnapshot(front.located.window, front.located.root, front.located.totalWindowCount)
-            }
         }
     } ?: return EventSnapshot.Skipped(ForegroundSkipReason.MAP_FAILED)
 
@@ -127,5 +119,5 @@ internal fun AccessibilitySource.snapshotForEvent(
         )
         return EventSnapshot.Skipped(ForegroundSkipReason.POST_MAP_MISMATCH)
     }
-    return EventSnapshot.Resolved(snapshot, viaOverlay)
+    return EventSnapshot.Resolved(snapshot)
 }

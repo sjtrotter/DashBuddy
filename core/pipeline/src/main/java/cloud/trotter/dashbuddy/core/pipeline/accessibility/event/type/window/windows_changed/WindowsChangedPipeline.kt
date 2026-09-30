@@ -92,10 +92,10 @@ class WindowsChangedPipeline @Inject constructor(
                 coalescedEvents = coalesced,
                 spanMs = 0L,
             )
-            fun snapshotOf(w: AccessibilityWindowInfo, root: AccessibilityNodeInfo, overlay: Boolean = false): TreeSnapshot? =
-                // #1148 review F6: the shared snapshot builder (one WindowContext, one map path).
+            fun snapshotOf(w: AccessibilityWindowInfo, root: AccessibilityNodeInfo): TreeSnapshot? =
+                // #1148 review F6: the shared snapshot builder (one WindowContext, one map path; it
+                // also counts overlay frames — FF6).
                 source.getWindowSnapshot(w, root, totalCount)?.let {
-                    if (overlay) stats.onOverlaySnapshot() // #1152
                     TreeSnapshot(it.tree, it.packageName, it.windowContext, trigger())
                 }
 
@@ -107,7 +107,7 @@ class WindowsChangedPipeline @Inject constructor(
                 // Reuse THIS enumeration (round 4): no second getWindows() per topology burst.
                 when (val front = source.foregroundWindow(windows, { it in enabled }, display)) {
                     is AccessibilitySource.Foreground.Found ->
-                        snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
+                        snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
                     is AccessibilitySource.Foreground.Refused -> {
                         stats.onTopologySkip(front.reason) // FF4: the topology path's own census
                         Timber.tag("Pipeline").v("🚫 Windows: our window active, foreground refused %s", front.reason)
@@ -125,7 +125,7 @@ class WindowsChangedPipeline @Inject constructor(
             if (activePkg in enabled) {
                 when (val scan = source.overlayFront(windows, active, { it in enabled }, display)) {
                     is AccessibilitySource.OverlayScan.Overlay ->
-                        snapshotOf(scan.located.window, scan.located.root, overlay = true)?.let { emit(it) }
+                        snapshotOf(scan.located.window, scan.located.root)?.let { emit(it) }
                     is AccessibilitySource.OverlayScan.Refused -> {
                         stats.onTopologySkip(scan.reason) // FF4
                         Timber.tag("Pipeline").v("🚫 Windows: overlay scan refused %s", scan.reason)
@@ -137,7 +137,7 @@ class WindowsChangedPipeline @Inject constructor(
             }
             when (val front = source.frontAbove(windows, active, { it in enabled }, display)) {
                 is AccessibilitySource.Foreground.Found ->
-                    snapshotOf(front.located.window, front.located.root, front.located.isOverlay)?.let { emit(it) }
+                    snapshotOf(front.located.window, front.located.root)?.let { emit(it) }
                 is AccessibilitySource.Foreground.Refused -> {
                     stats.onTopologySkip(front.reason) // FF4
                     Timber.tag("Pipeline").v("🚫 Windows: nothing emitted above the active window (%s)", front.reason)
