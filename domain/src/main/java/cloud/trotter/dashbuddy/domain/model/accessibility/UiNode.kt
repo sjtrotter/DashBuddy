@@ -454,17 +454,19 @@ data class UiNode(
      * them are asked for.
      */
     fun allScrubbableText(): List<String> {
-        val results = mutableListOf<String>()
-        collectScrubbableText(this, results, legacy = true)
-        collectScrubbableText(this, results, legacy = false)
-        return results
+        // Review Z5: ONE traversal into two segments; the frozen ordering is the concatenation.
+        val legacy = mutableListOf<String>()
+        val fresh = mutableListOf<String>()
+        collectScrubbableText(this, legacy, fresh)
+        return legacy + fresh
     }
 
-    private fun collectScrubbableText(node: UiNode, list: MutableList<String>, legacy: Boolean) {
+    private fun collectScrubbableText(node: UiNode, legacy: MutableList<String>, fresh: MutableList<String>) {
         for ((field, value) in node.scrubbableStrings()) {
-            if ((field in UiNodeTextField.LEGACY_SCAN_ORDER) == legacy && !value.isNullOrBlank()) list.add(value)
+            if (value.isNullOrBlank()) continue
+            if (field in UiNodeTextField.LEGACY_SCAN_ORDER) legacy.add(value) else fresh.add(value)
         }
-        node.children.forEach { collectScrubbableText(it, list, legacy) }
+        node.children.forEach { collectScrubbableText(it, legacy, fresh) }
     }
 
     // ========================================================================
