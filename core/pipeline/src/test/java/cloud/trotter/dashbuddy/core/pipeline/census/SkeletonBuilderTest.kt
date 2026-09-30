@@ -31,7 +31,12 @@ class SkeletonBuilderTest {
         platformAppVersion = "8.97.8",
     )
 
-    private fun slot(value: String?, id: String? = null) = SkeletonBuilder.slotFor(value, id)
+    /** One field's slot, through the whole builder (the per-field path is private, review CC5). */
+    private fun slot(value: String?, id: String? = null): TextSlot? =
+        SkeletonBuilder.build(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = id, text = value),
+            null, meta, "doordash", "2026-09-30",
+        )!!.root.text["text"]
     private fun words(n: Int, value: String) = TextSlot(h = CensusHash.of(value), kind = "words:$n")
 
     // ---- The required vectors (ADR §1/§2, spec) -------------------------------------------------
@@ -81,8 +86,9 @@ class SkeletonBuilderTest {
     @Test
     fun `step 1 - a PII_ID_SUFFIXES exact suffix withholds`() {
         // `order_cx_name` and `tvTitle` are PII_ID_SUFFIXES only (not ID_MARKERS) — the union is used.
-        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Accept", "com.x:id/order_cx_name"))
-        assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Accept", "com.x:id/tvTitle"))
+        assertEquals(FilterStep.PII_ID_INTAKE, SkeletonBuilder.withholdingStep("Accept", "com.x:id/order_cx_name"))
+        assertEquals(FilterStep.PII_ID_INTAKE, SkeletonBuilder.withholdingStep("Accept", "com.x:id/tvTitle"))
+        assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/tvTitle"))
     }
 
     @Test
@@ -352,5 +358,58 @@ class SkeletonBuilderTest {
         assertEquals("com.doordash.driverapp:id/drop_off_step_instructions_activity_host_fragment", a.root.id)
         // The §2 PII-id step still sees the RAW id: a dynamic id ending in a PII suffix withholds.
         assertEquals(FilterStep.PII_ID, SkeletonBuilder.withholdingStep("Sam", "x:id/row_1234_customer_name"))
+    }
+
+    // ---- #1160 review round 2 ----------------------------------------------------------------------
+
+    @Test
+    fun `CC1 - a non-static class name is absent on the wire and in the fingerprint`() {
+        fun frame(cls: String) = UiNode(
+            className = "android.widget.FrameLayout",
+            viewIdResourceName = "com.x:id/host",
+            children = listOf(UiNode(className = cls, text = "Continue")),
+        )
+        val dynamic = SkeletonBuilder.build(frame("Composable_3f488d4a"), null, meta, "doordash", "2026-09-30")!!
+        val free = SkeletonBuilder.build(frame("Jane Smith's button"), null, meta, "doordash", "2026-09-30")!!
+        assertNull(dynamic.root.children.single().className)
+        assertNull(free.root.children.single().className)
+        assertEquals(dynamic.fingerprint, free.fingerprint)
+        val static = SkeletonBuilder.build(frame("androidx.compose.ui.platform.ComposeView"), null, meta, "doordash", "2026-09-30")!!
+        assertEquals("androidx.compose.ui.platform.ComposeView", static.root.children.single().className)
+    }
+
+    @Test
+    fun `CC2 - an over-long optional stamp is truncated, never a refusal`() {
+        val long = meta.copy(platformAppVersion = "9".repeat(90), rulesetReleaseTag = "r".repeat(70))
+        val out = SkeletonBuilder.outcome(tree("Continue"), null, long, "doordash", "2026-09-30")
+        assertTrue("$out", out is Outcome.Built)
+        val item = (out as Outcome.Built).skeleton
+        assertEquals("9".repeat(64), item.platformAppVersion)
+        assertEquals("r".repeat(64), item.rulesetReleaseTag)
+        // A truncation that would split a surrogate pair drops the stamp rather than ship malformed text.
+        val split = meta.copy(appVersion = "a".repeat(63) + "\uD801\uDC00")
+        assertNull(SkeletonBuilder.build(tree("Continue"), null, split, "doordash", "2026-09-30")!!.appVersion)
+    }
+
+    @Test
+    fun `CC3 - an intake-only PII id withholds its own field but does not seed the frame`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = "com.doordash.driverapp:id/sheet",
+            children = listOf(
+                UiNode(className = "android.widget.TextView", text = "Hand it to me"),
+                UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/step_description", text = "Hand it to me"),
+            ),
+        )
+        val item = SkeletonBuilder.build(frame, null, meta, "doordash", "2026-09-30")!!
+        assertEquals(words(4, "Hand it to me"), item.root.children[0].text.getValue("text"))
+        assertEquals(TextSlot.WITHHELD, item.root.children[1].text.getValue("text"))
+        // ...while an ID_MARKERS id (value IS PII) still propagates frame-wide (the AA1 fixture shape).
+        val pii = UiNode(
+            className = "android.widget.LinearLayout",
+            contentDescription = "Sam",
+            children = listOf(UiNode(className = "android.widget.TextView", viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Sam")),
+        )
+        assertEquals(TextSlot.WITHHELD, SkeletonBuilder.build(pii, null, meta, "doordash", "2026-09-30")!!.root.text.getValue("desc"))
     }
 }

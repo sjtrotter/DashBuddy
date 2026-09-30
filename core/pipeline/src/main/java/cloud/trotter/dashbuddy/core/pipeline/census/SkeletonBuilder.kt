@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
+import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
 import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
 import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
 import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
@@ -89,8 +90,17 @@ object SkeletonBuilder {
      * withhold.
      */
     enum class FilterStep(val adrStep: Int) {
-        /** The node id is in `ID_MARKERS` (suffix) ∪ `PII_ID_SUFFIXES` (exact, after the last `/`). */
+        /**
+         * The node id carries an `ID_MARKERS` suffix — its VALUE is PII by construction. Seeds the
+         * frame-level duplicate rule.
+         */
         PII_ID(1),
+
+        /**
+         * The node id is in `PII_ID_SUFFIXES` only (exact, after the last `/`) — the intake list, which
+         * also covers instruction bodies. Withholds the field; does NOT seed the frame-level rule (CC3).
+         */
+        PII_ID_INTAKE(1),
 
         /** The trimmed value is longer than [MAX_TOKEN_LENGTH]. */
         LENGTH_CAP(2),
@@ -155,16 +165,19 @@ object SkeletonBuilder {
             return Outcome.Refused(Refusal.SENSITIVE_TITLE)
         }
 
-        // Frame-level duplicate rule (ADR-0011 §2, #1160 review AA1), pass 1: every trimmed value a
-        // withholding step caught ANYWHERE in the frame. The corpus intake's replacements are
-        // document-wide, so a value it masks where the id marks it is masked where the id does not.
-        val caught = HashSet<String>()
-        collectCaught(tree, caught)
-        collectCaughtValue(windowTitle, nodeId = null, caught)
+        // Frame-level duplicate rule (ADR-0011 §2; #1160 reviews AA1, CC3). Pass 1 runs the per-field
+        // filter ONCE per field (memoized per frame, review CC5) and seeds the frame's caught set.
+        val frame = FrameFilter()
+        val pending = try {
+            frame.scan(tree)
+        } catch (_: IllegalArgumentException) {
+            return Outcome.Refused(Refusal.INVALID_TREE)
+        }
+        val title = frame.field(windowTitle, IdClass.NONE)
 
-        // Pass 2: build, withholding every field whose trimmed value was caught somewhere.
+        // Pass 2: emit, withholding every field whose trimmed value was caught anywhere in the frame.
         val root = try {
-            skeletonOf(tree, caught)
+            frame.emit(pending)
         } catch (_: IllegalArgumentException) {
             return Outcome.Refused(Refusal.INVALID_TREE)
         }
@@ -176,79 +189,156 @@ object SkeletonBuilder {
                 filterRev = FILTER_REV,
                 fingerprint = fingerprint,
                 platform = platform,
-                platformAppVersion = meta.platformAppVersion,
-                appVersion = meta.appVersion,
-                rulesetReleaseTag = meta.rulesetReleaseTag,
+                platformAppVersion = stamp(meta.platformAppVersion),
+                appVersion = stamp(meta.appVersion),
+                rulesetReleaseTag = stamp(meta.rulesetReleaseTag),
                 engineVersion = meta.engineVersion,
                 rulesetFormatVersion = meta.rulesetFormatVersion,
                 day = day,
-                windowTitle = frameSlot(windowTitle, nodeId = null, caught),
+                windowTitle = title?.let { frame.slot(it) },
                 root = root,
             )
         } catch (_: IllegalArgumentException) {
             return Outcome.Refused(Refusal.INVALID_ENVELOPE)
         }
-        val json = SkeletonSchema.serialize(item)
-        val bytes = json.toByteArray(Charsets.UTF_8).size
-        if (bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, json, bytes)
-    }
-
-    private fun collectCaught(node: UiNode, caught: MutableSet<String>) {
-        for ((_, value) in node.scrubbableStrings()) collectCaughtValue(value, node.viewIdResourceName, caught)
-        node.children.forEach { collectCaught(it, caught) }
+        val measured = SkeletonSchema.measure(item)
+        if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
+        return Outcome.Built(item, measured.json, measured.bytes)
     }
 
     /**
-     * Pass-1 membership: steps 1, 3, 4, 5, 7, 8. The length cap (step 2) is excluded — a duplicate of
-     * an over-length value is itself over-length. A filter failure counts as caught (fail closed).
+     * An OPTIONAL version stamp, bounded for the wire (#1160 review CC2): the observed app's
+     * `versionName` is arbitrary third-party text, and an over-long one must not refuse every frame of
+     * that platform. Truncated to [UiSkeletonDto.MAX_VERSION_LENGTH]; null when not well-formed (a
+     * truncation that splits a surrogate pair included). The DTO keeps its hard `require` for decode.
      */
-    private fun collectCaughtValue(value: String?, nodeId: String?, caught: MutableSet<String>) {
-        if (value.isNullOrBlank()) return
-        val trimmed = value.trim()
-        val step = try {
-            withholdingStep(trimmed, nodeId)
-        } catch (_: Exception) {
-            FilterStep.PII_SHAPE
+    private fun stamp(value: String?): String? =
+        value?.take(UiSkeletonDto.MAX_VERSION_LENGTH)?.takeIf { WireStrings.isWellFormed(it) }
+
+    /** How the §2 step-1 id check classified a node's RAW id (review CC3). */
+    private enum class IdClass {
+        /** In `CustomerTextMarkers.ID_MARKERS`: the node's VALUE IS PII by construction. */
+        PII_VALUE,
+
+        /** In `PII_ID_SUFFIXES` only (the intake list; it also covers instruction BODIES). */
+        INTAKE_ONLY,
+
+        NONE,
+    }
+
+    private fun idClassOf(id: String?): IdClass = when {
+        CustomerTextMarkers.hasIdMarkerSuffix(id) -> IdClass.PII_VALUE
+        PiiShapes.hasPiiIdSuffix(id) -> IdClass.INTAKE_ONLY
+        else -> IdClass.NONE
+    }
+
+    /** One non-blank field after pass 1: its trimmed value, and whether its own id withholds it. */
+    private class Field(val trimmed: String, val idWithholds: Boolean)
+
+    /** A node after pass 1: its validated class/id, flags, and fields by wire key. */
+    private class Pending(
+        val className: String?,
+        val id: String?,
+        val node: UiNode,
+        val fields: List<Pair<String, Field>>,
+        val children: List<Pending>,
+    )
+
+    /**
+     * The per-frame filter state (review CC5): the value-only steps (2–8) and the value's own slot are
+     * computed once per distinct trimmed value; step 1 once per node. [caught] is the frame-level set.
+     */
+    private class FrameFilter {
+        private val valueSteps = HashMap<String, FilterStep?>()
+        private val valueSlots = HashMap<String, TextSlot>()
+        private val caught = HashSet<String>()
+
+        fun scan(node: UiNode): Pending {
+            // Reviews BB1/BB2/CC1: validate the RAW class and id BEFORE the grammar gates, which would
+            // otherwise drop a malformed value to null unseen. Refused as INVALID_TREE.
+            node.className?.let { require(WireStrings.isWellFormed(it)) { "malformed class name" } }
+            node.viewIdResourceName?.let { require(WireStrings.isWellFormed(it)) { "malformed view id" } }
+            val idClass = idClassOf(node.viewIdResourceName)
+            val fields = ArrayList<Pair<String, Field>>()
+            for ((field, value) in node.scrubbableStrings()) {
+                field(value, idClass)?.let { fields += field.wire to it }
+            }
+            return Pending(
+                className = ClassNameGrammar.staticOrNull(node.className),
+                id = ResourceIdGrammar.staticOrNull(node.viewIdResourceName),
+                node = node,
+                fields = fields,
+                children = node.children.map { scan(it) },
+            )
         }
-        if (step != null && step != FilterStep.LENGTH_CAP) caught += trimmed
-    }
 
-    /** [slotFor] under the frame-level duplicate rule. */
-    private fun frameSlot(value: String?, nodeId: String?, caught: Set<String>): TextSlot? {
-        val slot = slotFor(value, nodeId) ?: return null
-        return if (value!!.trim() in caught) TextSlot.WITHHELD else slot
-    }
-
-    /**
-     * One text field → its [TextSlot], or null when the field is null/blank (OMITTED, never emitted —
-     * including on a node whose id would withhold it). [nodeId] is the owning node's view id (null for
-     * the window title, which has no node). Fail closed: an unexpected failure withholds.
-     */
-    fun slotFor(value: String?, nodeId: String?): TextSlot? {
-        if (value.isNullOrBlank()) return null
-        return try {
+        /** Pass 1 for one field: filter it, and seed [caught] per the frame-level rule. */
+        fun field(value: String?, idClass: IdClass): Field? {
+            if (value.isNullOrBlank()) return null
             val trimmed = value.trim()
-            if (withholdingStep(trimmed, nodeId) != null) return TextSlot.WITHHELD
-            // Step 6: the grammar runs on the (already capped) trimmed value; only words:1..8 hash.
-            val shape = KindClassifier.shapeKind(trimmed)
-            if (!shape.hashable) return TextSlot(kind = shape.wire)
-            val h = CensusHash.of(trimmed) ?: return TextSlot.WITHHELD
-            TextSlot(h = h, kind = shape.wire)
-        } catch (_: Exception) {
-            TextSlot.WITHHELD
-        } catch (_: StackOverflowError) {
-            TextSlot.WITHHELD
+            val step = valueStep(trimmed)
+            // Seeds: the value-judging steps 3, 4, 5, 7, 8 — and step 1 ONLY when the id's VALUE is PII by
+            // construction (ID_MARKERS). Not the length cap (a duplicate is itself over-length), not an
+            // intake-only id (its list also covers chrome-bearing instruction bodies, review CC3).
+            if ((step != null && step != FilterStep.LENGTH_CAP) || idClass == IdClass.PII_VALUE) caught += trimmed
+            return Field(trimmed, idWithholds = idClass != IdClass.NONE)
         }
+
+        /** Steps 2–8 of [withholdingStep], memoized; a filter failure withholds (fail closed). */
+        private fun valueStep(trimmed: String): FilterStep? = valueSteps.getOrPut(trimmed) {
+            try {
+                withholdingStep(trimmed, nodeId = null)
+            } catch (_: Exception) {
+                FilterStep.PII_SHAPE
+            }
+        }
+
+        /** Pass 2 for one field: the constant `withheld`, or the value's own (memoized) slot. */
+        fun slot(field: Field): TextSlot {
+            if (field.idWithholds || field.trimmed in caught || valueStep(field.trimmed) != null) return TextSlot.WITHHELD
+            return valueSlots.getOrPut(field.trimmed) { unfilteredSlot(field.trimmed) }
+        }
+
+        fun emit(p: Pending): UiSkeletonNodeDto {
+            val text = LinkedHashMap<String, TextSlot>()
+            for ((wire, field) in p.fields) text[wire] = slot(field)
+            return UiSkeletonNodeDto(
+                // ADR §1 / reviews AA10, CC1: only a STATIC class / resource name travels (and keys the
+                // fingerprint); anything else is absent. The §2 PII-id step used the RAW id.
+                className = p.className,
+                id = p.id,
+                isClickable = p.node.isClickable,
+                isEnabled = p.node.isEnabled,
+                isChecked = p.node.isChecked.takeIf { it in 0..2 } ?: 0,
+                text = text,
+                children = p.children.map { emit(it) },
+            )
+        }
+    }
+
+    /**
+     * Step 6 and the hash, for a value no withholding step caught: only `words:1..8` hash; a digest
+     * failure withholds. PRIVATE (review CC5): every caller goes through the frame-level rule.
+     */
+    private fun unfilteredSlot(trimmed: String): TextSlot = try {
+        val shape = KindClassifier.shapeKind(trimmed)
+        if (!shape.hashable) {
+            TextSlot(kind = shape.wire)
+        } else {
+            CensusHash.of(trimmed)?.let { TextSlot(h = it, kind = shape.wire) } ?: TextSlot.WITHHELD
+        }
+    } catch (_: Exception) {
+        TextSlot.WITHHELD
     }
 
     /**
      * The FIRST withholding §2 step that fires on [trimmed] (the trimmed canonical value), or null when
      * none does. ADR order; the length cap (step 2) precedes every text predicate, so steps 3–8 only
-     * ever see ≤ [MAX_TOKEN_LENGTH] characters.
+     * ever see ≤ [MAX_TOKEN_LENGTH] characters. Internal for the tests.
      */
-    fun withholdingStep(trimmed: String, nodeId: String?): FilterStep? = when {
-        CustomerTextMarkers.hasIdMarkerSuffix(nodeId) || PiiShapes.hasPiiIdSuffix(nodeId) -> FilterStep.PII_ID
+    internal fun withholdingStep(trimmed: String, nodeId: String?): FilterStep? = when {
+        CustomerTextMarkers.hasIdMarkerSuffix(nodeId) -> FilterStep.PII_ID
+        PiiShapes.hasPiiIdSuffix(nodeId) -> FilterStep.PII_ID_INTAKE
         trimmed.length > MAX_TOKEN_LENGTH -> FilterStep.LENGTH_CAP
         CustomerTextMarkers.unredactedMarker(trimmed) != null -> FilterStep.CUSTOMER_MARKER
         PiiShapes.customerLeadIn(trimmed) != null -> FilterStep.LEAD_IN
@@ -256,27 +346,5 @@ object SkeletonBuilder {
         PiiShapes.hasNameShape(trimmed) -> FilterStep.NAME_SHAPE
         PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) } -> FilterStep.PII_SHAPE
         else -> null
-    }
-
-    /** The skeleton of one node and its subtree: structure + flags + per-field slots, no bounds. */
-    private fun skeletonOf(node: UiNode, caught: Set<String>): UiSkeletonNodeDto {
-        // Review BB2: validate the RAW id before the grammar gate — `staticOrNull` would otherwise drop
-        // a malformed id to null and the DTO's check would never see it. Refused as INVALID_TREE.
-        node.viewIdResourceName?.let { require(WireStrings.isWellFormed(it)) { "malformed view id" } }
-        val text = LinkedHashMap<String, TextSlot>()
-        for ((field, value) in node.scrubbableStrings()) {
-            frameSlot(value, node.viewIdResourceName, caught)?.let { text[field.wire] = it }
-        }
-        return UiSkeletonNodeDto(
-            className = node.className,
-            // ADR §1 / review AA10: only a STATIC resource name travels (and keys the fingerprint); a
-            // dynamic id (a per-frame UUID test tag) is absent. The §2 PII-id step above used the RAW id.
-            id = ResourceIdGrammar.staticOrNull(node.viewIdResourceName),
-            isClickable = node.isClickable,
-            isEnabled = node.isEnabled,
-            isChecked = node.isChecked.takeIf { it in 0..2 } ?: 0,
-            text = text,
-            children = node.children.map { skeletonOf(it, caught) },
-        )
     }
 }
