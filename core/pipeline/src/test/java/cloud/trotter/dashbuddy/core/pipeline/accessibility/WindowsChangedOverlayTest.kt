@@ -287,4 +287,45 @@ class WindowsChangedOverlayTest {
         )
         assertEquals(listOf("uber-offer-top"), out.map { it.tree.text })
     }
+
+    @Test
+    fun `CC2 - an unreadable LARGE system window above an enabled overlay is a barrier - nothing emitted`() {
+        val overlay = system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER)
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                overlay,
+                system(12, 12, null, OverlayGeometry.FULL_SCREEN),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
+        verify(overlay, never()).root
+    }
+
+    @Test
+    fun `CC2 - an unreadable application window above an enabled overlay is a barrier - nothing emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+                window(12, 12, null),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertTrue(out.isEmpty())
+    }
+
+    @Test
+    fun `CC2 - a SMALL unreadable system window above the overlay is no barrier - the overlay is emitted`() {
+        val out = emitted(
+            listOf(
+                window(3, 2, node(ddPkg, "dd"), active = true),
+                system(9, 9, node(uberPkg, "uber-offer"), OverlayGeometry.UBER_OFFER),
+                system(12, 12, null, OverlayGeometry.STATUS_BAR),
+            ),
+            enabled = setOf(ddPkg, uberPkg),
+        )
+        assertEquals(listOf("uber-offer"), out.map { it.tree.text })
+    }
 }
