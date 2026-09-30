@@ -36,11 +36,14 @@ class CorpusNodeFieldsAdditiveTest {
         return f.name != "approved-parse-output.json"
     }
 
-    /** The top-most JSON objects that are node trees (carry an object `bounds`); a subtree is its root's. */
+    /**
+     * The top-most JSON objects that are node trees (carry a `bounds` — an object, or the legacy
+     * `"[l,t][r,b]"` string `BoundingBoxDto` also reads); a subtree is its root's.
+     */
     private fun nodeTrees(e: JsonElement, out: MutableList<JsonObject>) {
         when (e) {
             is JsonObject ->
-                if (e["bounds"] is JsonObject) out += e else e.values.forEach { nodeTrees(it, out) }
+                if (e.containsKey("bounds")) out += e else e.values.forEach { nodeTrees(it, out) }
             is JsonArray -> e.forEach { nodeTrees(it, out) }
             else -> {}
         }
