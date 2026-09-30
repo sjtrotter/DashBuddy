@@ -605,7 +605,8 @@ valueIsPii)`, list content/order pinned — the runtime backstop is unchanged); 
 frame-wide set from step 1 only for IDENTITY ids (`valueIsPii`) and only from their text/desc; every step,
 the grammar and the hash run on `CensusHash.canonical` (trimmed, census whitespace collapsed to one ASCII
 space) so the JVM and ICU regex engines agree; the envelope validates stamps as well-formed and the day as
-a real month/day; the per-frame verdict cache stores a wrapped verdict so a passing value is judged once.
+a real month/day; the per-frame verdict cache stores a wrapped verdict so a passing value is judged once. Round 4: the value-judging steps run on the raw trimmed value AND the canonical form (either
+withholds), because canonicalization can shrink a value below a pattern's minimum.
 Nothing calls the builder at runtime yet: the publisher stage,
 `CensusSink` and `PipelineStats` counters are #1146 (M1b); upload is M3.
 

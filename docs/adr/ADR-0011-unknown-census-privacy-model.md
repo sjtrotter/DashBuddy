@@ -198,7 +198,11 @@ token is caught by step 5 and emits `withheld`), not the runtime shape.
 whitespace-normalized (`CensusHash.canonical`: every run of code points the classifier treats as whitespace,
 `Character.isWhitespace || isSpaceChar`, collapsed to one ASCII space; amended in #1160 because the JVM's
 regex `\s` excludes NBSP/thin space while ICU's includes `\p{Z}`, so the decision was engine-dependent) —
-the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Step 1 uses the
+the same bytes `CensusHash` hashes — so a leading space cannot slip a prefix past a `startsWith`. Every
+value-judging step (3, 4, 5, 7, 8) runs on the raw trimmed value AND on the canonical form; either hit
+withholds (the 40-character cap applies to both); classification and hashing use the canonical form, and
+the frame-wide duplicate set is keyed by it (amended in #1160 review round 4 — canonicalization alone can
+shrink a value below a pattern's minimum: `"ab  cd"` is a quoted note raw, `"ab cd"` is not). Step 1 uses the
 two EXISTING predicates as they are: `ID_MARKERS` is a case-insensitive SUFFIX match on the full
 resource id (`ID_MARKERS.any { id.endsWith(it, ignoreCase = true) }`, today inline in
 `CustomerTextMarkers.unredactedIdMarker`; #1145 extracts it as the shared helper both call),

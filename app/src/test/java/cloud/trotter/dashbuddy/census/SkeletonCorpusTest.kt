@@ -349,7 +349,7 @@ class SkeletonCorpusTest {
                 // no seeding identity-id occurrence and no value-judging step anywhere in the frame).
                 val trimmed = CensusHash.canonical(value)
                 if (redactedInIsolation(o.viewIdResourceName, field.wire, value) == value &&
-                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed)
+                    trimmed in propagatedNotSeeded && trimmed !in idSeeded && !valueJudged(trimmed) && !valueJudged(value.trim())
                 ) {
                     exempt++
                     continue
@@ -375,6 +375,19 @@ class SkeletonCorpusTest {
             PiiShapes.containsMask(trimmed) ||
             PiiShapes.hasNameShape(trimmed) ||
             PiiShapes.VALUE_SHAPES.any { it.hits(trimmed) }
+
+    @Test
+    fun `(c) full-tree parity holds on the raw-only QUOTED_NOTE value (review FF1)`() {
+        val frame = UiNode(
+            className = "android.widget.LinearLayout",
+            children = listOf(UiNode(className = "android.widget.TextView", text = "\"ab  cd\"")),
+        ).restoreParents()
+        val item = SkeletonBuilder.build(frame, null, META, "doordash", DAY)!!
+        assertEquals(TextSlot.WITHHELD, item.root.children.single().text.getValue("text"))
+        val (rewritten, _, problems) = parityProblems("ff1", frame, item)
+        assertEquals(1, rewritten)
+        assertTrue(problems.joinToString(), problems.isEmpty())
+    }
 
     @Test
     fun `(c) negative control - the exemption refuses a value with an independent ID_MARKERS cause (review DD1)`() {
@@ -521,10 +534,11 @@ class SkeletonCorpusTest {
             PiiShapes.FIRST_LAST_INITIAL + PiiShapes.FIRST_LAST_INITIAL_EMBEDDED_REGEX
         var piiSeen = 0
         checkAll(PropSeeds.samples(500), PropSeeds.config(SEED), valueArb) { value ->
-            val trimmed = CensusHash.canonical(value) // the value steps 7/8 see (review EE2)
+            // Steps 7/8 judge the raw trimmed value AND the canonical form (reviews EE2, FF1).
+            val forms = setOf(value.trim(), CensusHash.canonical(value))
             // A sensitive fragment ("Visa ••••…") refuses the whole one-node frame — nothing to check.
             val slot = slotOf(value) ?: return@checkAll
-            if (shapes.any { it.containsMatchIn(trimmed) }) {
+            if (forms.any { form -> shapes.any { it.containsMatchIn(form) } }) {
                 piiSeen++
                 assertNull("'$value' matches a PiiShapes pattern but hashed", slot.h)
             }
