@@ -234,6 +234,19 @@ object CustomerTextMarkers {
     // --- Node-id path, UNKNOWN envelopes only (#910) --------------------------
 
     /**
+     * The [ID_MARKERS] entry [id] ends with (case-insensitive SUFFIX match on the FULL resource id —
+     * the rules' `hasIdSuffix` semantics), or null. The ONE owner of that comparison (#1145): the
+     * UNKNOWN-envelope scan below and the census filter (ADR-0011 §2 step 1) both call it.
+     */
+    fun idMarkerSuffix(id: String?): String? {
+        if (id.isNullOrEmpty()) return null
+        return ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) }
+    }
+
+    /** True when [id] carries an [ID_MARKERS] suffix — [idMarkerSuffix] as a predicate. */
+    fun hasIdMarkerSuffix(id: String?): Boolean = idMarkerSuffix(id) != null
+
+    /**
      * The [ID_MARKERS] suffix [node]'s own view id carries while the node still
      * holds UN-redacted text/description, or null. A node whose every value is
      * already masked (a rule's own `[redacted:…]` output, or an empty node) returns
@@ -241,9 +254,7 @@ object CustomerTextMarkers {
      * re-scrubs a mask.
      */
     fun unredactedIdMarker(node: UiNode): String? {
-        val id = node.viewIdResourceName
-        if (id.isNullOrEmpty()) return null
-        val marker = ID_MARKERS.firstOrNull { id.endsWith(it, ignoreCase = true) } ?: return null
+        val marker = idMarkerSuffix(node.viewIdResourceName) ?: return null
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
         // must still be scrubbed.
