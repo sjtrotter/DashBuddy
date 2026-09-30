@@ -55,7 +55,8 @@ separators read as spaces, every token start — through the frame-free customer
 lead-in, mask, name shape), and a hit makes the id absent: `row_Deliver_to_Sam` and `chip_Adam_S` do not
 travel. Those predicates live in `:core:pipeline`, so that judgement is client-side only; a bare name
 with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) is indistinguishable by shape from chrome
-(`chip_Gold`, `Artwork Image`) and travels in the clear — residual risk 10. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
+(`chip_Gold`, `Artwork Image`) — it is absent when an identity id on the same frame carries that name
+(§2 frame-level rule), and travels in the clear otherwise — residual risk 10. `class` likewise travels only when it matches `ClassNameGrammar` — a Java binary
 class name, ≤ 128 characters, the same digit-run rule — else it is absent (null on the wire, `""` in the
 fingerprint), because Compose/Flutter/WebView/custom views can report any string as their class), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
@@ -187,7 +188,11 @@ each identity value contributes its maximal letter runs of at least 2 letters (c
 case-folded with the one `CaseFold`), and any
 field containing one of those runs is withheld — so `customer_name` "Adam" withholds an id-less
 "Adam's order" or "Adam, 2 items" (which pass steps 3–8), while "Add a tip" beside it still hashes
-(amended in #1160 review round 4). A CONTENT id (an `ID_MARKER_TABLE` row without the
+(amended in #1160 review round 4). The containment rule applies to text slots AND to the id and class of
+every node on the frame: a static id whose name part (separators read as spaces) or a class that carries
+an identity run is treated as ABSENT for the wire and the fingerprint, exactly like a dynamic id —
+`chip_Adam` beside `customer_name` "Adam" does not travel, `chip_Gold` does (one owner,
+`FrameFilter.containsIdentityRun`; amended in #1160 review round 5). A CONTENT id (an `ID_MARKER_TABLE` row without the
 flag — the free-text instruction bodies, `description_text_view`, which the same table documents as
 generic DoorDash chrome such as "Raise to 50%" or "Required") and a `PII_ID_SUFFIXES`-only id (the intake
 list, which also covers instruction BODIES — `step_description`, `instruction_text`, `tvTitle`) withhold
@@ -573,12 +578,14 @@ must stay green.
    difference on a chrome slot reveals only that SOME identity value on the frame shares that word —
    never the value — but it is a real one-bit channel and a recall cost, accepted in exchange for
    withholding "Adam's order".
-10. **A bare name in a test-tag id** (#1160 review round 5). The static id gate cannot tell a Compose test
-    tag built from a customer's name with no marker, lead-in or initial (`chip_Adam`, `Adam Smith`) from
-    chrome of the same shape (`chip_Gold`, `Artwork Image`); such an id travels in the clear. The corpus
-    has none (the rejected-id pin lists only the three dynamic UUIDs). The control is the corpus pin and
-    the k-gated, human-reviewed promotion path; closing it needs a frame-aware id judgement (an id whose
-    name part repeats an identity value's run) — a candidate follow-up.
+10. **A name-shaped test-tag id on a frame with NO identity id bearing that name** (#1160 review round 5).
+    The static id gate cannot tell a Compose test tag built from a customer's name with no marker,
+    lead-in or initial (`chip_Adam`, `Adam Smith`) from chrome of the same shape (`chip_Gold`, `Artwork
+    Image`). The frame-level containment rule closes the case where an identity id on the same frame
+    carries that name (the id is then absent); a name-shaped tag on a frame with no such identity id
+    still travels in the clear. The corpus has none (the rejected-id pin lists only the three dynamic
+    UUIDs, and no identity seed collides with a committed chrome id); the controls are that pin and the
+    k-gated, human-reviewed promotion path.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 

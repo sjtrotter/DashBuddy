@@ -578,7 +578,8 @@ side-effect-free half.
   `ResourceIdGrammar.isStaticShape` / `ClassNameGrammar` (enforced by the DTO at construction and decode)
   — a dynamic id (a per-frame-UUID Compose test tag) or a non-static class is ABSENT on the wire and in
   the fingerprint; the builder's `isStaticId` also refuses an id whose name part trips a frame-free
-  customer-PII predicate (`row_Deliver_to_Sam`). The golden vectors live with the
+  customer-PII predicate (`row_Deliver_to_Sam`), and the frame-level containment rule nulls a static id
+  or class carrying an identity run of the same frame (`chip_Adam` beside `customer_name` "Adam"). The golden vectors live with the
   contract's tests (never in the APK).
 - *Shared vocabulary* — the anonymous-wrapper predicate (`domain.model.accessibility.AnonymousWrappers`,
   owned by the core model and imported by the contract) is the one `UiNode.stableHash`
