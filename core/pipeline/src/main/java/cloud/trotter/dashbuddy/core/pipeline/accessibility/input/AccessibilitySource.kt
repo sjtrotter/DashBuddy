@@ -193,15 +193,16 @@ class AccessibilitySource @Inject constructor() {
     }
 
     /**
-     * Locates the active window's metadata: the window flagged `isActive`, else the window whose
-     * root equals [activeRoot]. Null when neither is found — fail-open, the context is diagnostic
-     * metadata and must never cost a frame.
+     * Locates the metadata of the window the captured [activeRoot] belongs to, matched by the
+     * root's OWN `windowId` (a local getter, no IPC) — never by `isActive`, which may already name
+     * a different window if focus moved while the tree was being mapped (#1148 review F4). Null when
+     * no window carries that id — fail-open, the context is diagnostic metadata and must never cost
+     * a frame.
      */
     private fun activeWindowContext(activeRoot: AccessibilityNodeInfo): TreeSnapshot.WindowContext? = try {
+        val rootWindowId = activeRoot.windowId
         val windows = getWindows()
-        val window = windows.firstOrNull { it.isActive }
-            ?: windows.firstOrNull { it.root == activeRoot }
-        window?.let { contextOf(it, windows.size) }
+        windows.firstOrNull { it.id == rootWindowId }?.let { contextOf(it, windows.size) }
     } catch (_: Exception) {
         null
     }

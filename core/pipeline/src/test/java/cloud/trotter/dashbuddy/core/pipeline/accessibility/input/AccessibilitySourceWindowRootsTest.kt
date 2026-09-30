@@ -107,11 +107,14 @@ class AccessibilitySourceWindowRootsTest {
         on { layer } doReturn windowLayer
     }
 
-    private fun nodeOf(pkg: String): AccessibilityNodeInfo = mock { on { packageName } doReturn pkg }
+    private fun nodeOf(pkg: String, rootWindowId: Int = -1): AccessibilityNodeInfo = mock {
+        on { packageName } doReturn pkg
+        on { windowId } doReturn rootWindowId
+    }
 
     @Test
     fun `getCurrentRootSnapshot fills windowContext from the active window`() {
-        val activeRoot = nodeOf("com.doordash.driverapp")
+        val activeRoot = nodeOf("com.doordash.driverapp", rootWindowId = 9)
         val other = nodeOf("cloud.trotter.dashbuddy")
         val windowList = listOf(windowInfo(7, other, active = false), windowInfo(9, activeRoot, active = true))
         val service = mock<AccessibilityService> {
@@ -168,5 +171,36 @@ class AccessibilitySourceWindowRootsTest {
         }
 
         assertNull(sourceFor(service).topmostWindow { it == "com.doordash.driverapp" })
+    }
+
+    @Test
+    fun `active-root context is matched by the root's own windowId, not by isActive (F4)`() {
+        // Focus moved during the map: window 9 is now flagged active, but the tree came from 5.
+        val capturedRoot = nodeOf("com.doordash.driverapp", rootWindowId = 5)
+        val other = nodeOf("com.doordash.driverapp")
+        val windowList = listOf(windowInfo(9, other, active = true), windowInfo(5, capturedRoot, active = false))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn capturedRoot
+            on { windows } doReturn windowList
+        }
+
+        val ctx = requireNotNull(sourceFor(service).getCurrentRootSnapshot()?.windowContext)
+
+        assertEquals(5, ctx.windowId)
+        assertEquals(false, ctx.isActive)
+    }
+
+    @Test
+    fun `active-root context is null when no window carries the root's windowId`() {
+        val capturedRoot = nodeOf("com.doordash.driverapp", rootWindowId = 5)
+        val windowList = listOf(windowInfo(9, nodeOf("com.doordash.driverapp"), active = true))
+        val service = mock<AccessibilityService> {
+            on { rootInActiveWindow } doReturn capturedRoot
+            on { windows } doReturn windowList
+        }
+
+        val snapshot = requireNotNull(sourceFor(service).getCurrentRootSnapshot())
+
+        assertNull(snapshot.windowContext)
     }
 }
