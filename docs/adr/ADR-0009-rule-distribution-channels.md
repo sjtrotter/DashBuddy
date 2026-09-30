@@ -300,8 +300,9 @@ census (#1138, ADR-0011) changes who does what while leaving every gate in place
   Phase C becomes a **review queue + classification UI** rather than a contributor guide.
 - **The CI gates are unchanged and are what makes a drafted rule safe**: `AllMatchersSuite` (golden
   guard, negative corpus, sensitive-screen invariant, redact parity, `ParseOutputGoldenTest`),
-  schema validation, canonicalization, and — once #641 lands (planned, not yet built) — the
-  signature. A drafted rule that over-matches forges
+  schema validation, canonicalization, and the signature — the runtime gate exists today
+  (`RulesetVerifier`, #416, gating `JsonRuleInterpreter.load`); #641 adds the CI signing step and #640
+  the OTA fetch. A drafted rule that over-matches forges
   state; a drafted rule with a wrong redact ships PII to every phone; both are caught only here plus
   a reader, so **human approval before signing is structural** (ADR-0011 §9). A fully automatic push
   is out of scope by design; a canary ring keyed on the install id can widen a rollout later.

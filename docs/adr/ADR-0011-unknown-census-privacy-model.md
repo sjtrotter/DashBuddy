@@ -8,7 +8,8 @@ M1 builders (#1145, #1146) and the server (#1157) implement. Nothing leaves the 
 ADR-0007 (canonical domain schema), ADR-0009 (rule distribution channels — amended in the same PR)
 **Related:** #192 (the downstream OTA half), #193 (self-hostable aggregation server, URL sovereignty),
 #194 (attestation / poisoning resistance), #1137 (k-promo), #1157 (census server v0),
-#835 (`UiNodeTextField` scrub contract), #1147 (richer node fields), #246 (counsel review)
+#835 (`UiNodeTextField` scrub contract), #1147 (richer node fields — SHIPPED in PR #1158, so its seven
+strings incl. `uniqueId` are already in the enum), #246 (counsel review)
 
 ---
 
@@ -46,10 +47,17 @@ A new versioned schema, `uinode.skeleton.v1` (`UiSkeletonDto` + `SkeletonSchema`
 chrome by construction), the three flags (`isClickable`/`isEnabled` as booleans, `isChecked` as the
 `UiNode` tri-state `Int` 0/1/2 — wire types stated so the shared vectors cannot disagree), and
 `children`. Per text field — enumerated from **`UiNodeTextField`**, the #835 scrub contract, never a
-hand-list, so a string field added later (#1147's `paneTitle`, `hintText`, `clickActionLabel`, …) is
-covered automatically — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
+hand-list, so #1147's strings (`paneTitle`, `hintText`, `clickActionLabel`, …) and any entry added
+later are covered automatically; the node's text fields travel as a MAP keyed by the enum's wire key,
+and the server accepts ANY key in that map (every value has the same `{h?, kind}` shape, so a new key
+is not a privacy change) while rejecting unknown fields everywhere else — an object `{h?, kind}`: `kind` is a coarse shape class and `h` is present
 only when the §2 filter admits a hash (§3 only defines how the admitted token is hashed). **The type has no plaintext slot**: a leak of a text value is a
-type error. **The window title is the ONE explicit non-node text field** (it lives on
+type error. **`uniqueId` (`uid`) is the one enum entry treated as an IDENTIFIER, not a text slot**:
+it is an app-assigned identifier (a Compose test tag — the only stable handle on an id-less Compose
+card, the #1114 class), so it travels in the CLEAR beside `id` when it passes the identifier gate
+(≤ 40 chars, only `[A-Za-z0-9_.:/-]`, no run of 3+ digits, no `CustomerTextMarkers` marker, not a
+mask) and is `withheld` otherwise; it is never hashed. **The window title is the ONE explicit non-node
+text field** (it lives on
 `windowContext`, outside `UiNodeTextField`) and goes through the same `{h?, kind}` rule; it is the
 single named exception to "enumerate the enum", and `SkeletonCorpusTest` names it. `deviceFingerprint`
 is dropped from skeleton metadata.
@@ -67,7 +75,10 @@ The permitted fields, at both levels, are the test allowlist (§7a): per node `c
 object (§1's one non-node text field), the strings `schemaId`,
 `fingerprint`, `platform`, `platformAppVersion`, `appVersion`, `rulesetReleaseTag`, `day` (an `hour`
 bucket in flight only) and the integers `filterRev`, `hashDomain`, `engineVersion`,
-`rulesetFormatVersion` — the metadata names are `ReplayMetadata`'s own. The install id is added by the M3 uploader at the transport layer,
+`rulesetFormatVersion`. Five of these are `ReplayMetadata`'s own names (`platformAppVersion`,
+`appVersion`, `rulesetReleaseTag`, `engineVersion`, `rulesetFormatVersion`); the other six
+(`schemaId`, `fingerprint`, `platform`, `day`, `filterRev`, `hashDomain`) are census-own fields, and
+the §7(a) test enumerates both groups explicitly. The install id is added by the M3 uploader at the transport layer,
 never inside the skeleton.
 
 `kind` is a NORMATIVE classifier, evaluated on the trimmed canonical value (the same bytes that would
@@ -81,7 +92,7 @@ emitted only together with its hash.
 |---|---|---|
 | 1 | `withheld` | a WITHHOLDING filter step in §2 (steps 1–5, 7, 8) caught the field — a CONSTANT, so a caught PII slot reveals nothing, not even its word count. Step 6 is NOT a withholding step: it only refuses the HASH, and the token keeps its `digits`/`mixed` kind |
 | 2 | `digits` | every non-whitespace character is a Unicode decimal digit (`Character.isDigit`) |
-| 3 | `words:N` | split on whitespace runs; strip LEADING and TRAILING punctuation (Unicode general category P*) from each run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
+| 3 | `words:N` | split on whitespace runs; DROP any run that contains no letter and no digit (`&`, `→`, `-`, emoji-only — so `Pickup & delivery` is `words:2`); strip LEADING and TRAILING punctuation (Unicode general category P*) from each remaining run (interior apostrophes and hyphens are kept, so `O'Brien` and `Drop-off` are one run each); every remaining run must contain at least one Unicode letter and no digit; N = the run count, `words:8+` when N > 8 |
 | 4 | `mixed` | everything else — money (`$45.66`), clock times, unit numbers, gate codes, order ids, plates, symbols, emoji |
 
 A null or blank field is OMITTED from the skeleton before any classification, never emitted —
@@ -113,15 +124,19 @@ SSOTs the redact side uses, in this order, and **any hit withholds the hash**:
    caught — the corpus has both shapes and they are vectors (`[redacted…]`, `[address]`, `[email]`, `[phone]`, `[card]`,
    `[note]`, …) → `withheld`; a mask must never be hashed (`[address]` would otherwise strip to
    `words:1`), and the predicate is what §7(e) asserts against;
-6. `kind` is not `words:N` — **only `words:N` tokens are ever hashed** (this step refuses the hash
-   only; the token is emitted with its `digits`/`mixed` kind, it is not `withheld`). The `kind`
+6. `shapeKind` is not `words:N` — **only `words:N` tokens are ever hashed**. This step SHORT-CIRCUITS:
+   a `digits`/`mixed` token is emitted with that kind and no hash and steps 7–8 do not run on it (there
+   is nothing left to protect); steps 7–8 run only on `words:N` survivors. The `kind`
    grammar is the digit backstop: any run containing a digit makes the token `digits` or `mixed`, never `words:N`, so gate codes, PINs, unit numbers and phone fragments emit `kind` only by construction
    (a future grammar change that lets a digit into `words:N` must re-add an explicit digit rule);
 7. `PiiShapes.FIRST_LAST_INITIAL_PATTERN` (the id-less name shape, byte-SSOT with the redact side —
    the existing match mode, `matches` with `IGNORE_CASE`, is preserved);
-8. any other promoted `PiiShapes` pattern (street, city/state/ZIP, full address, bare street,
-   apartment, PIN, quoted note, phone, email, card) — each keeps the match mode `SnapshotRedactor`
-   uses today (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests.
+8. any other promoted `PiiShapes` pattern — each keeps the match mode `SnapshotRedactor` uses today
+   (`BARE_STREET` whole-value, the others substring), pinned by the byte-SSOT tests. Because only
+   `words:N` tokens reach this step, the digit-bearing shapes (street number, ZIP, apartment, PIN,
+   phone, card) cannot fire here and are covered by step 6; the letter-only shapes (quoted note,
+   city/state, email's local part) are the ones this step exists for. The list stays the one
+   `PiiShapes` owner — no census-specific subset is hand-maintained.
 
 **What the builder consumes.** `SkeletonBuilder` takes the RAW admitted `UiNode` tree plus the
 window title. #1146's publisher sits on the UNKNOWN SCREEN BRANCH of `AccessibilityPipeline.output()`
@@ -273,7 +288,8 @@ the residual for an uncaught value is stated in risk 6. `SkeletonCorpusTest` (#1
 including `SENSITIVE/` and `UNKNOWN/negative/` and asserts (a) no string field outside the §1
 allowlist (per node `class`/`id`/`kind`/`h`; per envelope the enumerated metadata) and no bounds on
 any node; (b) invariance under two shape-matched pseudonym
-substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h`; (d)
+substitutions; (c) redactor parity — any value `SnapshotRedactor.redact` changes has no `h` (load-bearing only on
+the pseudonym and decoy fixtures: on an already-redacted committed fixture `redact` is idempotent); (d)
 every `SENSITIVE/` fixture the markers catch yields no skeleton; (e) no `h` equals `CensusHash.of(x)` (trimmed, as the builder hashes) for any PII-VALUED
 `CorpusDecoys` entry (pseudonym names, addresses, notes — not retained chrome labels such as
 `"Hand it to me: "`, which are legitimately hashed) or for any mask token; (f) determinism and idempotence. A seeded property (#878) adds:
@@ -318,7 +334,8 @@ be consumable by an AGPL server (open question 1).
 
 A cluster that crosses a threshold yields a shape bundle → a drafted rule + synthetic fixture → a
 matchers PR → the existing CI gates (`AllMatchersSuite`: golden, negative corpus, sensitive-screen
-invariant, redact parity) → **human approval** → signing (#641) → OTA (#640). Over-match forges
+invariant, redact parity) → **human approval** → signing (the runtime signature gate exists today —
+`RulesetVerifier`, #416; #641 adds the CI signing step) → OTA fetch (#640). Over-match forges
 state and a wrong redact ships PII to every phone; both are silent in the field and caught only by
 the corpus plus a reader, so the human gate is structural. The authoring-model consequence is
 recorded as the ADR-0009 amendment.
@@ -355,8 +372,9 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 ## Lifecycle: schema, filter and identity evolution
 
 - **Schema versions** are explicit wire fields (`schemaId`); the server negotiates accepted versions
-  through `GET /v1/policy` and rejects the rest. Adding a field on the client (a new `UiNodeTextField`
-  entry) is a schema bump, not a silent widening — the server rejects unknown fields.
+  through `GET /v1/policy` and rejects the rest. A new `UiNodeTextField` entry is NOT a schema bump —
+  it is a new key in the per-node text map, which the server accepts by construction (§1); any other
+  new field (node-level, envelope-level) IS a schema bump, and the server rejects unknown fields there.
 - **Hash versions** are the domain prefix (`census.v1:`) AND an explicit integer `hashDomain` in the
   envelope allowlist (1 for `census.v1:`) — the prefix is inside the digest and `h` is 16 hex, so the
   wire needs its own discriminator; sightings and vocabulary are keyed by `(hashDomain, h)` and counts
@@ -401,8 +419,10 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
 - **M4:** unblinding tool, `skeleton.v2`, the working-vocabulary → shipped-allowlist promotion gate.
 - **Contract placement (open question 1) — the default until the dev decides otherwise:** an
   Apache-2.0-headed package `cloud.trotter.dashbuddy.domain.census.contract` inside `:domain`, with
-  no dependency on anything outside the JDK and `sha256OrNull` (which moves into the package), so
-  extraction to a `census-contract/` included build is a move, not a rewrite.
+  no dependency on anything outside the JDK and `domain.util.sha256OrNull` (which STAYS where it is —
+  it is the #362 recognition-side SSOT the parse transform and the redact masks share; on extraction
+  the contract module carries its own ten-line copy or depends on `:domain`), so extraction to a
+  `census-contract/` included build is a move, not a rewrite.
 
 ## Consequences
 
@@ -413,7 +433,8 @@ are covered without a census change. Client and server share `CensusFingerprint`
 
 **Negative / tradeoffs.** Chrome that is rare (a screen only one market sees) never crosses k from
 community installs alone — the trusted install must see it. The filter over-withholds by design
-(`mixed` never hashes, so "Order #1234" contributes only a kind). The two hash domains (census vs parse)
+(`mixed` never hashes, so "Order #1234" contributes only a kind; a symbol-only run is dropped
+before counting so `Pickup & delivery` still hashes as `words:2`). The two hash domains (census vs parse)
 never produce equal digests, so nothing in the system joins a census cluster to a customer hash by
 key — and the census cannot help attribute a delivery; the operator-side dictionary linkage residual
 (§3, risk 1) is the honest limit of that statement and the M3 disclosure must not overclaim it. Promoting `PiiShapes`
