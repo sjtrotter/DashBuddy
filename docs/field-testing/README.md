@@ -3027,14 +3027,12 @@ DoorDash opened and browsed (side menu, ratings, notifications, performance deta
 19:04:11 and ended 19:04:29 (`early_offline`, no summary screen, no offer). One process, no recovery,
 **zero ERROR**, two WARN (both expected, below). 35 capture envelopes, 1,065 log lines. Pull dir
 `~/dashbuddy/logs/2026/09/30`, device purged after verification. The 09-28 dashes in the db were already
-covered by the 09-29 pull. **Consent: `expand_earnings` is still UNGRANTED** (`reconciled 6 capabilit(ies)
-… none granted` at load, no grant line after) — the dev must re-Allow it before the next dash or the
-receipt auto-expand (#1149's item) cannot fire.
+covered by the 09-29 pull. **Consent (corrected after the dev's read):** the grant store SURVIVED the reinstall and every current key is decided — `expand_earnings` GRANTED, `decline_offer` GRANTED on the legacy View-card branch but DENIED on the Compose-card branch (the one 8.99.20 renders), both `accept_offer` branches DENIED, `confirm_decline` DENIED (by choice). The first write-up said "ungranted" because the reconcile INFO line is a fixed string that always reads "none granted" — #1167(b). The duplicate Accept/Decline rows the dev asked about are the two `offer_popup` branches — #1167(a).
 
 ### Bugs
 
-1. **The 8.99.20 "Current dash" control sheet falls to UNKNOWN, and its `End dash` tap is an UNKNOWN
-   click (#1165, new).** The Compose sheet (`Current dash` / `Pause orders` / `Earnings` / `This dash`
+1. **The 8.99.20 timeline sheet ("Current dash") falls to UNKNOWN on a per-offer dash with no task, and its `End dash` tap is an UNKNOWN
+   click (#1165, new — the dev identified it as the existing `timeline` surface: the rule's `Dash ends at`/`Current task` anchors rotted and the `This dash` figure is now a glyph wheel).** The Compose sheet (`Current dash` / `Pause orders` / `Earnings` / `This dash`
    `$0.00` wheel / `End dash` / `Other` / `Go to home screen` / `Read instructions on arrival`, 52 nodes,
    ids only `action_bar_root`/`content`) has no rule; the confirm sheet after it IS recognized
    (`end_dash_confirm`), so the dash still ended correctly. Likely cause: the sheet is new chrome since
@@ -3059,8 +3057,7 @@ receipt auto-expand (#1149's item) cannot fire.
    `text/desc/hint/pane/clickLabel/uid/tooltip` found only chrome ("Pro Shopper", "Side Menu", "Earnings
    Mode Switcher", "Dash Preferences", "Open Settings"); average envelope 88 KB vs 129 KB on the 09-29
    pull (different surfaces, but no growth). No offer card this run (item 2 open).
-5. **Not exercised:** #1160 chat-list masking (no chat), #1149 receipt re-find (no delivery, and the
-   capability is ungranted), #1152 Uber overlays (Uber off).
+5. **Not exercised:** #1160 chat-list masking (no chat), #1149 receipt re-find (no delivery), #1152 Uber overlays (Uber off).
 
 ### Field UX context
 
