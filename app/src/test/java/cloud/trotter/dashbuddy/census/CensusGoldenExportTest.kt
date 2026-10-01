@@ -1,17 +1,16 @@
 package cloud.trotter.dashbuddy.census
 
 import cloud.trotter.census.contract.SkeletonSchema
-import cloud.trotter.census.contract.TextSlot
-import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
+import cloud.trotter.dashbuddy.guard.RepoRoot
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -22,13 +21,25 @@ import java.io.File
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-/** #1173 — the app corpus's wire output, replayed by the census server's ingest suite. */
+/**
+ * #1173 — the app corpus's wire output, replayed by the census server's ingest suite.
+ * SENSITIVE/ is excluded entirely: the dasher's sensitive surfaces are never parsed or stored,
+ * and production drops those frames before the builder, even when fixture markers were redacted.
+ */
 class CensusGoldenExportTest : SkeletonCorpusTestBase() {
 
     @Test
     fun `census output matches the committed conformance golden`() {
         assertTrue("census corpus must not be empty", corpus.isNotEmpty())
-        val lines = outcomes.sortedBy { (fixture, _) -> fixture.path }.map { (fixture, outcome) ->
+        val sortedOutcomes = outcomes.sortedBy { it.first.path }
+        // Mirrors SkeletonCorpusTest (d), including the fixtures excluded from the artifact below.
+        sortedOutcomes.forEach { (fixture, outcome) ->
+            if (fixture.path.startsWith("SENSITIVE/") && SensitiveTextMarkers.findMarker(fixture.tree) != null) {
+                assertTrue("${fixture.path}: a marker-bearing SENSITIVE fixture must be refused", outcome is SkeletonBuilder.Outcome.Refused)
+            }
+        }
+        val exportedOutcomes = sortedOutcomes.filterNot { it.first.path.startsWith("SENSITIVE/") }
+        val lines = exportedOutcomes.map { (fixture, outcome) ->
             val record = buildJsonObject {
                 put("file", fixture.path)
                 when (outcome) {
@@ -38,27 +49,22 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
                         val skeletonJson = Json.parseToJsonElement(outcome.json).jsonObject
                         // #1174 review (Astra): STRICT round-trip through the wire DTO — an unexpected key or a
                         // plaintext slot anywhere in the skeleton is a decode failure, not a grep blind spot.
-                        SkeletonSchema.json.decodeFromJsonElement(UiSkeletonDto.serializer(), skeletonJson)
+                        SkeletonSchema.deserialize(outcome.json)
                         put("skeleton", skeletonJson)
                     }
                     is SkeletonBuilder.Outcome.Refused -> put("refused", outcome.reason.name)
                 }
             }
-            // Mirrors SkeletonCorpusTest (d): a SENSITIVE fixture the MARKERS catch yields no skeleton. The
-            // committed SENSITIVE/ fixtures are hand-redacted (CLAUDE.md § Snapshot Regression Testing), so one
-            // whose markers were redacted away legitimately builds a hash-only skeleton — in production such a
-            // frame never reaches the builder (its RULE drops it at the content gate).
-            if (fixture.path.startsWith("SENSITIVE/") && SensitiveTextMarkers.findMarker(fixture.tree) != null) {
-                assertTrue("${fixture.path}: a marker-bearing SENSITIVE fixture must be refused", record.containsKey("refused"))
-                assertFalse("${fixture.path}: a marker-bearing SENSITIVE fixture must never export a skeleton", record.containsKey("skeleton"))
-            }
-            assertNoPlaintextText(fixture.path, record)
             Json.encodeToString(JsonObject.serializer(), record).also { line ->
                 assertFalse("${fixture.path}: redaction marker reached the wire", line.contains("[redacted"))
             }
         }
+        assertFalse(
+            "SENSITIVE fixtures must never reach the conformance artifact",
+            lines.any { Json.parseToJsonElement(it).jsonObject.getValue("file").jsonPrimitive.content.startsWith("SENSITIVE/") },
+        )
         val actual = (lines.joinToString("\n") + "\n").toByteArray(Charsets.UTF_8)
-        val golden = File(locateRepoRoot(), "census-contract/conformance/skeletons.jsonl.gz")
+        val golden = File(RepoRoot.locate(), "census-contract/conformance/skeletons.jsonl.gz")
 
         if (System.getProperty("exportCensusGolden") == "true") {
             golden.parentFile?.mkdirs()
@@ -77,41 +83,10 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
         } ?: 0
         assertArrayEquals(
             "skeletons.jsonl.gz differs at line ${firstDifference + 1} " +
-                "(${outcomes.sortedBy { it.first.path }.getOrNull(firstDifference)?.first?.path ?: "end of file"}) — " +
+                "(${exportedOutcomes.getOrNull(firstDifference)?.first?.path ?: "end of file"}) — " +
                 "regenerate with -DexportCensusGolden=true and review the diff",
             approved,
             actual,
         )
-    }
-
-    /**
-     * The wire already has `text` keys: node maps and their `text` TextSlot entry. Both must be
-     * objects of validated slots, never plaintext values; forbidding the key would reject v1.
-     */
-    private fun assertNoPlaintextText(path: String, element: JsonElement) {
-        when (element) {
-            is JsonObject -> element.forEach { (key, value) ->
-                if (key == "text") {
-                    assertTrue("$path: plaintext text value reached the wire", value is JsonObject)
-                    val obj = value.jsonObject
-                    val slots = if ("kind" in obj) listOf(obj) else obj.values
-                    slots.forEach { slot ->
-                        // Strict decoding rejects unknown/plaintext fields and validates hash/kind.
-                        SkeletonSchema.json.decodeFromJsonElement(TextSlot.serializer(), slot)
-                    }
-                }
-                assertNoPlaintextText(path, value)
-            }
-            is JsonArray -> element.forEach { assertNoPlaintextText(path, it) }
-            is JsonPrimitive -> Unit
-        }
-    }
-
-    private fun locateRepoRoot(): File {
-        var dir = File(".").absoluteFile.normalize()
-        while (true) {
-            if (File(dir, "settings.gradle.kts").isFile) return dir
-            dir = dir.parentFile ?: error("Could not locate repo root (settings.gradle.kts)")
-        }
     }
 }

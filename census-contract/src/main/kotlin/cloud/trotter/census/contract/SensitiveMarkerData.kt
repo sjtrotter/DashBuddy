@@ -141,7 +141,7 @@ object SensitiveMarkerData {
      * Shaped-value patterns no keyword list can cover: SSNs, card PANs, and the
      * amount-bearing DasherDirect transfer button.
      *
-     * Matched against the NORMALIZED text (see [normalize]), so every pattern is written in
+     * Matched against the normal form [SensitiveMarkerScan.normalize] produces, so every pattern is written in
      * lowercase with ASCII spaces — normalization already folded case, homoglyph whitespace,
      * fullwidth digits/`＄`, and zero-width injections before the scan runs.
      *
@@ -149,8 +149,9 @@ object SensitiveMarkerData {
      * (no nested/unbounded quantifiers) so a hostile third-party string cannot make the scan
      * backtrack: each is a linear scan with fixed-count repetitions only.
      *
-     * `internal` (#862) so `MarkerLogIdTest` pins the LIVE patterns rather than a hand-copied
-     * list — a shape added here is covered by the log-safety guard automatically.
+     * Public here as the data owner so the server can read it; re-exposed `internal` by
+     * `SensitiveTextMarkers.SHAPE_PATTERNS` in `:core:pipeline`, where `MarkerLogIdTest` pins
+     * the LIVE patterns (#862) — a shape added here is covered by the log-safety guard automatically.
      */
     val SHAPE_PATTERNS: List<Regex> = listOf(
         // SSN: 123-45-6789

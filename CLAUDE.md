@@ -911,7 +911,10 @@ Tests are data-driven using captured UI hierarchy JSON files under
    sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
 5. Commit only the sorted files from their category folders (never from `INBOX/`).
 6. New corpus changes the parse-output golden — regenerate it deliberately (next section, step 4)
-   and commit `snapshots/approved-parse-output.json` together with the new snapshots.
+   and the census conformance golden (`./gradlew :app:testDebugUnitTest --tests "*CensusGoldenExportTest*" -DexportCensusGolden=true`,
+   then review the diff of `census-contract/conformance/skeletons.jsonl.gz` — both goldens pin the
+   corpus the working tree holds, so regenerate after sorting, before committing).
+   Commit `snapshots/approved-parse-output.json` and the census golden together with the new snapshots.
 
 **The intake tools MUTATE the corpus, and are excluded from a plain sweep (#941).**
 `InboxProcessorTest` and `UnknownScreenAnalysisTest` redact/move/prune/delete files under

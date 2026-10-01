@@ -23,3 +23,17 @@ dependencies {
     api(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
 }
+
+// mirrors the root subprojects block (#841/#1093), which does not reach an included build
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "2g"
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = false
+    }
+    if (JavaVersion.current() >= JavaVersion.VERSION_24) {
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
+    }
+}

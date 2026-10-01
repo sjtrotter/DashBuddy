@@ -1,5 +1,11 @@
-package cloud.trotter.census.contract
+package cloud.trotter.dashbuddy.domain.census
 
+import cloud.trotter.census.contract.CensusFingerprint
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.UiSkeletonDto
+import cloud.trotter.census.contract.UiSkeletonNodeDto
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.SerialDescriptor

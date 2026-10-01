@@ -68,7 +68,7 @@ jobs:
       - name: Run unit tests
         # :domain is pure-JVM — its task is `test`, which the Android aggregate does NOT
         # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
-        # #1173: censusContractTest also runs the census-contract included build's tests.
+        # #1173 review: :domain:test covers the census-contract included build's tests; the alias is harmless.
         run: ./gradlew testDebugUnitTest :domain:test censusContractTest
 
       - name: Release lint (lintVitalRelease)

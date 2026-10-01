@@ -23,3 +23,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.reflect)
 }
+
+// #1173 review: :domain:test — which CI already runs — also runs the contract's tests,
+// because :domain is the contract's first consumer.
+tasks.test {
+    dependsOn(gradle.includedBuild("census-contract").task(":test"))
+}

@@ -1,5 +1,6 @@
-package cloud.trotter.census.contract
+package cloud.trotter.dashbuddy.domain.census
 
+import cloud.trotter.census.contract.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
