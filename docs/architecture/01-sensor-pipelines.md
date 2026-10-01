@@ -566,7 +566,7 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer hold
 side-effect-free half.
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
-- *Wire contract* — the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` /
+- *Wire contract* — the Apache-2.0 package `cloud.trotter.census.contract` (the `census-contract/` build, #1173): `UiSkeletonDto` /
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
   iff `kind` is `words:1..8`; invariants checked at construction AND on decode, incl. well-formed UTF-16
@@ -593,8 +593,8 @@ side-effect-free half.
   run of the same frame (`chip_Adam` beside `customer_name` "Adam"), so the node keeps its place in the
   fingerprint's structure, and makes absent a non-wrapper class carrying a customer-name run. The golden vectors live with the
   contract's tests (never in the APK).
-- *Shared vocabulary* — the anonymous-wrapper predicate (`domain.model.accessibility.AnonymousWrappers`,
-  owned by the core model and imported by the contract) is the one `UiNode.stableHash`
+- *Shared vocabulary* — the anonymous-wrapper predicate (`cloud.trotter.census.contract.AnonymousWrappers`,
+  owned by the contract build and imported by the core model) is the one `UiNode.stableHash`
   also uses (algorithm unchanged, pinned by `UiNodeStableHashPinTest`); the customer-PII shapes moved
   byte-for-byte from the test-only `SnapshotRedactor` to `domain.privacy.PiiShapes` (app licence;
   `SnapshotRedactor` delegates, `PiiShapesParityTest` pins it; `PiiShapesIcuGuardTest` applies the ICU
@@ -780,7 +780,7 @@ supersession guessed the row) — checked AFTER the #788 active-window scoping, 
 candidates only, so a nested pair in a background window cannot abort an unambiguous foreground tap
 (round 5; `UiInteractionHandlerTieTest` runs the two-root sequence through the real handler). (5) The `bindShortfall` census is keyed structurally by (rule, bind) —
 a dotted string merged `(a.b, c)` with `(a, b.c)` — and rendered `rule#bind` with `#`/`%` escaped in
-each component so the render cannot merge two pairs either. The sha256 helper moved to `:domain` (`domain.util.sha256OrNull`) so `NodeRef` can hash
+each component so the render cannot merge two pairs either. The sha256 helper lives in `census-contract/` (`cloud.trotter.census.contract.sha256OrNull`, #1173) so `NodeRef` can hash
 without a second digest site; `:core:pipeline`'s `sha256OrNull` delegates to it. The
 rule's id-less arm requires the chevron's `Expand` contentDescription too, since `find` visits
 ancestors first and an id-less clickable ancestor containing `This offer` (the 07-17 frames) would

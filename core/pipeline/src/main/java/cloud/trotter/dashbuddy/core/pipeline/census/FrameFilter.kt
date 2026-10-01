@@ -2,13 +2,13 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.FilterStep
-import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
-import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
-import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
-import cloud.trotter.dashbuddy.domain.census.contract.WireStrings
+import cloud.trotter.census.contract.CaseFold
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.ClassNameGrammar
+import cloud.trotter.census.contract.ResourceIdGrammar
+import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.UiSkeletonNodeDto
+import cloud.trotter.census.contract.WireStrings
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes

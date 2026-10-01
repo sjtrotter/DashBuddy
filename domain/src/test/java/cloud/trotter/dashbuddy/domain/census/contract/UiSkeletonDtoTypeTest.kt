@@ -1,4 +1,4 @@
-package cloud.trotter.dashbuddy.domain.census.contract
+package cloud.trotter.census.contract
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.PrimitiveKind

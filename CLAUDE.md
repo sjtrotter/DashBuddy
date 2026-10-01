@@ -62,8 +62,8 @@ trusted installs; server #1157).
 # Build the app
 ./gradlew :app:build
 
-# Run all unit tests (across all modules — :domain is pure-JVM, its task is `test`)
-./gradlew testDebugUnitTest :domain:test
+# Run all unit tests (:domain is pure-JVM; censusContractTest bridges the included build)
+./gradlew testDebugUnitTest :domain:test censusContractTest
 
 # Run ONLY the ruleset/recognition regressions (fast pre-PR check — no state
 # machine / DB / UI). Side-effect-free; does NOT sort INBOX or re-triage UNKNOWN.
@@ -109,6 +109,7 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :feature:bubble    → :domain, :core:designsystem
 
 matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
+census-contract (included build, Apache-2.0) ⇒ the census wire contract; :domain depends on it (api), the dashbuddy-census server includeBuilds it
 ```
 
 **Feature modules (MAD Phase 6 — complete; no extractions remain).** UI extracted per-feature under
@@ -145,12 +146,10 @@ sibling surface, left for a future extraction.
   `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
   UI and the state layer route through one definition; the Compose time helpers
   `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
-  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.) Two #1145 packages:
-  `domain.census.contract` — the census wire contract (ADR-0011: skeleton DTOs/schema, `CensusHash`,
-  `CensusFingerprint`, the kind classifier, the id/class grammars, `WireStrings`) — is **Apache-2.0-headed**,
-  depends on nothing but the JDK, kotlinx-serialization, `domain.util.sha256OrNull` and
-  `domain.model.accessibility.AnonymousWrappers` (the wrapper class set, owned by the core model so `UiNode`
-  never imports the contract), and is bound for extraction to its own build (ADR-0011 open question 1); `domain.privacy.PiiShapes` (app licence) is the
+  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.) The census wire contract now lives in the
+  **`census-contract/` included build** (`cloud.trotter.census.contract`, Apache-2.0, #1173;
+  `:domain` depends on it with `api`; owns `sha256OrNull`, `AnonymousWrappers`, `SensitiveMarkerData`).
+  `domain.privacy.PiiShapes` stays in `:domain` (app licence), the
   promoted customer-PII pattern SSOT that the test-side `SnapshotRedactor` delegates to and the census
   filter reads.
 - **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
@@ -238,7 +237,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
 (`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference; the package-less `WINDOWS_CHANGED` reaches the #1148 D2 `ListenerGate` only when the dasher's **event-receipt consent** is ALLOWED — the listener clears `packageNames` via the pure `ServiceInfoPolicy`, in debug AND release, #1151) and the
-parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure `census.SkeletonBuilder` over the `domain.census.contract` wire types (sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`) and published by `census.SkeletonPublisher` (#1146: post-admission, after `captureScreen`, before the UNKNOWN filter, UNKNOWN platform screens only, fail-open, only while the bound `CensusSink` is enabled — every variant binds `NoOpCensusSink`; `census{…}` in `PipelineStats`). `AccessibilityPipeline.output()` gates in order:
+parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure `census.SkeletonBuilder` over the `cloud.trotter.census.contract` (the `census-contract/` build) wire types (sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`) and published by `census.SkeletonPublisher` (#1146: post-admission, after `captureScreen`, before the UNKNOWN filter, UNKNOWN platform screens only, fail-open, only while the bound `CensusSink` is enabled — every variant binds `NoOpCensusSink`; `census{…}` in `PipelineStats`). `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
 to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +
@@ -284,7 +283,8 @@ PR #1066 — read a pull's build from the logs, never infer it).
   lifecycle neutrality, asserted by `FlowlessRecognitionNeutralityTest`.
 
 **Backstops (rules-independent, cross-platform DATA):** `SensitiveTextMarkers` drops the dasher's
-banking screens; `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
+banking screens using `cloud.trotter.census.contract.SensitiveMarkerData` from the `census-contract/`
+build (#1173); `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
 recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (view-id suffixes whose
 VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only — the census kind
 table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its

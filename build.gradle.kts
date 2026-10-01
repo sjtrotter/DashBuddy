@@ -9,6 +9,11 @@ plugins {
     alias(libs.plugins.android.library) apply false
 }
 
+// #1173: bridge the included build's tests into the root all-tests / CI lifecycle.
+tasks.register("censusContractTest") {
+    dependsOn(gradle.includedBuild("census-contract").task(":test"))
+}
+
 // Warnings-as-errors gate (#841): every Kotlin compilation in every module fails on ANY
 // warning — hand-written or KSP-generated. A deliberate exception (e.g. the minSdk-30
 // areBubblesAllowed fallback) gets a site-local @Suppress with a justifying comment, never

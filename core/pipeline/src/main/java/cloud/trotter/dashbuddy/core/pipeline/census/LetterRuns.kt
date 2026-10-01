@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
-import cloud.trotter.dashbuddy.domain.census.contract.CaseFold
+import cloud.trotter.census.contract.CaseFold
 
 /**
  * The census's letter-run vocabulary (ADR-0011 §2; split from `SkeletonBuilder` by #1160 review AD10): the

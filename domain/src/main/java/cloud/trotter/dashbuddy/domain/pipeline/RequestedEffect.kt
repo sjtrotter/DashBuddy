@@ -106,7 +106,7 @@ data class NodeRef(
         // number exactly the hints (the walk calls this for every clickable region).
         val keys = liveLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
         if (keys.size != labelHintHashes.size) return false
-        val live = keys.mapNotNullTo(HashSet()) { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
+        val live = keys.mapNotNullTo(HashSet()) { cloud.trotter.census.contract.sha256OrNull(it) }
         return live == hintSet
     }
 
@@ -121,7 +121,7 @@ data class NodeRef(
         val keys = visibleLabels.mapNotNullTo(HashSet(), ::hintKeyOrNull)
         if (keys.isEmpty() || keys.size > labelHintHashes.size) return false
         // A hash failure is treated as CONSISTENT (the veto side — fail closed).
-        return keys.all { k -> cloud.trotter.dashbuddy.domain.util.sha256OrNull(k)?.let { it in hintSet } ?: true }
+        return keys.all { k -> cloud.trotter.census.contract.sha256OrNull(k)?.let { it in hintSet } ?: true }
     }
 
     companion object {
@@ -222,7 +222,7 @@ data class NodeRef(
 
         /** sha256 of [hintKeyOrNull]; null when the label carries no key (fail-closed: no hint). */
         fun hintHash(label: String): String? =
-            hintKeyOrNull(label)?.let { cloud.trotter.dashbuddy.domain.util.sha256OrNull(it) }
+            hintKeyOrNull(label)?.let { cloud.trotter.census.contract.sha256OrNull(it) }
     }
 }
 /** #1149 review L2 — the bind-time fingerprint of the bound node's action owner ([NodeRef.bindHintsOf]). */

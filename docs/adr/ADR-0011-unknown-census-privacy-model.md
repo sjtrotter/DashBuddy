@@ -526,7 +526,7 @@ because a Compose recomposition adds and removes such wrappers and the cluster m
 them; every other boundary is preserved (`A(B(C)) ≠ A(B, C)`). This is the census's OWN rule — today's
 `computeStableHash` folds a wrapper's children as a nested group and never splices, so the two
 algorithms are deliberately different; only the wrapper CLASS SET is shared, through one constant owned
-by the core model (`domain.model.accessibility.AnonymousWrappers`, which the contract imports).
+by the `census-contract/` build (`cloud.trotter.census.contract.AnonymousWrappers`, #1173).
 `stableHash` and `UnknownSuppressor` are untouched. (The corpus librarian's variant check is a TEXT fingerprint and
 `FrameGate`'s identity is `Observation.identity()`; neither is touched — a structural key would
 collapse the librarian's store-distinct variants.) The server RECOMPUTES the fingerprint from the
@@ -621,14 +621,14 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
   network I/O — the `CaptureBus`/`LogScrubber` precedent), the trusted-install transport (envelope +
   skeleton pairing, metadata stripped as §6 says), server v0.
 - **M4:** unblinding tool, `skeleton.v2`, the working-vocabulary → shipped-allowlist promotion gate.
-- **Contract placement (open question 1) — the default until the dev decides otherwise:** an
-  Apache-2.0-headed package `cloud.trotter.dashbuddy.domain.census.contract` inside `:domain`, with
-  no dependency on anything outside the JDK, kotlinx-serialization, `domain.util.sha256OrNull` and
-  `domain.model.accessibility.AnonymousWrappers` (the four-class wrapper set, owned by the core model so
-  `UiNode` never imports the contract; amended in #1160); `sha256OrNull` STAYS where it is —
-  it is the #362 recognition-side SSOT the parse transform and the redact masks share; on extraction
-  the contract module carries its own ten-line copy or depends on `:domain`), so extraction to a
-  `census-contract/` included build is a move, not a rewrite.
+- **Contract placement (open question 1, resolved 2026-10-01):** the Apache-2.0
+  `census-contract/` included build (#1173), package `cloud.trotter.census.contract`, depends only
+  on the JDK and kotlinx-serialization. Both the PolyForm-Shield app (`:domain` via `api`) and
+  the AGPL `dashbuddy-census` server consume it by `includeBuild`. It owns the ONE `sha256OrNull`
+  (#362 SSOT), `AnonymousWrappers`, and the sensitive-marker DATA (`SensitiveMarkerData`);
+  the phone's scan logic stays in `:core:pipeline` and `PiiShapes` stays in `:domain`.
+  `UiNode` never imports the contract's WIRE types; it imports the anonymous-wrapper predicate
+  from the contract build, which owns it (#1173).
 
 ## Consequences
 
@@ -713,8 +713,7 @@ must stay green.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
-1. Wire-contract licence and location: an Apache-2.0 `census-contract/` included build, or an
-   Apache-headed package inside `:domain` for now. Changes #1145's file placement.
+1. **RESOLVED 2026-10-01:** the Apache-2.0 `census-contract/` included build (#1173).
 2. Whether trusted installs are excluded from `k_ship` (this ADR assumes yes).
 3. Backup retention of 14 days.
 4. What "contributing" means for the #1137 promo (decides whether the server keeps a metro cell at all).

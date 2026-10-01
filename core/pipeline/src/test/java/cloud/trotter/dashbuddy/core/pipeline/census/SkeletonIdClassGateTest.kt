@@ -3,11 +3,11 @@ import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.FilterStep
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Refusal
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
-import cloud.trotter.dashbuddy.domain.census.contract.CensusFingerprint
-import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
-import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
-import cloud.trotter.dashbuddy.domain.model.accessibility.AnonymousWrappers
+import cloud.trotter.census.contract.CensusFingerprint
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.AnonymousWrappers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.state.Platform

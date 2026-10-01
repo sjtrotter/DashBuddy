@@ -1,9 +1,9 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
-import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
-import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
-import cloud.trotter.dashbuddy.domain.census.contract.TextFold
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.KindClassifier
+import cloud.trotter.census.contract.TextFold
+import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import java.text.Normalizer
 import org.junit.Assert.assertEquals
