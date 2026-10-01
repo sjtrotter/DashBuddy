@@ -125,7 +125,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      (grep the pull the way the playbook greps `text`).
   4. Capture files are not noticeably larger than the previous pull's, and no new WARN/ERROR tagged
      `Mapper` or `Pipeline` appears.
-  - Issue: #1147, PR #1158. Confirmed: 0/2
+  - Issue: #1147, PR #1158. Confirmed: 1/2 (2026-09-30 on `1fe9243f`: `pane` ×2, `tooltip` ×3, `clickAction` ×282, `visible` ×49 across 35 envelopes; rich-field PII sweep clean; 88 KB avg vs 129 KB prior; no new WARN. Item 2 (offer card) open)
 
 - **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
@@ -152,7 +152,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      the switch. (On an Android 11 device both appear — a known limitation, see the sensor reference.)
   7. Debug build, a bubble deep link that arrives while the notice is up, then a rotation, then
      Allow: the app opens the linked screen exactly once.
-  - Issue: #1151. Confirmed: 0/2
+  - Issue: #1151. Confirmed: 1/2 (2026-09-30 smoke test on `1fe9243f`: items 1–2 — the step came first and was allowed, `wide=false` → `wide=true`, `WINDOWS_CHANGED` lines began; items 3–7 not exercised)
 
 - **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
   offer as a floating system overlay above other apps; it used to be read only when it had focus.
@@ -207,7 +207,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   3. With a DoorDash sheet open (e.g. the decline-confirm sheet over the offer card), R0 does NOT flap
      between the sheet and the card underneath — the hidden card must never be recognized.
   4. The `PipelineStats` summary shows no new `mappingFailures`.
-  - Issue: #1148. Confirmed: 0/2
+  - Issue: #1148. Confirmed: 1/2 (desk half, 2026-09-30 on `1fe9243f`: 132 `DRIP` lines on the cadence contract — leading `n=1 span=0ms`, floods `n=19–24` at 202–302 ms; no `Skip active window`, no Mapper WARN; item 1 not deliberately exercised, no stats summary printed)
 
 - **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
@@ -3016,6 +3016,64 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-09-30 (smoke test of `1fe9243f` — the TalkBack batch + census build goes live; an 18-second dash; the "Current dash" sheet is UNKNOWN)
+
+**Date:** 2026-09-30 · **Platform(s) tested:** DoorDash (app **8.99.20**) · **Branch under test:** `master`
+at `1fe9243f` (build `0.230.0+1fe9243f`, installed 18:52) — the first run of PRs #1150 (#1148), #1153
+(#1149), #1155 (#1152), #1156 (#1151), #1158 (#1147), #1160 (#1145) and #1163 (#1161/#1162). · **Field
+conditions:** desk smoke test, no driving: install → the new wide-event-receipt consent step allowed →
+DoorDash opened and browsed (side menu, ratings, notifications, performance detail) → one dash started
+19:04:11 and ended 19:04:29 (`early_offline`, no summary screen, no offer). One process, no recovery,
+**zero ERROR**, two WARN (both expected, below). 35 capture envelopes, 1,065 log lines. Pull dir
+`~/dashbuddy/logs/2026/09/30`, device purged after verification. The 09-28 dashes in the db were already
+covered by the 09-29 pull. **Consent: `expand_earnings` is still UNGRANTED** (`reconciled 6 capabilit(ies)
+… none granted` at load, no grant line after) — the dev must re-Allow it before the next dash or the
+receipt auto-expand (#1149's item) cannot fire.
+
+### Bugs
+
+1. **The 8.99.20 "Current dash" control sheet falls to UNKNOWN, and its `End dash` tap is an UNKNOWN
+   click (#1165, new).** The Compose sheet (`Current dash` / `Pause orders` / `Earnings` / `This dash`
+   `$0.00` wheel / `End dash` / `Other` / `Go to home screen` / `Read instructions on arrival`, 52 nodes,
+   ids only `action_bar_root`/`content`) has no rule; the confirm sheet after it IS recognized
+   (`end_dash_confirm`), so the dash still ended correctly. Likely cause: the sheet is new chrome since
+   the dash-lifecycle rules were written; one possibility is a recognize-only rule on its text anchors
+   with an optional, settle-gated `This dash` read — the issue carries the shape.
+   - **Status:** Open (#1165).
+
+### Verification TODOs → checklist movements
+
+2. **#1151 wide-event-receipt consent — 1/2.** The step appeared before the accessibility card and was
+   allowed; the log reads `Event receipt: wide=false` at connect (18:52:35) then `wide=true` (18:53:43),
+   and `WINDOWS_CHANGED (coalesced n=…)` DEBUG lines begin right after. Items 3–7 (release decline, debug
+   decline shell, the switch) not exercised.
+3. **#1148 coalescer — 1/2 (desk half).** 132 `DRIP` lines follow the cadence contract: a leading
+   `n=1 span=0ms` on every idle→change edge (43 of them), floods coalesced at `n=19 span=202ms` /
+   `n=24 span=302ms`, trailing drips at 100–250 ms. No `Skip active window` line in the run, no Mapper
+   WARN. Item 1 (frames while the bubble is the active window) was not deliberately exercised; no
+   `PipelineStats` summary printed (the run was shorter than one summary interval), so
+   `mappingFailures` is inferred from the absence of WARNs, not read.
+4. **#1147 rich node fields — 1/2.** Across the 35 envelopes: `clickAction` ×282, `visible` ×49,
+   `tooltip` ×3, `pane` ×2 (so a DoorDash surface DOES publish a pane title). The PII sweep over
+   `text/desc/hint/pane/clickLabel/uid/tooltip` found only chrome ("Pro Shopper", "Side Menu", "Earnings
+   Mode Switcher", "Dash Preferences", "Open Settings"); average envelope 88 KB vs 129 KB on the 09-29
+   pull (different surfaces, but no growth). No offer card this run (item 2 open).
+5. **Not exercised:** #1160 chat-list masking (no chat), #1149 receipt re-find (no delivery, and the
+   capability is ungranted), #1152 Uber overlays (Uber off).
+
+### Field UX context
+
+6. The two WARNs: `ParseHealth: Rule doordash.screen.idle_map matched with a parse shortfall` — the
+   documented benign baseline (idle_map's one field is legitimately optional, 01-sensor-pipelines) — and
+   `Effects: Timer Expired: GRACE_COMMIT`, the session-end grace committing the 18-second dash as
+   `early_offline` with every summary scalar null (`SessionEndedFields.totalEarnings` null, not `$0.00`
+   — #1030 holding).
+7. UNKNOWN census (8 window + 1 click): the #1165 sheet (2 frames incl. its mid-inflate 21-node form),
+   five text-less Compose shells mid-inflate (9–21 nodes — side-nav host, a `progress_bar` workflow host),
+   and one 48-node home frame carrying `earnings_pill` ("This week" + a glyph wheel) and
+   `side_menu_button` but not yet the `Earnings Mode Switcher` description the `idle_map` rule anchors on
+   — a single transitional frame; the next six frames were `idle_map`.
 
 ## 2026-09-27 → 2026-09-28 (desk analysis of the 09-29 pull — money to the cent; #1118's third clean run; four more accepts died; a stacked-job picker leaked two names; a dash stayed "online" 31 minutes after End dash)
 
