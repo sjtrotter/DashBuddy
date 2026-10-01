@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.RecognitionHealthMonitor
+import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonPublisher
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.content_changed.ContentChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.state_changed.StateChangedPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.event.type.window.windows_changed.WindowsChangedPipeline
@@ -49,6 +50,7 @@ class AccessibilityPipeline @Inject constructor(
     private val platformPreferences: PlatformPreferences,
     private val stats: PipelineStats,
     private val recognitionHealth: RecognitionHealthMonitor,
+    private val skeletonPublisher: SkeletonPublisher,
 ) {
     companion object {
         const val SCREEN_PIPELINE_ID = "accessibility.window"
@@ -174,7 +176,7 @@ class AccessibilityPipeline @Inject constructor(
             (obs as? Observation.Screen)?.parseShortfalls?.forEach { stats.onParseShortfall(it) }
             // Capture via the shared writer; smart-casts replace the old
             // unchecked downcasts (#361).
-            when {
+            val captured = when {
                 obs is Observation.Screen && event is PipelineEvent.Screen ->
                     captureWriter.captureScreen(obs, event)
                 obs is Observation.Click && event is PipelineEvent.Click ->
@@ -184,6 +186,12 @@ class AccessibilityPipeline @Inject constructor(
                     captureWriter.captureClick(obs, event, obs.screenTarget, obs.screenRuleId)
                 else -> obs
             }
+            // #1146 census publisher (ADR-0011): UNKNOWN screens only, post-admission, AFTER the capture
+            // so the stamped captureId is the trusted-install pairing key; fail-open, screens only.
+            if (captured is Observation.Screen && event is PipelineEvent.Screen) {
+                skeletonPublisher.publish(captured, event)
+            }
+            captured
         }
 
         // Gate: don't forward UNKNOWN observations to state machine

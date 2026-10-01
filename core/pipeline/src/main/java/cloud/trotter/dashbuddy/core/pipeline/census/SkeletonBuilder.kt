@@ -155,11 +155,11 @@ object SkeletonBuilder {
     ): Outcome = outcome(tree, windowTitle, meta, platform, day, sensitive = null)
 
     /**
-     * [outcome] with the tree's sensitive-marker verdict the caller ALREADY computed (review PP8): on the
-     * debug path `CaptureWriter` has scanned the same raw tree, and #1146's publisher passes that verdict
-     * here so the full-tree scan is not run twice. `null` (release — `NoOpCaptureBus`, no capture-side
-     * scan — or any caller without one) makes the builder scan itself. The window title is always scanned
-     * here (it is one short string).
+     * [outcome] with the tree's sensitive-marker verdict the caller ALREADY computed (review PP8), so a
+     * caller that scanned the same raw tree need not have it scanned twice. NOT YET WIRED: #1146's publisher
+     * passes `null` (the builder scans itself) because `CaptureWriter` does not surface its verdict — #1172
+     * item 2 tracks the hand-off. `null` from any caller makes the builder scan itself. The window title is
+     * always scanned here (it is one short string).
      */
     fun outcome(
         tree: UiNode,

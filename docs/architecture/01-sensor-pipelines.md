@@ -561,10 +561,11 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 (they discard observer evidence), `TYPE_ANNOUNCEMENT`/text events, and any change to `FrameGate`,
 `Observation.identity()`, the classifier or the capture envelope schema.
 
-**Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — pure, not yet wired.**
+**Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — wired behind a NoOp sink (M1b, #1146).**
 The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer holds its first,
 side-effect-free half.
 
+- *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
 - *Wire contract* — the Apache-2.0-headed package `domain.census.contract`: `UiSkeletonDto` /
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present

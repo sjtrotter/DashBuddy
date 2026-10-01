@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
+import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -68,6 +69,21 @@ class PipelineStats @Inject constructor(
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
+
+    /** #1146: census items and token decisions, counts only; disabled sinks leave these untouched. */
+    private val censusSkeletons = AtomicLong()
+    private val censusTokensHashed = AtomicLong()
+    private val censusTokensWithheld = AtomicLong()
+    private val censusSinkRefused = AtomicLong()
+    private val censusPublishFailures = AtomicLong()
+    /** #1171 review: an admitted UNKNOWN frame whose package resolves to no platform — refused BEFORE a build (ADR-0011 scopes the census to platform screens). */
+    private val censusUnattributedPlatform = AtomicLong()
+
+    /** #1146: builder refusals in declaration order, with no frame content. */
+    private val censusRefusals: Map<SkeletonBuilder.Refusal, AtomicLong> =
+        EnumMap<SkeletonBuilder.Refusal, AtomicLong>(SkeletonBuilder.Refusal::class.java).apply {
+            SkeletonBuilder.Refusal.entries.forEach { put(it, AtomicLong()) }
+        }
 
     /** #1152: frames read from a platform offer overlay (a11y `TYPE_SYSTEM`), on any window path. */
     private val overlaySnapshots = AtomicLong()
@@ -399,6 +415,41 @@ class PipelineStats @Inject constructor(
 
     fun overlayRejectedCount(reason: OverlayRejectReason): Long = overlayRejections.getValue(reason).get()
 
+    /** One built census skeleton and its hashed/withheld token counts (#1146). */
+    fun onCensusSkeleton(hashed: Int, withheld: Int) {
+        censusSkeletons.incrementAndGet()
+        censusTokensHashed.addAndGet(hashed.toLong())
+        censusTokensWithheld.addAndGet(withheld.toLong())
+    }
+
+    /** The builder refused a census item; the admitted frame is unaffected (#1146). */
+    fun onCensusRefused(reason: SkeletonBuilder.Refusal) {
+        censusRefusals.getValue(reason).incrementAndGet()
+    }
+
+    /** A built item was offered but not accepted by the census sink (#1146). */
+    fun onCensusSinkRefused() {
+        censusSinkRefused.incrementAndGet()
+    }
+
+    /** A census publisher failure was contained without losing a frame (#1146). */
+    fun onCensusPublishFailure() {
+        censusPublishFailures.incrementAndGet()
+    }
+
+    fun onCensusUnattributedPlatform() {
+        censusUnattributedPlatform.incrementAndGet()
+    }
+
+    fun censusUnattributedPlatformCount(): Long = censusUnattributedPlatform.get()
+
+    fun censusSkeletonCount(): Long = censusSkeletons.get()
+    fun censusTokensHashedCount(): Long = censusTokensHashed.get()
+    fun censusTokensWithheldCount(): Long = censusTokensWithheld.get()
+    fun censusRefusedCount(reason: SkeletonBuilder.Refusal): Long = censusRefusals.getValue(reason).get()
+    fun censusSinkRefusedCount(): Long = censusSinkRefused.get()
+    fun censusPublishFailureCount(): Long = censusPublishFailures.get()
+
     /** An observation was forwarded to the state machine. */
     fun onForwarded() {
         val n = forwarded.incrementAndGet()
@@ -435,31 +486,47 @@ class PipelineStats @Inject constructor(
             bindRefusedSuffix() +
             foregroundSkipSuffix() +
             topologySkipSuffix() +
-            overlayRejectedSuffix()
+            overlayRejectedSuffix() +
+            censusSuffix()
+
+    /** Census counts only (#1146); absent when untouched, preserving the existing summary bytes. */
+    private fun censusSuffix(): String {
+        val skeletons = censusSkeletons.get()
+        val hashed = censusTokensHashed.get()
+        val withheld = censusTokensWithheld.get()
+        val sinkRefused = censusSinkRefused.get()
+        val failures = censusPublishFailures.get()
+        val unattributed = censusUnattributedPlatform.get()
+        val refused = reasonSuffix(",refused", censusRefusals)
+        if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
+            failures == 0L && unattributed == 0L && refused.isEmpty()
+        ) return ""
+        return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
+            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused}"
+    }
+
+    /**
+     * The ONE renderer of a per-reason counter map (#1171 review: four hand-rolled copies had grown):
+     * `"<prefix>{REASON=n,…}"` over the NON-ZERO reasons in enum declaration order, or the empty string
+     * when none — so a suffix never appears while its counters are untouched.
+     */
+    private fun <E : Enum<E>> reasonSuffix(prefix: String, byReason: Map<E, AtomicLong>): String {
+        val nonZero = byReason.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = "$prefix{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
+    }
 
     /**
      * `" foregroundSkip{NO_ACTIVE_ROOT=3,FRONT_NOT_ENABLED=12}"` (#1148 review H3), non-zero reasons
      * only, in declaration order; empty when none. Enum names and counts — PII-free (principle 7).
      */
-    private fun foregroundSkipSuffix(): String {
-        val nonZero = foregroundSkips.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " foregroundSkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun foregroundSkipSuffix(): String = reasonSuffix(" foregroundSkip", foregroundSkips)
 
     /** `" topologySkip{FRONT_NOT_ENABLED=3}"` (PR #1155 review FF4), non-zero reasons only; empty when none. */
-    private fun topologySkipSuffix(): String {
-        val nonZero = topologySkips.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " topologySkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun topologySkipSuffix(): String = reasonSuffix(" topologySkip", topologySkips)
 
     /** `" overlayRejected{TOO_SMALL=40,NOT_OVERLAY_PLATFORM=2}"` (#1152), non-zero reasons only; empty when none. */
-    private fun overlayRejectedSuffix(): String {
-        val nonZero = overlayRejections.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " overlayRejected{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun overlayRejectedSuffix(): String = reasonSuffix(" overlayRejected", overlayRejections)
 
     /**
      * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).
