@@ -205,6 +205,14 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   Confirm-decline automation stays DENIED by the dev's choice — it is not a validation target here.
   - Issue: #1149. Confirmed: 0/2
 
+- **🆕 NEW — the dash-controls sheet recognizes as `timeline` on a per-offer dash with no task (#1165).**
+  Open the dash controls (the "Current dash" sheet with Pause orders / End dash) on a dash with no
+  scheduled end and no active task. **How to tell it works:** the capture lands under
+  `accessibility.window/timeline/`, not `UNKNOWN/`; its parse carries `sessionEarnings` equal to the
+  "This dash" figure and empty `tasks`; the mid-inflate frame (title alone) stays UNKNOWN; the dash is
+  still `Online` while the sheet is up (the rule asserts `modeHint: online`).
+  - Issue: #1165. Confirmed: 0/2
+
 - **🆕 NEW — frames keep flowing while the bubble is the active window (#1148).** Content and state
   changes still read the active window when it is an ENABLED platform's (a DoorDash sheet included);
   when a NON-enabled window is active (our bubble, the launcher) the readable enabled APPLICATION
@@ -3053,7 +3061,7 @@ covered by the 09-29 pull. **Consent (corrected after the dev's read):** the gra
    (`end_dash_confirm`), so the dash still ended correctly. Likely cause: the sheet is new chrome since
    the dash-lifecycle rules were written; one possibility is a recognize-only rule on its text anchors
    with an optional, settle-gated `This dash` read — the issue carries the shape.
-   - **Status:** Open (#1165).
+   - **Status:** Shipped in #1165's PR (2026-09-30) — a third `require` arm; the figure parsed as `sessionEarnings 0.0` on the fixture.
 
 ### Verification TODOs → checklist movements
 

@@ -107,6 +107,12 @@
               "current dash",
               "current task"
             ]
+          },
+          {
+            "allTextContainsAll": [
+              "current dash",
+              "pause orders"
+            ]
           }
         ]
       },

@@ -7403,6 +7403,18 @@
             "tasks": []
         }
     },
+    "timeline/2026-09-30_19-04-14-764__doordash__accessibility.window__timeline__d6a6ac.json": {
+        "ruleId": "doordash.screen.timeline",
+        "intent": "timeline",
+        "shape": "timeline",
+        "fields": {
+            "endsAtMillis": null,
+            "endsAtText": null,
+            "offerEarnings": null,
+            "sessionEarnings": 0.0,
+            "tasks": []
+        }
+    },
     "timeline/20260128_054044_998_TIMELINE_VIEW.json": {
         "ruleId": "doordash.screen.timeline",
         "intent": "timeline",

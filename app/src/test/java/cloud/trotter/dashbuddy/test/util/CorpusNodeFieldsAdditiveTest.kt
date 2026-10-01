@@ -14,9 +14,10 @@ import java.io.File
 /**
  * #1147 review X4 — the #1147 node fields are ADDITIVE for the committed corpus: every node tree in
  * every committed snapshot fixture decodes and re-encodes (through the production `UiNodeSchema`)
- * without gaining any of the new wire keys on ANY node. That is the property "every fixture stays
- * byte-identical" rests on: the new keys default-omit, so no committed frame, golden or replay
- * session can change shape because of them. `INBOX/` and the `UNKNOWN/` staging area are
+ * without gaining any new wire key the FILE did not already carry. That is the property "every
+ * pre-#1147 fixture stays byte-identical" rests on: the new keys default-omit, so no committed frame,
+ * golden or replay session can change shape because of them — while a fixture captured on a
+ * post-#1147 build (#1165's 09-30 frames are the first) may carry them with real values. `INBOX/` and the `UNKNOWN/` staging area are
  * uncommitted and skipped; the committed `UNKNOWN/negative/` corpus is included.
  */
 class CorpusNodeFieldsAdditiveTest {
@@ -69,7 +70,12 @@ class CorpusNodeFieldsAdditiveTest {
                 val node = lenient.decodeFromJsonElement(UiNodeDto.serializer(), tree).toDomain()
                 val keys = mutableSetOf<String>()
                 keysAnywhere(Json.parseToJsonElement(UiNodeSchema.serialize(node)), keys)
-                val gained = keys intersect newKeys
+                // #1165 (the first fixture captured on a post-#1147 build): the property is ADDITIVITY —
+                // re-encoding gains no new key relative to the FILE — not "no #1147 key anywhere": a
+                // frame the device wrote with `focusable: true` legitimately carries it on disk.
+                val onDisk = mutableSetOf<String>()
+                keysAnywhere(tree, onDisk)
+                val gained = (keys intersect newKeys) - onDisk
                 if (gained.isNotEmpty()) offenders += "${file.relativeTo(root)}: $gained"
                 trees++
             }
