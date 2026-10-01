@@ -611,7 +611,7 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is 
   exists, that envelope's `captureId` (the PAIRING key), so a trusted transport can pair the two with
   no new redaction code. Nothing leaves the
   device. The trusted TRANSPORT itself (upload, metadata projection) is M3's — a deliberate deferral
-  recorded here, because nothing uploads before M3.
+  recorded here, because nothing uploads before M3. — **shipped 2026-10-01** (PR for #1146): `CensusSink` + `CensusRecord` in `:domain`, `NoOpCensusSink` bound in every variant, `SkeletonPublisher` + `census{…}` counters.
 - **Sequencing:** the TalkBack issues (#1147, #1148, #1149 — and #1151/#1152 from their review) shipped
   FIRST by dev decision (2026-09-29) so the census sees the richer, window-correct tree; the census
   chain is `#1144 → #1145 → #1146`, with #1157 in parallel from #1144/#1145.

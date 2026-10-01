@@ -80,6 +80,8 @@ receives the domain model + classification result. For events that were
 dropped by the sensitive gate, the subscriber receives a metadata-only record
 (classification = `"SENSITIVE"`, no raw content).
 
+**Amendment (#1146, 2026-10-01):** a seventh, optional stage — the **census publisher** — subscribes at the same boundary, on the UNKNOWN screen branch only, after the capture subscriber (so the capture id is available as the trusted-install pairing key) and before the UNKNOWN filter. It is fail-open (a publisher failure never costs a frame) and structurally skipped while the bound `CensusSink` is disabled; every variant binds `NoOpCensusSink` until #1138 M2/M3. See ADR-0011.
+
 #### Why this order?
 
 - **Dedup before Sensitive Gate:** avoids running the gate check on duplicate

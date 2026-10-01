@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
+import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -68,6 +69,19 @@ class PipelineStats @Inject constructor(
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
+
+    /** #1146: census items and token decisions, counts only; disabled sinks leave these untouched. */
+    private val censusSkeletons = AtomicLong()
+    private val censusTokensHashed = AtomicLong()
+    private val censusTokensWithheld = AtomicLong()
+    private val censusSinkRefused = AtomicLong()
+    private val censusPublishFailures = AtomicLong()
+
+    /** #1146: builder refusals in declaration order, with no frame content. */
+    private val censusRefusals: Map<SkeletonBuilder.Refusal, AtomicLong> =
+        EnumMap<SkeletonBuilder.Refusal, AtomicLong>(SkeletonBuilder.Refusal::class.java).apply {
+            SkeletonBuilder.Refusal.entries.forEach { put(it, AtomicLong()) }
+        }
 
     /** #1152: frames read from a platform offer overlay (a11y `TYPE_SYSTEM`), on any window path. */
     private val overlaySnapshots = AtomicLong()
@@ -399,6 +413,35 @@ class PipelineStats @Inject constructor(
 
     fun overlayRejectedCount(reason: OverlayRejectReason): Long = overlayRejections.getValue(reason).get()
 
+    /** One built census skeleton and its hashed/withheld token counts (#1146). */
+    fun onCensusSkeleton(hashed: Int, withheld: Int) {
+        censusSkeletons.incrementAndGet()
+        censusTokensHashed.addAndGet(hashed.toLong())
+        censusTokensWithheld.addAndGet(withheld.toLong())
+    }
+
+    /** The builder refused a census item; the admitted frame is unaffected (#1146). */
+    fun onCensusRefused(reason: SkeletonBuilder.Refusal) {
+        censusRefusals.getValue(reason).incrementAndGet()
+    }
+
+    /** A built item was offered but not accepted by the census sink (#1146). */
+    fun onCensusSinkRefused() {
+        censusSinkRefused.incrementAndGet()
+    }
+
+    /** A census publisher failure was contained without losing a frame (#1146). */
+    fun onCensusPublishFailure() {
+        censusPublishFailures.incrementAndGet()
+    }
+
+    fun censusSkeletonCount(): Long = censusSkeletons.get()
+    fun censusTokensHashedCount(): Long = censusTokensHashed.get()
+    fun censusTokensWithheldCount(): Long = censusTokensWithheld.get()
+    fun censusRefusedCount(reason: SkeletonBuilder.Refusal): Long = censusRefusals.getValue(reason).get()
+    fun censusSinkRefusedCount(): Long = censusSinkRefused.get()
+    fun censusPublishFailureCount(): Long = censusPublishFailures.get()
+
     /** An observation was forwarded to the state machine. */
     fun onForwarded() {
         val n = forwarded.incrementAndGet()
@@ -435,7 +478,26 @@ class PipelineStats @Inject constructor(
             bindRefusedSuffix() +
             foregroundSkipSuffix() +
             topologySkipSuffix() +
-            overlayRejectedSuffix()
+            overlayRejectedSuffix() +
+            censusSuffix()
+
+    /** Census counts only (#1146); absent when untouched, preserving the existing summary bytes. */
+    private fun censusSuffix(): String {
+        val skeletons = censusSkeletons.get()
+        val hashed = censusTokensHashed.get()
+        val withheld = censusTokensWithheld.get()
+        val sinkRefused = censusSinkRefused.get()
+        val failures = censusPublishFailures.get()
+        val nonZero = censusRefusals.entries.map { it.key to it.value.get() }.filter { it.second != 0L }
+        if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
+            failures == 0L && nonZero.isEmpty()
+        ) return ""
+        val refused = if (nonZero.isEmpty()) "" else nonZero.joinToString(
+            ",", prefix = ",refused{", postfix = "}",
+        ) { (reason, count) -> "${reason.name}=$count" }
+        return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
+            "sinkRefused=$sinkRefused,failures=$failures$refused}"
+    }
 
     /**
      * `" foregroundSkip{NO_ACTIVE_ROOT=3,FRONT_NOT_ENABLED=12}"` (#1148 review H3), non-zero reasons
