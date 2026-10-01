@@ -21,7 +21,7 @@ class PipelineStatsCensusSuffixTest {
         stats.onCensusRefused(Refusal.OVERSIZE)
 
         assertTrue(stats.summary().endsWith(
-            " census{skeletons=1,hashed=3,withheld=2,sinkRefused=0,failures=0,refused{OVERSIZE=1}}",
+            " census{skeletons=1,hashed=3,withheld=2,sinkRefused=0,failures=0,unattributed=0,refused{OVERSIZE=1}}",
         ))
     }
 
@@ -39,7 +39,7 @@ class PipelineStatsCensusSuffixTest {
         assertEquals(1L, stats.censusSinkRefusedCount())
         assertEquals(1L, stats.censusPublishFailureCount())
         assertTrue(stats.summary().endsWith(
-            " census{skeletons=2,hashed=4,withheld=6,sinkRefused=1,failures=1}",
+            " census{skeletons=2,hashed=4,withheld=6,sinkRefused=1,failures=1,unattributed=0}",
         ))
     }
 
@@ -51,7 +51,7 @@ class PipelineStatsCensusSuffixTest {
         stats.onCensusRefused(Refusal.OVERSIZE)
 
         assertTrue(stats.summary().endsWith(
-            " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=0," +
+            " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=0,unattributed=0," +
                 "refused{SENSITIVE_FRAME=1,OVERSIZE=2}}",
         ))
     }
@@ -62,7 +62,7 @@ class PipelineStatsCensusSuffixTest {
         stats.onCensusPublishFailure()
 
         assertTrue(stats.summary().endsWith(
-            " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=1}",
+            " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=1,unattributed=0}",
         ))
     }
 }

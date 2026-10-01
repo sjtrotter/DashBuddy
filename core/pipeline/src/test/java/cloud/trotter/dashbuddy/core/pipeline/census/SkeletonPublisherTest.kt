@@ -172,6 +172,34 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     }
 
     @Test
+    fun `an unattributable package is refused before any build (#1171 review)`() {
+        val stats = PipelineStats()
+        val sink = FakeSink(enabled = true)
+        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"))
+        val t = tree("Continue")
+        publisher.publish(
+            screen(target = UNKNOWN_TARGET),
+            PipelineEvent.Screen(timestamp = 1_000L, tree = t, snapshot = TreeSnapshot(tree = t, packageName = "com.example.other"), packageName = "com.example.other"),
+        )
+        assertEquals(1L, stats.censusUnattributedPlatformCount())
+        assertEquals(0L, stats.censusSkeletonCount())
+        assertTrue(sink.records.isEmpty())
+    }
+
+    @Test
+    fun `a throwing enablement getter never escapes (#1171 review)`() {
+        val stats = PipelineStats()
+        val sink = object : CensusSink {
+            override val isEnabled: Boolean get() = error("boom")
+            override fun offer(record: CensusRecord): Boolean = true
+        }
+        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"))
+        publisher.publish(screen(target = UNKNOWN_TARGET), event(tree("Continue")))
+        assertEquals(1L, stats.censusPublishFailureCount())
+        assertEquals(0L, stats.censusSkeletonCount())
+    }
+
+    @Test
     fun `a throwing sink never escapes`() {
         val sink = object : CensusSink {
             override val isEnabled: Boolean = true

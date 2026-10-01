@@ -76,6 +76,8 @@ class PipelineStats @Inject constructor(
     private val censusTokensWithheld = AtomicLong()
     private val censusSinkRefused = AtomicLong()
     private val censusPublishFailures = AtomicLong()
+    /** #1171 review: an admitted UNKNOWN frame whose package resolves to no platform — refused BEFORE a build (ADR-0011 scopes the census to platform screens). */
+    private val censusUnattributedPlatform = AtomicLong()
 
     /** #1146: builder refusals in declaration order, with no frame content. */
     private val censusRefusals: Map<SkeletonBuilder.Refusal, AtomicLong> =
@@ -435,6 +437,12 @@ class PipelineStats @Inject constructor(
         censusPublishFailures.incrementAndGet()
     }
 
+    fun onCensusUnattributedPlatform() {
+        censusUnattributedPlatform.incrementAndGet()
+    }
+
+    fun censusUnattributedPlatformCount(): Long = censusUnattributedPlatform.get()
+
     fun censusSkeletonCount(): Long = censusSkeletons.get()
     fun censusTokensHashedCount(): Long = censusTokensHashed.get()
     fun censusTokensWithheldCount(): Long = censusTokensWithheld.get()
@@ -488,40 +496,37 @@ class PipelineStats @Inject constructor(
         val withheld = censusTokensWithheld.get()
         val sinkRefused = censusSinkRefused.get()
         val failures = censusPublishFailures.get()
-        val nonZero = censusRefusals.entries.map { it.key to it.value.get() }.filter { it.second != 0L }
+        val unattributed = censusUnattributedPlatform.get()
+        val refused = reasonSuffix(",refused", censusRefusals)
         if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
-            failures == 0L && nonZero.isEmpty()
+            failures == 0L && unattributed == 0L && refused.isEmpty()
         ) return ""
-        val refused = if (nonZero.isEmpty()) "" else nonZero.joinToString(
-            ",", prefix = ",refused{", postfix = "}",
-        ) { (reason, count) -> "${reason.name}=$count" }
         return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
-            "sinkRefused=$sinkRefused,failures=$failures$refused}"
+            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused}"
+    }
+
+    /**
+     * The ONE renderer of a per-reason counter map (#1171 review: four hand-rolled copies had grown):
+     * `"<prefix>{REASON=n,…}"` over the NON-ZERO reasons in enum declaration order, or the empty string
+     * when none — so a suffix never appears while its counters are untouched.
+     */
+    private fun <E : Enum<E>> reasonSuffix(prefix: String, byReason: Map<E, AtomicLong>): String {
+        val nonZero = byReason.entries.filter { it.value.get() > 0 }
+        if (nonZero.isEmpty()) return ""
+        return nonZero.joinToString(",", prefix = "$prefix{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
     }
 
     /**
      * `" foregroundSkip{NO_ACTIVE_ROOT=3,FRONT_NOT_ENABLED=12}"` (#1148 review H3), non-zero reasons
      * only, in declaration order; empty when none. Enum names and counts — PII-free (principle 7).
      */
-    private fun foregroundSkipSuffix(): String {
-        val nonZero = foregroundSkips.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " foregroundSkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun foregroundSkipSuffix(): String = reasonSuffix(" foregroundSkip", foregroundSkips)
 
     /** `" topologySkip{FRONT_NOT_ENABLED=3}"` (PR #1155 review FF4), non-zero reasons only; empty when none. */
-    private fun topologySkipSuffix(): String {
-        val nonZero = topologySkips.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " topologySkip{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun topologySkipSuffix(): String = reasonSuffix(" topologySkip", topologySkips)
 
     /** `" overlayRejected{TOO_SMALL=40,NOT_OVERLAY_PLATFORM=2}"` (#1152), non-zero reasons only; empty when none. */
-    private fun overlayRejectedSuffix(): String {
-        val nonZero = overlayRejections.entries.filter { it.value.get() > 0 }
-        if (nonZero.isEmpty()) return ""
-        return nonZero.joinToString(",", prefix = " overlayRejected{", postfix = "}") { "${it.key.name}=${it.value.get()}" }
-    }
+    private fun overlayRejectedSuffix(): String = reasonSuffix(" overlayRejected", overlayRejections)
 
     /**
      * `"app=0.230.0+ab12cd34 "`, or empty when no version was injected (PR #1066).

@@ -34,13 +34,24 @@ class SkeletonPublisher internal constructor(
 ) {
     @Inject constructor(sink: CensusSink, stats: PipelineStats) : this(sink, stats, ZoneId.systemDefault())
 
+    /** One WARN per publisher; the publisher is a Hilt @Singleton, so per process in the app (#1171 review: an instance field, not a JVM static, keeps tests isolated). */
+    private val warned = AtomicBoolean()
+
     /** Post-admission, UNKNOWN screens only; fail-OPEN — nothing here may ever cost a frame (#1146). */
     fun publish(obs: Observation.Screen, event: PipelineEvent.Screen) {
-        if (!sink.isEnabled) return
         if (obs.target != UNKNOWN_TARGET) return
 
         try {
+            // #1171 review (Astra): a sink's enablement getter is itself a seam a future binding can break;
+            // it is read INSIDE the fail-open try, after the free UNKNOWN check.
+            if (!sink.isEnabled) return
             val platform = Platform.fromPackage(event.packageName)
+            // #1171 review: the disabled-platform gate deliberately ADMITS Platform.Unknown, but ADR-0011 scopes
+            // the census to PLATFORM screens — an unattributable package is refused before any build (fail closed).
+            if (platform == Platform.Unknown) {
+                stats.onCensusUnattributedPlatform()
+                return
+            }
             val day = Instant.ofEpochMilli(obs.timestamp).atZone(zoneId).toLocalDate()
             when (val outcome = SkeletonBuilder.outcome(
                 event.tree,
@@ -76,9 +87,6 @@ class SkeletonPublisher internal constructor(
         }
     }
 
-    companion object {
-        private val warned = AtomicBoolean()
-    }
 }
 
 /** Counts every node text slot and the window title, without retaining token content (#1146). */
