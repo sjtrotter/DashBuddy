@@ -2018,6 +2018,7 @@
     {
       "id": "doordash.screen.delivery_summary_collapsed",
       "priority": 31,
+      "enables": ["expand_earnings"],
       "redact": [
         {
           "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",

@@ -20,8 +20,8 @@ import javax.inject.Singleton
  * unchanged ruleset and *stop covering* a rule whose binding definition
  * changed — that re-consent property is the point of the key (#422). Denials
  * are stored separately so an explicit opt-out (consent prompt/settings, #843)
- * is durable — reloads never re-ask, and the one-shot schema migration
- * ([migrateConsentSchemaIfNeeded]) preserves denials while clearing grants.
+ * is durable across unchanged ruleset reloads. A key-shape migration
+ * ([migrateConsentSchemaIfNeeded]) clears both sets for fresh consent (#1167).
  */
 @Singleton
 class RuleCapabilityDataSource @Inject constructor(
@@ -67,18 +67,11 @@ class RuleCapabilityDataSource @Inject constructor(
     }
 
     /**
-     * One-shot consent-schema migration (#843). On the first run whose stored
-     * [Keys.SCHEMA_VERSION] is below [CONSENT_SCHEMA_VERSION], **clear the
-     * granted set** — the old auto-grant policy could have populated it without
-     * an explicit user act, so every capability must return to undecided and be
-     * re-consented through the prompt — while **keeping the denied set** (an
-     * explicit opt-out stays honored) — then stamp the version so the clear
-     * never runs again. Idempotent: a second call finds the version already at
-     * target and no-ops. All in one atomic edit.
-     *
-     * Returns true iff the clear ran (for the caller's INFO log), false on a
-     * no-op. Fail-closed by construction: clearing grants can only *remove*
-     * automation, never fabricate it.
+     * v1 (#843) cleared pre-consent auto-grants and kept denials; v2 (#1167) changes the key SHAPE
+     * (one key per (rule, action)), so neither old grants nor old denials can be mapped — both are
+     * cleared and every capability lands undecided for the prompt to re-collect (fail-closed).
+     * Stamps the version in the same atomic edit; returns true iff migration ran, and subsequent
+     * calls preserve fresh decisions.
      */
     suspend fun migrateConsentSchemaIfNeeded(): Boolean {
         var migrated = false
@@ -86,7 +79,7 @@ class RuleCapabilityDataSource @Inject constructor(
             val stored = prefs[Keys.SCHEMA_VERSION] ?: 0
             if (stored < CONSENT_SCHEMA_VERSION) {
                 prefs[Keys.GRANTED] = emptySet()
-                // Keys.DENIED intentionally preserved.
+                if (stored < 2) prefs[Keys.DENIED] = emptySet()
                 prefs[Keys.SCHEMA_VERSION] = CONSENT_SCHEMA_VERSION
                 migrated = true
             }
@@ -96,10 +89,9 @@ class RuleCapabilityDataSource @Inject constructor(
 
     companion object {
         /**
-         * Current consent-schema version. Bumped from 0 to 1 by #843 (kill the
-         * auto-grant): the bump flips every previously auto-granted capability
-         * back to undecided so the prompt collects fresh, explicit consent.
+         * Current consent-schema version. v2 (#1167) changes the key shape to one
+         * key per (rule, action), clearing old grants and denials for fresh consent.
          */
-        const val CONSENT_SCHEMA_VERSION = 1
+        const val CONSENT_SCHEMA_VERSION = 2
     }
 }

@@ -32,6 +32,7 @@ class RuleCapabilityEnumerationTest {
       "id": "$id",
       "priority": 10,
       "require": { "exists": { "hasText": "Decline" } },
+      "enables": ["decline_offer"],
       "bind": { "declineButton": { "find": $bindPredicate } }
     }]
     """.trimIndent()
@@ -81,6 +82,7 @@ class RuleCapabilityEnumerationTest {
           "id": "doordash.screen.offer_popup_test",
           "priority": 10,
           "require": { "exists": { "hasText": "Decline" } },
+          "enables": ["decline_offer"],
           "bind": { "declineButton": $entry }
         }]
         """.trimIndent()
@@ -102,6 +104,7 @@ class RuleCapabilityEnumerationTest {
                   "id": "doordash.screen.offer_popup_test",
                   "priority": 10,
                   "require": { "exists": { "hasText": "Decline" } },
+                  "enables": ["accept_offer", "decline_offer"],
                   "bind": {
                     "acceptButton": { "find": { "hasIdSuffix": "accept_button" }, "optional": true },
                     "declineButton": { "find": { "hasText": "Decline" }, "optional": true }
@@ -142,6 +145,7 @@ class RuleCapabilityEnumerationTest {
                   "id": "doordash.offer.auto_decline",
                   "priority": 10,
                   "require": { "exists": { "hasText": "Decline" } },
+                  "enables": ["decline_offer"],
                   "bind": { "declineButton": { "find": { "hasText": "Decline" } } },
                   "effects": [ { "click": "${'$'}declineButton" } ]
                 }]
@@ -211,6 +215,7 @@ class RuleCapabilityEnumerationTest {
           "id": "doordash.screen.receipt_test",
           "priority": 10,
           "require": { "exists": { "hasText": "Dash summary" } },
+          "enables": ["expand_earnings"],
           "bind": { "expandButton": { "find": { "hasIdSuffix": "icon_button" } } }
         }]
         """.trimIndent()

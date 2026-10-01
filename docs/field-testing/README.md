@@ -99,6 +99,21 @@ _(The 2026-09-26 entry below **validated and retired** the **#1118** transition-
 clean runs (10/10 + 5/5 accepts inferred from the task surface, 44/44 + 12/12 declines from the confirm sheet, zero
 over-inference); the remaining accept losses are #1119 and the merged card is #1069.)_
 
+- **🆕 NEW — one consent decision per rule action; the prompt re-collects once (#1167).** The grant
+  store's key shape changed (one key per (rule, action), pinned to every branch's binding
+  definition), so the v2 migration clears every stored grant AND denial on the first launch of this
+  build and the front door asks again. **How to tell it works:**
+  1. First foreground after install: the consent prompt shows exactly FOUR rows — Accept offer,
+     Decline offer, Confirm decline, Expand earnings — never a duplicate; Accept and Decline each
+     carry the line "Covers 2 card layouts". Settings → Automation & Consent shows the same four.
+  2. The log's rule-load line reads `reconciled 4 capabilit(ies) from rule load: granted=0 denied=0
+     undecided=4 (stale grants=0)` on that first launch, then real counts after your answers; one
+     `consent-schema migration ran: cleared stored grants and denials (key shape v2, #1167)` INFO line
+     appears exactly once.
+  3. Allow Decline once → on the next dash BOTH card layouts' Decline binds are covered: a decline
+     automation on the Compose card (8.99.20) fires without a second prompt.
+  - Issue: #1167. Confirmed: 0/2
+
 - **🆕 NEW — chat header and chat preview are masked in captures (PR #1160 / #1145).** Desk check on a
   debug pull; nothing on the dash looks different. **How to tell it works:**
   1. A capture of the live DoorDash chat list (the conversation row with the customer's name and their

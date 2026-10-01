@@ -40,6 +40,7 @@
     <string name="consent_disclosure_heading">Review or change what DashBuddy is allowed to tap</string>
     <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually.</string>
     <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
+    <string name="consent_layout_count_format">Covers %1$d card layouts</string>
     <string name="consent_platform_unknown">Delivery app</string>
     <string name="consent_source_bundled_format">%1$s · built-in rules</string>
     <string name="consent_source_bundled_note">These automations ship inside the app. None are turned on for you — each stays off until you allow it.</string>

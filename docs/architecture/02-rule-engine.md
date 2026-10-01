@@ -136,8 +136,13 @@ CONTENT identity (#427) and `{presentationHash}` = its PRESENTATION identity (#8
 than once per quote. There are no Kotlin matcher classes —
 changing recognition means editing rule JSON plus corpus tests. **Rules cannot declare actuation**
 (#425): the compiler rejects `click`/gesture effect verbs; rules instead expose well-known *target
-bindings* (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction`
-registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`.
+bindings* (`acceptButton`, `declineButton`, `confirmDeclineButton`, `expandButton`) that the app-owned
+`RuleAction` registry (`:domain`) consumes — see `docs/design/rule-capability-consent.md`. **#1167:** a
+screen rule binding any of them declares the enabled actions at its top level (`"enables": ["accept_offer",
+"decline_offer"]`), load-validated both ways (a bound-but-undeclared or declared-but-unbound action is a
+compile reject); the consent unit is ONE key per (rule, action), pinned to the sorted set of every
+branch's binding definition — the two-branch `offer_popup` yields one Accept and one Decline capability
+(`layoutCount = 2`), not two of each.
 
 **Rule-authored regexes run on a linear-time engine (#1053, ADR-0010).** Every rule pattern —
 predicate, parse `find`, redact `match`, `nextSiblingMatchingRegex` — funnels through the ONE

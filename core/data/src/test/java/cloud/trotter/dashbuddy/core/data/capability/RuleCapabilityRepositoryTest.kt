@@ -24,7 +24,7 @@ import java.io.File
  * Repository glue over a REAL Preferences DataStore (#843): the Play-policy core
  * — reconcile grants NOTHING (any source, incl. asset), an undecided capability
  * never fires the gate, an explicit grant is the only path to firing, denials
- * are durable, and the one-shot schema migration clears grants / keeps denials /
+ * are durable, and the one-shot schema migration clears grants and denials /
  * stamps its marker exactly once.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -136,8 +136,9 @@ class RuleCapabilityRepositoryTest {
     // one-shot schema migration
     // =========================================================================
 
+    /** The v2 key shape resets old decisions and stamps the migration marker (#1167). */
     @Test
-    fun `migration clears grants keeps denials and stamps the marker once`() = runTest {
+    fun `migration clears grants and denials and stamps the marker once`() = runTest {
         val (repo, ds) = newRepo(this, "migrate1.preferences_pb")
 
         // Pre-#843 store: an auto-granted key AND an explicit denial.
@@ -148,7 +149,7 @@ class RuleCapabilityRepositoryTest {
         advanceUntilIdle()
 
         assertTrue("stale grant cleared", repo.grantedKeys.first().isEmpty())
-        assertEquals("denial preserved", setOf("explicit-deny"), repo.deniedKeys.first())
+        assertTrue("#1167: stale denial cleared", repo.deniedKeys.first().isEmpty())
     }
 
     @Test

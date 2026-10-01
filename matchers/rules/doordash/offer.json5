@@ -5,6 +5,7 @@
     {
       "id": "doordash.screen.offer_popup_confirm_decline",
       "priority": 19,
+      "enables": ["confirm_decline"],
       // #1104/#1114: `offerSurface: decline_confirm` — this FRAME is the decline evidence on the
       // 8.97.8 Compose card (its buttons emit no click event for a human tap): the lifecycle marks
       // the presented offer's `declineSheetSeenAt`, and an offer that then leaves presentation
@@ -71,6 +72,7 @@
       "comment": "#595: the require block demands at least one STORE leg (the display_name family the orders parse extracts, excluding 'Customer dropoff'/'Business handoff'). DoorDash's post-accept teardown frame (and arrival pre-render) keeps pay/distance/Accept/Decline chrome but drops the store rows — that frame re-parsed as a NEW degenerate offer (orders=[], itemCount=0, different offerHash) which REPLACED the just-accepted one: ghost accept/timeout, 06-28 seq 141/142 + 06-30 seq 241/242. A frame with no store leg is not an actionable offer; it now classifies UNKNOWN and is never forwarded. Verified against all 43 real offer frames on file (28 device + 15 corpus): every real render carries a store leg.",
       "id": "doordash.screen.offer_popup",
       "priority": 20,
+      "enables": ["accept_offer", "decline_offer"],
       "state": {
         "flow": "offer:presented",
         "modeHint": "online"

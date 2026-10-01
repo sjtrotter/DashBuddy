@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.datastore.capability
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -18,9 +20,8 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * #843 — the one-shot consent-schema migration marker. The migration clears the
- * granted set (a pre-#843 store may hold auto-granted keys that were never an
- * explicit user act), preserves explicit denials, and stamps a version so it
+ * #843/#1167 — the one-shot consent-schema migration marker. v2 clears both
+ * grants and denials because the key shape changed, and stamps a version so it
  * runs exactly once (idempotent). The grant/deny [RuleCapabilityDataSource.update]
  * round-trip is covered by the repository-level test in :core:data.
  */
@@ -38,19 +39,30 @@ class RuleCapabilityDataSourceTest {
         return RuleCapabilityDataSource(ds)
     }
 
+    /** The v2 key shape resets old decisions and stamps the migration marker (#1167). */
     @Test
-    fun `migration clears grants keeps denials and reports it ran the first time`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "cap-migrate1.preferences_pb")
+    fun `migration clears grants and denials and stamps v2 once`() = runTest {
+        for (stored in listOf(0, 1)) {
+            val ds = PreferenceDataStoreFactory.create(
+                scope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job()),
+                produceFile = { File(tmp.root, "cap-migrate-$stored.preferences_pb") },
+            )
+            val schemaVersion = intPreferencesKey("consent_schema_version")
+            if (stored > 0) ds.edit { it[schemaVersion] = stored }
+            val source = RuleCapabilityDataSource(ds)
 
-        source.update { _, _ -> setOf("stale-grant-a", "stale-grant-b") to setOf("denied-a") }
-        advanceUntilIdle()
+            source.update { _, _ -> setOf("stale-grant-a", "stale-grant-b") to setOf("denied-a") }
+            advanceUntilIdle()
 
-        val ran = source.migrateConsentSchemaIfNeeded()
-        advanceUntilIdle()
+            val ran = source.migrateConsentSchemaIfNeeded()
+            advanceUntilIdle()
 
-        assertTrue("first run reports it migrated", ran)
-        assertTrue("granted set cleared", source.granted.first().isEmpty())
-        assertEquals("denial preserved", setOf("denied-a"), source.denied.first())
+            assertTrue("first run reports it migrated", ran)
+            assertTrue("granted set cleared", source.granted.first().isEmpty())
+            assertTrue("denied set cleared", source.denied.first().isEmpty())
+            assertEquals("v2 marker stamped", 2, ds.data.first()[schemaVersion])
+            assertFalse("second run no-ops", source.migrateConsentSchemaIfNeeded())
+        }
     }
 
     @Test

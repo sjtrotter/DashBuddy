@@ -27,6 +27,7 @@ class CapabilityEnumeratorTest {
       "id": "doordash.screen.offer_popup_test",
       "priority": 10,
       "require": { "exists": { "hasText": "Decline" } },
+      "enables": ["decline_offer"],
       "bind": { "declineButton": { "find": $bindPredicate } }
     }]
     """.trimIndent()
@@ -72,6 +73,7 @@ class CapabilityEnumeratorTest {
           "id": "doordash.screen.offer_popup_test",
           "priority": 10,
           "require": { "exists": { "hasText": "Decline" } },
+          "enables": ["decline_offer"],
           "bind": { "declineButton": $entry }
         }]
         """.trimIndent()
@@ -97,5 +99,85 @@ class CapabilityEnumeratorTest {
             """.trimIndent(),
         )
         assertTrue(CapabilityEnumerator.enumerate(rules, "s").isEmpty())
+    }
+
+    private fun branchedDeclineRule(vararg labels: String) = """
+    [{
+      "id": "doordash.screen.offer_popup_test",
+      "priority": 10,
+      "enables": ["decline_offer"],
+      "branches": [${labels.joinToString { label ->
+          """{
+            "require": { "exists": { "hasText": "Offer" } },
+            "bind": { "declineButton": { "find": { "hasText": "$label" } } }
+          }"""
+      }}]
+    }]
+    """.trimIndent()
+
+    /** Distinct branch definitions share one consent decision, with both layouts disclosed (#1167). */
+    @Test
+    fun `a two-branch rule yields ONE capability per action with layoutCount 2`() {
+        val caps = CapabilityEnumerator.enumerate(compile(branchedDeclineRule("Decline", "Decline offer")), "s")
+        assertEquals(1, caps.size)
+        assertEquals(RuleAction.DECLINE_OFFER, caps.single().action)
+        assertEquals(2, caps.single().layoutCount)
+    }
+
+    /** Repointing any branch invalidates the grant for the entire action (#1167). */
+    @Test
+    fun `repointing one branch's predicate changes the key`() {
+        val original = CapabilityEnumerator.enumerate(
+            compile(branchedDeclineRule("Decline", "Decline offer")), "s",
+        ).single()
+        val repointed = CapabilityEnumerator.enumerate(
+            compile(branchedDeclineRule("Decline", "Accept")), "s",
+        ).single()
+        assertNotEquals(original.key, repointed.key)
+    }
+
+    /** Branch ordering leaves the sorted definition set and consent key unchanged (#1167). */
+    @Test
+    fun `reordering branches does NOT change the key`() {
+        val original = CapabilityEnumerator.enumerate(
+            compile(branchedDeclineRule("Decline", "Decline offer")), "s",
+        ).single()
+        val reordered = CapabilityEnumerator.enumerate(
+            compile(branchedDeclineRule("Decline offer", "Decline")), "s",
+        ).single()
+        assertEquals(original.key, reordered.key)
+    }
+
+    /** A newly covered layout requires one fresh consent decision for the action (#1167). */
+    @Test
+    fun `adding a branch layout changes the key`() {
+        val original = CapabilityEnumerator.enumerate(compile(branchedDeclineRule("Decline")), "s").single()
+        val extended = CapabilityEnumerator.enumerate(
+            compile(branchedDeclineRule("Decline", "Decline offer")), "s",
+        ).single()
+        assertNotEquals(original.key, extended.key)
+    }
+
+    /** Inherited copies of a rule-level definition count as a single layout (#1167). */
+    @Test
+    fun `a rule-level bind inherited by two branches is one layout`() {
+        val rules = compile(
+            """
+            [{
+              "id": "doordash.screen.offer_popup_test",
+              "priority": 10,
+              "enables": ["decline_offer"],
+              "bind": { "declineButton": { "find": { "hasText": "Decline" } } },
+              "branches": [
+                { "require": { "exists": { "hasText": "Legacy" } } },
+                { "require": { "exists": { "hasText": "Compose" } } }
+              ]
+            }]
+            """.trimIndent(),
+        )
+        val inherited = CapabilityEnumerator.enumerate(rules, "s").single()
+        val original = CapabilityEnumerator.enumerate(compile(declineRule()), "s").single()
+        assertEquals(1, inherited.layoutCount)
+        assertEquals(original.key, inherited.key)
     }
 }

@@ -76,6 +76,8 @@ data class ConsentPromptRow(
     val platform: Platform,
     /** True for a bundled (asset) source — selects the "Built-in" source label. */
     val isBundled: Boolean,
+    /** Number of distinct card layouts covered by this consent decision (#1167); display only. */
+    val layoutCount: Int,
 )
 
 /**
@@ -100,6 +102,7 @@ fun buildConsentPromptState(
             ConsentPromptRow(
                 key = cap.key,
                 action = cap.action,
+                layoutCount = cap.layoutCount,
                 platform = Platform.fromRuleId(cap.ruleId),
                 isBundled = cap.source.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX),
             )
