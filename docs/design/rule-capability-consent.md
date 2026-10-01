@@ -65,42 +65,67 @@ Both halves are required; each catches what the other cannot.
 ### Static: the content-pinned capability key (load time)
 
 A **RuleCapability** is one (rule, action) pair a ruleset's bindings enable —
-the unit of user consent:
+the unit of user consent (#1167). Every layout of that action shares one grant:
 
 ```
 RuleCapability(
     ruleId: String,          // e.g. "doordash.screen.offer_popup"
-    action: RuleAction,      // ACCEPT_OFFER | DECLINE_OFFER | EXPAND_EARNINGS
+    action: RuleAction,      // ACCEPT_OFFER | DECLINE_OFFER | CONFIRM_DECLINE | EXPAND_EARNINGS
     targetBindName: String,  // display only
     key: String,             // the grant key — see below
     source: String,          // "asset:doordash.json" | "cdn:<url>" | "fork:<id>"
+    layoutCount: Int = 1,    // distinct definitions covered; display only
 )
 
 key = sha256( canonicalJson({
     "rule":   ruleId,
     "action": action.wire,
-    "bind":   bindName,
-    "def":    <the binding DEFINITION — its `find` predicate + flags>
+    "bind":   action.targetBindName,
+    "defs":   [<sorted canonical binding definitions across every branch>]
 }) )
 ```
 
-Enumeration (`RuleCompiler.enumerateCapabilities`) walks the compiled rules'
-bind blocks against the `RuleAction` registry. The key pins the binding
-**definition**: a remote update to a trusted rule id that keeps the bind name
-but repoints `declineButton`'s predicate at the Accept button changes the
-definition → changes the key → the old grant no longer covers it and it
-re-enters consent. Robustness (both tested): the key input is a canonical JSON
-object (structurally unambiguous — no in-band delimiters), recursively
-key-sorted (an innocuous reformat must not re-prompt; re-prompt fatigue trains
-click-through).
+Enumeration (`RuleCompiler.enumerateCapabilities`) collects rule-level and
+branch-level action bindings against the `RuleAction` registry. Each definition
+is recursively key-sorted canonical JSON; a binding with no recorded definition
+is not consentable at all (it enumerates no capability); `compileBindBlock` always
+records one, so this is a defensive boundary. `defs` contains the **distinct canonical strings**,
+sorted lexicographically, rather than raw JSON objects. An inherited duplicate
+counts once. `layoutCount` is this set's size, so the UI can disclose how many card
+layouts one grant covers without making the count a separate key input.
 
-**No key threading.** The original implementation stamped keys onto compiled
-effects and carried them through the pipeline ("the same value by
-construction") — and the carry chain silently dropped them in two places
-(deferred-click reroute, transition overrides). That chain is deleted. The
-future gate (#417) looks grants up at fire time from the enumeration, keyed by
-the `sourceRuleId` + `action` that ride `PerformRuleAction` — authoritative
-state, not threaded fields.
+The key pins the entire set of binding definitions:
+
+- Repointing a predicate in **any** branch changes the key: an old grant cannot
+  cover a rule update that silently aims Decline at the Accept button.
+- Adding a distinct layout changes the key, causing **one re-prompt** for the
+  (rule, action) pair.
+- Reordering branches leaves the key unchanged. Reordering object keys or
+  inheriting another copy of an existing definition also leaves it unchanged.
+
+Residual (Astra review, 2026-09-30): the key pins the SET of binding definitions,
+not each definition's association with its branch's `require`/`reject`. A remote
+update can therefore swap two existing definitions between branches, or change
+a branch's recognition conditions, without changing the key — the static half
+never pinned recognition context (pre-#1167 per-definition keys had the same
+property). The DYNAMIC half is the control: fire-time package scope + label
+verification; `expand_earnings` is package-scoped only (icon-only arrow) and is
+the exposed case. Pinning branch conditions was REJECTED: it would re-prompt on
+every recognition anchor tweak (re-prompt fatigue trains click-through).
+
+A screen rule **must declare `enables`** whenever a rule-level or branch binding
+names an action target, for example `"enables": ["accept_offer", "decline_offer"]`.
+The declaration is a JSON array of distinct, known `RuleAction.wire` strings at
+the rule's top level; branches never declare it. The compiler rejects a
+**bound-but-undeclared** action and a **declared-but-unbound** action. No action
+targets and no declaration is valid (both sets are empty). This declares the
+app-owned actions available for consent; rules still never declare actuation.
+
+**No key threading.** The fire-time gate looks grants up from the enumeration,
+keyed by the `sourceRuleId` + `action` carried by `PerformRuleAction`. Consent
+uses authoritative state rather than keys threaded through effect pipelines.
+
+Store schema v2 (#1167) cleared every pre-v2 grant and denial; the prompt re-collected.
 
 ### Dynamic: tap-time verification (fire time) — implemented
 

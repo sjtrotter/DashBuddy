@@ -371,8 +371,10 @@ compiles, `ObservationClassifier` matches.
   Predicate values are strictly typed (a string predicate takes only a JSON string, a flag only an
   unquoted boolean — review X3).
 - **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
-  bindings (`acceptButton`, `declineButton`, `expandButton`) that the app-owned `RuleAction` registry
-  consumes (`docs/design/rule-capability-consent.md`).
+  bindings (`acceptButton`, `declineButton`, `confirmDeclineButton`, `expandButton`) that the app-owned
+  `RuleAction` registry consumes (`docs/design/rule-capability-consent.md`); a screen rule binding any
+  of them declares the enabled actions at its top level (`enables: [...]`, #1167 — the consent unit, a
+  compile reject when bound ≠ declared).
 - New rule↔state vocabulary goes through the enumerated, load-validated contract —
   `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` plus `StateMachineContract.EFFECT_INTENTS` /
   `.REQUIRED_FIELDS_BY_FLOW` — enforced at compile per file (principle 8).
@@ -760,8 +762,13 @@ Every new feature or refactor holds to these — they are forefront design input
      taps are app-owned `RuleAction`s aimed by ruleset target bindings and verified at fire
      time (package scope + label allowlist + strict click); any failed check aborts to manual.
      Automation-initiated taps must additionally be covered by a granted, content-pinned
-     capability key (#417): rule loads enumerate capabilities and publish them to the grant
-     store *before* rules go live, but **grant NOTHING — there is no auto-grant (#843)**. Every
+     capability key (#417) — **one key per (rule, action) since #1167**, pinned to the SORTED
+     SET of every branch's binding definition (a repointed predicate in any branch re-enters
+     consent; a new card layout re-prompts once; reordering branches does not), and a screen
+     rule that binds an action target MUST declare it at the top level (`enables`, load-validated
+     both ways like `REQUIRED_FIELDS_BY_FLOW`): rule loads enumerate capabilities and publish
+     them to the grant store *before* rules go live, but **grant NOTHING — there is no auto-grant
+     (#843)**. Every
      capability, bundled (asset) OR remote, lands *undecided* (three states: granted / denied /
      undecided; only an explicit user act grants; the gate fires only on granted). Per Google
      Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline

@@ -53,21 +53,36 @@ class RuleCapabilityRepository @Inject constructor(
 
     override suspend fun reconcile(capabilities: List<RuleCapability>) {
         // Publish the enumeration ONLY — grants NOTHING (#843). Bundled and
-        // remote sources are enumerated identically; every capability lands
-        // undecided until the user opts in through the consent prompt. The
+        // remote sources are enumerated identically; new capability keys stay
+        // undecided until the user answers the consent prompt. The
         // fire-time gate stays fail-closed for anything not in the granted set,
         // so leaving the persisted store untouched here is the whole point.
         enumerated.value = capabilities
-        Timber.tag(TAG).i(
-            "reconciled %d capabilit(ies) from rule load (none granted — awaiting consent)",
-            capabilities.size,
-        )
+        // #1167 review: the counts are diagnostics; their read must not become a reconcile failure
+        try {
+            val keys = capabilities.map { it.key }.toSet()
+            val (granted, denied) = dataSource.snapshot()
+            val grantedCount = keys.count { it in granted }
+            val deniedCount = keys.count { it in denied }
+            Timber.tag(TAG).i(
+                "reconciled %d capabilit(ies) from rule load: granted=%d denied=%d undecided=%d (stale grants=%d)",
+                keys.size,
+                grantedCount,
+                deniedCount,
+                keys.size - grantedCount - deniedCount,
+                granted.count { it !in keys },
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "reconciled %d capabilit(ies); consent counts unavailable", capabilities.size)
+        }
     }
 
     /**
-     * One-shot consent-schema migration (#843), delegated to the persisted
-     * store. The single-user alpha upgrade path: clear any pre-#843
-     * auto-granted keys, keep explicit denials, stamp the version marker so it
+     * One-shot consent-schema migration (#843/#1167), delegated to the persisted
+     * store. The v2 upgrade clears grants and denials whose old key shape cannot
+     * map to one decision per (rule, action), then stamps the version marker so it
      * runs once. Called at app startup BEFORE the rulesets go live, so no
      * automation can fire against a stale grant. See
      * [RuleCapabilityDataSource.migrateConsentSchemaIfNeeded].
@@ -75,14 +90,15 @@ class RuleCapabilityRepository @Inject constructor(
     suspend fun migrateConsentSchemaIfNeeded() {
         // Snapshot BEFORE the migration so the INFO line reflects reality: a fresh
         // install stamps the marker (ran == true) but had nothing to clear, and a
-        // misleading "cleared auto-granted capabilities" would then pollute the
-        // shareable log every first launch. Only log when real grants were cleared.
-        val hadGrants = dataSource.granted.first().isNotEmpty()
-        if (dataSource.migrateConsentSchemaIfNeeded() && hadGrants) {
+        // misleading "cleared stored grants and denials" would then pollute the
+        // shareable log every first launch. Only log when grants or denials were cleared.
+        val (granted, denied) = dataSource.snapshot()
+        val hadState = granted.isNotEmpty() || denied.isNotEmpty()
+        if (dataSource.migrateConsentSchemaIfNeeded() && hadState) {
             // INFO milestone — PII-safe (no keys, just a count-free status).
             Timber.tag(TAG).i(
-                "consent-schema migration ran: cleared auto-granted capabilities; " +
-                    "denials preserved; automation stays off until re-consented (#843)",
+                "consent-schema migration ran: cleared stored grants and denials (key shape v2, #1167); " +
+                    "automation stays off until re-consented",
             )
         }
     }

@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -18,22 +17,21 @@ import kotlinx.serialization.json.put
  *
  * The unit of user consent is one [RuleCapability] per (rule, action) whose
  * well-known target bind name the rule binds. The key content-pins consent to
- * the binding DEFINITION, so a remote update that repoints a binding forces
- * re-consent.
+ * the sorted set of binding DEFINITIONS across every branch (#1167), so a
+ * remote update that repoints any binding forces re-consent.
  */
 internal object CapabilityEnumerator {
 
     /**
      * Enumerate the app-owned actions a compiled ruleset's bindings enable —
      * one [RuleCapability] per (rule, action) whose well-known target bind name
-     * ([RuleAction.targetBindName]) the rule binds. Deduped by
-     * [RuleCapability.key] (the same binding compiled into several branches is
-     * one capability). [source] is recorded for provenance only — consent is
-     * uniform regardless of where the rule came from.
+     * ([RuleAction.targetBindName]) the rule binds (#1167). Definitions shared
+     * by several branches count as one layout. [source] is recorded for
+     * provenance only — consent is uniform regardless of where the rule came from.
      *
-     * The key hashes `(ruleId, action, the CANONICAL binding definition)` —
-     * pinned to the predicate that selects the node, so repointing the binding
-     * (even with the same bind name) forces re-consent. The execution gate
+     * The key hashes `(ruleId, action, the SORTED SET of canonical binding definitions)` —
+     * repointing any branch or adding a layout forces re-consent; reordering
+     * branches does not. The execution gate
      * (#417) looks grants up from this enumeration at fire time; nothing is
      * threaded through the effect pipeline.
      */
@@ -41,10 +39,19 @@ internal object CapabilityEnumerator {
         rules: List<CompiledRule<*>>,
         source: String,
     ): List<RuleCapability> {
-        val byKey = LinkedHashMap<String, RuleCapability>()
-        fun consider(ruleId: String, bindings: List<Binding>) {
-            for (binding in bindings) {
-                val action = RuleAction.byTargetBindName[binding.name] ?: continue
+        val capabilities = mutableListOf<RuleCapability>()
+        for (rule in rules) {
+            val definitionsByAction = (rule.bindings + rule.branches.flatMap { it.bindings })
+                .mapNotNull { binding ->
+                    // #1167 review (Astra): unpinnable → not consentable, the same rule as a sha256 failure.
+                    val definition = binding.defJson ?: return@mapNotNull null
+                    RuleAction.byTargetBindName[binding.name]?.let { action ->
+                        action to canonicalJson(definition)
+                    }
+                }
+                .groupBy({ it.first }, { it.second })
+            for (action in RuleAction.entries) {
+                val defs = definitionsByAction[action]?.distinct()?.sorted() ?: continue
                 // Structurally-unambiguous key input (#422): a canonical JSON
                 // object, NOT delimiter-joined fields. Rule ids and bind names
                 // are arbitrary JSON strings (no charset constraint), so JSON
@@ -52,29 +59,24 @@ internal object CapabilityEnumerator {
                 // distinct tuples can never collide on the same input.
                 val keyInput = canonicalJson(
                     buildJsonObject {
-                        put("rule", ruleId)
+                        put("rule", rule.id)
                         put("action", action.wire)
-                        put("bind", binding.name)
-                        put("def", binding.defJson ?: JsonNull)
+                        put("bind", action.targetBindName)
+                        put("defs", JsonArray(defs.map { JsonPrimitive(it) }))
                     },
                 )
                 val key = sha256OrNull(keyInput) ?: continue // fail closed: unkeyable → not consentable
-                byKey.getOrPut(key) {
-                    RuleCapability(
-                        ruleId = ruleId,
-                        action = action,
-                        targetBindName = binding.name,
-                        key = key,
-                        source = source,
-                    )
-                }
+                capabilities += RuleCapability(
+                    ruleId = rule.id,
+                    action = action,
+                    targetBindName = action.targetBindName,
+                    key = key,
+                    source = source,
+                    layoutCount = defs.size,
+                )
             }
         }
-        for (rule in rules) {
-            consider(rule.id, rule.bindings)
-            for (branch in rule.branches) consider(rule.id, branch.bindings)
-        }
-        return byKey.values.toList()
+        return capabilities
     }
 
     /** Stable serialization (recursively sorted object keys) so reordering a

@@ -206,15 +206,30 @@ private fun ConsentSourceSection(
         ) {
             Column {
                 group.capabilities.forEach { cap ->
-                    val copy = capabilityCopy(cap.action, platformName)
-                    SwitchRow(
-                        label = copy.title,
-                        subtitle = copy.description,
-                        checked = cap.granted,
-                        onCheckedChange = { onSetGranted(cap.key, it) },
+                    ConsentCapabilityRowView(
+                        row = cap,
+                        platformName = platformName,
+                        onSetGranted = onSetGranted,
                     )
                 }
             }
         }
     }
+}
+
+/** The consent switch row, with distinct layout coverage directly below its title (#1167). */
+@Composable
+private fun ConsentCapabilityRowView(
+    row: ConsentCapabilityRow,
+    platformName: String,
+    onSetGranted: (key: String, granted: Boolean) -> Unit,
+) {
+    val copy = capabilityCopy(row.action, platformName)
+    SwitchRow(
+        label = copy.title,
+        subtitle = copy.description,
+        note = if (row.layoutCount > 1) stringResource(R.string.consent_layout_count_format, row.layoutCount) else null,
+        checked = row.granted,
+        onCheckedChange = { onSetGranted(row.key, it) },
+    )
 }

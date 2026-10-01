@@ -107,7 +107,8 @@ class CapabilityConsentViewModelTest {
                 // Deliberately out of order: decline before accept, fork before asset.
                 cap("fork-accept", "uber.screen.offer", RuleAction.ACCEPT_OFFER, "fork:community"),
                 cap("dd-decline", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER, "asset:rules/doordash.json"),
-                cap("dd-accept", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json"),
+                cap("dd-accept", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")
+                    .copy(layoutCount = 2),
             ),
             grantedKeys = setOf("dd-accept"), // asset accept granted; decline revoked; fork pending
         )
@@ -120,6 +121,7 @@ class CapabilityConsentViewModelTest {
         assertEquals(2, bundled.capabilities.size)
         // ACCEPT_OFFER (ordinal 0) before DECLINE_OFFER (ordinal 1) — deterministic.
         assertEquals(RuleAction.ACCEPT_OFFER, bundled.capabilities[0].action)
+        assertEquals("#1167: layout coverage reaches the settings row", 2, bundled.capabilities[0].layoutCount)
         assertTrue("granted key reflects true", bundled.capabilities[0].granted)
         assertFalse("revoked key reflects false", bundled.capabilities[1].granted)
 

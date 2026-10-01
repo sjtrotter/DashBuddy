@@ -99,6 +99,7 @@ class ParseShortfallLoudnessTest {
         "id": "doordash.screen.delivery_summary_collapsed",
         "priority": 10,
         "require": { "allTextContains": "Dash summary" },
+        "enables": ["expand_earnings"],
         "bind": { "expandButton": { "find": { "hasIdExact": "expandable_view" }, "optional": true } },
         "parse": { "fields": {
             "totalPay": { "find": { "hasTextContaining": "Total" }, "read": "text" }

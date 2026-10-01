@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
@@ -200,14 +201,14 @@ object RuleCompiler {
      * Enumerate the app-owned actions a compiled ruleset's bindings enable
      * (#422, refit by #425) — one [RuleCapability] per (rule, action) whose
      * well-known target bind name (`RuleAction.targetBindName`) the rule
-     * binds. The unit of user consent. Deduped by [RuleCapability.key] (the
-     * same binding compiled into several branches is one capability).
+     * binds. The unit of user consent (#1167); distinct branch definitions
+     * share one capability, and inherited duplicates count as one layout.
      * [source] is recorded for provenance only — consent is uniform
      * regardless of where the rule came from.
      *
-     * The key hashes `(ruleId, action, the CANONICAL binding definition)` —
-     * pinned to the predicate that selects the node, so repointing the
-     * binding (even with the same bind name) forces re-consent. The future
+     * The key hashes `(ruleId, action, the SORTED SET of canonical binding definitions)` —
+     * repointing any branch or adding a layout forces re-consent, while
+     * reordering branches preserves consent. The
      * execution gate (#417) looks grants up from this enumeration at fire
      * time; nothing is threaded through the effect pipeline.
      */
@@ -416,7 +417,55 @@ object RuleCompiler {
             )
         }
 
+        // #1167: the consent unit is (rule, action); the declaration is load-validated
+        // like REQUIRED_FIELDS_BY_FLOW / EFFECT_INTENTS — a bound action must be
+        // declared, a declared action must be bound.
+        if (context == RuleContext.SCREEN) {
+            val boundActions: Set<RuleAction> = (ruleBindings + branches.flatMap { it.bindings })
+                .mapNotNull { RuleAction.byTargetBindName[it.name] }
+                .toSet()
+            val enables = obj["enables"]
+            val declared: Set<RuleAction> = if (enables == null) {
+                emptySet()
+            } else {
+                val actions = (enables as? JsonArray)?.mapNotNull { element ->
+                    val wire = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
+                    RuleAction.entries.find { it.wire == wire }
+                }
+                if (enables !is JsonArray || actions == null || actions.size != enables.size ||
+                    actions.toSet().size != actions.size
+                ) {
+                    throw RuleCompileException(
+                        "Rule '$id': 'enables' must be an array of distinct action wire names " +
+                            "(${RuleAction.entries.joinToString { it.wire }}); got ${describe(enables)}",
+                    )
+                }
+                actions.toSet()
+            }
+            if (declared != boundActions) {
+                throw RuleCompileException(
+                    "Rule '$id': 'enables' must declare exactly the actions its bindings aim — " +
+                        "bound {${boundActions.map { it.wire }.sorted().joinToString()}} " +
+                        "declared {${declared.map { it.wire }.sorted().joinToString()}} (#1167)",
+                )
+            }
+        }
+
         return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact, notifRedact)
+    }
+
+    /** Shape-only diagnostic: never include untrusted rule-body text in the rejection log. */
+    private fun describe(enables: JsonElement): String {
+        if (enables !is JsonArray) return "not an array"
+        val unknownCount = enables.count { element ->
+            val wire = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
+            RuleAction.entries.none { it.wire == wire }
+        }
+        return if (unknownCount > 0) {
+            "${enables.size} element(s), $unknownCount unknown/non-string"
+        } else {
+            "duplicate entries"
+        }
     }
 
     /**
@@ -1107,7 +1156,7 @@ object RuleCompiler {
 
     private fun knownRuleKeys(context: RuleContext): Set<String> = when (context) {
         RuleContext.SCREEN -> setOf(
-            "id", "priority", "overrideable", "state", "bind", "redact", "reject",
+            "id", "priority", "overrideable", "state", "bind", "enables", "redact", "reject",
             "require", "parse", "validate", "effects", "transitionOverrides",
             "branches", "intent",
         )

@@ -87,7 +87,8 @@ class ConsentPromptViewModelTest {
             capabilities = listOf(
                 cap("granted-k", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER),
                 cap("denied-k", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
-                cap("undecided-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS),
+                cap("undecided-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS)
+                    .copy(layoutCount = 2),
             ),
             grantedKeys = setOf("granted-k"),
             deniedKeys = setOf("denied-k"),
@@ -95,6 +96,7 @@ class ConsentPromptViewModelTest {
 
         assertEquals(1, state.rows.size)
         assertEquals("undecided-k", state.rows[0].key)
+        assertEquals("#1167: layout coverage reaches the prompt row", 2, state.rows[0].layoutCount)
         assertEquals(RuleAction.EXPAND_EARNINGS, state.rows[0].action)
         assertEquals(Platform.DoorDash, state.rows[0].platform)
         assertTrue(state.rows[0].isBundled)

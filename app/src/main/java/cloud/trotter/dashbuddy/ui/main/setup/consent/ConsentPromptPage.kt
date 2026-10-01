@@ -72,6 +72,12 @@ private fun ConsentPromptRowView(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
+        if (row.layoutCount > 1) {
+            Text(
+                text = stringResource(SettingsR.string.consent_layout_count_format, row.layoutCount),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         Spacer(Modifier.height(2.dp))
         Text(
             text = sourceLabel,

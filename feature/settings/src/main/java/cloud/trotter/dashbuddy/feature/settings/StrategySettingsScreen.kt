@@ -234,7 +234,8 @@ fun SwitchRow(
     label: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    note: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -245,6 +246,9 @@ fun SwitchRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.titleMedium)
+            if (note != null) {
+                Text(note, style = MaterialTheme.typography.bodySmall)
+            }
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)

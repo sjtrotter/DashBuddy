@@ -9,8 +9,8 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
  * these per (rule, action) at rule-load time, and the user grants or denies
  * each individually.
  *
- * Rules no longer declare actions at all — they expose target *bindings*
- * (data), and the app's [RuleAction] registry decides and performs taps. What
+ * Rules declare enabled actions and expose target *bindings* (data), while
+ * the app's [RuleAction] registry decides and performs taps (#1167). What
  * the user consents to is therefore "the app may perform [action] on this
  * platform, aimed by this rule's binding."
  *
@@ -21,13 +21,11 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
  * consent UI can show provenance.
  *
  * ## Why [key] is content-pinned (the security property)
- * [key] is a hash of `(ruleId, action, the binding DEFINITION that aims it)` —
- * pinned to the *matching predicate that selects the node the action will
- * tap*. A remote update that keeps the rule id and bind name but quietly
- * repoints `declineButton`'s predicate at the **Accept** button changes the
- * definition → changes [key] → the old grant no longer covers it and it
- * re-enters consent. This defeats silent escalation via an update to an
- * already-approved rule.
+ * [key] hashes `(ruleId, action, the SORTED SET of every branch's binding definition)`
+ * (#1167), including rule-level bindings. Repointing a predicate in ANY branch
+ * changes [key], so the old grant no longer covers it and it re-enters consent.
+ * Adding a layout changes the key (one re-prompt); reordering branches does not.
+ * This defeats silent escalation via an update to an already-approved rule.
  *
  * The definition pin is the *static* half of the defense; the *dynamic* half
  * is tap-time verification ([RuleAction.verification] + package scoping in
@@ -44,4 +42,10 @@ data class RuleCapability(
     val key: String,
     /** Where the rule was loaded from (asset path, CDN url, fork id); display only. */
     val source: String,
+    /**
+     * How many DISTINCT binding definitions across the rule's branches aim this action — the number
+     * of card layouts one grant covers (#1167). Display only; it is not part of the key's identity
+     * beyond the definitions themselves.
+     */
+    val layoutCount: Int = 1,
 )

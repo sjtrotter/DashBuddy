@@ -99,6 +99,8 @@ data class ConsentCapabilityRow(
     /** The app-owned action; the composable maps it to disclosure copy. */
     val action: RuleAction,
     val granted: Boolean,
+    /** Number of distinct card layouts covered by this consent decision (#1167); display only. */
+    val layoutCount: Int,
 )
 
 /**
@@ -126,6 +128,7 @@ fun buildConsentUiState(
                         ConsentCapabilityRow(
                             key = cap.key,
                             action = cap.action,
+                            layoutCount = cap.layoutCount,
                             granted = cap.key in grantedKeys,
                         )
                     },

@@ -149,8 +149,8 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // parse+regex-compile work. The classifier tolerates a null ruleset
         // (classifies UNKNOWN) for the instants before the swap lands.
         //
-        // First run the one-shot consent-schema migration (#843): clear any
-        // pre-#843 auto-granted capabilities (keep explicit denials) so nothing
+        // First run the one-shot consent-schema migration (v1 #843 cleared auto-grants;
+        // v2 #1167 clears grants AND denials because the key shape changed) so nothing
         // fires against a stale grant, THEN load the rules. Ordering it before
         // loadDefaults means the reconcile publishes the enumeration into a
         // store that already reflects the no-auto-grant policy; the consent

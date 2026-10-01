@@ -65,6 +65,12 @@
         },
         "state": { "$ref": "#/$defs/stateBlock" },
         "bind": { "$ref": "#/$defs/bindBlock" },
+        "enables": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["accept_offer", "decline_offer", "confirm_decline", "expand_earnings"] },
+          "description": "#1167: REQUIRED whenever any bind block (rule-level or in a branch) names an action target (acceptButton / declineButton / confirmDeclineButton / expandButton): the app-owned actions this rule enables, and the unit of user consent — one grant per (rule, action), whose key is pinned to the sorted set of every branch's binding definition. The compiler rejects a bound-but-undeclared or declared-but-unbound action. Rules still never declare actuation; this names what the app may be allowed to do, aimed by the rule's targets."
+        },
         "redact": { "$ref": "#/$defs/redactBlock" },
         "intent": {
           "type": "string",
