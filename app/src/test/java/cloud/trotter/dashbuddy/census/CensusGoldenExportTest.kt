@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.census
 
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import kotlinx.serialization.json.Json
@@ -34,7 +35,11 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
                     is SkeletonBuilder.Outcome.Built -> {
                         put("fingerprint", outcome.skeleton.fingerprint)
                         put("hashes", JsonArray(allHashes(outcome.skeleton).distinct().sorted().map { JsonPrimitive(it) }))
-                        put("skeleton", Json.parseToJsonElement(outcome.json).jsonObject)
+                        val skeletonJson = Json.parseToJsonElement(outcome.json).jsonObject
+                        // #1174 review (Astra): STRICT round-trip through the wire DTO — an unexpected key or a
+                        // plaintext slot anywhere in the skeleton is a decode failure, not a grep blind spot.
+                        SkeletonSchema.json.decodeFromJsonElement(UiSkeletonDto.serializer(), skeletonJson)
+                        put("skeleton", skeletonJson)
                     }
                     is SkeletonBuilder.Outcome.Refused -> put("refused", outcome.reason.name)
                 }

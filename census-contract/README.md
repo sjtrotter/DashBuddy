@@ -33,3 +33,7 @@ then rerun without the flag and commit the gzip artifact. Each fixture has one
 path-sorted record containing either its refusal reason or its fingerprint,
 sorted distinct hashes, and embedded skeleton. The server's ingest suite replays
 this golden; it contains no plaintext text slots.
+
+## Consuming from another build
+
+`census-contract/settings.gradle.kts` reads the version catalog at `../gradle/libs.versions.toml`, so the build must be included from a COMPLETE DashBuddy checkout (`includeBuild("<path>/DashBuddy/census-contract")`), never vendored as a bare directory. The `dashbuddy-census` server pins that checkout to a SHA in CI.
