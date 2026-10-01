@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
-import cloud.trotter.dashbuddy.domain.util.sha256OrNull
+import cloud.trotter.census.contract.ClassNameGrammar
+import cloud.trotter.census.contract.sha256OrNull
 import java.io.IOException
 import java.io.InputStream
 import kotlin.coroutines.cancellation.CancellationException

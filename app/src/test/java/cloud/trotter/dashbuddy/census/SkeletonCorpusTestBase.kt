@@ -6,12 +6,12 @@ import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.diagnostics.DiagnosticSkeletonBuilder
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
-import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
-import cloud.trotter.dashbuddy.domain.census.contract.SkeletonSchema
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.ClassNameGrammar
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.UiSkeletonDto
+import cloud.trotter.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
@@ -77,75 +77,89 @@ abstract class SkeletonCorpusTestBase {
         val MASK_TOKEN = Regex(
             Regex.escape(MaskTokens.REDACTED_PREFIX) + """(?::[0-9a-f]{4})?\]|\[(?:address|email|phone|card|note|name)\]""",
         )
+
+        private val snapshotsDir = File("src/test/resources/snapshots")
+
+        /** Every committed corpus tree, loaded strictly once per test JVM and shared by all test instances. */
+        private val corpus: List<Fixture> by lazy {
+            val dirs = snapshotsDir.walkTopDown()
+                .filter { it.isDirectory && it != snapshotsDir }
+                .filter { dir ->
+                    val rel = dir.relativeTo(snapshotsDir).invariantSeparatorsPath
+                    // Staging (never committed): all of INBOX/, and the flat UNKNOWN/ — but NOT the
+                    // committed UNKNOWN/negative/ below it.
+                    rel.substringBefore('/') != "INBOX" && rel != "UNKNOWN"
+                }
+                .toList()
+            dirs.flatMap { dir ->
+                dir.listFiles { f -> f.isFile && f.extension == "json" }.orEmpty().sorted().mapNotNull { file ->
+                    val rel = file.relativeTo(snapshotsDir).invariantSeparatorsPath
+                    loadTree(file)?.let { Fixture(rel, it) }
+                }
+            }
+        }
+
+        /**
+         * A screen envelope / bare tree / legacy wrapper decodes to its tree; a CLICK envelope to its
+         * clicked node (a tree too); a NOTIFICATION envelope has no tree and is skipped (the census
+         * never sees notifications in v1, ADR §8).
+         */
+        private fun loadTree(file: File): UiNode? {
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            val payload = root["payload"] as? JsonObject
+            return when {
+                payload == null -> TestResourceLoader.loadNode(file)
+                payload.containsKey("node") -> TestResourceLoader.nodeFromElement(payload.getValue("node"))
+                payload.containsKey("packageName") || payload.containsKey("channelId") -> null
+                else -> TestResourceLoader.loadNode(file)
+            }
+        }
+
+        /**
+         * The platform wire from the capture-naming token `<timestamp>__<platformWire>__…` (#1160 review
+         * AA8), resolved through the `Platform` registry — never a literal. Legacy names carry no platform
+         * token (a single segment, or an UPPER-CASE screen label in that slot) and resolve to
+         * [Platform.Unknown]; a lowercase token that is not a registered wire FAILS LOUD.
+         */
+        private fun platformOf(path: String): Platform {
+            val segments = path.substringAfterLast('/').removeSuffix(".json").split("__")
+            val token = segments.getOrNull(1)?.takeIf { segments.size >= 3 && it.matches(Regex("[a-z0-9_]+")) }
+                ?: return Platform.Unknown
+            return Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")
+        }
+
+        /** ONE build per fixture (review EE5); [builtJson] reuses the JSON the builder already measured. */
+        private val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> by lazy {
+            corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY) }
+        }
+
+        private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy {
+            outcomes.map { (f, o) -> f to (o as? SkeletonBuilder.Outcome.Built)?.skeleton }
+        }
+
+        private val builtJson: Map<String, String> by lazy {
+            outcomes.mapNotNull { (f, o) -> (o as? SkeletonBuilder.Outcome.Built)?.let { f.path to it.json } }.toMap()
+        }
     }
 
     protected data class Fixture(val path: String, val tree: UiNode)
 
-    protected val snapshotsDir = File("src/test/resources/snapshots")
+    protected val snapshotsDir: File get() = Companion.snapshotsDir
 
-    /** Every committed corpus tree, loaded strictly (a committed file that fails to parse fails). */
-    protected val corpus: List<Fixture> by lazy {
-        val dirs = snapshotsDir.walkTopDown()
-            .filter { it.isDirectory && it != snapshotsDir }
-            .filter { dir ->
-                val rel = dir.relativeTo(snapshotsDir).invariantSeparatorsPath
-                // Staging (never committed): all of INBOX/, and the flat UNKNOWN/ — but NOT the
-                // committed UNKNOWN/negative/ below it.
-                rel.substringBefore('/') != "INBOX" && rel != "UNKNOWN"
-            }
-            .toList()
-        dirs.flatMap { dir ->
-            dir.listFiles { f -> f.isFile && f.extension == "json" }.orEmpty().sorted().mapNotNull { file ->
-                val rel = file.relativeTo(snapshotsDir).invariantSeparatorsPath
-                loadTree(file)?.let { Fixture(rel, it) }
-            }
-        }
-    }
+    protected val corpus: List<Fixture> get() = Companion.corpus
 
-    /**
-     * A screen envelope / bare tree / legacy wrapper decodes to its tree; a CLICK envelope to its
-     * clicked node (a tree too); a NOTIFICATION envelope has no tree and is skipped (the census
-     * never sees notifications in v1, ADR §8).
-     */
-    protected fun loadTree(file: File): UiNode? {
-        val root = Json.parseToJsonElement(file.readText()).jsonObject
-        val payload = root["payload"] as? JsonObject
-        return when {
-            payload == null -> TestResourceLoader.loadNode(file)
-            payload.containsKey("node") -> TestResourceLoader.nodeFromElement(payload.getValue("node"))
-            payload.containsKey("packageName") || payload.containsKey("channelId") -> null
-            else -> TestResourceLoader.loadNode(file)
-        }
-    }
+    protected fun loadTree(file: File): UiNode? = Companion.loadTree(file)
 
-    /**
-     * The platform wire from the capture-naming token `<timestamp>__<platformWire>__…` (#1160 review
-     * AA8), resolved through the `Platform` registry — never a literal. Legacy names carry no platform
-     * token (a single segment, or an UPPER-CASE screen label in that slot) and resolve to
-     * [Platform.Unknown]; a lowercase token that is not a registered wire FAILS LOUD.
-     */
-    protected fun platformOf(path: String): Platform {
-        val segments = path.substringAfterLast('/').removeSuffix(".json").split("__")
-        val token = segments.getOrNull(1)?.takeIf { segments.size >= 3 && it.matches(Regex("[a-z0-9_]+")) }
-            ?: return Platform.Unknown
-        return Platform.fromWire(token) ?: error("$path: unknown platform wire '$token'")
-    }
+    protected fun platformOf(path: String): Platform = Companion.platformOf(path)
 
     protected fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
         SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY)
 
-    /** ONE build per fixture (review EE5); [builtJson] reuses the JSON the builder already measured. */
-    protected val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> by lazy {
-        corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY) }
-    }
+    protected val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> get() = Companion.outcomes
 
-    protected val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy {
-        outcomes.map { (f, o) -> f to (o as? SkeletonBuilder.Outcome.Built)?.skeleton }
-    }
+    protected val built: List<Pair<Fixture, UiSkeletonDto?>> get() = Companion.built
 
-    protected val builtJson: Map<String, String> by lazy {
-        outcomes.mapNotNull { (f, o) -> (o as? SkeletonBuilder.Outcome.Built)?.let { f.path to it.json } }.toMap()
-    }
+    protected val builtJson: Map<String, String> get() = Companion.builtJson
 
     /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
     protected fun slotOf(value: String): TextSlot? =

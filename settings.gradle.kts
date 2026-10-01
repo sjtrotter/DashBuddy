@@ -26,6 +26,12 @@ dependencyResolutionManagement {
 // (When the matchers repo splits out — #192, gated on #246 — this becomes a git
 // submodule.) See docs/adr/ADR-0009-rule-distribution-channels.md.
 includeBuild("matchers")
+// #1173: the census wire contract, shared across app and server.
+// Apache-2.0, consumed by :domain and by the
+// dashbuddy-census server build.
+includeBuild("census-contract") {
+    name = "census-contract"
+}
 
 rootProject.name = "DashBuddy"
 include(":app")

@@ -1,8 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
-import cloud.trotter.dashbuddy.domain.census.contract.CensusHash
-import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
+import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 
 /**

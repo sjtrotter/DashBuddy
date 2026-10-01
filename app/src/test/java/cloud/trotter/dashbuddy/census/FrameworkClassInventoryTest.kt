@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.census
 
 import cloud.trotter.dashbuddy.core.pipeline.census.FrameworkClasses
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
+import cloud.trotter.census.contract.ClassNameGrammar
 import java.io.DataInputStream
 import java.io.File
 import java.io.InputStream

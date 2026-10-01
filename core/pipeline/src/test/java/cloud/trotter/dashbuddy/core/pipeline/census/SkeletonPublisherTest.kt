@@ -7,7 +7,7 @@ import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Refusal
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
+import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET

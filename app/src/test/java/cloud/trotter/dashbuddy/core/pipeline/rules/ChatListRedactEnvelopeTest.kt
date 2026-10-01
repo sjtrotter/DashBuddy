@@ -9,7 +9,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
-import cloud.trotter.dashbuddy.domain.util.sha256OrNull
+import cloud.trotter.census.contract.sha256OrNull
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

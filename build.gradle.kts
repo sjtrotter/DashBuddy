@@ -9,11 +9,16 @@ plugins {
     alias(libs.plugins.android.library) apply false
 }
 
+// #1173: explicit alias for the included build's tests; :domain:test supplies the lifecycle hook.
+tasks.register("censusContractTest") {
+    dependsOn(gradle.includedBuild("census-contract").task(":test"))
+}
+
 // Warnings-as-errors gate (#841): every Kotlin compilation in every module fails on ANY
 // warning — hand-written or KSP-generated. A deliberate exception (e.g. the minSdk-30
 // areBubblesAllowed fallback) gets a site-local @Suppress with a justifying comment, never
-// a global opt-out. (The matchers included build has no Kotlin compilation tasks — its
-// canonicalizer is build-script logic on the `base` plugin — so nothing to gate there.)
+// a global opt-out. (The matchers included build has no Kotlin compilation; the census-contract
+// included build gates itself — see its build file.)
 subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
         compilerOptions.allWarningsAsErrors.set(true)

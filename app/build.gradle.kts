@@ -161,6 +161,10 @@ android {
             System.getProperty("updateFrameworkClasses")?.let {
                 test.systemProperty("updateFrameworkClasses", it)
             }
+            // #1173: same forwarding for the census server conformance golden export.
+            System.getProperty("exportCensusGolden")?.let {
+                test.systemProperty("exportCensusGolden", it)
+            }
 
             // Two families are excluded from an UNFILTERED sweep. Both stay runnable by
             // name (`--tests "*Foo*"` sets commandLineIncludePatterns, so the whole block

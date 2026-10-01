@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.guard
 
-import cloud.trotter.dashbuddy.domain.census.contract.ClassNameGrammar
-import cloud.trotter.dashbuddy.domain.census.contract.ResourceIdGrammar
+import cloud.trotter.census.contract.ClassNameGrammar
+import cloud.trotter.census.contract.ResourceIdGrammar
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

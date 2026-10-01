@@ -5,10 +5,10 @@ import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
-import cloud.trotter.dashbuddy.domain.census.contract.KindClassifier
-import cloud.trotter.dashbuddy.domain.census.contract.TextSlot
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonDto
-import cloud.trotter.dashbuddy.domain.census.contract.UiSkeletonNodeDto
+import cloud.trotter.census.contract.KindClassifier
+import cloud.trotter.census.contract.TextSlot
+import cloud.trotter.census.contract.UiSkeletonDto
+import cloud.trotter.census.contract.UiSkeletonNodeDto
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.state.Platform
