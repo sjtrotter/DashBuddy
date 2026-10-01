@@ -4,7 +4,6 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -44,8 +43,10 @@ internal object CapabilityEnumerator {
         for (rule in rules) {
             val definitionsByAction = (rule.bindings + rule.branches.flatMap { it.bindings })
                 .mapNotNull { binding ->
+                    // #1167 review (Astra): unpinnable → not consentable, the same rule as a sha256 failure.
+                    val definition = binding.defJson ?: return@mapNotNull null
                     RuleAction.byTargetBindName[binding.name]?.let { action ->
-                        action to canonicalJson(binding.defJson ?: JsonNull)
+                        action to canonicalJson(definition)
                     }
                 }
                 .groupBy({ it.first }, { it.second })

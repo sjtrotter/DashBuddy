@@ -16,8 +16,8 @@ package cloud.trotter.dashbuddy.domain.action
  * binding definition comes from the (future-CDN, untrusted) ruleset, the
  * executor re-checks the *resolved live node* against this expectation at
  * tap time — see `UiInteractionHandler.performVerifiedClick`. Consent
- * (#422/#417) is keyed per (rule, action, binding definition) via
- * `RuleCapability`.
+ * (#422/#417) is keyed per (rule, action), the key pinned to the sorted set of
+ * every branch's binding definition (#1167) via `RuleCapability`.
  */
 enum class RuleAction(
     val wire: String,

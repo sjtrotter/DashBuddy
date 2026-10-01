@@ -437,7 +437,7 @@ object RuleCompiler {
                 ) {
                     throw RuleCompileException(
                         "Rule '$id': 'enables' must be an array of distinct action wire names " +
-                            "(${RuleAction.entries.joinToString { it.wire }}); got $enables",
+                            "(${RuleAction.entries.joinToString { it.wire }}); got ${describe(enables)}",
                     )
                 }
                 actions.toSet()
@@ -452,6 +452,20 @@ object RuleCompiler {
         }
 
         return CompiledRule(id, priority, overrideable, ruleBindings, branches, redact, notifRedact)
+    }
+
+    /** Shape-only diagnostic: never include untrusted rule-body text in the rejection log. */
+    private fun describe(enables: JsonElement): String {
+        if (enables !is JsonArray) return "not an array"
+        val unknownCount = enables.count { element ->
+            val wire = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
+            RuleAction.entries.none { it.wire == wire }
+        }
+        return if (unknownCount > 0) {
+            "${enables.size} element(s), $unknownCount unknown/non-string"
+        } else {
+            "duplicate entries"
+        }
     }
 
     /**

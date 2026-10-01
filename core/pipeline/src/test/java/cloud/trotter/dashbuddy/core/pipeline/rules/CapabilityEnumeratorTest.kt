@@ -101,6 +101,17 @@ class CapabilityEnumeratorTest {
         assertTrue(CapabilityEnumerator.enumerate(rules, "s").isEmpty())
     }
 
+    @Test
+    fun `an action binding with no recorded definition produces no capability`() {
+        val rule = CompiledRule<UiNode>(
+            id = "doordash.screen.offer_popup_test",
+            priority = 10,
+            bindings = listOf(Binding(name = "declineButton", find = { null }, defJson = null)),
+            branches = listOf(CompiledBranch(intent = "OFFER", predicate = { true })),
+        )
+        assertTrue(CapabilityEnumerator.enumerate(listOf(rule), "s").isEmpty())
+    }
+
     private fun branchedDeclineRule(vararg labels: String) = """
     [{
       "id": "doordash.screen.offer_popup_test",

@@ -87,10 +87,11 @@ key = sha256( canonicalJson({
 
 Enumeration (`RuleCompiler.enumerateCapabilities`) collects rule-level and
 branch-level action bindings against the `RuleAction` registry. Each definition
-is recursively key-sorted canonical JSON; a missing definition contributes the
-literal string `"null"`. `defs` contains the **distinct canonical strings**, sorted
-lexicographically, rather than raw JSON objects. An inherited duplicate counts
-once. `layoutCount` is this set's size, so the UI can disclose how many card
+is recursively key-sorted canonical JSON; a binding with no recorded definition
+is not consentable at all (it enumerates no capability); `compileBindBlock` always
+records one, so this is a defensive boundary. `defs` contains the **distinct canonical strings**,
+sorted lexicographically, rather than raw JSON objects. An inherited duplicate
+counts once. `layoutCount` is this set's size, so the UI can disclose how many card
 layouts one grant covers without making the count a separate key input.
 
 The key pins the entire set of binding definitions:
@@ -101,6 +102,16 @@ The key pins the entire set of binding definitions:
   (rule, action) pair.
 - Reordering branches leaves the key unchanged. Reordering object keys or
   inheriting another copy of an existing definition also leaves it unchanged.
+
+Residual (Astra review, 2026-09-30): the key pins the SET of binding definitions,
+not each definition's association with its branch's `require`/`reject`. A remote
+update can therefore swap two existing definitions between branches, or change
+a branch's recognition conditions, without changing the key — the static half
+never pinned recognition context (pre-#1167 per-definition keys had the same
+property). The DYNAMIC half is the control: fire-time package scope + label
+verification; `expand_earnings` is package-scoped only (icon-only arrow) and is
+the exposed case. Pinning branch conditions was REJECTED: it would re-prompt on
+every recognition anchor tweak (re-prompt fatigue trains click-through).
 
 A screen rule **must declare `enables`** whenever a rule-level or branch binding
 names an action target, for example `"enables": ["accept_offer", "decline_offer"]`.

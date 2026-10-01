@@ -61,7 +61,10 @@ class RuleCapabilityDataSourceTest {
             assertTrue("granted set cleared", source.granted.first().isEmpty())
             assertTrue("denied set cleared", source.denied.first().isEmpty())
             assertEquals("v2 marker stamped", 2, ds.data.first()[schemaVersion])
+            source.update { _, _ -> setOf("fresh-grant") to setOf("fresh-denial") }
             assertFalse("second run no-ops", source.migrateConsentSchemaIfNeeded())
+            assertEquals(setOf("fresh-grant"), source.granted.first())
+            assertEquals(setOf("fresh-denial"), source.denied.first())
         }
     }
 
@@ -72,11 +75,16 @@ class RuleCapabilityDataSourceTest {
         assertTrue("first run migrates", source.migrateConsentSchemaIfNeeded())
         advanceUntilIdle()
 
+        source.update { _, _ -> setOf("fresh-grant") to setOf("fresh-denial") }
+        advanceUntilIdle()
+
         assertFalse(
             "second run is a no-op — the version marker was stamped",
             source.migrateConsentSchemaIfNeeded(),
         )
         advanceUntilIdle()
+        assertEquals(setOf("fresh-grant"), source.granted.first())
+        assertEquals(setOf("fresh-denial"), source.denied.first())
     }
 
     @Test

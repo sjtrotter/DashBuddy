@@ -81,10 +81,9 @@ interface RuleCapabilityGrants {
 
     /**
      * Fire-time gate lookup (#417), keyed by the `sourceRuleId` + action that
-     * ride the effect — authoritative state, never threaded fields. True iff
-     * the pair resolves to at least one enumerated capability AND every
-     * enumerated key for the pair is granted (the effect cannot prove which
-     * binding definition aimed its target, so all of them must be covered).
+     * ride the effect — authoritative state, never threaded fields. Since #1167
+     * there is exactly ONE key per (rule, action) — pinned to the sorted set of
+     * every branch's binding definition — so the check is: that key is in the granted set.
      *
      * A null [ruleId] (no provenance) is never granted.
      */

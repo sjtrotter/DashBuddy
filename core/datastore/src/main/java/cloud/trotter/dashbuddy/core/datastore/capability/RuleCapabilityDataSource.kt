@@ -7,9 +7,12 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.RuleCapabilityPreferences
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class GrantSnapshot(val granted: Set<String>, val denied: Set<String>)
 
 /**
  * Persistence for rule-capability consent (#417/#422): the set of granted
@@ -47,6 +50,15 @@ class RuleCapabilityDataSource @Inject constructor(
     /** Explicitly denied capability keys; auto-grant never overrides these. */
     val denied: Flow<Set<String>> = ds.data.map { it[Keys.DENIED] ?: emptySet() }
 
+    /** Both decisions from one Preferences emission, so concurrent edits cannot split the read. */
+    suspend fun snapshot(): GrantSnapshot {
+        val prefs = ds.data.first()
+        return GrantSnapshot(
+            granted = prefs[Keys.GRANTED] ?: emptySet(),
+            denied = prefs[Keys.DENIED] ?: emptySet(),
+        )
+    }
+
     /**
      * Atomically transform both sets in ONE DataStore edit (#364 lesson:
      * read-modify-write must happen inside the edit so concurrent updates
@@ -72,6 +84,7 @@ class RuleCapabilityDataSource @Inject constructor(
      * cleared and every capability lands undecided for the prompt to re-collect (fail-closed).
      * Stamps the version in the same atomic edit; returns true iff migration ran, and subsequent
      * calls preserve fresh decisions.
+     * A future v3 that wants to KEEP denials must add an explicit per-version step here, with a test.
      */
     suspend fun migrateConsentSchemaIfNeeded(): Boolean {
         var migrated = false
@@ -79,7 +92,7 @@ class RuleCapabilityDataSource @Inject constructor(
             val stored = prefs[Keys.SCHEMA_VERSION] ?: 0
             if (stored < CONSENT_SCHEMA_VERSION) {
                 prefs[Keys.GRANTED] = emptySet()
-                if (stored < 2) prefs[Keys.DENIED] = emptySet()
+                prefs[Keys.DENIED] = emptySet()
                 prefs[Keys.SCHEMA_VERSION] = CONSENT_SCHEMA_VERSION
                 migrated = true
             }
