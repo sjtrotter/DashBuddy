@@ -24,7 +24,7 @@ import timber.log.Timber
  * ADR-0011 publisher (#1146): UNKNOWN branch, after `FrameGate.admit` and `captureScreen` so the
  * stamped `captureId` is the pairing key, before the terminal UNKNOWN filter.
  * Screens only in v1 (clicks and notification bodies are out of scope).
- * Inert in the field: every variant binds `NoOpCensusSink` until M2/M3.
+ * Debug binds the opt-in HTTP spool sink; release binds `NoOpCensusSink` (#1182).
  */
 @Singleton
 class SkeletonPublisher internal constructor(

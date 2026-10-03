@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.feature.settings
 
+import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
+import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
+import kotlinx.coroutines.flow.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
@@ -16,8 +19,21 @@ import javax.inject.Inject
 class SettingsMenuViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val devSettingsRepository: DevSettingsRepository,
-    private val strategyRepository: StrategyRepository
+    private val strategyRepository: StrategyRepository,
+    credentials: CensusCredentialStore,
+    private val censusScheduler: CensusUploadScheduler,
 ) : ViewModel() {
+
+    val censusAvailable = devSettingsRepository.censusAvailable
+    val censusUploadEnabled = devSettingsRepository.censusUploadEnabled
+    val censusHost = devSettingsRepository.censusBaseUrl.map { it.removePrefix("https://") }
+    val censusInstallIdPrefix = credentials.installIdPrefix
+
+    fun setCensusUploadEnabled(enabled: Boolean) = viewModelScope.launch {
+        devSettingsRepository.setCensusUploadEnabled(enabled)
+    }
+
+    fun uploadCensusNow() = censusScheduler.enqueueNow()
 
     // Pass-through flows for the UI
     val evidenceConfig = strategyRepository.evidenceConfig

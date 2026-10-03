@@ -6,7 +6,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Census publishing is structurally disabled in every variant until M2/M3 (#1146). */
+/** Release census publishing is structurally disabled; debug binds the opt-in HttpCensusSink (#1182). */
 @Singleton
 class NoOpCensusSink @Inject constructor() : CensusSink {
 

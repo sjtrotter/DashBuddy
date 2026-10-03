@@ -117,4 +117,8 @@
     <string name="event_receipt_settings_section">Screen events</string>
     <string name="event_receipt_android11_caveat">(may not take effect on Android 11)</string>
     <string name="event_receipt_settings_switch">Notice windows from other apps</string>
+    <string name="developer_settings_census_upload">Census upload (debug)</string>
+    <string name="developer_settings_census_identity">%1$s · Install: %2$s</string>
+    <string name="developer_settings_census_not_enrolled">Not enrolled</string>
+    <string name="developer_settings_census_upload_now">Upload now</string>
 </resources>

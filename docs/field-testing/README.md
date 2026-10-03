@@ -48,6 +48,10 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Census upload lands as clusters on the dashboard (#1182).** Enable Census upload (debug),
+  collect UNKNOWN platform screens, then use Upload now; confirm clusters appear on the census dashboard.
+  - Confirmed: 0/2
+
 **Living checklist (not a session entry).** Recently-merged changes (and open
 PRs / closed issues) that were validated only against captured data and need
 eyes on a live dash. A field-testing agent reads this section at the start of a

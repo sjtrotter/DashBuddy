@@ -246,6 +246,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.play.services.location)
     implementation(libs.reorderable)
+    testImplementation(libs.androidx.work.testing)
     testImplementation(libs.robolectric)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))

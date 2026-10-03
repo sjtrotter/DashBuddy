@@ -52,6 +52,7 @@ android {
 
 dependencies {
     implementation(libs.hilt.android)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
@@ -63,6 +64,8 @@ dependencies {
 
     ksp(libs.hilt.compiler)
 
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
     testImplementation(libs.mockito.kotlin)
 

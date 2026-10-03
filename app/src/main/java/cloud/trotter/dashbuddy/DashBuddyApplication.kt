@@ -20,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.worker.DailyGasPriceWorker
+import cloud.trotter.dashbuddy.worker.CensusUploadWorker
 import cloud.trotter.dashbuddy.worker.WeeklyPlanWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -209,6 +210,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // #981 — the Sunday-evening Weekly Plan nudge. Re-anchored on every launch (the delay is
         // computed from the wall clock), which is also what corrects a DST drift in the 7-day period.
         WeeklyPlanWorker.schedule(this)
+        if (BuildConfig.DEBUG) CensusUploadWorker.schedule(this)
 
         Timber.i("Background workers verified and scheduled.")
     }

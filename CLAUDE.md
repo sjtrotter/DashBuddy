@@ -183,8 +183,8 @@ sibling surface, left for a future extraction.
   retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
   and do NOT gate the unit-only PR CI.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
-  concrete data layers.
-- **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration.
+  concrete data layers; census Keystore credentials, bounded file spool and debug upload sink (#1182).
+- **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration, signed census transport (#1182).
 - **`:core:location`** — Play Services GPS tracking.
 - **`:core:datastore`** — Preferences DataStore (eight single-concern stores behind Hilt
   qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms,
@@ -237,7 +237,7 @@ Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/0
 `AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
 normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
 (`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference; the package-less `WINDOWS_CHANGED` reaches the #1148 D2 `ListenerGate` only when the dasher's **event-receipt consent** is ALLOWED — the listener clears `packageNames` via the pure `ServiceInfoPolicy`, in debug AND release, #1151) and the
-parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure `census.SkeletonBuilder` over the `cloud.trotter.census.contract` (the `census-contract/` build) wire types (sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`) and published by `census.SkeletonPublisher` (#1146: post-admission, after `captureScreen`, before the UNKNOWN filter, UNKNOWN platform screens only, fail-open, only while the bound `CensusSink` is enabled — every variant binds `NoOpCensusSink`; `census{…}` in `PipelineStats`). `AccessibilityPipeline.output()` gates in order:
+parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure `census.SkeletonBuilder` over the `cloud.trotter.census.contract` (the `census-contract/` build) wire types (sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`) and published by `census.SkeletonPublisher` (#1146: post-admission, after `captureScreen`, before the UNKNOWN filter, UNKNOWN platform screens only, fail-open, only while the bound `CensusSink` is enabled — debug binds `HttpCensusSink` behind the developer toggle; release binds `NoOpCensusSink` and stays inert by construction (#1182); `census{…}` in `PipelineStats`). `AccessibilityPipeline.output()` gates in order:
 **rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
 **UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
 to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +

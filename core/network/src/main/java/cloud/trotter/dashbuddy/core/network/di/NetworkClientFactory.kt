@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  * [Retrofit.Builder], and the two copies had already diverged on the #348 security
  * hardening (one redacted the `api_key` query param and set timeouts, the other did
  * neither). Centralizing the assembly here makes the secure path the *default* path:
- * any provider that calls [okHttpClient] gets debug-gated, Timber-piped BODY logging
+ * any provider that calls [okHttpClient] gets debug-gated, Timber-piped logging (Census headers only, other clients BODY)
  * **with secret redaction and standard timeouts baked in** — there is no longer a
  * per-module step to remember.
  *
@@ -48,8 +48,9 @@ object NetworkClientFactory {
 
     /**
      * A [OkHttpClient] with the #348 hardening baked in as the default:
-     *  - **Debug-only** Timber-piped BODY [HttpLoggingInterceptor] (release gets no HTTP
-     *    logging at all), with [redactedQueryParams] stripped so secrets never reach logs.
+     *  - **Debug-only** Timber-piped [HttpLoggingInterceptor] (release gets no HTTP
+     *    logging at all): Census headers only, otherwise BODY, with bearer/signature headers
+     *    and [redactedQueryParams] stripped so secrets never reach logs.
      *  - Standard connect/read/write timeouts.
      *
      * @param logTag Timber tag for the HTTP log lines (debug builds only).
@@ -68,13 +69,18 @@ object NetworkClientFactory {
                 }
                 addInterceptor(
                     HttpLoggingInterceptor(timberLogger).apply {
-                        level = HttpLoggingInterceptor.Level.BODY
+                        // Census bodies contain skeletons / enrollment IDs. Never log bodies,
+                        // even at VERBOSE; signatures and the bearer are secrets too.
+                        level = if (logTag == "Census") HttpLoggingInterceptor.Level.HEADERS
+                            else HttpLoggingInterceptor.Level.BODY
+                        redactHeader("Authorization")
+                        redactHeader("X-Census-Signature")
                         redactedQueryParams.forEach { redactQueryParams(it) }
                     }
                 )
             }
         }
-        .connectTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectTimeout(if (logTag == "Census") 10L else DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()

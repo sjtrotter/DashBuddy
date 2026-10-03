@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
+import cloud.trotter.dashbuddy.domain.census.CensusUploadPreferences
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
@@ -23,7 +24,20 @@ class DevSettingsRepository @Inject constructor(
     private val dataSource: DevSettingsDataSource,
     @param:Named("isDebug") private val isDebug: Boolean,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
-) {
+) : CensusUploadPreferences {
+    val censusUploadEnabled: Flow<Boolean> = dataSource.censusUploadEnabled.map { isDebug && it }
+    val censusBaseUrl: Flow<String> = dataSource.censusBaseUrl
+    override val enabled: Flow<Boolean> = censusUploadEnabled
+    override val baseUrl: Flow<String> = censusBaseUrl
+    val nextAllowedAtMillis = dataSource.nextAllowedAtMillis
+    val censusPolicy = dataSource.censusPolicy
+    val censusAvailable: Boolean get() = isDebug
+
+    suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
+    suspend fun setCensusBaseUrl(url: String): Boolean = dataSource.setCensusBaseUrl(url)
+    suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)
+    suspend fun setCensusPolicy(value: String) = dataSource.setCensusPolicy(value)
+
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 
     // ============================================================================================
