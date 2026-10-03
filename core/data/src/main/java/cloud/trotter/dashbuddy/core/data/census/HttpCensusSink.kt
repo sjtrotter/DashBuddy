@@ -47,8 +47,12 @@ class HttpCensusSink @Inject constructor(
                         continue
                     }
                     try {
+                        val wasEmpty = spool.count() == 0
                         spool.append(record)
                         appended++
+                        // Automatic delivery (dev ask 2026-10-03): the FIRST item of a non-empty spool schedules an upload
+                        // within ~5 minutes; 50 appends or 100 queued items still upload immediately; the hourly sweep remains.
+                        if (wasEmpty) scheduler.enqueueSoon()
                         if (appended % 50 == 0 || spool.count() >= 100) scheduler.enqueueNow()
                     } catch (e: CancellationException) {
                         throw e

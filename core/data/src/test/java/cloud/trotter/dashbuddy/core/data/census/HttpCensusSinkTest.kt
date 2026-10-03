@@ -27,8 +27,27 @@ class HttpCensusSinkTest {
     }
     private class Scheduler : CensusUploadScheduler {
         var runs = 0
+        var soon = 0
         override fun enqueueNow() { runs++ }
+        override fun enqueueSoon() { soon++ }
         override fun deferUntil(epochMillis: Long) = Unit
+    }
+
+    @Test fun `the first item of an empty spool schedules an upload soon and later items do not`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(tmp.newFolder(), stats, io)
+        val scheduler = Scheduler()
+        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
+        runCurrent()
+        sink.offer(censusRecord(0)); runCurrent()
+        assertEquals(1, scheduler.soon)
+        repeat(10) { sink.offer(censusRecord(it + 1)) }; runCurrent()
+        assertEquals(1, scheduler.soon)
+        assertEquals(0, scheduler.runs)
+        spool.remove(spool.take(100, 1_000_000).map { it.id }); runCurrent()
+        sink.offer(censusRecord(20)); runCurrent()
+        assertEquals(2, scheduler.soon)
     }
 
     @Test(timeout = 5000) fun `offer never waits for a stalled append and overflow drops oldest with counts`() = runTest {
