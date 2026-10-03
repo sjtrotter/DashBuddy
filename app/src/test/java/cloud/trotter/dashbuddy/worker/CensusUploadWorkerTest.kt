@@ -465,6 +465,32 @@ class CensusUploadWorkerTest {
         }
     }
 
+    @Test fun `a pending identity waits out its enrol 429 on later runs without re-enrolling`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        whenever(h.credentials.current()).thenReturn(null)
+        whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
+        h.api.enrollments += EnrolResult.RateLimited(3600)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
+        val deadline = h.preferences.nextAllowedAtMillis.first()
+        assertTrue(deadline > System.currentTimeMillis())
+        assertEquals(1, h.api.enrolledIds.size)
+        // The hourly cadence is never postponed, so the next run arrives inside the window: no enrol call.
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
+        assertEquals(1, h.api.enrolledIds.size)
+        assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+        assertEquals(0L, h.scheduler.deadline)
+        h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(2, h.api.enrolledIds.size)
+        assertTrue(h.queued.isEmpty())
+    }
+
     @Test fun `unauthorized resigns once with same batch and bytes`() = runTest {
         val h = harness()
         h.initialize()

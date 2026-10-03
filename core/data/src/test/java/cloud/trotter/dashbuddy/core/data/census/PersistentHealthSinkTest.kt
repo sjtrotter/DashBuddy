@@ -273,6 +273,26 @@ class PersistentHealthSinkTest {
         }
     }
 
+    @Test fun `a persisted document past MAX_ROWS keeps the newest rows and counts the excess`() = runTest {
+        val total = HealthLedger.MAX_ROWS + 44
+        val rows = (0 until total).joinToString(",") { i ->
+            val day = java.time.LocalDate.of(2026, 1, 1).plusDays((i % 20).toLong())
+            "\"${key.copy(day = day.toString(), platformAppVersion = "$i")}\":{\"unknown\":1,\"revision\":1}"
+        }
+        memory.memory.value = emptyPreferences().toMutablePreferences().apply {
+            this[stringPreferencesKey("ledger_json")] = """{"generation":2,"rows":{$rows}}"""
+        }
+        val refusedBefore = stats.healthRowsRefused.get()
+        val loaded = store.load()
+        assertEquals(HealthLedger.MAX_ROWS, loaded.rows.size)
+        assertEquals(refusedBefore + 44, stats.healthRowsRefused.get())
+        assertEquals(0L, stats.healthCorrupt.get())
+        val keptDays = loaded.rows.keys.map { it.substringBefore('|') }
+        val droppedDay = java.time.LocalDate.of(2026, 1, 1).toString()
+        assertTrue("the oldest day is the one shed", keptDays.none { it == droppedDay })
+        assertEquals(2, loaded.generation)
+    }
+
     @Test fun `missing and corrupt ledger load empty and only corruption is counted`() = runTest {
         assertEquals(HealthLedger(), store.load())
         assertEquals(0L, stats.healthCorrupt.get())

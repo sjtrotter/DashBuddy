@@ -47,7 +47,7 @@ class HealthLedgerStore @Inject constructor(
     private fun decode(json: String): HealthLedger = try {
         val document = Json.parseToJsonElement(json).jsonObject
         val ledger = Json.decodeFromJsonElement<HealthLedger>(JsonObject(document - "rows"))
-        val rows = buildMap {
+        val decoded = buildMap {
             document["rows"]?.jsonObject?.forEach { (key, value) ->
                 try {
                     HealthKey.parse(key)
@@ -56,6 +56,13 @@ class HealthLedgerStore @Inject constructor(
                     stats.healthCorrupt.incrementAndGet()
                 }
             }
+        }
+        // The persisted document is bounded input too: past MAX_ROWS keep the NEWEST keys (a key
+        // starts with its ISO day, so lexical order is chronological) and count the excess as refused.
+        val rows = if (decoded.size <= HealthLedger.MAX_ROWS) decoded else {
+            stats.healthRowsRefused.addAndGet((decoded.size - HealthLedger.MAX_ROWS).toLong())
+            val kept = decoded.keys.sortedDescending().take(HealthLedger.MAX_ROWS).toSet()
+            decoded.filterKeys { it in kept }
         }
         ledger.copy(rows = rows)
     } catch (_: IllegalArgumentException) {

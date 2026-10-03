@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Resolves the `versionName` of an OBSERVED third-party app (#937).
@@ -52,9 +53,15 @@ class CachingPlatformAppVersions(
 ) : PlatformAppVersions {
 
     private data class Resolution(val value: String?, val resolvedAt: Long)
-    private val cache = mutableMapOf<String, Resolution>()
 
-    @Synchronized
+    /**
+     * Lock-free on purpose: a cache HIT for one package must never wait behind another package's
+     * binder round-trip (the notification source buffers 64 events; a held monitor across the
+     * `PackageManager` call could drop them). Two threads racing the same expired entry each
+     * resolve once — harmless, and the second write wins with an equivalent value.
+     */
+    private val cache = ConcurrentHashMap<String, Resolution>()
+
     override fun versionName(packageName: String): String? {
         if (packageName.isEmpty()) return null
         val now = clock()
@@ -73,7 +80,7 @@ class CachingPlatformAppVersions(
         // dasher's screen shows), but this is fed from untrusted frame data, so cap it rather
         // than trust that. Past the cap we still ANSWER, we just stop remembering — correctness
         // is unchanged, only the binder traffic.
-        if (packageName in cache || cache.size < MAX_CACHED_PACKAGES) {
+        if (cache.containsKey(packageName) || cache.size < MAX_CACHED_PACKAGES) {
             cache[packageName] = Resolution(resolved, clock())
             if (resolved != null) stats.onPlatformAppVersion(packageName, resolved)
         }

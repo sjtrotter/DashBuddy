@@ -754,7 +754,10 @@ exactly its audience.)
 (effect engine #914, bubble #916, odometer #917; the offer voice joined as the fifth in #991, §4).
 Two pieces, both fail-OPEN and both inert to frame processing. (1) **Version stamping:**
 `PlatformAppVersions` resolves the OBSERVED app's `versionName` (`CachingPlatformAppVersions` — one
-`PackageManager` lookup per package per process, negative results cached too, `catch (Throwable)`;
+`PackageManager` lookup per package per 10-minute TTL (positive AND negative results expire together,
+#1197: the stamp now keys the daily health rollup, so a stale read after an in-place update is bounded
+to ten minutes; a `PACKAGE_REPLACED` receiver was rejected as a sensing-hot-path cost), a lock-free
+`ConcurrentHashMap` so a hit never waits behind another package's binder call, `catch (Throwable)`;
 the `PackageManager` call is a lambda injected at the `PipelineModule` DI edge so the caching logic
 is a plain unit test). `ObservationClassifier` stamps it onto every observation's
 `ReplayMetadata.platformAppVersion` — classification is the one point that always runs AND knows the

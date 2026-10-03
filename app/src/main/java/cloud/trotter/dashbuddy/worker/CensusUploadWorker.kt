@@ -127,6 +127,15 @@ class CensusUploadWorker @AssistedInject constructor(
     }
 
     private suspend fun enrol(api: CensusTransport, initial: Credential, record: RunRecord): Enrollment {
+        // A 429 on enrolment persists the same deadline the skeleton stage honours; now that the hourly
+        // cadence is never postponed, the pending identity must wait it out here instead of re-enrolling
+        // on every run. (An ENROLLED credential never reaches this method — its deadline gates only skeletons.)
+        val deadline = preferences.nextAllowedAtMillis.first()
+        val now = System.currentTimeMillis()
+        if (deadline > now) {
+            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+            return Enrollment.Stop(Result.success())
+        }
         var credential = initial
         repeat(2) { attempt ->
             if (!preferences.censusUploadEnabled.first()) {
