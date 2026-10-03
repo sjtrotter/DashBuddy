@@ -17,6 +17,11 @@ class CensusUploadStats @Inject constructor() {
     val uploadFailures = AtomicLong()
     val oversized = AtomicLong()
     val badRequest = AtomicLong()
+    val keystoreTransient = AtomicLong()
+    val inflightCorrupt = AtomicLong()
+    val enrolRejected = AtomicLong()
+    val unauthorized = AtomicLong()
+    val stale = AtomicLong()
     private val rejected = ConcurrentHashMap<String, AtomicLong>()
 
     fun reject(reasons: Map<String, Int>) {
@@ -31,9 +36,12 @@ class CensusUploadStats @Inject constructor() {
         val values = listOf(spooled, spoolDropped, spoolCorrupt, spoolOversized, uploaded, duplicate, uploadFailures, oversized, badRequest)
             .map { it.get() }
         val reasons = rejectedCounts()
-        if (values.all { it == 0L } && reasons.isEmpty()) return ""
+        if (values.all { it == 0L } && reasons.isEmpty() &&
+            listOf(keystoreTransient, inflightCorrupt, enrolRejected, unauthorized, stale).all { it.get() == 0L }) return ""
         return ",spooled=${values[0]},spoolDropped=${values[1]},corrupt=${values[2]},spoolOversized=${values[3]}," +
             "uploaded=${values[4]},duplicate=${values[5]},uploadFailures=${values[6]},rejected=$reasons," +
+            "keystoreTransient=${keystoreTransient.get()},inflightCorrupt=${inflightCorrupt.get()}," +
+            "enrolRejected=${enrolRejected.get()},unauthorized=${unauthorized.get()},stale=${stale.get()}," +
             "oversized=${values[7]},badRequest=${values[8]}"
     }
 }

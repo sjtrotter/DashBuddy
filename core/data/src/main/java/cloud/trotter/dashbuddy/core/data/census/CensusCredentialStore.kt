@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.census
 
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.SecureRandom
+import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 import java.util.Base64
 import java.util.UUID
 import javax.inject.Inject
@@ -37,6 +40,7 @@ class CensusCredentialStore @Inject constructor(
 
     /** Deliberately carries no cause/message from cryptography or persisted data. */
     class Unusable : IllegalStateException("Census credential unusable")
+    class Transient : IllegalStateException("Census credential temporarily unavailable")
 
     private val mutex = Mutex()
     private var needsKeyReset = false
@@ -80,19 +84,33 @@ class CensusCredentialStore @Inject constructor(
     }
 
     private suspend fun read(): Credential? {
-        val prefs = ds.data.first()
-        if (prefs.asMap().isEmpty()) return null
         try {
-            val id = requireNotNull(prefs[INSTALL_ID])
-            val iv = Base64.getDecoder().decode(requireNotNull(prefs[IV]))
-            val ct = Base64.getDecoder().decode(requireNotNull(prefs[SEALED]))
+            val prefs = ds.data.first()
+            if (prefs.asMap().isEmpty()) return null
+            val id = prefs[INSTALL_ID] ?: throw Unusable()
+            val iv = decode(prefs[IV])
+            val ct = decode(prefs[SEALED])
             val secret = sealer.open(iv, ct).toString(Charsets.UTF_8)
-            require(InstallIdGrammar.isCanonicalV4(id) && InstallSecret.isValid(secret))
+            if (!InstallIdGrammar.isCanonicalV4(id) || !InstallSecret.isValid(secret)) throw Unusable()
             return Credential(id, secret, prefs[ENROLLED] == true)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            needsKeyReset = true
+        } catch (e: Exception) {
+            when (e) {
+                is Unusable, is UnrecoverableKeyException, is KeyPermanentlyInvalidatedException, is AEADBadTagException -> {
+                    needsKeyReset = true
+                    throw Unusable()
+                }
+                else -> throw Transient()
+            }
+        }
+    }
+
+    private fun decode(value: String?): ByteArray {
+        if (value == null) throw Unusable()
+        return try {
+            Base64.getDecoder().decode(value)
+        } catch (_: IllegalArgumentException) {
             throw Unusable()
         }
     }

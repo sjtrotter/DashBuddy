@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.network.census
 
+import android.util.Log
+import cloud.trotter.dashbuddy.core.network.di.ClientProfile
+import cloud.trotter.dashbuddy.core.network.di.NetworkClientFactory
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.InstallSecret
@@ -17,6 +20,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CopyOnWriteArrayList
+import timber.log.Timber
 
 class CensusApiTest {
     private lateinit var server: MockWebServer
@@ -137,6 +142,68 @@ class CensusApiTest {
         assertEquals(UploadResult.Unauthorized(1790899200000L), api.uploadSkeletons(credential, "batch", listOf("{}")))
         respond(422, "{\"error\":\"batch_quality\",\"rejected\":{\"untrusted response text\":1}}")
         assertEquals(UploadResult.BatchQuality(mapOf("unknown_reason" to 1)), api.uploadSkeletons(credential, "batch", listOf("{}")))
+    }
+
+    @Test fun `every endpoint rejects a one MiB response including unknown lengths`() = runTest {
+        val oversized = "x".repeat(1024 * 1024)
+        for (chunked in listOf(false, true)) {
+            fun enqueue() {
+                val response = MockResponse.Builder().code(200)
+                if (chunked) response.chunkedBody(oversized, 8192) else response.body(oversized)
+                server.enqueue(response.build())
+            }
+            enqueue()
+            assertEquals(EnrolResult.TransportFailure("oversized_response"), api.enrol(credential, "test"))
+            enqueue()
+            assertEquals(PolicyResult.TransportFailure("oversized_response"), api.policy())
+            enqueue()
+            assertEquals(UploadResult.TransportFailure("oversized_response"), api.uploadSkeletons(credential, "batch", listOf("{}")))
+        }
+    }
+
+    @Test fun `response bound accepts exactly 64 KiB and rejects one byte more`() = runTest {
+        val body = "{}".padEnd(65_536, ' ')
+        server.enqueue(MockResponse.Builder().code(200).chunkedBody(body, 8192).build())
+        assertTrue(api.policy() is PolicyResult.Available)
+        server.enqueue(MockResponse.Builder().code(200).chunkedBody(body + " ", 8192).build())
+        assertEquals(PolicyResult.TransportFailure("oversized_response"), api.policy())
+    }
+
+    @Test fun `retry after a year is capped to one day`() = runTest {
+        for (header in listOf("31536000", Long.MAX_VALUE.toString(), "99999999999999999999999999")) {
+            server.enqueue(MockResponse.Builder().code(429).addHeader("Retry-After", header)
+                .body("{\"error\":\"rate_limited\"}").build())
+            assertEquals(UploadResult.RateLimited(86_400), api.uploadSkeletons(credential, "batch", listOf("{}")))
+        }
+    }
+
+    @Test fun `Census profile logs request line at verbose but redacts secrets and bodies`() = runTest {
+        val logs = CopyOnWriteArrayList<Pair<Int, String>>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (tag == "Census") logs += priority to message
+            }
+        }
+        val censusClient = NetworkClientFactory.okHttpClient("Census", ClientProfile.Census)
+        val census = CensusApi(censusClient, server.url("/").toString().removeSuffix("/"))
+        Timber.plant(tree)
+        try {
+            respond(200, accepted)
+            val fingerprint = "cafe".repeat(16)
+            val item = "{\"fingerprint\":\"$fingerprint\"}"
+            assertTrue(census.uploadSkeletons(credential, "private-batch", listOf(item)) is UploadResult.Accepted)
+            val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+            val signature = requireNotNull(request.headers[CensusHeaders.SIGNATURE])
+            assertTrue(logs.any { (priority, line) -> priority == Log.VERBOSE && line.startsWith("--> POST ") && line.contains("/v1/skeletons") })
+            for (sensitive in listOf(credential.secret, signature, fingerprint, "private-batch", item, accepted)) {
+                assertFalse(logs.any { (_, line) -> line.contains(sensitive) })
+            }
+            assertEquals(10_000, censusClient.connectTimeoutMillis)
+        } finally {
+            Timber.uproot(tree)
+            censusClient.dispatcher.executorService.shutdown()
+            censusClient.connectionPool.evictAll()
+        }
     }
 
     private fun respond(code: Int, body: String) {

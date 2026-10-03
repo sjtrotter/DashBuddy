@@ -59,6 +59,26 @@ class CensusSpoolTest {
         assertNull(reopened.inFlight())
     }
 
+    @Test fun `corrupt in flight is removed counted once and fresh items remain drainable`() = runTest {
+        for (corrupt in listOf("broken", "{}", "{\"batchId\":\"bad\",\"ids\":[\"../escape\"]}")) {
+            val dir = File(tmp.newFolder(), "spool")
+            val stats = CensusUploadStats()
+            val io = StandardTestDispatcher(testScheduler)
+            val spool = CensusSpool(dir, stats, io)
+            repeat(2) { spool.append(censusRecord(it)) }
+            val expected = spool.take(100, 100_000)
+            val state = File(dir.parentFile, "inflight.json")
+            state.writeText(corrupt)
+            val reopened = CensusSpool(dir, stats, io)
+            assertEquals(expected, reopened.take(100, 100_000))
+            assertFalse(state.exists())
+            assertNull(reopened.inFlight())
+            assertEquals(1L, stats.inflightCorrupt.get())
+            assertEquals(0L, stats.spoolDropped.get())
+            assertEquals(2, reopened.count())
+        }
+    }
+
     @Test fun `atomic append preserves exact item bytes and survives reopening`() = runTest {
         val dir = tmp.newFolder()
         val stats = CensusUploadStats()

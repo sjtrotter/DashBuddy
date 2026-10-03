@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.network.di
 
+import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.dashbuddy.core.network.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -9,6 +10,8 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
+
+enum class ClientProfile { Default, Census }
 
 /**
  * Single source of truth for Retrofit/OkHttp client assembly across [core:network].
@@ -54,11 +57,13 @@ object NetworkClientFactory {
      *  - Standard connect/read/write timeouts.
      *
      * @param logTag Timber tag for the HTTP log lines (debug builds only).
+     * @param profile Census suppresses bodies and uses a ten-second connect timeout.
      * @param redactedQueryParams query-param names to redact from logs; defaults to the
      *   shared secret list (`api_key`). Pass a superset if the upstream carries more secrets.
      */
     fun okHttpClient(
         logTag: String,
+        profile: ClientProfile = ClientProfile.Default,
         redactedQueryParams: List<String> = DEFAULT_REDACTED_QUERY_PARAMS,
     ): OkHttpClient = OkHttpClient.Builder()
         .apply {
@@ -71,16 +76,16 @@ object NetworkClientFactory {
                     HttpLoggingInterceptor(timberLogger).apply {
                         // Census bodies contain skeletons / enrollment IDs. Never log bodies,
                         // even at VERBOSE; signatures and the bearer are secrets too.
-                        level = if (logTag == "Census") HttpLoggingInterceptor.Level.HEADERS
+                        level = if (profile == ClientProfile.Census) HttpLoggingInterceptor.Level.HEADERS
                             else HttpLoggingInterceptor.Level.BODY
-                        redactHeader("Authorization")
-                        redactHeader("X-Census-Signature")
+                        redactHeader(CensusHeaders.AUTHORIZATION)
+                        redactHeader(CensusHeaders.SIGNATURE)
                         redactedQueryParams.forEach { redactQueryParams(it) }
                     }
                 )
             }
         }
-        .connectTimeout(if (logTag == "Census") 10L else DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectTimeout(if (profile == ClientProfile.Census) 10L else DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()

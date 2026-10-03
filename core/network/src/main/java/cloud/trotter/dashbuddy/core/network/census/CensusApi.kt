@@ -4,6 +4,7 @@ import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.RequestSigner
+import cloud.trotter.dashbuddy.core.network.di.ClientProfile
 import cloud.trotter.dashbuddy.core.network.di.NetworkClientFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -77,7 +78,7 @@ sealed interface UploadResult {
 /** Factory is the injectable seam for workers; callers never configure their own HTTP logging. */
 @Singleton
 open class CensusApiFactory @Inject constructor() {
-    private val client by lazy { NetworkClientFactory.okHttpClient("Census") }
+    private val client by lazy { NetworkClientFactory.okHttpClient("Census", ClientProfile.Census) }
     open fun create(baseUrl: String): CensusTransport = CensusApi(client, baseUrl)
 }
 
@@ -119,7 +120,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        EnrolResult.TransportFailure(e.javaClass.simpleName)
+        EnrolResult.TransportFailure(e.failureToken())
     }
 
     override suspend fun policy(): PolicyResult = try {
@@ -128,7 +129,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        PolicyResult.TransportFailure(e.javaClass.simpleName)
+        PolicyResult.TransportFailure(e.failureToken())
     }
 
     override suspend fun uploadSkeletons(
@@ -164,7 +165,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        UploadResult.TransportFailure(e.javaClass.simpleName)
+        UploadResult.TransportFailure(e.failureToken())
     }
 
     private fun request(path: String, body: ByteArray, cred: Bearer.Credential, signed: Boolean): Request {
@@ -205,10 +206,15 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
                     val reply = response.use {
                         val now = System.currentTimeMillis()
                         val retry = it.header("Retry-After")
-                        val seconds = retry?.toLongOrNull() ?: parseDate(retry)?.let { date ->
-                            ((date - now + 999) / 1000).coerceAtLeast(1)
-                        } ?: 60L
-                        Reply(it.code, it.body.string(), seconds.coerceAtLeast(1), parseDate(it.header("Date")))
+                        val seconds = retry?.toLongOrNull()
+                            ?: if (!retry.isNullOrEmpty() && retry.all { digit -> digit in '0'..'9' }) 86_400L
+                            else parseDate(retry)?.let { date -> ((date - now + 999) / 1000).coerceAtLeast(1) } ?: 60L
+                        if (it.body.contentLength() > MAX_RESPONSE_BYTES) throw OversizedResponse()
+                        val body = it.peekBody(MAX_RESPONSE_BYTES)
+                        // Unknown-length/chunked responses need one byte of lookahead to detect overflow.
+                        if (body.contentLength() == MAX_RESPONSE_BYTES &&
+                            it.body.source().request(MAX_RESPONSE_BYTES + 1)) throw OversizedResponse()
+                        Reply(it.code, body.string(), seconds.coerceIn(1, 86_400), parseDate(it.header("Date")))
                     }
                     continuation.resume(reply)
                 } catch (e: Exception) {
@@ -218,7 +224,13 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         })
     }
 
+    private class OversizedResponse : IOException()
+
     companion object {
+        private const val MAX_RESPONSE_BYTES = 65_536L
+        private fun Exception.failureToken(): String =
+            if (this is OversizedResponse) "oversized_response" else javaClass.simpleName
+
         private const val USER_AGENT = "dashbuddy-census/1"
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")

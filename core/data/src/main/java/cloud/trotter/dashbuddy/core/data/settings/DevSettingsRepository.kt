@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,9 +37,13 @@ class DevSettingsRepository @Inject constructor(
     val censusAvailable: Boolean get() = isDebug
 
     suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
-    suspend fun setCensusBaseUrl(url: String): Boolean = dataSource.setCensusBaseUrl(url)
     suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)
-    suspend fun setCensusPolicy(value: String) = dataSource.setCensusPolicy(value)
+    suspend fun setCensusPolicy(value: JsonObject) = dataSource.setCensusPolicy(
+        value.mapNotNull { (key, element) ->
+            val number = element as? JsonPrimitive
+            number?.takeUnless { it.isString }?.intOrNull?.let { key to it }
+        }.toMap(),
+    )
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 

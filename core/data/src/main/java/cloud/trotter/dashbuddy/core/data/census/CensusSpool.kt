@@ -149,10 +149,16 @@ open class CensusSpool internal constructor(
 
     private fun readInFlight(): InFlight? {
         if (!inFlightFile.exists()) return null
-        val json = Json.parseToJsonElement(inFlightFile.readText(Charsets.UTF_8)).jsonObject
-        val ids = json.getValue("ids").jsonArray.map { it.jsonPrimitive.content }
-        require(ids.all { FILE_NAME.matches(it) })
-        return InFlight(json.getValue("batchId").jsonPrimitive.content, ids)
+        return runCatching {
+            val json = Json.parseToJsonElement(inFlightFile.readText(Charsets.UTF_8)).jsonObject
+            val ids = json.getValue("ids").jsonArray.map { it.jsonPrimitive.content }
+            require(ids.isNotEmpty() && ids.all { FILE_NAME.matches(it) })
+            InFlight(json.getValue("batchId").jsonPrimitive.content, ids)
+        }.getOrElse {
+            deleteInFlight()
+            stats.inflightCorrupt.incrementAndGet()
+            null
+        }
     }
 
     private fun deleteInFlight() {
@@ -189,6 +195,7 @@ open class CensusSpool internal constructor(
         val files = files()
         var bytes = files.sumOf { it.length() }
         var count = files.size
+        size.set(count)
         for (file in files) {
             if (count <= maxFiles && bytes <= maxDiskBytes) break
             val length = file.length()
@@ -203,7 +210,7 @@ open class CensusSpool internal constructor(
         if (!file.delete()) throw IOException("Census spool drop failed")
         stats.spoolDropped.incrementAndGet()
         reason?.incrementAndGet()
-        size.set(files().size)
+        size.decrementAndGet()
     }
 
     private fun readOrDrop(file: File): Spooled? = try {
