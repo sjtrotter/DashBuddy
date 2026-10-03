@@ -594,8 +594,34 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   and secret and re-enrollment: the old install is orphaned server-side, not withdrawn.
   The install secret is AES-256-GCM sealed by Android Keystore; credentials and spool are excluded
   from cloud backup and device transfer. The random install ID is a handle, not a device identifier.
-  Logs contain counters / allowlisted reason codes; the settings screen shows only an eight-character
-  enrolled prefix. Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;
+  Logs contain counters / allowlisted reason codes; the settings screen shows the eight-character
+  enrolled prefix and (#1185) a **Copy install id** button for the FULL id — a random handle, never the
+  secret — because the server-side trust step (`POST /ops/installs/<uuid>/trust`) needs it.
+  **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
+  database reset, withdrawn install) uploads 401 and the worker stops; the developer screen's **Reset
+  census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the
+  APPLICATION scope (leaving the screen cannot cancel it half-done; a failure is recorded as `failure`, never
+  thrown) under the shared `CensusUploadLock` (moved to `:core:data` so the resetter and the `:app` worker
+  serialize) in a non-cancellable section: `CensusSpool.clear()` FIRST (in-flight marker + its temp file, every
+  queued record and temp file — a failed clear leaves the identity in place and the count truthful), then the
+  sealed credential is wiped, then ONE DataStore edit drops the server policy and writes the `reset` outcome.
+  Consent is untouched, and so is a server-imposed deferral deadline (Retry-After / exhausted budget is server
+  policy, not identity state — a fresh id must not bypass it); only if consent is still on does it enqueue an
+  immediate run with `enqueueNow(replaceQueued = true)` (REPLACE, so a manual run parked in WorkManager
+  backoff cannot swallow it), which mints + enrols a fresh id (the old server install is orphaned, not
+  withdrawn). The worker's "identity unknown to server" WARN latch is keyed to the current install id
+  (`unauthorizedWarnedFor`: a changed identity re-arms it). Every run persists ONE
+  `CensusLastRun(atMillis, CensusRunOutcome, detail?)` into developer settings (`:domain` vocabulary, wire
+  strings `deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|stale_removed|
+  uploaded|duplicate|rejected|oversized|bad_request|unauthorized|clock_skew|revoked|failure|reset`, decode
+  fail-closed to `unknown`), EXCEPT a consent-off no-op (`disabled`), which writes nothing so the terminal
+  outcome it would overwrite (`revoked`, `enrol_rejected`…) stays readable; the last decisive site wins, an
+  otherwise idle run keeps `enrolled`, accepted/duplicate/rejected/stale totals summarize at the end of a
+  drain, and three exhausted batches never claim `spool_empty`; an unresigned non-skew 401 is the consent
+  check short-circuiting, recorded as nothing rather than `unauthorized`. The screen renders it raw as
+  `Last run <ago> · <token [detail]> · Queued: <n>` beside the identity line, with the queued count observed
+  from the spool's own `queued` flow (the one owner of the count, fail-open to 0 if the directory is
+  unavailable); the one new log line is INFO `census identity reset`, identifier-free. Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;
   neither enrollment IDs, secrets nor skeleton bodies are logged. Pipeline INFO `census{…}` includes
   spooled / dropped / corrupt / spool-oversized / server-oversized / bad-request / uploaded /
   duplicate / rejection / upload-failure counts.

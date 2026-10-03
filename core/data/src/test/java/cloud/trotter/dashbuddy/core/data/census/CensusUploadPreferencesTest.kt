@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
+import cloud.trotter.dashbuddy.domain.census.CensusLastRun
+import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -14,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -23,6 +26,34 @@ import java.io.File
 
 class CensusUploadPreferencesTest {
     @get:Rule val tmp = TemporaryFolder()
+
+    @Test fun `last run roundtrips decodes unknown tokens fail closed and a reset keeps the deferral deadline`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(io + Job())
+        try {
+            val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "last-run.preferences_pb") }
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            repo.setCensusUploadEnabled(true)
+            repo.setCensusPolicy(Json.parseToJsonElement("""{"k":10}""").jsonObject)
+            val run = CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12)
+            repo.setCensusLastRun(run)
+            assertEquals(run, repo.censusLastRun.first())
+            assertEquals("uploaded 12", repo.censusLastRun.first()?.token())
+            ds.edit { it[stringPreferencesKey("census_last_run_outcome")] = "bogus" }
+            assertEquals(CensusRunOutcome.UNKNOWN, repo.censusLastRun.first()?.outcome)
+            assertEquals(5L, repo.censusLastRun.first()?.atMillis)
+            repo.setNextAllowedAtMillis(99)
+
+            repo.recordCensusReset(CensusLastRun(7L, CensusRunOutcome.RESET))
+
+            assertEquals(CensusLastRun(7L, CensusRunOutcome.RESET), repo.censusLastRun.first())
+            assertEquals(99L, repo.nextAllowedAtMillis.first()) // Server policy survives an identity reset.
+            assertTrue(repo.censusPolicy.first().isEmpty())
+            assertTrue(repo.enabled.first())
+        } finally {
+            scope.cancel()
+        }
+    }
 
     @Test fun `consent defaults off and base URL is constant`() = runTest {
         val io = StandardTestDispatcher(testScheduler)

@@ -17,10 +17,11 @@ import javax.inject.Singleton
 
 @Singleton
 class CensusWorkScheduler @Inject constructor(@param:ApplicationContext private val context: Context) : CensusUploadScheduler {
-    override fun enqueueNow() {
+    override fun enqueueNow(replaceQueued: Boolean) {
         if (!BuildConfig.DEBUG) return
+        // KEEP would let a manual run parked in backoff swallow the request; a reset wants the fresh identity enrolled now.
         WorkManager.getInstance(context).enqueueUniqueWork(
-            NOW_NAME, ExistingWorkPolicy.KEEP,
+            NOW_NAME, if (replaceQueued) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<CensusUploadWorker>().setConstraints(constraints()).build(),
         )
     }

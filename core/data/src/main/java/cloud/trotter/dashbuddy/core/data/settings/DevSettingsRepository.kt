@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
+import cloud.trotter.dashbuddy.domain.census.CensusLastRun
+import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadPreferences
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
@@ -35,6 +37,11 @@ class DevSettingsRepository @Inject constructor(
     val nextAllowedAtMillis = dataSource.nextAllowedAtMillis
     val censusPolicy = dataSource.censusPolicy
     val censusAvailable: Boolean get() = isDebug
+    val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
+        raw?.let { (at, wire, detail) -> CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail) }
+    }
+    suspend fun setCensusLastRun(run: CensusLastRun) = dataSource.setCensusLastRun(run.atMillis, run.outcome.wire, run.detail)
+    suspend fun recordCensusReset(run: CensusLastRun) = dataSource.recordCensusReset(run.atMillis, run.outcome.wire)
 
     suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
     suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)

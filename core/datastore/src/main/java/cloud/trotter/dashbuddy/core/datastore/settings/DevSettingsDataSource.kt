@@ -23,6 +23,9 @@ class DevSettingsDataSource @Inject constructor(
         val LOG_LEVEL = intPreferencesKey("log_level")
         val CENSUS_UPLOAD_ENABLED = booleanPreferencesKey("census_upload_enabled")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
+        val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
+        val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
+        val CENSUS_LAST_RUN_DETAIL = intPreferencesKey("census_last_run_detail")
         val CENSUS_POLICY = listOf("dailySkeletonBudget", "maxBatchItems", "maxBatchBytes", "maxSkeletonBytes", "k")
             .associateWith { intPreferencesKey("census_policy_$it") }
         val BUBBLE_SESSION_MODE = stringPreferencesKey("bubble_session_mode")
@@ -54,6 +57,32 @@ class DevSettingsDataSource @Inject constructor(
     val nextAllowedAtMillis: Flow<Long> = ds.data.map { it[Keys.CENSUS_NEXT_ALLOWED_AT] ?: 0L }
     val censusPolicy: Flow<Map<String, Int>> = ds.data.map { prefs ->
         Keys.CENSUS_POLICY.mapNotNull { (name, key) -> prefs[key]?.let { name to it } }.toMap()
+    }
+
+    /** Raw (atMillis, outcomeWire, detail) of the last census run; the repository owns the fail-closed decode. */
+    val censusLastRun: Flow<Triple<Long, String?, Int?>?> = ds.data.map { prefs ->
+        prefs[Keys.CENSUS_LAST_RUN_AT]?.let { Triple(it, prefs[Keys.CENSUS_LAST_RUN_OUTCOME], prefs[Keys.CENSUS_LAST_RUN_DETAIL]) }
+    }
+
+    suspend fun setCensusLastRun(atMillis: Long, outcomeWire: String, detail: Int?) {
+        ds.edit {
+            it[Keys.CENSUS_LAST_RUN_AT] = atMillis
+            it[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
+            if (detail != null) it[Keys.CENSUS_LAST_RUN_DETAIL] = detail else it.remove(Keys.CENSUS_LAST_RUN_DETAIL)
+        }
+    }
+
+    /**
+     * Identity reset, ONE edit: forget the server policy and write the reset as the last run. Consent is untouched, and
+     * so is the deferral deadline — a server Retry-After / exhausted budget is server policy, not identity state.
+     */
+    suspend fun recordCensusReset(atMillis: Long, outcomeWire: String) {
+        ds.edit { prefs ->
+            Keys.CENSUS_POLICY.values.forEach { prefs.remove(it) }
+            prefs[Keys.CENSUS_LAST_RUN_AT] = atMillis
+            prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
+            prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
+        }
     }
 
     suspend fun setCensusUploadEnabled(enabled: Boolean) {

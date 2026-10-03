@@ -121,4 +121,12 @@
     <string name="developer_settings_census_identity">%1$s · Install: %2$s</string>
     <string name="developer_settings_census_not_enrolled">Not enrolled</string>
     <string name="developer_settings_census_upload_now">Upload now</string>
+    <string name="developer_settings_census_status">Last run %1$s ago · %2$s · Queued: %3$d</string>
+    <string name="developer_settings_census_status_never">No upload run yet · Queued: %1$d</string>
+    <string name="developer_settings_census_copy_id">Copy install id</string>
+    <string name="developer_settings_census_reset">Reset census identity</string>
+    <string name="developer_settings_census_reset_title">Reset census identity?</string>
+    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
+    <string name="developer_settings_census_reset_confirm">Reset</string>
+    <string name="developer_settings_census_reset_cancel">Cancel</string>
 </resources>

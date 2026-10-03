@@ -51,6 +51,13 @@ For items with multiple sub-concerns at different statuses, use one
 - **Census upload lands as clusters on the dashboard (#1182).** Enable Census upload (debug),
   collect UNKNOWN platform screens, then use Upload now; confirm clusters appear on the census dashboard.
   - Confirmed: 1/2 (2026-10-02 22:53 — first enrol + one batch accepted; cluster visible on /ops/clusters, redacted below k as designed)
+- **Census developer status line + Reset census identity (#1185).** In Developer settings the census
+  block shows `Last run <ago> · <outcome token> · Queued: <n>`; after a dash with UNKNOWN screens it should
+  read `uploaded <n>` within ~5 min with Queued back to 0. **Copy install id** puts the full UUID on the
+  clipboard (paste it somewhere to confirm). Only if you want to exercise the reset: tap Reset census
+  identity → Reset, confirm the prefix line changes to a NEW 8-char prefix within a minute (status
+  `reset` → `enrolled`/`spool_empty`), then trust the new install server-side (the old one is orphaned).
+  - Confirmed: 0/2
 
 **Living checklist (not a session entry).** Recently-merged changes (and open
 PRs / closed issues) that were validated only against captured data and need

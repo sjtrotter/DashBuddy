@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.census
 
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -14,6 +15,30 @@ import java.io.File
 
 class CensusSpoolTest {
     @get:Rule val tmp = TemporaryFolder()
+
+    @Test fun `clear removes every record the in flight marker and temp files and the queued flow reports zero`() = runTest {
+        val dir = File(tmp.newFolder(), "spool")
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(dir, stats, StandardTestDispatcher(testScheduler), now = { 10L })
+        repeat(3) { spool.append(censusRecord(it)) }
+        spool.markInFlight(spool.take(2, 100_000).map { it.id }, "reset-batch")
+        File(dir, "x.tmp").writeText("interrupted")
+        File(dir.parentFile, "inflight.json.tmp").writeText("interrupted") // Process death mid markInFlight.
+        assertEquals(3, spool.queued.first())
+
+        spool.clear()
+
+        assertEquals(0, spool.count())
+        assertEquals(0, spool.queued.first())
+        assertNull(spool.inFlight())
+        assertTrue(dir.listFiles()!!.isEmpty())
+        assertFalse(File(dir.parentFile, "inflight.json").exists())
+        assertFalse(File(dir.parentFile, "inflight.json.tmp").exists())
+        assertEquals(0L, stats.spoolDropped.get())
+        assertTrue(spool.take(100, 100_000).isEmpty())
+        spool.append(censusRecord(3))
+        assertEquals(1, spool.queued.first())
+    }
 
     @Test fun `in flight survives reopening with original order and batch id ahead of new arrivals`() = runTest {
         val dir = File(tmp.newFolder(), "spool")
