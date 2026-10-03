@@ -50,7 +50,7 @@ For items with multiple sub-concerns at different statuses, use one
 
 - **Census upload lands as clusters on the dashboard (#1182).** Enable Census upload (debug),
   collect UNKNOWN platform screens, then use Upload now; confirm clusters appear on the census dashboard.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-10-02 22:53 — first enrol + one batch accepted; cluster visible on /ops/clusters, redacted below k as designed)
 
 **Living checklist (not a session entry).** Recently-merged changes (and open
 PRs / closed issues) that were validated only against captured data and need
