@@ -33,6 +33,7 @@ import kotlin.coroutines.resumeWithException
 
 interface CensusTransport {
     suspend fun enrol(cred: Bearer.Credential, appVersion: String): EnrolResult
+    suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult
     suspend fun policy(): PolicyResult
     suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
 }
@@ -75,6 +76,19 @@ sealed interface UploadResult {
     data class TransportFailure(val failureClass: String) : UploadResult
 }
 
+sealed interface HealthResult {
+    data class Accepted(val accepted: Int, val rejected: Map<String, Int>) : HealthResult
+    data class BatchQuality(val rejected: Map<String, Int>) : HealthResult
+    data object BadRequest : HealthResult
+    data object PayloadTooLarge : HealthResult
+    data class BudgetExhausted(val retryAfterSeconds: Long) : HealthResult
+    data class RateLimited(val retryAfter: Long) : HealthResult
+    data class Unauthorized(val serverDateMillis: Long?) : HealthResult
+    data object Revoked : HealthResult
+    data class ServerUnavailable(val status: Int) : HealthResult
+    data class TransportFailure(val failureClass: String) : HealthResult
+}
+
 /** Factory is the injectable seam for workers; callers never configure their own HTTP logging. */
 @Singleton
 open class CensusApiFactory @Inject constructor() {
@@ -84,9 +98,9 @@ open class CensusApiFactory @Inject constructor() {
 
 /**
  * Plain OkHttp; no transport retry, redirect or body re-serialization. The worker owns retries.
- * Application request data is limited to the bearer, timestamp and signature (upload only),
+ * Application request data is limited to the bearer, timestamp and signature (skeletons and health),
  * constant User-Agent `dashbuddy-census/1`, Content-Type `application/json`, and the body:
- * protocol-required installId/appVersion/schemaIds on enrol, batchId/items on upload.
+ * protocol-required installId/appVersion/schemaIds on enrol, batchId/items on skeleton upload, reports on health.
  * Enrol uses the bearer without timestamp/signature; policy is a bodyless, unauthenticated GET
  * with the same User-Agent. No other application metadata is sent.
  */
@@ -112,7 +126,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         when (response.status) {
             200 -> EnrolResult.Enrolled(response.json())
             409 -> EnrolResult.InstallExists
-            401 -> if (response.error() == "revoked") EnrolResult.Revoked else EnrolResult.Unauthorized
+            401 -> if (response.isRevoked()) EnrolResult.Revoked else EnrolResult.Unauthorized
             429 -> EnrolResult.RateLimited(response.retryAfter)
             408, in 500..599 -> EnrolResult.ServerUnavailable(response.status)
             else -> EnrolResult.RequestRejected(response.status)
@@ -155,7 +169,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
                 }
             }
             400 -> UploadResult.BadRequest
-            401 -> if (response.error() == "revoked") UploadResult.Revoked else UploadResult.Unauthorized(response.dateMillis)
+            401 -> if (response.isRevoked()) UploadResult.Revoked else UploadResult.Unauthorized(response.dateMillis)
             413 -> UploadResult.PayloadTooLarge
             422 -> UploadResult.BatchQuality(reasons(response.json()))
             429 -> if (response.error() == "budget_exhausted") UploadResult.BudgetExhausted(response.retryAfter)
@@ -166,6 +180,30 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         throw e
     } catch (e: Exception) {
         UploadResult.TransportFailure(e.failureToken())
+    }
+
+    override suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult = try {
+        val bytes = ("{\"reports\":[" + reportsJson.joinToString(",") + "]}").toByteArray(Charsets.UTF_8)
+        val response = execute(request("/v1/health", bytes, cred, signed = true))
+        when (response.status) {
+            200 -> {
+                val json = response.json()
+                if (json.getValue("status").jsonPrimitive.content == "accepted") {
+                    HealthResult.Accepted(json.int("accepted"), reasons(json))
+                } else HealthResult.TransportFailure("InvalidResponse")
+            }
+            400 -> HealthResult.BadRequest
+            401 -> if (response.isRevoked()) HealthResult.Revoked else HealthResult.Unauthorized(response.dateMillis)
+            413 -> HealthResult.PayloadTooLarge
+            422 -> HealthResult.BatchQuality(reasons(response.json()))
+            429 -> if (response.error() == "budget_exhausted") HealthResult.BudgetExhausted(response.retryAfter)
+                else HealthResult.RateLimited(response.retryAfter)
+            else -> HealthResult.ServerUnavailable(response.status)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        HealthResult.TransportFailure(e.failureToken())
     }
 
     private fun request(path: String, body: ByteArray, cred: Bearer.Credential, signed: Boolean): Request {
@@ -189,6 +227,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
 
     private data class Reply(val status: Int, val body: String, val retryAfter: Long, val dateMillis: Long?) {
         fun json(): JsonObject = Json.parseToJsonElement(body).jsonObject
+        fun isRevoked(): Boolean = error() == "revoked"
         fun error(): String? = runCatching { json()["error"]?.jsonPrimitive?.content }.getOrNull()
         override fun toString(): String = "Reply(status=$status)"
     }

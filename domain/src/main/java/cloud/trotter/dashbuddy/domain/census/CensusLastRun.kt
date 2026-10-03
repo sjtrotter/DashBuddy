@@ -8,6 +8,8 @@ enum class CensusRunOutcome(val wire: String) {
     ENROL_CONFLICT("enrol_conflict"),
     ENROL_REJECTED("enrol_rejected"), // detail = HTTP status
     KEYSTORE_TRANSIENT("keystore_transient"),
+    HEALTH_POSTED("health_posted"), // detail = reports accepted this run
+    HEALTH_REJECTED("health_rejected"), // detail = reports rejected this run
     SPOOL_EMPTY("spool_empty"),
     STALE_REMOVED("stale_removed"),  // detail = stale items removed locally when nothing else happened this run
     UPLOADED("uploaded"),            // detail = accepted items this run

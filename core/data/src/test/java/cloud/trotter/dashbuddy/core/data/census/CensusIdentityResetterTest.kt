@@ -5,6 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
+import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
+import cloud.trotter.dashbuddy.domain.census.HealthLedger
+import kotlinx.coroutines.test.StandardTestDispatcher
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
 import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
@@ -47,12 +50,16 @@ class CensusIdentityResetterTest {
 
     private val credentials: CensusCredentialStore = mock()
     private val spool: CensusSpool = mock()
+    private val healthStore: HealthLedgerStore = mock()
     private val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined)
     private val scheduler = Scheduler()
     private val lock = CensusUploadLock()
 
-    private fun TestScope.resetter(scope: CoroutineScope = backgroundScope) =
-        CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, now = { 123L })
+    private suspend fun TestScope.resetter(scope: CoroutineScope = backgroundScope): CensusIdentityResetter {
+        whenever(healthStore.load()).thenReturn(HealthLedger())
+        val sink = PersistentHealthSink(healthStore, CensusUploadStats(), scope, StandardTestDispatcher(testScheduler))
+        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L })
+    }
 
     @Test fun `reset clears the spool before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
         preferences.setCensusUploadEnabled(true)
@@ -62,9 +69,10 @@ class CensusIdentityResetterTest {
 
         resetter().reset()
 
-        inOrder(spool, credentials) {
+        inOrder(spool, credentials, healthStore) {
             verify(spool).clear()
             verify(credentials).wipe()
+            verify(healthStore).clear()
         }
         assertEquals(99L, preferences.nextAllowedAtMillis.first()) // A server-imposed deferral is not identity state.
         assertTrue(preferences.censusPolicy.first().isEmpty())
@@ -104,6 +112,7 @@ class CensusIdentityResetterTest {
         assertFalse(resetter().reset())
 
         verify(credentials, never()).wipe()
+        verify(healthStore, never()).clear()
         assertTrue(scheduler.enqueued.isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }

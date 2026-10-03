@@ -625,6 +625,14 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   neither enrollment IDs, secrets nor skeleton bodies are logged. Pipeline INFO `census{…}` includes
   spooled / dropped / corrupt / spool-oversized / server-oversized / bad-request / uploaded /
   duplicate / rejection / upload-failure counts.
+  **Health (#1197)** — the local ledger records every admitted screen regardless of upload consent,
+  keyed by (UTC day, platform wire, platform app version). Wire `admitted` means recognized frames,
+  `unknown` means UNKNOWN frames, and `trips` counts local alarm edges; the complete rule map is
+  retained and oversized reports are refused, never truncated. Bundled rules use the `dev` tag.
+  With consent, each closed day posts as a singleton to `/v1/health` (at most three per run), with
+  exact-revision acknowledgements. Health is not gated by the skeleton deferral deadline. The ledger
+  is generation-scoped and cleared on identity reset, and excluded from cloud backup and device
+  transfer; no PII: rule ids, platform wire, version strings, counts.
 - *Wire contract* — the Apache-2.0 package `cloud.trotter.census.contract` (the `census-contract/` build, #1173): `UiSkeletonDto` /
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present

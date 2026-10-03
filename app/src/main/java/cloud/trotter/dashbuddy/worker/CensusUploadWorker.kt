@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore.Credential
 import cloud.trotter.dashbuddy.core.data.census.CensusSpool
+import cloud.trotter.dashbuddy.core.data.census.PersistentHealthSink
+import cloud.trotter.dashbuddy.domain.census.HealthLedger
+import cloud.trotter.dashbuddy.core.network.census.HealthResult
 import cloud.trotter.dashbuddy.core.data.census.CensusUploadLock
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.network.census.CensusApi
@@ -45,6 +48,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private val scheduler: CensusUploadScheduler,
     private val stats: CensusUploadStats,
     private val uploadLock: CensusUploadLock,
+    private val healthSink: PersistentHealthSink,
 ) : CoroutineWorker(appContext, workerParams) {
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
@@ -53,6 +57,8 @@ class CensusUploadWorker @AssistedInject constructor(
         var duplicate = 0
         var rejected = 0
         var stale = 0
+        var healthPosted = 0
+        var healthRejected = 0
         fun set(outcome: CensusRunOutcome, detail: Int? = null) { this.outcome = outcome; this.detail = detail }
     }
 
@@ -66,7 +72,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 val credential = loadCredential()
                 val enrolled = if (credential.enrolled) Enrollment.Ready(credential) else enrol(api, credential, record)
                 when (enrolled) {
-                    is Enrollment.Ready -> uploadBatches(api, enrolled.credential, record)
+                    is Enrollment.Ready -> postHealth(api, enrolled.credential, record)
+                        ?: uploadBatches(api, enrolled.credential, record)
                     is Enrollment.Stop -> enrolled.result
                 }
             }
@@ -98,14 +105,6 @@ class CensusUploadWorker @AssistedInject constructor(
         if (!BuildConfig.DEBUG || !preferences.censusUploadEnabled.first()) {
             record.set(CensusRunOutcome.DISABLED)
             Timber.tag(TAG).d("census disabled runs=1")
-            return false
-        }
-        val deadline = preferences.nextAllowedAtMillis.first()
-        val now = System.currentTimeMillis()
-        if (now < deadline) {
-            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
-            scheduler.deferUntil(deadline)
-            Timber.tag(TAG).i("census deferred runs=1")
             return false
         }
         return true
@@ -158,7 +157,57 @@ class CensusUploadWorker @AssistedInject constructor(
         return Enrollment.Stop(failure(record))
     }
 
+    /** Closed days are singleton UPSERTs; only the exact submitted revision can be acknowledged. */
+    private suspend fun postHealth(api: CensusTransport, credential: Credential, record: RunRecord): Result? {
+        val ledger = healthSink.snapshot()
+        val todayUtc = LocalDate.now(ZoneOffset.UTC)
+        val candidates = ledger.closedRowsToPost(todayUtc.toString(), todayUtc.minusDays(7).toString()).take(3)
+        for ((key, row) in candidates) {
+            if (!preferences.censusUploadEnabled.first()) {
+                record.set(CensusRunOutcome.DISABLED)
+                return Result.success()
+            }
+            val json = HealthLedger.reportJson(key, row, BuildConfig.VERSION_NAME, rulesetVersion = "dev")
+            if (!HealthLedger.reportFits(json)) {
+                healthSink.apply { if (it.generation == ledger.generation) it.markRefused(key, row.revision) else it }
+                stats.healthOversized.incrementAndGet()
+                Timber.tag(TAG).w("census health oversized day=%s", key.day)
+                continue
+            }
+            val reasons = when (val result = api.postHealth(credential.bearer(), listOf(json))) {
+                is HealthResult.Accepted -> {
+                    if (result.accepted != 1) result.rejected else {
+                        healthSink.apply { if (it.generation == ledger.generation) it.markPosted(key, row.revision) else it }
+                        stats.healthPosted.incrementAndGet()
+                        record.healthPosted++
+                        continue
+                    }
+                }
+                is HealthResult.BatchQuality -> result.rejected
+                HealthResult.BadRequest -> mapOf("bad_request" to 1)
+                HealthResult.PayloadTooLarge -> mapOf("batch_too_large" to 1)
+                is HealthResult.RateLimited, is HealthResult.BudgetExhausted,
+                is HealthResult.Unauthorized, is HealthResult.ServerUnavailable,
+                is HealthResult.TransportFailure -> return null
+                HealthResult.Revoked -> return revoke(record)
+            }
+            healthSink.apply { if (it.generation == ledger.generation) it.markRefused(key, row.revision) else it }
+            stats.healthRejected.incrementAndGet()
+            record.healthRejected++
+            Timber.tag(TAG).w("census health rejected reasons=%s", reasons)
+        }
+        return null
+    }
+
     private suspend fun uploadBatches(api: CensusTransport, credential: Credential, record: RunRecord): Result {
+        val deadline = preferences.nextAllowedAtMillis.first()
+        val now = System.currentTimeMillis()
+        if (now < deadline) {
+            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+            scheduler.deferUntil(deadline)
+            Timber.tag(TAG).i("census deferred runs=1")
+            return Result.success()
+        }
         val run = UploadRun()
         repeat(3) {
             if (!preferences.censusUploadEnabled.first()) {
@@ -196,8 +245,10 @@ class CensusUploadWorker @AssistedInject constructor(
             duplicate > 0 -> set(CensusRunOutcome.DUPLICATE, duplicate)
             rejected > 0 -> set(CensusRunOutcome.REJECTED, rejected)
             stale > 0 -> set(CensusRunOutcome.STALE_REMOVED, stale)
-            outcome == CensusRunOutcome.ENROLLED || outcome == CensusRunOutcome.OVERSIZED ||
-                outcome == CensusRunOutcome.BAD_REQUEST -> Unit
+            outcome == CensusRunOutcome.OVERSIZED || outcome == CensusRunOutcome.BAD_REQUEST -> Unit
+            healthPosted > 0 -> set(CensusRunOutcome.HEALTH_POSTED, healthPosted)
+            healthRejected > 0 -> set(CensusRunOutcome.HEALTH_REJECTED, healthRejected)
+            outcome == CensusRunOutcome.ENROLLED -> Unit
             spoolEmpty -> set(CensusRunOutcome.SPOOL_EMPTY)
             else -> Unit
         }

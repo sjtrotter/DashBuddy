@@ -19,7 +19,7 @@ import javax.inject.Singleton
 
 /**
  * Developer action (#1185): forget this phone's census identity. Under the uploader lock (never mid-batch) it clears
- * the spool FIRST (a failed clear leaves the identity in place), wipes the sealed credential, and records the reset
+ * the spool FIRST (a failed clear leaves the identity in place), wipes the sealed credential and health ledger, and records the reset
  * as the last run in one DataStore edit; the next run mints + enrols a fresh install id, which the server must trust
  * again. The old server-side install is orphaned, not withdrawn. Consent and a server-imposed deferral deadline are
  * left as they are. [resetAsync] runs on the application scope so leaving the screen cannot cancel it half-done.
@@ -32,6 +32,7 @@ class CensusIdentityResetter internal constructor(
     private val scheduler: CensusUploadScheduler,
     private val lock: CensusUploadLock,
     private val scope: CoroutineScope,
+    private val healthSink: PersistentHealthSink,
     private val now: () -> Long,
 ) {
     @Inject constructor(
@@ -41,7 +42,8 @@ class CensusIdentityResetter internal constructor(
         scheduler: CensusUploadScheduler,
         lock: CensusUploadLock,
         @ApplicationScope scope: CoroutineScope,
-    ) : this(credentials, spool, preferences, scheduler, lock, scope, System::currentTimeMillis)
+        healthSink: PersistentHealthSink,
+    ) : this(credentials, spool, preferences, scheduler, lock, scope, healthSink, System::currentTimeMillis)
 
     /** The UI entry point: never cancelled by the caller's lifecycle. */
     fun resetAsync(): Job = scope.launch { reset() }
@@ -57,6 +59,7 @@ class CensusIdentityResetter internal constructor(
                 try {
                     spool.clear()
                     credentials.wipe()
+                    healthSink.reset()
                     preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))
                     Timber.tag(TAG).i("census identity reset")
                     true
