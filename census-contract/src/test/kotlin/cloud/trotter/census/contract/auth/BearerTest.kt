@@ -36,7 +36,7 @@ class BearerTest {
             val parsed = requireNotNull(Bearer.parse("$it $installId.$secret"))
             assertEquals(installId, parsed.installId)
             assertEquals(secret, parsed.secret)
-            assertFalse(parsed.toString().contains(secret), "toString must never render the secret")
+            assertFalse("toString must never render the secret", parsed.toString().contains(secret))
         }
     }
 
