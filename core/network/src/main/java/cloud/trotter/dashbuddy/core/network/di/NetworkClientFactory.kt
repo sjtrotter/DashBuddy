@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.network.di
 
+import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.dashbuddy.core.network.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -10,6 +11,8 @@ import retrofit2.Retrofit
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
+enum class ClientProfile { Default, Census }
+
 /**
  * Single source of truth for Retrofit/OkHttp client assembly across [core:network].
  *
@@ -17,7 +20,7 @@ import java.util.concurrent.TimeUnit
  * [Retrofit.Builder], and the two copies had already diverged on the #348 security
  * hardening (one redacted the `api_key` query param and set timeouts, the other did
  * neither). Centralizing the assembly here makes the secure path the *default* path:
- * any provider that calls [okHttpClient] gets debug-gated, Timber-piped BODY logging
+ * any provider that calls [okHttpClient] gets debug-gated, Timber-piped logging (Census headers only, other clients BODY)
  * **with secret redaction and standard timeouts baked in** — there is no longer a
  * per-module step to remember.
  *
@@ -48,16 +51,19 @@ object NetworkClientFactory {
 
     /**
      * A [OkHttpClient] with the #348 hardening baked in as the default:
-     *  - **Debug-only** Timber-piped BODY [HttpLoggingInterceptor] (release gets no HTTP
-     *    logging at all), with [redactedQueryParams] stripped so secrets never reach logs.
+     *  - **Debug-only** Timber-piped [HttpLoggingInterceptor] (release gets no HTTP
+     *    logging at all): Census headers only, otherwise BODY, with bearer/signature headers
+     *    and [redactedQueryParams] stripped so secrets never reach logs.
      *  - Standard connect/read/write timeouts.
      *
      * @param logTag Timber tag for the HTTP log lines (debug builds only).
+     * @param profile Census suppresses bodies and uses a ten-second connect timeout.
      * @param redactedQueryParams query-param names to redact from logs; defaults to the
      *   shared secret list (`api_key`). Pass a superset if the upstream carries more secrets.
      */
     fun okHttpClient(
         logTag: String,
+        profile: ClientProfile = ClientProfile.Default,
         redactedQueryParams: List<String> = DEFAULT_REDACTED_QUERY_PARAMS,
     ): OkHttpClient = OkHttpClient.Builder()
         .apply {
@@ -68,13 +74,18 @@ object NetworkClientFactory {
                 }
                 addInterceptor(
                     HttpLoggingInterceptor(timberLogger).apply {
-                        level = HttpLoggingInterceptor.Level.BODY
+                        // Census bodies contain skeletons / enrollment IDs. Never log bodies,
+                        // even at VERBOSE; signatures and the bearer are secrets too.
+                        level = if (profile == ClientProfile.Census) HttpLoggingInterceptor.Level.HEADERS
+                            else HttpLoggingInterceptor.Level.BODY
+                        redactHeader(CensusHeaders.AUTHORIZATION)
+                        redactHeader(CensusHeaders.SIGNATURE)
                         redactedQueryParams.forEach { redactQueryParams(it) }
                     }
                 )
             }
         }
-        .connectTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectTimeout(if (profile == ClientProfile.Census) 10L else DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()

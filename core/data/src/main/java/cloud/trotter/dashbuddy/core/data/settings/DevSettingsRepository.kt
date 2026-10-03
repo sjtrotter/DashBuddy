@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
+import cloud.trotter.dashbuddy.domain.census.CensusUploadPreferences
 import android.util.Log
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
@@ -11,6 +12,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,7 +27,24 @@ class DevSettingsRepository @Inject constructor(
     private val dataSource: DevSettingsDataSource,
     @param:Named("isDebug") private val isDebug: Boolean,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
-) {
+) : CensusUploadPreferences {
+    val censusUploadEnabled: Flow<Boolean> = dataSource.censusUploadEnabled.map { isDebug && it }
+    val censusBaseUrl: Flow<String> = dataSource.censusBaseUrl
+    override val enabled: Flow<Boolean> = censusUploadEnabled
+    override val baseUrl: Flow<String> = censusBaseUrl
+    val nextAllowedAtMillis = dataSource.nextAllowedAtMillis
+    val censusPolicy = dataSource.censusPolicy
+    val censusAvailable: Boolean get() = isDebug
+
+    suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
+    suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)
+    suspend fun setCensusPolicy(value: JsonObject) = dataSource.setCensusPolicy(
+        value.mapNotNull { (key, element) ->
+            val number = element as? JsonPrimitive
+            number?.takeUnless { it.isString }?.intOrNull?.let { key to it }
+        }.toMap(),
+    )
+
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 
     // ============================================================================================

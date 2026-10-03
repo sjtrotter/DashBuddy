@@ -562,10 +562,43 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 `Observation.identity()`, the classifier or the capture envelope schema.
 
 **Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — wired behind a NoOp sink (M1b, #1146).**
-The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer holds its first,
-side-effect-free half.
+The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
+  release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
+  256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
+  The spool retains at most 2,000 records / 20 MiB, dropping oldest first; corrupt and oversized
+  records are deleted and counted. Every 50 appends or at 100 queued items requests unique KEEP
+  work. Periodic work runs hourly with connected-network and battery-not-low constraints.
+  A run selects at most three batches of 100 items / 900 KiB, preserving the builder's item bytes.
+  A fresh `batchId = sha256Hex(sorted fingerprints joined by "\n").take(32)` and ordered spool IDs
+  are atomically persisted in `filesDir/census/inflight.json` before sending. Retries send the same
+  surviving IDs in order with the saved batch ID before taking new arrivals; removal clears the
+  in-flight record. Accepted / duplicate batches are removed; batch-quality rejected batches are
+  removed and counted by reason. 413 splits a batch in half recursively in the same run (at most
+  seven levels); a singleton still refused is removed and counted as oversized, with one size-only
+  WARN. 400 removes the batch, counts one bad request and emits one item-count-only WARN.
+  Upload 401 re-signs at most once per run, across all batches and split halves, unless
+  the server Date differs by more than 300 seconds; revoked credentials are wiped and consent
+  switched off. 429 stores a deadline, defers periodic work, and gates manual work too; 408 / 5xx /
+  transport failures use WorkManager backoff. Concurrent manual and periodic runs share a mutex.
+  Enrollment persists the returned policy and retries the same pending identity after a lost reply;
+  enrol 401 uses WorkManager retry.
+  The complete application request data is the bearer, timestamp and signature (upload only),
+  constant `User-Agent: dashbuddy-census/1`, `Content-Type: application/json`, and the body:
+  protocol-required `installId` / `appVersion` / `schemaIds` on enrol, `batchId` + items on upload.
+  Enrol carries the bearer without timestamp/signature; the unauthenticated, bodyless policy GET
+  carries the same constant User-Agent. No other application metadata is sent.
+  A conflicting pending ID is replaced once. An unusable Keystore key triggers a new random UUID v4
+  and secret and re-enrollment: the old install is orphaned server-side, not withdrawn.
+  The install secret is AES-256-GCM sealed by Android Keystore; credentials and spool are excluded
+  from cloud backup and device transfer. The random install ID is a handle, not a device identifier.
+  Logs contain counters / allowlisted reason codes; the settings screen shows only an eight-character
+  enrolled prefix. Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;
+  neither enrollment IDs, secrets nor skeleton bodies are logged. Pipeline INFO `census{…}` includes
+  spooled / dropped / corrupt / spool-oversized / server-oversized / bad-request / uploaded /
+  duplicate / rejection / upload-failure counts.
 - *Wire contract* — the Apache-2.0 package `cloud.trotter.census.contract` (the `census-contract/` build, #1173): `UiSkeletonDto` /
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
@@ -662,7 +695,7 @@ side-effect-free half.
   redactor parity with exactly one stated exemption, plus a negative control) and a seeded property.
 
 Nothing calls the builder at runtime yet: the publisher stage, `CensusSink` and `PipelineStats` counters
-are #1146 (M1b); upload is M3.
+are #1146 (M1b); the opt-in debug uploader is #1182 (S7b).
 
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal

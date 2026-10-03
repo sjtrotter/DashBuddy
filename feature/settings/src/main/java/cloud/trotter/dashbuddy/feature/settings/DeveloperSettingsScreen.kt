@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,9 +47,7 @@ private val BubbleSessionMode.explainerRes: Int
     }
 
 /**
- * Developer Options — the field-experiment switches. Today: the bubble's session-presentation mode
- * (#867), which the developer live-tests across a multi-app dash; whichever presentation wins
- * becomes the shipped default and the others get deleted.
+ * Developer Options — the bubble session experiment (#867) and opt-in debug census uploads (#1182).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +57,10 @@ fun DeveloperSettingsScreen(
 ) {
     val sessionMode by viewModel.bubbleSessionMode
         .collectAsStateWithLifecycle(initialValue = BubbleSessionMode.Default)
+
+    val censusEnabled by viewModel.censusUploadEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val censusHost by viewModel.censusHost.collectAsStateWithLifecycle(initialValue = "")
+    val censusPrefix by viewModel.censusInstallIdPrefix.collectAsStateWithLifecycle(initialValue = null)
 
     Scaffold(
         topBar = {
@@ -112,6 +116,21 @@ fun DeveloperSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
             )
+            if (viewModel.censusAvailable) {
+                Text(stringResource(R.string.developer_settings_census_upload))
+                Switch(checked = censusEnabled, onCheckedChange = { viewModel.setCensusUploadEnabled(it) })
+                Text(
+                    stringResource(
+                        R.string.developer_settings_census_identity,
+                        censusHost,
+                        censusPrefix ?: stringResource(R.string.developer_settings_census_not_enrolled),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = viewModel::uploadCensusNow, enabled = censusEnabled) {
+                    Text(stringResource(R.string.developer_settings_census_upload_now))
+                }
+            }
         }
     }
 }

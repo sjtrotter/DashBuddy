@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import cloud.trotter.dashbuddy.domain.pipeline.ParseShortfall
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
@@ -42,6 +43,7 @@ class PipelineStats @Inject constructor(
      * BuildConfig edge.
      */
     @param:Named("appVersionName") private val appVersionName: String,
+    private val censusUploads: CensusUploadStats = CensusUploadStats(),
 ) {
 
     /**
@@ -69,6 +71,13 @@ class PipelineStats @Inject constructor(
     private val notifRedactBackstopScrubs = AtomicLong()
     private val notifListenerConnects = AtomicLong()
     private val notifListenerDisconnects = AtomicLong()
+
+    val censusSpooled: Long get() = censusUploads.spooled.get()
+    val censusSpoolDropped: Long get() = censusUploads.spoolDropped.get()
+    val censusUploaded: Long get() = censusUploads.uploaded.get()
+    val censusDuplicate: Long get() = censusUploads.duplicate.get()
+    val censusRejected: Map<String, Long> get() = censusUploads.rejectedCounts()
+    val censusUploadFailures: Long get() = censusUploads.uploadFailures.get()
 
     /** #1146: census items and token decisions, counts only; disabled sinks leave these untouched. */
     private val censusSkeletons = AtomicLong()
@@ -497,12 +506,13 @@ class PipelineStats @Inject constructor(
         val sinkRefused = censusSinkRefused.get()
         val failures = censusPublishFailures.get()
         val unattributed = censusUnattributedPlatform.get()
+        val uploads = censusUploads.summary()
         val refused = reasonSuffix(",refused", censusRefusals)
         if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
-            failures == 0L && unattributed == 0L && refused.isEmpty()
+            failures == 0L && unattributed == 0L && refused.isEmpty() && uploads.isEmpty()
         ) return ""
         return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
-            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused}"
+            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused$uploads}"
     }
 
     /**
