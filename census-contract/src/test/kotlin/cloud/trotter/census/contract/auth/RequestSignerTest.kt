@@ -89,6 +89,17 @@ class RequestSignerTest {
         }
         val wrongSecret = InstallSecret.encode(ByteArray(32) { (it + 1).toByte() })
         assertFalse(RequestSigner.verify(wrongSecret, canonical, SIGNATURE))
+        // Review: the comparison seam must be reached with FIXED-LENGTH arrays for a well-formed MISMATCH too (no short-circuit).
+        var seamLengths: Pair<Int, Int>? = null
+        assertFalse(RequestSigner.verify(SECRET, canonical, "v1=" + "0".repeat(64)) { expected, actual ->
+            seamLengths = expected.size to actual.size
+            java.security.MessageDigest.isEqual(expected, actual)
+        })
+        assertEquals(67 to 67, seamLengths)
+        // Review: the window must not overflow at the Long extremes (the server's Instant domain never reaches them).
+        assertTrue(RequestSigner.timestampInWindow(Long.MAX_VALUE.toString(), Long.MAX_VALUE))
+        assertFalse(RequestSigner.timestampInWindow(Long.MIN_VALUE.toString(), Long.MAX_VALUE))
+        assertFalse(RequestSigner.timestampInWindow("0", Long.MIN_VALUE))
     }
 
     @Test

@@ -24,7 +24,14 @@ package cloud.trotter.census.contract.auth
 object Bearer {
     fun format(installId: String, secret: String): String = "Bearer $installId.$secret"
 
-    fun parse(header: String?): Pair<String, String>? {
+    /** A parsed bearer. `toString` never renders the secret (review: a `Pair` would have). */
+    class Credential(val installId: String, val secret: String) {
+        override fun toString(): String = "Bearer.Credential(installId=${installId.take(8)}…, secret=[redacted])"
+        override fun equals(other: Any?): Boolean = other is Credential && other.installId == installId && other.secret == secret
+        override fun hashCode(): Int = 31 * installId.hashCode() + secret.hashCode()
+    }
+
+    fun parse(header: String?): Credential? {
         if (header == null || !header.startsWith("Bearer ", ignoreCase = true)) return null
         val credential = header.substring(7)
         val separator = credential.indexOf('.')
@@ -32,6 +39,6 @@ object Bearer {
         val id = credential.substring(0, separator)
         if (!InstallIdGrammar.isCanonicalV4(id)) return null
         val secret = credential.substring(separator + 1)
-        return if (InstallSecret.isValid(secret)) Pair(id, secret) else null
+        return if (InstallSecret.isValid(secret)) Credential(id, secret) else null
     }
 }

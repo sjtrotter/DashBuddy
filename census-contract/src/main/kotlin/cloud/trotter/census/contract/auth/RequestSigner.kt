@@ -58,6 +58,12 @@ object RequestSigner {
     fun timestampInWindow(timestamp: String, nowEpochSeconds: Long, windowSeconds: Long = 300): Boolean {
         if (!Regex("-?(0|[1-9][0-9]*)").matches(timestamp)) return false
         val seconds = timestamp.toLongOrNull() ?: return false
-        return seconds >= nowEpochSeconds - windowSeconds && seconds <= nowEpochSeconds + windowSeconds
+        // Overflow-safe (review): compare the DISTANCE, never `now ± window` — a value near Long.MAX_VALUE wrapped the bound.
+        val distance = try {
+            Math.abs(Math.subtractExact(seconds, nowEpochSeconds))
+        } catch (_: ArithmeticException) {
+            return false
+        }
+        return distance >= 0 && distance <= windowSeconds
     }
 }

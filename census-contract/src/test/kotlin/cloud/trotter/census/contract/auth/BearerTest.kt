@@ -21,6 +21,7 @@
 package cloud.trotter.census.contract.auth
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -32,7 +33,10 @@ class BearerTest {
     fun `format and parse round trip with case insensitive scheme`() {
         assertEquals("Bearer $installId.$secret", Bearer.format(installId, secret))
         listOf("Bearer", "bearer", "BEARER", "bEaReR").forEach {
-            assertEquals(Pair(installId, secret), Bearer.parse("$it $installId.$secret"))
+            val parsed = requireNotNull(Bearer.parse("$it $installId.$secret"))
+            assertEquals(installId, parsed.installId)
+            assertEquals(secret, parsed.secret)
+            assertFalse(parsed.toString().contains(secret), "toString must never render the secret")
         }
     }
 
