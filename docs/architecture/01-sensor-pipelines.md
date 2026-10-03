@@ -754,7 +754,7 @@ exactly its audience.)
 (effect engine #914, bubble #916, odometer #917; the offer voice joined as the fifth in #991, §4).
 Two pieces, both fail-OPEN and both inert to frame processing. (1) **Version stamping:**
 `PlatformAppVersions` resolves the OBSERVED app's `versionName` (`CachingPlatformAppVersions` — one
-`PackageManager` lookup per package per 10-minute TTL (positive AND negative results expire together,
+`PackageManager` lookup per package per 10-minute TTL — two concurrent misses may both resolve, harmlessly — (positive AND negative results expire together,
 #1197: the stamp now keys the daily health rollup, so a stale read after an in-place update is bounded
 to ten minutes; a `PACKAGE_REPLACED` receiver was rejected as a sensing-hot-path cost), a lock-free
 `ConcurrentHashMap` so a hit never waits behind another package's binder call, `catch (Throwable)`;
@@ -765,8 +765,10 @@ package, since the capture stage is skipped wholesale on a disabled bus — from
 the capture envelope for free. Additive + nullable, and `Json.encodeDefaults` is false, so an
 unstamped envelope is byte-identical to a pre-#937 one: the committed corpus and the parse golden
 carry no such key and no test may require it. The cache is deliberately NOT invalidated on a package
-update (a process restart follows one in practice; a stale diagnostic stamp is a nuisance, never a
-correctness problem). The resolved `package@version` pairs also ride the periodic `PipelineStats`
+update (a `PACKAGE_REPLACED` receiver was rejected as a sensing-hot-path cost; since #1197 the stamp
+keys the daily health rollup, so a screen admitted inside the TTL after an in-place update is
+attributed to the previous version — an exposure the 10-minute expiry bounds, not removes). The
+resolved `package@version` pairs also ride the periodic `PipelineStats`
 INFO summary — platform-app facts, PII-free. (2) **UNKNOWN-rate alarm:** `RecognitionHealth` (pure,
 per-platform rolling window of the last `WINDOW_SIZE`=50 **admitted** screen frames —
 post-`FrameGate`, so a dasher parked on one unruled screen contributes a couple of samples, not a

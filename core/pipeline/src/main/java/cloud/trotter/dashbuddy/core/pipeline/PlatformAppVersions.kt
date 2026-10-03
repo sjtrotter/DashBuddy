@@ -61,6 +61,7 @@ class CachingPlatformAppVersions(
      * resolve once — harmless, and the second write wins with an equivalent value.
      */
     private val cache = ConcurrentHashMap<String, Resolution>()
+    private val admission = Any()
 
     override fun versionName(packageName: String): String? {
         if (packageName.isEmpty()) return null
@@ -80,10 +81,15 @@ class CachingPlatformAppVersions(
         // dasher's screen shows), but this is fed from untrusted frame data, so cap it rather
         // than trust that. Past the cap we still ANSWER, we just stop remembering — correctness
         // is unchanged, only the binder traffic.
-        if (cache.containsKey(packageName) || cache.size < MAX_CACHED_PACKAGES) {
-            cache[packageName] = Resolution(resolved, clock())
-            if (resolved != null) stats.onPlatformAppVersion(packageName, resolved)
+        // Admission is the one short critical section: the capacity check and the insert must be
+        // atomic or two concurrent misses can push the map past the cap. The lookup above stays
+        // outside it, and reads never take it.
+        val admitted = synchronized(admission) {
+            if (cache.containsKey(packageName) || cache.size < MAX_CACHED_PACKAGES) {
+                cache[packageName] = Resolution(resolved, clock()); true
+            } else false
         }
+        if (admitted && resolved != null) stats.onPlatformAppVersion(packageName, resolved)
         return resolved
     }
 
