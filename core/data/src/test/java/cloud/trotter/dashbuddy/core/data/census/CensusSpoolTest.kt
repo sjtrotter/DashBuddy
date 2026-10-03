@@ -23,6 +23,7 @@ class CensusSpoolTest {
         repeat(3) { spool.append(censusRecord(it)) }
         spool.markInFlight(spool.take(2, 100_000).map { it.id }, "reset-batch")
         File(dir, "x.tmp").writeText("interrupted")
+        File(dir.parentFile, "inflight.json.tmp").writeText("interrupted") // Process death mid markInFlight.
         assertEquals(3, spool.queued.first())
 
         spool.clear()
@@ -32,6 +33,7 @@ class CensusSpoolTest {
         assertNull(spool.inFlight())
         assertTrue(dir.listFiles()!!.isEmpty())
         assertFalse(File(dir.parentFile, "inflight.json").exists())
+        assertFalse(File(dir.parentFile, "inflight.json.tmp").exists())
         assertEquals(0L, stats.spoolDropped.get())
         assertTrue(spool.take(100, 100_000).isEmpty())
         spool.append(censusRecord(3))

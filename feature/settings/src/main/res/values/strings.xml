@@ -126,7 +126,7 @@
     <string name="developer_settings_census_copy_id">Copy install id</string>
     <string name="developer_settings_census_reset">Reset census identity</string>
     <string name="developer_settings_census_reset_title">Reset census identity?</string>
-    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons. The next upload enrols a new install id, which the census server must trust again. Uploads stay switched on.</string>
+    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
 </resources>

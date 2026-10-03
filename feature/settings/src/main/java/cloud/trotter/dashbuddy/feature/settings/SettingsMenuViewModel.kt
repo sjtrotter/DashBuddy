@@ -42,8 +42,10 @@ class SettingsMenuViewModel @Inject constructor(
 
     fun uploadCensusNow() = censusScheduler.enqueueNow()
 
-    /** #1185 — forget this phone's census identity; the next run enrols a fresh install id. */
-    fun resetCensusIdentity() = viewModelScope.launch { censusResetter.reset() }
+    /** #1185 — forget this phone's census identity; runs on the application scope so Back cannot cancel it half-done. */
+    fun resetCensusIdentity() {
+        censusResetter.resetAsync()
+    }
 
     // Pass-through flows for the UI
     val evidenceConfig = strategyRepository.evidenceConfig

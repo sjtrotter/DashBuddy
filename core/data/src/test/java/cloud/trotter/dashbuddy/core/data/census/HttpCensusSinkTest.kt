@@ -28,7 +28,7 @@ class HttpCensusSinkTest {
     private class Scheduler : CensusUploadScheduler {
         var runs = 0
         var soon = 0
-        override fun enqueueNow() { runs++ }
+        override fun enqueueNow(replaceQueued: Boolean) { runs++ }
         override fun enqueueSoon() { soon++ }
         override fun deferUntil(epochMillis: Long) = Unit
     }

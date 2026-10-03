@@ -190,15 +190,22 @@ open class CensusSpool internal constructor(
         }
     }
 
-    /** Identity reset (#1185): deletes every queued record, the in-flight marker and any temp file. Not counted as a drop. */
+    /**
+     * Identity reset (#1185): deletes the in-flight marker (and its temp file), then every queued record and temp file.
+     * Not counted as a drop. A failed delete still leaves the count truthful.
+     */
     open suspend fun clear() = withContext(io) {
         mutex.withLock {
             initialize()
-            directory.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
-                if (!file.delete()) throw IOException("Census spool clear failed")
-            }
             deleteInFlight()
-            size.value = 0
+            File(inFlightFile.parentFile, "inflight.json.tmp").delete()
+            try {
+                directory.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
+                    if (!file.delete()) throw IOException("Census spool clear failed")
+                }
+            } finally {
+                size.value = files().size
+            }
         }
     }
 

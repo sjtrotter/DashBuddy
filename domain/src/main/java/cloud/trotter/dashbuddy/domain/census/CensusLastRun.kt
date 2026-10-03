@@ -9,6 +9,7 @@ enum class CensusRunOutcome(val wire: String) {
     ENROL_REJECTED("enrol_rejected"), // detail = HTTP status
     KEYSTORE_TRANSIENT("keystore_transient"),
     SPOOL_EMPTY("spool_empty"),
+    STALE_REMOVED("stale_removed"),  // detail = stale items removed locally when nothing else happened this run
     UPLOADED("uploaded"),            // detail = accepted items this run
     DUPLICATE("duplicate"),          // detail = duplicate items this run
     REJECTED("rejected"),            // detail = batch-quality rejected items this run

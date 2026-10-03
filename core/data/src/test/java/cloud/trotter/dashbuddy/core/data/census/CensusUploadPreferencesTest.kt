@@ -27,7 +27,7 @@ import java.io.File
 class CensusUploadPreferencesTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    @Test fun `last run roundtrips decodes unknown tokens fail closed and clears with run state`() = runTest {
+    @Test fun `last run roundtrips decodes unknown tokens fail closed and a reset keeps the deferral deadline`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(io + Job())
         try {
@@ -44,10 +44,10 @@ class CensusUploadPreferencesTest {
             assertEquals(5L, repo.censusLastRun.first()?.atMillis)
             repo.setNextAllowedAtMillis(99)
 
-            repo.clearCensusRunState()
+            repo.recordCensusReset(CensusLastRun(7L, CensusRunOutcome.RESET))
 
-            assertNull(repo.censusLastRun.first())
-            assertEquals(0L, repo.nextAllowedAtMillis.first())
+            assertEquals(CensusLastRun(7L, CensusRunOutcome.RESET), repo.censusLastRun.first())
+            assertEquals(99L, repo.nextAllowedAtMillis.first()) // Server policy survives an identity reset.
             assertTrue(repo.censusPolicy.first().isEmpty())
             assertTrue(repo.enabled.first())
         } finally {

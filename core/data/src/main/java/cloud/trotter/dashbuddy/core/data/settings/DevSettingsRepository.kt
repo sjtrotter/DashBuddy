@@ -41,7 +41,7 @@ class DevSettingsRepository @Inject constructor(
         raw?.let { (at, wire, detail) -> CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail) }
     }
     suspend fun setCensusLastRun(run: CensusLastRun) = dataSource.setCensusLastRun(run.atMillis, run.outcome.wire, run.detail)
-    suspend fun clearCensusRunState() = dataSource.clearCensusRunState()
+    suspend fun recordCensusReset(run: CensusLastRun) = dataSource.recordCensusReset(run.atMillis, run.outcome.wire)
 
     suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
     suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)

@@ -52,6 +52,7 @@ class CensusUploadWorker @AssistedInject constructor(
         var accepted = 0
         var duplicate = 0
         var rejected = 0
+        var stale = 0
         fun set(outcome: CensusRunOutcome, detail: Int? = null) { this.outcome = outcome; this.detail = detail }
     }
 
@@ -79,9 +80,17 @@ class CensusUploadWorker @AssistedInject constructor(
         } catch (_: Exception) {
             failure(record)
         }
-        try {
-            preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), record.outcome, record.detail))
-        } catch (_: Exception) { }
+        // A consent-off no-op writes nothing: the terminal outcome it would overwrite (revoked, enrol_rejected…) is
+        // exactly what the status line exists to explain.
+        if (record.outcome != CensusRunOutcome.DISABLED) {
+            try {
+                preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), record.outcome, record.detail))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Timber.tag(TAG).w("census status write failed")
+            }
+        }
         result
     }
 
@@ -158,7 +167,7 @@ class CensusUploadWorker @AssistedInject constructor(
             }
             val pending = spool.take(100, 900 * 1024)
             if (pending.isEmpty()) {
-                summarize(record)
+                summarize(record, spoolEmpty = true)
                 return Result.success()
             }
             val oldestDay = LocalDate.now(ZoneOffset.UTC).minusDays(7)
@@ -169,22 +178,28 @@ class CensusUploadWorker @AssistedInject constructor(
                 spool.remove(stale.map { it.id })
                 spool.clearInFlight() // The surviving set needs a new batch ID and signature.
                 stats.stale.addAndGet(stale.size.toLong())
+                record.stale += stale.size
             }
             if (items.isEmpty()) return@repeat
             val batchId = spool.inFlight()?.batchId ?: CensusApi.batchId(items.map { it.fingerprint })
             uploadBatch(api, credential, items, batchId, run, record, depth = 0)?.let { return it }
         }
-        summarize(record)
+        // Three batches exhausted without ever seeing an empty spool: never claim emptiness.
+        summarize(record, spoolEmpty = false)
         return Result.success()
     }
 
-    private fun summarize(record: RunRecord) = with(record) {
+    /** The run's one token: what moved items wins; `enrolled` survives an otherwise idle run so a fresh identity is visible. */
+    private fun summarize(record: RunRecord, spoolEmpty: Boolean) = with(record) {
         when {
             accepted > 0 -> set(CensusRunOutcome.UPLOADED, accepted)
             duplicate > 0 -> set(CensusRunOutcome.DUPLICATE, duplicate)
             rejected > 0 -> set(CensusRunOutcome.REJECTED, rejected)
-            outcome == CensusRunOutcome.OVERSIZED || outcome == CensusRunOutcome.BAD_REQUEST -> Unit
-            else -> set(CensusRunOutcome.SPOOL_EMPTY)
+            stale > 0 -> set(CensusRunOutcome.STALE_REMOVED, stale)
+            outcome == CensusRunOutcome.ENROLLED || outcome == CensusRunOutcome.OVERSIZED ||
+                outcome == CensusRunOutcome.BAD_REQUEST -> Unit
+            spoolEmpty -> set(CensusRunOutcome.SPOOL_EMPTY)
+            else -> Unit
         }
     }
 
@@ -255,7 +270,12 @@ class CensusUploadWorker @AssistedInject constructor(
             is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds)
             is UploadResult.RateLimited -> return defer(record, result.retryAfter)
             is UploadResult.Unauthorized -> {
-                record.set(if (run.clockSkew) CensusRunOutcome.CLOCK_SKEW else CensusRunOutcome.UNAUTHORIZED)
+                // An unresigned, non-skew 401 means the consent check short-circuited the re-sign: not an identity problem.
+                record.set(when {
+                    run.clockSkew -> CensusRunOutcome.CLOCK_SKEW
+                    !run.resigned -> CensusRunOutcome.DISABLED
+                    else -> CensusRunOutcome.UNAUTHORIZED
+                })
                 if (credential.enrolled && run.resigned && !run.clockSkew) {
                     stats.unauthorized.incrementAndGet()
                     if (unauthorizedWarnedFor.getAndSet(credential.installId) != credential.installId) {

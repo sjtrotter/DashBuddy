@@ -10,7 +10,8 @@ interface CensusUploadPreferences {
 
 /** The app owns WorkManager; data and feature modules only request a run. */
 interface CensusUploadScheduler {
-    fun enqueueNow()
+    /** [replaceQueued] (the identity reset, #1185) replaces a manual run still waiting out WorkManager backoff; the default keeps it. */
+    fun enqueueNow(replaceQueued: Boolean = false)
     /** A spool that just became non-empty uploads within ~5 minutes without any manual step (dev ask, 2026-10-03); repeated calls keep the first deadline. */
     fun enqueueSoon()
     fun deferUntil(epochMillis: Long)

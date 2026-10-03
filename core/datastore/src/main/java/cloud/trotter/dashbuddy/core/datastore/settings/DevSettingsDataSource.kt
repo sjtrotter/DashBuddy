@@ -72,14 +72,16 @@ class DevSettingsDataSource @Inject constructor(
         }
     }
 
-    /** Identity reset: forget the deferral deadline, the server policy and the last-run record; consent is untouched. */
-    suspend fun clearCensusRunState() {
+    /**
+     * Identity reset, ONE edit: forget the server policy and write the reset as the last run. Consent is untouched, and
+     * so is the deferral deadline — a server Retry-After / exhausted budget is server policy, not identity state.
+     */
+    suspend fun recordCensusReset(atMillis: Long, outcomeWire: String) {
         ds.edit { prefs ->
-            prefs.remove(Keys.CENSUS_NEXT_ALLOWED_AT)
-            prefs.remove(Keys.CENSUS_LAST_RUN_AT)
-            prefs.remove(Keys.CENSUS_LAST_RUN_OUTCOME)
-            prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
             Keys.CENSUS_POLICY.values.forEach { prefs.remove(it) }
+            prefs[Keys.CENSUS_LAST_RUN_AT] = atMillis
+            prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
+            prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
         }
     }
 

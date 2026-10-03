@@ -90,13 +90,14 @@ class CensusUploadWorkerTest {
 
     private class Scheduler : CensusUploadScheduler {
         var deadline = 0L
-        override fun enqueueNow() = Unit
+        override fun enqueueNow(replaceQueued: Boolean) = Unit
         override fun enqueueSoon() = Unit
         override fun deferUntil(epochMillis: Long) { deadline = epochMillis }
     }
 
     private class Harness {
-        val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined)
+        private val memory = MemoryPreferences()
+        val preferences = DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined)
         val credentials: CensusCredentialStore = mock()
         val spool: CensusSpool = mock()
         val api = FakeApi()
@@ -145,6 +146,13 @@ class CensusUploadWorkerTest {
             }
         }
 
+        /** Flip consent from inside a non-suspending transport hook (the in-memory store completes synchronously). */
+        fun setConsentSync(enabled: Boolean) {
+            memory.data.value = memory.data.value.toMutablePreferences().apply {
+                this[androidx.datastore.preferences.core.booleanPreferencesKey("census_upload_enabled")] = enabled
+            }
+        }
+
         fun queue(count: Int = 1) {
             repeat(count) { queueBatch(1) }
         }
@@ -169,7 +177,7 @@ class CensusUploadWorkerTest {
         val h = Harness()
         h.initialize(enabled = false)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-        assertEquals(CensusRunOutcome.DISABLED, h.preferences.censusLastRun.first()?.outcome)
+        assertNull(h.preferences.censusLastRun.first()) // A consent-off no-op never overwrites the last real outcome.
         assertEquals(0, h.factoryCalls)
         verify(h.credentials, never()).current()
         verify(h.spool, never()).take(any(), any())
@@ -215,6 +223,7 @@ class CensusUploadWorkerTest {
         h.api.enrollments.addAll(listOf(EnrolResult.InstallExists, EnrolResult.InstallExists))
         assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
         verify(h.credentials).mint()
+        assertEquals(CensusRunOutcome.ENROL_CONFLICT, h.preferences.censusLastRun.first()?.outcome)
     }
 
     @Test fun `unusable credential remints and enrolls`() = runTest {
@@ -226,6 +235,8 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         verify(h.credentials).mint()
         verify(h.credentials).markEnrolled()
+        // Nothing queued: the fresh identity stays visible as `enrolled` instead of degrading to `spool_empty`.
+        assertEquals(CensusRunOutcome.ENROLLED, h.preferences.censusLastRun.first()?.outcome)
     }
 
     @Test fun `transient credential failure retries with one INFO counter and no identity changes`() = runTest {
@@ -478,6 +489,36 @@ class CensusUploadWorkerTest {
         } finally {
             Timber.uproot(tree)
         }
+    }
+
+    @Test fun `three all-stale batches with fresh work remaining record stale_removed never spool_empty`() = runTest {
+        val h = Harness()
+        h.initialize()
+        val today = LocalDate.now(ZoneOffset.UTC)
+        repeat(3) { h.queueBatch(100, today.minusDays(9)) }
+        val fresh = h.queueBatch(1)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.api.batches.isEmpty())
+        assertEquals(300L, h.stats.stale.get())
+        assertEquals(listOf(fresh), h.queued)
+        val lastRun = requireNotNull(h.preferences.censusLastRun.first())
+        assertEquals(CensusLastRun(lastRun.atMillis, CensusRunOutcome.STALE_REMOVED, 300), lastRun)
+    }
+
+    @Test fun `a 401 after consent is switched off records disabled not unauthorized`() = runTest {
+        val h = Harness()
+        h.initialize()
+        h.queue()
+        h.api.uploads += UploadResult.Unauthorized(System.currentTimeMillis())
+        val before = h.api.beforeUpload
+        h.api.beforeUpload = { batchId, json ->
+            before(batchId, json)
+            h.setConsentSync(false)
+        }
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.batches.size) // No re-sign once consent is off.
+        assertEquals(0L, h.stats.unauthorized.get())
+        assertNull(h.preferences.censusLastRun.first()) // The consent-off stop is a no-op, not an identity verdict.
     }
 
     @Test fun `resign allowance is shared by all batches in a run and resets next run`() = runTest {
