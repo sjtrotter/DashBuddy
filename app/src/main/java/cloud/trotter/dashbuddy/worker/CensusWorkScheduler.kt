@@ -25,6 +25,18 @@ class CensusWorkScheduler @Inject constructor(@param:ApplicationContext private 
         )
     }
 
+    override fun enqueueSoon() {
+        if (!BuildConfig.DEBUG) return
+        // KEEP: the first spooled item sets the five-minute deadline; later items never push it out.
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SOON_NAME, ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<CensusUploadWorker>()
+                .setConstraints(constraints())
+                .setInitialDelay(SOON_DELAY_MINUTES, TimeUnit.MINUTES)
+                .build(),
+        )
+    }
+
     override fun deferUntil(epochMillis: Long) {
         if (!BuildConfig.DEBUG) return
         // UPDATE preserves a running periodic worker. The persisted deadline also gates manual runs.
@@ -40,6 +52,8 @@ class CensusWorkScheduler @Inject constructor(@param:ApplicationContext private 
     companion object {
         const val PERIODIC_NAME = "census_upload"
         const val NOW_NAME = "census_upload_now"
+        const val SOON_NAME = "census_upload_soon"
+        const val SOON_DELAY_MINUTES = 5L
 
         private fun constraints(): Constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

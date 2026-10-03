@@ -88,6 +88,7 @@ class CensusUploadWorkerTest {
     private class Scheduler : CensusUploadScheduler {
         var deadline = 0L
         override fun enqueueNow() = Unit
+        override fun enqueueSoon() = Unit
         override fun deferUntil(epochMillis: Long) { deadline = epochMillis }
     }
 
