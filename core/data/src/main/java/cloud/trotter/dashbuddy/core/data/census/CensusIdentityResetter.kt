@@ -43,28 +43,34 @@ class CensusIdentityResetter internal constructor(
         @ApplicationScope scope: CoroutineScope,
     ) : this(credentials, spool, preferences, scheduler, lock, scope, System::currentTimeMillis)
 
-    /** The UI entry point: never throws, never cancelled by the caller's lifecycle; a failure is recorded, not crashed. */
-    fun resetAsync(): Job = scope.launch {
-        try {
-            reset()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            Timber.tag(TAG).w("census identity reset failed")
-            runCatching { preferences.setCensusLastRun(CensusLastRun(now(), CensusRunOutcome.FAILURE)) }
-        }
-    }
+    /** The UI entry point: never cancelled by the caller's lifecycle. */
+    fun resetAsync(): Job = scope.launch { reset() }
 
-    suspend fun reset() {
-        lock.mutex.withLock {
+    /**
+     * Never throws: a mutation failure is logged and recorded as `failure` INSIDE the locked section, so a second
+     * reset that succeeds meanwhile cannot have its `reset` record overwritten by the first one's late failure.
+     * Returns whether the identity was reset.
+     */
+    suspend fun reset(): Boolean {
+        val done = lock.mutex.withLock {
             withContext(NonCancellable) {
-                spool.clear()
-                credentials.wipe()
-                preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))
-                Timber.tag(TAG).i("census identity reset")
+                try {
+                    spool.clear()
+                    credentials.wipe()
+                    preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))
+                    Timber.tag(TAG).i("census identity reset")
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Timber.tag(TAG).w("census identity reset failed")
+                    runCatching { preferences.setCensusLastRun(CensusLastRun(now(), CensusRunOutcome.FAILURE)) }
+                    false
+                }
             }
         }
-        if (preferences.censusUploadEnabled.first()) scheduler.enqueueNow(replaceQueued = true)
+        if (done && preferences.censusUploadEnabled.first()) scheduler.enqueueNow(replaceQueued = true)
+        return done
     }
 
     private companion object {

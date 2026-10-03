@@ -101,11 +101,21 @@ class CensusIdentityResetterTest {
         preferences.setCensusUploadEnabled(true)
         whenever(spool.clear()).thenAnswer { throw IOException("Census spool clear failed") }
 
-        resetter().resetAsync().join()
+        assertFalse(resetter().reset())
 
         verify(credentials, never()).wipe()
         assertTrue(scheduler.enqueued.isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
+    }
+
+    @Test fun `a failure is recorded inside the lock so a later successful reset is not overwritten`() = runTest {
+        var calls = 0
+        whenever(spool.clear()).thenAnswer { if (++calls == 1) throw IOException("first clear fails") else Unit }
+        val first = resetter()
+        assertFalse(first.reset())
+        assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
+        assertTrue(first.reset())
+        assertEquals(CensusLastRun(123L, CensusRunOutcome.RESET), preferences.censusLastRun.first())
     }
 
     @Test fun `resetAsync runs on the application scope not the caller's`() = runTest {

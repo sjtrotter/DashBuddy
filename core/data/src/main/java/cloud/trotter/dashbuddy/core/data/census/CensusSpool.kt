@@ -198,7 +198,8 @@ open class CensusSpool internal constructor(
         mutex.withLock {
             initialize()
             deleteInFlight()
-            File(inFlightFile.parentFile, "inflight.json.tmp").delete()
+            val tmp = File(inFlightFile.parentFile, "inflight.json.tmp")
+            if (tmp.exists() && !tmp.delete()) throw IOException("Census in-flight temp removal failed")
             try {
                 directory.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
                     if (!file.delete()) throw IOException("Census spool clear failed")
