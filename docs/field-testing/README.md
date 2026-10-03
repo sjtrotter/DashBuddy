@@ -48,6 +48,16 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Daily recognition health reaches the server (#1197, PR #1198).** Nothing to do on the dash itself;
+  the day's RECOGNIZED/UNKNOWN counts per (platform, app version) are ledgered on-device and posted as
+  ONE closed-day report by the first census run after UTC midnight. Next morning: the developer census
+  status line should read `health_posted 1` (or `spool_empty` on a later run), and the ops dashboard's
+  **Fleet health** table (`https://10.8.0.1:8443/ops/` over the tunnel) shows yesterday's UTC day for
+  `doordash` with the phone's observed DoorDash version, Admitted ≈ the dash's recognized frames and
+  UNKNOWN > 0, and the per-install disclosure lists the phone's 8-char prefix. A row that never appears
+  (status `health_rejected n`) is the thing to report, with the rejection reason from the status detail.
+  - Confirmed: 0/2
+
 - **Census developer status line + Reset census identity (#1185).** In Developer settings the census
   block shows `Last run <ago> · <outcome token> · Queued: <n>`; after a dash with UNKNOWN screens it should
   read `uploaded <n>` within ~5 min with Queued back to 0. **Copy install id** puts the full UUID on the
