@@ -45,10 +45,13 @@ class CensusCredentialStore @Inject constructor(
     private val mutex = Mutex()
     private var needsKeyReset = false
 
-    /** The UI observes only an enrolled prefix, and never reads/decrypts a secret. */
+    /** The UI observes an enrolled prefix or id, and never reads/decrypts a secret. */
     val installIdPrefix: Flow<String?> = ds.data.map {
         if (it[ENROLLED] == true) it[INSTALL_ID]?.take(8) else null
     }
+
+    /** The full enrolled install id — a random handle, not a secret — so the developer can copy it for the server-side trust step (#1185). */
+    val installId: Flow<String?> = ds.data.map { if (it[ENROLLED] == true) it[INSTALL_ID] else null }
 
     /** Null until enrolled; pending() preserves enrollment idempotency after a lost response. */
     suspend fun current(): Credential? = mutex.withLock { read()?.takeIf { it.enrolled } }

@@ -183,7 +183,7 @@ sibling surface, left for a future extraction.
   retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
   and do NOT gate the unit-only PR CI.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
-  concrete data layers; census Keystore credentials, bounded file spool and debug upload sink (#1182).
+  concrete data layers; census Keystore credentials, bounded file spool, debug upload sink (#1182) and the identity reset + upload lock (#1185).
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration, signed census transport (#1182).
 - **`:core:location`** — Play Services GPS tracking.
 - **`:core:datastore`** — Preferences DataStore (nine single-concern stores behind Hilt

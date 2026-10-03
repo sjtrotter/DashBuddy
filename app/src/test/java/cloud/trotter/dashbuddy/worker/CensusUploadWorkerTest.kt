@@ -14,6 +14,7 @@ import cloud.trotter.census.contract.auth.InstallSecret
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore.Credential
 import cloud.trotter.dashbuddy.core.data.census.CensusSpool
+import cloud.trotter.dashbuddy.core.data.census.CensusUploadLock
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.dashbuddy.core.network.census.CensusApiFactory
@@ -23,6 +24,8 @@ import cloud.trotter.dashbuddy.core.network.census.CensusTransport
 import cloud.trotter.dashbuddy.core.network.census.EnrolResult
 import cloud.trotter.dashbuddy.core.network.census.PolicyResult
 import cloud.trotter.dashbuddy.core.network.census.UploadResult
+import cloud.trotter.dashbuddy.domain.census.CensusLastRun
+import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +59,7 @@ import java.time.ZoneOffset
 class CensusUploadWorkerTest {
     @Before fun resetProcessWarnings() {
         CensusUploadWorker.enrolRejectedWarned.set(false)
-        CensusUploadWorker.unauthorizedWarned.set(false)
+        CensusUploadWorker.unauthorizedWarnedFor.set(null)
     }
 
     private class MemoryPreferences : DataStore<Preferences> {
@@ -166,6 +169,7 @@ class CensusUploadWorkerTest {
         val h = Harness()
         h.initialize(enabled = false)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(CensusRunOutcome.DISABLED, h.preferences.censusLastRun.first()?.outcome)
         assertEquals(0, h.factoryCalls)
         verify(h.credentials, never()).current()
         verify(h.spool, never()).take(any(), any())
@@ -263,6 +267,9 @@ class CensusUploadWorkerTest {
                 whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
                 h.api.enrollments.addAll(listOf(rejection, rejection))
                 repeat(2) { assertEquals(ListenableWorker.Result.success(), h.worker().doWork()) }
+                val lastRun = h.preferences.censusLastRun.first()
+                assertEquals(CensusRunOutcome.ENROL_REJECTED, lastRun?.outcome)
+                assertEquals(if (rejection is EnrolResult.RequestRejected) rejection.status else 401, lastRun?.detail)
                 assertEquals(2L, h.stats.enrolRejected.get())
                 assertEquals(0L, h.stats.uploadFailures.get())
                 verify(h.credentials, never()).mint()
@@ -330,6 +337,8 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(3, h.api.batches.size)
         assertEquals(1, h.queued.size) // At most three batches per run.
+        val lastRun = requireNotNull(h.preferences.censusLastRun.first())
+        assertEquals(CensusLastRun(lastRun.atMillis, CensusRunOutcome.UPLOADED, 1), lastRun)
         assertEquals(1L, h.stats.uploaded.get())
         assertEquals(3L, h.stats.duplicate.get())
         assertEquals(mapOf("bad_hash" to 1L, "bad_kind" to 1L), h.stats.rejectedCounts())
@@ -342,9 +351,11 @@ class CensusUploadWorkerTest {
             h.queue()
             h.api.uploads += result
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
             assertTrue(h.scheduler.deadline > System.currentTimeMillis())
             assertEquals(h.scheduler.deadline, h.preferences.nextAllowedAtMillis.first())
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
             assertEquals(1, h.factoryCalls)
             assertEquals(1, h.api.batches.size)
             assertEquals(1, h.queued.size)
@@ -428,6 +439,7 @@ class CensusUploadWorkerTest {
                 h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
                 assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
                 assertEquals(2, h.api.batches.size)
+                assertEquals(CensusRunOutcome.UNAUTHORIZED, h.preferences.censusLastRun.first()?.outcome)
                 assertEquals(1L, h.stats.unauthorized.get())
                 assertEquals(1, h.queued.size)
                 verify(h.credentials, never()).mint()
@@ -435,6 +447,34 @@ class CensusUploadWorkerTest {
                 assertTrue(h.api.enrolledIds.isEmpty())
             }
             assertEquals(listOf("census unauthorized: identity unknown to server"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test fun `unknown identity warns again after the identity changes`() = runTest {
+        val warnings = mutableListOf<String>()
+        val tree = warningTree(warnings)
+        Timber.plant(tree)
+        try {
+            val first = Harness()
+            first.initialize()
+            first.queue()
+            first.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
+            assertEquals(ListenableWorker.Result.success(), first.worker().doWork())
+
+            val second = Harness()
+            second.initialize()
+            val replacement = second.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
+            whenever(second.credentials.current()).thenReturn(replacement)
+            second.queue()
+            second.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
+            assertEquals(ListenableWorker.Result.success(), second.worker().doWork())
+            assertEquals(List(2) { "census unauthorized: identity unknown to server" }, warnings)
+
+            second.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
+            assertEquals(ListenableWorker.Result.success(), second.worker().doWork())
+            assertEquals(List(2) { "census unauthorized: identity unknown to server" }, warnings)
         } finally {
             Timber.uproot(tree)
         }

@@ -6,6 +6,11 @@ import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,7 +27,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,12 +56,21 @@ open class CensusSpool internal constructor(
 
     private val inFlightFile = File(directory.parentFile, "inflight.json")
     private val mutex = Mutex()
-    private val size = AtomicInteger()
+    private val size = MutableStateFlow(0)
     @Volatile private var initialized = false
     private var sequence = 0L
 
-    open fun count(): Int = if (initialized) size.get() else
+    open fun count(): Int = if (initialized) size.value else
         directory.listFiles().orEmpty().count { it.isFile && FILE_NAME.matches(it.name) }
+
+    /**
+     * Queued-record count for the developer screen; the first collection initializes the spool off the IO
+     * dispatcher. Fail-OPEN: an unavailable spool directory reports 0 rather than failing the UI collector.
+     */
+    open val queued: Flow<Int> = flow {
+        withContext(io) { mutex.withLock { runCatching { initialize() } } }
+        emitAll(size)
+    }
 
     open suspend fun append(record: CensusRecord) = withContext(io) {
         mutex.withLock {
@@ -173,7 +186,19 @@ open class CensusSpool internal constructor(
                 val file = File(directory, id)
                 if (file.exists() && !file.delete()) throw IOException("Census spool removal failed")
             }
-            size.set(files().size)
+            size.value = files().size
+        }
+    }
+
+    /** Identity reset (#1185): deletes every queued record, the in-flight marker and any temp file. Not counted as a drop. */
+    open suspend fun clear() = withContext(io) {
+        mutex.withLock {
+            initialize()
+            directory.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
+                if (!file.delete()) throw IOException("Census spool clear failed")
+            }
+            deleteInFlight()
+            size.value = 0
         }
     }
 
@@ -195,7 +220,7 @@ open class CensusSpool internal constructor(
         val files = files()
         var bytes = files.sumOf { it.length() }
         var count = files.size
-        size.set(count)
+        size.value = count
         for (file in files) {
             if (count <= maxFiles && bytes <= maxDiskBytes) break
             val length = file.length()
@@ -203,14 +228,14 @@ open class CensusSpool internal constructor(
             count--
             bytes -= length
         }
-        size.set(count)
+        size.value = count
     }
 
     private fun drop(file: File, reason: java.util.concurrent.atomic.AtomicLong? = null) {
         if (!file.delete()) throw IOException("Census spool drop failed")
         stats.spoolDropped.incrementAndGet()
         reason?.incrementAndGet()
-        size.decrementAndGet()
+        size.update { it - 1 }
     }
 
     private fun readOrDrop(file: File): Spooled? = try {

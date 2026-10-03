@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.feature.settings
 
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
+import cloud.trotter.dashbuddy.core.data.census.CensusIdentityResetter
+import cloud.trotter.dashbuddy.core.data.census.CensusSpool
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
 import kotlinx.coroutines.flow.map
 import androidx.lifecycle.ViewModel
@@ -21,6 +23,8 @@ class SettingsMenuViewModel @Inject constructor(
     private val devSettingsRepository: DevSettingsRepository,
     private val strategyRepository: StrategyRepository,
     credentials: CensusCredentialStore,
+    spool: CensusSpool,
+    private val censusResetter: CensusIdentityResetter,
     private val censusScheduler: CensusUploadScheduler,
 ) : ViewModel() {
 
@@ -28,12 +32,18 @@ class SettingsMenuViewModel @Inject constructor(
     val censusUploadEnabled = devSettingsRepository.censusUploadEnabled
     val censusHost = devSettingsRepository.censusBaseUrl.map { it.removePrefix("https://") }
     val censusInstallIdPrefix = credentials.installIdPrefix
+    val censusInstallId = credentials.installId
+    val censusLastRun = devSettingsRepository.censusLastRun
+    val censusQueued = spool.queued
 
     fun setCensusUploadEnabled(enabled: Boolean) = viewModelScope.launch {
         devSettingsRepository.setCensusUploadEnabled(enabled)
     }
 
     fun uploadCensusNow() = censusScheduler.enqueueNow()
+
+    /** #1185 — forget this phone's census identity; the next run enrols a fresh install id. */
+    fun resetCensusIdentity() = viewModelScope.launch { censusResetter.reset() }
 
     // Pass-through flows for the UI
     val evidenceConfig = strategyRepository.evidenceConfig

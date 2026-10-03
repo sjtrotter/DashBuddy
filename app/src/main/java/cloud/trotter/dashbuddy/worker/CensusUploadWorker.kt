@@ -8,19 +8,21 @@ import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore.Credential
 import cloud.trotter.dashbuddy.core.data.census.CensusSpool
+import cloud.trotter.dashbuddy.core.data.census.CensusUploadLock
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.network.census.CensusApi
 import cloud.trotter.dashbuddy.core.network.census.CensusApiFactory
 import cloud.trotter.dashbuddy.core.network.census.CensusTransport
 import cloud.trotter.dashbuddy.core.network.census.EnrolResult
 import cloud.trotter.dashbuddy.core.network.census.UploadResult
+import cloud.trotter.dashbuddy.domain.census.CensusLastRun
+import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -29,15 +31,8 @@ import timber.log.Timber
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
-
-/** Periodic and manual unique names can overlap: serialize credential and batch ownership. */
-@Singleton
-class CensusUploadLock @Inject constructor() {
-    val mutex = Mutex()
-}
 
 @HiltWorker
 class CensusUploadWorker @AssistedInject constructor(
@@ -51,34 +46,55 @@ class CensusUploadWorker @AssistedInject constructor(
     private val stats: CensusUploadStats,
     private val uploadLock: CensusUploadLock,
 ) : CoroutineWorker(appContext, workerParams) {
+    private class RunRecord {
+        var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
+        var detail: Int? = null
+        var accepted = 0
+        var duplicate = 0
+        var rejected = 0
+        fun set(outcome: CensusRunOutcome, detail: Int? = null) { this.outcome = outcome; this.detail = detail }
+    }
+
     override suspend fun doWork(): Result = uploadLock.mutex.withLock {
-        try {
-            if (!canRun()) return@withLock Result.success()
-            val api = apis.create(preferences.censusBaseUrl.first())
-            val credential = loadCredential()
-            val enrolled = if (credential.enrolled) Enrollment.Ready(credential) else enrol(api, credential)
-            when (enrolled) {
-                is Enrollment.Ready -> uploadBatches(api, enrolled.credential)
-                is Enrollment.Stop -> enrolled.result
+        val record = RunRecord()
+        val result = try {
+            if (!canRun(record)) {
+                Result.success()
+            } else {
+                val api = apis.create(preferences.censusBaseUrl.first())
+                val credential = loadCredential()
+                val enrolled = if (credential.enrolled) Enrollment.Ready(credential) else enrol(api, credential, record)
+                when (enrolled) {
+                    is Enrollment.Ready -> uploadBatches(api, enrolled.credential, record)
+                    is Enrollment.Stop -> enrolled.result
+                }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: CensusCredentialStore.Transient) {
+            record.set(CensusRunOutcome.KEYSTORE_TRANSIENT)
             stats.keystoreTransient.incrementAndGet()
             Timber.tag(TAG).i("census keystoreTransient=%d", stats.keystoreTransient.get())
             Result.retry()
         } catch (_: Exception) {
-            failure()
+            failure(record)
         }
+        try {
+            preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), record.outcome, record.detail))
+        } catch (_: Exception) { }
+        result
     }
 
-    private suspend fun canRun(): Boolean {
+    private suspend fun canRun(record: RunRecord): Boolean {
         if (!BuildConfig.DEBUG || !preferences.censusUploadEnabled.first()) {
+            record.set(CensusRunOutcome.DISABLED)
             Timber.tag(TAG).d("census disabled runs=1")
             return false
         }
         val deadline = preferences.nextAllowedAtMillis.first()
-        if (System.currentTimeMillis() < deadline) {
+        val now = System.currentTimeMillis()
+        if (now < deadline) {
+            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
             scheduler.deferUntil(deadline)
             Timber.tag(TAG).i("census deferred runs=1")
             return false
@@ -98,39 +114,53 @@ class CensusUploadWorker @AssistedInject constructor(
         data class Stop(val result: Result) : Enrollment
     }
 
-    private suspend fun enrol(api: CensusTransport, initial: Credential): Enrollment {
+    private suspend fun enrol(api: CensusTransport, initial: Credential, record: RunRecord): Enrollment {
         var credential = initial
         repeat(2) { attempt ->
-            if (!preferences.censusUploadEnabled.first()) return Enrollment.Stop(Result.success())
+            if (!preferences.censusUploadEnabled.first()) {
+                record.set(CensusRunOutcome.DISABLED)
+                return Enrollment.Stop(Result.success())
+            }
             when (val result = api.enrol(credential.bearer(), BuildConfig.VERSION_NAME)) {
                 is EnrolResult.Enrolled -> {
                     preferences.setCensusPolicy(result.policy)
                     credentials.markEnrolled()
+                    record.set(CensusRunOutcome.ENROLLED)
                     Timber.tag(TAG).i("census enrolled installs=1")
                     return Enrollment.Ready(credential.copy(enrolled = true))
                 }
                 EnrolResult.InstallExists -> {
                     // Only a locally pending identity can reach here; never replace an enrolled one.
                     if (attempt == 0) credential = credentials.mint()
-                    else return Enrollment.Stop(failure())
+                    else {
+                        val stopped = failure(record)
+                        record.set(CensusRunOutcome.ENROL_CONFLICT)
+                        return Enrollment.Stop(stopped)
+                    }
                 }
-                EnrolResult.Revoked -> return Enrollment.Stop(revoke())
-                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(result.retryAfter))
-                EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(401))
-                is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(result.status))
+                EnrolResult.Revoked -> return Enrollment.Stop(revoke(record))
+                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter))
+                EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(record, 401))
+                is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status))
                 is EnrolResult.ServerUnavailable, is EnrolResult.TransportFailure ->
-                    return Enrollment.Stop(failure())
+                    return Enrollment.Stop(failure(record))
             }
         }
-        return Enrollment.Stop(failure())
+        return Enrollment.Stop(failure(record))
     }
 
-    private suspend fun uploadBatches(api: CensusTransport, credential: Credential): Result {
+    private suspend fun uploadBatches(api: CensusTransport, credential: Credential, record: RunRecord): Result {
         val run = UploadRun()
         repeat(3) {
-            if (!preferences.censusUploadEnabled.first()) return Result.success()
+            if (!preferences.censusUploadEnabled.first()) {
+                record.set(CensusRunOutcome.DISABLED)
+                return Result.success()
+            }
             val pending = spool.take(100, 900 * 1024)
-            if (pending.isEmpty()) return Result.success()
+            if (pending.isEmpty()) {
+                summarize(record)
+                return Result.success()
+            }
             val oldestDay = LocalDate.now(ZoneOffset.UTC).minusDays(7)
             val (stale, items) = pending.partition {
                 LocalDate.parse(Json.parseToJsonElement(it.itemJson).jsonObject.getValue("day").jsonPrimitive.content) < oldestDay
@@ -142,9 +172,20 @@ class CensusUploadWorker @AssistedInject constructor(
             }
             if (items.isEmpty()) return@repeat
             val batchId = spool.inFlight()?.batchId ?: CensusApi.batchId(items.map { it.fingerprint })
-            uploadBatch(api, credential, items, batchId, run, depth = 0)?.let { return it }
+            uploadBatch(api, credential, items, batchId, run, record, depth = 0)?.let { return it }
         }
+        summarize(record)
         return Result.success()
+    }
+
+    private fun summarize(record: RunRecord) = with(record) {
+        when {
+            accepted > 0 -> set(CensusRunOutcome.UPLOADED, accepted)
+            duplicate > 0 -> set(CensusRunOutcome.DUPLICATE, duplicate)
+            rejected > 0 -> set(CensusRunOutcome.REJECTED, rejected)
+            outcome == CensusRunOutcome.OVERSIZED || outcome == CensusRunOutcome.BAD_REQUEST -> Unit
+            else -> set(CensusRunOutcome.SPOOL_EMPTY)
+        }
     }
 
     private class UploadRun {
@@ -159,14 +200,21 @@ class CensusUploadWorker @AssistedInject constructor(
         items: List<CensusSpool.Spooled>,
         batchId: String,
         run: UploadRun,
+        record: RunRecord,
         depth: Int,
     ): Result? {
-        if (!preferences.censusUploadEnabled.first()) return Result.success()
+        if (!preferences.censusUploadEnabled.first()) {
+            record.set(CensusRunOutcome.DISABLED)
+            return Result.success()
+        }
         val ids = items.map { it.id }
         spool.markInFlight(ids, batchId)
         when (val result = uploadWithResign(api, credential, items, batchId, run)) {
             is UploadResult.Accepted -> {
                 removeBatch(ids)
+                record.accepted += result.accepted
+                record.duplicate += result.duplicate
+                record.rejected += result.rejected.values.sum()
                 stats.uploaded.addAndGet(result.accepted.toLong())
                 stats.duplicate.addAndGet(result.duplicate.toLong())
                 stats.reject(result.rejected)
@@ -174,12 +222,14 @@ class CensusUploadWorker @AssistedInject constructor(
             }
             UploadResult.Duplicate -> {
                 removeBatch(ids)
+                record.duplicate += items.size
                 stats.duplicate.addAndGet(items.size.toLong())
                 Timber.tag(TAG).i("census duplicate=%d", items.size)
             }
             UploadResult.PayloadTooLarge -> {
                 if (items.size == 1) {
                     removeBatch(ids)
+                    record.set(CensusRunOutcome.OVERSIZED)
                     stats.oversized.incrementAndGet()
                     Timber.tag(TAG).w("census item oversized bytes=%d", items.single().itemJson.toByteArray(Charsets.UTF_8).size)
                 } else {
@@ -188,29 +238,34 @@ class CensusUploadWorker @AssistedInject constructor(
                     val middle = items.size / 2
                     for (half in listOf(items.take(middle), items.drop(middle))) {
                         val halfId = CensusApi.batchId(half.map { it.fingerprint })
-                        uploadBatch(api, credential, half, halfId, run, depth + 1)?.let { return it }
+                        uploadBatch(api, credential, half, halfId, run, record, depth + 1)?.let { return it }
                     }
                 }
             }
             UploadResult.BadRequest -> {
                 removeBatch(ids)
+                record.set(CensusRunOutcome.BAD_REQUEST)
                 stats.badRequest.incrementAndGet()
                 Timber.tag(TAG).w("census batch bad_request items=%d", items.size)
             }
-            is UploadResult.BatchQuality -> reject(ids, result.rejected)
-            is UploadResult.BudgetExhausted -> return defer(result.retryAfterSeconds)
-            is UploadResult.RateLimited -> return defer(result.retryAfter)
+            is UploadResult.BatchQuality -> {
+                reject(ids, result.rejected)
+                record.rejected += result.rejected.values.sum()
+            }
+            is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds)
+            is UploadResult.RateLimited -> return defer(record, result.retryAfter)
             is UploadResult.Unauthorized -> {
+                record.set(if (run.clockSkew) CensusRunOutcome.CLOCK_SKEW else CensusRunOutcome.UNAUTHORIZED)
                 if (credential.enrolled && run.resigned && !run.clockSkew) {
                     stats.unauthorized.incrementAndGet()
-                    if (unauthorizedWarned.compareAndSet(false, true)) {
+                    if (unauthorizedWarnedFor.getAndSet(credential.installId) != credential.installId) {
                         Timber.tag(TAG).w("census unauthorized: identity unknown to server")
                     }
                 }
                 return Result.success()
             }
-            UploadResult.Revoked -> return revoke()
-            is UploadResult.ServerUnavailable, is UploadResult.TransportFailure -> return failure()
+            UploadResult.Revoked -> return revoke(record)
+            is UploadResult.ServerUnavailable, is UploadResult.TransportFailure -> return failure(record)
         }
         return null
     }
@@ -257,16 +312,19 @@ class CensusUploadWorker @AssistedInject constructor(
         Timber.tag(TAG).w("census batch rejected reasons=%s", rejected)
     }
 
-    private suspend fun defer(seconds: Long): Result {
+    private suspend fun defer(record: RunRecord, seconds: Long): Result {
         val now = System.currentTimeMillis()
-        val deadline = now + seconds.coerceIn(1, 86_400) * 1000
+        val coercedSeconds = seconds.coerceIn(1, 86_400)
+        record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
+        val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
         scheduler.deferUntil(deadline)
         Timber.tag(TAG).i("census deferred runs=1")
         return Result.success()
     }
 
-    private suspend fun revoke(): Result {
+    private suspend fun revoke(record: RunRecord): Result {
+        record.set(CensusRunOutcome.REVOKED)
         // Switch off first, so even a failed disk wipe cannot leave uploads enabled.
         preferences.setCensusUploadEnabled(false)
         credentials.wipe()
@@ -274,7 +332,8 @@ class CensusUploadWorker @AssistedInject constructor(
         return Result.success()
     }
 
-    private fun enrolRejected(status: Int): Result {
+    private fun enrolRejected(record: RunRecord, status: Int): Result {
+        record.set(CensusRunOutcome.ENROL_REJECTED, status)
         stats.enrolRejected.incrementAndGet()
         if (enrolRejectedWarned.compareAndSet(false, true)) {
             Timber.tag(TAG).w("census enrol rejected status=%d", status)
@@ -282,7 +341,8 @@ class CensusUploadWorker @AssistedInject constructor(
         return Result.success()
     }
 
-    private fun failure(): Result {
+    private fun failure(record: RunRecord): Result {
+        record.set(CensusRunOutcome.FAILURE)
         stats.uploadFailures.incrementAndGet()
         Timber.tag(TAG).i("census upload failures=%d", stats.uploadFailures.get())
         return Result.retry()
@@ -292,7 +352,7 @@ class CensusUploadWorker @AssistedInject constructor(
         private const val TAG = "Census"
         private const val MAX_SPLIT_DEPTH = 7
         internal val enrolRejectedWarned = AtomicBoolean()
-        internal val unauthorizedWarned = AtomicBoolean()
+        internal val unauthorizedWarnedFor = AtomicReference<String?>()
         fun schedule(context: Context) = CensusWorkScheduler.schedule(context)
     }
 }

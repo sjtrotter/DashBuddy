@@ -594,8 +594,25 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   and secret and re-enrollment: the old install is orphaned server-side, not withdrawn.
   The install secret is AES-256-GCM sealed by Android Keystore; credentials and spool are excluded
   from cloud backup and device transfer. The random install ID is a handle, not a device identifier.
-  Logs contain counters / allowlisted reason codes; the settings screen shows only an eight-character
-  enrolled prefix. Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;
+  Logs contain counters / allowlisted reason codes; the settings screen shows the eight-character
+  enrolled prefix and (#1185) a **Copy install id** button for the FULL id — a random handle, never the
+  secret — because the server-side trust step (`POST /ops/installs/<uuid>/trust`) needs it.
+  **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
+  database reset, withdrawn install) uploads 401 and the worker stops; the developer screen's **Reset
+  census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) under the
+  shared `CensusUploadLock` (moved to `:core:data` so the resetter and the `:app` worker serialize): wipes the
+  sealed credential, `CensusSpool.clear()`s every queued record + the in-flight marker, clears the deferral
+  deadline / server policy / last-run record, records a `reset` outcome, and — only if consent is still on —
+  enqueues an immediate run, which mints + enrols a fresh id (the old server install is orphaned, not
+  withdrawn; consent is untouched). The worker's "identity unknown to server" WARN latch is keyed per
+  install id (`unauthorizedWarnedFor`), so a fresh identity that fails again warns again. Every run persists
+  ONE `CensusLastRun(atMillis, CensusRunOutcome, detail?)` into developer settings (`:domain` vocabulary,
+  wire strings `disabled|deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|
+  uploaded|duplicate|rejected|oversized|bad_request|unauthorized|clock_skew|revoked|failure|reset`, decode
+  fail-closed to `unknown`; the last decisive site wins, accepted/duplicate/rejected totals summarize at the
+  end of a successful drain), rendered raw as `Last run <ago> · <token [detail]> · Queued: <n>` beside the
+  identity line, with the queued count observed from the spool's own `queued` flow (the one owner of the
+  count). Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;
   neither enrollment IDs, secrets nor skeleton bodies are logged. Pipeline INFO `census{…}` includes
   spooled / dropped / corrupt / spool-oversized / server-oversized / bad-request / uploaded /
   duplicate / rejection / upload-failure counts.
