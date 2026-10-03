@@ -24,10 +24,14 @@ class CensusUploadStats @Inject constructor() {
     val stale = AtomicLong()
     val healthRecorded = AtomicLong()
     val healthSkippedNoVersion = AtomicLong()
+    val healthSkippedBadVersion = AtomicLong()
+    val healthLoadFailures = AtomicLong()
     val healthDropped = AtomicLong()
+    val healthRowsRefused = AtomicLong()
     val healthCorrupt = AtomicLong()
     val healthPosted = AtomicLong()
     val healthRejected = AtomicLong()
+    val healthFailed = AtomicLong()
     val healthOversized = AtomicLong()
     private val rejected = ConcurrentHashMap<String, AtomicLong>()
 
@@ -44,8 +48,9 @@ class CensusUploadStats @Inject constructor() {
             .map { it.get() }
         val health = linkedMapOf(
             "healthRecorded" to healthRecorded, "healthSkippedNoVersion" to healthSkippedNoVersion,
-            "healthDropped" to healthDropped, "healthCorrupt" to healthCorrupt, "healthPosted" to healthPosted,
-            "healthRejected" to healthRejected, "healthOversized" to healthOversized,
+            "healthSkippedBadVersion" to healthSkippedBadVersion, "healthLoadFailures" to healthLoadFailures,
+            "healthRowsRefused" to healthRowsRefused, "healthDropped" to healthDropped, "healthCorrupt" to healthCorrupt, "healthPosted" to healthPosted,
+            "healthRejected" to healthRejected, "healthFailed" to healthFailed, "healthOversized" to healthOversized,
         ).mapValues { it.value.get() }.filterValues { it != 0L }
         val reasons = rejectedCounts()
         if (health.isEmpty() && values.all { it == 0L } && reasons.isEmpty() &&

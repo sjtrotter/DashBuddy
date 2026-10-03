@@ -108,6 +108,40 @@ class CensusApiTest {
         assertEquals(cases.size, server.requestCount)
     }
 
+    @Test fun `health statuses map without internal retry`() = runTest {
+        val cases = listOf(
+            Triple(200, """{"status":"accepted","accepted":1,"rejected":{}}""", HealthResult.Accepted(1, emptyMap())),
+            Triple(422, """{"error":"batch_quality","rejected":{"bad_count":1}}""", HealthResult.BatchQuality(mapOf("bad_count" to 1))),
+            Triple(422, """{"error":"batch_quality","rejected":{"bad_rule_id":1}}""", HealthResult.BatchQuality(mapOf("bad_rule_id" to 1))),
+            Triple(429, """{"error":"budget_exhausted"}""", HealthResult.BudgetExhausted(17)),
+            Triple(429, """{"error":"rate_limited"}""", HealthResult.RateLimited(17)),
+            Triple(401, """{"error":"unauthorized"}""", HealthResult.Unauthorized(null)),
+            Triple(401, """{"error":"revoked"}""", HealthResult.Revoked),
+            Triple(413, """{"error":"payload_too_large"}""", HealthResult.PayloadTooLarge),
+        )
+        for ((status, body, expected) in cases) {
+            respond(status, body)
+            assertEquals(expected, api.postHealth(credential, listOf("{}")))
+        }
+        assertEquals(cases.size, server.requestCount)
+    }
+
+    @Test fun `health exact report envelope is signed with all three auth headers`() = runTest {
+        respond(200, """{"status":"accepted","accepted":1,"rejected":{}}""")
+        val report = """{"day":"2026-10-01", "ruleCounts":{}}"""
+        assertEquals(HealthResult.Accepted(1, emptyMap()), api.postHealth(credential, listOf(report)))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        val bytes = requireNotNull(request.body).toByteArray()
+        assertArrayEquals("""{"reports":[$report]}""".toByteArray(Charsets.UTF_8), bytes)
+        assertEquals("POST", request.method)
+        assertEquals("/v1/health", request.url.encodedPath)
+        assertEquals(Bearer.format(credential.installId, credential.secret), request.headers[CensusHeaders.AUTHORIZATION])
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.timestampInWindow(ts, System.currentTimeMillis() / 1000))
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("POST", "/v1/health", ts, bytes),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+    }
+
     @Test fun `503 retry after zero never retries inside OkHttp`() = runTest {
         server.enqueue(MockResponse.Builder().code(503).addHeader("Retry-After", "0")
             .body("{\"error\":\"db_unavailable\"}").build())

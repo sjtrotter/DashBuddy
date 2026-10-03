@@ -19,7 +19,7 @@ import javax.inject.Singleton
 
 /**
  * Developer action (#1185): forget this phone's census identity. Under the uploader lock (never mid-batch) it clears
- * the spool FIRST (a failed clear leaves the identity in place), wipes the sealed credential and health ledger, and records the reset
+ * the spool then the health ledger (either failed clear leaves the identity in place), wipes the sealed credential, and records the reset
  * as the last run in one DataStore edit; the next run mints + enrols a fresh install id, which the server must trust
  * again. The old server-side install is orphaned, not withdrawn. Consent and a server-imposed deferral deadline are
  * left as they are. [resetAsync] runs on the application scope so leaving the screen cannot cancel it half-done.
@@ -58,8 +58,8 @@ class CensusIdentityResetter internal constructor(
             withContext(NonCancellable) {
                 try {
                     spool.clear()
-                    credentials.wipe()
                     healthSink.reset()
+                    credentials.wipe()
                     preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))
                     Timber.tag(TAG).i("census identity reset")
                     true

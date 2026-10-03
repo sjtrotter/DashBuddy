@@ -13,6 +13,22 @@ import org.junit.Test
 class HealthLedgerTest {
     private val key = HealthKey("2026-10-01", "doordash", "7.1.0")
 
+    @Test fun `HealthGrammar pins server version grammars`() {
+        for (version in listOf("8.99.20", "4.599.10004")) {
+            assertTrue(HealthGrammar.platformAppVersion.matches(version))
+        }
+        for (version in listOf("8.97.8|prod", "unknown", "")) {
+            assertFalse(HealthGrammar.platformAppVersion.matches(version))
+        }
+        for (version in listOf("dev", "corpus", "v1.2.3-rc1")) {
+            assertTrue(HealthGrammar.rulesetVersion.matches(version))
+        }
+        for (version in listOf("0.230.0+a41f0965", "1.2.3+nogit")) {
+            assertTrue(HealthGrammar.appVersion.matches(version))
+        }
+        assertFalse(HealthGrammar.appVersion.matches("0.230.0+zz"))
+    }
+
     @Test fun `record unknown and trip are immutable and maintain complete rule counts`() {
         val empty = HealthLedger()
         val ledger = empty.record(key, "doordash.screen.offer").record(key, null)
@@ -60,6 +76,20 @@ class HealthLedgerTest {
         val ledger = HealthLedger(generation = 4).record(key, null).record(key.copy(day = "2026-09-30"), null)
         assertEquals(setOf(key.toString()), ledger.pruneBefore(key.day).rows.keys)
         assertEquals(HealthLedger(generation = 5), ledger.clear())
+    }
+
+    @Test fun `257th distinct key is refused while existing keys keep recording`() {
+        var ledger = HealthLedger()
+        repeat(HealthLedger.MAX_ROWS) { ledger = ledger.record(key.copy(platformAppVersion = "$it"), null) }
+        val newKey = key.copy(platformAppVersion = "256")
+        assertEquals(256, ledger.rows.size)
+        assertEquals(ledger, ledger.record(newKey, "doordash.screen.offer"))
+        assertEquals(ledger, ledger.trip(newKey))
+
+        val existing = key.copy(platformAppVersion = "0")
+        val updated = ledger.record(existing, null).record(existing, "doordash.screen.offer").trip(existing)
+        assertEquals(256, updated.rows.size)
+        assertEquals(HealthRow(1, 2, 1, mapOf("doordash.screen.offer" to 1), 4), updated.rows[existing.toString()])
     }
 
     @Test fun `wire JSON has only nine ordered keys and no receipt fields`() {

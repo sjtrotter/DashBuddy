@@ -23,7 +23,52 @@ class PlatformAppVersionsTest {
 
         repeat(100) { assertEquals("15.2.3", versions.versionName(doordash)) }
 
-        assertEquals("one binder round-trip per package per process", 1, lookups)
+        assertEquals("one binder round-trip per package while fresh", 1, lookups)
+    }
+
+    @Test
+    fun `a fresh version is cached and re-resolved at the TTL`() {
+        var now = 0L
+        var lookups = 0
+        val versions = CachingPlatformAppVersions({ "7.${++lookups}" }, PipelineStats(), ttlMillis = 1000, clock = { now })
+
+        assertEquals("7.1", versions.versionName(doordash))
+        now = 999
+        assertEquals("7.1", versions.versionName(doordash))
+        assertEquals(1, lookups)
+        now = 1000
+        repeat(100) { assertEquals("7.2", versions.versionName(doordash)) }
+        assertEquals(2, lookups)
+    }
+
+    @Test
+    fun `a negative result expires after the default ten minutes`() {
+        var now = 0L
+        var lookups = 0
+        val versions = CachingPlatformAppVersions({ if (++lookups == 1) null else "7.2" }, PipelineStats(), clock = { now })
+
+        assertNull(versions.versionName(doordash))
+        now = 599_999
+        assertNull(versions.versionName(doordash))
+        assertEquals(1, lookups)
+        now = 600_000
+        repeat(100) { assertEquals("7.2", versions.versionName(doordash)) }
+        assertEquals(2, lookups)
+    }
+
+    @Test
+    fun `a throwing lookup after expiry fails open and caches null`() {
+        var now = 0L
+        var lookups = 0
+        val versions = CachingPlatformAppVersions(
+            { if (++lookups == 1) "7.1" else throw IllegalStateException("DeadObjectException") },
+            PipelineStats(), ttlMillis = 1000, clock = { now },
+        )
+
+        assertEquals("7.1", versions.versionName(doordash))
+        now = 1000
+        repeat(100) { assertNull(versions.versionName(doordash)) }
+        assertEquals(2, lookups)
     }
 
     @Test

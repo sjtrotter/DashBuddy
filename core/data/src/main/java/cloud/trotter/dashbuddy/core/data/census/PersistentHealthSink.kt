@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.census
 
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
+import cloud.trotter.dashbuddy.domain.census.HealthGrammar
 import cloud.trotter.dashbuddy.domain.census.HealthKey
 import cloud.trotter.dashbuddy.domain.census.HealthLedger
 import cloud.trotter.dashbuddy.domain.census.HealthSink
@@ -20,6 +21,7 @@ import timber.log.Timber
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +38,7 @@ class PersistentHealthSink @Inject constructor(
     private val ingress = Any()
     private var epoch = 0L
     private var ledger: HealthLedger? = null
+    private var lastPrunedDay: String? = null
     private var dirty = false
     private val channel = Channel<Event>(
         capacity = 1024,
@@ -46,15 +49,17 @@ class PersistentHealthSink @Inject constructor(
 
     init {
         scope.launch(io) {
+            var retryDelayMillis = 1_000L
             for (ignored in wake) {
                 try {
                     mutex.withLock { drain() }
+                    retryDelayMillis = 1_000L
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    Timber.tag("Census").w("census health load failures=1")
                     // Keep queued records for a later load; never apply them to an empty substitute.
-                    delay(1_000)
+                    delay(retryDelayMillis)
+                    retryDelayMillis = (retryDelayMillis * 2).coerceAtMost(60_000)
                     wake.trySend(Unit)
                 }
             }
@@ -84,6 +89,10 @@ class PersistentHealthSink @Inject constructor(
         try {
             if (version == null) {
                 stats.healthSkippedNoVersion.incrementAndGet()
+                return
+            }
+            if (!HealthGrammar.platformAppVersion.matches(version)) {
+                stats.healthSkippedBadVersion.incrementAndGet()
                 return
             }
             val day = Instant.ofEpochMilli(timestampMillis).atZone(ZoneOffset.UTC).toLocalDate().toString()
@@ -122,7 +131,7 @@ class PersistentHealthSink @Inject constructor(
     /** Clears memory, queued old-generation frames and disk as one serialized identity boundary. */
     suspend fun reset() = withContext(io) {
         mutex.withLock {
-            if (ledger == null) ledger = store.load()
+            if (ledger == null) ledger = loadLedger()
             synchronized(ingress) { epoch++ }
             ledger = requireNotNull(ledger).clear()
             dirty = true
@@ -132,14 +141,41 @@ class PersistentHealthSink @Inject constructor(
         }
     }
 
+    private suspend fun loadLedger(): HealthLedger = try {
+        val loaded = store.load()
+        val todayUtc = LocalDate.now(ZoneOffset.UTC)
+        val pruned = loaded.pruneBefore(todayUtc.minusDays(8).toString())
+        lastPrunedDay = todayUtc.toString()
+        if (pruned != loaded) dirty = true
+        pruned
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        stats.healthLoadFailures.incrementAndGet()
+        if (loadFailureWarned.compareAndSet(false, true)) {
+            Timber.tag("Census").w("census health load failed")
+        }
+        throw e
+    }
+
     private suspend fun drain() {
-        if (ledger == null) ledger = store.load()
+        if (ledger == null) ledger = loadLedger()
         // Bound each pass so continuous producers cannot starve snapshots or the flush loop.
         repeat(1024) {
             val event = channel.tryReceive().getOrNull() ?: return
             if (event.epoch != synchronized(ingress) { epoch }) return@repeat
-            ledger = if (event.trip) requireNotNull(ledger).trip(event.key)
-                else requireNotNull(ledger).record(event.key, event.ruleId)
+            if (event.key.day != lastPrunedDay) {
+                ledger = requireNotNull(ledger).pruneBefore(LocalDate.parse(event.key.day).minusDays(8).toString())
+                lastPrunedDay = event.key.day
+                dirty = true
+            }
+            val current = requireNotNull(ledger)
+            val updated = if (event.trip) current.trip(event.key) else current.record(event.key, event.ruleId)
+            if (updated === current) {
+                stats.healthRowsRefused.incrementAndGet()
+                return@repeat
+            }
+            ledger = updated
             if (!event.trip) stats.healthRecorded.incrementAndGet()
             dirty = true
         }
@@ -149,5 +185,9 @@ class PersistentHealthSink @Inject constructor(
         if (!dirty) return
         store.save(requireNotNull(ledger))
         dirty = false
+    }
+
+    companion object {
+        internal val loadFailureWarned = AtomicBoolean()
     }
 }

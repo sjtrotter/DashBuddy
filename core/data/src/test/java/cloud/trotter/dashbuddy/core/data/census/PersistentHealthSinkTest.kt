@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.census
 
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
@@ -18,17 +19,31 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
+import timber.log.Timber
+import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PersistentHealthSinkTest {
+    @Before fun resetProcessWarnings() {
+        PersistentHealthSink.loadFailureWarned.set(false)
+    }
+
     private class MemoryPreferences : DataStore<Preferences> {
         val memory = MutableStateFlow(emptyPreferences())
         var loadGate: CompletableDeferred<Unit>? = null
         var writes = 0
+        var loadFailures = 0
+        var loads = 0
         override val data = flow {
+            loads++
+            if (loadFailures > 0) {
+                loadFailures--
+                throw IOException("health load failed")
+            }
             loadGate?.await()
             emit(memory.value)
         }
@@ -69,6 +84,82 @@ class PersistentHealthSinkTest {
         assertTrue(sink.snapshot().rows.isEmpty())
         assertEquals(2L, stats.healthSkippedNoVersion.get())
         assertEquals(0L, stats.healthRecorded.get())
+    }
+
+    @Test fun `invalid versions skip and valid records still save and load cleanly`() = runTest {
+        val sink = sink()
+        for (version in listOf("8.97.8|prod", "8.97.8-beta")) {
+            sink.onScreen(timestamp, key.platform, version, null)
+            sink.onTrip(timestamp, key.platform, version)
+        }
+        sink.onScreen(timestamp, key.platform, key.platformAppVersion, null)
+        sink.onTrip(timestamp, key.platform, key.platformAppVersion)
+        val ledger = sink.snapshot()
+        assertEquals(setOf(key.toString()), ledger.rows.keys)
+        assertEquals(1, ledger.rows.getValue(key.toString()).unknown)
+        assertEquals(1, ledger.rows.getValue(key.toString()).trips)
+        assertEquals(4L, stats.healthSkippedBadVersion.get())
+        assertEquals(0L, stats.healthSkippedNoVersion.get())
+        assertEquals(1L, stats.healthRecorded.get())
+        assertEquals(ledger, store.load())
+        assertEquals(0L, stats.healthCorrupt.get())
+        assertTrue(stats.summary().contains(",healthSkippedBadVersion=4"))
+    }
+
+    @Test fun `three load failures back off retain queued records and warn once per process`() = runTest {
+        memory.loadFailures = 3
+        val warnings = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority == Log.WARN && tag == "Census") warnings += message
+            }
+        }
+        Timber.plant(tree)
+        try {
+            val sink = sink()
+            sink.onScreen(timestamp, key.platform, key.platformAppVersion, null)
+            runCurrent()
+            assertEquals(1, memory.loads)
+            for ((delayMillis, failures) in listOf(1_000L to 2, 2_000L to 3)) {
+                advanceTimeBy(delayMillis - 1)
+                runCurrent()
+                assertEquals(failures - 1, memory.loads)
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(failures, memory.loads)
+            }
+            assertEquals(3L, stats.healthLoadFailures.get())
+            assertEquals(listOf("census health load failed"), warnings)
+            assertTrue(stats.summary().contains(",healthLoadFailures=3"))
+            advanceTimeBy(3_999)
+            runCurrent()
+            assertEquals(3, memory.loads)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(4, memory.loads)
+            assertEquals(1, sink.snapshot().rows.getValue(key.toString()).unknown)
+            assertEquals(3L, stats.healthLoadFailures.get())
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test fun `load retry backoff caps at sixty seconds`() = runTest {
+        memory.loadFailures = 9
+        val sink = sink()
+        sink.onScreen(timestamp, key.platform, key.platformAppVersion, null)
+        runCurrent()
+        var attempts = 1
+        for (delayMillis in listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 32_000L, 60_000L, 60_000L, 60_000L)) {
+            advanceTimeBy(delayMillis - 1)
+            runCurrent()
+            assertEquals(attempts, memory.loads)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(++attempts, memory.loads)
+        }
+        assertEquals(9L, stats.healthLoadFailures.get())
+        assertEquals(1, sink.snapshot().rows.getValue(key.toString()).unknown)
     }
 
     @Test fun `continuous traffic flushes by sixty seconds without a trailing debounce`() = runTest {
@@ -124,6 +215,62 @@ class PersistentHealthSinkTest {
         val retained = key.copy(day = today.minusDays(8).toString())
         store.save(HealthLedger().record(retained, null).record(key.copy(day = today.minusDays(9).toString()), null))
         assertEquals(setOf(retained.toString()), sink().snapshot().rows.keys)
+    }
+
+    @Test fun `consumer prunes on load without a snapshot or upload`() = runTest {
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val retained = key.copy(day = today.minusDays(8).toString())
+        val current = key.copy(day = today.toString())
+        store.save(HealthLedger().record(retained, null).record(key.copy(day = today.minusDays(9).toString()), null))
+        val sink = sink()
+        sink.onTrip(today.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(), key.platform, key.platformAppVersion)
+        runCurrent()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(setOf(retained.toString(), current.toString()), store.load().rows.keys)
+    }
+
+    @Test fun `thirty day feed prunes on each UTC day change without uploads or consent`() = runTest {
+        val sink = sink()
+        val start = LocalDate.now(ZoneOffset.UTC)
+        repeat(30) { offset ->
+            val day = start.plusDays(offset.toLong())
+            sink.onScreen(day.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(), key.platform, key.platformAppVersion, null)
+            runCurrent()
+            advanceTimeBy(60_000)
+            runCurrent()
+            val expectedDays = (maxOf(0, offset - 8)..offset).map { start.plusDays(it.toLong()).toString() }.toSet()
+            // The inclusive boundary keeps today and days up to eight days old.
+            assertEquals(expectedDays, store.load().rows.keys.map { HealthKey.parse(it).day }.toSet())
+        }
+    }
+
+    @Test fun `row cap counts refused screens and trips while existing rows keep recording`() = runTest {
+        val sink = sink()
+        repeat(HealthLedger.MAX_ROWS) { sink.onScreen(timestamp, key.platform, "$it", null) }
+        sink.onScreen(timestamp, key.platform, "256", null)
+        sink.onTrip(timestamp, key.platform, "256")
+        sink.onScreen(timestamp, key.platform, "0", null)
+        sink.onTrip(timestamp, key.platform, "0")
+        val ledger = sink.snapshot()
+        assertEquals(256, ledger.rows.size)
+        assertEquals(2, ledger.rows.getValue(key.copy(platformAppVersion = "0").toString()).unknown)
+        assertEquals(1, ledger.rows.getValue(key.copy(platformAppVersion = "0").toString()).trips)
+        assertEquals(257L, stats.healthRecorded.get())
+        assertEquals(2L, stats.healthRowsRefused.get())
+        assertTrue(stats.summary().contains(",healthRowsRefused=2"))
+    }
+
+    @Test fun `malformed persisted keys and row values leave valid rows and generation intact`() = runTest {
+        for (badRow in listOf("\"a|b|c|d\":{}", "\"${key.copy(platformAppVersion = "7.2")}\":{\"unknown\":\"bad\"}")) {
+            memory.memory.value = emptyPreferences().toMutablePreferences().apply {
+                this[stringPreferencesKey("ledger_json")] =
+                    """{"generation":5,"rows":{$badRow,"$key":{"unknown":1,"revision":1}}}"""
+            }
+            val corruptBefore = stats.healthCorrupt.get()
+            assertEquals(HealthLedger(generation = 5).record(key, null), store.load())
+            assertEquals(corruptBefore + 1, stats.healthCorrupt.get())
+        }
     }
 
     @Test fun `missing and corrupt ledger load empty and only corruption is counted`() = runTest {

@@ -61,7 +61,7 @@ class CensusIdentityResetterTest {
         return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L })
     }
 
-    @Test fun `reset clears the spool before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
+    @Test fun `reset clears spool and health before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
         preferences.setCensusUploadEnabled(true)
         preferences.setNextAllowedAtMillis(99L)
         preferences.setCensusPolicy(Json.parseToJsonElement("""{"k":10}""").jsonObject)
@@ -69,10 +69,11 @@ class CensusIdentityResetterTest {
 
         resetter().reset()
 
-        inOrder(spool, credentials, healthStore) {
+        inOrder(spool, healthStore, credentials) {
             verify(spool).clear()
-            verify(credentials).wipe()
             verify(healthStore).clear()
+            verify(healthStore).save(HealthLedger(generation = 1))
+            verify(credentials).wipe()
         }
         assertEquals(99L, preferences.nextAllowedAtMillis.first()) // A server-imposed deferral is not identity state.
         assertTrue(preferences.censusPolicy.first().isEmpty())
@@ -113,6 +114,18 @@ class CensusIdentityResetterTest {
 
         verify(credentials, never()).wipe()
         verify(healthStore, never()).clear()
+        assertTrue(scheduler.enqueued.isEmpty())
+        assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
+    }
+
+    @Test fun `a failed health clear leaves the identity in place and is recorded not thrown`() = runTest {
+        preferences.setCensusUploadEnabled(true)
+        whenever(healthStore.clear()).thenAnswer { throw IOException("Census health clear failed") }
+
+        assertFalse(resetter().reset())
+
+        verify(spool).clear()
+        verify(credentials, never()).wipe()
         assertTrue(scheduler.enqueued.isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }

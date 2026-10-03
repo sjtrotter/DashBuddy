@@ -581,7 +581,8 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   WARN. 400 removes the batch, counts one bad request and emits one item-count-only WARN.
   Upload 401 re-signs at most once per run, across all batches and split halves, unless
   the server Date differs by more than 300 seconds; revoked credentials are wiped and consent
-  switched off. 429 stores a deadline, defers periodic work, and gates manual work too; 408 / 5xx /
+  switched off. 429 stores a deadline that gates the skeleton stage of every run (manual or periodic);
+  the hourly cadence itself is never postponed, so health keeps posting. 408 / 5xx /
   transport failures use WorkManager backoff. Concurrent manual and periodic runs share a mutex.
   Enrollment persists the returned policy and retries the same pending identity after a lost reply;
   enrol 401 uses WorkManager retry.

@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.core.network.census.CensusApiFactory
 import cloud.trotter.dashbuddy.core.network.census.CensusTransport
 import cloud.trotter.dashbuddy.core.network.census.EnrolResult
 import cloud.trotter.dashbuddy.core.network.census.UploadResult
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
 import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
@@ -49,6 +50,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private val stats: CensusUploadStats,
     private val uploadLock: CensusUploadLock,
     private val healthSink: PersistentHealthSink,
+    private val metadataProvider: ReplayMetadataProvider,
 ) : CoroutineWorker(appContext, workerParams) {
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
@@ -59,6 +61,7 @@ class CensusUploadWorker @AssistedInject constructor(
         var stale = 0
         var healthPosted = 0
         var healthRejected = 0
+        var healthFailed = 0
         fun set(outcome: CensusRunOutcome, detail: Int? = null) { this.outcome = outcome; this.detail = detail }
     }
 
@@ -114,6 +117,7 @@ class CensusUploadWorker @AssistedInject constructor(
         credentials.current() ?: credentials.pending() ?: credentials.mint()
     } catch (_: CensusCredentialStore.Unusable) {
         Timber.tag(TAG).i("census unusable credentials=1")
+        healthSink.reset()
         credentials.mint()
     }
 
@@ -139,8 +143,10 @@ class CensusUploadWorker @AssistedInject constructor(
                 }
                 EnrolResult.InstallExists -> {
                     // Only a locally pending identity can reach here; never replace an enrolled one.
-                    if (attempt == 0) credential = credentials.mint()
-                    else {
+                    if (attempt == 0) {
+                        healthSink.reset()
+                        credential = credentials.mint()
+                    } else {
                         val stopped = failure(record)
                         record.set(CensusRunOutcome.ENROL_CONFLICT)
                         return Enrollment.Stop(stopped)
@@ -167,7 +173,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 record.set(CensusRunOutcome.DISABLED)
                 return Result.success()
             }
-            val json = HealthLedger.reportJson(key, row, BuildConfig.VERSION_NAME, rulesetVersion = "dev")
+            val json = HealthLedger.reportJson(key, row, BuildConfig.VERSION_NAME,
+                rulesetVersion = metadataProvider.current().rulesetReleaseTag ?: "dev")
             if (!HealthLedger.reportFits(json)) {
                 healthSink.apply { if (it.generation == ledger.generation) it.markRefused(key, row.revision) else it }
                 stats.healthOversized.incrementAndGet()
@@ -186,9 +193,20 @@ class CensusUploadWorker @AssistedInject constructor(
                 is HealthResult.BatchQuality -> result.rejected
                 HealthResult.BadRequest -> mapOf("bad_request" to 1)
                 HealthResult.PayloadTooLarge -> mapOf("batch_too_large" to 1)
-                is HealthResult.RateLimited, is HealthResult.BudgetExhausted,
+                is HealthResult.RateLimited -> {
+                    record.set(CensusRunOutcome.DEFERRED, result.retryAfter.coerceIn(1, 86_400).toInt())
+                    return Result.success()
+                }
+                is HealthResult.BudgetExhausted -> {
+                    record.set(CensusRunOutcome.DEFERRED, result.retryAfterSeconds.coerceIn(1, 86_400).toInt())
+                    return Result.success()
+                }
                 is HealthResult.Unauthorized, is HealthResult.ServerUnavailable,
-                is HealthResult.TransportFailure -> return null
+                is HealthResult.TransportFailure -> {
+                    stats.healthFailed.incrementAndGet()
+                    record.healthFailed++
+                    return null
+                }
                 HealthResult.Revoked -> return revoke(record)
             }
             healthSink.apply { if (it.generation == ledger.generation) it.markRefused(key, row.revision) else it }
@@ -203,8 +221,11 @@ class CensusUploadWorker @AssistedInject constructor(
         val deadline = preferences.nextAllowedAtMillis.first()
         val now = System.currentTimeMillis()
         if (now < deadline) {
-            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
-            scheduler.deferUntil(deadline)
+            when {
+                record.healthPosted > 0 -> record.set(CensusRunOutcome.HEALTH_POSTED, record.healthPosted)
+                record.healthRejected > 0 -> record.set(CensusRunOutcome.HEALTH_REJECTED, record.healthRejected)
+                else -> record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+            }
             Timber.tag(TAG).i("census deferred runs=1")
             return Result.success()
         }
@@ -248,6 +269,7 @@ class CensusUploadWorker @AssistedInject constructor(
             outcome == CensusRunOutcome.OVERSIZED || outcome == CensusRunOutcome.BAD_REQUEST -> Unit
             healthPosted > 0 -> set(CensusRunOutcome.HEALTH_POSTED, healthPosted)
             healthRejected > 0 -> set(CensusRunOutcome.HEALTH_REJECTED, healthRejected)
+            healthFailed > 0 -> set(CensusRunOutcome.FAILURE)
             outcome == CensusRunOutcome.ENROLLED -> Unit
             spoolEmpty -> set(CensusRunOutcome.SPOOL_EMPTY)
             else -> Unit
@@ -389,7 +411,6 @@ class CensusUploadWorker @AssistedInject constructor(
         record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
         val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
-        scheduler.deferUntil(deadline)
         Timber.tag(TAG).i("census deferred runs=1")
         return Result.success()
     }
@@ -398,6 +419,7 @@ class CensusUploadWorker @AssistedInject constructor(
         record.set(CensusRunOutcome.REVOKED)
         // Switch off first, so even a failed disk wipe cannot leave uploads enabled.
         preferences.setCensusUploadEnabled(false)
+        healthSink.reset()
         credentials.wipe()
         Timber.tag(TAG).w("census revoked")
         return Result.success()

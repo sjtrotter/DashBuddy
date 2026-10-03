@@ -290,6 +290,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
             "bad_item", "unknown_schema", "unknown_field", "plaintext_field", "too_deep", "too_many_nodes",
             "bad_kind", "bad_hash", "hash_on_withheld_kind", "missing_hash", "bad_id", "bad_class",
             "hash_domain_mismatch", "bad_platform", "bad_day", "stale_day", "bad_version", "too_large", "fingerprint_mismatch",
+            "bad_count", "bad_rule_id",
         )
 
         private fun reasons(json: JsonObject): Map<String, Int> {

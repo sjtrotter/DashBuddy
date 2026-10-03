@@ -9,9 +9,13 @@ import cloud.trotter.dashbuddy.core.data.di.CensusHealthPreferences
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import cloud.trotter.dashbuddy.domain.census.HealthKey
 import cloud.trotter.dashbuddy.domain.census.HealthLedger
+import cloud.trotter.dashbuddy.domain.census.HealthRow
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,7 +45,19 @@ class HealthLedgerStore @Inject constructor(
     }
 
     private fun decode(json: String): HealthLedger = try {
-        Json.decodeFromString<HealthLedger>(json).also { ledger -> ledger.rows.keys.forEach { HealthKey.parse(it) } }
+        val document = Json.parseToJsonElement(json).jsonObject
+        val ledger = Json.decodeFromJsonElement<HealthLedger>(JsonObject(document - "rows"))
+        val rows = buildMap {
+            document["rows"]?.jsonObject?.forEach { (key, value) ->
+                try {
+                    HealthKey.parse(key)
+                    put(key, Json.decodeFromJsonElement<HealthRow>(value))
+                } catch (_: IllegalArgumentException) {
+                    stats.healthCorrupt.incrementAndGet()
+                }
+            }
+        }
+        ledger.copy(rows = rows)
     } catch (_: IllegalArgumentException) {
         stats.healthCorrupt.incrementAndGet()
         HealthLedger()

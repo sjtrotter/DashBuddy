@@ -7,6 +7,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
+/** Server version grammars shared by health recording and reporting. */
+object HealthGrammar {
+    val platformAppVersion = Regex("^[0-9]{1,5}(\\.[0-9]{1,5}){0,3}$")
+    val rulesetVersion = Regex("^(corpus|dev|v?[0-9]{1,5}(\\.[0-9]{1,5}){0,3}(-[a-z0-9]{1,12})?)$")
+    val appVersion = Regex("^([0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(\\+([0-9a-f]{7,40}(\\.dirty)?|nogit))?)$")
+}
+
 /** UTC day, platform wire and observed platform app version identify one report. */
 @Serializable
 data class HealthKey(val day: String, val platform: String, val platformAppVersion: String) {
@@ -71,8 +78,11 @@ data class HealthLedger(val rows: Map<String, HealthRow> = emptyMap(), val gener
 
     fun clear(): HealthLedger = HealthLedger(generation = generation + 1)
 
-    private fun update(key: HealthKey, transform: (HealthRow) -> HealthRow): HealthLedger =
-        copy(rows = rows + (key.toString() to transform(rows[key.toString()] ?: HealthRow())))
+    private fun update(key: HealthKey, transform: (HealthRow) -> HealthRow): HealthLedger {
+        val row = rows[key.toString()]
+        if (row == null && rows.size >= MAX_ROWS) return this
+        return copy(rows = rows + (key.toString() to transform(row ?: HealthRow())))
+    }
 
     private fun acknowledge(key: HealthKey, revision: Long, transform: (HealthRow) -> HealthRow): HealthLedger {
         val row = rows[key.toString()] ?: return copy()
@@ -80,6 +90,7 @@ data class HealthLedger(val rows: Map<String, HealthRow> = emptyMap(), val gener
     }
 
     companion object {
+        const val MAX_ROWS = 256
         private const val MAX_COUNT = 1_000_000
         private fun increment(value: Int): Int = if (value >= MAX_COUNT) MAX_COUNT else value + 1
 
