@@ -20,6 +20,9 @@ class ReplayMetadataProviderImpl @Inject constructor(
     override fun current(): ReplayMetadata = ReplayMetadata(
         engineVersion = RuleEngineConstants.VERSION,
         rulesetFormatVersion = interpreter.loadedFormatVersion,
+        // bundled rules have no release tag yet; `dev` is the contract's token for them (#1197) —
+        // the loaded bundle's tag replaces it once OTA rules exist.
+        rulesetReleaseTag = "dev",
         pipelineVersions = PipelineRegistry.pipelines,
         stateMachineApiVersion = "${StateMachineContract.API_VERSION_MAJOR}.${StateMachineContract.API_VERSION_MINOR}",
         appVersion = appVersionName,

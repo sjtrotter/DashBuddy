@@ -19,9 +19,9 @@ class CensusVariantBindingTest {
         assertTrue(application.contains("if (BuildConfig.DEBUG) CensusUploadWorker.schedule(this)"))
     }
 
-    @Test fun `credentials and spool excluded from every backup channel`() {
+    @Test fun `credentials spool and health ledger excluded from every backup channel`() {
         val root = RepoRoot.locate()
-        val paths = listOf("datastore/census_credentials.preferences_pb", "census/")
+        val paths = listOf("datastore/census_credentials.preferences_pb", "census/", "datastore/census_health.preferences_pb")
         val extraction = File(root, "app/src/main/res/xml/data_extraction_rules.xml").readText()
         val backup = File(root, "app/src/main/res/xml/backup_rules.xml").readText()
         for (path in paths) {

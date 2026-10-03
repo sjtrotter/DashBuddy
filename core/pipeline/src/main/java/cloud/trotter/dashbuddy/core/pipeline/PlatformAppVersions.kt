@@ -24,15 +24,12 @@ fun interface PlatformAppVersions {
 }
 
 /**
- * The production [PlatformAppVersions]: one lookup per package per process, cached.
+ * The production [PlatformAppVersions]: one lookup per package per cache lifetime.
  *
- * **Caching decision (#937):** the cache is never invalidated on a package update. An app
- * update kills the updated app's process and the accessibility service is re-bound, and in
- * practice DashBuddy's own process is restarted alongside it; the residual — one stale stamp
- * on the frames between an in-place update and the next process start — is strictly smaller
- * than the cost of listening for `PACKAGE_REPLACED` broadcasts on the sensing hot path. The
- * stamp is a diagnostic, not an input to any decision, so a stale value is a nuisance, never
- * a correctness problem.
+ * **Caching decision (#937, #1197):** the stamp now drives the daily health rollup, so a
+ * stale version after an in-place update is bounded to ten minutes. A `PACKAGE_REPLACED`
+ * receiver was rejected as a sensing-hot-path cost; positive and negative resolutions
+ * instead expire together after the TTL.
  *
  * **Negative results are cached too.** A package that doesn't resolve (uninstalled, an OEM
  * overlay, a `NameNotFoundException`) would otherwise pay a binder round-trip on EVERY frame.
@@ -43,20 +40,33 @@ fun interface PlatformAppVersions {
  *
  * @param lookup the raw resolution (the `PackageManager` call at the DI edge). Injected as a
  *   lambda so the caching/fail-open logic above is unit-testable without Robolectric.
- * @param stats records each FIRST resolution for the periodic summary line. The cache here is
+ * @param stats records each successful resolution for the periodic summary line. The cache here is
  *   the SSOT of resolution; [PipelineStats] holds only a render-only copy for the log line.
+ * @param ttlMillis bounds stale resolutions, including negative results.
+ * @param clock supplies resolution timestamps in milliseconds.
  */
 class CachingPlatformAppVersions(
     private val lookup: (String) -> String?,
     private val stats: PipelineStats,
+    private val ttlMillis: Long = 10 * 60 * 1000L,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : PlatformAppVersions {
 
-    /** `packageName → versionName`, with [ABSENT] standing in for "resolved to nothing". */
-    private val cache = ConcurrentHashMap<String, String>()
+    private data class Resolution(val value: String?, val resolvedAt: Long)
+
+    /**
+     * Lock-free on purpose: a cache HIT for one package must never wait behind another package's
+     * binder round-trip (the notification source buffers 64 events; a held monitor across the
+     * `PackageManager` call could drop them). Two threads racing the same expired entry each
+     * resolve once — harmless, and the second write wins with an equivalent value.
+     */
+    private val cache = ConcurrentHashMap<String, Resolution>()
+    private val admission = Any()
 
     override fun versionName(packageName: String): String? {
         if (packageName.isEmpty()) return null
-        cache[packageName]?.let { return it.takeIf { v -> v != ABSENT } }
+        val now = clock()
+        cache[packageName]?.let { if (now - it.resolvedAt in 0 until ttlMillis) return it.value }
 
         val resolved = try {
             lookup(packageName)
@@ -71,18 +81,20 @@ class CachingPlatformAppVersions(
         // dasher's screen shows), but this is fed from untrusted frame data, so cap it rather
         // than trust that. Past the cap we still ANSWER, we just stop remembering — correctness
         // is unchanged, only the binder traffic.
-        if (cache.size < MAX_CACHED_PACKAGES) {
-            cache[packageName] = resolved ?: ABSENT
-            if (resolved != null) stats.onPlatformAppVersion(packageName, resolved)
+        // Admission is the one short critical section: the capacity check and the insert must be
+        // atomic or two concurrent misses can push the map past the cap. The lookup above stays
+        // outside it, and reads never take it.
+        val admitted = synchronized(admission) {
+            if (cache.containsKey(packageName) || cache.size < MAX_CACHED_PACKAGES) {
+                cache[packageName] = Resolution(resolved, clock()); true
+            } else false
         }
+        if (admitted && resolved != null) stats.onPlatformAppVersion(packageName, resolved)
         return resolved
     }
 
     companion object {
         private const val TAG = "Pipeline"
-
-        /** Sentinel for a negative lookup — `ConcurrentHashMap` cannot hold a null value. */
-        private const val ABSENT = ""
 
         /** Cache cap; see [versionName] for why exceeding it is not an error. */
         const val MAX_CACHED_PACKAGES = 64

@@ -166,7 +166,7 @@ class AccessibilityPipeline @Inject constructor(
             // the screen surface, and mixing them would dilute the denominator. Fail-open: the
             // monitor swallows everything, so a broken alarm can never cost a frame.
             if (event is PipelineEvent.Screen) {
-                recognitionHealth.onScreenAdmitted(event.packageName, obs.target == UNKNOWN_TARGET)
+                recognitionHealth.onScreenAdmitted(event.packageName, obs)
             }
             // #1036 parse-shortfall census, taken HERE for the same reason as the #937 sample
             // above: post-admission, so a dasher parked on a rotted screen contributes the frames

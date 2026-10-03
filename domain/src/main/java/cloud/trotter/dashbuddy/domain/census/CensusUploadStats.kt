@@ -22,6 +22,17 @@ class CensusUploadStats @Inject constructor() {
     val enrolRejected = AtomicLong()
     val unauthorized = AtomicLong()
     val stale = AtomicLong()
+    val healthRecorded = AtomicLong()
+    val healthSkippedNoVersion = AtomicLong()
+    val healthSkippedBadVersion = AtomicLong()
+    val healthLoadFailures = AtomicLong()
+    val healthDropped = AtomicLong()
+    val healthRowsRefused = AtomicLong()
+    val healthCorrupt = AtomicLong()
+    val healthPosted = AtomicLong()
+    val healthRejected = AtomicLong()
+    val healthFailed = AtomicLong()
+    val healthOversized = AtomicLong()
     private val rejected = ConcurrentHashMap<String, AtomicLong>()
 
     fun reject(reasons: Map<String, Int>) {
@@ -35,13 +46,20 @@ class CensusUploadStats @Inject constructor() {
     fun summary(): String {
         val values = listOf(spooled, spoolDropped, spoolCorrupt, spoolOversized, uploaded, duplicate, uploadFailures, oversized, badRequest)
             .map { it.get() }
+        val health = linkedMapOf(
+            "healthRecorded" to healthRecorded, "healthSkippedNoVersion" to healthSkippedNoVersion,
+            "healthSkippedBadVersion" to healthSkippedBadVersion, "healthLoadFailures" to healthLoadFailures,
+            "healthRowsRefused" to healthRowsRefused, "healthDropped" to healthDropped, "healthCorrupt" to healthCorrupt, "healthPosted" to healthPosted,
+            "healthRejected" to healthRejected, "healthFailed" to healthFailed, "healthOversized" to healthOversized,
+        ).mapValues { it.value.get() }.filterValues { it != 0L }
         val reasons = rejectedCounts()
-        if (values.all { it == 0L } && reasons.isEmpty() &&
+        if (health.isEmpty() && values.all { it == 0L } && reasons.isEmpty() &&
             listOf(keystoreTransient, inflightCorrupt, enrolRejected, unauthorized, stale).all { it.get() == 0L }) return ""
         return ",spooled=${values[0]},spoolDropped=${values[1]},corrupt=${values[2]},spoolOversized=${values[3]}," +
             "uploaded=${values[4]},duplicate=${values[5]},uploadFailures=${values[6]},rejected=$reasons," +
             "keystoreTransient=${keystoreTransient.get()},inflightCorrupt=${inflightCorrupt.get()}," +
             "enrolRejected=${enrolRejected.get()},unauthorized=${unauthorized.get()},stale=${stale.get()}," +
-            "oversized=${values[7]},badRequest=${values[8]}"
+            "oversized=${values[7]},badRequest=${values[8]}" +
+            health.entries.joinToString("") { ",${it.key}=${it.value}" }
     }
 }

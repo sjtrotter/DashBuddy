@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.census.HealthSink
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.dashbuddy.domain.pipeline.RecognitionHealthReporter
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
@@ -33,6 +36,7 @@ import javax.inject.Singleton
 @Singleton
 class RecognitionHealthMonitor @Inject constructor(
     private val reporter: RecognitionHealthReporter,
+    private val sink: HealthSink,
 ) {
 
     private val lock = Any()
@@ -42,14 +46,27 @@ class RecognitionHealthMonitor @Inject constructor(
      * Record one frame that survived `FrameGate` admission.
      *
      * @param packageName the window's real package (the frame's own attribution).
-     * @param unknown true when the frame classified UNKNOWN.
+     * @param obs the admitted screen (any flow observation of a screen event), with its recognition and version stamps.
      */
-    fun onScreenAdmitted(packageName: String?, unknown: Boolean) {
+    fun onScreenAdmitted(packageName: String?, obs: Observation.FlowObservation) {
+        val unknown = obs.target == UNKNOWN_TARGET
         try {
             val platform = Platform.fromPackage(packageName)
             if (platform == Platform.Unknown) return
 
+            try {
+                sink.onScreen(obs.timestamp, platform.wire, obs.metadata.platformAppVersion, obs.ruleId?.takeUnless { unknown })
+            } catch (t: Throwable) {
+                Timber.tag(TAG).w("Health ledger record failed — sensing unaffected")
+            }
+
             val alarm = synchronized(lock) { health.record(platform.wire, unknown) } ?: return
+
+            try {
+                sink.onTrip(obs.timestamp, platform.wire, obs.metadata.platformAppVersion)
+            } catch (t: Throwable) {
+                Timber.tag(TAG).w("Health ledger record failed — sensing unaffected")
+            }
 
             // WARN, not ERROR: a defended invariant fired and the app is degraded, but nothing
             // is lost or crashed (principle 7). PII-free by construction — a platform wire and

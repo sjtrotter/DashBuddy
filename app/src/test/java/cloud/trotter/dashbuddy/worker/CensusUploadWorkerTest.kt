@@ -14,6 +14,19 @@ import cloud.trotter.census.contract.auth.InstallSecret
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore.Credential
 import cloud.trotter.dashbuddy.core.data.census.CensusSpool
+import cloud.trotter.dashbuddy.BuildConfig
+import cloud.trotter.dashbuddy.core.data.census.HealthLedgerStore
+import cloud.trotter.dashbuddy.core.data.census.PersistentHealthSink
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
+import cloud.trotter.dashbuddy.domain.census.HealthKey
+import cloud.trotter.dashbuddy.domain.census.HealthLedger
+import cloud.trotter.dashbuddy.domain.census.HealthRow
+import cloud.trotter.dashbuddy.core.network.census.HealthResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.StandardTestDispatcher
 import cloud.trotter.dashbuddy.core.data.census.CensusUploadLock
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
@@ -69,6 +82,14 @@ class CensusUploadWorkerTest {
     }
 
     private class FakeApi : CensusTransport {
+        val healthResults = ArrayDeque<HealthResult>()
+        val healthBodies = mutableListOf<List<String>>()
+        var beforeHealth: suspend () -> Unit = {}
+        override suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult {
+            healthBodies += reportsJson
+            beforeHealth()
+            return healthResults.removeFirst()
+        }
         val enrollments = ArrayDeque<EnrolResult>()
         val uploads = ArrayDeque<UploadResult>()
         val enrolledIds = mutableListOf<String>()
@@ -95,7 +116,7 @@ class CensusUploadWorkerTest {
         override fun deferUntil(epochMillis: Long) { deadline = epochMillis }
     }
 
-    private class Harness {
+    private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
         private val memory = MemoryPreferences()
         val preferences = DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined)
         val credentials: CensusCredentialStore = mock()
@@ -103,6 +124,19 @@ class CensusUploadWorkerTest {
         val api = FakeApi()
         val scheduler = Scheduler()
         val stats = CensusUploadStats()
+        val healthMemory = MemoryPreferences()
+        val healthStore = HealthLedgerStore(healthMemory, stats)
+        val healthSink = PersistentHealthSink(healthStore, stats, scope, io)
+        var rulesetReleaseTag: String? = "dev"
+        val metadataProvider = object : ReplayMetadataProvider {
+            override fun current() = ReplayMetadata(engineVersion = 1, rulesetReleaseTag = rulesetReleaseTag)
+        }
+
+        suspend fun health(day: LocalDate = LocalDate.now(ZoneOffset.UTC).minusDays(1), version: String = "7.1"): HealthKey {
+            val key = HealthKey(day.toString(), "doordash", version)
+            healthSink.apply { it.record(key, "doordash.screen.offer").record(key, null).trip(key) }
+            return key
+        }
         val queued = mutableListOf<List<CensusSpool.Spooled>>()
         var pending: CensusSpool.InFlight? = null
         private var sequence = 0
@@ -146,6 +180,14 @@ class CensusUploadWorkerTest {
             }
         }
 
+        fun consentEnabled(): Boolean? = memory.data.value[
+            androidx.datastore.preferences.core.booleanPreferencesKey("census_upload_enabled")
+        ]
+
+        fun persistedHealth(): HealthLedger = healthMemory.data.value[
+            androidx.datastore.preferences.core.stringPreferencesKey("ledger_json")
+        ]?.let { Json.decodeFromString<HealthLedger>(it) } ?: HealthLedger()
+
         /** Flip consent from inside a non-suspending transport hook (the in-memory store completes synchronously). */
         fun setConsentSync(enabled: Boolean) {
             memory.data.value = memory.data.value.toMutablePreferences().apply {
@@ -169,12 +211,14 @@ class CensusUploadWorkerTest {
         fun worker(): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, scheduler, stats, lock)
+                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, scheduler, stats, lock, healthSink, metadataProvider)
             }).build()
     }
 
+    private fun TestScope.harness() = Harness(backgroundScope, StandardTestDispatcher(testScheduler))
+
     @Test fun `disabled does not create API read credentials or drain spool`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize(enabled = false)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertNull(h.preferences.censusLastRun.first()) // A consent-off no-op never overwrites the last real outcome.
@@ -184,7 +228,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `fresh enrollment is persisted before upload and lost replies reuse pending identity`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
         whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
@@ -199,12 +243,19 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `install conflict mints only once more and enrol unauthorized stops`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
         val pending = h.credential.copy(enrolled = false)
         val replacement = pending.copy(installId = "87654321-1234-4123-8123-123456789abc")
-        whenever(h.credentials.mint()).thenReturn(pending, replacement)
+        h.health()
+        var mints = 0
+        whenever(h.credentials.mint()).thenAnswer {
+            mints++
+            assertEquals(if (mints == 1) 0L else 1L, h.persistedHealth().generation)
+            if (mints == 2) assertTrue(h.persistedHealth().rows.isEmpty())
+            if (mints == 1) pending else replacement
+        }
         h.api.enrollments += EnrolResult.InstallExists
         h.api.enrollments += EnrolResult.Unauthorized
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
@@ -215,7 +266,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `second install conflict stops without another mint`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
         whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
@@ -227,10 +278,14 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `unusable credential remints and enrolls`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenThrow(CensusCredentialStore.Unusable())
-        whenever(h.credentials.mint()).thenReturn(h.credential.copy(enrolled = false))
+        h.health()
+        whenever(h.credentials.mint()).thenAnswer {
+            assertEquals(HealthLedger(generation = 1), h.persistedHealth())
+            h.credential.copy(enrolled = false)
+        }
         h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         verify(h.credentials).mint()
@@ -240,7 +295,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `transient credential failure retries with one INFO counter and no identity changes`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenThrow(CensusCredentialStore.Transient())
         val logs = mutableListOf<Pair<Int, String>>()
@@ -272,7 +327,7 @@ class CensusUploadWorkerTest {
         Timber.plant(tree)
         try {
             for (rejection in listOf(EnrolResult.RequestRejected(400), EnrolResult.Unauthorized)) {
-                val h = Harness()
+                val h = harness()
                 h.initialize()
                 whenever(h.credentials.current()).thenReturn(null)
                 whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
@@ -294,7 +349,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `enrol persists only numeric policy projection`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
         whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
@@ -307,7 +362,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `thirty stale items are removed locally and seventy fresh items upload`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val today = LocalDate.now(ZoneOffset.UTC)
         val stale = h.queueBatch(30, today.minusDays(8))
@@ -325,7 +380,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `stale in flight items invalidate batch id and entirely stale batch does not stop fresh work`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val stale = h.queueBatch(2, LocalDate.now(ZoneOffset.UTC).minusDays(8))
         val fresh = h.queueBatch(1)
@@ -339,7 +394,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `accepted duplicate and batch quality remove items and count outcomes`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queue(4)
         h.api.uploads += UploadResult.Accepted(1, 2, mapOf("bad_hash" to 1), CensusBudget(200, 1000, 30, 300))
@@ -357,30 +412,33 @@ class CensusUploadWorkerTest {
 
     @Test fun `429 deadlines persist and are honored by subsequent manual runs`() = runTest {
         for (result in listOf(UploadResult.RateLimited(3600), UploadResult.BudgetExhausted(3600))) {
-            val h = Harness()
+            val h = harness()
             h.initialize()
             h.queue()
             h.api.uploads += result
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
             assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
-            assertTrue(h.scheduler.deadline > System.currentTimeMillis())
-            assertEquals(h.scheduler.deadline, h.preferences.nextAllowedAtMillis.first())
+            val deadline = h.preferences.nextAllowedAtMillis.first()
+            assertTrue(deadline > System.currentTimeMillis())
+            assertEquals(0L, h.scheduler.deadline)
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
             assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
-            assertEquals(1, h.factoryCalls)
+            assertEquals(2, h.factoryCalls)
+            assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+            assertEquals(0L, h.scheduler.deadline)
             assertEquals(1, h.api.batches.size)
             assertEquals(1, h.queued.size)
             h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
             h.api.uploads += UploadResult.Duplicate
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-            assertEquals(2, h.factoryCalls)
+            assertEquals(3, h.factoryCalls)
             assertTrue(h.queued.isEmpty())
         }
     }
 
     @Test fun `year long retry after is capped and consent toggle allows upload now`() = runTest {
         for (enrolling in listOf(false, true)) {
-            val h = Harness()
+            val h = harness()
             h.initialize()
             h.queue()
             if (enrolling) {
@@ -392,8 +450,9 @@ class CensusUploadWorkerTest {
             }
             val before = System.currentTimeMillis()
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-            assertTrue(h.scheduler.deadline >= before + 86_400_000)
-            assertTrue(h.scheduler.deadline <= System.currentTimeMillis() + 86_460_000)
+            assertTrue(h.preferences.nextAllowedAtMillis.first() >= before + 86_400_000)
+            assertTrue(h.preferences.nextAllowedAtMillis.first() <= System.currentTimeMillis() + 86_460_000)
+            assertEquals(0L, h.scheduler.deadline)
             h.preferences.setCensusUploadEnabled(false)
             assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
             h.preferences.setNextAllowedAtMillis(Long.MAX_VALUE)
@@ -406,8 +465,34 @@ class CensusUploadWorkerTest {
         }
     }
 
+    @Test fun `a pending identity waits out its enrol 429 on later runs without re-enrolling`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        whenever(h.credentials.current()).thenReturn(null)
+        whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
+        h.api.enrollments += EnrolResult.RateLimited(3600)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
+        val deadline = h.preferences.nextAllowedAtMillis.first()
+        assertTrue(deadline > System.currentTimeMillis())
+        assertEquals(1, h.api.enrolledIds.size)
+        // The hourly cadence is never postponed, so the next run arrives inside the window: no enrol call.
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
+        assertEquals(1, h.api.enrolledIds.size)
+        assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+        assertEquals(0L, h.scheduler.deadline)
+        h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(2, h.api.enrolledIds.size)
+        assertTrue(h.queued.isEmpty())
+    }
+
     @Test fun `unauthorized resigns once with same batch and bytes`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queue()
         h.api.uploads += UploadResult.Unauthorized(System.currentTimeMillis())
@@ -420,7 +505,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `second unauthorized stops without a third request and keeps in flight`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queue()
         h.api.uploads.addAll(listOf(
@@ -444,7 +529,7 @@ class CensusUploadWorkerTest {
         Timber.plant(tree)
         try {
             repeat(2) {
-                val h = Harness()
+                val h = harness()
                 h.initialize()
                 h.queue()
                 h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
@@ -468,13 +553,13 @@ class CensusUploadWorkerTest {
         val tree = warningTree(warnings)
         Timber.plant(tree)
         try {
-            val first = Harness()
+            val first = harness()
             first.initialize()
             first.queue()
             first.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
             assertEquals(ListenableWorker.Result.success(), first.worker().doWork())
 
-            val second = Harness()
+            val second = harness()
             second.initialize()
             val replacement = second.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
             whenever(second.credentials.current()).thenReturn(replacement)
@@ -492,7 +577,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `three all-stale batches with fresh work remaining record stale_removed never spool_empty`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val today = LocalDate.now(ZoneOffset.UTC)
         repeat(3) { h.queueBatch(100, today.minusDays(9)) }
@@ -506,7 +591,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `a 401 after consent is switched off records disabled not unauthorized`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queue()
         h.api.uploads += UploadResult.Unauthorized(System.currentTimeMillis())
@@ -522,7 +607,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `resign allowance is shared by all batches in a run and resets next run`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queue(2)
         h.api.uploads.addAll(listOf(
@@ -542,7 +627,7 @@ class CensusUploadWorkerTest {
 
     @Test fun `clock skew stops before resign and repeated unauthorized retains spool`() = runTest {
         for (skew in listOf(true, false)) {
-            val h = Harness()
+            val h = harness()
             h.initialize()
             h.queue()
             val date = System.currentTimeMillis() + if (skew) 600_000 else 0
@@ -555,9 +640,15 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `revoked wipes credentials disables toggle and stops`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
+        h.health(LocalDate.now(ZoneOffset.UTC))
         h.queue()
+        whenever(h.credentials.wipe()).thenAnswer {
+            assertEquals(HealthLedger(generation = 1), h.persistedHealth())
+            assertEquals(false, h.consentEnabled())
+            Unit
+        }
         h.api.uploads += UploadResult.Revoked
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         verify(h.credentials).wipe()
@@ -568,7 +659,7 @@ class CensusUploadWorkerTest {
 
     @Test fun `server and transport failures retry without removing records`() = runTest {
         for (result in listOf(UploadResult.ServerUnavailable(503), UploadResult.TransportFailure("IOException"))) {
-            val h = Harness()
+            val h = harness()
             h.initialize()
             h.queue()
             h.api.uploads += result
@@ -579,7 +670,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `transport failure retries original batch before new arrivals with original batch id`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val a = h.queueBatch(1)
         h.api.uploads += UploadResult.TransportFailure("IOException")
@@ -600,7 +691,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `413 recursively halves an odd batch in the same run and drops only oversized singleton`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val items = h.queueBatch(3)
         val warnings = mutableListOf<String>()
@@ -627,7 +718,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `413 splits maximum batch down to singletons within seven levels`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queueBatch(100)
         h.api.uploads.addAll(List(199) { UploadResult.PayloadTooLarge })
@@ -641,7 +732,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `failed split half is persisted and retried before its sibling and new arrivals`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         val items = h.queueBatch(4)
         val first = items.take(2)
@@ -661,7 +752,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `bad request removes whole batch counts once warns once and continues`() = runTest {
-        val h = Harness()
+        val h = harness()
         h.initialize()
         h.queueBatch(3)
         h.queue()
@@ -681,6 +772,332 @@ class CensusUploadWorkerTest {
             verify(h.spool, times(2)).clearInFlight()
         } finally {
             Timber.uproot(tree)
+        }
+    }
+
+    @Test fun `closed day posts exact singleton JSON and acknowledges once while today stays open`() = runTest {
+        val h = harness()
+        h.initialize()
+        val key = h.health()
+        h.health(LocalDate.now(ZoneOffset.UTC))
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        val expected = """{"day":"${key.day}","platform":"doordash","platformAppVersion":"7.1","appVersion":"${BuildConfig.VERSION_NAME}","rulesetVersion":"dev","admitted":1,"unknown":1,"trips":1,"ruleCounts":{"doordash.screen.offer":1}}"""
+        assertEquals(listOf(listOf(expected)), h.api.healthBodies)
+        assertEquals("health_posted 1", h.preferences.censusLastRun.first()?.token())
+        assertEquals(1L, h.stats.healthPosted.get())
+        val row = h.healthStore.load().rows.getValue(key.toString())
+        assertEquals(row.revision, row.postedRevision)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.healthBodies.size)
+        assertEquals(CensusRunOutcome.SPOOL_EMPTY, h.preferences.censusLastRun.first()?.outcome)
+    }
+
+    @Test fun `422 refuses only current revision and a later frame posts again`() = runTest {
+        val h = harness()
+        h.initialize()
+        val key = h.health()
+        h.api.healthResults += HealthResult.BatchQuality(mapOf("bad_version" to 1))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals("health_rejected 1", h.preferences.censusLastRun.first()?.token())
+        assertEquals(1L, h.stats.healthRejected.get())
+        val refused = h.healthStore.load().rows.getValue(key.toString())
+        assertEquals(refused.revision, refused.refusedRevision)
+        h.worker().doWork()
+        assertEquals(1, h.api.healthBodies.size)
+        h.healthSink.apply { it.record(key, "doordash.screen.offer") }
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.worker().doWork()
+        assertEquals(2, h.api.healthBodies.size)
+        assertEquals("health_posted 1", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `accepted zero bad request and payload too large refuse and count reports`() = runTest {
+        for (result in listOf(HealthResult.Accepted(0, mapOf("bad_day" to 1)), HealthResult.BadRequest, HealthResult.PayloadTooLarge)) {
+            val h = harness()
+            h.initialize()
+            val key = h.health()
+            h.api.healthResults += result
+            h.worker().doWork()
+            val row = h.healthStore.load().rows.getValue(key.toString())
+            assertEquals(row.revision, row.refusedRevision)
+            assertEquals(1L, h.stats.healthRejected.get())
+            assertEquals("health_rejected 1", h.preferences.censusLastRun.first()?.token())
+        }
+    }
+
+    @Test fun `changed row during post is not acknowledged by an older receipt`() = runTest {
+        for (result in listOf(HealthResult.Accepted(1, emptyMap()), HealthResult.BatchQuality(mapOf("bad_day" to 1)))) {
+            val h = harness()
+            h.initialize()
+            val key = h.health()
+            h.api.beforeHealth = { h.healthSink.apply { it.record(key, null) } }
+            h.api.healthResults += result
+            h.worker().doWork()
+            val row = h.healthStore.load().rows.getValue(key.toString())
+            assertEquals(-1L, row.postedRevision)
+            assertEquals(-1L, row.refusedRevision)
+            h.api.beforeHealth = {}
+            h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+            h.worker().doWork()
+            assertEquals(2, h.api.healthBodies.size)
+        }
+    }
+
+    @Test fun `oversized report is refused locally with its complete rule map intact`() = runTest {
+        val h = harness()
+        h.initialize()
+        val key = h.health()
+        val rules = (1..600).associate { "a.r$it" to 1 }
+        h.healthSink.apply { it.copy(rows = mapOf(key.toString() to HealthRow(admitted = 600, ruleCounts = rules, revision = 9))) }
+        val warnings = mutableListOf<String>()
+        val tree = warningTree(warnings)
+        Timber.plant(tree)
+        try {
+            h.worker().doWork()
+            h.worker().doWork()
+            assertTrue(h.api.healthBodies.isEmpty())
+            assertEquals(1L, h.stats.healthOversized.get())
+            val row = h.healthStore.load().rows.getValue(key.toString())
+            assertEquals(9L, row.refusedRevision)
+            assertEquals(rules, row.ruleCounts)
+            assertEquals(listOf("census health oversized day=${key.day}"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test fun `health 429 ends the run without uploading skeletons or changing their deadline`() = runTest {
+        for (result in listOf(HealthResult.RateLimited(3600), HealthResult.BudgetExhausted(3600))) {
+            val h = harness()
+            h.initialize()
+            val key = h.health()
+            h.health(version = "7.2")
+            h.queue()
+            h.api.healthResults += result
+            h.api.uploads += UploadResult.Duplicate
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(1, h.api.healthBodies.size)
+            assertTrue(h.api.bodies.isEmpty())
+            assertEquals(1, h.queued.size)
+            assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
+            assertEquals(0L, h.scheduler.deadline)
+            assertEquals("deferred 3600", h.preferences.censusLastRun.first()?.token())
+            assertEquals(-1L, h.healthStore.load().rows.getValue(key.toString()).refusedRevision)
+            h.api.healthResults.addAll(List(2) { HealthResult.Accepted(1, emptyMap()) })
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(3, h.api.healthBodies.size)
+            assertEquals(1, h.api.bodies.size)
+            assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
+            assertEquals(2L, h.stats.healthPosted.get())
+        }
+    }
+
+    @Test fun `health 429 clamps the run detail without scheduling a skeleton deferral`() = runTest {
+        for (seconds in listOf(0L, Long.MAX_VALUE)) {
+            for (result in listOf(HealthResult.RateLimited(seconds), HealthResult.BudgetExhausted(seconds))) {
+                val h = harness()
+                h.initialize()
+                h.health()
+                h.api.healthResults += result
+                assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+                assertEquals("deferred ${seconds.coerceIn(1, 86_400)}", h.preferences.censusLastRun.first()?.token())
+                assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
+                assertEquals(0L, h.scheduler.deadline)
+            }
+        }
+    }
+
+    @Test fun `health outcomes survive a live skeleton deadline`() = runTest {
+        for ((result, token) in listOf(HealthResult.Accepted(1, emptyMap()) to "health_posted 1",
+            HealthResult.BatchQuality(mapOf("bad_count" to 1)) to "health_rejected 1")) {
+            val h = harness()
+            h.initialize()
+            h.health()
+            h.queue()
+            val deadline = System.currentTimeMillis() + 3_600_000
+            h.preferences.setNextAllowedAtMillis(deadline)
+            h.api.healthResults += result
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(token, h.preferences.censusLastRun.first()?.token())
+            assertTrue(h.api.bodies.isEmpty())
+            assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+            assertEquals(0L, h.scheduler.deadline)
+        }
+    }
+
+    @Test fun `a closed health day posts on a run whose skeleton stage is deferred`() = runTest {
+        val h = harness()
+        h.initialize()
+        val today = LocalDate.now(ZoneOffset.UTC)
+        for (days in 1L..4L) h.health(today.minusDays(days))
+        h.queue()
+        h.api.healthResults.addAll(List(4) { HealthResult.Accepted(1, emptyMap()) })
+        h.api.uploads += UploadResult.BudgetExhausted(3600)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(3, h.api.healthBodies.size)
+        assertEquals(1, h.api.bodies.size)
+        val deadline = h.preferences.nextAllowedAtMillis.first()
+        assertTrue(deadline > System.currentTimeMillis())
+        assertEquals(0L, h.scheduler.deadline)
+
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(4, h.api.healthBodies.size)
+        val fourth = Json.parseToJsonElement(h.api.healthBodies.last().single()).jsonObject
+        assertEquals("\"${today.minusDays(1)}\"", fourth.getValue("day").toString())
+        assertEquals("health_posted 1", h.preferences.censusLastRun.first()?.token())
+        assertEquals(4L, h.stats.healthPosted.get())
+        assertEquals(1, h.api.bodies.size)
+        assertEquals(1, h.queued.size)
+        assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+        assertEquals(0L, h.scheduler.deadline)
+    }
+
+    @Test fun `health failures with an empty spool remain visible`() = runTest {
+        for (result in listOf(HealthResult.Unauthorized(null), HealthResult.ServerUnavailable(503),
+            HealthResult.TransportFailure("IOException"))) {
+            val h = harness()
+            h.initialize()
+            val key = h.health()
+            h.api.healthResults += result
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals("failure", h.preferences.censusLastRun.first()?.token())
+            assertEquals(1L, h.stats.healthFailed.get())
+            assertTrue(h.stats.summary().contains(",healthFailed=1"))
+            assertEquals(-1L, h.healthStore.load().rows.getValue(key.toString()).refusedRevision)
+        }
+    }
+
+    @Test fun `health ruleset version follows current metadata with a dev fallback`() = runTest {
+        val h = harness()
+        h.initialize()
+        val key = h.health()
+        for (tag in listOf("v1.2.3-rc1", null)) {
+            h.rulesetReleaseTag = tag
+            h.healthSink.apply { it.record(key, null) }
+            h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            val json = Json.parseToJsonElement(h.api.healthBodies.last().single()).jsonObject
+            assertEquals("\"${tag ?: "dev"}\"", json.getValue("rulesetVersion").toString())
+        }
+    }
+
+    @Test fun `health transient failures do not defer skeletons or refuse rows`() = runTest {
+        for (result in listOf(HealthResult.Unauthorized(null), HealthResult.ServerUnavailable(503),
+            HealthResult.TransportFailure("IOException"))) {
+            val h = harness()
+            h.initialize()
+            val key = h.health()
+            h.health(version = "7.2")
+            h.queue()
+            h.api.healthResults += result
+            h.api.uploads += UploadResult.Duplicate
+            h.worker().doWork()
+            assertEquals(1, h.api.healthBodies.size)
+            assertEquals(1, h.api.bodies.size)
+            assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
+            assertEquals(-1L, h.healthStore.load().rows.getValue(key.toString()).refusedRevision)
+        }
+    }
+
+    @Test fun `health revoked wipes credentials and stops before skeletons`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.health()
+        h.queue()
+        whenever(h.credentials.wipe()).thenAnswer {
+            assertEquals(HealthLedger(generation = 1), h.persistedHealth())
+            assertEquals(false, h.consentEnabled())
+            Unit
+        }
+        h.api.healthResults += HealthResult.Revoked
+        h.worker().doWork()
+        verify(h.credentials).wipe()
+        assertFalse(h.preferences.censusUploadEnabled.first())
+        assertTrue(h.api.bodies.isEmpty())
+        assertEquals(CensusRunOutcome.REVOKED, h.preferences.censusLastRun.first()?.outcome)
+    }
+
+    @Test fun `health records locally with consent off but sends no request`() = runTest {
+        val h = harness()
+        h.initialize(enabled = false)
+        h.health()
+        h.worker().doWork()
+        assertTrue(h.api.healthBodies.isEmpty())
+        assertEquals(0, h.factoryCalls)
+        assertEquals(1, h.healthStore.load().rows.size)
+    }
+
+    @Test fun `health posts oldest eligible days first with at most three singletons`() = runTest {
+        val h = harness()
+        h.initialize()
+        val today = LocalDate.now(ZoneOffset.UTC)
+        for (days in listOf(1L, 7L, 8L, 3L, 2L, 0L)) h.health(today.minusDays(days))
+        h.api.healthResults.addAll(List(3) { HealthResult.Accepted(1, emptyMap()) })
+        h.worker().doWork()
+        assertTrue(h.api.healthBodies.all { it.size == 1 })
+        assertEquals(listOf(7L, 3L, 2L).map { today.minusDays(it).toString() }, h.api.healthBodies.map {
+            Json.parseToJsonElement(it.single()).jsonObject.getValue("day").toString().trim('"')
+        })
+        assertEquals("health_posted 3", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `health outcomes beat idle enrolled and posted beats health rejected`() = runTest {
+        for (accepted in listOf(false, true)) {
+            val h = harness()
+            h.initialize()
+            whenever(h.credentials.current()).thenReturn(null)
+            whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
+            h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+            h.health()
+            h.api.healthResults += HealthResult.BatchQuality(mapOf("bad_day" to 1))
+            if (accepted) {
+                h.health(version = "7.2")
+                h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+            }
+            h.worker().doWork()
+            assertEquals(if (accepted) "health_posted 1" else "health_rejected 1", h.preferences.censusLastRun.first()?.token())
+        }
+    }
+
+    @Test fun `skeleton movement takes summary precedence over health`() = runTest {
+        val results = listOf(
+            UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1)) to CensusRunOutcome.UPLOADED,
+            UploadResult.Duplicate to CensusRunOutcome.DUPLICATE,
+            UploadResult.BatchQuality(mapOf("bad_day" to 1)) to CensusRunOutcome.REJECTED,
+        )
+        for ((result, outcome) in results) {
+            val h = harness()
+            h.initialize()
+            h.health()
+            h.queue()
+            h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+            h.api.uploads += result
+            h.worker().doWork()
+            assertEquals(outcome, h.preferences.censusLastRun.first()?.outcome)
+        }
+        val h = harness()
+        h.initialize()
+        h.health()
+        h.queueBatch(1, LocalDate.now(ZoneOffset.UTC).minusDays(8))
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.worker().doWork()
+        assertEquals(CensusRunOutcome.STALE_REMOVED, h.preferences.censusLastRun.first()?.outcome)
+        assertEquals(CensusRunOutcome.HEALTH_POSTED, CensusRunOutcome.fromWire("health_posted"))
+        assertEquals(CensusRunOutcome.HEALTH_REJECTED, CensusRunOutcome.fromWire("health_rejected"))
+    }
+
+    @Test fun `skeleton bad request and oversized outcomes survive successful health`() = runTest {
+        for ((result, outcome) in listOf(UploadResult.BadRequest to CensusRunOutcome.BAD_REQUEST,
+            UploadResult.PayloadTooLarge to CensusRunOutcome.OVERSIZED)) {
+            val h = harness()
+            h.initialize()
+            h.health()
+            h.queue()
+            h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+            h.api.uploads += result
+            h.worker().doWork()
+            assertEquals(outcome, h.preferences.censusLastRun.first()?.outcome)
         }
     }
 

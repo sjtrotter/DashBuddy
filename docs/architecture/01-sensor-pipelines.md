@@ -581,7 +581,8 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   WARN. 400 removes the batch, counts one bad request and emits one item-count-only WARN.
   Upload 401 re-signs at most once per run, across all batches and split halves, unless
   the server Date differs by more than 300 seconds; revoked credentials are wiped and consent
-  switched off. 429 stores a deadline, defers periodic work, and gates manual work too; 408 / 5xx /
+  switched off. 429 stores a deadline that gates the skeleton stage of every run (manual or periodic);
+  the hourly cadence itself is never postponed, so health keeps posting. 408 / 5xx /
   transport failures use WorkManager backoff. Concurrent manual and periodic runs share a mutex.
   Enrollment persists the returned policy and retries the same pending identity after a lost reply;
   enrol 401 uses WorkManager retry.
@@ -625,6 +626,14 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
   neither enrollment IDs, secrets nor skeleton bodies are logged. Pipeline INFO `census{…}` includes
   spooled / dropped / corrupt / spool-oversized / server-oversized / bad-request / uploaded /
   duplicate / rejection / upload-failure counts.
+  **Health (#1197)** — the local ledger records every admitted screen regardless of upload consent,
+  keyed by (UTC day, platform wire, platform app version). Wire `admitted` means recognized frames,
+  `unknown` means UNKNOWN frames, and `trips` counts local alarm edges; the complete rule map is
+  retained and oversized reports are refused, never truncated. Bundled rules use the `dev` tag.
+  With consent, each closed day posts as a singleton to `/v1/health` (at most three per run), with
+  exact-revision acknowledgements. Health is not gated by the skeleton deferral deadline. The ledger
+  is generation-scoped and cleared on identity reset, and excluded from cloud backup and device
+  transfer; no PII: rule ids, platform wire, version strings, counts.
 - *Wire contract* — the Apache-2.0 package `cloud.trotter.census.contract` (the `census-contract/` build, #1173): `UiSkeletonDto` /
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
@@ -745,7 +754,10 @@ exactly its audience.)
 (effect engine #914, bubble #916, odometer #917; the offer voice joined as the fifth in #991, §4).
 Two pieces, both fail-OPEN and both inert to frame processing. (1) **Version stamping:**
 `PlatformAppVersions` resolves the OBSERVED app's `versionName` (`CachingPlatformAppVersions` — one
-`PackageManager` lookup per package per process, negative results cached too, `catch (Throwable)`;
+`PackageManager` lookup per package per 10-minute TTL — two concurrent misses may both resolve, harmlessly — (positive AND negative results expire together,
+#1197: the stamp now keys the daily health rollup, so a stale read after an in-place update is bounded
+to ten minutes; a `PACKAGE_REPLACED` receiver was rejected as a sensing-hot-path cost), a lock-free
+`ConcurrentHashMap` so a hit never waits behind another package's binder call, `catch (Throwable)`;
 the `PackageManager` call is a lambda injected at the `PipelineModule` DI edge so the caching logic
 is a plain unit test). `ObservationClassifier` stamps it onto every observation's
 `ReplayMetadata.platformAppVersion` — classification is the one point that always runs AND knows the
@@ -753,8 +765,10 @@ package, since the capture stage is skipped wholesale on a disabled bus — from
 the capture envelope for free. Additive + nullable, and `Json.encodeDefaults` is false, so an
 unstamped envelope is byte-identical to a pre-#937 one: the committed corpus and the parse golden
 carry no such key and no test may require it. The cache is deliberately NOT invalidated on a package
-update (a process restart follows one in practice; a stale diagnostic stamp is a nuisance, never a
-correctness problem). The resolved `package@version` pairs also ride the periodic `PipelineStats`
+update (a `PACKAGE_REPLACED` receiver was rejected as a sensing-hot-path cost; since #1197 the stamp
+keys the daily health rollup, so a screen admitted inside the TTL after an in-place update is
+attributed to the previous version — an exposure the 10-minute expiry bounds, not removes). The
+resolved `package@version` pairs also ride the periodic `PipelineStats`
 INFO summary — platform-app facts, PII-free. (2) **UNKNOWN-rate alarm:** `RecognitionHealth` (pure,
 per-platform rolling window of the last `WINDOW_SIZE`=50 **admitted** screen frames —
 post-`FrameGate`, so a dasher parked on one unruled screen contributes a couple of samples, not a
