@@ -37,3 +37,19 @@ this golden; it contains no plaintext text slots.
 ## Consuming from another build
 
 `census-contract/settings.gradle.kts` reads the version catalog at `../gradle/libs.versions.toml`, so the build must be included from a COMPLETE DashBuddy checkout (`includeBuild("<path>/DashBuddy/census-contract")`), never vendored as a bare directory. The `dashbuddy-census` server pins that checkout to a SHA in CI.
+
+## Wire authentication
+
+[`cloud.trotter.census.contract.auth`](src/main/kotlin/cloud/trotter/census/contract/auth/)
+owns the install ID/secret grammars, bearer format, authentication header names,
+and byte-exact request signing shared by Android and `dashbuddy-census`.
+Secrets are canonical unpadded base64url; callers supply the random bytes.
+HMAC uses the decoded key, while the stored credential digest hashes the encoded
+secret string as UTF-8.
+
+[`RequestSignerTest`](src/test/kotlin/cloud/trotter/census/contract/auth/RequestSignerTest.kt)
+locks the server's worked vector: key bytes `00 01 … 1f`, `POST /v1/nonce`,
+timestamp `1790899200`, and an empty body produce
+`v1=bcf991bb04da013f724bd200abe7e8352c68dbd7155aacbcb6a1a1dff94cbefd`.
+The canonical string has three LF separators, strips the path's query, and ends
+with the lowercase SHA-256 body digest without a trailing newline.
