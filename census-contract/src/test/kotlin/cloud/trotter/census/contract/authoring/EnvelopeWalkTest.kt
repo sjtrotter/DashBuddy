@@ -51,14 +51,16 @@ class EnvelopeWalkTest {
         val value = requireNotNull(nodes.at(listOf(1)))
         assertEquals("app:id/value", value.viewId)
         assertEquals("value", value.idSuffix)
-        assertEquals("Value", value.desc)
-        assertEquals("Label", value.precedingSiblingText)
+        assertEquals(" Value ", value.desc)
+        assertEquals("Value", value.displayDesc)
+        assertEquals(" Label ", value.precedingSiblingText)
+        assertEquals("Label", value.displayPrecedingSiblingText)
         assertTrue(value.hasClickAction)
         assertTrue(value.clickableAncestor)
         assertTrue(value.visible)
         assertFalse(requireNotNull(nodes.at(listOf(0))).visible)
         assertNull(requireNotNull(nodes.at(listOf(2))).precedingSiblingText)
-        assertEquals("Value", nodes.at(listOf(2))?.precedingSiblingDesc)
+        assertEquals(" Value ", nodes.at(listOf(2))?.precedingSiblingDesc)
         assertNull(nodes.at(listOf(2, 0))?.precedingSiblingDesc)
         assertEquals("Hint", nodes.at(listOf(2))?.hint)
         assertEquals("Pane", nodes.at(listOf(2))?.pane)
@@ -86,11 +88,27 @@ class EnvelopeWalkTest {
             val child = payload
             payload = buildJsonObject { put("class", "Branch"); put("children", JsonArray(listOf(child))) }
         }
-        assertEquals(65, EnvelopeWalk.walk(payload).size)
+        assertEquals(61, EnvelopeWalk.walk(payload).size)
+        assertTrue(EnvelopeWalk.walk(payload).truncated)
         assertEquals(4, EnvelopeWalk.walk(payload, maxNodes = 4).size)
         assertEquals(3, EnvelopeWalk.walk(payload, maxDepth = 2).size)
         assertEquals(1, EnvelopeWalk.walk(payload, maxDepth = 0).size)
         assertTrue(EnvelopeWalk.walk(payload, maxNodes = 0).isEmpty())
         assertTrue(EnvelopeWalk.walk(payload, maxDepth = -1).isEmpty())
     }
+    @Test
+    fun `bounds distinguish exact completion from a truncated prefix`() {
+        val leaf = buildJsonObject { put("text", "leaf") }
+        val payload = buildJsonObject { put("children", JsonArray(listOf(leaf, leaf))) }
+        assertFalse(EnvelopeWalk.walk(payload, maxNodes = 3, maxDepth = 1).truncated)
+        assertTrue(EnvelopeWalk.walk(payload, maxNodes = 2).truncated)
+        assertTrue(EnvelopeWalk.walk(payload, maxDepth = 0).truncated)
+        assertFalse(EnvelopeWalk.walk(leaf, maxDepth = 0).truncated)
+        val blank = Json.parseToJsonElement("""{"text":" ","desc":"","children":[{"text":"value"}]}""").jsonObject
+        val walked = EnvelopeWalk.walk(blank)
+        assertEquals(" ", walked.first().text)
+        assertNull(walked.first().displayText)
+        assertNull(walked.first().displayDesc)
+    }
+
 }

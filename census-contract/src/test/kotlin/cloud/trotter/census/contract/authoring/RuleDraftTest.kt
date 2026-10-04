@@ -101,7 +101,7 @@ class RuleDraftTest {
         assertEquals(List(4) { "node path does not resolve: [9]" }, result)
         assertEquals(
             listOf("envelope has no payload object", "node path does not resolve: []"),
-            (RuleDraft.generate(JsonObject(emptyMap()), base, "example", null, "day") as DraftResult.Refused).errors,
+            (RuleDraft.generate(JsonObject(emptyMap()), base, "example", null, "2026-10-04") as DraftResult.Refused).errors,
         )
     }
 
@@ -118,13 +118,13 @@ class RuleDraftTest {
         ), result)
         assertTrue(errors(base.copy(fields = listOf(FieldAssignment(root, "zoneName", listOf("sha256")))), node(text = "x"))
             .contains("sha256 requires a hash field"))
-        assertTrue(errors(base.copy(shape = "task", fields = listOf(
+        assertTrue(errors(base.copy(screenClass = "task:active", shape = "task", fields = listOf(
             FieldAssignment(root, "customerAddressHash", listOf("normalizeCustomerName")),
         )), node(text = "x")).contains("normalizeCustomerName requires a customer-name hash field"))
     }
 
     @Test
-    fun `required and one-of fields count typed constants`() {
+    fun `required fields cannot be supplied through dynamic constants`() {
         val offer = base.copy(screenClass = "offer:presented", shape = "offer", offerSurface = "card")
         assertEquals(listOf("missing required field payAmount", "missing required field distance",
             "missing one of: deliveryTimeText, timeToCompleteMinutes"), errors(offer))
@@ -132,9 +132,11 @@ class RuleDraftTest {
             Constant("payAmount", JsonPrimitive(8.5)), Constant("distance", JsonPrimitive(2.1)),
             Constant("timeToCompleteMinutes", JsonPrimitive(12)),
         ))
-        assertEquals(listOf("offer draft has no orders[] — store names will be absent"), ok(complete).warnings)
-        assertEquals(listOf("missing required field totalPay"), errors(base.copy(shape = "post_task")))
-        assertEquals(listOf("missing required field totalEarnings"), errors(base.copy(shape = "session_ended")))
+        assertEquals(listOf("payAmount", "distance", "timeToCompleteMinutes").map {
+            "constant $it: only flags, counts and enum values may be constants"
+        }, errors(complete))
+        assertEquals(listOf("missing required field totalPay"), errors(base.copy(screenClass = "post:task", shape = "post_task")))
+        assertEquals(listOf("missing required field totalEarnings"), errors(base.copy(screenClass = "session:ended", shape = "session_ended")))
     }
 
     @Test
@@ -142,7 +144,7 @@ class RuleDraftTest {
         assertEquals(listOf("unknown constant custom for shape idle"), errors(base.copy(constants = listOf(Constant("custom", JsonPrimitive(true))))))
         assertEquals(listOf("invalid constant type for startingSession"), errors(base.copy(constants = listOf(Constant("startingSession", JsonPrimitive("true"))))))
         assertEquals(listOf("hash field customerNameHash requires a node assignment"), errors(base.copy(
-            shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
+            screenClass = "task:active", shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
         )))
         assertTrue(errors(base.copy(fields = listOf(FieldAssignment(root, "zoneName")),
             constants = listOf(Constant("zoneName", JsonPrimitive("zone")))), node(text = "zone")).contains("duplicate field zoneName"))
@@ -160,7 +162,7 @@ class RuleDraftTest {
         ))
         assertEquals(listOf("field zoneName has no text/desc slot"), errors(base.copy(fields = listOf(FieldAssignment(root, "zoneName")))))
         assertEquals(listOf("hash field customerNameHash has no text/desc slot"), errors(
-            base.copy(shape = "task", fields = listOf(FieldAssignment(root, "customerNameHash"))),
+            base.copy(screenClass = "task:active", shape = "task", fields = listOf(FieldAssignment(root, "customerNameHash"))),
         ))
     }
 
@@ -168,7 +170,7 @@ class RuleDraftTest {
     fun `duplicate ids escalate anchor predicates but cannot silently parse another value`() {
         val payload = node(id = "same", text = "Ready", children = listOf(node(id = "same", text = "Other")))
         val predicate = ok(payload = payload).rule().getValue("require").jsonObject.getValue("exists")
-        assertEquals(Json.parseToJsonElement("""{"all":[{"hasIdSuffix":"same"},{"hasClassNameEndsWith":"TextView"},{"hasText":"Ready"}]}"""), predicate)
+        assertEquals(Json.parseToJsonElement("""{"all":[{"hasIdSuffix":":id/same"},{"hasClassNameEndsWith":"TextView"},{"hasText":"Ready"}]}"""), predicate)
         assertEquals(listOf("ambiguous id at []"), errors(payload = node(id = "same", children = listOf(node(id = "same")))))
         assertEquals(listOf("ambiguous id for field at [0]"), errors(
             base.copy(fields = listOf(FieldAssignment(child, "zoneName"))), payload,
@@ -180,7 +182,7 @@ class RuleDraftTest {
 
     @Test
     fun `description is a typed anchor and parse fallback`() {
-        assertEquals(Json.parseToJsonElement("""{"exists":{"hasDesc":"Ready"}}"""),
+        assertEquals(Json.parseToJsonElement("""{"exists":{"hasDesc":" Ready "}}"""),
             ok(payload = node(id = null, desc = " Ready ")).rule().getValue("require"))
         val result = ok(base.copy(fields = listOf(FieldAssignment(child, "zoneName"))),
             node(children = listOf(node(id = "value", desc = " Zone "))))
@@ -204,11 +206,11 @@ class RuleDraftTest {
         val payload = node(children = listOf(node(id = "value", text = "$8.30"), node(id = "value", text = "3.8 mi")))
         val find = ok(selection, payload).fields().getValue("sessionPay").jsonObject.getValue("find")
         assertEquals(buildJsonObject { put("all", JsonArray(listOf(
-            buildJsonObject { put("hasIdSuffix", "value") },
+            buildJsonObject { put("hasIdSuffix", ":id/value") },
             buildJsonObject { put("hasClassNameEndsWith", "TextView") },
             buildJsonObject { put("hasTextMatchesRegex", RuleAuthoringVocabulary.VALUE_SHAPES_BY_TRANSFORM.getValue("parseCurrency")) },
         ))) }, find)
-        for (values in listOf(listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "3.8 mi"))) {
+        for (values in listOf(listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "$9.00 Guaranteed"))) {
             assertEquals(listOf("ambiguous id for field at [0]"), errors(selection,
                 node(children = values.map { node(id = "value", text = it) })))
         }
@@ -220,13 +222,9 @@ class RuleDraftTest {
     }
 
     @Test
-    fun `idless shape disambiguation counts same class siblings and requires full match`() {
+    fun `idless fields cannot use global shape selection even for a unique amount`() {
         val selection = base.copy(fields = listOf(FieldAssignment(child, "sessionPay")))
-        val result = ok(selection, node(children = listOf(node(id = null, text = "$8.30"), node(id = null, text = "3.8 mi"))))
-        val predicates = result.fields().getValue("sessionPay").jsonObject.getValue("find").jsonObject.getValue("all").jsonArray
-        assertEquals(2, predicates.size)
-        assertEquals(setOf("hasTextMatchesRegex"), predicates.last().jsonObject.keys)
-        for (values in listOf(listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "3.8 mi"))) {
+        for (values in listOf(listOf("$8.30", "3.8 mi"), listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "3.8 mi"))) {
             assertEquals(listOf("field has no stable anchor at [0]"), errors(selection,
                 node(children = values.map { node(id = null, text = it) })))
         }
@@ -244,8 +242,8 @@ class RuleDraftTest {
 
     @Test
     fun `desc sibling hash field still refuses without a stable redact predicate`() {
-        val selection = base.copy(shape = "task", fields = listOf(FieldAssignment(NodeRef(listOf(1)), "customerNameHash")))
-        assertEquals(listOf("field has no stable anchor at [1]"), errors(selection,
+        val selection = base.copy(screenClass = "task:active", shape = "task", fields = listOf(FieldAssignment(NodeRef(listOf(1)), "customerNameHash")))
+        assertEquals(listOf("hash field customerNameHash has no stable redact predicate (the parse selector was valid)"), errors(selection,
             node(children = listOf(node(id = null, desc = "Customer"), node(id = null, text = "Sample Customer")))))
     }
 
@@ -267,13 +265,13 @@ class RuleDraftTest {
 
     @Test
     fun `stripPrefix precedes the forced hash chain and preserves chrome in redact`() {
-        val prefix = "Deliver to door of "
-        val selection = base.copy(shape = "task", fields = listOf(
+        val prefix = "Recipient: "
+        val selection = base.copy(screenClass = "task:active", shape = "task", fields = listOf(
             FieldAssignment(child, "customerNameHash", emptyList(), stripPrefix = prefix),
         ))
         val result = ok(selection, node(children = listOf(node(id = "name", text = prefix + "Sample Customer"))))
         val field = result.fields().getValue("customerNameHash").jsonObject
-        assertEquals(Json.parseToJsonElement("""[{"stripPrefixes":["Deliver to door of "]},"trim","normalizeCustomerName","sha256"]"""), field["transform"])
+        assertEquals(Json.parseToJsonElement("""[{"stripPrefixes":["Recipient: "]},"trim","normalizeCustomerName","sha256"]"""), field["transform"])
         val redact = result.rule().getValue("redact").jsonArray.single().jsonObject
         assertEquals(JsonArray(listOf(JsonPrimitive(prefix))), redact["keepPrefix"])
         assertEquals(JsonPrimitive("customerName"), redact["normalize"])
@@ -306,8 +304,8 @@ class RuleDraftTest {
         ))
         assertEquals(listOf("ambiguous sibling anchor at [1]"), errors(fields, repeated))
         val binds = base.copy(binds = listOf(BindAssignment(child, "expandButton")))
-        assertEquals(listOf("unsafe anchor literal at [0]"), errors(binds,
-            node(children = listOf(node(id = null, desc = "Bank account", clickable = true)))))
+        assertTrue(errors(binds, node(children = listOf(node(id = null, desc = "Bank account", clickable = true))))
+            .contains("unsafe anchor literal at [0]"))
         val result = ok(binds, node(children = listOf(node(id = null, desc = "Expand", clickable = true))))
         assertEquals(Json.parseToJsonElement("""{"hasDesc":"Expand"}"""),
             result.rule().getValue("bind").jsonObject.getValue("expandButton").jsonObject["find"])
@@ -315,11 +313,15 @@ class RuleDraftTest {
 
     @Test
     fun `hash transforms are forced and redact uses the same selector`() {
-        val selection = base.copy(shape = "task", fields = listOf(
+        val selection = base.copy(screenClass = "task:active", shape = "task", fields = listOf(
             FieldAssignment(child, "customerNameHash", emptyList()),
             FieldAssignment(NodeRef(listOf(1)), "customerAddressHash", listOf("trim")),
         ), redacts = listOf(root))
         val result = ok(selection, node(children = listOf(node(id = "name", text = "Sample Customer"), node(id = "address", desc = "Sample street"))))
+        assertTrue(result.warnings.containsAll(listOf(
+            "transform on customerNameHash ignored: hash fields use their fixed chain",
+            "transform on customerAddressHash ignored: hash fields use their fixed chain",
+        )))
         val name = result.fields().getValue("customerNameHash").jsonObject
         assertEquals(Json.parseToJsonElement("""["trim","normalizeCustomerName","sha256"]"""), name["transform"])
         val redacts = result.rule().getValue("redact").jsonArray
@@ -348,12 +350,13 @@ class RuleDraftTest {
 
     @Test
     fun `unsafe literals never enter a successful draft`() {
-        for (literal in listOf(" ", "x".repeat(81), "Pay $8", "Route 123", "Route ١٢٣", "[redacted:sample]", "Bank account")) {
-            assertEquals(listOf("unsafe anchor literal at []"), errors(payload = node(id = null, text = literal)))
-            assertEquals(listOf("unsafe anchor literal at []"), errors(payload = node(id = null, desc = literal)))
+        for (literal in listOf("x".repeat(81), "Pay $8", "Route 123", "Route ١٢٣", "[redacted:sample]", "Bank account")) {
+            assertTrue(errors(payload = node(id = null, text = literal)).contains("unsafe anchor literal at []"))
+            assertTrue(errors(payload = node(id = null, desc = literal)).contains("unsafe anchor literal at []"))
             assertTrue(errors(payload = node(id = "same", text = literal, children = listOf(node(id = "same"))))
                 .contains("unsafe anchor literal at []"))
         }
+        assertEquals(listOf("class-only anchor refused at []"), errors(payload = node(id = null, text = " ")))
         assertEquals(listOf("one anchor; verify against the negative corpus"), ok(payload = node(id = null, text = "Ready")).warnings)
         assertTrue(ok(payload = node(text = "$123.00")).warnings.isEmpty()) // The literal is never emitted for a unique id.
     }
@@ -406,4 +409,118 @@ class RuleDraftTest {
         val two = ok(base.copy(anchors = listOf(root, child)), node(children = listOf(node(id = "other"))))
         assertEquals(2, two.rule().getValue("require").jsonObject.getValue("all").jsonArray.size)
     }
+    @Test
+    fun `resource boundaries and compiler suffix semantics define peers`() {
+        val boundary = node(id = "container", children = listOf(node(id = "bottom_navigation_container")))
+        // Round 3 refinement: :id/ makes this suffix collision impossible in the compiler too.
+        assertEquals(Json.parseToJsonElement("""{"exists":{"hasIdSuffix":":id/container"}}"""), ok(payload = boundary).rule()["require"])
+        val casePeers = node(id = "container", text = "Ready", className = "View",
+            children = listOf(node(id = "CONTAINER", text = "Other", className = "TextView")))
+        assertTrue(ok(payload = casePeers).json5.contains("hasClassNameEndsWith"))
+        assertTrue(errors(base.copy(fields = listOf(FieldAssignment(root, "zoneName"))), casePeers)
+            .contains("ambiguous id for field at []"))
+        val labels = node(children = listOf(node(id = null, text = "Zone"), node(id = null, text = "North", className = "View"),
+            node(id = null, text = "ZONE"), node(id = null, text = "South", className = "TextView")))
+        assertEquals(listOf("ambiguous sibling anchor at [1]"), errors(base.copy(
+            fields = listOf(FieldAssignment(NodeRef(listOf(1)), "zoneName"))), labels))
+    }
+
+    @Test
+    fun `raw labels stay exact while blank text falls through to desc`() {
+        assertEquals(Json.parseToJsonElement("""{"exists":{"all":[{"hasClassNameEndsWith":"TextView"},{"hasText":" Ready "}]}}"""),
+            ok(payload = node(id = null, text = " Ready ")).rule()["require"])
+        assertEquals(Json.parseToJsonElement("""{"exists":{"hasDesc":"Collapse"}}"""),
+            ok(payload = node(id = null, text = "", desc = "Collapse")).rule()["require"])
+        val selected = base.copy(fields = listOf(FieldAssignment(NodeRef(listOf(1)), "sessionPay")))
+        assertTrue("siblingOf" in ok(selected, node(children = listOf(node(id = null, text = "", desc = "Collapse"),
+            node(id = null, text = "$8.30")))).fields().getValue("sessionPay").jsonObject)
+        assertEquals("contentDescription", ok(base.copy(fields = listOf(FieldAssignment(root, "zoneName"))),
+            node(text = "", desc = "North")).fields().getValue("zoneName").jsonObject.getValue("read").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `truncated envelopes refuse uniqueness decisions`() {
+        val wide = node(children = List(EnvelopeWalk.MAX_NODES) { node(id = "peer") })
+        assertTrue(errors(payload = wide).contains("envelope exceeds the walk bounds"))
+        var deep = node(id = "leaf")
+        repeat(EnvelopeWalk.MAX_DEPTH + 1) { deep = node(id = "branch", children = listOf(deep)) }
+        assertTrue(errors(payload = deep).contains("envelope exceeds the walk bounds"))
+    }
+
+    @Test
+    fun `header metadata cannot inject comments`() {
+        val envelope = buildJsonObject { put("payload", node()) }
+        for (day in listOf("day", "2026-10-04\n", "2026-1-04")) {
+            assertTrue(RuleDraft.generate(envelope, base, "example", null, day) is DraftResult.Refused)
+        }
+        for (version in listOf("", "x".repeat(41), "1\n//", "1 / 2")) {
+            assertTrue(RuleDraft.generate(envelope, base, "example", version, "2026-10-04") is DraftResult.Refused)
+        }
+        for (platform in listOf("", "Upper", "a-b", "x".repeat(33), "a\n")) {
+            assertTrue(RuleDraft.generate(envelope, base, platform, null, "2026-10-04") is DraftResult.Refused)
+        }
+    }
+
+    @Test
+    fun `customer and unicode value literals refuse across anchors labels and prefixes`() {
+        for (text in listOf("Ready 1", "Ready ١", "Ready 𝟚", "Pay ＄", "Pay €", "Jane S", "Deliver to", "deliver to Jane")) {
+            assertTrue(generate(payload = node(id = null, text = text)) is DraftResult.Refused)
+            assertTrue(generate(payload = node(id = null, text = "", desc = text)) is DraftResult.Refused)
+            assertTrue(generate(base.copy(fields = listOf(FieldAssignment(NodeRef(listOf(1)), "zoneName"))),
+                node(children = listOf(node(id = null, text = text), node(id = null, text = "North")))) is DraftResult.Refused)
+        }
+        for (prefix in listOf("Zone:", "Route 1 ", "Pay ＄ ", "Jane S ")) {
+            assertTrue(generate(base.copy(fields = listOf(FieldAssignment(child, "zoneName", stripPrefix = prefix))),
+                node(children = listOf(node(id = "zone", text = prefix + "North")))) is DraftResult.Refused)
+        }
+        for (comment in listOf("x".repeat(201), "Jane S", "Deliver to", "＄", "Bank account")) {
+            assertTrue(generate(base.copy(comment = comment)) is DraftResult.Refused)
+        }
+        ok(base.copy(comment = "123456"))
+    }
+
+    @Test
+    fun `class shape legality enum constants and resource reads enforce field policy`() {
+        for (shape in listOf("task", "offer", "post_task", "session_ended", "paused", "ratings", "timeline")) {
+            assertTrue(errors(base.copy(shape = shape)).contains("shape $shape is not legal for class idle"))
+        }
+        for (value in RuleAuthoringVocabulary.SESSION_TYPES) ok(base.copy(constants = listOf(Constant("sessionType", JsonPrimitive(value)))))
+        assertTrue(errors(base.copy(constants = listOf(Constant("sessionType", JsonPrimitive("bad")))))
+            .contains("invalid constant type for sessionType"))
+        for ((name, value) in listOf("phase" to "PICKUP", "subFlow" to "ARRIVED")) {
+            ok(base.copy(screenClass = "task:active", shape = "task", constants = listOf(Constant(name, JsonPrimitive(value)))))
+        }
+        val post = base.copy(screenClass = "post:task", shape = "post_task", fields = listOf(
+            FieldAssignment(root, "totalPay"), FieldAssignment(child, "expandButtonId")))
+        val expanded = ok(post, node(text = "$8.30", children = listOf(node(id = "expand"))))
+        assertEquals("viewIdResourceName", expanded.fields().getValue("expandButtonId").jsonObject.getValue("read").jsonPrimitive.content)
+        assertFalse(RuleAuthoringVocabulary.FIELDS_BY_SHAPE.getValue("offer").any { it.name == "offerHash" })
+        val counts = ok(base.copy(screenClass = "task:active", shape = "task", constants = listOf(Constant("itemsShopped", JsonPrimitive(3)))))
+        assertEquals(JsonPrimitive(3), counts.fields()["itemsShopped"])
+        assertTrue(errors(base.copy(screenClass = "task:active", shape = "task", constants = listOf(Constant("itemsShopped", JsonPrimitive(3.5)))))
+            .contains("invalid constant type for itemsShopped"))
+    }
+
+    @Test
+    fun `a lead-in stripPrefix is accepted while a whole-value name prefix is refused`() {
+        // A stripPrefix IS a customer lead-in by design: the name-shape body ("Deliver t" inside "Deliver to ") must not
+        // refuse it, and the emitted redact keeps the prefix while the name is masked. Only a prefix that is ITSELF a
+        // name shape ("Jane S. ") is refused.
+        for (prefix in listOf("Deliver to ", "Deliver to door of ")) {
+            val selection = base.copy(screenClass = "task:active", shape = "task", fields = listOf(
+                FieldAssignment(child, "customerNameHash", stripPrefix = prefix),
+            ))
+            val draft = ok(selection, node(children = listOf(node(id = "name", text = prefix + "Sample Customer"))))
+            val rule = draft.fragment.getValue("screens").jsonArray.single().jsonObject
+            val redact = rule.getValue("redact").jsonArray.single().jsonObject
+            assertEquals(JsonArray(listOf(JsonPrimitive(prefix))), redact["keepPrefix"])
+            assertEquals(JsonPrimitive("customerName"), redact["normalize"])
+        }
+        val named = base.copy(screenClass = "task:active", shape = "task", fields = listOf(
+            FieldAssignment(child, "customerNameHash", stripPrefix = "Jane S. "),
+        ))
+        assertTrue(errors(named, node(children = listOf(node(id = "name", text = "Jane S. Sample Customer"))))
+            .contains("stripPrefix looks like a customer name"))
+    }
+
 }

@@ -1,5 +1,11 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
+import cloud.trotter.census.contract.authoring.EnvelopeWalk
+import cloud.trotter.census.contract.authoring.FieldType
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
+import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
+import cloud.trotter.dashbuddy.domain.state.SessionType
+import kotlinx.serialization.json.JsonObject
 import cloud.trotter.census.contract.authoring.RuleAuthoringVocabulary as Vocabulary
 import cloud.trotter.dashbuddy.core.pipeline.rules.RegexSafety
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
@@ -36,6 +42,8 @@ class RuleAuthoringVocabularyGuardTest {
     @Test
     fun `domain enums keep declaration order`() {
         assertEquals(Flow.entries.map { it.wire }, Vocabulary.FLOWS)
+        // SessionType has no wire property: ParsedFieldsFactory uses valueOf, i.e. enum names.
+        assertEquals(SessionType.entries.map { it.name }, Vocabulary.SESSION_TYPES)
         assertEquals(Mode.entries.map { it.wire }, Vocabulary.MODES)
         assertEquals(OfferSurface.entries.map { it.wire }, Vocabulary.OFFER_SURFACES)
         assertEquals(TaskPhase.entries.map { it.name }, Vocabulary.TASK_PHASES)
@@ -73,6 +81,13 @@ class RuleAuthoringVocabularyGuardTest {
         assertTrue("plain transform dispatch must not scan empty", accepted.isNotEmpty())
         assertEquals(accepted, Vocabulary.TRANSFORMS.toSet())
         assertEquals(schemaEnum("plainTransform").toSet(), Vocabulary.TRANSFORMS.toSet())
+        val validation = source.substringAfter("private val knownPlainTransforms = setOf(").substringBefore(")")
+        assertEquals(Regex("\"([^\"]+)\"").findAll(validation).map { it.groupValues[1] }.toSet(), Vocabulary.TRANSFORMS.toSet())
+        val parameterized = source.substringAfter("fun apply(spec: JsonObject, value: String?): Any?")
+            .substringBefore("//  Compile-time validation")
+        for (name in Vocabulary.EMITTED_PARAMETERIZED_TRANSFORMS) {
+            assertTrue("parameterized transform $name missing", Regex("\"$name\"\\s*->").containsMatchIn(parameterized))
+        }
     }
 
     @Test
@@ -87,22 +102,75 @@ class RuleAuthoringVocabularyGuardTest {
             assertTrue("$shape factory function missing", start >= 0)
             val end = source.indexOf("private fun ", start + 1).let { if (it < 0) source.length else it }
             val body = source.substring(start, end)
-            // The owner spells DOUBLE reads `double`, not `dbl`. Only the top-level `f` counts.
-            val read = Regex("""\bf\.(?:str|dbl|double|int|long|bool)\("([^"]+)"\)""")
-                .findAll(body).map { it.groupValues[1] }.toMutableSet()
-            // parsedTime reads these two scalar fallbacks through its textKey/millisKey parameters.
+            val types = mapOf("str" to FieldType.STRING, "dbl" to FieldType.DOUBLE,
+                "double" to FieldType.DOUBLE, "int" to FieldType.INT, "long" to FieldType.LONG, "bool" to FieldType.BOOLEAN)
+            val read = Regex("""\bf\.(str|dbl|double|int|long|bool)\("([^"]+)"\)""")
+                .findAll(body).associate { it.groupValues[2] to types.getValue(it.groupValues[1]) }.toMutableMap()
             Regex("""\bf\.parsedTime\("[^"]+",\s*"([^"]+)",\s*"([^"]+)"\)""")
-                .findAll(body).forEach { read += it.groupValues.drop(1) }
+                .findAll(body).forEach {
+                    read[it.groupValues[1]] = FieldType.STRING
+                    read[it.groupValues[2]] = FieldType.LONG
+                }
+            for (spec in Vocabulary.FIELDS_BY_SHAPE.getValue(shape)) {
+                assertEquals("$shape.${spec.name} type", read[spec.name], spec.type)
+            }
             val exposed = Vocabulary.FIELDS_BY_SHAPE.getValue(shape).map { it.name }.toSet()
             for (field in exposed) assertTrue("$shape exposes unread field $field", field in read)
             val required = Vocabulary.REQUIRED_FIELDS_BY_SHAPE[shape].orEmpty() +
                 Vocabulary.REQUIRED_ONE_OF_BY_SHAPE[shape].orEmpty().flatten()
             for (field in required) assertTrue("$shape is missing required field $field", field in exposed)
-            assertEquals("$shape scalar inventory (excluding activity)", read - "activity", exposed)
+            val computed = if (shape == "offer") setOf("activity", "offerHash") else setOf("activity")
+            assertEquals("$shape scalar inventory (excluding computed fields)", read.keys - computed, exposed)
         }
         for (shape in listOf("sensitive", "noise", "none", "timeline", "ratings")) {
             assertTrue("$shape must expose no scalar fields", Vocabulary.FIELDS_BY_SHAPE.getValue(shape).isEmpty())
         }
+    }
+
+    @Test
+    fun `walk and privacy data mirror their owners`() {
+        assertEquals(TreeLimits.MAX_TREE_NODES, EnvelopeWalk.MAX_NODES)
+        assertEquals(TreeLimits.MAX_TREE_DEPTH, EnvelopeWalk.MAX_DEPTH)
+        assertEquals(PiiShapes.NAME_PREFIXES.toSet(), Vocabulary.ANCHOR_LEAD_INS.toSet())
+        assertEquals(PiiShapes.FIRST_LAST_INITIAL_BODY, Vocabulary.FIRST_LAST_INITIAL_BODY)
+    }
+
+    @Test
+    fun `emitted node predicates exist in the compiler dispatch`() {
+        val source = File(rulesSource, "PredicateCompiler.kt").readText()
+        for (name in Vocabulary.EMITTED_NODE_PREDICATES) {
+            assertTrue("node predicate $name missing", Regex("\"$name\"\\s*->").containsMatchIn(source))
+        }
+        assertEquals(listOf("all", "exists"), Vocabulary.EMITTED_TREE_OPERATORS)
+        assertEquals(listOf("find", "siblingOf"), Vocabulary.EMITTED_PARSE_EXPRESSIONS)
+    }
+
+    @Test
+    fun `generated production flow shape pairs are legal including branches`() {
+        assertEquals(Vocabulary.SCREEN_CLASSES.toSet(), Vocabulary.LEGAL_SHAPES_BY_CLASS.keys)
+        for (flow in Vocabulary.FLOWS) {
+            assertEquals(listOf(Vocabulary.DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none"), Vocabulary.LEGAL_SHAPES_BY_CLASS[flow])
+        }
+        for (special in listOf("sensitive", "noise")) assertEquals(listOf(special), Vocabulary.LEGAL_SHAPES_BY_CLASS[special])
+        val dir = File(repoRoot, "core/pipeline/build/generated/assets/importMatchersRules/rules")
+        val files = requireNotNull(dir.listFiles { f -> f.extension == "json" })
+        assertTrue("generated rules must exist", files.isNotEmpty())
+        var checked = 0
+        fun check(rule: JsonObject, inheritedFlow: String? = null, inheritedShape: String? = null) {
+            val flow = (rule["state"] as? JsonObject)?.get("flow")?.jsonPrimitive?.content ?: inheritedFlow
+            val shape = (rule["parse"] as? JsonObject)?.get("as")?.jsonPrimitive?.content ?: inheritedShape
+            val branches = rule["branches"]
+            if (branches != null) branches.jsonArray.forEach { check(it.jsonObject, flow, shape) }
+            else if (flow != null && shape != null) {
+                checked++
+                assertTrue("production pair $flow / $shape", shape in Vocabulary.LEGAL_SHAPES_BY_CLASS[flow].orEmpty())
+            }
+        }
+        for (file in files) {
+            val rules = Json.parseToJsonElement(file.readText()).jsonObject
+            rules["screens"]?.jsonArray?.forEach { check(it.jsonObject) }
+        }
+        assertTrue("production flow scan must not be empty", checked > 0)
     }
 
     private fun schemaEnum(name: String): List<String> = definitions.getValue(name).jsonObject

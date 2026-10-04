@@ -306,34 +306,47 @@ the schema, and the compiler's plain-transform dispatch. No app or Android depen
 contract build. Drafts are fragment envelopes with deterministic JSON5 and platform/version/day
 provenance; capture identifiers and fingerprints are never copied.
 
-Generation collects errors and refuses unknown classes/shapes/fields/transforms/bind targets,
-invalid intent/priority/mode/surface, unresolved node paths, absent anchors, missing required or
-one-of fields, non-clickable binds without a clickable ancestor, unreadable fields, unstable or
-ambiguous field selectors, and class-only anchors. Literal anchors are refused when blank, over
-80 characters, money-shaped (`$`), containing three consecutive digits, redaction markers, or a
-`SensitiveMarkerScan` hit. Constants must name typed scalar fields, cannot replace hash reads, and
-cannot overwrite another declaration. Sensitive/noise classes cannot declare fields or binds and
-must use their matching shape; both omit state and sensitive emits `overrideable: false`. Hash
-fields force the canonical hash transform chain and auto-emit the matching redact selector.
-Single text-only anchors and ancestor-dependent binds warn; offer drafts warn that orders are absent.
+Generation refuses unknown classes/shapes/fields/transforms/bind targets, invalid header metadata,
+intent/priority/mode/surface, unresolved paths, absent anchors, missing required fields, unreadable
+fields, ambiguous selectors, and non-clickable binds without a clickable ancestor. Walks mirror
+`TreeLimits` (4,000 nodes, depth 60) and refuse truncated envelopes instead of judging uniqueness
+on a prefix. Raw text/desc values are retained for exact selectors; trimmed display values decide
+whether a slot is usable, so blank text falls through to desc.
 
-For shared-id fields, or id-less fields without a usable sibling label, an anchored transform value
-shape may disambiguate exactly one id/class peer or same-parent class peer; nonmatching or repeated
-values (including another parent's matching node, since `find` searches the envelope) still refuse
-as ambiguous/no stable anchor, and anchor predicates remain literal.
-An id-less field after a desc-only immediate sibling emits `siblingOf` with offset 1; unsafe labels
-and descriptions matching multiple nodes still refuse, hash fields still need a stable redact
-predicate, and text labels retain `hasPrecedingSiblingText`.
-An operator-chosen `stripPrefix` prepends the parameterized `stripPrefixes` transform and adds
-`keepPrefix` to hash-field redaction; unsafe prefixes and prefixes absent from the value still refuse,
-and canonical hash transforms remain mandatory.
+Every flow permits its default shape or `none`; sensitive/noise permit only their matching shape,
+omit state, and forbid fields/binds. Sensitive emits `overrideable: false`. Flow-less `paused`,
+`ratings`, and `timeline` shapes are not draftable in this slice. Constants are limited to booleans,
+integers, and the declared phase/subFlow/sessionType enums; dynamic money and free strings cannot
+be substituted with constants. `offerHash` is computed, never authored. `expandButtonId` reads
+`viewIdResourceName` without requiring a text slot.
 
-`CensusDraftRoundTripTest` gates accepted drafts through the real app path: compile alone → recognise
-the source frame and assert parsed values → stay UNKNOWN on every DoorDash negative frame (with
-both global and platform corpus floors) → compile merged at the smallest free production priority.
-The selected legacy offer has three identical `text_field` id/class pairs, so its field selectors
-are refused instead of reading pay three times. The expanded summary's id-less total follows a
-description-only Collapse node, so it is refused for having no stable field anchor. Dropoff exercises
-the accepted path and auto-redaction; its prefixed sanitized name slot also pins the current plain
-normalizer's limitation (no parameterized prefix stripping). Paths and reasons are recorded in the
-test KDoc. These refusals preserve the generator's boundary instead of weakening it for a fixture.
+Literal anchors/labels refuse blanks, more than 80 characters, any Unicode decimal digit or currency
+symbol, redaction markers, sensitive markers, customer lead-ins, and matches of the authoring mirror
+of `PiiShapes.FIRST_LAST_INITIAL_BODY` with `IGNORE_CASE`. The name-like warning checks two consecutive
+Capitalized words of at least three letters. Comments use the same guard with digits allowed and a
+200-character limit. `stripPrefix` must end in a space and passes the same checks except the lead-in
+refusal; it prepends `stripPrefixes`, and hash redaction preserves it with `keepPrefix`. Hash fields
+always use their fixed chains and warn when an operator transform is ignored.
+
+IDs emit their resource boundary (`:id/<suffix>`). Peer checks mirror compiler case-insensitive
+suffix comparisons for IDs/classes and raw, case-insensitive equality for sibling labels. Value
+shapes disambiguate only same-id/class peers and warn that identity needs checking on more frames;
+id-less global shape selection is refused. An id-less field after a desc-only immediate sibling
+emits `siblingOf` with offset 1; unsafe or ambiguous labels refuse. Hash fields still need a stable
+redact predicate, while text labels use `hasPrecedingSiblingText`.
+
+`CensusDraftRoundTripTest` compiles accepted drafts alone, recognises their source, asserts parsed
+values/binds, checks every DoorDash negative frame, and compares draft-only and production redaction
+with the exact `CompiledRedact.apply` step used by `CaptureWriter`. Production-masked text/desc slots
+must be a subset of draft masks by node path. It compiles the merged draft at the largest free priority
+at most 998 and verifies the production winner is unchanged. The receipt drafts through the unique
+Collapse desc sibling and reads 40.57. The legacy offer drafts through same-id money/distance/time
+shapes: the money shape permits a trailing qualifier, and `parseCurrency` reads 8.30 from the fused
+amount; distance is 3.8 and both offer actions bind. Dropoff selections add the arrival address,
+sheet address lines, and instructions to the hash field's redaction, with paths pinned in the KDoc.
+Two literal round-3 requirements currently prevent the full gate from passing: the unanchored name
+body matches `Deliver t` inside the dropoff's `stripPrefix = "Deliver to "`, so it refuses with
+`anchor literal looks like customer text`; and the shipped sensitive catchall at priority 999 makes
+ranking below *every* production rule impossible within the 998 cap. The strict refusal and rank
+assertion remain in place. The selected dropoff cannot yet exercise its intended bare-name hash
+and redaction round trip under that literal name check.

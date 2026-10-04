@@ -28,6 +28,7 @@ data class FieldSpec(
     val type: FieldType,
     val kind: FieldKind = FieldKind.PLAIN,
     val defaultTransform: List<String> = emptyList(),
+    val read: String = "text",
 )
 
 /** Authoring vocabulary mirrored from the app owners and pinned by its source/enum guards. */
@@ -40,6 +41,8 @@ object RuleAuthoringVocabulary {
     val SCREEN_CLASSES: List<String> = FLOWS + listOf("sensitive", "noise")
     val MODES: List<String> = listOf("offline", "online", "paused")
     val OFFER_SURFACES: List<String> = listOf("card", "decline_confirm")
+    /** SessionType enum names are the parser wires (the owner has no separate wire property). */
+    val SESSION_TYPES: List<String> = listOf("PerOffer", "ByTime")
     val TASK_PHASES: List<String> = listOf("PICKUP", "DROPOFF")
     val TASK_SUB_FLOWS: List<String> = listOf("NAVIGATION", "ARRIVED")
     val SHAPES: List<String> = listOf(
@@ -53,6 +56,11 @@ object RuleAuthoringVocabulary {
         "post:task" to "post_task", "task:unassigned" to "none", "task:active" to "task",
         "session:ended" to "session_ended", "sensitive" to "sensitive", "noise" to "noise",
     )
+    /** Flow-less paused/ratings/timeline shapes are not draftable in this slice. */
+    val LEGAL_SHAPES_BY_CLASS: Map<String, List<String>> = SCREEN_CLASSES.associateWith { flow ->
+        if (flow in FLOWS) listOf(DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none")
+        else listOf(flow)
+    }
     val TASK_CONSTANTS_BY_CLASS: Map<String, Pair<String, String>> = mapOf(
         "task:pickup:navigation" to ("PICKUP" to "NAVIGATION"),
         "task:pickup:arrived" to ("PICKUP" to "ARRIVED"),
@@ -94,7 +102,7 @@ object RuleAuthoringVocabulary {
             FieldSpec("appPay", FieldType.DOUBLE, defaultTransform = listOf("parseCurrency")),
             FieldSpec("customerTips", FieldType.DOUBLE, defaultTransform = listOf("parseCurrency")),
             FieldSpec("isExpanded", FieldType.BOOLEAN),
-            FieldSpec("expandButtonId", FieldType.STRING),
+            FieldSpec("expandButtonId", FieldType.STRING, read = "viewIdResourceName"),
             FieldSpec("sessionEarnings", FieldType.DOUBLE, defaultTransform = listOf("parseCurrency")),
         ),
         "session_ended" to listOf(
@@ -115,7 +123,6 @@ object RuleAuthoringVocabulary {
             FieldSpec("distance", FieldType.DOUBLE, defaultTransform = listOf("parseDistance")),
             FieldSpec("deliveryTimeText", FieldType.STRING),
             FieldSpec("timeToCompleteMinutes", FieldType.LONG, defaultTransform = listOf("parseTotalMinutes")),
-            FieldSpec("offerHash", FieldType.STRING),
             FieldSpec("deliveryTime", FieldType.LONG, defaultTransform = listOf("parseDeadline")),
             FieldSpec("initialCountdownSeconds", FieldType.INT, defaultTransform = listOf("parseClockSeconds")),
             FieldSpec("offerKind", FieldType.STRING),
@@ -142,16 +149,18 @@ object RuleAuthoringVocabulary {
         "parseClockSeconds", "parseLeadingInt", "parsePercent", "sha256", "normalizeCustomerName",
         "trim", "lower", "upper", "toDouble", "toInt", "stripDeadlinePrefix",
     )
-    val EMITTED_PREDICATES: List<String> = listOf(
-        "hasIdSuffix", "hasText", "hasDesc", "hasClassNameEndsWith", "isClickable",
-        "hasPrecedingSiblingText", "all", "exists", "hasTextMatchesRegex", "siblingOf",
+    val EMITTED_NODE_PREDICATES: List<String> = listOf(
+        "hasIdSuffix", "hasText", "hasDesc", "hasClassNameEndsWith",
+        "hasPrecedingSiblingText", "hasTextMatchesRegex",
     )
+    val EMITTED_TREE_OPERATORS: List<String> = listOf("all", "exists")
+    val EMITTED_PARSE_EXPRESSIONS: List<String> = listOf("find", "siblingOf")
     val EMITTED_PARAMETERIZED_TRANSFORMS: List<String> = listOf("stripPrefixes")
 
-    /** Shapes disambiguate fields among same-id/class peers; they never replace an anchor. */
+    /** Shapes disambiguate fields only among same-id/class peers; they never replace an anchor. */
     val VALUE_SHAPES_BY_TRANSFORM: Map<String, String> = mapOf(
-        "parseCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?$""",
-        "parseGlyphCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?$""",
+        "parseCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( .*)?$""",
+        "parseGlyphCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( .*)?$""",
         "parseDistance" to """^[0-9]{1,3}(\.[0-9]{1,2})? ?(mi|km)$""",
         "parseTotalMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
         "parseMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
@@ -163,6 +172,14 @@ object RuleAuthoringVocabulary {
         "parseLeadingInt" to """^[0-9]{1,4}( .*)?$""",
         "parsePercent" to """^[0-9]{1,3}(\.[0-9]+)?%$""",
     )
+    /** Authoring-side DATA mirror of domain.privacy.PiiShapes; app guards pin these bytes. */
+    val ANCHOR_LEAD_INS: List<String> = listOf(
+        "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
+        "Message from ", "Heading to ", "Pick up at ",
+    )
+    const val FIRST_LAST_INITIAL_BODY: String =
+        """[\p{L}][\p{L}'-]{0,20}(\s{1,4}[\p{L}][\p{L}'-]{0,20}){0,3}\s{1,4}[A-Z]\.?"""
+
     val INTENT: Regex = Regex("^[a-z][a-z0-9_]{0,47}$")
     val PRIORITY_RANGE: IntRange = 1..998
     const val ANCHOR_TEXT_MAX: Int = 80

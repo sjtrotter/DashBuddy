@@ -37,7 +37,8 @@ class RuleAuthoringVocabularyTest {
             assertTrue(transform, !Regex("""\\(?:[1-9]|k[<{])""").containsMatchIn(shape))
             Regex(shape)
         }
-        assertTrue(Vocabulary.EMITTED_PREDICATES.containsAll(listOf("hasTextMatchesRegex", "siblingOf")))
+        assertTrue("hasTextMatchesRegex" in Vocabulary.EMITTED_NODE_PREDICATES)
+        assertTrue("siblingOf" in Vocabulary.EMITTED_PARSE_EXPRESSIONS)
         assertEquals(listOf("stripPrefixes"), Vocabulary.EMITTED_PARAMETERIZED_TRANSFORMS)
     }
 

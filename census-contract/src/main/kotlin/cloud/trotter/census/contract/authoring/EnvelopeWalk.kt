@@ -31,6 +31,7 @@ import kotlinx.serialization.json.intOrNull
 /** Screen coordinates in the capture's own coordinate system. */
 data class Bounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
 
+/** Text/desc and immediate sibling values are raw; display variants trim and suppress blank slots. */
 data class WalkedNode(
     val path: List<Int>,
     val className: String?,
@@ -48,13 +49,23 @@ data class WalkedNode(
     val precedingSiblingText: String?,
     val clickableAncestor: Boolean,
     val precedingSiblingDesc: String? = null,
+    val displayText: String? = text?.trim()?.takeIf { it.isNotEmpty() },
+    val displayDesc: String? = desc?.trim()?.takeIf { it.isNotEmpty() },
+    val displayPrecedingSiblingText: String? = precedingSiblingText?.trim()?.takeIf { it.isNotEmpty() },
+    val displayPrecedingSiblingDesc: String? = precedingSiblingDesc?.trim()?.takeIf { it.isNotEmpty() },
 )
+
+/** Bounded result; list delegation keeps paths convenient for authoring forms. */
+data class WalkResult(val nodes: List<WalkedNode>, val truncated: Boolean) : List<WalkedNode> by nodes
 
 /** Paths keep original child indices, including holes left by malformed children. */
 fun List<WalkedNode>.at(path: List<Int>): WalkedNode? = firstOrNull { it.path == path }
 
 /** One bounded pre-order walk shared by the authoring form and the draft generator. */
 object EnvelopeWalk {
+    // Authoring-side mirror of the mapper's TreeLimits, pinned by the application guard.
+    const val MAX_NODES: Int = 4_000
+    const val MAX_DEPTH: Int = 60
     private data class Level(
         val children: List<JsonElement>,
         val parentPath: List<Int>?,
@@ -62,12 +73,13 @@ object EnvelopeWalk {
         var index: Int = 0,
     )
 
-    fun walk(payload: JsonObject, maxNodes: Int = 2_000, maxDepth: Int = 64): List<WalkedNode> {
-        if (maxNodes <= 0 || maxDepth < 0) return emptyList()
+    fun walk(payload: JsonObject, maxNodes: Int = MAX_NODES, maxDepth: Int = MAX_DEPTH): WalkResult {
+        if (maxNodes <= 0 || maxDepth < 0) return WalkResult(emptyList(), true)
         val result = mutableListOf<WalkedNode>()
         val stack = ArrayDeque<Level>()
         stack.addLast(Level(listOf(payload), null, false))
         var visited = 0
+        var truncated = false
         while (stack.isNotEmpty() && visited < maxNodes) {
             val level = stack.last()
             if (level.index >= level.children.size) {
@@ -88,8 +100,8 @@ object EnvelopeWalk {
                 simpleClass = className?.substringAfterLast('.')?.takeIf { it.isNotBlank() },
                 viewId = viewId,
                 idSuffix = viewId?.substringAfter(":id/", "")?.takeIf { it.isNotEmpty() },
-                text = node.string("text"),
-                desc = node.string("desc"),
+                text = node.rawString("text"),
+                desc = node.rawString("desc"),
                 hint = node.string("hint"),
                 pane = node.string("pane"),
                 clickable = clickable,
@@ -105,25 +117,27 @@ object EnvelopeWalk {
                     )
                 },
                 precedingSiblingText = if (index > 0) {
-                    (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.string("text")
+                    (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.rawString("text")
                 } else null,
                 precedingSiblingDesc = if (index > 0) {
-                    (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.string("desc")
+                    (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.rawString("desc")
                 } else null,
                 clickableAncestor = level.clickableAncestor,
             )
-            if (path.size < maxDepth) {
-                val children = node["children"] as? JsonArray
-                if (!children.isNullOrEmpty()) {
-                    stack.addLast(Level(children, path, level.clickableAncestor || clickable))
-                }
+            val children = node["children"] as? JsonArray
+            if (!children.isNullOrEmpty()) {
+                if (path.size < maxDepth) stack.addLast(Level(children, path, level.clickableAncestor || clickable))
+                else truncated = true
             }
         }
-        return result.toList()
+        return WalkResult(result.toList(), truncated || stack.any { it.index < it.children.size })
     }
 
     private fun JsonObject.string(key: String): String? =
-        (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()
+        rawString(key)?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun JsonObject.rawString(key: String): String? =
+        (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     private fun JsonObject.flag(key: String): Boolean? =
         (get(key) as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull

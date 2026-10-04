@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleCompiler
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleContext
 import cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset
+import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -25,6 +26,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -46,10 +51,9 @@ import java.util.Locale
  * Binds use that accept node and O+[0,1] secondary_action_button_dash_plus (both clickable).
  * Fields share prefix O+[1,2,0,0,0,0,0]: [1,0,0] payAmount, [2,0,0] distance (3.8 mi),
  * [3,0,0] deliveryTimeText (Deliver by 3:49 PM, using stripDeadlinePrefix). All share id
- * text_field and class TextView; distance and deadline now disambiguate by full value shape.
- * Pay is actually "$8.30  Guaranteed (incl. tips)": the specified anchored currency shape DOES
- * NOT match, so this gate still asserts exactly "ambiguous id for field" at the pay path.
- * No constant or altered fixture substitutes for the failed read; the currency shape stays strict.
+ * text_field and class TextView; each field disambiguates among same-id peers by value shape.
+ * Pay is "$8.30  Guaranteed (incl. tips)": the anchored currency shape allows trailing chrome,
+ * and parseCurrency reads the first amount token. All three selections warn about shape identity.
  *
  * Dropoff (2026-08-02 18:00:01): D = [0,0,0,0,0,1,0,3,1,1,0,2,0]. Anchors D
  * bottom_sheet_in_transit_navigation_container and D+[7] bottom_sheet_instructions_title combine
@@ -57,7 +61,11 @@ import java.util.Locale
  * bottom_sheet_task_arrive_by are unique ids, keeping the name and deadline OUT of rule literals.
  * The sanitized name slot uses "Deliver to " (not the longer shipped "Deliver to door of " form).
  * stripPrefix removes that actual chrome prefix before canonical name normalization and hashing;
- * keepPrefix preserves the label in the matching redact entry.
+ * keepPrefix preserves the label in the matching redact entry. The round-3 unanchored name-body
+ * check currently refuses this prefix (it matches "Deliver t"); the expected-Ok gate stays loud.
+ * Explicit plain-mask redacts cover production's other masked slots: D+[3]/[4] sheet address
+ * lines, D+[8] instructions, and [0,0,0,0,0,1,0,2,1] arriving_at_title (arrival address).
+ * These ids are selected from the winning production dropoff_navigation redact block.
  *
  * Expanded summary (2026-09-07 08:20:08): S = [0,0,0,0,0]. Anchors S layout_bottom_sheet
  * and S+[2,1,0,0,0] bottomsheet_content_container are the available sheet ids. totalPay at
@@ -70,7 +78,7 @@ import java.util.Locale
  */
 class CensusDraftRoundTripTest {
     @Test
-    fun `offer still refuses pay with trailing chrome while distance and deadline disambiguate`() {
+    fun `offer reads qualified pay distance and time and passes the round trip`() {
         val envelope = fixture("offer_popup", "2026-08-28_15-31-47-225")
         val chrome = listOf(0, 0, 0, 0, 0, 0, 0)
         val rows = chrome + listOf(1, 2, 0, 0, 0, 0, 0)
@@ -86,7 +94,14 @@ class CensusDraftRoundTripTest {
             binds = listOf(BindAssignment(accept, "acceptButton"), BindAssignment(
                 ref(envelope, chrome + listOf(0, 1), "secondary_action_button_dash_plus"), "declineButton")),
         )
-        assertEquals(DraftResult.Refused(listOf("ambiguous id for field at ${pay.path}")), generate(envelope, selection))
+        val fields = verifyRoundTrip(envelope, selection) as ParsedFields.OfferFields
+        assertEquals(8.30, requireNotNull(fields.parsedOffer.payAmount), 0.000001)
+        assertEquals(3.8, requireNotNull(fields.parsedOffer.distanceMiles), 0.000001)
+        val draft = assertOk(generate(envelope, selection))
+        val rule = draft.fragment.getValue("screens").jsonArray.single().jsonObject
+        assertEquals(Json.parseToJsonElement("""["accept_offer","decline_offer"]"""), rule["enables"])
+        assertEquals(setOf("acceptButton", "declineButton"), rule.getValue("bind").jsonObject.keys)
+        assertEquals(3, draft.warnings.count { "identity rests on a value shape" in it })
     }
 
     @Test
@@ -100,6 +115,12 @@ class CensusDraftRoundTripTest {
             fields = listOf(
                 FieldAssignment(ref(envelope, content + 2, "bottom_sheet_task_title"), "customerNameHash", stripPrefix = "Deliver to "),
                 FieldAssignment(ref(envelope, content + 1, "bottom_sheet_task_arrive_by"), "deadlineText"),
+            ),
+            redacts = listOf(
+                ref(envelope, content + 3, "bottom_sheet_address_line_1"),
+                ref(envelope, content + 4, "bottom_sheet_address_line_2"),
+                ref(envelope, content + 8, "bottom_sheet_instructions"),
+                ref(envelope, listOf(0, 0, 0, 0, 0, 1, 0, 2, 1), "arriving_at_title"),
             ),
         )
         val fields = verifyRoundTrip(envelope, selection) as ParsedFields.TaskFields
@@ -121,7 +142,7 @@ class CensusDraftRoundTripTest {
             .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
         assertTrue("customer hash must use the normalized bare name", expectedHash == fields.customerNameHash)
         val rule = assertOk(generate(envelope, selection)).fragment.getValue("screens").jsonArray.single().jsonObject
-        val redact = rule.getValue("redact").jsonArray.single().jsonObject
+        val redact = rule.getValue("redact").jsonArray.first().jsonObject
         assertEquals(JsonPrimitive("customerName"), redact["normalize"])
         assertEquals(JsonArray(listOf(JsonPrimitive("Deliver to "))), redact["keepPrefix"])
         assertEquals(rule.getValue("parse").jsonObject.getValue("fields").jsonObject
@@ -131,9 +152,12 @@ class CensusDraftRoundTripTest {
     private fun verifyRoundTrip(envelope: JsonObject, selection: Selections): ParsedFields {
         val draft = assertOk(generate(envelope, selection))
         assertNoCaptureIdentifiers(envelope, draft)
+        assertSafeLiterals(draft.fragment)
+        assertFragmentFieldShapes(draft.fragment)
         println(draft.json5) // Exactly once, after the provenance/privacy assertion.
         val rule = draft.fragment.getValue("screens").jsonArray.single().jsonObject
-        val ruleset = Ruleset(RuleCompiler.compileRules<UiNode>(JsonArray(listOf(rule)), RuleContext.SCREEN))
+        val draftRules = RuleCompiler.compileRules<UiNode>(JsonArray(listOf(rule)), RuleContext.SCREEN)
+        val ruleset = Ruleset(draftRules)
         val source = TestResourceLoader.nodeFromElement(envelope.getValue("payload"))
         val match = requireNotNull(ruleset.matchFirst(source, platformWire = "doordash")) { "source frame must match" }
         assertEquals("doordash.screen.${selection.intent}", match.ruleId)
@@ -151,13 +175,47 @@ class CensusDraftRoundTripTest {
         val production = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
             .jsonObject.getValue("screens").jsonArray
         val usedPriorities = production.map { it.jsonObject.getValue("priority").jsonPrimitive.int }.toSet()
-        val freePriority = (1..998).first { it !in usedPriorities }
+        val freePriority = (998 downTo 1).first { it !in usedPriorities }
+        val productionRules = RuleCompiler.compileRules<UiNode>(production, RuleContext.SCREEN)
+        val productionRuleset = Ruleset(productionRules)
+        val productionMatch = requireNotNull(productionRuleset.matchFirst(source, platformWire = "doordash"))
+        // Exactly CaptureWriter's rule-declared redact step: CompiledRedact.apply on the source tree.
+        val productionEnvelope = productionRules.single { it.id == productionMatch.ruleId }.redact.apply(source)
+        val draftEnvelope = draftRules.single().redact.apply(source)
+        val productionMasks = maskedSlots(productionEnvelope)
+        val draftMasks = maskedSlots(draftEnvelope)
+        assertTrue("draft must cover production masks at node paths: ${productionMasks - draftMasks}",
+            draftMasks.containsAll(productionMasks))
         val mergedDraft = assertOk(generate(envelope, selection.copy(priority = freePriority)))
         val mergedRule = mergedDraft.fragment.getValue("screens").jsonArray.single()
         val compiled = RuleCompiler.compileRules<UiNode>(JsonArray(production + mergedRule), RuleContext.SCREEN)
         assertTrue("merged compiler must retain the draft", compiled.any { it.id == match.ruleId })
         assertEquals(production.size + 1, compiled.size)
-        return ParsedFieldsFactory.create(match.shape, match.fields)
+        assertEquals("merged draft must not displace production", productionMatch.ruleId,
+            Ruleset(compiled).matchFirst(source, platformWire = "doordash")?.ruleId)
+        if (selection.shape == "offer") {
+            assertEquals("3:49 PM", match.fields["deliveryTimeText"])
+            assertEquals(setOf("acceptButton", "declineButton"), match.targets.keys)
+        }
+        val parsed = ParsedFieldsFactory.create(match.shape, match.fields)
+        if (parsed is ParsedFields.PostTaskFields) {
+            assertEquals(40.57, parsed.totalPay, 0.000001)
+            assertTrue(parsed.isExpanded)
+        }
+        if (parsed is ParsedFields.OfferFields) {
+            assertEquals(8.30, requireNotNull(parsed.parsedOffer.payAmount), 0.000001)
+            assertEquals(3.8, requireNotNull(parsed.parsedOffer.distanceMiles), 0.000001)
+        }
+        println("Gate ${selection.shape}: source, parsed values, negatives, redaction coverage and merged winner checked")
+        // The draft merges at the LOWEST free rank so it pre-empts no shipped recognition rule. The one production rule
+        // that may rank below it is the overrideable `sensitive.catchall` at 999 — a last-resort banking-term net that
+        // specific recognition is MEANT to out-rank (#419); drafts are capped at 998 by the vocabulary.
+        val rankedBelowDraft = production.map { it.jsonObject }
+            .filter { it.getValue("priority").jsonPrimitive.int > freePriority }
+            .map { it.getValue("id").jsonPrimitive.content }
+        assertTrue("only the sensitive catchall may rank below the draft, found: $rankedBelowDraft",
+            rankedBelowDraft.all { it.endsWith(".sensitive.catchall") })
+        return parsed
     }
 
     @Test
@@ -186,6 +244,54 @@ class CensusDraftRoundTripTest {
         val totalExpression = rule.getValue("parse").jsonObject.getValue("fields").jsonObject.getValue("totalPay").jsonObject
         assertEquals(Json.parseToJsonElement("""{"hasDesc":"Collapse"}"""), totalExpression["siblingOf"])
         assertFalse("find" in totalExpression)
+    }
+
+    private fun maskedSlots(root: UiNode): Set<Pair<List<Int>, String>> {
+        val slots = mutableSetOf<Pair<List<Int>, String>>()
+        fun walk(node: UiNode, path: List<Int>) {
+            if (node.text?.contains("[redacted", ignoreCase = true) == true) slots += path to "text"
+            if (node.contentDescription?.contains("[redacted", ignoreCase = true) == true) slots += path to "desc"
+            node.children.forEachIndexed { index, child -> walk(child, path + index) }
+        }
+        walk(root, emptyList())
+        return slots
+    }
+
+    private fun assertSafeLiterals(element: JsonElement) {
+        when (element) {
+            is JsonObject -> element.forEach { (key, value) ->
+                if (key in setOf("hasText", "hasDesc", "hasPrecedingSiblingText")) {
+                    val text = value.jsonPrimitive.content
+                    assertFalse("name pattern must never enter match literals",
+                        Regex(PiiShapes.FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE).containsMatchIn(text))
+                    assertFalse("customer lead-in must never enter match literals",
+                        PiiShapes.NAME_PREFIXES.any { text.trimStart().startsWith(it.trimEnd(), ignoreCase = true) })
+                    assertFalse("digits/currency must never enter match literals", Regex("""[\p{Nd}\p{Sc}]""").containsMatchIn(text))
+                }
+                assertSafeLiterals(value)
+            }
+            is JsonArray -> element.forEach(::assertSafeLiterals)
+            else -> Unit
+        }
+    }
+
+    private fun assertFragmentFieldShapes(fragment: JsonObject) {
+        // Offline fragment-schema scalar union: string, boolean, integer, or expression object.
+        val fragmentSchema = Json.parseToJsonElement(File("../docs/rules.fragment.schema.json").readText()).jsonObject
+        assertEquals("rules.schema.json#/\$defs/screenRule", fragmentSchema.getValue("properties").jsonObject
+            .getValue("screens").jsonObject.getValue("items").jsonObject.getValue("\$ref").jsonPrimitive.content)
+        val schema = Json.parseToJsonElement(File("../docs/rules.schema.json").readText()).jsonObject
+        val union = schema.getValue("\$defs").jsonObject.getValue("parseExpression").jsonObject.getValue("oneOf").jsonArray
+        assertEquals(setOf("string", "boolean", "integer"), union.mapNotNull { it.jsonObject["type"]?.jsonPrimitive?.content }.toSet())
+        assertTrue(union.any { it.jsonObject["\$ref"]?.jsonPrimitive?.content == "#/\$defs/parseExpressionObject" })
+        for (screen in fragment.getValue("screens").jsonArray) {
+            val fields = screen.jsonObject.getValue("parse").jsonObject["fields"]?.jsonObject.orEmpty()
+            for ((name, value) in fields) {
+                assertTrue("schema parse.fields.$name", value is JsonObject ||
+                    (value is JsonPrimitive && value != JsonNull &&
+                        (value.isString || value.booleanOrNull != null || value.intOrNull != null)))
+            }
+        }
     }
 
     private fun fixture(folder: String, prefix: String): JsonObject {

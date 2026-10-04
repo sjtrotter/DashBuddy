@@ -31,9 +31,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.util.Locale
 
@@ -71,6 +69,19 @@ object RuleDraft {
     @OptIn(ExperimentalSerializationApi::class)
     private val prettyJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
 
+    private val decimalDigits = Regex("""\p{Nd}{3,}""")
+    private val digitOrCurrency = Regex("""[\p{Nd}\p{Sc}]""")
+    private val currency = Regex("""\p{Sc}""")
+    private val customerName = Regex(Vocabulary.FIRST_LAST_INITIAL_BODY, RegexOption.IGNORE_CASE)
+    /** A stripPrefix is a lead-in, so only a WHOLE-value name shape ("Jane S. ") is refused for it. */
+    private val customerNameWhole = Regex("^\\s*" + Vocabulary.FIRST_LAST_INITIAL_BODY + "\\s*$", RegexOption.IGNORE_CASE)
+    private val capitalizedWords = Regex("""\b\p{Lu}\p{Ll}{2,}\s+\p{Lu}\p{Ll}{2,}\b""")
+    private val shapes: Map<String, Regex> = Vocabulary.VALUE_SHAPES_BY_TRANSFORM.values.distinct()
+        .associateWith { Regex(it, RegexOption.IGNORE_CASE) }
+    private val dayPattern = Regex("""^\d{4}-\d{2}-\d{2}$""")
+    private val versionPattern = Regex("^[0-9A-Za-z.+_-]{1,40}$")
+    private val platformPattern = Regex("^[a-z_][a-z0-9_]{0,31}$")
+
     fun generate(
         envelope: JsonObject,
         selections: Selections,
@@ -79,6 +90,9 @@ object RuleDraft {
         day: String,
     ): DraftResult {
         val draft = Draft(envelope, selections)
+        if (!dayPattern.matches(day)) draft.errors += "invalid day"
+        if (platformAppVersion != null && !versionPattern.matches(platformAppVersion)) draft.errors += "invalid platformAppVersion"
+        if (!platformPattern.matches(platform)) draft.errors += "invalid platform"
         val rule = draft.build(platform)
         if (draft.errors.isNotEmpty()) return DraftResult.Refused(draft.errors.toList())
         val fragment = buildJsonObject {
@@ -99,7 +113,11 @@ object RuleDraft {
     private class Draft(envelope: JsonObject, private val selections: Selections) {
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
-        private val nodes = (envelope["payload"] as? JsonObject)?.let { EnvelopeWalk.walk(it) }
+        private val nodes = (envelope["payload"] as? JsonObject)?.let {
+            EnvelopeWalk.walk(it).also { result ->
+                if (result.truncated) errors += "envelope exceeds the walk bounds"
+            }.nodes
+        }
             ?: emptyList<WalkedNode>().also { errors += "envelope has no payload object" }
         private val byPath = nodes.associateBy { it.path }
         private val specs = Vocabulary.FIELDS_BY_SHAPE[selections.shape].orEmpty().associateBy { it.name }
@@ -114,7 +132,7 @@ object RuleDraft {
             val anchors = selections.anchors.mapNotNull { predicate(it, Role.ANCHOR) }
             if (selections.anchors.size == 1) {
                 val node = byPath[selections.anchors.single().path]
-                if (node != null && node.idSuffix == null && (node.text != null || node.desc != null)) {
+                if (node != null && node.idSuffix == null && (node.displayText != null || node.displayDesc != null)) {
                     warnings += "one anchor; verify against the negative corpus"
                 }
             }
@@ -129,18 +147,21 @@ object RuleDraft {
                 val transforms = if (spec?.kind == FieldKind.PLAIN) {
                     assignment.transform ?: spec.defaultTransform
                 } else spec?.defaultTransform.orEmpty()
+                if (spec != null && spec.kind != FieldKind.PLAIN && assignment.transform != null) {
+                    warnings += "transform on ${assignment.field} ignored: hash fields use their fixed chain"
+                }
                 val siblingDesc = node?.precedingSiblingDesc?.takeIf {
-                    node.idSuffix == null && node.precedingSiblingText == null
+                    node.idSuffix == null && node.displayPrecedingSiblingText == null && node.displayPrecedingSiblingDesc != null
                 }
                 val selector = if (siblingDesc != null) {
-                    if (nodes.count { it.desc?.equals(siblingDesc, ignoreCase = true) == true } > 1) {
+                    if (descPeers(siblingDesc).size > 1) {
                         errors += "ambiguous sibling label at ${assignment.node.path}"
                     }
                     buildJsonObject {
                         put("siblingOf", literal(assignment.node, "hasDesc", siblingDesc))
                         put("offset", 1)
                     }
-                } else predicate(assignment.node, Role.FIELD, transforms)?.let { find ->
+                } else predicate(assignment.node, Role.FIELD, transforms, assignment.field)?.let { find ->
                     buildJsonObject { put("find", find) }
                 }
                 assignment.stripPrefix?.let { prefix ->
@@ -150,14 +171,17 @@ object RuleDraft {
                     }
                 }
                 val read = when {
-                    node?.text != null -> "text"
-                    node?.desc != null -> "contentDescription"
+                    spec?.read == "viewIdResourceName" -> spec.read.takeIf { node?.viewId != null }
+                    node?.displayText != null -> "text"
+                    node?.displayDesc != null -> "contentDescription"
                     else -> null
                 }
                 if (node != null && read == null) {
-                    errors += if (spec != null && spec.kind != FieldKind.PLAIN) {
-                        "hash field ${assignment.field} has no text/desc slot"
-                    } else "field ${assignment.field} has no text/desc slot"
+                    errors += when {
+                        spec?.read == "viewIdResourceName" -> "field ${assignment.field} has no viewIdResourceName slot"
+                        spec != null && spec.kind != FieldKind.PLAIN -> "hash field ${assignment.field} has no text/desc slot"
+                        else -> "field ${assignment.field} has no text/desc slot"
+                    }
                 }
                 if (selector == null || read == null || spec == null) continue
                 fields[assignment.field] = buildJsonObject {
@@ -172,7 +196,10 @@ object RuleDraft {
                 }
                 if (spec.kind != FieldKind.PLAIN) {
                     // Redaction needs a node predicate, not a sibling parse expression.
-                    val find = selector["find"] ?: predicate(assignment.node, Role.REDACT) ?: continue
+                    val find = selector["find"] ?: run {
+                        errors += "hash field ${assignment.field} has no stable redact predicate (the parse selector was valid)"
+                        null
+                    } ?: continue
                     redacts += buildJsonObject {
                         put("find", find)
                         assignment.stripPrefix?.let { put("keepPrefix", strings(listOf(it))) }
@@ -226,6 +253,11 @@ object RuleDraft {
         private fun validateSelections() {
             if (selections.screenClass !in Vocabulary.SCREEN_CLASSES) errors += "unknown screenClass"
             if (selections.shape !in Vocabulary.SHAPES) errors += "unknown shape"
+            if (selections.screenClass in Vocabulary.SCREEN_CLASSES &&
+                selections.shape !in Vocabulary.LEGAL_SHAPES_BY_CLASS[selections.screenClass].orEmpty()) {
+                errors += "shape ${selections.shape} is not legal for class ${selections.screenClass}"
+            }
+            selections.comment?.let { literal(NodeRef(emptyList()), "comment", it) }
             if (!Vocabulary.INTENT.matches(selections.intent)) errors += "invalid intent"
             if (selections.priority !in Vocabulary.PRIORITY_RANGE) errors += "priority must be in 1..998"
             if (selections.modeHint != null && selections.modeHint !in Vocabulary.MODES) errors += "unknown modeHint"
@@ -264,7 +296,9 @@ object RuleDraft {
                 val spec = specs[constant.name]
                 if (spec == null) errors += "unknown constant ${constant.name} for shape ${selections.shape}"
                 else if (spec.kind != FieldKind.PLAIN) errors += "hash field ${constant.name} requires a node assignment"
-                else if (!validConstant(spec.type, constant.value)) errors += "invalid constant type for ${constant.name}"
+                else if (spec.type !in listOf(FieldType.BOOLEAN, FieldType.INT) && enumValues(spec.name) == null) {
+                    errors += "constant ${constant.name}: only flags, counts and enum values may be constants"
+                } else if (!validConstant(spec, constant.value)) errors += "invalid constant type for ${constant.name}"
             }
             for (required in Vocabulary.REQUIRED_FIELDS_BY_SHAPE[selections.shape].orEmpty()) {
                 if (required !in declared) errors += "missing required field $required"
@@ -281,15 +315,51 @@ object RuleDraft {
         }
 
         private fun literal(ref: NodeRef, key: String, text: String): JsonObject {
-            if (text.isBlank() || text.length > Vocabulary.ANCHOR_TEXT_MAX || '$' in text ||
-                Regex("\\p{Nd}{3,}").containsMatchIn(text) || text.contains("[redacted", ignoreCase = true) ||
+            val comment = key == "comment"
+            val prefix = key == "stripPrefix"
+            if (text.isBlank() || text.length > (if (comment) 200 else Vocabulary.ANCHOR_TEXT_MAX) ||
+                (if (comment) currency.containsMatchIn(text) else digitOrCurrency.containsMatchIn(text)) ||
+                (!comment && decimalDigits.containsMatchIn(text)) ||
+                (prefix && !text.endsWith(" ")) || text.contains("[redacted", ignoreCase = true) ||
                 SensitiveMarkerScan.findMarker(text) != null) {
                 errors += "unsafe anchor literal at ${ref.path}"
+            }
+            // A stripPrefix IS a customer lead-in by design ("Deliver to "): it never reaches the rule's match side, so
+            // the lead-in and name-shape refusals apply only to match/label literals. Its structural bounds (ends with
+            // a space, no digit or currency symbol, marker scan) still apply above.
+            if (!prefix && (Vocabulary.ANCHOR_LEAD_INS.any { text.trimStart().startsWith(it.trimEnd(), ignoreCase = true) } ||
+                customerName.containsMatchIn(text))) {
+                errors += "anchor literal looks like customer text"
+            }
+            if (prefix && customerNameWhole.matches(text)) errors += "stripPrefix looks like a customer name"
+            if (capitalizedWords.containsMatchIn(text)) {
+                warnings += "anchor literal has a name-like shape — confirm it is chrome"
             }
             return atom(key, text)
         }
 
-        private fun predicate(ref: NodeRef, role: Role, transforms: List<String> = emptyList()): JsonObject? {
+        /** Mirrors PredicateCompiler.hasIdSuffix: case-insensitive endsWith, including resource boundary. */
+        private fun idPeers(suffix: String): List<WalkedNode> =
+            nodes.filter { it.viewId?.endsWith(suffix, ignoreCase = true) == true }
+
+        /** Mirrors PredicateCompiler.hasClassNameEndsWith at shared-id and shape peer sites. */
+        private fun classPeers(peers: List<WalkedNode>, simpleClass: String?): List<WalkedNode> =
+            if (simpleClass == null) emptyList() else peers.filter { it.className?.endsWith(simpleClass, ignoreCase = true) == true }
+
+        /** Mirrors PredicateCompiler.hasDesc for the envelope-wide siblingOf label search. */
+        private fun descPeers(label: String): List<WalkedNode> =
+            nodes.filter { it.desc?.equals(label, ignoreCase = true) == true }
+
+        /** Mirrors PredicateCompiler.hasClassNameEndsWith and hasPrecedingSiblingText, without trimming. */
+        private fun siblingPeers(simpleClass: String?, label: String): List<WalkedNode> =
+            classPeers(nodes, simpleClass).filter { it.precedingSiblingText?.equals(label, ignoreCase = true) == true }
+
+        private fun predicate(
+            ref: NodeRef,
+            role: Role,
+            transforms: List<String> = emptyList(),
+            fieldName: String? = null,
+        ): JsonObject? {
             val node = byPath[ref.path]
             if (node == null) {
                 errors += "node path does not resolve: ${ref.path}"
@@ -301,77 +371,76 @@ object RuleDraft {
                 return simpleClass?.let { atom("hasClassNameEndsWith", it) }
             }
             fun literal(key: String, text: String): JsonObject = literal(ref, key, text)
+            /** Mirrors PredicateCompiler.hasTextMatchesRegex: case-insensitive containsMatchIn on raw text. */
             fun shapePredicate(peers: List<WalkedNode>): JsonObject? {
                 if (role != Role.FIELD) return null
                 val shape = transforms.firstNotNullOfOrNull { Vocabulary.VALUE_SHAPES_BY_TRANSFORM[it] }
                     ?: return null
-                val regex = Regex(shape)
-                if (node.text?.let { regex.matches(it) } != true) return null
-                if (peers.count { it.text?.let(regex::matches) == true } != 1) return null
+                val regex = shapes.getValue(shape)
+                if (node.text?.let { regex.containsMatchIn(it) } != true) return null
+                if (peers.count { it.text?.let(regex::containsMatchIn) == true } != 1) return null
                 return atom("hasTextMatchesRegex", shape)
             }
             val suffix = node.idSuffix
             if (suffix != null) {
-                val id = atom("hasIdSuffix", suffix)
-                val peers = nodes.filter { it.idSuffix == suffix }
+                val resourceSuffix = ":id/$suffix"
+                val id = atom("hasIdSuffix", resourceSuffix)
+                val peers = idPeers(resourceSuffix)
                 if (peers.size == 1) return id
                 val cls = classPredicate() ?: return null
                 val predicates = mutableListOf(id, cls)
                 if (role == Role.ANCHOR) {
                     when {
-                        node.text != null -> predicates += literal("hasText", node.text)
-                        node.desc != null -> predicates += literal("hasDesc", node.desc)
+                        node.displayText != null -> predicates += literal("hasText", requireNotNull(node.text))
+                        node.displayDesc != null -> predicates += literal("hasDesc", requireNotNull(node.desc))
                         else -> errors += "ambiguous id at ${ref.path}"
                     }
-                } else if (peers.count { it.simpleClass == node.simpleClass } > 1) {
+                } else if (classPeers(peers, node.simpleClass).size > 1) {
                     // A find returns the FIRST node: id + class must actually identify the selected value.
-                    val shape = shapePredicate(peers.filter { it.simpleClass == node.simpleClass })
-                    if (shape != null) predicates += shape
-                    else errors += "ambiguous id for ${role.name.lowercase(Locale.ROOT)} at ${ref.path}"
+                    val shape = shapePredicate(classPeers(peers, node.simpleClass))
+                    if (shape != null) {
+                        predicates += shape
+                        val name = requireNotNull(fieldName)
+                        warnings += "field $name identity rests on a value shape among same-id peers — verify on more frames"
+                    } else errors += "ambiguous id for ${role.name.lowercase(Locale.ROOT)} at ${ref.path}"
                 }
                 return all(predicates)
             }
             if (role == Role.ANCHOR || role == Role.BIND) {
                 return when {
-                    node.text != null -> classPredicate()?.let { all(listOf(it, literal("hasText", node.text))) }
-                    node.desc != null -> literal("hasDesc", node.desc)
+                    node.displayText != null -> classPredicate()?.let { all(listOf(it, literal("hasText", requireNotNull(node.text)))) }
+                    node.displayDesc != null -> literal("hasDesc", requireNotNull(node.desc))
                     else -> null.also { errors += "class-only anchor refused at ${ref.path}" }
                 }
             }
-            val preceding = node.precedingSiblingText
+            val preceding = node.precedingSiblingText?.takeIf { node.displayPrecedingSiblingText != null }
             if (preceding == null) {
-                val peers = nodes.filter {
-                    it.path.size == node.path.size && it.path.dropLast(1) == node.path.dropLast(1) &&
-                        it.simpleClass == node.simpleClass
-                }
-                val shape = shapePredicate(peers)
-                // The emitted find searches the envelope, not just this parent. Another parent's
-                // matching value would silently select the wrong node, so retain the refusal there.
-                val envelopeShape = if (shape != null) shapePredicate(nodes.filter {
-                    node.simpleClass?.let { cls -> it.className?.endsWith(cls) } == true
-                }) else null
-                if (envelopeShape != null) return classPredicate()?.let { all(listOf(it, envelopeShape)) }
                 errors += "field has no stable anchor at ${ref.path}"
                 return null
             }
             val cls = classPredicate() ?: return null
-            if (nodes.count { it.simpleClass == node.simpleClass && it.precedingSiblingText == preceding } > 1) {
+            if (siblingPeers(node.simpleClass, preceding).size > 1) {
                 errors += "ambiguous sibling anchor at ${ref.path}"
             }
             return all(listOf(cls, literal("hasPrecedingSiblingText", preceding)))
         }
     }
 
-    private fun validConstant(type: FieldType, value: JsonPrimitive): Boolean {
+    private fun enumValues(name: String): List<String>? = when (name) {
+        "phase" -> Vocabulary.TASK_PHASES
+        "subFlow" -> Vocabulary.TASK_SUB_FLOWS
+        "sessionType" -> Vocabulary.SESSION_TYPES
+        else -> null
+    }
+
+    private fun validConstant(spec: FieldSpec, value: JsonPrimitive): Boolean {
         if (value == JsonNull) return false
-        if (type == FieldType.STRING) return value.isString
+        if (spec.type == FieldType.STRING) return value.isString && value.content in enumValues(spec.name).orEmpty()
         if (value.isString) return false
-        return when (type) {
-            FieldType.STRING -> false
-            FieldType.DOUBLE -> value.doubleOrNull?.isFinite() == true
-            FieldType.LONG -> value.longOrNull != null
+        return when (spec.type) {
             FieldType.INT -> value.intOrNull != null
             FieldType.BOOLEAN -> value.booleanOrNull != null
+            else -> false
         }
     }
 
