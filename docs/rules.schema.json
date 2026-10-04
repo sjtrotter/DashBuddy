@@ -951,7 +951,10 @@
         "upper",
         "toDouble",
         "toInt",
-        "stripDeadlinePrefix"
+        "stripDeadlinePrefix",
+        "parseClockSeconds",
+        "parseItemCountUnit",
+        "parseTotalMinutes"
       ]
     },
 
@@ -1821,7 +1824,8 @@
         "task:dropoff:arrived",
         "task:active",
         "post:task",
-        "session:ended"
+        "session:ended",
+        "task:unassigned"
       ]
     },
 

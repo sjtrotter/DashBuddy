@@ -296,3 +296,33 @@ predecessor: no leading-zero integer (`$016.70`, one settled digit from the fiel
 `$016.603`) and no malformed thousands group (`$1234,567.00`, which the old Kotlin shape folded to
 1234567.0; the old rule-side `^\$[\d,]+\.\d{2}$` also took `$,.00` → 0.0). Neither primitive can
 catch a mid-spin read that is well-FORMED but wrong — that is the settle gate's job (§3).
+
+## Drafting from the census (#1188)
+
+The Apache-2.0 `census-contract/authoring` package shares `RuleAuthoringVocabulary`, the bounded
+`EnvelopeWalk` (child-index paths), and the pure `RuleDraft` generator with the census dashboard.
+App guards pin its vocabulary to the domain enums, factory scalar reads and required-field maps,
+the schema, and the compiler's plain-transform dispatch. No app or Android dependency enters the
+contract build. Drafts are fragment envelopes with deterministic JSON5 and platform/version/day
+provenance; capture identifiers and fingerprints are never copied.
+
+Generation collects errors and refuses unknown classes/shapes/fields/transforms/bind targets,
+invalid intent/priority/mode/surface, unresolved node paths, absent anchors, missing required or
+one-of fields, non-clickable binds without a clickable ancestor, unreadable fields, unstable or
+ambiguous field selectors, and class-only anchors. Literal anchors are refused when blank, over
+80 characters, money-shaped (`$`), containing three consecutive digits, redaction markers, or a
+`SensitiveMarkerScan` hit. Constants must name typed scalar fields, cannot replace hash reads, and
+cannot overwrite another declaration. Sensitive/noise classes cannot declare fields or binds and
+must use their matching shape; both omit state and sensitive emits `overrideable: false`. Hash
+fields force the canonical hash transform chain and auto-emit the matching redact selector.
+Single text-only anchors and ancestor-dependent binds warn; offer drafts warn that orders are absent.
+
+`CensusDraftRoundTripTest` gates accepted drafts through the real app path: compile alone → recognise
+the source frame and assert parsed values → stay UNKNOWN on every DoorDash negative frame (with
+both global and platform corpus floors) → compile merged at the smallest free production priority.
+The selected legacy offer has three identical `text_field` id/class pairs, so its field selectors
+are refused instead of reading pay three times. The expanded summary's id-less total follows a
+description-only Collapse node, so it is refused for having no stable field anchor. Dropoff exercises
+the accepted path and auto-redaction; its prefixed sanitized name slot also pins the current plain
+normalizer's limitation (no parameterized prefix stripping). Paths and reasons are recorded in the
+test KDoc. These refusals preserve the generator's boundary instead of weakening it for a fixture.
