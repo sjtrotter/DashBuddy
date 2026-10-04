@@ -29,6 +29,7 @@ import cloud.trotter.census.contract.authoring.Selections
 import cloud.trotter.census.contract.authoring.at
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.RedactNormalize
+import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleCompiler
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleContext
@@ -204,9 +205,7 @@ class CensusDraftRoundTripTest {
         val namePaths = nodesByPath(source).filterValues { node ->
             productionRedact.entries.firstOrNull { it.find(node) }?.normalize == RedactNormalize.CUSTOMER_NAME
         }.keys
-        val coveragePayload = restoreCorpusPlaintext(envelope.getValue("payload").jsonObject, namePaths)
-        val coverageSource = TestResourceLoader.nodeFromElement(coveragePayload)
-        assertTrue("coverage source must contain no corpus masks", maskedSlots(coverageSource).isEmpty())
+        val coverageSource = restoreWithObligation(envelope.getValue("payload").jsonObject, source, namePaths, productionRedact)
         // Exactly CaptureWriter's rule-declared redact step, on the same restored plaintext tree.
         val productionEnvelope = productionRedact.apply(coverageSource)
         val draftEnvelope = draftRules.single().redact.apply(coverageSource)
@@ -294,11 +293,19 @@ class CensusDraftRoundTripTest {
      * "Sample Customer"; all other masked slots receive "123 Example Lane". No committed fixture is
      * changed, and no other slot is invented (an empty address line cannot make a mutation pass).
      */
-    private fun restoreCorpusPlaintext(payload: JsonObject, customerNamePaths: Set<List<Int>>): JsonObject {
+    private fun restoreCorpusPlaintext(
+        payload: JsonObject,
+        customerNamePaths: Set<List<Int>>,
+        nameShapedPaths: Set<List<Int>> = emptySet(),
+    ): JsonObject {
         fun restore(node: JsonObject, path: List<Int>): JsonObject = JsonObject(node.mapValues { (key, value) ->
             when {
                 key in listOf("text", "desc") && value is JsonPrimitive && value.isString -> JsonPrimitive(
-                    MASK_TOKEN.replace(value.content, if (path in customerNamePaths) "Sample Customer" else "123 Example Lane"),
+                    MASK_TOKEN.replace(value.content, when (path) {
+                        in nameShapedPaths -> "Sample S."
+                        in customerNamePaths -> "Sample Customer"
+                        else -> "123 Example Lane"
+                    }),
                 )
                 key == "children" && value is JsonArray -> JsonArray(value.mapIndexed { index, child ->
                     if (child is JsonObject) restore(child, path + index) else child
@@ -307,6 +314,34 @@ class CensusDraftRoundTripTest {
             }
         })
         return restore(payload, emptyList())
+    }
+
+    /**
+     * Restoration must never LOSE a production masking obligation (Astra, round 3): a slot the corpus masked is a slot
+     * production masks on the real frame. A content-dependent production predicate (the id-less first-last-initial name
+     * shape) cannot be recognised from the already-masked text, so a slot restored as an address would silently drop
+     * out of production's mask set and a draft could omit that redaction and still pass. The restore therefore runs
+     * twice: the default restoration first; every corpus-masked slot production then fails to mask is restored again
+     * as a first-last-initial name; and the obligation set is ASSERTED equal before any coverage comparison.
+     */
+    private fun restoreWithObligation(
+        payload: JsonObject,
+        source: UiNode,
+        customerNamePaths: Set<List<Int>>,
+        productionRedact: CompiledRedact,
+    ): UiNode {
+        val corpusMasks = maskedSlots(source)
+        var restored = TestResourceLoader.nodeFromElement(restoreCorpusPlaintext(payload, customerNamePaths))
+        assertTrue("coverage source must contain no corpus masks", maskedSlots(restored).isEmpty())
+        val lost = corpusMasks - maskedSlots(productionRedact.apply(restored))
+        if (lost.isNotEmpty()) {
+            restored = TestResourceLoader.nodeFromElement(
+                restoreCorpusPlaintext(payload, customerNamePaths, nameShapedPaths = lost.map { it.first }.toSet()),
+            )
+        }
+        assertEquals("restoration must preserve every production masking obligation (path, slot)",
+            emptySet<Pair<List<Int>, String>>(), corpusMasks - maskedSlots(productionRedact.apply(restored)))
+        return restored
     }
 
     private fun nodesByPath(root: UiNode): Map<List<Int>, UiNode> {
@@ -335,6 +370,31 @@ class CensusDraftRoundTripTest {
         val missingMasks = maskedSlots(production) - maskedSlots(draft)
         if (missingMasks.isNotEmpty()) failures += "missing masks at $missingMasks"
         return failures
+    }
+
+    @Test
+    fun `restoration preserves a name-shape masking obligation the corpus mask hides`() {
+        // Astra round 3 probe: an id-less text node carrying a corpus mask whose ORIGINAL was a bare "Brandy S." — the
+        // production dropoff rule masks it through its name-shape predicate, which cannot match the masked text, so
+        // the default restoration (an address) would drop the obligation. The two-pass restore must re-establish it.
+        val envelope = fixture("dropoff_navigation", "2026-08-02_18-00-01-999")
+        val payload = envelope.getValue("payload").jsonObject
+        val probe = Json.parseToJsonElement("""{"class":"android.widget.TextView","isEnabled":true,"text":"[redacted:abcd]",
+            "bounds":{"left":0,"top":2300,"right":1080,"bottom":2400}}""").jsonObject
+        val probed = JsonObject(payload + ("children" to JsonArray(payload.getValue("children").jsonArray + probe)))
+        val source = TestResourceLoader.nodeFromElement(probed)
+        val production = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
+            .jsonObject.getValue("screens").jsonArray
+        val productionRules = RuleCompiler.compileRules<UiNode>(production, RuleContext.SCREEN)
+        val match = requireNotNull(Ruleset(productionRules).matchFirst(source, platformWire = "doordash"))
+        val productionRedact = productionRules.single { it.id == match.ruleId }.redact
+        val namePaths = nodesByPath(source).filterValues { node ->
+            productionRedact.entries.firstOrNull { it.find(node) }?.normalize == RedactNormalize.CUSTOMER_NAME
+        }.keys
+        val probePath = listOf(payload.getValue("children").jsonArray.size)
+        assertFalse("the masked probe cannot be recognised as a name slot up front", probePath in namePaths)
+        val restored = restoreWithObligation(probed, source, namePaths, productionRedact)
+        assertTrue("production must mask the restored probe", (probePath to "text") in maskedSlots(productionRedact.apply(restored)))
     }
 
     @Test
