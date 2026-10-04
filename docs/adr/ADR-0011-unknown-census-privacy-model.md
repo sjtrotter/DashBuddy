@@ -430,7 +430,7 @@ self-hoster runs the same debug/dev flavour the developer does. It is enrolled e
 and a dev-settings switch on the client that is never reachable from the consent screen. A trusted
 install uploads the **existing redacted capture envelope** for UNKNOWN frames (today's
 `captureScreen` order: sensitive drop → rule redact → customer text + id scrub) beside the skeleton
-so the two can be paired by the envelope's `captureId` (unique per capture — the census `fingerprint`
+(superseded by the 2026-10-04 amendment below) so the two can be paired by the envelope's `captureId` (unique per capture — the census `fingerprint`
 is a CLUSTER key shared by many frames and must never be the pairing key, or one frame's hashes would
 resolve against another frame's text);
 a trusted envelope or a trusted capture the operator already holds locally are the only sources from
@@ -438,6 +438,16 @@ which a hash is ever resolved to text. For a trusted install k = 1 by definition
 runs on one phone with zero community contributors — the fleet adds speed and coverage, never a
 precondition. Community installs never carry plaintext; the server rejects a clear-text envelope from
 a non-trusted key.
+
+**Amendment 2026-10-04 (#1200):** The shipped trusted envelope is paired to its CLUSTER by the
+skeleton `fingerprint` the phone computed for the same frame. The server presents it ONLY as one
+sample frame of that cluster: its own text in its own boxes (the wireframe). It is NEVER used to
+resolve another frame's withheld slots to text: two frames in one cluster can differ exactly in
+their withheld customer slots, which is the misattribution the original sentence guards against.
+`captureId` stays in the envelope so per-frame pairing remains possible. The transport projection
+drops `deviceFingerprint` and `rulesetSignature` and coarsens the timestamp to the hour. Node
+`bounds` remain and imply the screen resolution — a device-class signal the skeleton omits,
+accepted for the operator's own device.
 
 The trusted path reuses the existing scrubbed PAYLOAD, not the existing metadata:
 `ReplayMetadataProviderImpl` supplies `deviceFingerprint` (`Build.FINGERPRINT`) and `EnvelopeBuilder`

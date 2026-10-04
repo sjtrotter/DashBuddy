@@ -565,6 +565,16 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Trusted-envelope uploader (#1200, S7c-B)* — only debug builds with census consent and the separate default-off
+  “Share UNKNOWN captures” switch can send screen text to `/v1/envelopes`, which requires a trusted install.
+  The capture bus holds at most 16 UNKNOWN screen envelopes, and the publisher pairs the same frame's capture ID to
+  its accepted skeleton fingerprint; only paired envelopes are projected (device fingerprint and ruleset signature removed,
+  timestamp coarsened to the hour), scanned locally across every JSON key/string, and spooled in `census/envelopes`.
+  UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details,
+  and the server operator can read them. Trusted installs are the operator's own device today.
+  Envelopes follow a drained skeleton spool; pairing only queues work, and projection/scanning run on IO.
+  Sharing off or an identity boundary forgets held, queued, and spooled envelopes, serialized against the writer.
+  A `not_trusted` response turns sharing off and invalidates the sink; release binds `NoOpCensusEnvelopeSink`.
 - *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
   release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.

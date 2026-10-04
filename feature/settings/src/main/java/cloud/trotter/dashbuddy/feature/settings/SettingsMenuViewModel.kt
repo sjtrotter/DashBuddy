@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.feature.settings
 
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusIdentityResetter
+import cloud.trotter.dashbuddy.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.dashbuddy.core.data.census.CensusSpool
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,7 @@ class SettingsMenuViewModel @Inject constructor(
     private val strategyRepository: StrategyRepository,
     credentials: CensusCredentialStore,
     spool: CensusSpool,
+    @CensusEnvelopeSpool envelopeSpool: CensusSpool,
     private val censusResetter: CensusIdentityResetter,
     private val censusScheduler: CensusUploadScheduler,
 ) : ViewModel() {
@@ -35,9 +37,15 @@ class SettingsMenuViewModel @Inject constructor(
     val censusInstallId = credentials.installId
     val censusLastRun = devSettingsRepository.censusLastRun
     val censusQueued = spool.queued
+    val censusEnvelopesQueued = envelopeSpool.queued
+    val censusShareCaptures = devSettingsRepository.censusShareCaptures
 
     fun setCensusUploadEnabled(enabled: Boolean) = viewModelScope.launch {
         devSettingsRepository.setCensusUploadEnabled(enabled)
+    }
+
+    fun setCensusShareCaptures(enabled: Boolean) = viewModelScope.launch {
+        devSettingsRepository.setCensusShareCaptures(enabled)
     }
 
     fun uploadCensusNow() = censusScheduler.enqueueNow()

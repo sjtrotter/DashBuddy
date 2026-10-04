@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.core.data.census.CensusSpool
 import cloud.trotter.dashbuddy.BuildConfig
 import cloud.trotter.dashbuddy.core.data.census.HealthLedgerStore
 import cloud.trotter.dashbuddy.core.data.census.PersistentHealthSink
+import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.census.HealthKey
@@ -37,6 +38,7 @@ import cloud.trotter.dashbuddy.core.network.census.CensusTransport
 import cloud.trotter.dashbuddy.core.network.census.EnrolResult
 import cloud.trotter.dashbuddy.core.network.census.PolicyResult
 import cloud.trotter.dashbuddy.core.network.census.UploadResult
+import cloud.trotter.dashbuddy.domain.census.EnvelopeProjection
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
 import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
@@ -59,6 +61,7 @@ import org.junit.runner.RunWith
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -82,6 +85,18 @@ class CensusUploadWorkerTest {
     }
 
     private class FakeApi : CensusTransport {
+        val envelopeResults = ArrayDeque<UploadResult>()
+        val envelopeBodies = mutableListOf<List<String>>()
+        val envelopeBatches = mutableListOf<String>()
+        val stages = mutableListOf<String>()
+        var beforeEnvelope: (String, List<String>) -> Unit = { _, _ -> }
+        override suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
+            beforeEnvelope(batchId, itemsJson)
+            stages += "envelopes"
+            envelopeBodies += itemsJson
+            envelopeBatches += batchId
+            return envelopeResults.removeFirst()
+        }
         val healthResults = ArrayDeque<HealthResult>()
         val healthBodies = mutableListOf<List<String>>()
         var beforeHealth: suspend () -> Unit = {}
@@ -102,6 +117,7 @@ class CensusUploadWorkerTest {
         }
         override suspend fun policy(): PolicyResult = PolicyResult.Available(JsonObject(emptyMap()))
         override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
+            stages += "skeletons"
             beforeUpload(batchId, itemsJson)
             batches += batchId
             bodies += itemsJson
@@ -118,9 +134,13 @@ class CensusUploadWorkerTest {
 
     private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
         private val memory = MemoryPreferences()
-        val preferences = DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined)
+        val preferences = spy(DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined))
         val credentials: CensusCredentialStore = mock()
         val spool: CensusSpool = mock()
+        val envelopeSpool: CensusSpool = mock()
+        val envelopeSink: CensusEnvelopeSink = mock()
+        val envelopes = mutableListOf<CensusSpool.Spooled>()
+        var envelopePending: CensusSpool.InFlight? = null
         val api = FakeApi()
         val scheduler = Scheduler()
         val stats = CensusUploadStats()
@@ -173,6 +193,27 @@ class CensusUploadWorkerTest {
                 queued.addAll(remaining)
                 Unit
             }
+            whenever(envelopeSpool.take(20, 900 * 1024)).thenAnswer {
+                val retained = envelopePending?.ids?.mapNotNull { id -> envelopes.find { it.id == id } }
+                if (!retained.isNullOrEmpty()) retained else { envelopePending = null; envelopes.take(20) }
+            }
+            whenever(envelopeSpool.inFlight()).thenAnswer { envelopePending }
+            whenever(envelopeSpool.markInFlight(any(), any())).thenAnswer {
+                envelopePending = CensusSpool.InFlight(it.getArgument(1), it.getArgument<Collection<String>>(0).toList())
+                Unit
+            }
+            whenever(envelopeSpool.remove(any())).thenAnswer {
+                val ids = it.getArgument<Collection<String>>(0)
+                envelopes.removeAll { item -> item.id in ids }
+                Unit
+            }
+            whenever(envelopeSpool.clearInFlight()).thenAnswer { envelopePending = null; Unit }
+            whenever(envelopeSink.invalidate()).thenAnswer { envelopes.clear(); envelopePending = null; Unit }
+            api.beforeEnvelope = { batchId, json ->
+                val persisted = requireNotNull(envelopePending)
+                assertEquals(batchId, persisted.batchId)
+                assertEquals(json, persisted.ids.map { id -> envelopes.single { it.id == id }.itemJson })
+            }
             api.beforeUpload = { batchId, json ->
                 val persisted = requireNotNull(pending)
                 assertEquals(batchId, persisted.batchId)
@@ -195,6 +236,12 @@ class CensusUploadWorkerTest {
             }
         }
 
+        fun setShareSync(enabled: Boolean) {
+            memory.data.value = memory.data.value.toMutablePreferences().apply {
+                this[androidx.datastore.preferences.core.booleanPreferencesKey("census_share_captures")] = enabled
+            }
+        }
+
         fun queue(count: Int = 1) {
             repeat(count) { queueBatch(1) }
         }
@@ -208,10 +255,21 @@ class CensusUploadWorkerTest {
             return items
         }
 
+        suspend fun queueEnvelopes(count: Int = 1): List<CensusSpool.Spooled> {
+            preferences.setCensusShareCaptures(true)
+            return List(count) {
+                val index = ++sequence
+                val fingerprint = index.toString().padStart(64, '0')
+                val json = requireNotNull(EnvelopeProjection.project(
+                    """{"schemaId":"uinode.v1","timestamp":7200123,"platform":"doordash","metadata":{"deviceFingerprint":"removed","rulesetSignature":"removed"},"payload":{"text":"Continue $index"}}""", fingerprint))
+                CensusSpool.Spooled("2-$index.json", fingerprint, json)
+            }.also { envelopes += it }
+        }
+
         fun worker(): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, scheduler, stats, lock, healthSink, metadataProvider)
+                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, scheduler, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
             }).build()
     }
 
@@ -246,6 +304,7 @@ class CensusUploadWorkerTest {
         val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
+        h.queueEnvelopes()
         val pending = h.credential.copy(enrolled = false)
         val replacement = pending.copy(installId = "87654321-1234-4123-8123-123456789abc")
         h.health()
@@ -261,6 +320,9 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(1L, h.stats.enrolRejected.get())
         verify(h.credentials, times(2)).mint()
+        verify(h.envelopeSink).invalidate()
+        verify(h.preferences).setCensusShareCaptures(false)
+        assertFalse(h.preferences.censusShareCaptures.first())
         assertNotEquals(h.api.enrolledIds[0], h.api.enrolledIds[1])
         verify(h.credentials, never()).markEnrolled()
     }
@@ -281,6 +343,7 @@ class CensusUploadWorkerTest {
         val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenThrow(CensusCredentialStore.Unusable())
+        h.queueEnvelopes()
         h.health()
         whenever(h.credentials.mint()).thenAnswer {
             assertEquals(HealthLedger(generation = 1), h.persistedHealth())
@@ -290,6 +353,10 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         verify(h.credentials).mint()
         verify(h.credentials).markEnrolled()
+        verify(h.envelopeSink).invalidate()
+        verify(h.preferences).setCensusShareCaptures(false)
+        assertFalse(h.preferences.censusShareCaptures.first())
+        assertTrue(h.envelopes.isEmpty())
         // Nothing queued: the fresh identity stays visible as `enrolled` instead of degrading to `spool_empty`.
         assertEquals(CensusRunOutcome.ENROLLED, h.preferences.censusLastRun.first()?.outcome)
     }
@@ -651,6 +718,7 @@ class CensusUploadWorkerTest {
         }
         h.api.uploads += UploadResult.Revoked
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        verify(h.envelopeSink).invalidate()
         verify(h.credentials).wipe()
         assertFalse(h.preferences.censusUploadEnabled.first())
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
@@ -1012,6 +1080,7 @@ class CensusUploadWorkerTest {
         }
         h.api.healthResults += HealthResult.Revoked
         h.worker().doWork()
+        verify(h.envelopeSink).invalidate()
         verify(h.credentials).wipe()
         assertFalse(h.preferences.censusUploadEnabled.first())
         assertTrue(h.api.bodies.isEmpty())
@@ -1099,6 +1168,287 @@ class CensusUploadWorkerTest {
             h.worker().doWork()
             assertEquals(outcome, h.preferences.censusLastRun.first()?.outcome)
         }
+    }
+
+    @Test fun `envelopes post after skeletons with the exact projected strings and accepted skeletons rank first`() = runTest {
+        for (skeletonAccepted in listOf(false, true)) {
+            val h = harness()
+            h.initialize()
+            h.queue()
+            val items = h.queueEnvelopes(2)
+            h.api.uploads += if (skeletonAccepted) UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+                else UploadResult.Duplicate
+            h.api.envelopeResults += UploadResult.Accepted(2, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(listOf("skeletons", "envelopes"), h.api.stages)
+            assertEquals(listOf(items.map { it.itemJson }), h.api.envelopeBodies)
+            assertEquals(listOf(CensusApi.envelopeBatchId(items.map { it.itemJson })), h.api.envelopeBatches)
+            assertTrue(h.envelopes.isEmpty())
+            assertNull(h.envelopePending)
+            assertEquals(2L, h.stats.envelopesPosted.get())
+            assertEquals(2, h.preferences.censusLastRun.first()?.envelopesPosted)
+            assertEquals(if (skeletonAccepted) "uploaded 1" else "envelopes_posted 2", h.preferences.censusLastRun.first()?.token())
+        }
+    }
+
+    @Test fun `empty skeleton spool permits envelopes but sharing off never reads envelope spool`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queueEnvelopes()
+        h.preferences.setCensusShareCaptures(false)
+        h.worker().doWork()
+        verify(h.envelopeSpool, never()).take(any(), any())
+        assertTrue(h.api.envelopeBodies.isEmpty())
+        h.preferences.setCensusShareCaptures(true)
+        h.api.envelopeResults += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+        h.worker().doWork()
+        assertEquals("envelopes_posted 1", h.preferences.censusLastRun.first()?.token())
+        assertEquals(1, h.api.envelopeBodies.size)
+    }
+
+    @Test fun `not trusted switches sharing off clears envelope queue and preserves census consent`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queueEnvelopes(21)
+        h.api.envelopeResults += UploadResult.NotTrusted
+        val warnings = mutableListOf<String>()
+        val tree = warningTree(warnings)
+        Timber.plant(tree)
+        try {
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(listOf("census envelopes not_trusted sharing=off items=20"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
+        assertFalse(h.preferences.censusShareCaptures.first())
+        assertTrue(h.preferences.censusUploadEnabled.first())
+        assertTrue(h.envelopes.isEmpty())
+        assertNull(h.envelopePending)
+        verify(h.envelopeSink).invalidate()
+        assertEquals(1L, h.stats.envelopesNotTrusted.get())
+        assertEquals("not_trusted", h.preferences.censusLastRun.first()?.token())
+        h.worker().doWork()
+        assertEquals(1, h.api.envelopeBodies.size)
+    }
+
+    @Test fun `envelope 429 stores shared deadline and retry keeps exact membership despite new arrivals`() = runTest {
+        for (result in listOf(UploadResult.RateLimited(3600), UploadResult.BudgetExhausted(3600))) {
+            val h = harness()
+            h.initialize()
+            val original = h.queueEnvelopes(2)
+            h.api.envelopeResults += result
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals("deferred 3600", h.preferences.censusLastRun.first()?.token())
+            assertTrue(h.preferences.nextAllowedAtMillis.first() > System.currentTimeMillis())
+            val pending = h.envelopePending
+            h.queueEnvelopes()
+            h.worker().doWork()
+            assertEquals(1, h.api.envelopeBodies.size)
+            assertEquals(pending, h.envelopePending)
+            h.preferences.setNextAllowedAtMillis(0)
+            h.api.envelopeResults += UploadResult.Duplicate
+            h.worker().doWork()
+            assertEquals(listOf(original.map { it.itemJson }, original.map { it.itemJson }), h.api.envelopeBodies)
+            assertEquals(h.api.envelopeBatches[0], h.api.envelopeBatches[1])
+            assertEquals(1, h.envelopes.size)
+        }
+    }
+
+    @Test fun `skeleton deferral transport error and unauthorized stop before envelopes`() = runTest {
+        for (result in listOf(UploadResult.RateLimited(60), UploadResult.TransportFailure("IOException"),
+            UploadResult.Unauthorized(null))) {
+            val h = harness()
+            h.initialize()
+            h.queue()
+            h.queueEnvelopes()
+            h.api.uploads.addAll(listOf(result, result))
+            h.worker().doWork()
+            assertTrue(h.api.envelopeBodies.isEmpty())
+            verify(h.envelopeSpool, never()).take(any(), any())
+        }
+        val h = harness()
+        h.initialize()
+        h.queueEnvelopes()
+        h.health()
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() + 60_000)
+        h.worker().doWork()
+        assertEquals("health_posted 1", h.preferences.censusLastRun.first()?.token())
+        verify(h.envelopeSpool, never()).take(any(), any())
+    }
+
+    @Test fun `envelope split keeps prefix resolves both halves and counts quality rejection`() = runTest {
+        val h = harness()
+        h.initialize()
+        val items = h.queueEnvelopes(4)
+        h.api.envelopeResults.addAll(listOf(UploadResult.PayloadTooLarge,
+            UploadResult.Accepted(2, 0, emptyMap(), CensusBudget(1, 1, 1, 1)),
+            UploadResult.BatchQuality(mapOf("bad_item" to 2))))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(listOf(items, items.take(2), items.drop(2)).map { it.map { item -> item.itemJson } }, h.api.envelopeBodies)
+        assertTrue(h.api.envelopeBatches.all { it.startsWith("env-") })
+        assertEquals(listOf(items, items.take(2), items.drop(2)).map { batch ->
+            CensusApi.envelopeBatchId(batch.map { it.itemJson })
+        }, h.api.envelopeBatches)
+        assertTrue(h.envelopes.isEmpty())
+        assertNull(h.envelopePending)
+        assertEquals(2L, h.stats.envelopesPosted.get())
+        assertEquals(2L, h.stats.envelopesRejected.get())
+        assertEquals("envelopes_posted 2", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `envelope unauthorized resigns exact body and transport failure retains batch`() = runTest {
+        val h = harness()
+        h.initialize()
+        val items = h.queueEnvelopes()
+        h.api.envelopeResults.addAll(listOf(UploadResult.Unauthorized(null), UploadResult.TransportFailure("IOException")))
+        assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
+        assertEquals(listOf(items.map { it.itemJson }, items.map { it.itemJson }), h.api.envelopeBodies)
+        assertEquals(h.api.envelopeBatches[0], h.api.envelopeBatches[1])
+        assertEquals(items.map { it.id }, h.envelopePending?.ids)
+        assertEquals("failure", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `revoked envelope disables both switches clears envelopes and resets identity`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queueEnvelopes()
+        h.api.envelopeResults += UploadResult.Revoked
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertFalse(h.preferences.censusShareCaptures.first())
+        assertFalse(h.preferences.censusUploadEnabled.first())
+        assertTrue(h.envelopes.isEmpty())
+        verify(h.credentials).wipe()
+        assertEquals("revoked", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `switches rechecked after envelope in flight marker preserve uploaded skeleton outcome`() = runTest {
+        for (disableConsent in listOf(false, true)) {
+            val h = harness()
+            h.initialize()
+            h.queue()
+            val items = h.queueEnvelopes()
+            h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+            whenever(h.envelopeSpool.markInFlight(any(), any())).thenAnswer {
+                h.envelopePending = CensusSpool.InFlight(it.getArgument(1), it.getArgument<Collection<String>>(0).toList())
+                if (disableConsent) h.setConsentSync(false) else h.setShareSync(false)
+                Unit
+            }
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertTrue(h.api.envelopeBodies.isEmpty())
+            assertEquals("uploaded 1", h.preferences.censusLastRun.first()?.token())
+            assertEquals(0, h.preferences.censusLastRun.first()?.envelopesPosted)
+            assertEquals(items, h.envelopes)
+            assertNull(h.envelopePending)
+            verify(h.envelopeSpool).clearInFlight()
+        }
+    }
+
+    @Test fun `switches rechecked before envelope marker clear retry membership and preserve skeleton outcome`() = runTest {
+        for (disableConsent in listOf(false, true)) {
+            val h = harness()
+            h.initialize()
+            h.queue()
+            val items = h.queueEnvelopes()
+            h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+            val marker = CensusSpool.InFlight(CensusApi.envelopeBatchId(items.map { it.itemJson }), items.map { it.id })
+            h.envelopePending = marker
+            whenever(h.envelopeSpool.inFlight()).thenAnswer {
+                if (disableConsent) h.setConsentSync(false) else h.setShareSync(false)
+                marker
+            }
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertTrue(h.api.envelopeBodies.isEmpty())
+            assertEquals("uploaded 1", h.preferences.censusLastRun.first()?.token())
+            assertEquals(items, h.envelopes)
+            assertNull(h.envelopePending)
+            verify(h.envelopeSpool, never()).markInFlight(any(), any())
+            verify(h.envelopeSpool).clearInFlight()
+        }
+    }
+
+    @Test fun `sharing off during envelope response stops resign and preserves skeleton outcome`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        val items = h.queueEnvelopes()
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))
+        val checkMembership = h.api.beforeEnvelope
+        h.api.beforeEnvelope = { batch, body ->
+            checkMembership(batch, body)
+            h.setShareSync(false)
+        }
+        h.api.envelopeResults += UploadResult.Unauthorized(null)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.envelopeBodies.size)
+        assertEquals(items, h.envelopes)
+        assertNull(h.envelopePending)
+        verify(h.envelopeSpool).clearInFlight()
+        assertEquals("uploaded 1", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `three batch cap with 350 skeletons never dispatches an envelope`() = runTest {
+        val h = harness()
+        h.initialize()
+        repeat(3) { h.queueBatch(100) }
+        h.queueBatch(50)
+        val envelopes = h.queueEnvelopes()
+        h.api.uploads.addAll(List(3) { UploadResult.Accepted(100, 0, emptyMap(), CensusBudget(1, 1, 1, 1)) })
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(3, h.api.bodies.size)
+        assertEquals(50, h.queued.flatten().size)
+        assertEquals(envelopes, h.envelopes)
+        assertTrue(h.api.envelopeBodies.isEmpty())
+        verify(h.envelopeSpool, never()).take(any(), any())
+        assertEquals("uploaded 300", h.preferences.censusLastRun.first()?.token())
+    }
+
+    @Test fun `all rejected envelopes are removed counted warned and visible for 422 and accepted responses`() = runTest {
+        for (response in listOf(UploadResult.BatchQuality(mapOf("bad_item" to 1)),
+            UploadResult.Accepted(0, 0, mapOf("bad_item" to 1), CensusBudget(1, 1, 1, 1)))) {
+            val h = harness()
+            h.initialize()
+            val items = h.queueEnvelopes()
+            h.api.envelopeResults += response
+            val warnings = mutableListOf<String>()
+            val tree = warningTree(warnings)
+            Timber.plant(tree)
+            try {
+                assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+                assertEquals(listOf("census envelopes rejected reasons={bad_item=1}"), warnings)
+            } finally {
+                Timber.uproot(tree)
+            }
+            assertEquals("envelopes_rejected 1", h.preferences.censusLastRun.first()?.token())
+            assertEquals(0, h.preferences.censusLastRun.first()?.envelopesPosted)
+            assertEquals(1L, h.stats.envelopesRejected.get())
+            assertEquals(0L, h.stats.envelopesPosted.get())
+            assertTrue(h.envelopes.isEmpty())
+            assertNull(h.envelopePending)
+            verify(h.envelopeSpool).remove(items.map { it.id })
+        }
+    }
+
+    @Test fun `singleton envelope 413 drops only envelope counter and continues the split`() = runTest {
+        val h = harness()
+        h.initialize()
+        val items = h.queueEnvelopes(2)
+        h.api.envelopeResults.addAll(listOf(UploadResult.PayloadTooLarge,
+            UploadResult.PayloadTooLarge, UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(1, 1, 1, 1))))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(listOf(items, items.take(1), items.drop(1)).map { batch -> batch.map { it.itemJson } }, h.api.envelopeBodies)
+        assertEquals(1L, h.stats.envelopesDropped.get())
+        assertEquals(0L, h.stats.oversized.get())
+        assertEquals("envelopes_posted 1", h.preferences.censusLastRun.first()?.token())
+        assertTrue(h.envelopes.isEmpty())
+        assertNull(h.envelopePending)
+
+        h.queueEnvelopes()
+        h.api.envelopeResults += UploadResult.PayloadTooLarge
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals("spool_empty", h.preferences.censusLastRun.first()?.token())
+        assertEquals(2L, h.stats.envelopesDropped.get())
+        assertEquals(0L, h.stats.oversized.get())
     }
 
     private fun warningTree(warnings: MutableList<String>): Timber.Tree = object : Timber.Tree() {

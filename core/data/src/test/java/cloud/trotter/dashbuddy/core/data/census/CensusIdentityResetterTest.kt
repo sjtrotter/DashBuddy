@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
+import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
 import cloud.trotter.dashbuddy.domain.census.HealthLedger
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,6 +30,7 @@ import org.junit.Test
 import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.IOException
@@ -50,31 +52,36 @@ class CensusIdentityResetterTest {
 
     private val credentials: CensusCredentialStore = mock()
     private val spool: CensusSpool = mock()
+    private val envelopeSink: CensusEnvelopeSink = mock()
     private val healthStore: HealthLedgerStore = mock()
-    private val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined)
+    private val preferences = spy(DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined))
     private val scheduler = Scheduler()
     private val lock = CensusUploadLock()
 
     private suspend fun TestScope.resetter(scope: CoroutineScope = backgroundScope): CensusIdentityResetter {
         whenever(healthStore.load()).thenReturn(HealthLedger())
         val sink = PersistentHealthSink(healthStore, CensusUploadStats(), scope, StandardTestDispatcher(testScheduler))
-        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L })
+        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L }, envelopeSink = envelopeSink)
     }
 
     @Test fun `reset clears spool and health before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
         preferences.setCensusUploadEnabled(true)
         preferences.setNextAllowedAtMillis(99L)
+        preferences.setCensusShareCaptures(true)
         preferences.setCensusPolicy(Json.parseToJsonElement("""{"k":10}""").jsonObject)
-        preferences.setCensusLastRun(CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12))
+        preferences.setCensusLastRun(CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12, envelopesPosted = 3))
 
         resetter().reset()
 
-        inOrder(spool, healthStore, credentials) {
+        inOrder(spool, envelopeSink, preferences, healthStore, credentials) {
             verify(spool).clear()
+            verify(envelopeSink).invalidate()
+            verify(preferences).setCensusShareCaptures(false)
             verify(healthStore).clear()
             verify(healthStore).save(HealthLedger(generation = 1))
             verify(credentials).wipe()
         }
+        assertFalse(preferences.censusShareCaptures.first())
         assertEquals(99L, preferences.nextAllowedAtMillis.first()) // A server-imposed deferral is not identity state.
         assertTrue(preferences.censusPolicy.first().isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.RESET), preferences.censusLastRun.first())
@@ -115,6 +122,15 @@ class CensusIdentityResetterTest {
         verify(credentials, never()).wipe()
         verify(healthStore, never()).clear()
         assertTrue(scheduler.enqueued.isEmpty())
+        assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
+    }
+
+    @Test fun `a failed envelope clear leaves health and identity untouched`() = runTest {
+        whenever(envelopeSink.invalidate()).thenAnswer { throw IOException("test_failure") }
+        assertFalse(resetter().reset())
+        verify(spool).clear()
+        verify(healthStore, never()).clear()
+        verify(credentials, never()).wipe()
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }
 

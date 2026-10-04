@@ -8,8 +8,9 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  */
 data class CensusRecord(
     val platform: Platform,
-    /** The CLUSTER key (ADR-0011 §8). Never used to pair with an envelope. */
+    /** The CLUSTER key (ADR-0011 §8), also carried on the paired envelope sent to the server. */
     val fingerprint: String,
+    /** For the envelope spool, this is the projected capture envelope. */
     val skeletonJson: String,
     val itemBytes: Int,
     /**

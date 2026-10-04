@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.accessibility
 
+import cloud.trotter.dashbuddy.domain.pipeline.PipelineRegistry
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -53,7 +54,7 @@ class AccessibilityPipeline @Inject constructor(
     private val skeletonPublisher: SkeletonPublisher,
 ) {
     companion object {
-        const val SCREEN_PIPELINE_ID = "accessibility.window"
+        const val SCREEN_PIPELINE_ID = PipelineRegistry.SCREEN_PIPELINE_ID
         const val CLICK_PIPELINE_ID = "accessibility.click"
     }
 

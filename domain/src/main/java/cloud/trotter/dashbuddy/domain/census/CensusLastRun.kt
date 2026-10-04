@@ -13,6 +13,9 @@ enum class CensusRunOutcome(val wire: String) {
     SPOOL_EMPTY("spool_empty"),
     STALE_REMOVED("stale_removed"),  // detail = stale items removed locally when nothing else happened this run
     UPLOADED("uploaded"),            // detail = accepted items this run
+    ENVELOPES_POSTED("envelopes_posted"), // detail = envelopes accepted this run
+    ENVELOPES_REJECTED("envelopes_rejected"), // detail = envelopes rejected this run
+    NOT_TRUSTED("not_trusted"),
     DUPLICATE("duplicate"),          // detail = duplicate items this run
     REJECTED("rejected"),            // detail = batch-quality rejected items this run
     OVERSIZED("oversized"),
@@ -31,7 +34,12 @@ enum class CensusRunOutcome(val wire: String) {
 }
 
 /** The last uploader run (or identity reset), persisted in developer settings so it survives process death. */
-data class CensusLastRun(val atMillis: Long, val outcome: CensusRunOutcome, val detail: Int? = null) {
+data class CensusLastRun(
+    val atMillis: Long,
+    val outcome: CensusRunOutcome,
+    val detail: Int? = null,
+    val envelopesPosted: Int = 0,
+) {
     /** Developer-screen token, e.g. `uploaded 12`, `enrol_rejected 401`, `unauthorized`. */
     fun token(): String = if (detail == null) outcome.wire else "${outcome.wire} $detail"
 }

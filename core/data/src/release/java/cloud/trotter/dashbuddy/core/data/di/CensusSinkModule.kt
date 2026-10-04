@@ -1,7 +1,10 @@
 package cloud.trotter.dashbuddy.core.data.di
 
+import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
 import cloud.trotter.dashbuddy.core.data.capture.NoOpCensusSink
+import cloud.trotter.dashbuddy.domain.capture.NoOpCensusEnvelopeSink
+import dagger.Provides
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -12,6 +15,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class CensusSinkModule {
+    companion object {
+        @Provides
+        @Singleton
+        fun provideCensusEnvelopeSink(): CensusEnvelopeSink = NoOpCensusEnvelopeSink
+    }
+
 
     @Binds
     @Singleton

@@ -24,6 +24,7 @@ import okio.BufferedSink
 import okhttp3.Response
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -36,6 +37,7 @@ interface CensusTransport {
     suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult
     suspend fun policy(): PolicyResult
     suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
+    suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
 }
 
 sealed interface EnrolResult {
@@ -64,6 +66,7 @@ data class CensusBudget(
 
 sealed interface UploadResult {
     data class Accepted(val accepted: Int, val duplicate: Int, val rejected: Map<String, Int>, val budget: CensusBudget) : UploadResult
+    data object NotTrusted : UploadResult
     data object Duplicate : UploadResult
     data object PayloadTooLarge : UploadResult
     data object BadRequest : UploadResult
@@ -146,13 +149,20 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         PolicyResult.TransportFailure(e.failureToken())
     }
 
-    override suspend fun uploadSkeletons(
+    override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult =
+        upload("/v1/skeletons", cred, batchId, itemsJson)
+
+    override suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult =
+        upload("/v1/envelopes", cred, batchId, itemsJson)
+
+    private suspend fun upload(
+        path: String,
         cred: Bearer.Credential,
         batchId: String,
         itemsJson: List<String>,
     ): UploadResult = try {
         val bytes = batchBody(batchId, itemsJson)
-        val response = execute(request("/v1/skeletons", bytes, cred, signed = true))
+        val response = execute(request(path, bytes, cred, signed = true))
         when (response.status) {
             200 -> {
                 val json = response.json()
@@ -170,6 +180,8 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
             }
             400 -> UploadResult.BadRequest
             401 -> if (response.isRevoked()) UploadResult.Revoked else UploadResult.Unauthorized(response.dateMillis)
+            403 -> if (path == "/v1/envelopes" && response.error() == "not_trusted") UploadResult.NotTrusted
+                else UploadResult.ServerUnavailable(response.status)
             413 -> UploadResult.PayloadTooLarge
             422 -> UploadResult.BatchQuality(reasons(response.json()))
             429 -> if (response.error() == "budget_exhausted") UploadResult.BudgetExhausted(response.retryAfter)
@@ -274,7 +286,11 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")
             .digest(fingerprints.sorted().joinToString("\n").toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it.toInt() and 0xff) }.take(32)
+            .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }.take(32)
+
+        fun envelopeBatchId(itemsJson: List<String>): String = "env-" + MessageDigest.getInstance("SHA-256")
+            .digest(itemsJson.joinToString("\n").toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }.take(32)
 
         fun batchBody(batchId: String, itemsJson: List<String>): ByteArray =
             "{\"batchId\":${JsonPrimitive(batchId)},\"items\":[${itemsJson.joinToString(",")}]}".toByteArray(Charsets.UTF_8)
