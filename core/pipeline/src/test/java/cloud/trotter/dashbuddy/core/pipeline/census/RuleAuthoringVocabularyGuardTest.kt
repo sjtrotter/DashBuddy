@@ -1,3 +1,21 @@
+/*
+ * Copyright 2026 Stephen Trotter
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ */
 package cloud.trotter.dashbuddy.core.pipeline.census
 
 import cloud.trotter.census.contract.authoring.EnvelopeWalk
@@ -36,6 +54,11 @@ class RuleAuthoringVocabularyGuardTest {
         for ((transform, shape) in Vocabulary.VALUE_SHAPES_BY_TRANSFORM) {
             val size = RegexSafety.compileRegex(shape).programSize()
             assertTrue("$transform measured program size $size", size in 1..1_000)
+            val runtime = RegexSafety.compileRegex(shape)
+            val local = Regex(shape, RegexOption.IGNORE_CASE)
+            for (value in listOf("$1.00 \rbonus", "$8.30\n", "$8.30", "3.8 mi\n", "42 min", "12:30 PM")) {
+                assertEquals("$transform JVM/RE2 agreement", local.containsMatchIn(value), runtime.containsMatchIn(value))
+            }
         }
     }
 
@@ -91,6 +114,53 @@ class RuleAuthoringVocabularyGuardTest {
     }
 
     @Test
+    fun `terminal result types track registry signatures and factory minute widening`() {
+        val source = File(rulesSource, "TransformRegistry.kt").readText()
+        val dispatch = source.substringAfter("return when (name) {").substringBefore("else ->")
+        val calls = Regex(""""([a-zA-Z][a-zA-Z0-9]*)"\s*->\s*([^\n]+)""")
+            .findAll(dispatch).associate { it.groupValues[1] to it.groupValues[2].trim() }
+        assertEquals(Vocabulary.TRANSFORMS.toSet(), calls.keys)
+        val signatures = Regex("""fun\s+(\w+)\([^\n]*\):\s*(String|Double|Long|Int)\??""")
+            .findAll(listOf("TransformRegistry.kt", "Sha256.kt", "CustomerNameKey.kt")
+                .joinToString("\n") { File(rulesSource, it).readText() })
+            .associate { it.groupValues[1] to FieldType.valueOf(it.groupValues[2].uppercase()) }
+        val stringMethods = mapOf("trim" to "value.trim()", "lower" to "value.lowercase(Locale.ROOT)",
+            "upper" to "value.uppercase(Locale.ROOT)")
+        val numberMethods = mapOf("toDouble" to ("value.toDoubleOrNull()" to FieldType.DOUBLE),
+            "toInt" to ("value.toIntOrNull()" to FieldType.INT))
+        for ((name, call) in calls) {
+            val runtimeType = when (name) {
+                in stringMethods -> {
+                    assertEquals(stringMethods.getValue(name), call)
+                    FieldType.STRING
+                }
+                in numberMethods -> {
+                    assertEquals(numberMethods.getValue(name).first, call)
+                    numberMethods.getValue(name).second
+                }
+                else -> signatures.getValue(call.substringBefore('('))
+            }
+            // These two runtime Int minute counts intentionally serve LONG factory fields. Pin
+            // both the actual signature and the Number -> Long coercion instead of hiding drift.
+            val authoringType = if (name in listOf("parseMinutes", "parseTotalMinutes")) {
+                assertEquals("$name runtime signature", FieldType.INT, runtimeType)
+                FieldType.LONG
+            } else runtimeType
+            assertEquals(name, authoringType, Vocabulary.TRANSFORM_RESULT_TYPE.getValue(name))
+        }
+        val factory = File(rulesSource, "ParsedFieldsFactory.kt").readText()
+        val longReader = factory.substringAfter("private fun Map<String, Any?>.long(key: String): Long?")
+            .substringBefore("private fun")
+        assertTrue("factory widens minute counts", "is Number -> v.toLong()" in longReader)
+        val strip = source.substringAfter("\"stripPrefixes\" -> {").substringBefore("\"extractBefore\"")
+        assertTrue("stripPrefixes returns its String result", "var result: String = value" in strip &&
+            Regex("""\bresult\s*}""").containsMatchIn(strip))
+        assertEquals(FieldType.STRING, Vocabulary.TRANSFORM_RESULT_TYPE["stripPrefixes"])
+        assertEquals((Vocabulary.TRANSFORMS + Vocabulary.EMITTED_PARAMETERIZED_TRANSFORMS).toSet(),
+            Vocabulary.TRANSFORM_RESULT_TYPE.keys)
+    }
+
+    @Test
     fun `every exposed scalar is read by its factory and every required field is exposed`() {
         val source = File(rulesSource, "ParsedFieldsFactory.kt").readText()
         val functions = mapOf(
@@ -133,6 +203,7 @@ class RuleAuthoringVocabularyGuardTest {
         assertEquals(TreeLimits.MAX_TREE_DEPTH, EnvelopeWalk.MAX_DEPTH)
         assertEquals(PiiShapes.NAME_PREFIXES.toSet(), Vocabulary.ANCHOR_LEAD_INS.toSet())
         assertEquals(PiiShapes.FIRST_LAST_INITIAL_BODY, Vocabulary.FIRST_LAST_INITIAL_BODY)
+        assertEquals(PiiShapes.FIRST_LAST_INITIAL_EMBEDDED, Vocabulary.FIRST_LAST_INITIAL_EMBEDDED)
     }
 
     @Test
@@ -149,7 +220,7 @@ class RuleAuthoringVocabularyGuardTest {
     fun `generated production flow shape pairs are legal including branches`() {
         assertEquals(Vocabulary.SCREEN_CLASSES.toSet(), Vocabulary.LEGAL_SHAPES_BY_CLASS.keys)
         for (flow in Vocabulary.FLOWS) {
-            assertEquals(listOf(Vocabulary.DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none"), Vocabulary.LEGAL_SHAPES_BY_CLASS[flow])
+            assertEquals(listOf(Vocabulary.DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none").distinct(), Vocabulary.LEGAL_SHAPES_BY_CLASS[flow])
         }
         for (special in listOf("sensitive", "noise")) assertEquals(listOf(special), Vocabulary.LEGAL_SHAPES_BY_CLASS[special])
         val dir = File(repoRoot, "core/pipeline/build/generated/assets/importMatchersRules/rules")

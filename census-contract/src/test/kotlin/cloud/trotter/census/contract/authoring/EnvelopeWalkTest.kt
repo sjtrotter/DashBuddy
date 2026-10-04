@@ -55,8 +55,10 @@ class EnvelopeWalkTest {
         assertEquals("Value", value.displayDesc)
         assertEquals(" Label ", value.precedingSiblingText)
         assertEquals("Label", value.displayPrecedingSiblingText)
+        assertFalse(value.clickable)
+        assertTrue(value.takesClick)
         assertTrue(value.hasClickAction)
-        assertTrue(value.clickableAncestor)
+        assertTrue(value.takesClickAncestor)
         assertTrue(value.visible)
         assertFalse(requireNotNull(nodes.at(listOf(0))).visible)
         assertNull(requireNotNull(nodes.at(listOf(2))).precedingSiblingText)
@@ -65,7 +67,7 @@ class EnvelopeWalkTest {
         assertEquals("Hint", nodes.at(listOf(2))?.hint)
         assertEquals("Pane", nodes.at(listOf(2))?.pane)
         assertNull(nodes.at(listOf(7)))
-        assertFalse(nodes.first().clickableAncestor)
+        assertFalse(nodes.first().takesClickAncestor)
     }
 
     @Test

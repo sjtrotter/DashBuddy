@@ -44,10 +44,11 @@ data class WalkedNode(
     val pane: String?,
     val clickable: Boolean,
     val hasClickAction: Boolean,
+    val takesClick: Boolean,
     val visible: Boolean,
     val bounds: Bounds?,
     val precedingSiblingText: String?,
-    val clickableAncestor: Boolean,
+    val takesClickAncestor: Boolean,
     val precedingSiblingDesc: String? = null,
     val displayText: String? = text?.trim()?.takeIf { it.isNotEmpty() },
     val displayDesc: String? = desc?.trim()?.takeIf { it.isNotEmpty() },
@@ -69,7 +70,7 @@ object EnvelopeWalk {
     private data class Level(
         val children: List<JsonElement>,
         val parentPath: List<Int>?,
-        val clickableAncestor: Boolean,
+        val takesClickAncestor: Boolean,
         var index: Int = 0,
     )
 
@@ -94,6 +95,8 @@ object EnvelopeWalk {
             val className = node.string("class")
             val viewId = node.string("id")
             val clickable = node.flag("isClickable") ?: false
+            val hasClickAction = node.flag("clickAction") ?: false
+            val takesClick = clickable || hasClickAction
             result += WalkedNode(
                 path = path,
                 className = className,
@@ -105,7 +108,8 @@ object EnvelopeWalk {
                 hint = node.string("hint"),
                 pane = node.string("pane"),
                 clickable = clickable,
-                hasClickAction = node.flag("clickAction") ?: false,
+                hasClickAction = hasClickAction,
+                takesClick = takesClick,
                 visible = node.flag("visible") ?: true,
                 bounds = (node["bounds"] as? JsonObject)?.let { bounds ->
                     val coordinates = listOf("left", "top", "right", "bottom").map {
@@ -122,11 +126,11 @@ object EnvelopeWalk {
                 precedingSiblingDesc = if (index > 0) {
                     (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.rawString("desc")
                 } else null,
-                clickableAncestor = level.clickableAncestor,
+                takesClickAncestor = level.takesClickAncestor,
             )
             val children = node["children"] as? JsonArray
             if (!children.isNullOrEmpty()) {
-                if (path.size < maxDepth) stack.addLast(Level(children, path, level.clickableAncestor || clickable))
+                if (path.size < maxDepth) stack.addLast(Level(children, path, level.takesClickAncestor || takesClick))
                 else truncated = true
             }
         }

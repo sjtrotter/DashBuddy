@@ -300,7 +300,7 @@ catch a mid-spin read that is well-FORMED but wrong — that is the settle gate'
 ## Drafting from the census (#1188)
 
 The Apache-2.0 `census-contract/authoring` package shares `RuleAuthoringVocabulary`, the bounded
-`EnvelopeWalk` (child-index paths), and the pure `RuleDraft` generator with the census dashboard.
+`EnvelopeWalk` (`PathRef` child-index paths), and the pure `RuleDraft` generator with the census dashboard.
 App guards pin its vocabulary to the domain enums, factory scalar reads and required-field maps,
 the schema, and the compiler's plain-transform dispatch. No app or Android dependency enters the
 contract build. Drafts are fragment envelopes with deterministic JSON5 and platform/version/day
@@ -308,12 +308,14 @@ provenance; capture identifiers and fingerprints are never copied.
 
 Generation refuses unknown classes/shapes/fields/transforms/bind targets, invalid header metadata,
 intent/priority/mode/surface, unresolved paths, absent anchors, missing required fields, unreadable
-fields, ambiguous selectors, and non-clickable binds without a clickable ancestor. Walks mirror
+fields, ambiguous parse selectors, and binds without a click-taking node or ancestor. Click ownership
+uses `takesClick = isClickable || hasClickAction`, including Compose actions. Walks mirror
 `TreeLimits` (4,000 nodes, depth 60) and refuse truncated envelopes instead of judging uniqueness
 on a prefix. Raw text/desc values are retained for exact selectors; trimmed display values decide
 whether a slot is usable, so blank text falls through to desc.
 
-Every flow permits its default shape or `none`; sensitive/noise permit only their matching shape,
+Every flow permits its default shape or `none`; `task:active` permits only `none`. Phase/subFlow
+constants require one of the four phased task classes. Sensitive/noise permit only their matching shape,
 omit state, and forbid fields/binds. Sensitive emits `overrideable: false`. Flow-less `paused`,
 `ratings`, and `timeline` shapes are not draftable in this slice. Constants are limited to booleans,
 integers, and the declared phase/subFlow/sessionType enums; dynamic money and free strings cannot
@@ -322,31 +324,39 @@ be substituted with constants. `offerHash` is computed, never authored. `expandB
 
 Literal anchors/labels refuse blanks, more than 80 characters, any Unicode decimal digit or currency
 symbol, redaction markers, sensitive markers, customer lead-ins, and matches of the authoring mirror
-of `PiiShapes.FIRST_LAST_INITIAL_BODY` with `IGNORE_CASE`. The name-like warning checks two consecutive
+of `PiiShapes.FIRST_LAST_INITIAL_EMBEDDED` with `IGNORE_CASE` (letter boundaries and a case-sensitive
+initial preserve multi-word chrome). The name-like warning checks two consecutive
 Capitalized words of at least three letters. Comments use the same guard with digits allowed and a
-200-character limit. `stripPrefix` must end in a space and passes the same checks except the lead-in
-refusal; it prepends `stripPrefixes`, and hash redaction preserves it with `keepPrefix`. Hash fields
-always use their fixed chains and warn when an operator transform is ignored.
+200-character limit. `stripPrefix` must exactly match an approved lead-in, optionally followed by
+lowercase letters and spaces ending in a space; it also retains the structural and sensitive-marker
+checks. It prepends `stripPrefixes`, and hash redaction preserves it with `keepPrefix`. Hash fields
+always use their fixed chains and warn when an operator transform is ignored. Empty plain transform
+lists resolve to the field default. The terminal transform must yield the field type, as declared in
+`TRANSFORM_RESULT_TYPE`; guards pin registry return types and the factory widening of the two Int
+minute-count transforms into LONG fields.
 
 IDs emit their resource boundary (`:id/<suffix>`). Peer checks mirror compiler case-insensitive
 suffix comparisons for IDs/classes and raw, case-insensitive equality for sibling labels. Value
-shapes disambiguate only same-id/class peers and warn that identity needs checking on more frames;
+shapes use `\z` and `[^\n]*` for JVM/RE2 agreement. They disambiguate only same-id/class peers and
+warn that identity needs checking on more frames;
 id-less global shape selection is refused. An id-less field after a desc-only immediate sibling
 emits `siblingOf` with offset 1; unsafe or ambiguous labels refuse. Hash fields still need a stable
-redact predicate, while text labels use `hasPrecedingSiblingText`.
+redact predicate, while text labels use `hasPrecedingSiblingText`. Redaction intentionally uses the
+broad id (or class plus label) predicate to mask every matching peer; ambiguity is safe for redaction.
 
-`CensusDraftRoundTripTest` compiles accepted drafts alone, recognises their source, asserts parsed
+`CensusDraftRoundTripTest` compiles all three drafts alone, recognises their sources, asserts parsed
 values/binds, checks every DoorDash negative frame, and compares draft-only and production redaction
-with the exact `CompiledRedact.apply` step used by `CaptureWriter`. Production-masked text/desc slots
-must be a subset of draft masks by node path. It compiles the merged draft at the largest free priority
-at most 998 and verifies the production winner is unchanged. The receipt drafts through the unique
-Collapse desc sibling and reads 40.57. The legacy offer drafts through same-id money/distance/time
-shapes: the money shape permits a trailing qualifier, and `parseCurrency` reads 8.30 from the fused
-amount; distance is 3.8 and both offer actions bind. Dropoff selections add the arrival address,
-sheet address lines, and instructions to the hash field's redaction, with paths pinned in the KDoc.
-Two literal round-3 requirements currently prevent the full gate from passing: the unanchored name
-body matches `Deliver t` inside the dropoff's `stripPrefix = "Deliver to "`, so it refuses with
-`anchor literal looks like customer text`; and the shipped sensitive catchall at priority 999 makes
-ranking below *every* production rule impossible within the 998 cap. The strict refusal and rank
-assertion remain in place. The selected dropoff cannot yet exercise its intended bare-name hash
-and redaction round trip under that literal name check.
+with the exact `CompiledRedact.apply` step used by `CaptureWriter`. Before constructing the coverage
+tree it restores every corpus mask in text/desc to deterministic synthetic plaintext. At every path
+and slot, plaintext tokens left by the draft must be a subset of those left by production, and every
+production-masked slot must be masked by the draft. Removing each declared dropoff redact, including
+the automatic name entry, must fail coverage; the empty second address line is omitted from selections.
+The merged draft uses the largest free priority at most 998 and must leave the production winner
+unchanged. Only the overrideable sensitive catchall at 999 may rank below the draft.
+
+The receipt drafts through the unique Collapse desc sibling and reads 40.57. The legacy offer drafts
+through same-id money/distance/time shapes: the money shape permits a trailing qualifier, and
+`parseCurrency` reads 8.30 from the fused amount; distance is 3.8 and both offer actions bind. Dropoff
+accepts its approved `Deliver to ` prefix, normalizes and hashes the bare name, and masks the name,
+arrival address, populated sheet address, and instructions. The selected paths and coverage behavior
+are pinned in the gate KDoc.

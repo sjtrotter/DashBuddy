@@ -53,12 +53,12 @@ object RuleAuthoringVocabulary {
         "idle" to "idle", "offer:presented" to "offer",
         "task:pickup:navigation" to "task", "task:pickup:arrived" to "task",
         "task:dropoff:navigation" to "task", "task:dropoff:arrived" to "task",
-        "post:task" to "post_task", "task:unassigned" to "none", "task:active" to "task",
+        "post:task" to "post_task", "task:unassigned" to "none", "task:active" to "none",
         "session:ended" to "session_ended", "sensitive" to "sensitive", "noise" to "noise",
     )
     /** Flow-less paused/ratings/timeline shapes are not draftable in this slice. */
     val LEGAL_SHAPES_BY_CLASS: Map<String, List<String>> = SCREEN_CLASSES.associateWith { flow ->
-        if (flow in FLOWS) listOf(DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none")
+        if (flow in FLOWS) listOf(DEFAULT_SHAPE_BY_CLASS.getValue(flow), "none").distinct()
         else listOf(flow)
     }
     val TASK_CONSTANTS_BY_CLASS: Map<String, Pair<String, String>> = mapOf(
@@ -149,6 +149,23 @@ object RuleAuthoringVocabulary {
         "parseClockSeconds", "parseLeadingInt", "parsePercent", "sha256", "normalizeCustomerName",
         "trim", "lower", "upper", "toDouble", "toInt", "stripDeadlinePrefix",
     )
+    /**
+     * Terminal result types in the authoring contract. Minute counts are LONG for the factory's
+     * long-valued fields; runtime parseMinutes/parseTotalMinutes return Int, widened by the factory.
+     * parseItemCountUnit returns a string unit. The app guard pins registry signatures and this widening.
+     */
+    val TRANSFORM_RESULT_TYPE: Map<String, FieldType> = mapOf(
+        "parseCurrency" to FieldType.DOUBLE, "parseGlyphCurrency" to FieldType.DOUBLE,
+        "parseDistance" to FieldType.DOUBLE, "parsePercent" to FieldType.DOUBLE, "toDouble" to FieldType.DOUBLE,
+        "parseDeadline" to FieldType.LONG, "parseDuration" to FieldType.LONG,
+        "parseTotalMinutes" to FieldType.LONG, "parseMinutes" to FieldType.LONG,
+        "parseHrMin" to FieldType.LONG, "parseTime" to FieldType.LONG,
+        "parseLeadingInt" to FieldType.INT, "parseItemCount" to FieldType.INT,
+        "parseClockSeconds" to FieldType.INT, "toInt" to FieldType.INT,
+        "trim" to FieldType.STRING, "lower" to FieldType.STRING, "upper" to FieldType.STRING,
+        "stripDeadlinePrefix" to FieldType.STRING, "normalizeCustomerName" to FieldType.STRING,
+        "sha256" to FieldType.STRING, "stripPrefixes" to FieldType.STRING, "parseItemCountUnit" to FieldType.STRING,
+    )
     val EMITTED_NODE_PREDICATES: List<String> = listOf(
         "hasIdSuffix", "hasText", "hasDesc", "hasClassNameEndsWith",
         "hasPrecedingSiblingText", "hasTextMatchesRegex",
@@ -159,18 +176,18 @@ object RuleAuthoringVocabulary {
 
     /** Shapes disambiguate fields only among same-id/class peers; they never replace an anchor. */
     val VALUE_SHAPES_BY_TRANSFORM: Map<String, String> = mapOf(
-        "parseCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( .*)?$""",
-        "parseGlyphCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( .*)?$""",
-        "parseDistance" to """^[0-9]{1,3}(\.[0-9]{1,2})? ?(mi|km)$""",
-        "parseTotalMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
-        "parseMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
-        "parseDuration" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
-        "parseHrMin" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
-        "parseDeadline" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)$""",
-        "stripDeadlinePrefix" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)$""",
-        "parseClockSeconds" to """^[0-9]{1,2}:[0-9]{2}$""",
-        "parseLeadingInt" to """^[0-9]{1,4}( .*)?$""",
-        "parsePercent" to """^[0-9]{1,3}(\.[0-9]+)?%$""",
+        "parseCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( [^\n]*)?\z""",
+        "parseGlyphCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?( [^\n]*)?\z""",
+        "parseDistance" to """^[0-9]{1,3}(\.[0-9]{1,2})? ?(mi|km)\z""",
+        "parseTotalMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min\z""",
+        "parseMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min\z""",
+        "parseDuration" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min\z""",
+        "parseHrMin" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min\z""",
+        "parseDeadline" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)\z""",
+        "stripDeadlinePrefix" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)\z""",
+        "parseClockSeconds" to """^[0-9]{1,2}:[0-9]{2}\z""",
+        "parseLeadingInt" to """^[0-9]{1,4}( [^\n]*)?\z""",
+        "parsePercent" to """^[0-9]{1,3}(\.[0-9]+)?%\z""",
     )
     /** Authoring-side DATA mirror of domain.privacy.PiiShapes; app guards pin these bytes. */
     val ANCHOR_LEAD_INS: List<String> = listOf(
@@ -179,6 +196,9 @@ object RuleAuthoringVocabulary {
     )
     const val FIRST_LAST_INITIAL_BODY: String =
         """[\p{L}][\p{L}'-]{0,20}(\s{1,4}[\p{L}][\p{L}'-]{0,20}){0,3}\s{1,4}[A-Z]\.?"""
+
+    const val FIRST_LAST_INITIAL_EMBEDDED: String =
+        """(?<![\p{L}])[\p{L}][\p{L}'-]{0,20}(\s{1,4}[\p{L}][\p{L}'-]{0,20}){0,3}\s{1,4}(?-i:[A-Z])\.?(?![\p{L}])"""
 
     val INTENT: Regex = Regex("^[a-z][a-z0-9_]{0,47}$")
     val PRIORITY_RANGE: IntRange = 1..998

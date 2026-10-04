@@ -1,3 +1,21 @@
+/*
+ * Copyright 2026 Stephen Trotter
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ */
 package cloud.trotter.dashbuddy.census
 
 import cloud.trotter.census.contract.authoring.BindAssignment
@@ -5,11 +23,12 @@ import cloud.trotter.census.contract.authoring.Constant
 import cloud.trotter.census.contract.authoring.DraftResult
 import cloud.trotter.census.contract.authoring.EnvelopeWalk
 import cloud.trotter.census.contract.authoring.FieldAssignment
-import cloud.trotter.census.contract.authoring.NodeRef
+import cloud.trotter.census.contract.authoring.PathRef
 import cloud.trotter.census.contract.authoring.RuleDraft
 import cloud.trotter.census.contract.authoring.Selections
 import cloud.trotter.census.contract.authoring.at
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.RedactNormalize
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleCompiler
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleContext
@@ -61,11 +80,14 @@ import java.util.Locale
  * bottom_sheet_task_arrive_by are unique ids, keeping the name and deadline OUT of rule literals.
  * The sanitized name slot uses "Deliver to " (not the longer shipped "Deliver to door of " form).
  * stripPrefix removes that actual chrome prefix before canonical name normalization and hashing;
- * keepPrefix preserves the label in the matching redact entry. The round-3 unanchored name-body
- * check currently refuses this prefix (it matches "Deliver t"); the expected-Ok gate stays loud.
- * Explicit plain-mask redacts cover production's other masked slots: D+[3]/[4] sheet address
- * lines, D+[8] instructions, and [0,0,0,0,0,1,0,2,1] arriving_at_title (arrival address).
- * These ids are selected from the winning production dropoff_navigation redact block.
+ * keepPrefix preserves the label in the matching redact entry. Approved lowercase chrome is accepted.
+ * Explicit plain-mask redacts cover production's other populated masked slots: D+[3] sheet address,
+ * D+[8] instructions, and [0,0,0,0,0,1,0,2,1] arriving_at_title (arrival address).
+ * D+[4] address line two is empty and is omitted: each declared redact must protect plaintext here.
+ * Coverage restores corpus mask tokens to synthetic plaintext before constructing its UiNode,
+ * compares remaining plaintext tokens per slot as well as mask paths, and must fail when ANY
+ * dropoff redact (including the automatic name entry) is regenerated away.
+ * All three screens draft; merged rank may outrank only the shipped sensitive catchall at 999.
  *
  * Expanded summary (2026-09-07 08:20:08): S = [0,0,0,0,0]. Anchors S layout_bottom_sheet
  * and S+[2,1,0,0,0] bottomsheet_content_container are the available sheet ids. totalPay at
@@ -118,7 +140,6 @@ class CensusDraftRoundTripTest {
             ),
             redacts = listOf(
                 ref(envelope, content + 3, "bottom_sheet_address_line_1"),
-                ref(envelope, content + 4, "bottom_sheet_address_line_2"),
                 ref(envelope, content + 8, "bottom_sheet_instructions"),
                 ref(envelope, listOf(0, 0, 0, 0, 0, 1, 0, 2, 1), "arriving_at_title"),
             ),
@@ -179,13 +200,34 @@ class CensusDraftRoundTripTest {
         val productionRules = RuleCompiler.compileRules<UiNode>(production, RuleContext.SCREEN)
         val productionRuleset = Ruleset(productionRules)
         val productionMatch = requireNotNull(productionRuleset.matchFirst(source, platformWire = "doordash"))
-        // Exactly CaptureWriter's rule-declared redact step: CompiledRedact.apply on the source tree.
-        val productionEnvelope = productionRules.single { it.id == productionMatch.ruleId }.redact.apply(source)
-        val draftEnvelope = draftRules.single().redact.apply(source)
-        val productionMasks = maskedSlots(productionEnvelope)
-        val draftMasks = maskedSlots(draftEnvelope)
-        assertTrue("draft must cover production masks at node paths: ${productionMasks - draftMasks}",
-            draftMasks.containsAll(productionMasks))
+        val productionRedact = productionRules.single { it.id == productionMatch.ruleId }.redact
+        val namePaths = nodesByPath(source).filterValues { node ->
+            productionRedact.entries.firstOrNull { it.find(node) }?.normalize == RedactNormalize.CUSTOMER_NAME
+        }.keys
+        val coveragePayload = restoreCorpusPlaintext(envelope.getValue("payload").jsonObject, namePaths)
+        val coverageSource = TestResourceLoader.nodeFromElement(coveragePayload)
+        assertTrue("coverage source must contain no corpus masks", maskedSlots(coverageSource).isEmpty())
+        // Exactly CaptureWriter's rule-declared redact step, on the same restored plaintext tree.
+        val productionEnvelope = productionRedact.apply(coverageSource)
+        val draftEnvelope = draftRules.single().redact.apply(coverageSource)
+        assertEquals("draft must cover production plaintext and mask paths", emptyList<String>(),
+            coverageFailures(productionEnvelope, draftEnvelope))
+        if (selection.screenClass == "task:dropoff:navigation") {
+            assertTrue("dropoff coverage must actually mask plaintext", maskedSlots(productionEnvelope).isNotEmpty())
+            // Regenerate from selections, including removal of the hash field's automatic redact.
+            val mutations = selection.redacts.indices.map { index ->
+                selection.copy(redacts = selection.redacts.filterIndexed { i, _ -> i != index })
+            } + selection.fields.filter { it.field == "customerNameHash" || it.field == "customerAddressHash" }.map { field ->
+                selection.copy(fields = selection.fields - field)
+            }
+            assertEquals("every emitted redact has a selection mutation", rule.getValue("redact").jsonArray.size, mutations.size)
+            for ((index, mutation) in mutations.withIndex()) {
+                val mutatedRule = assertOk(generate(envelope, mutation)).fragment.getValue("screens").jsonArray.single()
+                val mutated = RuleCompiler.compileRules<UiNode>(JsonArray(listOf(mutatedRule)), RuleContext.SCREEN).single()
+                assertFalse("removing redact $index must fail plaintext coverage",
+                    coverageFailures(productionEnvelope, mutated.redact.apply(coverageSource)).isEmpty())
+            }
+        }
         val mergedDraft = assertOk(generate(envelope, selection.copy(priority = freePriority)))
         val mergedRule = mergedDraft.fragment.getValue("screens").jsonArray.single()
         val compiled = RuleCompiler.compileRules<UiNode>(JsonArray(production + mergedRule), RuleContext.SCREEN)
@@ -222,7 +264,7 @@ class CensusDraftRoundTripTest {
     fun `expanded summary reads total via desc sibling and passes the round trip`() {
         val envelope = fixture("delivery_summary_expanded", "2026-09-07_08-20-08-176")
         val sheet = listOf(0, 0, 0, 0, 0)
-        val total = NodeRef(sheet + listOf(2, 1, 0, 0, 0, 0, 0, 2, 0, 0, 2))
+        val total = PathRef(sheet + listOf(2, 1, 0, 0, 0, 0, 0, 2, 0, 0, 2))
         val walked = EnvelopeWalk.walk(envelope.getValue("payload").jsonObject)
         val totalNode = requireNotNull(walked.at(total.path))
         assertEquals("$40.57", totalNode.text)
@@ -233,7 +275,7 @@ class CensusDraftRoundTripTest {
             "post:task", "post_task", "drafted_delivery_summary_expanded", 50,
             anchors = listOf(ref(envelope, sheet, "layout_bottom_sheet"),
                 ref(envelope, sheet + listOf(2, 1, 0, 0, 0), "bottomsheet_content_container"),
-                NodeRef(total.path.dropLast(1) + 1)),
+                PathRef(total.path.dropLast(1) + 1)),
             fields = listOf(FieldAssignment(total, "totalPay")),
             constants = listOf(Constant("isExpanded", JsonPrimitive(true))),
         )
@@ -246,11 +288,78 @@ class CensusDraftRoundTripTest {
         assertFalse("find" in totalExpression)
     }
 
+    /**
+     * Pure fixture restoration: replace EVERY corpus mask token in text/desc, retaining surrounding
+     * chrome and tree shape. Paths selected by production's customerName-normalized redact receive
+     * "Sample Customer"; all other masked slots receive "123 Example Lane". No committed fixture is
+     * changed, and no other slot is invented (an empty address line cannot make a mutation pass).
+     */
+    private fun restoreCorpusPlaintext(payload: JsonObject, customerNamePaths: Set<List<Int>>): JsonObject {
+        fun restore(node: JsonObject, path: List<Int>): JsonObject = JsonObject(node.mapValues { (key, value) ->
+            when {
+                key in listOf("text", "desc") && value is JsonPrimitive && value.isString -> JsonPrimitive(
+                    MASK_TOKEN.replace(value.content, if (path in customerNamePaths) "Sample Customer" else "123 Example Lane"),
+                )
+                key == "children" && value is JsonArray -> JsonArray(value.mapIndexed { index, child ->
+                    if (child is JsonObject) restore(child, path + index) else child
+                })
+                else -> value
+            }
+        })
+        return restore(payload, emptyList())
+    }
+
+    private fun nodesByPath(root: UiNode): Map<List<Int>, UiNode> {
+        val nodes = linkedMapOf<List<Int>, UiNode>()
+        fun walk(node: UiNode, path: List<Int>) {
+            nodes[path] = node
+            node.children.forEachIndexed { index, child -> walk(child, path + index) }
+        }
+        walk(root, emptyList())
+        return nodes
+    }
+
+    /** Compare exposed tokens, never hash suffixes; even a partial mask cannot hide leftover PII. */
+    private fun coverageFailures(production: UiNode, draft: UiNode): List<String> {
+        fun plain(text: String?): Set<String> = MASK_TOKEN.replace(text.orEmpty(), " ")
+            .split(Regex("""\s+""")).filter { it.isNotEmpty() }.toSet()
+        val failures = mutableListOf<String>()
+        val productionNodes = nodesByPath(production)
+        val draftNodes = nodesByPath(draft)
+        if (productionNodes.keys != draftNodes.keys) failures += "node paths differ"
+        for ((path, node) in draftNodes) {
+            val expected = productionNodes[path]
+            if (!plain(expected?.text).containsAll(plain(node.text))) failures += "exposed text at $path"
+            if (!plain(expected?.contentDescription).containsAll(plain(node.contentDescription))) failures += "exposed desc at $path"
+        }
+        val missingMasks = maskedSlots(production) - maskedSlots(draft)
+        if (missingMasks.isNotEmpty()) failures += "missing masks at $missingMasks"
+        return failures
+    }
+
+    @Test
+    fun `coverage restores every mask and detects plaintext left beside a mask`() {
+        val payload = Json.parseToJsonElement("""{"class":"TextView","text":"Deliver to [redacted:abcd]",
+            "bounds":{"left":0,"top":0,"right":10,"bottom":10},
+            "desc":"[redacted] and [redacted:1234]","children":[{"text":"[redacted]",
+            "bounds":{"left":0,"top":0,"right":10,"bottom":10}}]}""").jsonObject
+        val restored = restoreCorpusPlaintext(payload, setOf(emptyList()))
+        assertEquals("Deliver to Sample Customer", restored.getValue("text").jsonPrimitive.content)
+        assertEquals("Sample Customer and Sample Customer", restored.getValue("desc").jsonPrimitive.content)
+        assertEquals("123 Example Lane", restored.getValue("children").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content)
+        val production = TestResourceLoader.nodeFromElement(payload)
+        val partial = TestResourceLoader.nodeFromElement(JsonObject(payload + ("text" to JsonPrimitive("Deliver to [redacted] Sample Customer"))))
+        assertEquals(maskedSlots(production), maskedSlots(partial))
+        assertFalse(coverageFailures(production, partial).isEmpty())
+        val fullyMasked = TestResourceLoader.nodeFromElement(JsonObject(payload + ("text" to JsonPrimitive("[redacted]"))))
+        assertTrue(coverageFailures(production, fullyMasked).isEmpty())
+    }
+
     private fun maskedSlots(root: UiNode): Set<Pair<List<Int>, String>> {
         val slots = mutableSetOf<Pair<List<Int>, String>>()
         fun walk(node: UiNode, path: List<Int>) {
-            if (node.text?.contains("[redacted", ignoreCase = true) == true) slots += path to "text"
-            if (node.contentDescription?.contains("[redacted", ignoreCase = true) == true) slots += path to "desc"
+            if (node.text?.let(MASK_TOKEN::containsMatchIn) == true) slots += path to "text"
+            if (node.contentDescription?.let(MASK_TOKEN::containsMatchIn) == true) slots += path to "desc"
             node.children.forEachIndexed { index, child -> walk(child, path + index) }
         }
         walk(root, emptyList())
@@ -263,7 +372,7 @@ class CensusDraftRoundTripTest {
                 if (key in setOf("hasText", "hasDesc", "hasPrecedingSiblingText")) {
                     val text = value.jsonPrimitive.content
                     assertFalse("name pattern must never enter match literals",
-                        Regex(PiiShapes.FIRST_LAST_INITIAL_PATTERN, RegexOption.IGNORE_CASE).containsMatchIn(text))
+                        Regex(PiiShapes.FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE).containsMatchIn(text))
                     assertFalse("customer lead-in must never enter match literals",
                         PiiShapes.NAME_PREFIXES.any { text.trimStart().startsWith(it.trimEnd(), ignoreCase = true) })
                     assertFalse("digits/currency must never enter match literals", Regex("""[\p{Nd}\p{Sc}]""").containsMatchIn(text))
@@ -302,10 +411,10 @@ class CensusDraftRoundTripTest {
         return envelope
     }
 
-    private fun ref(envelope: JsonObject, path: List<Int>, id: String): NodeRef {
+    private fun ref(envelope: JsonObject, path: List<Int>, id: String): PathRef {
         val node = requireNotNull(EnvelopeWalk.walk(envelope.getValue("payload").jsonObject).at(path))
         assertEquals("view id at $path", id, node.idSuffix)
-        return NodeRef(path)
+        return PathRef(path)
     }
 
     private fun generate(envelope: JsonObject, selection: Selections): DraftResult =
@@ -331,5 +440,6 @@ class CensusDraftRoundTripTest {
     private companion object {
         // The shared corpus floor is ten; seven of its current frames carry the DoorDash token.
         const val MINIMUM_FRAMES = 7
+        val MASK_TOKEN = Regex("""\[redacted(?::[0-9a-f]{4})?]""", RegexOption.IGNORE_CASE)
     }
 }

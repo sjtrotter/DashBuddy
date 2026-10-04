@@ -31,10 +31,11 @@ class RuleAuthoringVocabularyTest {
         assertEquals(12, Vocabulary.VALUE_SHAPES_BY_TRANSFORM.size)
         for ((transform, shape) in Vocabulary.VALUE_SHAPES_BY_TRANSFORM) {
             assertTrue(transform, transform in Vocabulary.TRANSFORMS)
-            assertTrue(transform, shape.startsWith("^") && shape.endsWith("$"))
+            assertTrue(transform, shape.startsWith("^") && shape.endsWith("\\z"))
             assertTrue(transform, shape.length <= 120)
             assertTrue(transform, listOf("(?=", "(?!", "(?<").none { it in shape })
             assertTrue(transform, !Regex("""\\(?:[1-9]|k[<{])""").containsMatchIn(shape))
+            assertTrue(transform, !Regex("""(?<!\\)[.$]""").containsMatchIn(shape))
             Regex(shape)
         }
         assertTrue("hasTextMatchesRegex" in Vocabulary.EMITTED_NODE_PREDICATES)
@@ -61,6 +62,8 @@ class RuleAuthoringVocabularyTest {
         assertEquals(Vocabulary.SCREEN_CLASSES.toSet(), Vocabulary.DEFAULT_SHAPE_BY_CLASS.keys)
         assertTrue(Vocabulary.SHAPES.containsAll(Vocabulary.DEFAULT_SHAPE_BY_CLASS.values))
         assertTrue(Vocabulary.BIND_TARGETS.isNotEmpty())
+        assertEquals((Vocabulary.TRANSFORMS + Vocabulary.EMITTED_PARAMETERIZED_TRANSFORMS).toSet(),
+            Vocabulary.TRANSFORM_RESULT_TYPE.keys)
         assertEquals(Vocabulary.TRANSFORMS.size, Vocabulary.TRANSFORMS.toSet().size)
     }
 }
