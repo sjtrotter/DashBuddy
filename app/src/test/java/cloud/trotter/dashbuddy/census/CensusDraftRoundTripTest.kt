@@ -34,6 +34,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleCompiler
 import cloud.trotter.dashbuddy.core.pipeline.rules.RuleContext
 import cloud.trotter.dashbuddy.core.pipeline.rules.Ruleset
+import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -60,7 +61,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
-import java.util.Locale
 
 /**
  * Known-capture authoring gate (#1188). All paths are child indices from payload root; the tests
@@ -102,7 +102,7 @@ import java.util.Locale
 class CensusDraftRoundTripTest {
     @Test
     fun `offer reads qualified pay distance and time and passes the round trip`() {
-        val envelope = fixture("offer_popup", "2026-08-28_15-31-47-225")
+        val envelope = fixture("offer_popup")
         val chrome = listOf(0, 0, 0, 0, 0, 0, 0)
         val rows = chrome + listOf(1, 2, 0, 0, 0, 0, 0)
         val accept = ref(envelope, chrome + listOf(3, 0, 0), "accept_button")
@@ -129,7 +129,7 @@ class CensusDraftRoundTripTest {
 
     @Test
     fun `dropoff compiles alone recognises source stays unknown on negatives and compiles merged`() {
-        val envelope = fixture("dropoff_navigation", "2026-08-02_18-00-01-999")
+        val envelope = fixture("dropoff_navigation")
         val content = listOf(0, 0, 0, 0, 0, 1, 0, 3, 1, 1, 0, 2, 0)
         val selection = Selections(
             "task:dropoff:navigation", "task", "drafted_dropoff_navigation", 50,
@@ -153,18 +153,15 @@ class CensusDraftRoundTripTest {
         val rawName = requireNotNull(EnvelopeWalk.walk(envelope.getValue("payload").jsonObject)
             .at(assignment.node.path)?.text)
         val bareName = rawName.removePrefix(requireNotNull(assignment.stripPrefix)).trim()
-        // Same canonicalization as CustomerNameKey.kt (normalizeCustomerName): ROOT lowercase,
-        // letters/digits/whitespace only, then first token plus second token's initial.
-        val tokens = bareName.lowercase(Locale.ROOT)
-            .filter { it.isLetterOrDigit() || it.isWhitespace() }.trim()
-            .split(Regex("\\s+")).filter { it.isNotEmpty() }
-        assertTrue("fixture must contain a bare name", tokens.isNotEmpty())
-        val normalized = tokens.first() + tokens.getOrNull(1)?.let { " ${it.first()}" }.orEmpty()
+        // normalizeCustomerName delegates to :core:pipeline's CustomerNameKey.kt.
+        val normalized = requireNotNull(TransformRegistry.apply("normalizeCustomerName", bareName) as? String) {
+            "fixture must contain a bare name"
+        }
         val expectedHash = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
             .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
         assertTrue("customer hash must use the normalized bare name", expectedHash == fields.customerNameHash)
         val rule = assertOk(generate(envelope, selection)).fragment.getValue("screens").jsonArray.single().jsonObject
-        val redact = rule.getValue("redact").jsonArray.first().jsonObject
+        val redact = rule.getValue("redact").jsonArray.last().jsonObject
         assertEquals(JsonPrimitive("customerName"), redact["normalize"])
         assertEquals(JsonArray(listOf(JsonPrimitive("Deliver to "))), redact["keepPrefix"])
         assertEquals(rule.getValue("parse").jsonObject.getValue("fields").jsonObject
@@ -261,7 +258,7 @@ class CensusDraftRoundTripTest {
 
     @Test
     fun `expanded summary reads total via desc sibling and passes the round trip`() {
-        val envelope = fixture("delivery_summary_expanded", "2026-09-07_08-20-08-176")
+        val envelope = fixture("delivery_summary_expanded")
         val sheet = listOf(0, 0, 0, 0, 0)
         val total = PathRef(sheet + listOf(2, 1, 0, 0, 0, 0, 0, 2, 0, 0, 2))
         val walked = EnvelopeWalk.walk(envelope.getValue("payload").jsonObject)
@@ -377,7 +374,7 @@ class CensusDraftRoundTripTest {
         // Astra round 3 probe: an id-less text node carrying a corpus mask whose ORIGINAL was a bare "Brandy S." — the
         // production dropoff rule masks it through its name-shape predicate, which cannot match the masked text, so
         // the default restoration (an address) would drop the obligation. The two-pass restore must re-establish it.
-        val envelope = fixture("dropoff_navigation", "2026-08-02_18-00-01-999")
+        val envelope = fixture("dropoff_navigation")
         val payload = envelope.getValue("payload").jsonObject
         val probe = Json.parseToJsonElement("""{"class":"android.widget.TextView","isEnabled":true,"text":"[redacted:abcd]",
             "bounds":{"left":0,"top":2300,"right":1080,"bottom":2400}}""").jsonObject
@@ -463,9 +460,9 @@ class CensusDraftRoundTripTest {
         }
     }
 
-    private fun fixture(folder: String, prefix: String): JsonObject {
-        val directory = File("src/test/resources/snapshots/$folder")
-        val file = directory.listFiles().orEmpty().single { it.name.startsWith(prefix) && it.extension == "json" }
+    /** Snapshot folders are pruned by the librarian; these copies are the gate's stable inputs; originals stay in the corpus for recognition tests. */
+    private fun fixture(screen: String): JsonObject {
+        val file = File("src/test/resources/census-drafts/doordash/$screen.json")
         val envelope = Json.parseToJsonElement(file.readText()).jsonObject
         assertEquals("uinode.v1", envelope.getValue("schemaId").jsonPrimitive.content)
         return envelope

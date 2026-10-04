@@ -194,6 +194,8 @@ object RuleAuthoringVocabulary {
         "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
         "Message from ", "Heading to ", "Pick up at ",
     )
+    /** Prefix text only from PiiShapes.GATED_NAME_PREFIXES; authoring conservatively refuses all tails. */
+    val ANCHOR_GATED_LEAD_INS: List<String> = listOf("Return ")
     const val FIRST_LAST_INITIAL_BODY: String =
         """[\p{L}][\p{L}'-]{0,20}(\s{1,4}[\p{L}][\p{L}'-]{0,20}){0,3}\s{1,4}[A-Z]\.?"""
 

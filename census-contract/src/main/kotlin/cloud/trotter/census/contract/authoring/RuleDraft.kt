@@ -69,7 +69,6 @@ object RuleDraft {
     @OptIn(ExperimentalSerializationApi::class)
     private val prettyJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
 
-    private val decimalDigits = Regex("""\p{Nd}{3,}""")
     private val digitOrCurrency = Regex("""[\p{Nd}\p{Sc}]""")
     private val currency = Regex("""\p{Sc}""")
     private val customerName = Regex(Vocabulary.FIRST_LAST_INITIAL_EMBEDDED, RegexOption.IGNORE_CASE)
@@ -139,6 +138,11 @@ object RuleDraft {
             val fields = linkedMapOf<String, JsonElement>()
             fields.putAll(taskConstants)
             selections.constants.forEach { fields[it.name] = it.value }
+            for (ref in selections.redacts) {
+                predicate(ref, Role.REDACT)?.let { find ->
+                    redacts += buildJsonObject { put("find", find); put("plainMask", true) }
+                }
+            }
             for (assignment in selections.fields) {
                 fieldEntry(assignment)?.let { fields[assignment.field] = it }
             }
@@ -154,11 +158,6 @@ object RuleDraft {
                         put("find", find)
                         put("optional", true)
                     })
-                }
-            }
-            for (ref in selections.redacts) {
-                predicate(ref, Role.REDACT)?.let { find ->
-                    redacts += buildJsonObject { put("find", find); put("plainMask", true) }
                 }
             }
             if (selections.shape == "offer") warnings += "offer draft has no orders[] — store names will be absent"
@@ -210,17 +209,22 @@ object RuleDraft {
             } else predicate(assignment.node, Role.FIELD, transforms, assignment.field)?.let { find ->
                 buildJsonObject { put("find", find) }
             }
-            assignment.stripPrefix?.let { prefix ->
-                assignment.node.validateLiteral("stripPrefix", prefix)
-                if (node?.text?.startsWith(prefix) != true) {
-                    errors += "stripPrefix is not a prefix of the value"
-                }
-            }
             val read = when {
                 spec?.read == "viewIdResourceName" -> spec.read.takeIf { node?.viewId != null }
                 node?.displayText != null -> "text"
                 node?.displayDesc != null -> "contentDescription"
                 else -> null
+            }
+            assignment.stripPrefix?.let { prefix ->
+                assignment.node.validateLiteral("stripPrefix", prefix)
+                val value = when (read) {
+                    "text" -> node?.text
+                    "contentDescription" -> node?.desc
+                    else -> null
+                }
+                if (value?.startsWith(prefix) != true) {
+                    errors += "stripPrefix is not a prefix of the value"
+                }
             }
             if (node != null && read == null) {
                 errors += when {
@@ -274,6 +278,9 @@ object RuleDraft {
             if (!Vocabulary.INTENT.matches(selections.intent)) errors += "invalid intent"
             if (selections.priority !in Vocabulary.PRIORITY_RANGE) errors += "priority must be in 1..998"
             if (selections.modeHint != null && selections.modeHint !in Vocabulary.MODES) errors += "unknown modeHint"
+            if (selections.modeHint != null && selections.screenClass in listOf("sensitive", "noise")) {
+                errors += "modeHint is not allowed for class ${selections.screenClass}"
+            }
             if (selections.offerSurface != null) {
                 if (selections.offerSurface !in Vocabulary.OFFER_SURFACES) errors += "unknown offerSurface"
                 if (selections.screenClass != "offer:presented") errors += "offerSurface requires offer:presented"
@@ -336,7 +343,6 @@ object RuleDraft {
             val prefix = kind == "stripPrefix"
             if (text.isBlank() || text.length > (if (comment) 200 else Vocabulary.ANCHOR_TEXT_MAX) ||
                 (if (comment) currency.containsMatchIn(text) else digitOrCurrency.containsMatchIn(text)) ||
-                (!comment && decimalDigits.containsMatchIn(text)) ||
                 (prefix && !text.endsWith(" ")) || text.contains("[redacted", ignoreCase = true) ||
                 SensitiveMarkerScan.findMarker(text) != null) {
                 errors += "unsafe anchor literal at $path"
@@ -348,6 +354,7 @@ object RuleDraft {
                 errors += "stripPrefix must be an approved lead-in (optionally followed by lowercase chrome)"
             }
             if (!prefix && (Vocabulary.ANCHOR_LEAD_INS.any { text.trimStart().startsWith(it.trimEnd(), ignoreCase = true) } ||
+                Vocabulary.ANCHOR_GATED_LEAD_INS.any { text.trimStart().startsWith(it, ignoreCase = true) } ||
                 customerName.containsMatchIn(text))) {
                 errors += "anchor literal looks like customer text"
             }
@@ -448,7 +455,7 @@ object RuleDraft {
             }
             val preceding = node.precedingSiblingText?.takeIf { node.displayPrecedingSiblingText != null }
             if (preceding == null) {
-                errors += "field has no stable anchor at ${ref.path}"
+                errors += "${role.name.lowercase(Locale.ROOT)} has no stable anchor at ${ref.path}"
                 return null
             }
             val cls = classPredicate() ?: return null

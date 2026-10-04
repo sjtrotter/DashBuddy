@@ -160,6 +160,9 @@ class RuleDraftTest {
         assertEquals(listOf("field has no stable anchor at [0]"), errors(
             base.copy(fields = listOf(FieldAssignment(child, "zoneName"))), node(children = listOf(node(id = null, text = "zone"))),
         ))
+        assertEquals(listOf("redact has no stable anchor at [0]"), errors(
+            base.copy(redacts = listOf(child)), node(children = listOf(node(id = null, text = "private"))),
+        ))
         assertEquals(listOf("field zoneName has no text/desc slot"), errors(base.copy(fields = listOf(FieldAssignment(root, "zoneName")))))
         assertEquals(listOf("hash field customerNameHash has no text/desc slot"), errors(
             base.copy(screenClass = "task:dropoff:navigation", shape = "task", fields = listOf(FieldAssignment(root, "customerNameHash"))),
@@ -291,6 +294,32 @@ class RuleDraftTest {
     }
 
     @Test
+    fun `stripPrefix validates the resolved desc slot`() {
+        val selection = base.copy(screenClass = "task:dropoff:navigation", shape = "task", fields = listOf(
+            FieldAssignment(child, "customerNameHash", stripPrefix = "Deliver to "),
+        ))
+        val payload = node(children = listOf(node(id = "name", text = " ", desc = "Deliver to Sample Customer")))
+        val field = ok(selection, payload).fields().getValue("customerNameHash").jsonObject
+        assertEquals(JsonPrimitive("contentDescription"), field["read"])
+        assertEquals(Json.parseToJsonElement("""[{"stripPrefixes":["Deliver to "]},"trim","normalizeCustomerName","sha256"]"""), field["transform"])
+        assertEquals(listOf("stripPrefix is not a prefix of the value"), errors(selection,
+            node(children = listOf(node(id = "name", text = "Other value", desc = "Deliver to Sample Customer")))))
+    }
+
+    @Test
+    fun `gated customer lead-ins are refused in anchors and labels regardless of case`() {
+        for (text in listOf("Return Brandy S to Walgreens", "return package to store", "RETURN package to store")) {
+            assertTrue(errors(payload = node(id = null, text = text))
+                .contains("anchor literal looks like customer text"))
+            for (label in listOf(node(id = null, text = text), node(id = null, desc = text))) {
+                assertTrue(errors(base.copy(fields = listOf(FieldAssignment(PathRef(listOf(1)), "zoneName"))),
+                    node(children = listOf(label, node(id = null, text = "North"))))
+                    .contains("anchor literal looks like customer text"))
+            }
+        }
+    }
+
+    @Test
     fun `all emitted label selectors use the literal guard and require a class when needed`() {
         val missingClass = buildJsonObject { put("text", "Ready") }
         assertEquals(listOf("node has no simple class: []"), errors(payload = missingClass))
@@ -325,10 +354,10 @@ class RuleDraftTest {
         val name = result.fields().getValue("customerNameHash").jsonObject
         assertEquals(Json.parseToJsonElement("""["trim","normalizeCustomerName","sha256"]"""), name["transform"])
         val redacts = result.rule().getValue("redact").jsonArray
-        assertEquals(name["find"], redacts[0].jsonObject["find"])
-        assertEquals(JsonPrimitive("customerName"), redacts[0].jsonObject["normalize"])
-        assertEquals(setOf("find"), redacts[1].jsonObject.keys)
-        assertEquals(JsonPrimitive(true), redacts[2].jsonObject["plainMask"])
+        assertEquals(JsonPrimitive(true), redacts[0].jsonObject["plainMask"])
+        assertEquals(name["find"], redacts[1].jsonObject["find"])
+        assertEquals(JsonPrimitive("customerName"), redacts[1].jsonObject["normalize"])
+        assertEquals(setOf("find"), redacts[2].jsonObject.keys)
         assertFalse(result.json5.contains("Sample Customer"))
         assertFalse(result.json5.contains("Sample street"))
     }
@@ -386,6 +415,8 @@ class RuleDraftTest {
         for (screenClass in listOf("sensitive", "noise")) {
             val selection = base.copy(screenClass = screenClass, shape = screenClass)
             val rule = ok(selection).rule()
+            assertEquals(listOf("modeHint is not allowed for class $screenClass"),
+                errors(selection.copy(modeHint = "online")))
             assertFalse("state" in rule)
             assertEquals(buildJsonObject { put("as", screenClass) }, rule["parse"])
             assertEquals(if (screenClass == "sensitive") JsonPrimitive(false) else null, rule["overrideable"])

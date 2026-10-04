@@ -202,6 +202,7 @@ class RuleAuthoringVocabularyGuardTest {
         assertEquals(TreeLimits.MAX_TREE_NODES, EnvelopeWalk.MAX_NODES)
         assertEquals(TreeLimits.MAX_TREE_DEPTH, EnvelopeWalk.MAX_DEPTH)
         assertEquals(PiiShapes.NAME_PREFIXES.toSet(), Vocabulary.ANCHOR_LEAD_INS.toSet())
+        assertEquals(PiiShapes.GATED_NAME_PREFIXES.keys.toList(), Vocabulary.ANCHOR_GATED_LEAD_INS)
         assertEquals(PiiShapes.FIRST_LAST_INITIAL_BODY, Vocabulary.FIRST_LAST_INITIAL_BODY)
         assertEquals(PiiShapes.FIRST_LAST_INITIAL_EMBEDDED, Vocabulary.FIRST_LAST_INITIAL_EMBEDDED)
     }
