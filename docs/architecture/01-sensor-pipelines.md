@@ -565,6 +565,14 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Classify & draft (#1188, server v0.11.0 + the `census-contract/authoring/` package)* — on the census dashboard a
+  trusted operator opens a cluster's wireframe, classifies the screen in the `Flow` vocabulary (+ `sensitive`/`noise`),
+  marks anchors / parse fields / bind targets / redacts on numbered nodes, and the shared Apache-2.0 generator
+  (`RuleDraft`) emits a fragment-schema JSON5 rule or REFUSES (weak anchors, PII-shaped literals, ambiguous ids, missing
+  required fields, illegal class⇄shape, unsafe prefixes). The app owns the correctness gate (`CensusDraftRoundTripTest`,
+  §2 of `02-rule-engine.md`); the server only renders a forms-only (no-JS) UI over the same generator, pins the trusted
+  capture by its immutable row id, and stores one replaceable draft per cluster (deleted with its capture on
+  withdrawal/retention; the operator's classification survives). Server-side details: `dashbuddy-census/docs/OPERATOR.md`.
 - *Trusted-envelope uploader (#1200, S7c-B)* — only debug builds with census consent and the separate default-off
   “Share UNKNOWN captures” switch can send screen text to `/v1/envelopes`, which requires a trusted install.
   The capture bus holds at most 16 UNKNOWN screen envelopes, and the publisher pairs the same frame's capture ID to
