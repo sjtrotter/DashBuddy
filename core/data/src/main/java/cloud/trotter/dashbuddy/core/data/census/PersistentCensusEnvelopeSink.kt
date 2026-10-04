@@ -50,6 +50,7 @@ class PersistentCensusEnvelopeSink internal constructor(
     private val held = LinkedHashMap<String, Held>()
     private val enabled = AtomicBoolean()
     private val warned = AtomicBoolean()
+    private val cleanupWarned = AtomicBoolean()
     private val generation = AtomicLong()
     private val mutex = Mutex()
     override val isEnabled: Boolean get() = enabled.get()
@@ -67,7 +68,20 @@ class PersistentCensusEnvelopeSink internal constructor(
                     synchronized(held) {
                         enabled.set(value)
                     }
-                    if (!value) invalidate()
+                    // Fail-open housekeeping: a failed clear on the OFF edge (or at start-up with the switch off) must
+                    // never kill the collector's scope. Explicit identity-boundary callers still see invalidate() throw.
+                    if (!value) {
+                        try {
+                            invalidate()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            stats.envelopesDropped.incrementAndGet()
+                            if (cleanupWarned.compareAndSet(false, true)) {
+                                Timber.tag("Census").w("census envelope cleanup failed=1")
+                            }
+                        }
+                    }
                 }
         }
         scope.launch {

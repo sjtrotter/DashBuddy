@@ -245,7 +245,10 @@ class CensusApiTest {
         val first = """{"fingerprint":"$fingerprint","payload":{"text":"First"}}"""
         val second = """{"fingerprint":"$fingerprint","payload":{"text":"Second"}}"""
         assertFalse(CensusApi.envelopeBatchId(listOf(first)) == CensusApi.envelopeBatchId(listOf(second)))
-        assertEquals(CensusApi.envelopeBatchId(listOf(first, second)), CensusApi.envelopeBatchId(listOf(first, second)))
+        val expected = "env-" + java.security.MessageDigest.getInstance("SHA-256")
+            .digest("$first\n$second".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(java.util.Locale.ROOT, it.toInt() and 0xff) }.take(32)
+        assertEquals(expected, CensusApi.envelopeBatchId(listOf(first, second)))
         assertFalse(CensusApi.envelopeBatchId(listOf(first, second)) == CensusApi.envelopeBatchId(listOf(second, first)))
         assertEquals("env-7e18f737311b2dc3b2f269dd78396b03", CensusApi.envelopeBatchId(listOf("a", "b")))
         assertEquals(CensusApi.batchId(listOf("a", "b")), CensusApi.batchId(listOf("b", "a")))

@@ -236,6 +236,26 @@ class PersistentCensusEnvelopeSinkTest {
         }
     }
 
+    @Test fun `a failing clear at start-up or on the off edge is counted and never kills the collector`() = runTest {
+        val h = Harness(this)
+        // Start-up with both switches OFF: the first (false) emission runs the housekeeping clear, and it fails.
+        whenever(h.spool.clear()).thenAnswer { throw java.io.IOException("storage_full") }
+        runCurrent()
+        assertEquals(1, h.stats.envelopesDropped.get())
+        // The collector is alive: enabling still turns the sink on, and the OFF edge's failing clear is absorbed too.
+        h.enable()
+        runCurrent()
+        assertTrue(h.sink.isEnabled)
+        h.preferences.setCensusShareCaptures(false)
+        runCurrent()
+        assertFalse(h.sink.isEnabled)
+        assertEquals(2, h.stats.envelopesDropped.get())
+        // An explicit identity-boundary call still propagates the failure to its caller.
+        var thrown = false
+        try { h.sink.invalidate() } catch (_: java.io.IOException) { thrown = true }
+        assertTrue(thrown)
+    }
+
     @Test fun `projection cap is enforced by the consumer after serialization`() = runTest {
         val h = Harness(this)
         h.enable()
