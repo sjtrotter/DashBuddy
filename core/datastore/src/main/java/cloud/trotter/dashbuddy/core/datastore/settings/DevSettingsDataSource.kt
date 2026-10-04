@@ -21,6 +21,7 @@ class DevSettingsDataSource @Inject constructor(
     private object Keys {
         val IS_DEV_MODE_UNLOCKED = booleanPreferencesKey("is_dev_mode_unlocked")
         val LOG_LEVEL = intPreferencesKey("log_level")
+        val CENSUS_SHARE_CAPTURES = booleanPreferencesKey("census_share_captures")
         val CENSUS_UPLOAD_ENABLED = booleanPreferencesKey("census_upload_enabled")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
         val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
@@ -52,6 +53,7 @@ class DevSettingsDataSource @Inject constructor(
         ds.edit { it[Keys.BUBBLE_SESSION_MODE] = wire }
     }
 
+    val censusShareCaptures: Flow<Boolean> = ds.data.map { it[Keys.CENSUS_SHARE_CAPTURES] ?: false }
     val censusUploadEnabled: Flow<Boolean> = ds.data.map { it[Keys.CENSUS_UPLOAD_ENABLED] ?: false }
     val censusBaseUrl: Flow<String> = flowOf(DEFAULT_CENSUS_BASE_URL)
     val nextAllowedAtMillis: Flow<Long> = ds.data.map { it[Keys.CENSUS_NEXT_ALLOWED_AT] ?: 0L }
@@ -83,6 +85,10 @@ class DevSettingsDataSource @Inject constructor(
             prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
             prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
         }
+    }
+
+    suspend fun setCensusShareCaptures(enabled: Boolean) {
+        ds.edit { it[Keys.CENSUS_SHARE_CAPTURES] = enabled }
     }
 
     suspend fun setCensusUploadEnabled(enabled: Boolean) {

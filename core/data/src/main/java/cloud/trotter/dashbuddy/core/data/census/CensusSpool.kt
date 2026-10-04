@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.census
 
 import android.content.Context
+import cloud.trotter.dashbuddy.domain.census.EnvelopeProjection
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
@@ -39,6 +40,7 @@ open class CensusSpool internal constructor(
     private val maxFiles: Int = 2_000,
     private val maxDiskBytes: Long = 20L * 1024 * 1024,
     private val now: () -> Long = System::currentTimeMillis,
+    private val envelopes: Boolean = false,
 ) {
     @Inject constructor(
         @ApplicationContext context: Context,
@@ -54,7 +56,8 @@ open class CensusSpool internal constructor(
         override fun toString(): String = "InFlight([redacted])"
     }
 
-    private val inFlightFile = File(directory.parentFile, "inflight.json")
+    // Preserve the skeleton marker location; envelopes own a separate marker inside their directory.
+    private val inFlightFile = File(if (envelopes) directory else directory.parentFile, "inflight.json")
     private val mutex = Mutex()
     private val size = MutableStateFlow(0)
     @Volatile private var initialized = false
@@ -91,7 +94,7 @@ open class CensusSpool internal constructor(
             } finally {
                 tmp.delete()
             }
-            stats.spooled.incrementAndGet()
+            if (!envelopes) stats.spooled.incrementAndGet()
             trim()
         }
     }
@@ -241,7 +244,7 @@ open class CensusSpool internal constructor(
 
     private fun drop(file: File, reason: java.util.concurrent.atomic.AtomicLong? = null) {
         if (!file.delete()) throw IOException("Census spool drop failed")
-        stats.spoolDropped.incrementAndGet()
+        if (envelopes) stats.envelopesDropped.incrementAndGet() else stats.spoolDropped.incrementAndGet()
         reason?.incrementAndGet()
         size.update { it - 1 }
     }
@@ -261,10 +264,17 @@ open class CensusSpool internal constructor(
         val end = text.lastIndexOf(",\"captureId\":")
         require(start >= "\"skeleton\":".length && end > start)
         val json = text.substring(start, end)
-        val skeleton = SkeletonSchema.deserialize(json)
         val fingerprint = wrapper.getValue("fingerprint").jsonPrimitive.content
-        require(skeleton.fingerprint == fingerprint)
-        require(skeleton.platform == wrapper.getValue("platform").jsonPrimitive.content)
+        if (envelopes) {
+            require(EnvelopeProjection.project(json, fingerprint) == json)
+            val envelope = wrapper.getValue("skeleton").jsonObject
+            require(envelope["fingerprint"] == JsonPrimitive(fingerprint))
+            require(envelope["platform"] == wrapper["platform"])
+        } else {
+            val skeleton = SkeletonSchema.deserialize(json)
+            require(skeleton.fingerprint == fingerprint)
+            require(skeleton.platform == wrapper.getValue("platform").jsonPrimitive.content)
+        }
         val capture = wrapper.getValue("captureId")
         require(capture == JsonNull || (capture.jsonPrimitive.isString &&
             UUID.fromString(capture.jsonPrimitive.content).toString() == capture.jsonPrimitive.content))

@@ -129,4 +129,8 @@
     <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
+    <string name="developer_settings_census_share_captures">Share UNKNOWN captures (trusted installs)</string>
+    <string name="developer_settings_census_share_captures_explainer">Plaintext of UNKNOWN screens, after redaction, only while this install is trusted on the server.</string>
+    <string name="developer_settings_census_captures_status">Captures shared: %1$d queued · %2$s</string>
+    <string name="developer_settings_census_captures_no_outcome">—</string>
 </resources>

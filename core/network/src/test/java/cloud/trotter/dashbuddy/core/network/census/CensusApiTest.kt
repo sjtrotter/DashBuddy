@@ -240,6 +240,33 @@ class CensusApiTest {
         }
     }
 
+    @Test fun `envelopes use the exact item bytes and sign their own path`() = runTest {
+        respond(200, accepted)
+        val items = listOf("""{"schemaId":"uinode.v1","fingerprint":"${"a".repeat(64)}","timestamp":0}""")
+        val batch = CensusApi.envelopeBatchId(listOf("b", "a"))
+        assertEquals("env-" + CensusApi.batchId(listOf("a", "b")), batch)
+        assertTrue(api.uploadEnvelopes(credential, batch, items) is UploadResult.Accepted)
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals("/v1/envelopes", request.url.encodedPath)
+        val bytes = requireNotNull(request.body).toByteArray()
+        assertArrayEquals(CensusApi.batchBody(batch, items), bytes)
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("POST", "/v1/envelopes", ts, bytes),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+    }
+
+    @Test fun `envelopes decode not trusted batch quality and payload too large`() = runTest {
+        for ((code, body, expected) in listOf(
+            Triple(403, """{"error":"not_trusted"}""", UploadResult.NotTrusted),
+            Triple(422, """{"error":"batch_quality","rejected":{"bad_hash":1}}""", UploadResult.BatchQuality(mapOf("bad_hash" to 1))),
+            Triple(413, "{}", UploadResult.PayloadTooLarge),
+        )) {
+            respond(code, body)
+            assertEquals(expected, api.uploadEnvelopes(credential, "env-batch", listOf("{}")))
+            server.takeRequest(1, TimeUnit.SECONDS)
+        }
+    }
+
     private fun respond(code: Int, body: String) {
         server.enqueue(MockResponse.Builder().code(code).addHeader("Retry-After", "17").body(body).build())
     }

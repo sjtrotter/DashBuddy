@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.census
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome
+import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
 import cloud.trotter.census.contract.KindClassifier
@@ -31,8 +32,10 @@ class SkeletonPublisher internal constructor(
     private val sink: CensusSink,
     private val stats: PipelineStats,
     private val zoneId: ZoneId,
+    private val envelopeSink: CensusEnvelopeSink,
 ) {
-    @Inject constructor(sink: CensusSink, stats: PipelineStats) : this(sink, stats, ZoneId.systemDefault())
+    @Inject constructor(sink: CensusSink, stats: PipelineStats, envelopeSink: CensusEnvelopeSink) :
+        this(sink, stats, ZoneId.systemDefault(), envelopeSink)
 
     /** One WARN per publisher; the publisher is a Hilt @Singleton, so per process in the app (#1171 review: an instance field, not a JVM static, keeps tests isolated). */
     private val warned = AtomicBoolean()
@@ -71,6 +74,10 @@ class SkeletonPublisher internal constructor(
                         captureId = obs.captureId,
                     ))
                     if (!accepted) stats.onCensusSinkRefused()
+                    val captureId = obs.captureId
+                    if (captureId != null && envelopeSink.isEnabled) {
+                        stats.onCensusEnvelopePaired(envelopeSink.pair(captureId, outcome.skeleton.fingerprint))
+                    }
                 }
                 is Outcome.Refused -> stats.onCensusRefused(outcome.reason)
             }

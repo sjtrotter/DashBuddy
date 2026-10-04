@@ -30,6 +30,7 @@ class DevSettingsRepository @Inject constructor(
     @param:Named("isDebug") private val isDebug: Boolean,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
 ) : CensusUploadPreferences {
+    val censusShareCaptures: Flow<Boolean> = dataSource.censusShareCaptures.map { isDebug && it }
     val censusUploadEnabled: Flow<Boolean> = dataSource.censusUploadEnabled.map { isDebug && it }
     val censusBaseUrl: Flow<String> = dataSource.censusBaseUrl
     override val enabled: Flow<Boolean> = censusUploadEnabled
@@ -43,7 +44,11 @@ class DevSettingsRepository @Inject constructor(
     suspend fun setCensusLastRun(run: CensusLastRun) = dataSource.setCensusLastRun(run.atMillis, run.outcome.wire, run.detail)
     suspend fun recordCensusReset(run: CensusLastRun) = dataSource.recordCensusReset(run.atMillis, run.outcome.wire)
 
-    suspend fun setCensusUploadEnabled(enabled: Boolean) = dataSource.setCensusUploadEnabled(isDebug && enabled)
+    suspend fun setCensusUploadEnabled(enabled: Boolean) {
+        dataSource.setCensusUploadEnabled(isDebug && enabled)
+        if (!isDebug || !enabled) setCensusShareCaptures(false)
+    }
+    suspend fun setCensusShareCaptures(enabled: Boolean) = dataSource.setCensusShareCaptures(isDebug && enabled)
     suspend fun setNextAllowedAtMillis(value: Long) = dataSource.setNextAllowedAtMillis(value)
     suspend fun setCensusPolicy(value: JsonObject) = dataSource.setCensusPolicy(
         value.mapNotNull { (key, element) ->

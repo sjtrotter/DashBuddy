@@ -565,6 +565,12 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Trusted-envelope uploader (#1200, S7c-B)* — only debug builds with census consent and the separate default-off
+  “Share UNKNOWN captures” switch can send redacted plaintext to `/v1/envelopes`, which requires a trusted install.
+  The capture bus holds at most 16 UNKNOWN screen envelopes, and the publisher pairs the same frame's capture ID to
+  its skeleton fingerprint; only paired envelopes are projected (device fingerprint and ruleset signature removed,
+  timestamp coarsened to the hour), scanned locally across every JSON key/string, and spooled in `census/envelopes`.
+  A `not_trusted` response turns sharing off and clears that spool; release binds `NoOpCensusEnvelopeSink`.
 - *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
   release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.

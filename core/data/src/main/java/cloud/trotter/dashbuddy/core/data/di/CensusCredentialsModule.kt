@@ -1,5 +1,10 @@
 package cloud.trotter.dashbuddy.core.data.di
 
+import cloud.trotter.dashbuddy.core.data.census.CensusSpool
+import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
+import java.io.File
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -23,10 +28,24 @@ annotation class CensusCredentialPreferences
 @Retention(AnnotationRetention.BINARY)
 annotation class CensusHealthPreferences
 
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class CensusEnvelopeSpool
+
 /** Credentials and generation-scoped health stay separate from settings and outside Android backups. */
 @Module
 @InstallIn(SingletonComponent::class)
 object CensusCredentialsModule {
+    @Provides
+    @Singleton
+    @CensusEnvelopeSpool
+    fun envelopeSpool(
+        @ApplicationContext context: Context,
+        stats: CensusUploadStats,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): CensusSpool = CensusSpool(File(context.filesDir, "census/envelopes"), stats, io,
+        maxFiles = 200, maxDiskBytes = 20L * 1024 * 1024, envelopes = true)
+
     @Provides
     @Singleton
     @CensusCredentialPreferences

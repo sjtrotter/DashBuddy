@@ -62,13 +62,22 @@ class CensusUploadPreferencesTest {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "dev.preferences_pb") }
             val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
             assertFalse(repo.enabled.first())
+            assertFalse(repo.censusShareCaptures.first())
             assertEquals("https://census.dashbuddy.trotter.cloud", repo.baseUrl.first())
             ds.edit { it[stringPreferencesKey("census_base_url")] = "https://obsolete.example.test" }
             assertEquals("https://census.dashbuddy.trotter.cloud", repo.baseUrl.first())
             repo.setCensusUploadEnabled(true)
             assertTrue(repo.enabled.first())
+            repo.setCensusShareCaptures(true)
+            assertTrue(repo.censusShareCaptures.first())
+            repo.setCensusUploadEnabled(false)
+            assertFalse(repo.censusShareCaptures.first())
+            repo.setCensusUploadEnabled(true)
+            assertFalse(repo.censusShareCaptures.first())
             val release = DevSettingsRepository(DevSettingsDataSource(ds), false, io)
             assertFalse(release.enabled.first())
+            release.setCensusShareCaptures(true)
+            assertFalse(release.censusShareCaptures.first())
             release.setCensusUploadEnabled(true)
             assertFalse(repo.enabled.first())
         } finally {

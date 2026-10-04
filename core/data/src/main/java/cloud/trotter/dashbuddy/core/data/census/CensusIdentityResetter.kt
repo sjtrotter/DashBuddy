@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.census
 
+import cloud.trotter.dashbuddy.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
 import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
@@ -19,7 +20,7 @@ import javax.inject.Singleton
 
 /**
  * Developer action (#1185): forget this phone's census identity. Under the uploader lock (never mid-batch) it clears
- * the spool then the health ledger (either failed clear leaves the identity in place), wipes the sealed credential, and records the reset
+ * both spools then the health ledger (either failed clear leaves the identity in place), wipes the sealed credential, and records the reset
  * as the last run in one DataStore edit; the next run mints + enrols a fresh install id, which the server must trust
  * again. The old server-side install is orphaned, not withdrawn. Consent and a server-imposed deferral deadline are
  * left as they are. [resetAsync] runs on the application scope so leaving the screen cannot cancel it half-done.
@@ -34,6 +35,7 @@ class CensusIdentityResetter internal constructor(
     private val scope: CoroutineScope,
     private val healthSink: PersistentHealthSink,
     private val now: () -> Long,
+    private val envelopeSpool: CensusSpool,
 ) {
     @Inject constructor(
         credentials: CensusCredentialStore,
@@ -43,7 +45,8 @@ class CensusIdentityResetter internal constructor(
         lock: CensusUploadLock,
         @ApplicationScope scope: CoroutineScope,
         healthSink: PersistentHealthSink,
-    ) : this(credentials, spool, preferences, scheduler, lock, scope, healthSink, System::currentTimeMillis)
+        @CensusEnvelopeSpool envelopeSpool: CensusSpool,
+    ) : this(credentials, spool, preferences, scheduler, lock, scope, healthSink, System::currentTimeMillis, envelopeSpool)
 
     /** The UI entry point: never cancelled by the caller's lifecycle. */
     fun resetAsync(): Job = scope.launch { reset() }
@@ -58,6 +61,7 @@ class CensusIdentityResetter internal constructor(
             withContext(NonCancellable) {
                 try {
                     spool.clear()
+                    envelopeSpool.clear()
                     healthSink.reset()
                     credentials.wipe()
                     preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))

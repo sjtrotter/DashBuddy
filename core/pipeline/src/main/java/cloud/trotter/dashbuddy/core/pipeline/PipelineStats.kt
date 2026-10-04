@@ -80,6 +80,8 @@ class PipelineStats @Inject constructor(
     val censusUploadFailures: Long get() = censusUploads.uploadFailures.get()
 
     /** #1146: census items and token decisions, counts only; disabled sinks leave these untouched. */
+    private val censusEnvelopesPaired = AtomicLong()
+    private val censusEnvelopesUnpaired = AtomicLong()
     private val censusSkeletons = AtomicLong()
     private val censusTokensHashed = AtomicLong()
     private val censusTokensWithheld = AtomicLong()
@@ -436,6 +438,11 @@ class PipelineStats @Inject constructor(
         censusRefusals.getValue(reason).incrementAndGet()
     }
 
+    /** #1200: the same frame's held UNKNOWN envelope was paired with its skeleton fingerprint — spooled, or refused by the envelope sink. */
+    fun onCensusEnvelopePaired(spooled: Boolean) {
+        if (spooled) censusEnvelopesPaired.incrementAndGet() else censusEnvelopesUnpaired.incrementAndGet()
+    }
+
     /** A built item was offered but not accepted by the census sink (#1146). */
     fun onCensusSinkRefused() {
         censusSinkRefused.incrementAndGet()
@@ -506,13 +513,15 @@ class PipelineStats @Inject constructor(
         val sinkRefused = censusSinkRefused.get()
         val failures = censusPublishFailures.get()
         val unattributed = censusUnattributedPlatform.get()
+        val envelopes = if (censusEnvelopesPaired.get() == 0L && censusEnvelopesUnpaired.get() == 0L) "" else
+            ",envelopesPaired=${censusEnvelopesPaired.get()},envelopesUnpaired=${censusEnvelopesUnpaired.get()}"
         val uploads = censusUploads.summary()
         val refused = reasonSuffix(",refused", censusRefusals)
         if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
-            failures == 0L && unattributed == 0L && refused.isEmpty() && uploads.isEmpty()
+            failures == 0L && unattributed == 0L && refused.isEmpty() && uploads.isEmpty() && envelopes.isEmpty()
         ) return ""
         return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
-            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused$uploads}"
+            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused$envelopes$uploads}"
     }
 
     /**

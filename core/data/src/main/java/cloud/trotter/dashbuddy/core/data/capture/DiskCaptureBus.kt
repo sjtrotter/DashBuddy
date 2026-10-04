@@ -1,6 +1,11 @@
 package cloud.trotter.dashbuddy.core.data.capture
 
 import cloud.trotter.dashbuddy.domain.capture.CaptureBus
+import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
+import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
+import cloud.trotter.dashbuddy.domain.pipeline.PipelineRegistry
+import cloud.trotter.dashbuddy.domain.pipeline.UNKNOWN_TARGET
+import cloud.trotter.dashbuddy.domain.state.Platform
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +36,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 class DiskCaptureBus @Inject constructor(
     @param:ApplicationContext private val context: Context,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    private val envelopeSink: CensusEnvelopeSink,
+    private val stats: CensusUploadStats,
 ) : CaptureBus {
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
@@ -63,6 +70,17 @@ class DiskCaptureBus @Inject constructor(
         if (contentHash != null) {
             val seen = seenHashes.getOrPut(bucket) { ConcurrentHashMap.newKeySet() }
             if (!seen.add(contentHash)) return null
+        }
+
+        try {
+            // The writer currently sends UNKNOWN_TARGET; null is also the bus contract's UNKNOWN form.
+            if ((classification == null || classification == UNKNOWN_TARGET) &&
+                source == PipelineRegistry.SCREEN_PIPELINE_ID && envelopeSink.isEnabled
+            ) {
+                Platform.fromWire(platform)?.let { envelopeSink.hold(captureId, it, envelopeJson) }
+            }
+        } catch (_: Throwable) {
+            stats.envelopesDropped.incrementAndGet()
         }
 
         scope.launch {

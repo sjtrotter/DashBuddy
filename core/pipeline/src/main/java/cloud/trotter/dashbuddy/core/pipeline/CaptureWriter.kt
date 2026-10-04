@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.pipeline.PipelineRegistry
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.AccessibilityPipeline
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.clickDedupHash
 import cloud.trotter.dashbuddy.core.pipeline.notification.NotificationPipeline
@@ -123,7 +124,7 @@ class CaptureWriter @Inject constructor(
         )
         val captureId = captureBus.offer(
             captureId = capture.captureId,
-            source = AccessibilityPipeline.SCREEN_PIPELINE_ID,
+            source = PipelineRegistry.SCREEN_PIPELINE_ID,
             classification = obs.target,
             platform = platform,
             envelopeJson = capture.envelopeJson,

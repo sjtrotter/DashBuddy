@@ -16,6 +16,34 @@ import java.io.File
 class CensusSpoolTest {
     @get:Rule val tmp = TemporaryFolder()
 
+    @Test fun `envelopes round trip exact projected bytes with independent in flight membership and clear`() = runTest {
+        val root = tmp.newFolder()
+        val stats = CensusUploadStats()
+        val io = StandardTestDispatcher(testScheduler)
+        val skeletons = CensusSpool(File(root, "spool"), stats, io)
+        val envelopes = CensusSpool(File(root, "envelopes"), stats, io, envelopes = true)
+        val fingerprint = "ab".repeat(32)
+        val json = requireNotNull(cloud.trotter.dashbuddy.domain.census.EnvelopeProjection.project(
+            """{"schemaId":"uinode.v1","platform":"doordash","timestamp":123,"payload":{"text":"Continue"}}""", fingerprint))
+        val record = censusRecord().copy(fingerprint = fingerprint, skeletonJson = json, itemBytes = json.toByteArray().size)
+        skeletons.append(censusRecord())
+        envelopes.append(record)
+        val skeletonIds = skeletons.take(100, 900 * 1024).map { it.id }
+        val original = envelopes.take(20, 900 * 1024)
+        skeletons.markInFlight(skeletonIds, "skeleton-batch")
+        envelopes.markInFlight(original.map { it.id }, "env-batch")
+        val reopened = CensusSpool(File(root, "envelopes"), stats, io, envelopes = true)
+        assertEquals(json, reopened.take(20, 900 * 1024).single().itemJson)
+        assertEquals(original, reopened.take(1, 1))
+        assertEquals("env-batch", reopened.inFlight()?.batchId)
+        reopened.clear()
+        assertEquals(0, reopened.queued.first())
+        assertNull(reopened.inFlight())
+        assertEquals("skeleton-batch", skeletons.inFlight()?.batchId)
+        assertEquals(skeletonIds, skeletons.take(100, 900 * 1024).map { it.id })
+    }
+
+
     @Test fun `clear removes every record the in flight marker and temp files and the queued flow reports zero`() = runTest {
         val dir = File(tmp.newFolder(), "spool")
         val stats = CensusUploadStats()

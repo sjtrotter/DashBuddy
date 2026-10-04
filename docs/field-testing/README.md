@@ -48,6 +48,11 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Trusted UNKNOWN captures (#1200):** Share UNKNOWN captures ON → after a dash with UNKNOWN screens the status
+  reads `envelopes_posted n` and the server's cluster detail page shows a wireframe (0/2).
+  - Confirmed: 0/2
+
+
 - **Daily recognition health reaches the server (#1197, PR #1198).** Nothing to do on the dash itself;
   the day's RECOGNIZED/UNKNOWN counts per (platform, app version) are ledgered on-device and posted as
   ONE closed-day report by the first census run after UTC midnight. Next morning: the developer census

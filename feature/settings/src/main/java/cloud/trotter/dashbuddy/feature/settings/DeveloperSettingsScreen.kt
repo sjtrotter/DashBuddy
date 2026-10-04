@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.settings
 
+import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -135,6 +136,8 @@ fun DeveloperSettingsScreen(
             if (viewModel.censusAvailable) {
                 val installId by viewModel.censusInstallId.collectAsStateWithLifecycle(initialValue = null)
                 val lastRun by viewModel.censusLastRun.collectAsStateWithLifecycle(initialValue = null)
+                val shareCaptures by viewModel.censusShareCaptures.collectAsStateWithLifecycle(initialValue = false)
+                val envelopesQueued by viewModel.censusEnvelopesQueued.collectAsStateWithLifecycle(initialValue = 0)
                 val queued by viewModel.censusQueued.collectAsStateWithLifecycle(initialValue = 0)
                 val now by rememberNow()
                 val clipboard = LocalClipboard.current
@@ -142,6 +145,20 @@ fun DeveloperSettingsScreen(
                 var showReset by remember { mutableStateOf(false) }
                 Text(stringResource(R.string.developer_settings_census_upload))
                 Switch(checked = censusEnabled, onCheckedChange = { viewModel.setCensusUploadEnabled(it) })
+                Text(stringResource(R.string.developer_settings_census_share_captures))
+                Switch(checked = shareCaptures, onCheckedChange = { viewModel.setCensusShareCaptures(it) }, enabled = censusEnabled)
+                Text(
+                    stringResource(R.string.developer_settings_census_share_captures_explainer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.developer_settings_census_captures_status, envelopesQueued,
+                        lastRun?.takeIf { it.outcome == CensusRunOutcome.ENVELOPES_POSTED || it.outcome == CensusRunOutcome.NOT_TRUSTED }
+                            ?.token() ?: stringResource(R.string.developer_settings_census_captures_no_outcome)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     stringResource(
                         R.string.developer_settings_census_identity,

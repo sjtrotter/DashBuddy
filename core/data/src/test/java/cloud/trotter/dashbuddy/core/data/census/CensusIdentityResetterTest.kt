@@ -50,6 +50,7 @@ class CensusIdentityResetterTest {
 
     private val credentials: CensusCredentialStore = mock()
     private val spool: CensusSpool = mock()
+    private val envelopeSpool: CensusSpool = mock()
     private val healthStore: HealthLedgerStore = mock()
     private val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined)
     private val scheduler = Scheduler()
@@ -58,7 +59,7 @@ class CensusIdentityResetterTest {
     private suspend fun TestScope.resetter(scope: CoroutineScope = backgroundScope): CensusIdentityResetter {
         whenever(healthStore.load()).thenReturn(HealthLedger())
         val sink = PersistentHealthSink(healthStore, CensusUploadStats(), scope, StandardTestDispatcher(testScheduler))
-        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L })
+        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L }, envelopeSpool = envelopeSpool)
     }
 
     @Test fun `reset clears spool and health before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
@@ -69,8 +70,9 @@ class CensusIdentityResetterTest {
 
         resetter().reset()
 
-        inOrder(spool, healthStore, credentials) {
+        inOrder(spool, envelopeSpool, healthStore, credentials) {
             verify(spool).clear()
+            verify(envelopeSpool).clear()
             verify(healthStore).clear()
             verify(healthStore).save(HealthLedger(generation = 1))
             verify(credentials).wipe()
@@ -115,6 +117,15 @@ class CensusIdentityResetterTest {
         verify(credentials, never()).wipe()
         verify(healthStore, never()).clear()
         assertTrue(scheduler.enqueued.isEmpty())
+        assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
+    }
+
+    @Test fun `a failed envelope clear leaves health and identity untouched`() = runTest {
+        whenever(envelopeSpool.clear()).thenAnswer { throw IOException("test_failure") }
+        assertFalse(resetter().reset())
+        verify(spool).clear()
+        verify(healthStore, never()).clear()
+        verify(credentials, never()).wipe()
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }
 
