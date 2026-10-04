@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.census
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -10,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -35,7 +39,7 @@ class CensusUploadPreferencesTest {
             val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
             repo.setCensusUploadEnabled(true)
             repo.setCensusPolicy(Json.parseToJsonElement("""{"k":10}""").jsonObject)
-            val run = CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12)
+            val run = CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12, envelopesPosted = 4)
             repo.setCensusLastRun(run)
             assertEquals(run, repo.censusLastRun.first())
             assertEquals("uploaded 12", repo.censusLastRun.first()?.token())
@@ -53,6 +57,44 @@ class CensusUploadPreferencesTest {
         } finally {
             scope.cancel()
         }
+    }
+
+    @Test fun `consent off clears sharing in exactly one datastore transaction and consent alone cannot restore it`() = runTest {
+        val edits = mutableListOf<Preferences>()
+        val ds = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                transform(data.value).also { data.value = it; edits += it }
+        }
+        val source = DevSettingsDataSource(ds)
+        val repo = DevSettingsRepository(source, true, StandardTestDispatcher(testScheduler))
+        repo.setCensusUploadEnabled(true)
+        repo.setCensusShareCaptures(true)
+        edits.clear()
+
+        repo.setCensusUploadEnabled(false)
+
+        assertEquals(1, edits.size)
+        assertFalse(source.censusUploadEnabled.first())
+        assertFalse(source.censusShareCaptures.first())
+        assertFalse(repo.censusShareCaptures.first())
+        repo.setCensusUploadEnabled(true)
+        assertTrue(repo.censusUploadEnabled.first())
+        assertFalse(repo.censusShareCaptures.first())
+    }
+
+    @Test fun `legacy last run without envelope count reads zero`() = runTest {
+        val ds = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                transform(data.value).also { data.value = it }
+        }
+        ds.edit {
+            it[androidx.datastore.preferences.core.longPreferencesKey("census_last_run_at_millis")] = 5L
+            it[stringPreferencesKey("census_last_run_outcome")] = "uploaded"
+        }
+        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler))
+        assertEquals(CensusLastRun(5L, CensusRunOutcome.UPLOADED), repo.censusLastRun.first())
     }
 
     @Test fun `consent defaults off and base URL is constant`() = runTest {

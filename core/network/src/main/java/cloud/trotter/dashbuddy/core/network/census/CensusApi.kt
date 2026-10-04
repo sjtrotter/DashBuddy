@@ -288,7 +288,9 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
             .digest(fingerprints.sorted().joinToString("\n").toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }.take(32)
 
-        fun envelopeBatchId(fingerprints: List<String>): String = "env-" + batchId(fingerprints)
+        fun envelopeBatchId(itemsJson: List<String>): String = "env-" + MessageDigest.getInstance("SHA-256")
+            .digest(itemsJson.joinToString("\n").toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }.take(32)
 
         fun batchBody(batchId: String, itemsJson: List<String>): ByteArray =
             "{\"batchId\":${JsonPrimitive(batchId)},\"items\":[${itemsJson.joinToString(",")}]}".toByteArray(Charsets.UTF_8)

@@ -26,6 +26,7 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
         val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
+        val CENSUS_LAST_RUN_ENVELOPES = intPreferencesKey("census_last_run_envelopes")
         val CENSUS_LAST_RUN_DETAIL = intPreferencesKey("census_last_run_detail")
         val CENSUS_POLICY = listOf("dailySkeletonBudget", "maxBatchItems", "maxBatchBytes", "maxSkeletonBytes", "k")
             .associateWith { intPreferencesKey("census_policy_$it") }
@@ -61,13 +62,19 @@ class DevSettingsDataSource @Inject constructor(
         Keys.CENSUS_POLICY.mapNotNull { (name, key) -> prefs[key]?.let { name to it } }.toMap()
     }
 
-    /** Raw (atMillis, outcomeWire, detail) of the last census run; the repository owns the fail-closed decode. */
-    val censusLastRun: Flow<Triple<Long, String?, Int?>?> = ds.data.map { prefs ->
-        prefs[Keys.CENSUS_LAST_RUN_AT]?.let { Triple(it, prefs[Keys.CENSUS_LAST_RUN_OUTCOME], prefs[Keys.CENSUS_LAST_RUN_DETAIL]) }
+    data class RawCensusLastRun(val atMillis: Long, val outcomeWire: String?, val detail: Int?, val envelopesPosted: Int)
+
+    /** Raw fields of the last census run; the repository owns the fail-closed decode. */
+    val censusLastRun: Flow<RawCensusLastRun?> = ds.data.map { prefs ->
+        prefs[Keys.CENSUS_LAST_RUN_AT]?.let {
+            RawCensusLastRun(it, prefs[Keys.CENSUS_LAST_RUN_OUTCOME], prefs[Keys.CENSUS_LAST_RUN_DETAIL],
+                prefs[Keys.CENSUS_LAST_RUN_ENVELOPES] ?: 0)
+        }
     }
 
-    suspend fun setCensusLastRun(atMillis: Long, outcomeWire: String, detail: Int?) {
+    suspend fun setCensusLastRun(atMillis: Long, outcomeWire: String, detail: Int?, envelopesPosted: Int) {
         ds.edit {
+            it[Keys.CENSUS_LAST_RUN_ENVELOPES] = envelopesPosted
             it[Keys.CENSUS_LAST_RUN_AT] = atMillis
             it[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
             if (detail != null) it[Keys.CENSUS_LAST_RUN_DETAIL] = detail else it.remove(Keys.CENSUS_LAST_RUN_DETAIL)
@@ -81,6 +88,7 @@ class DevSettingsDataSource @Inject constructor(
     suspend fun recordCensusReset(atMillis: Long, outcomeWire: String) {
         ds.edit { prefs ->
             Keys.CENSUS_POLICY.values.forEach { prefs.remove(it) }
+            prefs[Keys.CENSUS_LAST_RUN_ENVELOPES] = 0
             prefs[Keys.CENSUS_LAST_RUN_AT] = atMillis
             prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
             prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
@@ -94,6 +102,8 @@ class DevSettingsDataSource @Inject constructor(
     suspend fun setCensusUploadEnabled(enabled: Boolean) {
         ds.edit {
             it[Keys.CENSUS_UPLOAD_ENABLED] = enabled
+            // One transaction: cancellation or process death cannot leave sharing ON with consent OFF.
+            if (!enabled) it[Keys.CENSUS_SHARE_CAPTURES] = false
             it.remove(Keys.CENSUS_NEXT_ALLOWED_AT)
         }
     }

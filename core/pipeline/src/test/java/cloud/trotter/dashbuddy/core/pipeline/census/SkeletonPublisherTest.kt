@@ -70,23 +70,24 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     )
 
     @Test fun `built unknown pairs the same capture and fingerprint after skeleton offer`() {
-        for (spooled in listOf(true, false)) {
+        for (queued in listOf(true, false)) {
             val sink = FakeSink(enabled = true)
             val stats = PipelineStats()
             val pairs = mutableListOf<Pair<String, String>>()
             val envelopes = object : CensusEnvelopeSink {
                 override val isEnabled = true
+                override suspend fun invalidate() = Unit
                 override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
                 override fun pair(captureId: String, fingerprint: String): Boolean {
                     assertEquals(fingerprint, sink.records.single().fingerprint)
                     pairs += captureId to fingerprint
-                    return spooled
+                    return queued
                 }
             }
             val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
             publisher.publish(screen(captureId = "same-frame"), event(tree("Continue")))
             assertEquals(listOf("same-frame" to sink.records.single().fingerprint), pairs)
-            assertTrue(stats.summary().contains(if (spooled) "envelopesPaired=1" else "envelopesUnpaired=1"))
+            assertTrue(stats.summary().contains(if (queued) "envelopesPaired=1" else "envelopesUnpaired=1"))
         }
     }
 
@@ -96,6 +97,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         var enabled = true
         val envelopes = object : CensusEnvelopeSink {
             override val isEnabled get() = enabled
+            override suspend fun invalidate() = Unit
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
         }
@@ -107,11 +109,29 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         assertEquals(0, pairs)
     }
 
+    @Test fun `skeleton sink refusal never pairs its envelope`() {
+        val sink = FakeSink(enabled = true, accept = false)
+        val stats = PipelineStats()
+        var pairs = 0
+        val envelopes = object : CensusEnvelopeSink {
+            override val isEnabled = true
+            override suspend fun invalidate() = Unit
+            override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
+            override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
+        }
+        SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+            .publish(screen(captureId = "refused"), event(tree("Continue")))
+        assertEquals(1, sink.records.size)
+        assertEquals(1L, stats.censusSinkRefusedCount())
+        assertEquals(0, pairs)
+    }
+
     @Test fun `envelope pairing failure is contained after skeleton publication`() {
         val sink = FakeSink(enabled = true)
         val stats = PipelineStats()
         val envelopes = object : CensusEnvelopeSink {
             override val isEnabled = true
+            override suspend fun invalidate() = Unit
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean = throw AssertionError("test_failure")
         }

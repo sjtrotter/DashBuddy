@@ -438,9 +438,9 @@ class PipelineStats @Inject constructor(
         censusRefusals.getValue(reason).incrementAndGet()
     }
 
-    /** #1200: the same frame's held UNKNOWN envelope was paired with its skeleton fingerprint — spooled, or refused by the envelope sink. */
-    fun onCensusEnvelopePaired(spooled: Boolean) {
-        if (spooled) censusEnvelopesPaired.incrementAndGet() else censusEnvelopesUnpaired.incrementAndGet()
+    /** #1200: the same frame's held UNKNOWN envelope was paired with its skeleton fingerprint — queued, or refused by the envelope sink. */
+    fun onCensusEnvelopePaired(queued: Boolean) {
+        if (queued) censusEnvelopesPaired.incrementAndGet() else censusEnvelopesUnpaired.incrementAndGet()
     }
 
     /** A built item was offered but not accepted by the census sink (#1146). */

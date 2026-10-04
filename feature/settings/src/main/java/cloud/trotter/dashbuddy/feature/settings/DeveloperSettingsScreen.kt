@@ -154,8 +154,8 @@ fun DeveloperSettingsScreen(
                 )
                 Text(
                     stringResource(R.string.developer_settings_census_captures_status, envelopesQueued,
-                        lastRun?.takeIf { it.outcome == CensusRunOutcome.ENVELOPES_POSTED || it.outcome == CensusRunOutcome.NOT_TRUSTED }
-                            ?.token() ?: stringResource(R.string.developer_settings_census_captures_no_outcome)),
+                        lastRun?.takeIf { it.outcome == CensusRunOutcome.ENVELOPES_REJECTED || it.outcome == CensusRunOutcome.NOT_TRUSTED }
+                            ?.token() ?: stringResource(R.string.developer_settings_census_captures_sent, lastRun?.envelopesPosted ?: 0)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

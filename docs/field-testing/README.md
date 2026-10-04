@@ -49,7 +49,9 @@ For items with multiple sub-concerns at different statuses, use one
 ## Next field test — things to look for
 
 - **Trusted UNKNOWN captures (#1200):** Share UNKNOWN captures ON → after a dash with UNKNOWN screens the status
-  reads `envelopes_posted n` and the server's cluster detail page shows a wireframe (0/2).
+  reads `Captures shared: <queued> queued · <n> sent last run` and the server's cluster detail page shows a wireframe (0/2).
+  UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details,
+  and the server operator can read them. Trusted installs are the operator's own device today.
   - Confirmed: 0/2
 
 

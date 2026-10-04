@@ -25,6 +25,7 @@ class DiskCaptureBusEnvelopeTest {
             if (fail) throw AssertionError("test_failure")
             held += Triple(captureId, platform, envelopeJson)
         }
+        override suspend fun invalidate() = Unit
         override fun pair(captureId: String, fingerprint: String) = false
     }
 

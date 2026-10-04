@@ -16,6 +16,16 @@ class EnvelopeProjectionTest {
     private fun envelope(timestamp: String = "7200123", extra: String = "") =
         """{"schemaId":"uinode.v1","timestamp":$timestamp,"metadata":{"deviceFingerprint":"device","rulesetSignature":"signature","engineVersion":1},"payload":{"text":"Continue"}$extra}"""
 
+    @Test fun `object projection matches wire projection and leaves byte cap to serializer`() {
+        val projected = requireNotNull(EnvelopeProjection.projectToObject(envelope(), fingerprint))
+        assertEquals(EnvelopeProjection.project(envelope(), fingerprint), projected.toString())
+        val huge = envelope(extra = ",\"padding\":\"${"x".repeat(EnvelopeProjection.MAX_BYTES)}\"")
+        assertNotNull(EnvelopeProjection.projectToObject(huge, fingerprint))
+        assertNull(EnvelopeProjection.project(huge, fingerprint))
+        assertNull(EnvelopeProjection.projectToObject(envelope(), "A".repeat(64)))
+        assertNull(EnvelopeProjection.projectToObject("[]", fingerprint))
+    }
+
     @Test fun `projection removes only transport metadata coarsens time adds fingerprint and compacts JSON`() {
         val projected = requireNotNull(EnvelopeProjection.project(envelope(), fingerprint))
         val json = Json.parseToJsonElement(projected).jsonObject

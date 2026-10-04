@@ -245,7 +245,7 @@ open class CensusSpool internal constructor(
     private fun drop(file: File, reason: java.util.concurrent.atomic.AtomicLong? = null) {
         if (!file.delete()) throw IOException("Census spool drop failed")
         if (envelopes) stats.envelopesDropped.incrementAndGet() else stats.spoolDropped.incrementAndGet()
-        reason?.incrementAndGet()
+        if (!envelopes) reason?.incrementAndGet()
         size.update { it - 1 }
     }
 

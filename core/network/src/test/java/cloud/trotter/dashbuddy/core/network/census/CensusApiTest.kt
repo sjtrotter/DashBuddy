@@ -240,11 +240,22 @@ class CensusApiTest {
         }
     }
 
+    @Test fun `envelope batch identity preserves body bytes and order even for the same cluster`() {
+        val fingerprint = "a".repeat(64)
+        val first = """{"fingerprint":"$fingerprint","payload":{"text":"First"}}"""
+        val second = """{"fingerprint":"$fingerprint","payload":{"text":"Second"}}"""
+        assertFalse(CensusApi.envelopeBatchId(listOf(first)) == CensusApi.envelopeBatchId(listOf(second)))
+        assertEquals(CensusApi.envelopeBatchId(listOf(first, second)), CensusApi.envelopeBatchId(listOf(first, second)))
+        assertFalse(CensusApi.envelopeBatchId(listOf(first, second)) == CensusApi.envelopeBatchId(listOf(second, first)))
+        assertEquals("env-7e18f737311b2dc3b2f269dd78396b03", CensusApi.envelopeBatchId(listOf("a", "b")))
+        assertEquals(CensusApi.batchId(listOf("a", "b")), CensusApi.batchId(listOf("b", "a")))
+    }
+
     @Test fun `envelopes use the exact item bytes and sign their own path`() = runTest {
         respond(200, accepted)
         val items = listOf("""{"schemaId":"uinode.v1","fingerprint":"${"a".repeat(64)}","timestamp":0}""")
-        val batch = CensusApi.envelopeBatchId(listOf("b", "a"))
-        assertEquals("env-" + CensusApi.batchId(listOf("a", "b")), batch)
+        val batch = CensusApi.envelopeBatchId(items)
+        assertEquals("env-" + CensusApi.batchId(items), batch)
         assertTrue(api.uploadEnvelopes(credential, batch, items) is UploadResult.Accepted)
         val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
         assertEquals("/v1/envelopes", request.url.encodedPath)

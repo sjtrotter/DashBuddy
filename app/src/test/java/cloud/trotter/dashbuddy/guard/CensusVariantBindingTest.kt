@@ -30,7 +30,7 @@ class CensusVariantBindingTest {
         val pipeline = File(root, "core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/AccessibilityPipeline.kt").readText()
         val declaration = "const val SCREEN_PIPELINE_ID = \"accessibility.window\""
         assertTrue(registry.contains(declaration))
-        assertTrue(pipeline.contains(declaration))
+        assertTrue(pipeline.contains("SCREEN_PIPELINE_ID = PipelineRegistry.SCREEN_PIPELINE_ID"))
         val bus = File(root, "core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/DiskCaptureBus.kt").readText()
         assertTrue(bus.contains("source == PipelineRegistry.SCREEN_PIPELINE_ID"))
         val provider = File(root, "core/data/src/main/java/cloud/trotter/dashbuddy/core/data/di/CensusCredentialsModule.kt").readText()
@@ -42,7 +42,8 @@ class CensusVariantBindingTest {
 
     @Test fun `credentials spool and health ledger excluded from every backup channel`() {
         val root = RepoRoot.locate()
-        val paths = listOf("datastore/census_credentials.preferences_pb", "census/", "census/envelopes", "datastore/census_health.preferences_pb")
+        // census/ also covers census/envelopes in every backup channel.
+        val paths = listOf("datastore/census_credentials.preferences_pb", "census/", "datastore/census_health.preferences_pb")
         val extraction = File(root, "app/src/main/res/xml/data_extraction_rules.xml").readText()
         val backup = File(root, "app/src/main/res/xml/backup_rules.xml").readText()
         for (path in paths) {

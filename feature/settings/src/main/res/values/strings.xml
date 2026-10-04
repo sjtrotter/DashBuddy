@@ -126,11 +126,11 @@
     <string name="developer_settings_census_copy_id">Copy install id</string>
     <string name="developer_settings_census_reset">Reset census identity</string>
     <string name="developer_settings_census_reset_title">Reset census identity?</string>
-    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
+    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons and captures and switches capture sharing off. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
     <string name="developer_settings_census_share_captures">Share UNKNOWN captures (trusted installs)</string>
-    <string name="developer_settings_census_share_captures_explainer">Plaintext of UNKNOWN screens, after redaction, only while this install is trusted on the server.</string>
+    <string name="developer_settings_census_share_captures_explainer">Sends the text of UNKNOWN screens to the census server while this install is trusted there. UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details, and the server operator can read them.</string>
     <string name="developer_settings_census_captures_status">Captures shared: %1$d queued · %2$s</string>
-    <string name="developer_settings_census_captures_no_outcome">—</string>
+    <string name="developer_settings_census_captures_sent">%1$d sent last run</string>
 </resources>

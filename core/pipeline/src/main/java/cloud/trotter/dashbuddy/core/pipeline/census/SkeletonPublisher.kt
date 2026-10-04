@@ -75,7 +75,7 @@ class SkeletonPublisher internal constructor(
                     ))
                     if (!accepted) stats.onCensusSinkRefused()
                     val captureId = obs.captureId
-                    if (captureId != null && envelopeSink.isEnabled) {
+                    if (accepted && captureId != null && envelopeSink.isEnabled) {
                         stats.onCensusEnvelopePaired(envelopeSink.pair(captureId, outcome.skeleton.fingerprint))
                     }
                 }

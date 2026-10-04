@@ -7,12 +7,18 @@ interface CensusEnvelopeSink {
     val isEnabled: Boolean
     /** Park an UNKNOWN screen envelope until its skeleton pairs it (same frame). Bounded; never throws. */
     fun hold(captureId: String, platform: Platform, envelopeJson: String)
-    /** Pair a held envelope with its skeleton fingerprint. True when accepted for spooling. */
+    /** Pair a held envelope with its skeleton fingerprint. True when queued. */
     fun pair(captureId: String, fingerprint: String): Boolean
+    /**
+     * Identity boundary: forget every held and queued envelope and clear the envelope spool, serialized against
+     * the spool writer; a failure propagates (the caller leaves the identity in place).
+     */
+    suspend fun invalidate()
 }
 
 object NoOpCensusEnvelopeSink : CensusEnvelopeSink {
     override val isEnabled = false
     override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
     override fun pair(captureId: String, fingerprint: String) = false
+    override suspend fun invalidate() = Unit
 }

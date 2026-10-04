@@ -16,14 +16,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,11 +45,15 @@ class PersistentCensusEnvelopeSink internal constructor(
         @IoDispatcher io: CoroutineDispatcher,
     ) : this(preferences, spool, stats, CoroutineScope(SupervisorJob() + io))
 
-    private class Held(val platform: Platform, val json: String)
+    private class Held(val captureId: String, val platform: Platform, val json: String)
+    private class Queued(val held: Held, val fingerprint: String, val generation: Long)
     private val held = LinkedHashMap<String, Held>()
     private val enabled = AtomicBoolean()
+    private val warned = AtomicBoolean()
+    private val generation = AtomicLong()
+    private val mutex = Mutex()
     override val isEnabled: Boolean get() = enabled.get()
-    private val channel = Channel<CensusRecord>(
+    private val channel = Channel<Queued>(
         capacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
         onUndeliveredElement = { stats.envelopesDropped.incrementAndGet() },
@@ -55,23 +62,30 @@ class PersistentCensusEnvelopeSink internal constructor(
     init {
         scope.launch {
             preferences.censusUploadEnabled.combine(preferences.censusShareCaptures) { consent, share -> consent && share }
+                .distinctUntilChanged()
                 .collect { value ->
                     synchronized(held) {
                         enabled.set(value)
-                        if (!value) held.clear()
                     }
+                    if (!value) invalidate()
                 }
         }
         scope.launch {
             try {
-                for (record in channel) {
-                    if (!isEnabled) {
-                        stats.envelopesDropped.incrementAndGet()
-                        continue
-                    }
+                for (queued in channel) {
                     try {
-                        spool.append(record)
-                        stats.envelopesSpooled.incrementAndGet()
+                        mutex.withLock {
+                            if (queued.generation != generation.get() || !isEnabled) {
+                                stats.envelopesDropped.incrementAndGet()
+                                return@withLock
+                            }
+                            val record = project(queued) ?: return@withLock
+                            // Invalidation advances the generation even while projection is running.
+                            if (queued.generation == generation.get()) {
+                                spool.append(record)
+                                stats.envelopesSpooled.incrementAndGet()
+                            } else stats.envelopesDropped.incrementAndGet()
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -89,7 +103,7 @@ class PersistentCensusEnvelopeSink internal constructor(
             synchronized(held) {
                 if (!isEnabled) return
                 held.remove(captureId)
-                held[captureId] = Held(platform, envelopeJson)
+                held[captureId] = Held(captureId, platform, envelopeJson)
                 if (held.size > 16) held.remove(held.keys.first())
                 stats.envelopesHeld.incrementAndGet()
             }
@@ -100,29 +114,61 @@ class PersistentCensusEnvelopeSink internal constructor(
 
     override fun pair(captureId: String, fingerprint: String): Boolean {
         try {
-            val entry = synchronized(held) { held.remove(captureId) } ?: return false
-            if (!isEnabled) return false
-            val projected = EnvelopeProjection.project(entry.json, fingerprint)
+            return synchronized(held) {
+                val entry = held.remove(captureId) ?: return false
+                if (!isEnabled) return false
+                val accepted = channel.trySend(Queued(entry, fingerprint, generation.get())).isSuccess
+                if (!accepted) stats.envelopesDropped.incrementAndGet()
+                accepted
+            }
+        } catch (_: Throwable) {
+            stats.envelopesDropped.incrementAndGet()
+            return false
+        }
+    }
+
+    override suspend fun invalidate() {
+        synchronized(held) {
+            generation.incrementAndGet()
+            held.clear()
+        }
+        mutex.withLock { spool.clear() }
+    }
+
+    /** Projection and scanning stay on the IO consumer, never the sensing thread. */
+    private fun project(queued: Queued): CensusRecord? {
+        try {
+            val entry = queued.held
+            val projected = EnvelopeProjection.projectToObject(entry.json, queued.fingerprint)
             if (projected == null) {
                 stats.envelopesProjectionRefused.incrementAndGet()
-                return false
+                return null
             }
-            val marker = scan(Json.parseToJsonElement(projected), 0)
+            val marker = scan(projected, 0)
             if (marker != null) {
                 stats.envelopesSensitiveDropped.incrementAndGet()
                 if (warned.compareAndSet(false, true)) {
-                    Timber.tag("Census").w("census envelope dropped marker=%s", marker)
+                    Timber.tag("Census").w("census envelope dropped markerId=%s", markerLogId(marker))
                 }
-                return false
+                return null
             }
-            val accepted = channel.trySend(CensusRecord(entry.platform, fingerprint, projected,
-                projected.toByteArray(Charsets.UTF_8).size, captureId)).isSuccess
-            if (!accepted) stats.envelopesDropped.incrementAndGet()
-            return accepted
+            val json = projected.toString()
+            val bytes = json.toByteArray(Charsets.UTF_8).size
+            if (bytes > EnvelopeProjection.MAX_BYTES) {
+                stats.envelopesProjectionRefused.incrementAndGet()
+                return null
+            }
+            return CensusRecord(entry.platform, queued.fingerprint, json, bytes, entry.captureId)
         } catch (_: Throwable) {
             stats.envelopesProjectionRefused.incrementAndGet()
-            return false
+            return null
         }
+    }
+
+    /** Shape owner: core.pipeline.MarkerLogId; marker constants only, never captured text. */
+    private fun markerLogId(marker: String): String {
+        val head = marker.asSequence().filter { it.isLetterOrDigit() }.take(2).joinToString(separator = "")
+        return if (head.isEmpty()) "?${marker.length}" else "$head${marker.length}"
     }
 
     /** Every decoded key and string value, including metadata; excessive depth fails closed. */
@@ -137,9 +183,5 @@ class PersistentCensusEnvelopeSink internal constructor(
             is JsonPrimitive -> if (element.isString) return SensitiveMarkerScan.findMarker(element.content)
         }
         return null
-    }
-
-    private companion object {
-        val warned = AtomicBoolean()
     }
 }
