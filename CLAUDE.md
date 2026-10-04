@@ -109,7 +109,7 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :feature:bubble    → :domain, :core:designsystem
 
 matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
-census-contract (included build, Apache-2.0) ⇒ the census wire contract; :domain depends on it (api), the dashbuddy-census server includeBuilds it
+census-contract (included build, Apache-2.0) ⇒ the census wire contract + the rule-authoring contract (`authoring/`: vocabulary + `RuleDraft` generator, #1188) that the census dashboard and the app's round-trip gate share; :domain depends on it (api), the dashbuddy-census server includeBuilds it
 ```
 
 **Feature modules (MAD Phase 6 — complete; no extractions remain).** UI extracted per-feature under
@@ -347,6 +347,8 @@ included `matchers` build (ADR-0009). `:core:pipeline:importMatchersRules` canon
 (`TestRulesetFactory`); there are **no committed** rule assets, so a JSON5 edit flows straight into
 recognition tests. Rule order within a file is inert (unique priorities per section). `RuleCompiler`
 compiles, `ObservationClassifier` matches.
+Drafts generated from census captures are gated by `CensusDraftRoundTripTest` (compile alone →
+recognise the source frame → stay UNKNOWN on the negative corpus → compile merged).
 
 - **Partitions:** `matchFirst` evaluates the non-overrideable partition first, then the overrideable
   one, each priority-ordered (#419). `sensitive.known` is priority 0 + `overrideable: false`;
