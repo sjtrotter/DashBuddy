@@ -47,6 +47,7 @@ data class WalkedNode(
     val bounds: Bounds?,
     val precedingSiblingText: String?,
     val clickableAncestor: Boolean,
+    val precedingSiblingDesc: String? = null,
 )
 
 /** Paths keep original child indices, including holes left by malformed children. */
@@ -105,6 +106,9 @@ object EnvelopeWalk {
                 },
                 precedingSiblingText = if (index > 0) {
                     (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.string("text")
+                } else null,
+                precedingSiblingDesc = if (index > 0) {
+                    (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.string("desc")
                 } else null,
                 clickableAncestor = level.clickableAncestor,
             )

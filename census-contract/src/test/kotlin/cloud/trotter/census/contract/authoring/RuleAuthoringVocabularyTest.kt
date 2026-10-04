@@ -27,6 +27,21 @@ import org.junit.Test
 
 class RuleAuthoringVocabularyTest {
     @Test
+    fun `value shapes are anchored bounded portable regexes`() {
+        assertEquals(12, Vocabulary.VALUE_SHAPES_BY_TRANSFORM.size)
+        for ((transform, shape) in Vocabulary.VALUE_SHAPES_BY_TRANSFORM) {
+            assertTrue(transform, transform in Vocabulary.TRANSFORMS)
+            assertTrue(transform, shape.startsWith("^") && shape.endsWith("$"))
+            assertTrue(transform, shape.length <= 120)
+            assertTrue(transform, listOf("(?=", "(?!", "(?<").none { it in shape })
+            assertTrue(transform, !Regex("""\\(?:[1-9]|k[<{])""").containsMatchIn(shape))
+            Regex(shape)
+        }
+        assertTrue(Vocabulary.EMITTED_PREDICATES.containsAll(listOf("hasTextMatchesRegex", "siblingOf")))
+        assertEquals(listOf("stripPrefixes"), Vocabulary.EMITTED_PARAMETERIZED_TRANSFORMS)
+    }
+
+    @Test
     fun `field defaults and requirements are closed over the vocabulary`() {
         assertEquals(Vocabulary.SHAPES.toSet(), Vocabulary.FIELDS_BY_SHAPE.keys)
         for ((shape, fields) in Vocabulary.FIELDS_BY_SHAPE) {

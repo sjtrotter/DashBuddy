@@ -195,8 +195,101 @@ class RuleDraftTest {
         val result = ok(selection, node(children = listOf(node(id = null, text = "Zone"), node(id = null, text = "North"))))
         assertEquals(Json.parseToJsonElement("""{"all":[{"hasClassNameEndsWith":"TextView"},{"hasPrecedingSiblingText":"Zone"}]}"""),
             result.fields().getValue("zoneName").jsonObject.getValue("find"))
-        assertTrue(errors(selection, node(children = listOf(node(id = null, desc = "Zone"), node(id = null, text = "North"))))
-            .contains("field has no stable anchor at [1]"))
+
+    }
+
+    @Test
+    fun `shared id fields require a unique full value shape from the resolved transform chain`() {
+        val selection = base.copy(fields = listOf(FieldAssignment(child, "sessionPay", listOf("trim", "parseCurrency"))))
+        val payload = node(children = listOf(node(id = "value", text = "$8.30"), node(id = "value", text = "3.8 mi")))
+        val find = ok(selection, payload).fields().getValue("sessionPay").jsonObject.getValue("find")
+        assertEquals(buildJsonObject { put("all", JsonArray(listOf(
+            buildJsonObject { put("hasIdSuffix", "value") },
+            buildJsonObject { put("hasClassNameEndsWith", "TextView") },
+            buildJsonObject { put("hasTextMatchesRegex", RuleAuthoringVocabulary.VALUE_SHAPES_BY_TRANSFORM.getValue("parseCurrency")) },
+        ))) }, find)
+        for (values in listOf(listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "3.8 mi"))) {
+            assertEquals(listOf("ambiguous id for field at [0]"), errors(selection,
+                node(children = values.map { node(id = "value", text = it) })))
+        }
+        assertEquals(listOf("ambiguous id for field at [0]"), errors(selection.copy(
+            fields = listOf(FieldAssignment(child, "sessionPay", emptyList())),
+        ), payload))
+        // ANCHOR still quotes the literal and therefore refuses currency, even with a shaped FIELD.
+        assertTrue(errors(selection.copy(anchors = listOf(child)), payload).contains("unsafe anchor literal at [0]"))
+    }
+
+    @Test
+    fun `idless shape disambiguation counts same class siblings and requires full match`() {
+        val selection = base.copy(fields = listOf(FieldAssignment(child, "sessionPay")))
+        val result = ok(selection, node(children = listOf(node(id = null, text = "$8.30"), node(id = null, text = "3.8 mi"))))
+        val predicates = result.fields().getValue("sessionPay").jsonObject.getValue("find").jsonObject.getValue("all").jsonArray
+        assertEquals(2, predicates.size)
+        assertEquals(setOf("hasTextMatchesRegex"), predicates.last().jsonObject.keys)
+        for (values in listOf(listOf("$8.30", "$9.00"), listOf("$8.30 Guaranteed", "3.8 mi"))) {
+            assertEquals(listOf("field has no stable anchor at [0]"), errors(selection,
+                node(children = values.map { node(id = null, text = it) })))
+        }
+    }
+
+    @Test
+    fun `idless shape refuses a collision under another parent because find is envelope wide`() {
+        val selection = base.copy(fields = listOf(FieldAssignment(NodeRef(listOf(1, 0)), "sessionPay")))
+        val payload = node(children = listOf(
+            node(id = "first", children = listOf(node(id = null, text = "$9.00"))),
+            node(id = "second", children = listOf(node(id = null, text = "$8.30"))),
+        ))
+        assertEquals(listOf("field has no stable anchor at [1, 0]"), errors(selection, payload))
+    }
+
+    @Test
+    fun `desc sibling hash field still refuses without a stable redact predicate`() {
+        val selection = base.copy(shape = "task", fields = listOf(FieldAssignment(NodeRef(listOf(1)), "customerNameHash")))
+        assertEquals(listOf("field has no stable anchor at [1]"), errors(selection,
+            node(children = listOf(node(id = null, desc = "Customer"), node(id = null, text = "Sample Customer")))))
+    }
+
+    @Test
+    fun `desc only sibling emits siblingOf and refuses ambiguous or unsafe labels`() {
+        val selection = base.copy(fields = listOf(FieldAssignment(NodeRef(listOf(1)), "sessionPay")))
+        val children = listOf(node(id = null, desc = "Total"), node(id = null, text = "$8.30"))
+        val field = ok(selection, node(children = children)).fields().getValue("sessionPay").jsonObject
+        assertEquals(Json.parseToJsonElement("""{"siblingOf":{"hasDesc":"Total"},"offset":1,"read":"text","transform":"parseGlyphCurrency"}"""), field)
+        for (label in listOf("Total", "TOTAL")) {
+            assertEquals(listOf("ambiguous sibling label at [1]"), errors(selection,
+                node(children = children + node(id = "other", desc = label))))
+        }
+        assertEquals(listOf("unsafe anchor literal at [1]"), errors(selection,
+            node(children = listOf(node(id = null, desc = "Route 123"), children[1]))))
+        val withText = node(children = listOf(node(id = null, text = "Pay", desc = "Total"), children[1]))
+        assertTrue("find" in ok(selection, withText).fields().getValue("sessionPay").jsonObject)
+    }
+
+    @Test
+    fun `stripPrefix precedes the forced hash chain and preserves chrome in redact`() {
+        val prefix = "Deliver to door of "
+        val selection = base.copy(shape = "task", fields = listOf(
+            FieldAssignment(child, "customerNameHash", emptyList(), stripPrefix = prefix),
+        ))
+        val result = ok(selection, node(children = listOf(node(id = "name", text = prefix + "Sample Customer"))))
+        val field = result.fields().getValue("customerNameHash").jsonObject
+        assertEquals(Json.parseToJsonElement("""[{"stripPrefixes":["Deliver to door of "]},"trim","normalizeCustomerName","sha256"]"""), field["transform"])
+        val redact = result.rule().getValue("redact").jsonArray.single().jsonObject
+        assertEquals(JsonArray(listOf(JsonPrimitive(prefix))), redact["keepPrefix"])
+        assertEquals(JsonPrimitive("customerName"), redact["normalize"])
+        assertEquals(field["find"], redact["find"])
+        assertFalse(result.json5.contains("Sample Customer"))
+        assertEquals(listOf("stripPrefix is not a prefix of the value"), errors(selection,
+            node(children = listOf(node(id = "name", text = "Sample Customer")))))
+        for (unsafe in listOf("", "Route 123 ", "Bank account ", "$8 ")) {
+            assertTrue(errors(selection.copy(fields = listOf(FieldAssignment(child, "customerNameHash", stripPrefix = unsafe))),
+                node(children = listOf(node(id = "name", text = unsafe + "Sample Customer")))).contains("unsafe anchor literal at [0]"))
+        }
+        val plain = ok(base.copy(fields = listOf(FieldAssignment(child, "zoneName", listOf("trim", "lower"), "Zone: "))),
+            node(children = listOf(node(id = "zone", text = "Zone: North"))))
+        assertEquals(Json.parseToJsonElement("""[{"stripPrefixes":["Zone: "]},"trim","lower"]"""),
+            plain.fields().getValue("zoneName").jsonObject["transform"])
+        assertFalse("redact" in plain.rule())
     }
 
     @Test

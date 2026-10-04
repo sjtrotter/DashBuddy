@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.census
 
 import cloud.trotter.census.contract.authoring.RuleAuthoringVocabulary as Vocabulary
+import cloud.trotter.dashbuddy.core.pipeline.rules.RegexSafety
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -23,6 +24,14 @@ class RuleAuthoringVocabularyGuardTest {
     private val rulesSource = File(repoRoot, "core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules")
     private val definitions = Json.parseToJsonElement(File(repoRoot, "docs/rules.schema.json").readText())
         .jsonObject.getValue("\$defs").jsonObject
+
+    @Test
+    fun `every value shape compiles through the RE2 seam within the measured program budget`() {
+        for ((transform, shape) in Vocabulary.VALUE_SHAPES_BY_TRANSFORM) {
+            val size = RegexSafety.compileRegex(shape).programSize()
+            assertTrue("$transform measured program size $size", size in 1..1_000)
+        }
+    }
 
     @Test
     fun `domain enums keep declaration order`() {

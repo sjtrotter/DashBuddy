@@ -144,7 +144,24 @@ object RuleAuthoringVocabulary {
     )
     val EMITTED_PREDICATES: List<String> = listOf(
         "hasIdSuffix", "hasText", "hasDesc", "hasClassNameEndsWith", "isClickable",
-        "hasPrecedingSiblingText", "all", "exists",
+        "hasPrecedingSiblingText", "all", "exists", "hasTextMatchesRegex", "siblingOf",
+    )
+    val EMITTED_PARAMETERIZED_TRANSFORMS: List<String> = listOf("stripPrefixes")
+
+    /** Shapes disambiguate fields among same-id/class peers; they never replace an anchor. */
+    val VALUE_SHAPES_BY_TRANSFORM: Map<String, String> = mapOf(
+        "parseCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?$""",
+        "parseGlyphCurrency" to """^\$[0-9]{1,4}(,[0-9]{3})?(\.[0-9]{2})?$""",
+        "parseDistance" to """^[0-9]{1,3}(\.[0-9]{1,2})? ?(mi|km)$""",
+        "parseTotalMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
+        "parseMinutes" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
+        "parseDuration" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
+        "parseHrMin" to """^([0-9]{1,2} ?hr?s? ?)?[0-9]{1,3} ?min$""",
+        "parseDeadline" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)$""",
+        "stripDeadlinePrefix" to """^[A-Za-z ]{0,24}[0-9]{1,2}:[0-9]{2} ?(AM|PM|am|pm)$""",
+        "parseClockSeconds" to """^[0-9]{1,2}:[0-9]{2}$""",
+        "parseLeadingInt" to """^[0-9]{1,4}( .*)?$""",
+        "parsePercent" to """^[0-9]{1,3}(\.[0-9]+)?%$""",
     )
     val INTENT: Regex = Regex("^[a-z][a-z0-9_]{0,47}$")
     val PRIORITY_RANGE: IntRange = 1..998

@@ -58,6 +58,8 @@ class EnvelopeWalkTest {
         assertTrue(value.visible)
         assertFalse(requireNotNull(nodes.at(listOf(0))).visible)
         assertNull(requireNotNull(nodes.at(listOf(2))).precedingSiblingText)
+        assertEquals("Value", nodes.at(listOf(2))?.precedingSiblingDesc)
+        assertNull(nodes.at(listOf(2, 0))?.precedingSiblingDesc)
         assertEquals("Hint", nodes.at(listOf(2))?.hint)
         assertEquals("Pane", nodes.at(listOf(2))?.pane)
         assertNull(nodes.at(listOf(7)))
@@ -73,6 +75,7 @@ class EnvelopeWalkTest {
         val nodes = EnvelopeWalk.walk(payload)
         assertEquals(listOf(emptyList(), listOf(4), listOf(6)), nodes.map { it.path })
         assertNull(nodes.last().precedingSiblingText)
+        assertNull(nodes.last().precedingSiblingDesc)
         assertEquals(1, EnvelopeWalk.walk(payload, maxNodes = 5).size)
     }
 

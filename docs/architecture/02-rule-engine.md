@@ -317,6 +317,17 @@ must use their matching shape; both omit state and sensitive emits `overrideable
 fields force the canonical hash transform chain and auto-emit the matching redact selector.
 Single text-only anchors and ancestor-dependent binds warn; offer drafts warn that orders are absent.
 
+For shared-id fields, or id-less fields without a usable sibling label, an anchored transform value
+shape may disambiguate exactly one id/class peer or same-parent class peer; nonmatching or repeated
+values (including another parent's matching node, since `find` searches the envelope) still refuse
+as ambiguous/no stable anchor, and anchor predicates remain literal.
+An id-less field after a desc-only immediate sibling emits `siblingOf` with offset 1; unsafe labels
+and descriptions matching multiple nodes still refuse, hash fields still need a stable redact
+predicate, and text labels retain `hasPrecedingSiblingText`.
+An operator-chosen `stripPrefix` prepends the parameterized `stripPrefixes` transform and adds
+`keepPrefix` to hash-field redaction; unsafe prefixes and prefixes absent from the value still refuse,
+and canonical hash transforms remain mandatory.
+
 `CensusDraftRoundTripTest` gates accepted drafts through the real app path: compile alone → recognise
 the source frame and assert parsed values → stay UNKNOWN on every DoorDash negative frame (with
 both global and platform corpus floors) → compile merged at the smallest free production priority.

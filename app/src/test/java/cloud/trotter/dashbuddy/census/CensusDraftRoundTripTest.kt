@@ -35,6 +35,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Known-capture authoring gate (#1188). All paths are child indices from payload root; the tests
@@ -43,29 +44,33 @@ import java.security.MessageDigest
  * Offer (2026-08-28 15:31:47): O = [0,0,0,0,0,0,0]. Anchors O+[3,0,0] accept_button
  * and O+[0] accept_constraint_layout identify the legacy card chrome without quoting dynamic text.
  * Binds use that accept node and O+[0,1] secondary_action_button_dash_plus (both clickable).
- * Fields share prefix O+[1,2,0,0,0,0,0]: [1,0,0] payAmount ($8.30), [2,0,0] distance
- * (3.8 mi), [3,0,0] deliveryTimeText (Deliver by 3:49 PM). All three have id text_field AND
- * class TextView: id+class would read the first pay node three times. This gate MUST REFUSE all
- * three ambiguous field selectors, rather than embed money/deadline literals or invent navigation.
+ * Fields share prefix O+[1,2,0,0,0,0,0]: [1,0,0] payAmount, [2,0,0] distance (3.8 mi),
+ * [3,0,0] deliveryTimeText (Deliver by 3:49 PM, using stripDeadlinePrefix). All share id
+ * text_field and class TextView; distance and deadline now disambiguate by full value shape.
+ * Pay is actually "$8.30  Guaranteed (incl. tips)": the specified anchored currency shape DOES
+ * NOT match, so this gate still asserts exactly "ambiguous id for field" at the pay path.
+ * No constant or altered fixture substitutes for the failed read; the currency shape stays strict.
  *
  * Dropoff (2026-08-02 18:00:01): D = [0,0,0,0,0,1,0,3,1,1,0,2,0]. Anchors D
  * bottom_sheet_in_transit_navigation_container and D+[7] bottom_sheet_instructions_title combine
  * navigation chrome with customer-handoff chrome. Fields D+[2] bottom_sheet_task_title and D+[1]
  * bottom_sheet_task_arrive_by are unique ids, keeping the name and deadline OUT of rule literals.
- * The sanitized name slot includes a 'Deliver to' prefix; the specified plain-transform-only
- * authoring chain hashes its canonical key 'deliver t'. This pins current generator behavior,
- * not customer identity equivalence with production's parameterized stripPrefixes chain.
+ * The sanitized name slot uses "Deliver to " (not the longer shipped "Deliver to door of " form).
+ * stripPrefix removes that actual chrome prefix before canonical name normalization and hashing;
+ * keepPrefix preserves the label in the matching redact entry.
  *
  * Expanded summary (2026-09-07 08:20:08): S = [0,0,0,0,0]. Anchors S layout_bottom_sheet
  * and S+[2,1,0,0,0] bottomsheet_content_container are the available sheet ids. totalPay at
  * S+[2,1,0,0,0,0,0,2,0,0,2] is $40.57, id-less, and follows a desc-only Collapse node.
- * Its preceding sibling has NO text, so a stable scalar selector is unavailable: exact REFUSAL
- * is the gate result. The clickable preceding control is Collapse, not Expand; no expand binding.
+ * That label at the same path ending in [1] is a third anchor: the two generic sheet ids alone
+ * also match a negative frame, so the label narrows recognition to the expanded receipt.
+ * Its preceding sibling has NO text; siblingOf the unique Collapse desc reads the total at offset 1.
+ * The clickable preceding control is Collapse, not Expand; no expand binding.
  * No constant substitutes for a failed value read; isExpanded=true is the only operator constant.
  */
 class CensusDraftRoundTripTest {
     @Test
-    fun `offer refuses shared id fields rather than parsing pay three times`() {
+    fun `offer still refuses pay with trailing chrome while distance and deadline disambiguate`() {
         val envelope = fixture("offer_popup", "2026-08-28_15-31-47-225")
         val chrome = listOf(0, 0, 0, 0, 0, 0, 0)
         val rows = chrome + listOf(1, 2, 0, 0, 0, 0, 0)
@@ -77,13 +82,11 @@ class CensusDraftRoundTripTest {
             "offer:presented", "offer", "drafted_offer_popup", 50, offerSurface = "card",
             anchors = listOf(accept, ref(envelope, chrome + 0, "accept_constraint_layout")),
             fields = listOf(FieldAssignment(pay, "payAmount"), FieldAssignment(distance, "distance"),
-                FieldAssignment(deadline, "deliveryTimeText")),
+                FieldAssignment(deadline, "deliveryTimeText", listOf("stripDeadlinePrefix"))),
             binds = listOf(BindAssignment(accept, "acceptButton"), BindAssignment(
                 ref(envelope, chrome + listOf(0, 1), "secondary_action_button_dash_plus"), "declineButton")),
         )
-        assertEquals(DraftResult.Refused(listOf(pay, distance, deadline).map {
-            "ambiguous id for field at ${it.path}"
-        }), generate(envelope, selection))
+        assertEquals(DraftResult.Refused(listOf("ambiguous id for field at ${pay.path}")), generate(envelope, selection))
     }
 
     @Test
@@ -95,10 +98,37 @@ class CensusDraftRoundTripTest {
             anchors = listOf(ref(envelope, content, "bottom_sheet_in_transit_navigation_container"),
                 ref(envelope, content + 7, "bottom_sheet_instructions_title")),
             fields = listOf(
-                FieldAssignment(ref(envelope, content + 2, "bottom_sheet_task_title"), "customerNameHash"),
+                FieldAssignment(ref(envelope, content + 2, "bottom_sheet_task_title"), "customerNameHash", stripPrefix = "Deliver to "),
                 FieldAssignment(ref(envelope, content + 1, "bottom_sheet_task_arrive_by"), "deadlineText"),
             ),
         )
+        val fields = verifyRoundTrip(envelope, selection) as ParsedFields.TaskFields
+        assertEquals(TaskPhase.DROPOFF, fields.phase)
+        assertEquals(TaskSubFlow.NAVIGATION, fields.subFlow)
+        assertEquals("6:02 PM", fields.deadline?.text)
+        val assignment = selection.fields.first()
+        val rawName = requireNotNull(EnvelopeWalk.walk(envelope.getValue("payload").jsonObject)
+            .at(assignment.node.path)?.text)
+        val bareName = rawName.removePrefix(requireNotNull(assignment.stripPrefix)).trim()
+        // Same canonicalization as CustomerNameKey.kt (normalizeCustomerName): ROOT lowercase,
+        // letters/digits/whitespace only, then first token plus second token's initial.
+        val tokens = bareName.lowercase(Locale.ROOT)
+            .filter { it.isLetterOrDigit() || it.isWhitespace() }.trim()
+            .split(Regex("\\s+")).filter { it.isNotEmpty() }
+        assertTrue("fixture must contain a bare name", tokens.isNotEmpty())
+        val normalized = tokens.first() + tokens.getOrNull(1)?.let { " ${it.first()}" }.orEmpty()
+        val expectedHash = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
+            .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+        assertTrue("customer hash must use the normalized bare name", expectedHash == fields.customerNameHash)
+        val rule = assertOk(generate(envelope, selection)).fragment.getValue("screens").jsonArray.single().jsonObject
+        val redact = rule.getValue("redact").jsonArray.single().jsonObject
+        assertEquals(JsonPrimitive("customerName"), redact["normalize"])
+        assertEquals(JsonArray(listOf(JsonPrimitive("Deliver to "))), redact["keepPrefix"])
+        assertEquals(rule.getValue("parse").jsonObject.getValue("fields").jsonObject
+            .getValue("customerNameHash").jsonObject["find"], redact["find"])
+    }
+
+    private fun verifyRoundTrip(envelope: JsonObject, selection: Selections): ParsedFields {
         val draft = assertOk(generate(envelope, selection))
         assertNoCaptureIdentifiers(envelope, draft)
         println(draft.json5) // Exactly once, after the provenance/privacy assertion.
@@ -106,19 +136,7 @@ class CensusDraftRoundTripTest {
         val ruleset = Ruleset(RuleCompiler.compileRules<UiNode>(JsonArray(listOf(rule)), RuleContext.SCREEN))
         val source = TestResourceLoader.nodeFromElement(envelope.getValue("payload"))
         val match = requireNotNull(ruleset.matchFirst(source, platformWire = "doordash")) { "source frame must match" }
-        assertEquals("doordash.screen.drafted_dropoff_navigation", match.ruleId)
-        val fields = ParsedFieldsFactory.create(match.shape, match.fields) as ParsedFields.TaskFields
-        assertEquals(TaskPhase.DROPOFF, fields.phase)
-        assertEquals(TaskSubFlow.NAVIGATION, fields.subFlow)
-        assertEquals("6:02 PM", fields.deadline?.text)
-        val expectedHash = MessageDigest.getInstance("SHA-256").digest("deliver t".toByteArray(Charsets.UTF_8))
-            .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-        assertEquals(expectedHash, fields.customerNameHash)
-        val redact = rule.getValue("redact").jsonArray.single().jsonObject
-        assertEquals(JsonPrimitive("customerName"), redact["normalize"])
-        assertEquals(rule.getValue("parse").jsonObject.getValue("fields").jsonObject
-            .getValue("customerNameHash").jsonObject["find"], redact["find"])
-
+        assertEquals("doordash.screen.${selection.intent}", match.ruleId)
         val negatives = TestResourceLoader.loadSnapshots(NegativeCorpusStaysUnknownTest.FOLDER)
         assertTrue("negative corpus floor", negatives.size >= NegativeCorpusStaysUnknownTest.MINIMUM_FRAMES)
         val platformNegatives = negatives.filter {
@@ -139,10 +157,11 @@ class CensusDraftRoundTripTest {
         val compiled = RuleCompiler.compileRules<UiNode>(JsonArray(production + mergedRule), RuleContext.SCREEN)
         assertTrue("merged compiler must retain the draft", compiled.any { it.id == match.ruleId })
         assertEquals(production.size + 1, compiled.size)
+        return ParsedFieldsFactory.create(match.shape, match.fields)
     }
 
     @Test
-    fun `expanded summary refuses total pay without a stable field anchor`() {
+    fun `expanded summary reads total via desc sibling and passes the round trip`() {
         val envelope = fixture("delivery_summary_expanded", "2026-09-07_08-20-08-176")
         val sheet = listOf(0, 0, 0, 0, 0)
         val total = NodeRef(sheet + listOf(2, 1, 0, 0, 0, 0, 0, 2, 0, 0, 2))
@@ -151,14 +170,22 @@ class CensusDraftRoundTripTest {
         assertEquals("$40.57", totalNode.text)
         assertNull(totalNode.idSuffix)
         assertNull(totalNode.precedingSiblingText)
+        assertEquals("Collapse", totalNode.precedingSiblingDesc)
         val selection = Selections(
             "post:task", "post_task", "drafted_delivery_summary_expanded", 50,
             anchors = listOf(ref(envelope, sheet, "layout_bottom_sheet"),
-                ref(envelope, sheet + listOf(2, 1, 0, 0, 0), "bottomsheet_content_container")),
+                ref(envelope, sheet + listOf(2, 1, 0, 0, 0), "bottomsheet_content_container"),
+                NodeRef(total.path.dropLast(1) + 1)),
             fields = listOf(FieldAssignment(total, "totalPay")),
             constants = listOf(Constant("isExpanded", JsonPrimitive(true))),
         )
-        assertEquals(DraftResult.Refused(listOf("field has no stable anchor at ${total.path}")), generate(envelope, selection))
+        val fields = verifyRoundTrip(envelope, selection) as ParsedFields.PostTaskFields
+        assertEquals(40.57, fields.totalPay, 0.000001)
+        assertTrue(fields.isExpanded)
+        val rule = assertOk(generate(envelope, selection)).fragment.getValue("screens").jsonArray.single().jsonObject
+        val totalExpression = rule.getValue("parse").jsonObject.getValue("fields").jsonObject.getValue("totalPay").jsonObject
+        assertEquals(Json.parseToJsonElement("""{"hasDesc":"Collapse"}"""), totalExpression["siblingOf"])
+        assertFalse("find" in totalExpression)
     }
 
     private fun fixture(folder: String, prefix: String): JsonObject {

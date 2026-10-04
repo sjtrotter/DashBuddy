@@ -38,7 +38,12 @@ import kotlinx.serialization.json.put
 import java.util.Locale
 
 data class NodeRef(val path: List<Int>)
-data class FieldAssignment(val node: NodeRef, val field: String, val transform: List<String>? = null)
+data class FieldAssignment(
+    val node: NodeRef,
+    val field: String,
+    val transform: List<String>? = null,
+    val stripPrefix: String? = null,
+)
 data class BindAssignment(val node: NodeRef, val target: String)
 data class Constant(val name: String, val value: JsonPrimitive)
 data class Selections(
@@ -118,9 +123,32 @@ object RuleDraft {
             selections.constants.forEach { fields[it.name] = it.value }
             val redacts = mutableListOf<JsonElement>()
             for (assignment in selections.fields) {
-                val find = predicate(assignment.node, Role.FIELD)
                 val node = byPath[assignment.node.path]
                 val spec = specs[assignment.field]
+                // Hash fields cannot opt out of normalization/hashing or transform the digest later.
+                val transforms = if (spec?.kind == FieldKind.PLAIN) {
+                    assignment.transform ?: spec.defaultTransform
+                } else spec?.defaultTransform.orEmpty()
+                val siblingDesc = node?.precedingSiblingDesc?.takeIf {
+                    node.idSuffix == null && node.precedingSiblingText == null
+                }
+                val selector = if (siblingDesc != null) {
+                    if (nodes.count { it.desc?.equals(siblingDesc, ignoreCase = true) == true } > 1) {
+                        errors += "ambiguous sibling label at ${assignment.node.path}"
+                    }
+                    buildJsonObject {
+                        put("siblingOf", literal(assignment.node, "hasDesc", siblingDesc))
+                        put("offset", 1)
+                    }
+                } else predicate(assignment.node, Role.FIELD, transforms)?.let { find ->
+                    buildJsonObject { put("find", find) }
+                }
+                assignment.stripPrefix?.let { prefix ->
+                    literal(assignment.node, "stripPrefix", prefix)
+                    if (node?.text?.startsWith(prefix) != true) {
+                        errors += "stripPrefix is not a prefix of the value"
+                    }
+                }
                 val read = when {
                     node?.text != null -> "text"
                     node?.desc != null -> "contentDescription"
@@ -131,20 +159,23 @@ object RuleDraft {
                         "hash field ${assignment.field} has no text/desc slot"
                     } else "field ${assignment.field} has no text/desc slot"
                 }
-                if (find == null || read == null || spec == null) continue
-                // Hash fields cannot opt out of normalization/hashing or transform the digest later.
-                val transforms = if (spec.kind == FieldKind.PLAIN) {
-                    assignment.transform ?: spec.defaultTransform
-                } else spec.defaultTransform
+                if (selector == null || read == null || spec == null) continue
                 fields[assignment.field] = buildJsonObject {
-                    put("find", find)
+                    selector.forEach { (key, value) -> put(key, value) }
                     put("read", read)
-                    if (transforms.size == 1) put("transform", transforms.single())
+                    if (assignment.stripPrefix != null) {
+                        put("transform", JsonArray(listOf(buildJsonObject {
+                            put("stripPrefixes", strings(listOf(assignment.stripPrefix)))
+                        }) + transforms.map { JsonPrimitive(it) }))
+                    } else if (transforms.size == 1) put("transform", transforms.single())
                     else if (transforms.isNotEmpty()) put("transform", strings(transforms))
                 }
                 if (spec.kind != FieldKind.PLAIN) {
+                    // Redaction needs a node predicate, not a sibling parse expression.
+                    val find = selector["find"] ?: predicate(assignment.node, Role.REDACT) ?: continue
                     redacts += buildJsonObject {
                         put("find", find)
+                        assignment.stripPrefix?.let { put("keepPrefix", strings(listOf(it))) }
                         if (spec.kind == FieldKind.CUSTOMER_NAME_HASH) put("normalize", "customerName")
                     }
                 }
@@ -249,7 +280,16 @@ object RuleDraft {
             }
         }
 
-        private fun predicate(ref: NodeRef, role: Role): JsonObject? {
+        private fun literal(ref: NodeRef, key: String, text: String): JsonObject {
+            if (text.isBlank() || text.length > Vocabulary.ANCHOR_TEXT_MAX || '$' in text ||
+                Regex("\\p{Nd}{3,}").containsMatchIn(text) || text.contains("[redacted", ignoreCase = true) ||
+                SensitiveMarkerScan.findMarker(text) != null) {
+                errors += "unsafe anchor literal at ${ref.path}"
+            }
+            return atom(key, text)
+        }
+
+        private fun predicate(ref: NodeRef, role: Role, transforms: List<String> = emptyList()): JsonObject? {
             val node = byPath[ref.path]
             if (node == null) {
                 errors += "node path does not resolve: ${ref.path}"
@@ -260,13 +300,15 @@ object RuleDraft {
                 if (simpleClass == null) errors += "node has no simple class: ${ref.path}"
                 return simpleClass?.let { atom("hasClassNameEndsWith", it) }
             }
-            fun literal(key: String, text: String): JsonObject {
-                if (text.isBlank() || text.length > Vocabulary.ANCHOR_TEXT_MAX || '$' in text ||
-                    Regex("\\p{Nd}{3,}").containsMatchIn(text) || text.contains("[redacted", ignoreCase = true) ||
-                    SensitiveMarkerScan.findMarker(text) != null) {
-                    errors += "unsafe anchor literal at ${ref.path}"
-                }
-                return atom(key, text)
+            fun literal(key: String, text: String): JsonObject = literal(ref, key, text)
+            fun shapePredicate(peers: List<WalkedNode>): JsonObject? {
+                if (role != Role.FIELD) return null
+                val shape = transforms.firstNotNullOfOrNull { Vocabulary.VALUE_SHAPES_BY_TRANSFORM[it] }
+                    ?: return null
+                val regex = Regex(shape)
+                if (node.text?.let { regex.matches(it) } != true) return null
+                if (peers.count { it.text?.let(regex::matches) == true } != 1) return null
+                return atom("hasTextMatchesRegex", shape)
             }
             val suffix = node.idSuffix
             if (suffix != null) {
@@ -283,7 +325,9 @@ object RuleDraft {
                     }
                 } else if (peers.count { it.simpleClass == node.simpleClass } > 1) {
                     // A find returns the FIRST node: id + class must actually identify the selected value.
-                    errors += "ambiguous id for ${role.name.lowercase(Locale.ROOT)} at ${ref.path}"
+                    val shape = shapePredicate(peers.filter { it.simpleClass == node.simpleClass })
+                    if (shape != null) predicates += shape
+                    else errors += "ambiguous id for ${role.name.lowercase(Locale.ROOT)} at ${ref.path}"
                 }
                 return all(predicates)
             }
@@ -296,6 +340,17 @@ object RuleDraft {
             }
             val preceding = node.precedingSiblingText
             if (preceding == null) {
+                val peers = nodes.filter {
+                    it.path.size == node.path.size && it.path.dropLast(1) == node.path.dropLast(1) &&
+                        it.simpleClass == node.simpleClass
+                }
+                val shape = shapePredicate(peers)
+                // The emitted find searches the envelope, not just this parent. Another parent's
+                // matching value would silently select the wrong node, so retain the refusal there.
+                val envelopeShape = if (shape != null) shapePredicate(nodes.filter {
+                    node.simpleClass?.let { cls -> it.className?.endsWith(cls) } == true
+                }) else null
+                if (envelopeShape != null) return classPredicate()?.let { all(listOf(it, envelopeShape)) }
                 errors += "field has no stable anchor at ${ref.path}"
                 return null
             }
