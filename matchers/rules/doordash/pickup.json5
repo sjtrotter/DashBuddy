@@ -478,6 +478,35 @@
       ],
       "branches": [
         {
+          "comment": "#1141 — the 8.99.20 restaurant wait screen whose OWN chrome states the arrival ('Merchant notified of your arrival', with the 'Stay in your car' curbside card or the 'Waiting for your order?' survey beneath). Screen-authoritative: this render IS the pickup arrival, so it declares `task:pickup:arrived` — the fielded 09-27 11:50 frame folded a 16-min wait to 0.0 because the click alone carries no flow and this branch did not exist. `TaskLifecycle` stamps only the FIRST arrival, so a repeat render is inert. The other branches below stay flowless (the survey alone — 'What's causing your wait' — can render before arrival chrome exists, #501's GoPuff posture). Redact is rule-level and unchanged.",
+          "intent": "pickup_wait_survey",
+          "state": {
+            "flow": "task:pickup:arrived",
+            "modeHint": "online"
+          },
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasTextContaining": "Merchant notified of your arrival"
+                }
+              },
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasTextContaining": "Stay in your car"
+                    },
+                    {
+                      "hasTextContaining": "Waiting for your order"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
           "comment": "Normal DoorDash wait survey.",
           "require": {
             "all": [
