@@ -611,11 +611,24 @@ otherwise use the machine value under #1030's source-keyed trust rule. The DAO m
 agreement. Domain `SessionRecord.reportedEarnings` is effective; `machineReportedEarnings` retains
 provenance. Cards, drill-down, CSV, period and daily totals all use the effective report.
 
-The projector applies the correction by session PK within the batch transaction, after session
-upserts and in event order. Guards skip and warn for a missing session, a session that is not ENDED,
-an unknown operation, or a SET outside finite 0..10 000. The repository rejects values on CLEAR /
-RESTORE_MACHINE. The pure fold passes session context through unchanged: a correction days later
-never stretches online time. Hydration and lifecycle upserts carry all three override columns.
+**Eligibility is judged by the pure fold at the correction's position in the log** (Astra r1 P1): the
+target must already be an ENDED session in the fold context, so one batch or any batch boundary gives the
+same answer and a refold can never flip a correction. **The fold carries NO context back** (fable F1): a
+bookkeeping event must not mark the ended session `touched` and re-upsert its whole row from a hydration
+round-trip (itself batch-dependent) — the by-PK write is the only row effect. The projector applies by
+session PK within the batch transaction, after session upserts and in event order
+(`SessionReportApply.kt`, its own file — `AnalyticsProjector.kt` is past the P3 ceiling), with guards that
+skip and WARN (ids/enum only) as defence-in-depth: a missing session, a session that is not ENDED, an
+unknown operation, or a SET failing `SessionReportRule.isValidSet` (finite, 0..10 000 — the ONE validity
+owner the dialog, the repository and the projector all call). The applied triple — never a re-read — is
+copied onto any in-memory context so a later same-batch upsert cannot wipe it. The SQL mirror lives in
+`SessionReportSql.kt`, interpolating the `:domain` operation / end-source constants, and uses `WHEN
+reportedEarnings > 0` so a NEGATIVE non-summary machine value is no report in SQL exactly as in Kotlin
+(the matrix carries −5.0; the unattributed remainder stays floored at 0). The repository rejects values on
+CLEAR / RESTORE_MACHINE; the dialog disables a tap that would append a no-op duplicate (already SET to the
+same cents, already CLEAR). The decode-error log in `AppEventRepo` names the exception class only — its
+message embeds the payload JSON, a driver note included. Hydration and lifecycle upserts carry all three
+override columns.
 Room v16→v17 adds only these nullable columns; there is no `PROJECTOR_VERSION` bump because this
 event type is absent from history.
 

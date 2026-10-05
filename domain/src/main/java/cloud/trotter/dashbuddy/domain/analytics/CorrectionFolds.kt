@@ -189,11 +189,21 @@ internal object CorrectionFolds {
         )
     }
 
-    /** #1134: bookkeeping only — pass context through without advancing session liveness. */
+    /**
+     * #1134: bookkeeping only. ELIGIBILITY IS JUDGED HERE, at the correction's position in the log (Astra
+     * r1 P1): the target must already be an ENDED session in [context] — the same answer in one batch or
+     * across any batch boundary, so a refold can never flip the outcome. The outcome carries NO context
+     * (fable review F1): returning one would mark the ended session `touched` and re-upsert its whole row
+     * from a hydration round-trip, which is itself batch-dependent — the by-PK write is the only row effect.
+     * The projector's by-PK guards stay as defence-in-depth.
+     */
     fun foldSessionReportCorrection(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
         val p = event.event.payload as? SessionReportCorrectionPayload
-            ?: return FoldOutcome(context = context, skip = "SESSION_REPORT_CORRECTION: missing/malformed payload")
-        return FoldOutcome(context = context, sessionReportCorrection = SessionReportCorrectionFold(p.sessionId, p.operation, p.newReported))
+            ?: return FoldOutcome(context = null, skip = "SESSION_REPORT_CORRECTION: missing/malformed payload")
+        if (context == null || context.sessionId != p.sessionId || context.endedAt == null) {
+            return FoldOutcome(context = null, skip = "SESSION_REPORT_CORRECTION: target session unknown or not ended at this log position")
+        }
+        return FoldOutcome(context = null, sessionReportCorrection = SessionReportCorrectionFold(p.sessionId, p.operation, p.newReported))
     }
 
     /**

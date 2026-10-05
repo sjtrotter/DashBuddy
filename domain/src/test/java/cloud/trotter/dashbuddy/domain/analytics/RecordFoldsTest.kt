@@ -1823,8 +1823,8 @@ class RecordFoldsTest {
         )
     }
     @Test
-    fun `session report correction dispatches a decision without changing context or liveness`() {
-        val ctx = SessionFoldContext("483", Platform.DoorDash, 100L, 200L, endedAt = 200L)
+    fun `session report correction dispatches a decision and carries NO context back (#1134, fable F1)`() {
+        val ended = SessionFoldContext("483", Platform.DoorDash, 100L, 200L, endedAt = 200L)
         for ((op, value) in listOf(
             SessionReportOperation.CLEAR to null,
             SessionReportOperation.SET to 12.5,
@@ -1832,18 +1832,35 @@ class RecordFoldsTest {
         )) {
             val event = ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 999_999L,
                 SessionReportCorrectionPayload("483", op, value))
-            val outcome = RecordFolds.foldEvent(event, ctx, null)
-            assertEquals(ctx, outcome.context)
+            val outcome = RecordFolds.foldEvent(event, ended, null)
+            // No context back: the ended session's row is never re-upserted for bookkeeping (batch-independent).
+            assertNull(outcome.context)
             assertEquals(SessionReportCorrectionFold("483", op, value), outcome.sessionReportCorrection)
             assertNull(outcome.skip)
-            assertNull(RecordFolds.foldEvent(event, null, null).context)
         }
         for (payload in listOf(null, SessionStopPayload("483", 200L, SessionEndSource.EARLY_OFFLINE))) {
-            val malformed = RecordFolds.foldEvent(ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 999_999L, payload), ctx, null)
-            assertEquals(ctx, malformed.context)
+            val malformed = RecordFolds.foldEvent(ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 999_999L, payload), ended, null)
+            assertNull(malformed.context)
             assertNull(malformed.sessionReportCorrection)
             assertEquals("SESSION_REPORT_CORRECTION: missing/malformed payload", malformed.skip)
         }
+    }
+
+    @Test
+    fun `a session report correction whose target is live or unknown at its log position is refused (#1134, Astra r1 P1)`() {
+        val event = ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 1_500L,
+            SessionReportCorrectionPayload("483", SessionReportOperation.CLEAR, null))
+        val live = SessionFoldContext("483", Platform.DoorDash, 1_000L, 1_000L)
+        for (ctx in listOf(live, null)) {
+            val outcome = RecordFolds.foldEvent(event, ctx, null)
+            assertNull(outcome.sessionReportCorrection)
+            assertNull(outcome.context)
+            assertEquals("SESSION_REPORT_CORRECTION: target session unknown or not ended at this log position", outcome.skip)
+        }
+        assertEquals(
+            SessionReportCorrectionFold("483", SessionReportOperation.CLEAR, null),
+            RecordFolds.foldEvent(event, live.copy(endedAt = 2_000L), null).sessionReportCorrection,
+        )
     }
 
 }

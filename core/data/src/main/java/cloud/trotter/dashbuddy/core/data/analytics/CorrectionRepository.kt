@@ -210,9 +210,7 @@ class CorrectionRepository @Inject constructor(
         require(operation in setOf(SessionReportOperation.SET, SessionReportOperation.CLEAR, SessionReportOperation.RESTORE_MACHINE)) {
             "unknown session report operation"
         }
-        require(if (operation == SessionReportOperation.SET) {
-            value != null && value.isFinite() && value >= 0.0 && value <= SessionReportRule.MAX_REPORTED
-        } else value == null) { "invalid session report value" }
+        require(if (operation == SessionReportOperation.SET) SessionReportRule.isValidSet(value) else value == null) { "invalid session report value" }
         appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.SESSION_REPORT_CORRECTION,

@@ -26,12 +26,10 @@ import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
 import cloud.trotter.dashbuddy.domain.analytics.SessionAssignFold
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportCorrectionFold
-import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
-import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -245,19 +243,19 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
                     is Adjustment.SessionReportCorrect -> {
-                        val skipped = applySessionReportCorrection(adj.fold, adj.occurredAt)
-                        if (!skipped) {
-                            // Coherent with the by-PK write; never advance liveness for bookkeeping.
-                            val row = analyticsDao.sessionRecord(adj.fold.sessionId)
+                        // #1134 (fable review F1/F3): by-PK write only; the written triple (never a re-read) is
+                        // copied onto any in-memory context so a later same-batch upsert cannot wipe it.
+                        val written = analyticsDao.applySessionReportCorrection(adj.fold, adj.occurredAt)
+                        if (written != null) {
                             contexts[adj.fold.sessionId]?.let { ctx ->
-                                if (row != null) contexts[adj.fold.sessionId] = ctx.copy(
-                                    reportOverrideMode = row.reportOverrideMode,
-                                    reportOverride = row.reportOverride,
-                                    reportCorrectedAt = row.reportCorrectedAt,
+                                contexts[adj.fold.sessionId] = ctx.copy(
+                                    reportOverrideMode = written.mode,
+                                    reportOverride = written.value,
+                                    reportCorrectedAt = written.correctedAt,
                                 )
                             }
                         }
-                        skipped
+                        written == null
                     }
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
@@ -566,35 +564,6 @@ class AnalyticsProjector @Inject constructor(
         a == null && b == null -> true
         a == null || b == null -> false
         else -> Math.round(a * 100.0) == Math.round(b * 100.0)
-    }
-
-    /** #1134 — apply by PK. Guards SKIP + WARN (ids only), never throw. */
-    private suspend fun applySessionReportCorrection(fold: SessionReportCorrectionFold, occurredAt: Long): Boolean {
-        val session = analyticsDao.sessionRecord(fold.sessionId) ?: run {
-            Timber.tag(TAG).w("SESSION_REPORT_CORRECTION: target session %s not found — skipped", fold.sessionId)
-            return true
-        }
-        if (session.endedAt == null) {
-            Timber.tag(TAG).w("SESSION_REPORT_CORRECTION: target session %s still live — skipped", fold.sessionId)
-            return true
-        }
-        when (fold.operation) {
-            SessionReportOperation.SET -> {
-                val v = fold.value
-                if (v == null || !v.isFinite() || v < 0.0 || v > SessionReportRule.MAX_REPORTED) {
-                    Timber.tag(TAG).w("SESSION_REPORT_CORRECTION: SET value out of bounds for session %s — skipped", fold.sessionId)
-                    return true
-                }
-                analyticsDao.setSessionReportOverride(fold.sessionId, SessionReportOperation.SET, v, occurredAt)
-            }
-            SessionReportOperation.CLEAR -> analyticsDao.setSessionReportOverride(fold.sessionId, SessionReportOperation.CLEAR, null, occurredAt)
-            SessionReportOperation.RESTORE_MACHINE -> analyticsDao.setSessionReportOverride(fold.sessionId, null, null, null)
-            else -> {
-                Timber.tag(TAG).w("SESSION_REPORT_CORRECTION: unknown operation for session %s — skipped", fold.sessionId)
-                return true
-            }
-        }
-        return false
     }
 
     /**

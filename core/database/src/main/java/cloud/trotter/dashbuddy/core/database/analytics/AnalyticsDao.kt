@@ -1118,7 +1118,3 @@ interface AnalyticsDao {
     suspend fun lastOfferNonFuelPerMileInSession(id: String): Double?
 }
 
-/** SQL mirror of domain SessionReportRule; session alias is always `s`. Matrix-tested against Kotlin. */
-object SessionReportSql {
-    const val EFFECTIVE_REPORTED_SQL = "CASE WHEN s.reportOverrideMode = 'SET' THEN s.reportOverride WHEN s.reportOverrideMode = 'CLEAR' THEN NULL WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END"
-}

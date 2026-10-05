@@ -12,6 +12,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 object SessionReportRule {
     const val MAX_REPORTED = 10_000.0
 
+    /** The ONE validity rule for a SET value (dialog, repository and projector all call this): finite, 0 ≤ v ≤ [MAX_REPORTED]. */
+    fun isValidSet(value: Double?): Boolean = value != null && value.isFinite() && value >= 0.0 && value <= MAX_REPORTED
+
     fun effectiveReported(
         reportedEarnings: Double?,
         endSource: String?,

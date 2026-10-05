@@ -31,7 +31,12 @@ internal fun SessionReportDialog(
     onConfirm: (String, Double?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val value = amount.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 && it <= SessionReportRule.MAX_REPORTED }
+    val value = amount.toDoubleOrNull()?.takeIf { SessionReportRule.isValidSet(it) }
+    // Fable review F7: a tap that changes nothing must not append a duplicate correction event.
+    val currentOverride = session.reportOverride
+    val alreadySet = session.reportOverrideMode == SessionReportOperation.SET &&
+        value != null && currentOverride != null && Math.round(value * 100.0) == Math.round(currentOverride * 100.0)
+    val alreadyCleared = session.reportOverrideMode == SessionReportOperation.CLEAR
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.session_report_dialog_title, session.platform.displayName)) },
@@ -51,7 +56,7 @@ internal fun SessionReportDialog(
                     label = { Text(stringResource(R.string.session_report_dialog_note)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                TextButton(onClick = { onConfirm(SessionReportOperation.CLEAR, null) }) {
+                TextButton(onClick = { onConfirm(SessionReportOperation.CLEAR, null) }, enabled = !alreadyCleared) {
                     Text(stringResource(R.string.session_report_dialog_clear))
                 }
                 TextButton(
@@ -61,7 +66,7 @@ internal fun SessionReportDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(SessionReportOperation.SET, value) }, enabled = value != null) {
+            TextButton(onClick = { onConfirm(SessionReportOperation.SET, value) }, enabled = value != null && !alreadySet) {
                 Text(stringResource(R.string.session_report_dialog_set))
             }
         },
