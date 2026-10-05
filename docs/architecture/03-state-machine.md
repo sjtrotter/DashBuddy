@@ -182,7 +182,14 @@ stamped by `applyModeTransition` into Paused and cleared on the way out, armed/c
 `EffectMap.diffPauseSafetyTimer` like the other three region timers — because before round 4 its
 deadline lived ONLY in the engine's in-memory timer map, so a restore into Paused had no timer of any
 kind and a pocketed phone whose countdown ended kept the session live for the next morning's dash to
-RESUME. **A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
+RESUME. **The paused-dash PUSH is deliberately NOT a mode writer (#1090, decision pass 2026-10-05):**
+`doordash.notification.dash_paused` recognizes DoorDash's "Your current dash has been paused" push
+(it lands ~8 s before the screen-derived `DASH_PAUSED`) with a log effect only — no `state`, no
+`modeHint`. The pause-safety deadline is observation time + the PARSED remaining pause + a 1 s
+buffer, and the push carries no countdown, so letting it declare Paused would arm a net that ends the
+session almost immediately; a stale or re-posted push could also re-pause a resumed dash. The screen
+stays the authority; the push is corroborating evidence for desk analysis. Promoting it to a lifecycle
+input needs a countdown source and two field sightings showing it never arrives late. **A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
 `TimeoutType.REGION_TIMERS` arm or cancel while `recovering == true`, because such an arm is
 scheduled against a replayed frame's timestamp and so fires at the 1 ms floor mid-recovery — logging
 a `Timer Expired` WARN into the shareable log for a pending the hygiene may be about to drop (P7),

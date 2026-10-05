@@ -12,7 +12,7 @@
 `AccessibilityNodeMapper` normalizes window content into an immutable `UiNode` tree (defined in
 `:domain`). Per-event-type sub-pipelines (`ContentChangedPipeline` — coalesced as one burst, #1148,
 `StateChangedPipeline`, `WindowsChangedPipeline`, plus click handling in `AccessibilityPipeline`)
-and a parallel `NotificationPipeline` (`NotificationListener` → `NotificationFilter` →
+and a parallel `NotificationPipeline` (informational notification rules such as the #1090 paused-dash push carry no state and emit a DEBUG `Rule LOG` line only — see §3; `NotificationListener` → `NotificationFilter` →
 `NotificationMapper`) emit `PipelineEvent`s. `AccessibilityPipeline.output()` drops in stages:
 a fail-closed **rulesets-not-loaded** gate (#432), then **sensitive**/**noise** (the shared content
 gate, #399), then **disabled-platform** (defense-in-depth), then **UNKNOWN** (captured to disk for
