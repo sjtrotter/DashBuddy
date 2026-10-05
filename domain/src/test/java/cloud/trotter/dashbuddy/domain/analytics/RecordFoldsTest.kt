@@ -17,6 +17,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
@@ -1820,4 +1822,28 @@ class RecordFoldsTest {
             d1.realizedMiles + d2.realizedMiles <= span + 1e-9,
         )
     }
+    @Test
+    fun `session report correction dispatches a decision without changing context or liveness`() {
+        val ctx = SessionFoldContext("483", Platform.DoorDash, 100L, 200L, endedAt = 200L)
+        for ((op, value) in listOf(
+            SessionReportOperation.CLEAR to null,
+            SessionReportOperation.SET to 12.5,
+            SessionReportOperation.RESTORE_MACHINE to null,
+        )) {
+            val event = ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 999_999L,
+                SessionReportCorrectionPayload("483", op, value))
+            val outcome = RecordFolds.foldEvent(event, ctx, null)
+            assertEquals(ctx, outcome.context)
+            assertEquals(SessionReportCorrectionFold("483", op, value), outcome.sessionReportCorrection)
+            assertNull(outcome.skip)
+            assertNull(RecordFolds.foldEvent(event, null, null).context)
+        }
+        for (payload in listOf(null, SessionStopPayload("483", 200L, SessionEndSource.EARLY_OFFLINE))) {
+            val malformed = RecordFolds.foldEvent(ev(AppEventType.SESSION_REPORT_CORRECTION, "483", 999_999L, payload), ctx, null)
+            assertEquals(ctx, malformed.context)
+            assertNull(malformed.sessionReportCorrection)
+            assertEquals("SESSION_REPORT_CORRECTION: missing/malformed payload", malformed.skip)
+        }
+    }
+
 }

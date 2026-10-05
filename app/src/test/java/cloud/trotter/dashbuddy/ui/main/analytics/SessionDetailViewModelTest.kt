@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.Dispatchers
@@ -138,4 +139,14 @@ class SessionDetailViewModelTest {
         )
         job.cancel()
     }
+    @Test
+    fun `correctSessionReport forwards operation value and note for this session`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        whenever(analyticsRepository.sessionDetail(eq("483"))).thenReturn(flowOf(null))
+        val viewModel = buildViewModel("483")
+        viewModel.correctSessionReport(SessionReportOperation.SET, 12.5, "note")
+        testScheduler.advanceUntilIdle()
+        verify(correctionRepository).correctSessionReport("483", SessionReportOperation.SET, 12.5, "note")
+    }
+
 }

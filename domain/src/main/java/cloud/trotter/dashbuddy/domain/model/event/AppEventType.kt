@@ -50,6 +50,7 @@ enum class AppEventType {
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
     DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) — widens
                          // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
+    SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays
     DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
                              // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays
     OFFER_OUTCOME_CORRECTION, // A driver attests (or undoes) which accepted offer was invisibly unassigned

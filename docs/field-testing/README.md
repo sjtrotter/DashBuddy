@@ -48,6 +48,10 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Session report correction (#1134):** on session 483 (09-10 17:11, `early_offline`, 0 deliveries)
+  tap Correct total → No summary; the Sep 7–13 week's Earned drops from $646.34 to $606.20 and the
+  dash shows 'report corrected'; Restore detected value brings $40.14 back. — Confirmed: 0/2
+
 - **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
   no file under `captures/doordash/accessibility.click/UNKNOWN/` or `accessibility.window/UNKNOWN/`
   carries a `message_input` node or an `android.widget.EditText` node with readable `text` — the field

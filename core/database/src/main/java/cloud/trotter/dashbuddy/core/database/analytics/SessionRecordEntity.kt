@@ -58,6 +58,10 @@ data class SessionRecordEntity(
     val lastOdometer: Double?,
     /** SessionStopPayload.totalEarnings (summary screen only) — all-pay, incl. bonuses. */
     val reportedEarnings: Double?,
+    /** #1134 driver override; the machine reportedEarnings column is never rewritten by a correction. */
+    val reportOverrideMode: String? = null,
+    val reportOverride: Double? = null,
+    val reportCorrectedAt: Long? = null,
     /** SessionStopPayload.sessionDurationMillis. */
     val reportedDurationMillis: Long?,
     // Folded outcome counts:

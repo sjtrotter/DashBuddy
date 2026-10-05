@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -170,4 +172,34 @@ class CorrectionRepositoryTest {
         targetEventSequenceId = 1L, sessionId = "S1",
         newPay = newPay, newTip = newTip, newCashTip = newCashTip, newMiles = newMiles,
     )
+    @Test
+    fun `session report validation rejects invalid operations and values before append`() = runTest {
+        rejects { correctSessionReport("483", SessionReportOperation.SET) }
+        for (value in listOf(10_000.01, Double.NaN, Double.POSITIVE_INFINITY, -1.0)) {
+            rejects { correctSessionReport("483", SessionReportOperation.SET, value) }
+        }
+        rejects { correctSessionReport("483", SessionReportOperation.CLEAR, 0.0) }
+        rejects { correctSessionReport("483", SessionReportOperation.RESTORE_MACHINE, 0.0) }
+        rejects { correctSessionReport("483", "UNKNOWN") }
+        verify(appEventRepo, never()).appendUserEvent(any(), anyOrNull())
+    }
+
+    @Test
+    fun `session report appends the target session and preserves operation value and note`() = runTest {
+        val cases = listOf(
+            SessionReportOperation.SET to 0.0,
+            SessionReportOperation.SET to 10_000.0,
+            SessionReportOperation.CLEAR to null,
+            SessionReportOperation.RESTORE_MACHINE to null,
+        )
+        cases.forEach { (op, value) -> repo.correctSessionReport("483", op, value, "note") }
+        val captor = argumentCaptor<cloud.trotter.dashbuddy.domain.model.event.AppEvent>()
+        verify(appEventRepo, times(cases.size)).appendUserEvent(captor.capture(), anyOrNull())
+        captor.allValues.zip(cases).forEach { (event, case) ->
+            assertEquals(AppEventType.SESSION_REPORT_CORRECTION, event.type)
+            assertEquals("483", event.sessionId)
+            assertEquals(SessionReportCorrectionPayload("483", case.first, case.second, "note"), event.payload)
+        }
+    }
+
 }

@@ -8,12 +8,14 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignP
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
 
 /**
  * The driver-correction folds, split out of [RecordFolds] (#761, the #237 file-ceiling residue;
  * [LegFolds] is the same-package precedent). Pure — no Android / DB / wall clock. Covers the manual
- * missed-delivery mint ([foldManualDelivery]) and the three decision-only re-apply folds
- * ([foldPayAdjustment] / [foldDeliveryAdjustment] / [foldDeliverySessionAssign]) whose actual row
+ * missed-delivery mint ([foldManualDelivery]) and the decision-only re-apply folds
+ * ([foldPayAdjustment] / [foldDeliveryAdjustment] / [foldDeliverySessionAssign] /
+ * [foldSessionReportCorrection]) whose actual row
  * writes the orchestrator performs inside the batch transaction. The record-mint folds live in
  * [DeliveryFolds]; [RecordFolds] keeps the dispatcher, session-lifecycle folds, and — the ONE
  * top-level definition both new files derive from — the shared session helpers [resolveContext] /
@@ -185,6 +187,13 @@ internal object CorrectionFolds {
                 repricedAt = e.occurredAt,
             ),
         )
+    }
+
+    /** #1134: bookkeeping only — pass context through without advancing session liveness. */
+    fun foldSessionReportCorrection(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? SessionReportCorrectionPayload
+            ?: return FoldOutcome(context = context, skip = "SESSION_REPORT_CORRECTION: missing/malformed payload")
+        return FoldOutcome(context = context, sessionReportCorrection = SessionReportCorrectionFold(p.sessionId, p.operation, p.newReported))
     }
 
     /**

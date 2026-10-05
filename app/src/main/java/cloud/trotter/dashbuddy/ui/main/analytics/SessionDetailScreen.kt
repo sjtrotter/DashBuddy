@@ -53,6 +53,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatClockTime
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import kotlin.math.roundToInt
 
 /**
@@ -94,6 +95,7 @@ fun SessionDetailScreen(
                 onAddManualDelivery = viewModel::addManualDelivery,
                 onAdjustDelivery = viewModel::adjustDelivery,
                 onUnassignDelivery = viewModel::unassignDelivery,
+                onCorrectSessionReport = viewModel::correctSessionReport,
                 modifier = Modifier
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
@@ -122,9 +124,13 @@ private fun DashDetailContent(
         note: String?,
     ) -> Unit,
     onUnassignDelivery: (targetEventSequenceId: Long) -> Unit,
+    onCorrectSessionReport: (String, Double?, String?) -> Unit,
     modifier: Modifier,
 ) {
     // Correction dialog state — hoisted here, stateless children below (Principle 1 / 3).
+    var showReportDialog by remember(detail.session.sessionId) { mutableStateOf(false) }
+    var reportAmount by remember(detail.session.sessionId) { mutableStateOf("") }
+    var reportNote by remember(detail.session.sessionId) { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var adjustTarget by remember { mutableStateOf<DeliveryRecord?>(null) }
 
@@ -135,7 +141,11 @@ private fun DashDetailContent(
     val hasOverAttributedCallout = detail.overAttributedPay > UNATTRIBUTED_EPSILON
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        HeaderCard(detail)
+        HeaderCard(detail, onCorrectTotal = {
+            reportAmount = detail.session.reportedEarnings?.toString().orEmpty()
+            reportNote = ""
+            showReportDialog = true
+        })
         if (hasCallout) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppCallout(
@@ -165,6 +175,20 @@ private fun DashDetailContent(
         )
     }
 
+    if (showReportDialog) {
+        SessionReportDialog(
+            session = detail.session,
+            amount = reportAmount,
+            onAmountChange = { reportAmount = it },
+            note = reportNote,
+            onNoteChange = { reportNote = it },
+            onConfirm = { operation, value ->
+                onCorrectSessionReport(operation, value, reportNote.trim().ifEmpty { null })
+                showReportDialog = false
+            },
+            onDismiss = { showReportDialog = false },
+        )
+    }
     if (showAddDialog) {
         AddMissedDeliveryDialog(
             onDismiss = { showAddDialog = false },
@@ -191,7 +215,7 @@ private fun DashDetailContent(
 }
 
 @Composable
-private fun HeaderCard(detail: SessionDetail) {
+private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
     val c = AppTheme.colors
     val session = detail.session
     val hasReported = session.reportedEarnings != null
@@ -227,8 +251,11 @@ private fun HeaderCard(detail: SessionDetail) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = if (hasReported) stringResource(R.string.session_detail_gross_reported_label)
-                else stringResource(R.string.session_detail_gross_captured_label),
+                label = stringResource(when {
+                    session.reportOverrideMode == SessionReportOperation.SET -> R.string.session_detail_gross_set_label
+                    hasReported -> R.string.session_detail_gross_reported_label
+                    else -> R.string.session_detail_gross_captured_label
+                }),
                 value = Formats.money(gross),
                 modifier = Modifier.weight(1f),
             )
@@ -242,6 +269,12 @@ private fun HeaderCard(detail: SessionDetail) {
                 value = Formats.commaInt(session.deliveries),
                 modifier = Modifier.weight(1f),
             )
+        }
+        if (session.reportCorrectedAt != null) {
+            Text(stringResource(R.string.session_detail_report_corrected), style = MaterialTheme.typography.bodySmall, color = c.text3)
+        }
+        TextButton(onClick = onCorrectTotal, enabled = session.endedAt != null) {
+            Text(stringResource(R.string.session_detail_correct_total))
         }
         // Cash tips render as their OWN line (#688 F4) — the "Gross (reported)" tile stays cash-free
         // (it's the platform-reported total), so cash is never silently folded into a mislabelled tile.

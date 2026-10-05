@@ -421,6 +421,23 @@ data class DeliverySessionAssignPayload(
     val note: String? = null,
 ) : AppEventPayload
 
+/** #1134 — the operations a SESSION_REPORT_CORRECTION may carry (wire strings; the codec stores them verbatim). */
+object SessionReportOperation {
+    const val CLEAR = "CLEAR"
+    const val SET = "SET"
+    const val RESTORE_MACHINE = "RESTORE_MACHINE"
+}
+
+@Serializable
+data class SessionReportCorrectionPayload(
+    val sessionId: String,
+    /** One of [SessionReportOperation]. */
+    val operation: String,
+    /** Required for SET (0 ≤ value ≤ 10 000, finite); null otherwise. */
+    val newReported: Double? = null,
+    val note: String? = null,
+) : AppEventPayload
+
 /**
  * The wire vocabulary of `offer_records.outcomeResolved` (#810 B2) — the SSOT both the projector
  * writes and the read-side count-exclusion / UI derive from. A `null` column means "a normal offer /
