@@ -571,15 +571,15 @@ vocabulary rows that lose eligibility.
 | Backups | encrypted, **14 days** — shorter than the longest TTL, so the worst-case life of a purged sub-k row is TTL + 14 days |
 | Text | a community skeleton has no text field to store; the ONE exception is a trusted install's redacted envelope (§6), which can carry text the redact layers missed, kept 30 days |
 | Precise timestamps, device identifiers, location | never stored (hour bucket in flight, day at rest; a coarse metro cell only under the #1137 dual opt-in); request bodies are never logged on either side, not even on a parse failure |
-| IP addresses | not stored and not logged by default; ONE disclosed exception — during an abuse incident the operator may turn on a proxy access log capped at 72 hours, and `GET /v1/policy` reports `ipLogging: true` for as long as it is on |
+| IP addresses | **never stored and never logged — no exception** (#1180, 2026-10-05: the earlier "72 h abuse log, advertised as `ipLogging`" clause is withdrawn; the server never implemented it and `GET /v1/policy` has no such field). The one place a client address exists is the Caddy edge rate limiter's in-process memory for a single window (no access log, forwarded-IP headers stripped), which is transient state, not retention |
 
 The **operator-trust statement** (the residual no design removes): the official server is one
 machine operated by the DashBuddy maintainer running the published image digest of an AGPL-3.0
 repository; `GET /v1/policy` reports the digest and the retention numbers. The operator can see
-shapes, counts, the text of their OWN trusted devices' redacted envelopes (`k_unblind`), and — once
+shapes, counts, the text of their OWN trusted devices' redacted envelopes (`k_unblind` — for a trusted install, i.e. the operator's own device, k = 1 by definition; the **k = 10** promise below is the COMMUNITY-install gate and every statement of it carries this exception), and — once
 a token entered the shipped chrome vocabulary by one of §4's two routes — that vocabulary; for a community install the
 operator cannot see what the dasher typed, whom they delivered to, or what they earned, subject to
-the dictionary-linkage residual on low-entropy hashes (risk 1). The endpoint is user-selectable
+the dictionary-linkage residual on low-entropy hashes (risk 1). "Only credential digests are stored" is true of CLIENT bearers (`installs.key_hash`); the host itself holds RECOVERABLE operator secrets — the TOTP seed and the database password — as an SSM SecureString rendered into a root-only `.env` (encrypted at rest, not hashed), which the operator-trust statement discloses rather than papers over (#1180). The endpoint is user-selectable
 (the #193 pattern), so a dasher can point the app at any server running this code.
 
 ## Lifecycle: schema, filter and identity evolution
