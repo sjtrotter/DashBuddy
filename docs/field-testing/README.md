@@ -48,6 +48,15 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **"Dash paused" push is recognized (#1090):** after a dash in which you paused, the pull's
+  `captures/doordash/notification/` should hold NO UNKNOWN envelope reading "Your current dash has been
+  paused" — the envelope lands under `notification/dash_paused/` instead — and `app.log` carries
+  `Rule LOG [NOTIFICATION_RECEIVED]: DASH_PAUSED_PUSH` (a DEBUG line; the `log` verb writes NO
+  `app_events` row) a few seconds BEFORE the screen-derived `DASH_PAUSED`, while the dash's mode and
+  timers behave exactly as before (the push is informational — it must not pause, resume, or shorten
+  the safety net).
+  - Confirmed: 0/2
+
 - **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
   "Arrived at store" and wait, the pull's `pickup_records` dwell for that stop should reflect the real
   wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the
