@@ -150,6 +150,20 @@ class TriageRulesTest {
         assertEquals("demand_nudge", notif(raw(title = "Dash now in your area")))
     }
 
+    // #1090 — the paused-dash push is recognized INFORMATIONALLY (no flow, no modeHint): it carries no
+    // countdown, so it must never drive the pause-safety timing; the screen stays the authority.
+    @Test
+    fun `dash_paused — the dash-update channel's paused push is informational only (#1090)`() {
+        val push = raw(channelId = "dasher-notification-channel-dash-update", title = "Dash Update!", text = "Hey Sam! Your current dash has been paused")
+        val r = notificationRuleset.matchFirst(push)
+        assertEquals("dash_paused", r?.intent)
+        assertNull("informational: no flow", r?.flow)
+        assertNull("informational: no modeHint", r?.modeHint)
+        // the sibling dash-update rules keep their own anchors
+        assertEquals("demand_nudge", notif(raw(channelId = "dasher-notification-channel-dash-update", title = "Update!", text = "TX: northwest san antonio is busy for shop and deliver right now")))
+        assertEquals("arrived_in_zone", notif(raw(channelId = "dasher-notification-channel-dash-update", title = "You have arrived", text = "Start dashing")))
+    }
+
     @Test
     fun `dash_status_ongoing — foreground status channel`() {
         assertEquals(
