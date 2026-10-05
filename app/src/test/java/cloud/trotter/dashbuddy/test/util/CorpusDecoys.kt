@@ -126,6 +126,23 @@ object CorpusDecoys {
         "Sample D" to
             "hand-written pseudonym for the bare first-name + last-initial node the second " +
             "08-30 envelope renders",
+        // #1127 dropoff_customer_unavailable/2026-09-24_16-22-{14-420,31-888}__…__{9537b9,d2fda2}.json
+        //       — the 'Contact <customer>' `step_title` on the 8.99.20 "Can't hand order to
+        //       customer" page; the fielded customer was replaced by hand at intake.
+        "Contact Jane L" to
+            "hand-written pseudonym in the customer-unavailable page's Contact step title",
+        // #1128 pickup_resolution_options/2026-09-23_15-53-12-742__…__c1fbb5.json — the 8.99.20
+        //       'What do you want to do next?' sheet's fused attribution line; the store is the
+        //       real merchant (merchant names are driver-owned, not PII).
+        "For Jane D. • H-E-B" to
+            "hand-written pseudonym in the 8.99.20 resolution sheet's fused For line",
+        // #1139 pickup_order_picker/2026-09-27_12-01-03-994__…__997c2d.json — the two
+        //       `instructions` rows of the multi-order picker; names replaced by hand at intake,
+        //       the due times are the fielded render's shape.
+        "For John by 12:28" to
+            "hand-written first-name-only pseudonym on the order picker's first instructions row",
+        "For Jane D by 12:35" to
+            "hand-written pseudonym on the order picker's second instructions row",
     )
 
     /** True when [value] is an enumerated decoy (byte-exact). */

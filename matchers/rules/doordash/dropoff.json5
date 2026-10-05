@@ -3333,6 +3333,194 @@
           }
         ]
       }
+    },
+    {
+      "comment": "#1127 — the 'Can\u2019t hand order to customer' alternate-handoff steps page (nav title 'Can\u2019t hand order to customer' over 'Follow the alternate method below…' and a step list: 'Contact <customer>' with a wait timer + Call / Text, 'Take photo', 'Add description'), fielded 2026-09-24 16:22 on 8.99.20 in two envelopes and reaching UNKNOWN capture with the customer's first-name + last-initial raw in the first `step_title`. `dropoff_handoff` rejects any frame carrying `steps_screen_content`, and `dropoff_step_instructions` keys on the 'Drop off steps' title, so nothing recognized it. RECOGNIZE-ONLY, the #995/#985/#1107 posture: no `state`, no `parse`, no `bind` — the rule exists so a recognizing rule can carry a `redact` (#806); 'no state block' buys lifecycle NEUTRALITY, not state-inertness (`FlowlessRecognitionNeutralityTest`). Whether this page should mark anything in the dropoff lifecycle (it is the start of a customer-unavailable handoff) is a separate design question a privacy fix must not answer by accident. Anchor: the nav title matched ON its `textView_navBar_title` node, by the apostrophe-free substring 'hand order to customer' so the U+2019 render can never break it (the #888 precedent) — and the id conjunct keeps it off the drop-off HELP sheet, whose `help_menu_item` row carries the same words. The 8.98.5 render of this page (fielded 09-23, UNKNOWN pull frame `…9b0404`, not committed) used `cx_unavailable_steps_view` / `contact_cx_step_title` and read 'Contact Customer' with no name; both ids are `any` alternatives here so a rollback or A/B render is claimed and masked too. The require also demands a step row (`step_title` / `contact_cx_step_title`) so a title-only frame with an id-bearing customer slot (Astra's counterexample) cannot be claimed and stripped of its `ID_MARKERS` backstop. Priority 161 sits behind every other rule in this section (`dropoff_step_instructions` 160), so it only claims a frame nothing else recognized. Declares the file-wide #1107/#993/#1039 parity entries verbatim (inert here).",
+      "id": "doordash.screen.dropoff_customer_unavailable",
+      "priority": 161,
+      "redact": [
+        {
+          "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1127: the 'Contact <FirstName L>' step title — the step card names the customer the dasher must try to reach. Id-scoped to `step_title` (the same row family renders the 'Take photo' / 'Add description' chrome, untouched by the prefix) with the chrome spellings ('Contact support', the 8.98.5 'Contact Customer', store/merchant variants) excluded by regex — the fable review of PR #1216 showed an exact `hasText` exclusion would hash 'Contact Customer' into a constant masquerading as a customer identity. keepPrefix keeps 'Contact ' for replay context; the remainder masks to ONE token, and normalize customerName keys the hex on the canonical first-token + second-token-initial form so it equals the first 4 hex of the `customerNameHash` the dropoff parses persist (#623/#733).",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "step_title"
+              },
+              {
+                "hasTextStartsWith": "Contact "
+              },
+              {
+                "not": {
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
+                }
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Contact "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#1127: the 8.98.5 render's own step-title id (`contact_cx_step_title`, 'Contact Customer' on the fielded 09-23 frame — no name) — masked by the same name-shaped rule in case a later build personalises it like 8.99.20 did; the chrome exclusions above keep 'Contact Customer' raw.",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "contact_cx_step_title"
+              },
+              {
+                "hasTextStartsWith": "Contact "
+              },
+              {
+                "not": {
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
+                }
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Contact "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. `description_text_view` and `arriving_at_title` are declared above by the file-wide parity entries; inert on both committed fixtures.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvTitle"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
+          },
+          "plainMask": true
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "any": [
+                {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_navBar_title"
+                    },
+                    {
+                      "hasTextContaining": "hand order to customer"
+                    }
+                  ]
+                },
+                {
+                  "hasIdSuffix": "cx_unavailable_steps_view"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "step_title"
+                },
+                {
+                  "hasIdSuffix": "contact_cx_step_title"
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   "clicks": [

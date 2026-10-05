@@ -85,6 +85,12 @@ object SensitiveMarkerData {
         "Driver's License",
         "provide their signature",
         "A recipient signature is required",
+        // #1022: the STORE-EMPLOYEE signature pad (return-order flow) — `Submit signature` is the
+        // pad's own button and `Store Employee signature` its heading; neither phrase appears on
+        // any recognized customer-facing surface in the corpus (the instruction screens say
+        // "collect a signature" / "Collect signature"). Same document-image class as the two above.
+        "Submit signature",
+        "Store Employee signature",
         // uber.screen.sensitive.* (#762 D10) — Uber's sensitive rules (matchers/rules/uber.json5)
         // anchor on these strings, which had NO overlapping keyword above (case-insensitive
         // substring checked): the wallet balance card ("Uber Pro Card"), the cashout destination

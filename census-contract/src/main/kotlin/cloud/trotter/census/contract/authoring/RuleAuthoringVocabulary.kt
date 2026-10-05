@@ -195,7 +195,7 @@ object RuleAuthoringVocabulary {
         "Message from ", "Heading to ", "Pick up at ",
     )
     /** Prefix text only from PiiShapes.GATED_NAME_PREFIXES; authoring conservatively refuses all tails. */
-    val ANCHOR_GATED_LEAD_INS: List<String> = listOf("Return ")
+    val ANCHOR_GATED_LEAD_INS: List<String> = listOf("Return ", "Contact ") // #1127: mirrors PiiShapes.GATED_NAME_PREFIXES (key ORDER matters — the guard compares lists)
     const val FIRST_LAST_INITIAL_BODY: String =
         """[\p{L}][\p{L}'-]{0,20}(\s{1,4}[\p{L}][\p{L}'-]{0,20}){0,3}\s{1,4}[A-Z]\.?"""
 

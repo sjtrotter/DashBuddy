@@ -18,6 +18,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -715,6 +717,268 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /** Every node in [node]'s subtree, depth-first, via the file's one tree visitor [walkNodes]. */
+    private fun flatten(node: UiNode): List<UiNode> = buildList { walkNodes(node) { add(it) } }
+
+    /** Load a committed fixture and assert the production ruleset claims it with [ruleId]. */
+    private fun recognizedFixture(folder: String, filename: String, ruleId: String): UiNode {
+        val file = File("src/test/resources/snapshots/$folder/$filename")
+        assertTrue("missing fixture $folder/$filename", file.isFile)
+        val tree = TestResourceLoader.loadNode(file)
+        assertEquals(
+            "$folder/$filename must be recognized by $ruleId (else the redact never runs)",
+            ruleId,
+            TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId,
+        )
+        return tree
+    }
+
+    /** The customer's hex on the pickup card — the cross-surface one-customer-one-hex anchor (#733). */
+    private fun pickupCardHex(name: String): String = hexIn(
+        TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!.redact.apply(
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = name),
+        ).text!!,
+        "the pickup card's customer_name",
+    )
+
+    /**
+     * Astra r2 of PR #1216: a recognize-only privacy rule claims frames that would otherwise be
+     * UNKNOWN, and a RECOGNIZED frame keeps only its rule's redact — so the rule must carry EVERY
+     * runtime `ID_MARKERS` suffix itself, or a combined render loses that slot's protection. Pinned
+     * as belt ⊇ `ID_MARKERS`, so growing the marker table without growing these belts fails here.
+     */
+    @Test
+    fun `recognize-only privacy rules carry the whole ID_MARKERS belt (#1127, #1139)`() {
+        val rulesJson = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
+            .jsonObject["screens"]!!.jsonArray.map { it.jsonObject }
+        for (ruleId in listOf("doordash.screen.dropoff_customer_unavailable", "doordash.screen.pickup_order_picker")) {
+            val rule = rulesJson.single { it["id"]!!.jsonPrimitive.content == ruleId }
+            val declared = mutableSetOf<String>()
+            fun collect(e: kotlinx.serialization.json.JsonElement) {
+                when (e) {
+                    is kotlinx.serialization.json.JsonObject -> e.forEach { (k, v) ->
+                        if (k == "hasIdSuffix" && v is JsonPrimitive) declared += v.content else if (k != "comment") collect(v)
+                    }
+                    is kotlinx.serialization.json.JsonArray -> e.forEach { collect(it) }
+                    else -> Unit
+                }
+            }
+            rule["redact"]!!.jsonArray.forEach { collect(it.jsonObject["find"]!!) }
+            val missing = CustomerTextMarkers.ID_MARKERS.filterNot { it in declared }
+            assertTrue("$ruleId redact misses ID_MARKERS suffixes: $missing", missing.isEmpty())
+        }
+        // Astra r3: presence is not coverage (an entry could gate the id behind `all`/`not`) — so every
+        // marker id is also exercised BEHAVIORALLY on a claimed frame of each rule: the value must mask.
+        val claimedFrames = mapOf(
+            "doordash.screen.pickup_order_picker" to listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+            ),
+            "doordash.screen.dropoff_customer_unavailable" to listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Take photo"),
+            ),
+        )
+        for ((ruleId, chrome) in claimedFrames) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+            for (suffix in CustomerTextMarkers.ID_MARKERS) {
+                val secret = "Gate code 7391 Marisol Q"
+                val frame = UiNode(
+                    className = "android.widget.FrameLayout",
+                    children = chrome + UiNode(viewIdResourceName = "com.doordash.driverapp:id/$suffix", text = secret),
+                ).restoreParents()
+                // A higher-ranked rule may legitimately claim the combined frame (`nav_arriving` wins a frame
+                // carrying `arriving_at_title`); what must hold is that WHICHEVER rule wins masks the slot.
+                val winnerId = TestRulesetFactory.screenRuleset.matchFirst(frame)?.ruleId
+                assertNotNull("$ruleId: the frame carrying $suffix must not fall to UNKNOWN", winnerId)
+                val winner = if (winnerId == ruleId) rule else TestRulesetFactory.screenRuleset.ruleById(winnerId!!)!!
+                val masked = serialize(winner.redact.apply(frame))
+                assertFalse("$winnerId (claiming $ruleId's frame): $suffix value must not persist", masked.contains("7391") || masked.contains("Marisol"))
+            }
+        }
+        // The two r2 counterexample frames: a claimed render carrying a marker id the 4-entry belt missed.
+        val picker = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_order_picker")!!
+        val pickerFrame = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(picker.id, TestRulesetFactory.screenRuleset.matchFirst(pickerFrame)?.ruleId)
+        assertFalse(serialize(picker.redact.apply(pickerFrame)).contains("Jane"))
+        val unavailable = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_customer_unavailable")!!
+        val unavailableFrame = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Contact Jane L"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/dasher_instruction_content_collapsed", text = "Ask Jane at the side entrance"),
+            ),
+        ).restoreParents()
+        assertEquals(unavailable.id, TestRulesetFactory.screenRuleset.matchFirst(unavailableFrame)?.ruleId)
+        assertFalse(serialize(unavailable.redact.apply(unavailableFrame)).contains("Jane"))
+    }
+
+    /**
+     * #1127 — the 8.99.20 "Can't hand order to customer" page named the customer in its first
+     * `step_title` ('Contact <name>') and fell to UNKNOWN capture. Runs the PRODUCTION redact over
+     * both committed frames (raw pseudonym, a [CorpusDecoys] entry): the name masks behind the kept
+     * 'Contact ' lead-in, the hex equals the pickup card's for the same customer, and the step
+     * chrome — 'Take photo' / 'Add description' share the `step_title` id — survives.
+     */
+    @Test
+    fun `dropoff_customer_unavailable masks the Contact step title, keeps the step chrome (#1127)`() {
+        val ruleId = "doordash.screen.dropoff_customer_unavailable"
+        val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+        assertTrue("the pseudonym must be a CorpusDecoys entry", CorpusDecoys.isDecoy("Contact Jane L"))
+        for (filename in listOf(
+            "2026-09-24_16-22-14-420__doordash__accessibility.window__dropoff_customer_unavailable__9537b9.json",
+            "2026-09-24_16-22-31-888__doordash__accessibility.window__dropoff_customer_unavailable__d2fda2.json",
+        )) {
+            val tree = recognizedFixture("dropoff_customer_unavailable", filename, ruleId)
+            assertTrue(
+                "$filename: the raw pre-condition — the fixture must carry the pseudonym unmasked",
+                flatten(tree).any { it.text == "Contact Jane L" },
+            )
+            val masked = rule.redact.apply(tree.restoreParents())
+            val serialized = serialize(masked)
+            assertFalse("$filename: customer name must not persist", serialized.contains("Jane"))
+            val title = flatten(masked).single {
+                it.viewIdResourceName?.endsWith("step_title") == true && it.text!!.startsWith("Contact ")
+            }.text!!
+            assertTrue(
+                "$filename: the Contact title must mask to 'Contact [redacted:<4hex>]'; got '$title'",
+                wholeMaskAfter("Contact ").matches(title),
+            )
+            assertEquals(
+                "$filename: one customer, one hex — the title's mask equals the pickup card's",
+                pickupCardHex("Jane L"),
+                hexIn(title, "the Contact title"),
+            )
+            for (kept in listOf("hand order to customer", "Take photo", "Add description")) {
+                assertTrue("$filename: chrome kept: '$kept'", serialized.contains(kept))
+            }
+        }
+        // Chrome spellings are excluded even when they share the step_title id — an exact-match
+        // exclusion would have hashed the 8.98.5 'Contact Customer' into a constant (fable review).
+        for (chrome in listOf("Contact support", "Contact Customer", "Contact the store")) {
+            val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = chrome)
+            assertEquals(chrome, rule.redact.apply(node.restoreParents()).text)
+        }
+        // Astra P1 (PR #1216): a title-only render carrying an id-bearing customer slot must NOT be
+        // claimed (it would lose the UNKNOWN-path ID_MARKERS backstop) — the steps structure is required.
+        val titleOnly = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertNotEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(titleOnly)?.ruleId)
+        // And when a steps render DOES carry such a slot, the belt masks it.
+        val withSlot = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Take photo"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(withSlot)?.ruleId)
+        assertFalse(serialize(rule.redact.apply(withSlot)).contains("Jane"))
+    }
+
+    /**
+     * #1128 — the 8.99.20 re-titled resolution sheet ('What do you want to do next?', no
+     * 'Resolution options' header) now recognizes as `pickup_resolution_options`, so the rule's
+     * existing For-family redact (shape owned by the #809 loop) masks its fused header on the
+     * REAL tree. The kept chrome includes 'Contact support' and the new option label.
+     */
+    @Test
+    fun `pickup_resolution_options masks the 8_99_20 sheet's fused For line on the real tree (#1128)`() {
+        val ruleId = "doordash.screen.pickup_resolution_options"
+        val raw = "For Jane D. • H-E-B"
+        assertTrue("the pseudonym must be a CorpusDecoys entry", CorpusDecoys.isDecoy(raw))
+        val tree = recognizedFixture(
+            "pickup_resolution_options",
+            "2026-09-23_15-53-12-742__doordash__accessibility.window__pickup_resolution_options__c1fbb5.json",
+            ruleId,
+        )
+        assertTrue("raw pre-condition", flatten(tree).any { it.text == raw })
+        val masked = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(tree.restoreParents())
+        val serialized = serialize(masked)
+        assertFalse("customer name must not persist", serialized.contains("Jane"))
+        val header = flatten(masked).single { it.text?.startsWith("For ") == true }.text!!
+        assertTrue("fused header must mask to 'For [redacted:<4hex>]'; got '$header'", wholeMaskAfter("For ").matches(header))
+        assertEquals("one customer, one hex with the pickup card", pickupCardHex("Jane D"), hexIn(header, "the For line"))
+        for (kept in listOf("What do you want to do next?", "Ask the store to place the order", "Contact support")) {
+            assertTrue("chrome kept: '$kept'", serialized.contains(kept))
+        }
+    }
+
+    /**
+     * #1139 — the multi-order pickup picker ('Select an Order') rendered each row's customer in an
+     * `instructions` node ('For <name> by <h:mm>') and fell to UNKNOWN capture. On the committed
+     * frame both rows mask behind the kept 'For ' lead-in, the merchant rows (`restaurant_name`)
+     * stay raw, and the 'Jane D' row hashes to the same hex as the pickup card for that customer.
+     */
+    @Test
+    fun `pickup_order_picker masks every instructions row, keeps the merchants (#1139)`() {
+        val ruleId = "doordash.screen.pickup_order_picker"
+        val rows = listOf("For John by 12:28", "For Jane D by 12:35")
+        rows.forEach { assertTrue("'$it' must be a CorpusDecoys entry", CorpusDecoys.isDecoy(it)) }
+        val tree = recognizedFixture(
+            "pickup_order_picker",
+            "2026-09-27_12-01-03-994__doordash__accessibility.window__pickup_order_picker__997c2d.json",
+            ruleId,
+        )
+        rows.forEach { row -> assertTrue("raw pre-condition: '$row'", flatten(tree).any { it.text == row }) }
+        val masked = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(tree.restoreParents())
+        val serialized = serialize(masked)
+        assertFalse("first customer must not persist", serialized.contains("John"))
+        assertFalse("second customer must not persist", serialized.contains("Jane"))
+        val instructions = flatten(masked)
+            .filter { it.viewIdResourceName?.endsWith("instructions") == true }
+            .map { it.text!! }
+        assertEquals("both order rows are present", 2, instructions.size)
+        instructions.forEach {
+            assertTrue("row must mask to 'For [redacted:<4hex>]'; got '$it'", wholeMaskAfter("For ").matches(it))
+        }
+        assertEquals(
+            "the 'Jane D' row keys to the pickup card's hex for that customer (#733)",
+            pickupCardHex("Jane D"),
+            hexIn(instructions[1], "the second row"),
+        )
+        for (kept in listOf("Select an Order", "Pluckers Wing Bar", "Target")) {
+            assertTrue("chrome / merchant kept: '$kept'", serialized.contains(kept))
+        }
+        // Astra P1 (PR #1216): a picker render whose rows carry other text must stay UNKNOWN (and so
+        // keep its ID_MARKERS backstop); the `instructions` anchor demands the `For ` lead-in.
+        val otherRows = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "Tap an order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertNotEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(otherRows)?.ruleId)
+        // And a claimed render that also carries an id-bearing customer slot masks it via the belt.
+        val withSlot = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(withSlot)?.ruleId)
+        val beltMasked = serialize(TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(withSlot))
+        assertFalse(beltMasked.contains("Jane"))
+    }
+
     // =========================================================================
     // #501 — the id-less first-name + last-initial customer-name shape. The
     // adversarial-review pledge finding: the runtime redact fail-OPEN on common
@@ -895,6 +1159,13 @@ class CaptureRedactionCorpusTest {
             // `CustomerTextMarkers.ID_MARKERS`, so a future intake that forgets to redact the
             // instruction body fails HERE rather than committing green.
             "dropoff_step_instructions",
+            // #1127/#1128/#1139 add the three surfaces this PR gave (or widened) a redact for —
+            // the folders a real pull lands in next. `dropoff_customer_unavailable`'s
+            // `Contact <name>` title is caught by the #1127 GATED `Contact ` lead-in in
+            // `PiiShapes` (tail = the name shape); the two For-line folders carry no shape this
+            // guard flags (`For ` is chrome-ambiguous by the #1064 doctrine — follow-up filed), so
+            // for them the listing buys decoy reachability only.
+            "dropoff_customer_unavailable", "pickup_resolution_options", "pickup_order_picker",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()

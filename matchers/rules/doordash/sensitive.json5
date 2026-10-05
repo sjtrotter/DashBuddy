@@ -211,6 +211,46 @@
           }
         },
         {
+          "comment": "#1022: the STORE-EMPLOYEE signature pad ('Store Employee signature' / 'A store employee signature is required for this order' over a 'Store Employee name' field, the drawing canvas, Clear and 'Submit signature'), fielded 2026-08-01 13:00 on 8.91.7 and reaching UNKNOWN capture: the recipient-signature arm of `sensitive.id_verification` above keys on 'A recipient signature is required' / 'provide their signature', which this variant renders neither of. Blocked outright, NOT recognize-and-redact: the Pledge blocks a document-image capture surface (licence scan, signature pad) as a CLASS regardless of whose — the signer here is a store employee, not the dasher or the customer — and the typed-in employee name would be PII on top. Anchored first on the pad's own view ids (locale-immune, #938/#924/#1059): `signature_clear_button` / `signature_drawing_view` / `signature_drawing_line` / `signature_clear_img` are the canvas widget itself (every id the fixture renders, so a partial render exposing only the line or the clear glyph is still caught — Astra review), present before either label renders, and appear in the committed corpus ONLY on the already-blocked recipient-signature fixture (whose earlier `id_verification` arm still claims it first). The two English labels together are the belt for a render whose ids change. Over-match surface: the ordinary instruction screens that merely MENTION a signature ('collect a signature at dropoff', 'Collect signature' on the 8.97.8 steps wrapper) carry none of these anchors. Ships independently of #998.",
+          "intent": "sensitive.store_signature",
+          "require": {
+            "any": [
+              {
+                "exists": {
+                  "any": [
+                    {
+                      "hasIdSuffix": "signature_clear_button"
+                    },
+                    {
+                      "hasIdSuffix": "signature_drawing_view"
+                    },
+                    {
+                      "hasIdSuffix": "signature_drawing_line"
+                    },
+                    {
+                      "hasIdSuffix": "signature_clear_img"
+                    }
+                  ]
+                }
+              },
+              {
+                "all": [
+                  {
+                    "exists": {
+                      "hasText": "Submit signature"
+                    }
+                  },
+                  {
+                    "exists": {
+                      "hasText": "Store Employee signature"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
           "comment": "#1059: the dasher's OWN Persona selfie / identity-verification flow (the embedded Persona SDK: initializing spinner, live selfie camera with 'Center yourself' / 'Look slightly left' hints, the 'take picture' shutter, and the 'We\u2019re having trouble verifying your selfie' retry screen), fielded 2026-08-27 across 12 UNKNOWN envelopes. The frames carry no PII TEXT, but the Pledge blocks document-image capture surfaces as a CLASS (licence scan, signature pad) regardless of content, and a biometric selfie camera of the dasher is squarely in it. Only the flow's ENTRY was covered before ('ready to start verification' above), no step of the capture itself. Anchored on the Persona SDK's own container ids (locale-immune, #938/#924, and the ONLY thing most frames carry — the camera steps are almost entirely text-free): `persona_container` and `pi2_back_stack_screen_runner` on the fragment host, plus `personaComposeView` for the Compose-hosted variant that renders neither. The retry screen's copy is the belt-and-braces text arm. Over-match surface: all four anchors are Persona-SDK-specific and appear on no delivery/offer surface in the committed corpus or any pull.",
           "intent": "sensitive.selfie_verification",
           "require": {

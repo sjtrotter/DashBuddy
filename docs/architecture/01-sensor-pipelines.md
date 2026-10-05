@@ -182,6 +182,27 @@ corpus `SnapshotSecurityScanner`/`SnapshotRedactor`. Recognition is deliberately
 `UiNode.allText` (what rules match on) still excludes `stateDescription` — widening a scrub layer
 must never be able to move a classification.
 
+**Document-image block + 8.99.20 customer-name surfaces (#1022 / #1127 / #1128 / #1139).** #1022 adds the fourth document-image surface on the same pattern: the **store-employee signature pad**
+of the return-order flow (`sensitive.store_signature` — the pad's four widget ids (`signature_clear_button` / `signature_drawing_view` /
+`signature_drawing_line` / `signature_clear_img`) first, the `Submit signature` + `Store Employee signature` labels as the belt; both labels are also
+`SensitiveTextMarkers` keywords, so the rules-independent backstop covers the pad as well). A signature pad
+is blocked outright regardless of whose signature (#463), and the ordinary return-instruction screens that
+merely mention a signature carry none of its anchors. Three customer-PII surfaces fielded on DoorDash
+8.99.20 reaching UNKNOWN capture are now recognize-only rules with a `redact` (#806 direction 1):
+`dropoff_customer_unavailable` (#1127 — the "Can't hand order to customer" steps page; anchored on the
+`textView_navBar_title` id + the apostrophe-free `hand order to customer` substring so the U+2019 render
+cannot break it and the help sheet's same-worded menu row cannot claim it; the `Contact <name>` `step_title`
+masks with `keepPrefix: ["Contact "]` + `normalize: customerName`, `Contact support` excluded; priority 161,
+behind every other dropoff rule), `pickup_order_picker` (#1139 — the stacked-job "Select an Order" picker,
+`header` id + text AND an `instructions` row; each row's `For <name> by <h:mm>` masks whole behind the
+kept `For `, keyed to the customer's hash; `instructions` is deliberately NOT added to `ID_MARKERS` — generic
+id — so an UNKNOWN render is the recorded residual), and the `pickup_resolution_options` anchor widened to
+the 8.99.20 sheet (#1128 — `What do you want to do next?` header + the `Ask the store to place the order` /
+`Order not found in system` options; the existing `For ` redact masks the fused line). All three are
+flow-less (`FlowlessRecognitionNeutralityTest`); each ships its pseudonymized fixture with the pseudonym
+registered in `CorpusDecoys`.
+
+
 **Node model fields (#1147, the 2026-09-21 TalkBack study win 3).** The mapper now also reads what
 TalkBack reads, all optional with the DOMINANT value as the default so `UiNodeSchema`'s
 `encodeDefaults = false` omits them on a typical node (every committed fixture re-serializes

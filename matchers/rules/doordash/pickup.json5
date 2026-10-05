@@ -763,7 +763,7 @@
       ]
     },
     {
-      "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list.",
+      "comment": "Deeper than pickup_select_issue — the resolution panel reached after picking an issue. Keyed on its own distinctive strings so it never overlaps the issue list. #1128: DoorDash 8.99.20 re-titled the 'Order not found in system' resolution sheet — no 'Resolution options' header, the question 'What do you want to do next?' instead, and a new option 'Ask the store to place the order' beside the existing 'Unassign with no pay' — so the frame (fielded 2026-09-23 15:53, carrying the fused 'For <customer> • <store>' line) fell to UNKNOWN capture and reached disk with the customer name raw. The header anchor and the option anchor each gained the 8.99.20 alternatives; the redact below is unchanged and now covers that render. Over-match: 'What do you want to do next?' and 'Ask the store to place the order' appear nowhere else in the committed corpus; 'Order not found in system' was deliberately NOT added as an option anchor — it is an ISSUE label on 12 committed `pickup_select_issue` / `pickup_issue_menu` frames, and importing the issue list's vocabulary would let a corpus-absent help-page variant claim this rule (fable review of PR #1216).",
       "id": "doordash.screen.pickup_resolution_options",
       "priority": 103,
       "redact": [
@@ -781,7 +781,14 @@
         "all": [
           {
             "exists": {
-              "hasTextContaining": "Resolution options"
+              "any": [
+                {
+                  "hasTextContaining": "Resolution options"
+                },
+                {
+                  "hasTextContaining": "What do you want to do next?"
+                }
+              ]
             }
           },
           {
@@ -795,6 +802,136 @@
                 },
                 {
                   "hasTextContaining": "unassign and move on to the next task"
+                },
+                {
+                  "hasTextContaining": "Ask the store to place the order"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comment": "#1139 — the multi-order pickup ORDER PICKER ('Select an Order' header over one `order_info_container` row per order: `restaurant_name` = the merchant, `instructions` = 'For <customer> by <h:mm>'), fielded 2026-09-27 12:01 on 8.99.20 and reaching UNKNOWN capture with every row's customer first name / first-name + last-initial raw. RECOGNIZE-ONLY, the #995/#985/#1107 posture: no `state`, no `parse`, no `bind` — the rule exists purely so a recognizing rule can carry a `redact` (#806: a recognizing rule is the primary control for a leaking surface); 'no state block' buys lifecycle NEUTRALITY, not state-inertness, pinned by `FlowlessRecognitionNeutralityTest`. Whether the picker SHOULD anchor anything in the pickup lifecycle is a separate question this privacy fix must not answer by accident. Anchors are view-id first (locale-immune, #938/#924/#1059): the `header` node rendering 'Select an Order' (the id alone is generic, so it is conjoined with its text) AND an `instructions` row whose text opens with the `For ` lead-in the redact masks — a picker render whose rows carry other text (Astra's `Tap an order` counterexample) stays UNKNOWN with its `ID_MARKERS` backstop. Priority 145 sits behind every PICKUP rule in this file; `dash_summary` (150), `dropoff_step_instructions` (160) and `dropoff_customer_unavailable` (161) rank below it, so on a (implausible) combined frame the picker would win — those are dropoff-phase surfaces that do not render under the pickup help flow. The global `ID_MARKERS` set is deliberately NOT widened with `instructions` — the id is generic and carries chrome on other surfaces; on an UNKNOWN render of this picker that is a known residual, recorded on #1139.",
+      "id": "doordash.screen.pickup_order_picker",
+      "priority": 145,
+      "redact": [
+        {
+          "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. Inert on the committed fixtures, which render none of these ids.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvTitle"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#1139: each row's 'For <customer> by <h:mm>' line. Id-scoped to `instructions` so no other 'For ' text on a combined frame is touched by THIS entry; keepPrefix keeps the 'For ' lead-in for replay context and the whole remainder — name AND the due time — masks to ONE token. normalize customerName keys the hex on the canonical first-token + second-token-initial form, the same normalization the For-family siblings (`pickup_resolution_options` et al.) use, so a customer rendered 'Jane D' here keys to the same canonical `jane d` as their other surfaces. KNOWN LIMITATION (both PR #1216 reviews): a first-name-only row ('For John by 12:28') keys on the 'by' as its initial (`john b`), so it joins NOTHING — not the pickup card's `john`, and it would collide with a real 'John B'; the screen redact has no suffix-strip primitive (`maskGroup` is notification-only) to remove the ' by <h:mm>' tail before normalizing. Tracked as a follow-up; a mask, never a leak. The merchant lives in its own `restaurant_name` node and stays raw (merchant names are driver-owned, not PII).",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "instructions"
+              },
+              {
+                "hasTextStartsWith": "For "
+              }
+            ]
+          },
+          "keepPrefix": [
+            "For "
+          ],
+          "normalize": "customerName"
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "header"
+                },
+                {
+                  "hasText": "Select an Order"
+                }
+              ]
+            }
+          },
+          {
+            "exists": {
+              "all": [
+                {
+                  "hasIdSuffix": "instructions"
+                },
+                {
+                  "hasTextStartsWith": "For "
                 }
               ]
             }

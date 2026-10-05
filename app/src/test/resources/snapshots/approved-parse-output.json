@@ -1614,6 +1614,18 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_customer_unavailable/2026-09-24_16-22-14-420__doordash__accessibility.window__dropoff_customer_unavailable__9537b9.json": {
+        "ruleId": "doordash.screen.dropoff_customer_unavailable",
+        "intent": "dropoff_customer_unavailable",
+        "shape": null,
+        "fields": {}
+    },
+    "dropoff_customer_unavailable/2026-09-24_16-22-31-888__doordash__accessibility.window__dropoff_customer_unavailable__d2fda2.json": {
+        "ruleId": "doordash.screen.dropoff_customer_unavailable",
+        "intent": "dropoff_customer_unavailable",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_geofence_warning/2026-07-17_20-46-59-561__doordash__accessibility.window__dropoff_geofence_warning__f100d7.json": {
         "ruleId": "doordash.screen.dropoff_geofence_warning",
         "intent": "dropoff_geofence_warning",
@@ -4930,6 +4942,12 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "pickup_order_picker/2026-09-27_12-01-03-994__doordash__accessibility.window__pickup_order_picker__997c2d.json": {
+        "ruleId": "doordash.screen.pickup_order_picker",
+        "intent": "pickup_order_picker",
+        "shape": null,
+        "fields": {}
+    },
     "pickup_pizza_bag/2026-07-26_21-10-26-597__doordash__accessibility.window__UNKNOWN__0a4147.json": {
         "ruleId": "doordash.screen.pickup_pizza_bag",
         "intent": "pickup_pizza_bag",
@@ -5311,12 +5329,6 @@
         "shape": null,
         "fields": {}
     },
-    "pickup_resolution_options/2026-06-12__doordash__pickup_resolution_options__56f6eb.json": {
-        "ruleId": "doordash.screen.pickup_resolution_options",
-        "intent": "pickup_resolution_options",
-        "shape": null,
-        "fields": {}
-    },
     "pickup_resolution_options/2026-07-07__doordash__pickup_resolution_options__957d56.json": {
         "ruleId": "doordash.screen.pickup_resolution_options",
         "intent": "pickup_resolution_options",
@@ -5372,6 +5384,12 @@
         "fields": {}
     },
     "pickup_resolution_options/2026-09-23_15-08-08-382__doordash__accessibility.window__pickup_resolution_options__d67fdc.json": {
+        "ruleId": "doordash.screen.pickup_resolution_options",
+        "intent": "pickup_resolution_options",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_resolution_options/2026-09-23_15-53-12-742__doordash__accessibility.window__pickup_resolution_options__c1fbb5.json": {
         "ruleId": "doordash.screen.pickup_resolution_options",
         "intent": "pickup_resolution_options",
         "shape": null,
