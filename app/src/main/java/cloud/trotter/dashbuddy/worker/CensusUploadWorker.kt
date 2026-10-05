@@ -56,6 +56,21 @@ class CensusUploadWorker @AssistedInject constructor(
     @param:CensusEnvelopeSpool private val envelopeSpool: CensusSpool,
     private val envelopeSink: CensusEnvelopeSink,
 ) : CoroutineWorker(appContext, workerParams) {
+    private enum class DeferCause(val token: String) {
+        BUDGET("budget"),
+        UPLOAD_RATE_LIMIT("upload_rate_limit"),
+        ENROL_RATE_LIMIT("enrol_rate_limit"),
+        HEALTH_RATE_LIMIT("health_rate_limit"),
+        HEALTH_BUDGET("health_budget"),
+    }
+
+    /** #1210: the one INFO line for a run that pauses — a cause token and integers only (PII-safe). */
+    private fun logDeferral(cause: DeferCause, seconds: Long) =
+        Timber.tag(TAG).i("census deferred cause=%s seconds=%s", cause.token, seconds.toString())
+
+    private fun logStoredDeadline(remainingSeconds: Long) =
+        Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%s", remainingSeconds.toString())
+
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
         var detail: Int? = null
@@ -149,7 +164,9 @@ class CensusUploadWorker @AssistedInject constructor(
         val deadline = preferences.nextAllowedAtMillis.first()
         val now = System.currentTimeMillis()
         if (deadline > now) {
-            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
+            record.set(CensusRunOutcome.DEFERRED, remainingSeconds.toInt())
+            logStoredDeadline(remainingSeconds)
             return Enrollment.Stop(Result.success())
         }
         var credential = initial
@@ -180,7 +197,7 @@ class CensusUploadWorker @AssistedInject constructor(
                     }
                 }
                 EnrolResult.Revoked -> return Enrollment.Stop(revoke(record))
-                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter))
+                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter, DeferCause.ENROL_RATE_LIMIT))
                 EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(record, 401))
                 is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status))
                 is EnrolResult.ServerUnavailable, is EnrolResult.TransportFailure ->
@@ -221,11 +238,15 @@ class CensusUploadWorker @AssistedInject constructor(
                 HealthResult.BadRequest -> mapOf("bad_request" to 1)
                 HealthResult.PayloadTooLarge -> mapOf("batch_too_large" to 1)
                 is HealthResult.RateLimited -> {
-                    record.set(CensusRunOutcome.DEFERRED, result.retryAfter.coerceIn(1, 86_400).toInt())
+                    val seconds = result.retryAfter.coerceIn(1, 86_400)
+                    record.set(CensusRunOutcome.DEFERRED, seconds.toInt())
+                    logDeferral(DeferCause.HEALTH_RATE_LIMIT, seconds)
                     return Result.success()
                 }
                 is HealthResult.BudgetExhausted -> {
-                    record.set(CensusRunOutcome.DEFERRED, result.retryAfterSeconds.coerceIn(1, 86_400).toInt())
+                    val seconds = result.retryAfterSeconds.coerceIn(1, 86_400)
+                    record.set(CensusRunOutcome.DEFERRED, seconds.toInt())
+                    logDeferral(DeferCause.HEALTH_BUDGET, seconds)
                     return Result.success()
                 }
                 is HealthResult.Unauthorized, is HealthResult.ServerUnavailable,
@@ -248,12 +269,13 @@ class CensusUploadWorker @AssistedInject constructor(
         val deadline = preferences.nextAllowedAtMillis.first()
         val now = System.currentTimeMillis()
         if (now < deadline) {
+            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
             when {
                 record.healthPosted > 0 -> record.set(CensusRunOutcome.HEALTH_POSTED, record.healthPosted)
                 record.healthRejected > 0 -> record.set(CensusRunOutcome.HEALTH_REJECTED, record.healthRejected)
-                else -> record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+                else -> record.set(CensusRunOutcome.DEFERRED, remainingSeconds.toInt())
             }
-            Timber.tag(TAG).i("census deferred runs=1")
+            logStoredDeadline(remainingSeconds)
             return Result.success()
         }
         val run = UploadRun()
@@ -417,8 +439,8 @@ class CensusUploadWorker @AssistedInject constructor(
                     record.rejected += result.rejected.values.sum()
                 }
             }
-            is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds)
-            is UploadResult.RateLimited -> return defer(record, result.retryAfter)
+            is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds, DeferCause.BUDGET)
+            is UploadResult.RateLimited -> return defer(record, result.retryAfter, DeferCause.UPLOAD_RATE_LIMIT)
             is UploadResult.Unauthorized -> {
                 // An unresigned, non-skew 401 means the consent check short-circuited the re-sign: not an identity problem.
                 if (envelopes && !run.resigned && !run.clockSkew) {
@@ -498,13 +520,13 @@ class CensusUploadWorker @AssistedInject constructor(
         Timber.tag(TAG).w("census batch rejected reasons=%s", rejected)
     }
 
-    private suspend fun defer(record: RunRecord, seconds: Long): Result {
+    private suspend fun defer(record: RunRecord, seconds: Long, cause: DeferCause): Result {
         val now = System.currentTimeMillis()
         val coercedSeconds = seconds.coerceIn(1, 86_400)
         record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
         val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
-        Timber.tag(TAG).i("census deferred runs=1")
+        logDeferral(cause, coercedSeconds)
         return Result.success()
     }
 

@@ -48,6 +48,16 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Resolved offer cards no longer wear a verdict banner (#864):** after an offer times out or is declined, expand
+  its card in the HUD — the big ACCEPT/DECLINE advice banner is gone and only the header's outcome chip (Accepted /
+  Declined / Timed out) states what happened; a LIVE card still shows the banner. Working = no resolved card can be
+  misread as "declined" from the banner alone.
+  - Confirmed: 0/2
+
+- **Census deferral lines name their cause (#1210):** after any dash, `grep -h 'census deferred cause=' shareable.log`
+  shows `cause=budget|upload_rate_limit|enrol_rate_limit|health_rate_limit|health_budget seconds=<n>` or
+  `cause=stored_deadline remaining=<n>` — never the old bare `census deferred runs=1`. Working = every `deferred`
+  status (skeleton, health or enrolment stage) has a matching line naming its cause.
 - **Desk-first — #965 / #1126 (PR #1213):** on the next pull, (a) a `ratings` envelope from the LEGACY ratings hub
   parses `deliveriesLast30Days` as a count (the approved golden now carries 136/72/71/100 on the committed legacy
   frames; a null on a fielded legacy frame is the thing to report), and (b) every recognized dropoff envelope's
