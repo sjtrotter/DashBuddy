@@ -62,6 +62,49 @@ class PickupWaitArrivalRecognitionTest {
         assertEquals("doordash.screen.dropoff_workflow_sheet", r?.ruleId)
     }
 
+    private val fielded = "2026-09-27_11-50-25-492__doordash__accessibility.window__pickup_wait_survey__70a359.json"
+
+    // Astra r2: the FULL arrival render merged with the FULL unassigned confirmation — every branch of
+    // the wait rule (not only the arrival one) must step aside so rule 107 keeps the abandonment.
+    @Test
+    fun `the full arrival screen merged with the full unassigned confirmation keeps task-unassigned (#1220 r2)`() {
+        val arrival = loaded.getValue(fielded)
+        val unassigned = load("pickup_unassigned_confirmation/2026-07-07__doordash__pickup_unassigned_confirmation__30a95c.json")
+        val combined = arrival.copy(children = arrival.children + unassigned).restoreParents()
+        val r = rules.matchFirst(combined)
+        assertEquals("doordash.screen.pickup_unassigned_confirmation", r?.ruleId)
+        assertEquals(Flow.TaskUnassigned, r?.flow)
+    }
+
+    // Astra r2: the rejects are scoped to the sibling rules' two-text chrome, so a merchant note that
+    // quotes ONE of the strings cannot knock a valid wait screen out of recognition.
+    @Test
+    fun `a merchant note quoting one reject string does not un-recognize the arrival (#1220 r2)`() {
+        for (note in listOf("Pickup steps: wait in your car.", "You have been unassigned from this order? No — see staff.")) {
+            val r = rules.matchFirst(withNote(loaded.getValue(fielded), note))
+            assertEquals(note, "doordash.screen.pickup_wait_survey", r?.ruleId)
+            assertEquals(note, Flow.TaskPickupArrived, r?.flow)
+        }
+    }
+
+    // Astra r2: the store parse is scoped to the contact card, so another `instructions_title`
+    // earlier in the tree ("Walk into store", "Order number: …") is never read as the merchant.
+    @Test
+    fun `the store parse reads the contact card's merchant, never another instructions_title (#1220 r2)`() {
+        val r = rules.matchFirst(loaded.getValue(fielded))
+        assertEquals("Pluckers Wing Bar", r?.fields?.get("storeName"))
+        for (name in listOf(
+            "2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json",
+            "2026-08-28_15-41-29-654__doordash__accessibility.window__pickup_wait_survey__38622a.json",
+        )) {
+            val frame = withCurbsideCard(loaded.getValue(name))
+            val rr = rules.matchFirst(frame)
+            assertEquals(name, Flow.TaskPickupArrived, rr?.flow)
+            val store = rr?.fields?.get("storeName") as String?
+            assertTrue("$name: store must not be chrome — got '$store'", store == null || (store != "Walk into store" && !store.startsWith("Order number")))
+        }
+    }
+
     @Test
     fun `an unassigned confirmation that still shows the curbside labels keeps task-unassigned (#1220 r1)`() {
         val unassigned = load("pickup_unassigned_confirmation/" + File("src/test/resources/snapshots/pickup_unassigned_confirmation").list()!!.first { it.endsWith(".json") })
