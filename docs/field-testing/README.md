@@ -59,7 +59,7 @@ For items with multiple sub-concerns at different statuses, use one
   reads `Captures shared: <queued> queued · <n> sent last run` and the server's cluster detail page shows a wireframe (0/2).
   UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details,
   and the server operator can read them. Trusted installs are the operator's own device today.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (device half, the 10-04 dash on `e35dee8f`: `envelopesPaired=70 Unpaired=0`, Held/Spooled/Posted 70/70/70, zero `not_trusted`; server half — a wireframe on a cluster from that dash — still to eyeball)
 
 
 - **Daily recognition health reaches the server (#1197, PR #1198).** Nothing to do on the dash itself;
@@ -70,7 +70,7 @@ For items with multiple sub-concerns at different statuses, use one
   `doordash` with the phone's observed DoorDash version, Admitted ≈ the dash's recognized frames and
   UNKNOWN > 0, and the per-install disclosure lists the phone's 8-char prefix. A row that never appears
   (status `health_rejected n`) is the thing to report, with the rejection reason from the status detail.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk + server 2026-10-05: fleet row 2026-10-04 · doordash · 8.100.12 admitted 544 / unknown 78; device `healthPosted=1`, no health WARN)
 
 - **Census developer status line + Reset census identity (#1185).** In Developer settings the census
   block shows `Last run <ago> · <outcome token> · Queued: <n>`; after a dash with UNKNOWN screens it should
@@ -78,7 +78,7 @@ For items with multiple sub-concerns at different statuses, use one
   clipboard (paste it somewhere to confirm). Only if you want to exercise the reset: tap Reset census
   identity → Reset, confirm the prefix line changes to a NEW 8-char prefix within a minute (status
   `reset` → `enrolled`/`spool_empty`), then trust the new install server-side (the old one is orphaned).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (2026-10-05: dev eyes — status line renders correctly; desk — one enrolment, server shows one trusted unrevoked install last seen 10-05)
 
 **Living checklist (not a session entry).** Recently-merged changes (and open
 PRs / closed issues) that were validated only against captured data and need
@@ -144,7 +144,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      appears exactly once.
   3. Allow Decline once → on the next dash BOTH card layouts' Decline binds are covered: a decline
      automation on the Compose card (8.99.20) fires without a second prompt.
-  - Issue: #1167. Confirmed: 0/2
+  - Issue: #1167. Confirmed: 1/2 (log half, desk 2026-10-05: 11 notification Decline taps each resolved `OFFER_DECLINED` on the matching hash; `confirm_decline` granted since 10-03 and skipped by the quick-decline setting; the prompt half needs dev eyes)
 
 - **🆕 NEW — chat header and chat preview are masked in captures (PR #1160 / #1145).** Desk check on a
   debug pull; nothing on the dash looks different. **How to tell it works:**
@@ -157,22 +157,6 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      the rest of the X-Ray triage text is intact. That single lost node is the accepted cost (ADR-0011
      residual 11, on any platform whose id ends in `tvTitle`); anything more masked is a finding.
   - Confirmed: 0/2
-
-- **🆕 NEW — captures carry the richer node fields TalkBack reads (#1147).** Every captured node can
-  now also carry a pane title (`"pane"`), a role (`"role"`), the label on its click action
-  (`"clickLabel"`), a `"clickAction"`/`"selected"`/`"heading"`/`"visible"` flag and collection
-  positions — each only when it differs from the default, and each scrubbed like `text`. Nothing on
-  the dash should look different; this is a desk check on a debug pull. **How to tell it works:**
-  1. A DoorDash sheet or dialog capture (the decline-confirm sheet, a timeline sheet) shows a
-     `"pane": …` key on its container — or none anywhere in the pull, which is also an answer
-     (record which).
-  2. An offer-card capture shows `"clickLabel"` and/or `"clickAction": true` on the Accept/Decline
-     buttons (or verifiably neither — record which card generation).
-  3. No customer name or address appears raw in any `pane`/`role`/`hint`/`clickLabel`/`uid` value
-     (grep the pull the way the playbook greps `text`).
-  4. Capture files are not noticeably larger than the previous pull's, and no new WARN/ERROR tagged
-     `Mapper` or `Pipeline` appears.
-  - Issue: #1147, PR #1158. Confirmed: 1/2 (2026-09-30 on `1fe9243f`: `pane` ×2, `tooltip` ×3, `clickAction` ×282, `visible` ×49 across 35 envelopes; rich-field PII sweep clean; 88 KB avg vs 129 KB prior; no new WARN. Item 2 (offer card) open)
 
 - **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
@@ -235,7 +219,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
      WARNs on known-good surfaces (the receipt, the heads-up Accept/Decline buttons).
   3. The `bindShortfall{…}` census in `PipelineStats` is unchanged from the previous pull.
   Confirm-decline automation stays DENIED by the dev's choice — it is not a validation target here.
-  - Issue: #1149. Confirmed: 0/2
+  - Issue: #1149. Confirmed: 1/2 (desk 2026-10-05: 13 expands, 12 clean, 1 stale abort while an offer card covered the receipt — the designed outcome)
 
 - **🆕 NEW — the dash-controls sheet recognizes as `timeline` on a per-offer dash with no task (#1165).**
   Open the dash controls (the "Current dash" sheet with Pause orders / End dash) on a dash with no
@@ -243,26 +227,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   `accessibility.window/timeline/`, not `UNKNOWN/`; its parse carries `sessionEarnings` equal to the
   "This dash" figure and empty `tasks`; the mid-inflate frame (title alone) stays UNKNOWN; the dash is
   still `Online` while the sheet is up (the rule asserts `modeHint: online`).
-  - Issue: #1165. Confirmed: 0/2
-
-- **🆕 NEW — frames keep flowing while the bubble is the active window (#1148).** Content and state
-  changes still read the active window when it is an ENABLED platform's (a DoorDash sheet included);
-  when a NON-enabled window is active (our bubble, the launcher) the readable enabled APPLICATION
-  window in front is read (our bubble and a Maps picture-in-picture are skipped) — or the frame is
-  refused, and counted in `foregroundSkip{…}`, if something unreadable or another app is on top. Content
-  changes are coalesced as one burst (quiet 150 ms / scheduled max-wait 300 ms, with the first
-  change after idle emitted immediately). Before,
-  a DoorDash content change was rejected whenever our bubble was the active window. **No dash needed:** open DoorDash with the bubble showing,
-  tap the bubble so it is active, then scroll / interact with DoorDash. **How to tell it works:**
-  1. `SCREEN:` VERBOSE lines (and DEBUG captures) keep appearing for DoorDash while the bubble is
-     active — bubble-active frames used to be dropped (`🚫 Skip active window (pre-map)`).
-  2. `💧 DRIP: window=<id> types=0x.. n=<k> span=<ms>ms` DEBUG lines follow the cadence contract:
-     the first change immediately (a leading DRIP, `n=1`), then ≤ 1 per 300 ms during a flood, plus
-     one trailing DRIP ≥ 150 ms after the last change (the settled frame).
-  3. With a DoorDash sheet open (e.g. the decline-confirm sheet over the offer card), R0 does NOT flap
-     between the sheet and the card underneath — the hidden card must never be recognized.
-  4. The `PipelineStats` summary shows no new `mappingFailures`.
-  - Issue: #1148. Confirmed: 1/2 (desk half, 2026-09-30 on `1fe9243f`: 132 `DRIP` lines on the cadence contract — leading `n=1 span=0ms`, floods `n=19–24` at 202–302 ms; no `Skip active window`, no Mapper WARN; item 1 not deliberately exercised, no stats summary printed)
+  - Issue: #1165. Confirmed: 1/2 (desk 2026-10-05: all 7 dash-controls frames recognized `timeline`, all while Online)
 
 - **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
@@ -282,7 +247,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   3. On the header-less sheet envelopes (no `Deliver to`, no `Continue`): a hashed street line, PLAIN
      `[redacted]` for city/ST/ZIP, the unit and the quoted note; `Call`/`Message`/`Directions`/
      `Leave it at the door` kept raw.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 2026-10-05: check 1 passes)
     - desk 09-26: UNEXERCISED — build `71bacc8c` predates PR #1125. The #1122 shape recurred once on 8.98.5
       (UNKNOWN 09-23 11:30:13: street, city/ZIP, unit, quoted note + gate code, bare code and the bottom-bar name raw;
       purged). 9 other UNKNOWN host-fragment hits are text-free skeletons. The recognized `dropoff_workflow_sheet`
@@ -478,7 +443,7 @@ over-inference); the remaining accept losses are #1119 and the merged card is #1
   `app_events`; a `OFFER_TIMEOUT` with a preceding `OfferActionReceiver: decline_offer` line, or with
   a `Denied confirm_decline` WARN in the seconds before it, is the bug. Cross-check the Offers tab's
   accept/decline/timeout bar against what you actually did.
-  - Issue: #1104. Confirmed: 0/2
+  - Issue: #1104. Confirmed: 1/2 (desk 2026-10-05: one `OFFER_TIMEOUT` beside a `Denied confirm_decline` on 10-01, ~0.3 s before the card's own countdown end — by design; no lost decline on 10-03/10-04)
     - desk 09-15: SECOND SIGHTING, not a confirmation — 9 of 12 `OFFER_TIMEOUT`s were declines (confirm tap 24–229 ms before the confirm sheet's admitted frame); the sheet itself WAS admitted in time every time (the `Denied confirm_decline` WARN proves it), so the race is between the click and window sub-pipelines. Dev reported it independently the same day. Counts on #1104.
     - desk 09-20: IMPROVED, not closed, and the MECHANISM HAS MOVED — 1 `OFFER_TIMEOUT` in 23 offers (09-16/17), against 9-of-12 on the 09-15 pull; the one that fired was still a real decline (offer `0c4fc920`, 09-16 18:40: `initial_decline` click → UNKNOWN confirm click → `offer_popup_confirm_decline` screen → `Offer Timed Out!`). But **zero** clicks classified `confirm_decline` in 1 440 envelopes, so PR #1110's `screenIs`-array widening cannot be shown to have fired at all: on 8.97.8 the confirm sheet renders **no button label**, and a human tap on the Compose card emits no click event at all (see the decline-bound item and the 09-16→19 entry's Bug 3).
     - desk 09-21: UNEXERCISED — `aab8d960` predates PR #1118, so all 22 offers logged
@@ -3071,6 +3036,82 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2.
 
 ---
+
+## 2026-10-05 (desk analysis of the 10-05 pull — the 10-01→10-04 dashes across seven builds; money reconciles except one #1120-class receipt split; #1197 health, #1185 identity and the #1200 device half pass; the first server-side census checks from the desk)
+
+**Date:** 2026-10-05 (pull) · **Platform(s) tested:** DoorDash (8.99.20 → 8.100.12 between the 10-03 and
+10-04 dashes); one 1-minute Uber session early 10-03 · **Branch under test:** `master` at `9b7e2c68` (10-01
+dashes), `f98fd7c9`/`067f072a` (10-02 night), `a41f0965` (10-03), `1e7e5fcf` → `e35dee8f` (10-04 — the #1200
+trusted-envelope uploader ran the 10-04 dash), `61e66323` (installed 10-05 morning, no dash). · **Field
+conditions:** written at the desk from the pull per CLAUDE.local.md § Field-data import (1 503 captures,
+20 logs, DB+WAL; device purged) plus the FIRST server-side reads over the new workstation WireGuard tunnel
+(`/ops/ledger`, `/ops/health`, `/ops/installs`, `/ops/clusters`). Sessions / drops: 10-01 2 / 3; 10-03 4 / 8;
+10-04 3 / 5. Offer cards ↔ `OFFER_RECEIVED` 1:1 (18 / 21 / 9), one outcome per offer. Zero ERROR on any
+build. Dasher-banking sweep over `captures/`: **0 hits**. Full report: `~/dashbuddy/logs/2026/10/05/desk-2026-10-05.md`.
+
+### Confirmations that moved checklist items
+
+1. **#1197 daily recognition health — 1/2 (desk + server, 10-05).** Server `fleet` row 2026-10-04 · doordash ·
+   8.100.12: admitted 544, unknown 78, trips 0, a full `ruleCounts` map; device `healthPosted=1`, no health WARN.
+2. **#1185 status line + identity — 1/2 (dev eyes 10-05 "working properly" + desk).** One enrolment, no
+   unusable/revoked/unauthorized line; the server shows one install, trusted, not revoked, last seen 10-05.
+3. **#1200 trusted-envelope uploader — 1/2 (device half, 10-04 on `e35dee8f`).** `envelopesPaired=70 Unpaired=0`,
+   `Held/Spooled/Posted = 70/70/70`, zero `not_trusted` — the share switch was already ON for the 10-04 dash.
+   Server half (a wireframe on a cluster from that dash) still to be eyeballed.
+4. **#1148 bubble-as-active-window — desk half 2/2, retired.** Second clean desk pass (first 09-30). Item 1
+   (dev eyes: the HUD keeps updating while you touch it) was never deliberately exercised; it rides along.
+5. **#1147 richer node fields — 2/2, retired.** Items 2–3 pass: the offer card's Accept/Decline LABEL nodes carry
+   no click flag while their clickable parent does (the #1149 owner walk is the right reader); no rich-field
+   value sits raw beside redacted text.
+6. **#1165 dash-controls sheet → `timeline` — 1/2.** All 7 frames recognized as `timeline`, all while Online.
+7. **#1167 one consent per action — 1/2 (log half).** 11 notification Decline taps each resolved `OFFER_DECLINED`
+   on the matching offer hash (the #438 B4 check). `confirm_decline` is GRANTED since 10-03 and skipped only because
+   quick declines are off in settings (a fact, not a to-do — dev standing choice).
+8. **#1149 label re-find — 1/2 with a caveat.** 13 receipt expands, 12 clean, one stale abort when an offer card
+   covered the receipt (the abort is the designed outcome).
+9. **#1104 fast decline — 1/2 with a caveat.** The one `OFFER_TIMEOUT` beside a `Denied confirm_decline` (10-01
+   14:47) landed ~0.3 s before the card's own countdown end — by design, not a lost decline.
+10. **#1122 drop-off sheet masking — check 1, 1/2.**
+11. **#1182 uploads — PARTIAL (already retired at 2/2):** device uploads per UTC day 10-03 179 / 31 batches,
+    10-04 73 / 21, 10-05 2 / 2 at log end; the server ledger shows TODAY only (14 / 5, nothing rejected — the
+    other 12 uploaded after the pull), so earlier days cannot be cross-checked from the ledger endpoint.
+
+### Bugs / hypotheses (recorded, not fixed)
+
+1. **H1 — 18.42 unattributed on the 10-03 10:18 dash (`a41f0965`): the #1120 receipt-split class.** Job 836 took
+   three accepts from the same store; drop 837 never showed its receipt (an offer card followed), its completion was
+   held to the job close, and the ONE 20.03 receipt was split 10.02 / 10.01 across both drops; a
+   `JOB_ACCEPT_MISMATCH` fired. Likely the same mechanism as #1120 (single-drop receipt applied across a job) under
+   the #810 Tier-1 inconclusive shape. Evidence posted on #1120.
+2. **H2 — unassigning through the support CHAT records no `TASK_UNASSIGNED`.** Twice on 10-03 (~11:09, ~13:11):
+   accept → help → resolution options → virtual-assistant chat; that path never renders the "been unassigned" text
+   the rule anchors on, so the abandoned accept stays on the job (it feeds H1's mismatch) and one was never resolved.
+   One possibility: a `task:unassigned` anchor on the chat-flow's confirmation surface, capture-gated. Posted on #301.
+3. **H3 — #1119 again: two real accepts recorded as `OFFER_TIMEOUT`** (seq 3693, 3702), each followed within a
+   second by a pickup and a paid drop. Posted on #1119.
+4. **H4 — census uploads paused five hours on 10-04:** from 14:18:59 the worker deferred and re-checked hourly until
+   19:19 CDT (UTC midnight) — the shape of the daily skeleton budget. Only `BudgetExhausted` / `RateLimited` can
+   defer, and the `census deferred runs=1` line does not say which. No data lost. Filed: the deferral line should
+   name its cause and the deadline (issue below).
+5. **#1108 FAIL (still open):** seq 3667 carries `realizedMinutes = −32.4` (10-03, stacked job 836) — the same drop
+   as H1, apparently timed from the job close rather than its own completion. Evidence posted on #1108.
+
+### UNKNOWN census + corpus-intake TODO
+
+470 UNKNOWN envelopes in 40 families; the largest are the Uber home screen (62) and the DoorDash side-nav/map host
+(57) — the latter is the "blank Compose host" class the dev saw on the dashboard (1 sighting of the exact
+6-node frame; classified `noise` is sufficient, no rule). PII recipe sweep: 0 first-name-plus-initial, 0 PIN/gate
+codes, 0 customer notes, 0 fused name nodes; 7 street-address hits are merchant addresses on offer cards. **The
+two-capitalized-words name check is unfinished** (the analyst's value-listing command was blocked by the PII
+permission rule, correctly): 62 UNKNOWN files need the MANUAL sweep before any corpus intake — start with the
+drop-off step-instructions family (7) and the `message_input` click (the #919 class).
+
+### Meta
+
+- First pull analysed with the server half read from the desk (tunnel + operator token, no AWS): the ledger is
+  today-only, so per-day cross-checks need either `/ops/ledger?day=` history on the server or the device counts
+  alone. Noted in the playbook's census table.
+- `confirm_decline` denials ×15 on 10-01 predate the grant; none since. Quick declines are off by choice.
 
 ## 2026-10-03 (dash on `a41f0965` — the #1185 build; automatic census uploads confirmed from the server side; v0.7.0 server + VPN + edge limits went live during the dash)
 
