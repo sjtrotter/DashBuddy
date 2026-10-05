@@ -7,6 +7,12 @@ import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,6 +52,62 @@ class DropoffSheetRedactionParityTest {
     private val screens = TestRulesetFactory.screenRuleset
     private val preArrival = screens.ruleById("doordash.screen.dropoff_pre_arrival")!!
     private val sheet = screens.ruleById("doordash.screen.dropoff_workflow_sheet")!!
+
+    private fun dropoffRedactEntries(): List<Pair<String, List<JsonObject>>> {
+        val ruleIds = screensFromDropoffSource()
+        val rules = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
+            .jsonObject["screens"]!!.jsonArray
+            .map { it.jsonObject }
+            .filter { it["id"]!!.jsonPrimitive.content in ruleIds }
+        assertTrue("the dropoff source must declare rules", ruleIds.isNotEmpty())
+        assertEquals("every dropoff rule must be generated", ruleIds,
+            rules.map { it["id"]!!.jsonPrimitive.content }.toSet())
+        return rules.map { rule ->
+            rule["id"]!!.jsonPrimitive.content to rule["redact"]!!.jsonArray.map { it.jsonObject }
+        }
+    }
+
+    private fun screensFromDropoffSource(): Set<String> {
+        val source = listOf("../matchers/rules/doordash/dropoff.json5", "matchers/rules/doordash/dropoff.json5")
+            .map(::File).first { it.isFile }.readText()
+        // The source file also declares the `clicks` section; only screen rules carry a redact.
+        return Regex(""""id"\s*:\s*"([^"]+)"""").findAll(source)
+            .map { it.groupValues[1] }.filter { it.startsWith("doordash.screen.") }.toSet()
+    }
+
+    @Test
+    fun `every dropoff address line 2 redact entry plain-masks (#1126)`() {
+        val entries = dropoffRedactEntries()
+        assertTrue("the dropoff family must be present", entries.isNotEmpty())
+        for ((ruleId, redact) in entries) {
+            for (entry in redact) {
+                val suffix = entry["find"]!!.jsonObject["hasIdSuffix"]?.jsonPrimitive?.content
+                if (suffix?.endsWith("address_line_2") == true) {
+                    assertEquals("$ruleId: $suffix must plain-mask", true,
+                        entry["plainMask"]?.jsonPrimitive?.booleanOrNull)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `every Building Name hash entry follows its digit plain entry (#1126)`() {
+        for ((ruleId, redact) in dropoffRedactEntries()) {
+            for ((index, entry) in redact.withIndex()) {
+                val find = entry["find"]!!.jsonObject
+                if (find["hasPrecedingSiblingText"]?.jsonPrimitive?.content != "Building Name" ||
+                    entry["plainMask"]?.jsonPrimitive?.booleanOrNull == true) continue
+                assertTrue("$ruleId: Building Name digits must plain-mask before the hash entry",
+                    redact.take(index).any { earlier ->
+                        val all = earlier["find"]!!.jsonObject["all"]?.jsonArray
+                        earlier["plainMask"]?.jsonPrimitive?.booleanOrNull == true &&
+                            all != null &&
+                            all.any { it.jsonObject["hasPrecedingSiblingText"]?.jsonPrimitive?.content == "Building Name" } &&
+                            all.any { it.jsonObject["hasTextMatchesRegex"]?.jsonPrimitive?.content == "\\d" }
+                    })
+            }
+        }
+    }
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
     private fun tv(text: String, id: String? = null) =

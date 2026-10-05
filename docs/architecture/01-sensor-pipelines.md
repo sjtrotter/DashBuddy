@@ -246,7 +246,7 @@ accepted fail-toward-privacy cost). UNKNOWN frames and UNKNOWN clicks remain the
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
 backstop + the #806 scrub + the #910 id scan); the residual (a name-at-start body, an id-less
 address/gate-code line with no customer lead-in) persists on UNKNOWN frames until the surface is
-recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
+recognized (#806 direction 1). Family-wide bounded-alphabet hygiene (#1126): EVERY id-anchored `address_line_2` / `bottom_sheet_address_line_2` redact entry in `dropoff.json5` is `plainMask` (city/ST/ZIP is a bounded alphabet — the #1122 grade), and every `Building Name` label-sibling HASH entry is preceded by the digit-bearing plain entry; `DropoffSheetRedactionParityTest` scans the generated dropoff family for both. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
 feeds all collectors, so side effects (captures, dedup state) can never double-run (#361). The
 merged upstream is supervised — a crash logs + counts a restart and resubscribes with backoff
 instead of silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping

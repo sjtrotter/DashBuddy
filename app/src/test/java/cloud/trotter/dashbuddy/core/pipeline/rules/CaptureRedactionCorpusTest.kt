@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.booleanOrNull
@@ -33,6 +34,46 @@ class CaptureRedactionCorpusTest {
     private val rulesDir = File(TestRulesetFactory.rulesDir)
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
+
+    @Test
+    fun `committed corpus carries no device provenance (#1206)`() {
+        val base = File("src/test/resources/snapshots")
+        val fixtures = base.walkTopDown().filter { file ->
+            val path = file.relativeTo(base).invariantSeparatorsPath
+            file.isFile && file.extension == "json" && file.name != "approved-parse-output.json" &&
+                !path.startsWith("INBOX/") &&
+                (!path.startsWith("UNKNOWN/") || path.startsWith("UNKNOWN/negative/"))
+        }.sortedBy { it.path }.toList()
+        assertTrue("the committed corpus must be present", fixtures.isNotEmpty())
+
+        fun checkProvenance(element: kotlinx.serialization.json.JsonElement, path: String) {
+            when (element) {
+                is kotlinx.serialization.json.JsonObject -> element.forEach { (key, value) ->
+                    val expected = when (key) {
+                        "deviceFingerprint" -> SnapshotRedactor.DEVICE_FINGERPRINT_PLACEHOLDER
+                        "captureId" -> SnapshotRedactor.CAPTURE_ID_PLACEHOLDER
+                        else -> null
+                    }
+                    // Two legacy session fixtures have captureId: null. There is no
+                    // provenance to scrub there; #1206 rewrites string values only.
+                    if (expected != null && value != JsonNull) {
+                        assertEquals("$path/$key", JsonPrimitive(expected), value)
+                    }
+                    checkProvenance(value, "$path/$key")
+                }
+                is kotlinx.serialization.json.JsonArray -> element.forEachIndexed { index, value ->
+                    checkProvenance(value, "$path/$index")
+                }
+                else -> Unit
+            }
+        }
+        for (fixture in fixtures) {
+            checkProvenance(Json.parseToJsonElement(fixture.readText()), fixture.relativeTo(base).path)
+        }
+        val fixture = fixtures.first { it.readText().contains("\"deviceFingerprint\"") }.readText()
+        val sanitized = SnapshotRedactor.sanitizeProvenance(fixture)
+        assertEquals("provenance sanitizing is idempotent", sanitized, SnapshotRedactor.sanitizeProvenance(sanitized))
+    }
 
     companion object {
         /**

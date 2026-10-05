@@ -41,9 +41,9 @@ import java.time.ZoneId
  * - corpus coverage ratchet — every screen-rule intent should eventually have
  *   a golden folder; the known-missing set is pinned and may only shrink.
  * - dedupeKey lint — a `{field}` template in a matched rule's effect must
- *   reference a field that actually parses non-null somewhere in that rule's
- *   corpus (the #427 class of bug). Only rules with corpus coverage are
- *   linted — the ratchet above is what makes that blind spot visible.
+ *   reference a field that parses non-null on that fixture (the #427 class of bug).
+ *   Only rules with corpus coverage are linted — the ratchet above is what makes
+ *   that blind spot visible.
  */
 class ParseOutputGoldenTest {
 
@@ -326,33 +326,30 @@ class ParseOutputGoldenTest {
      * so weakening a live dedupe key to satisfy one stale fixture would trade a real
      * runtime property for a test-set entry. Pinning records the truth: on a frame that
      * renders no duration, the key stays partly literal.)
-     * Entries are "ruleId:field".
+     * Entries are "snapshots/<folder>/<file>|<ruleId>|<field>" (#1045).
      */
     private val knownDeadDedupeTemplates = setOf(
         // #1032 — see the KDoc above: one truncated 2026-02-07 fixture renders no
         // 'Total online time' row, and the fabricated `fallback: 0` that used to mask
         // that is gone.
-        "doordash.screen.dash_summary:sessionDurationMillis",
-        "doordash.screen.delivery_summary_collapsed:totalPay",
+        "snapshots/dash_summary/2026-02-07_17-30-17__DASH_SUMMARY_SCREEN__182b139b.json|doordash.screen.dash_summary|sessionDurationMillis",
+        "snapshots/delivery_summary_collapsed/20260128_173245_145_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+        "snapshots/delivery_summary_collapsed/20260128_173245_150_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
     )
 
     @Test
     fun `dedupeKey templates reference fields the rule actually parses`() {
         val template = Regex("\\{(\\w+)\\}")
-        // dedupeKeys are scanned POST-resolution, so a `{field}` token only
-        // reaches `template.findAll` on a frame where that field parsed null (it
-        // survived interpolation). A frame that parsed the field non-null resolved
-        // its key and registers nothing. So the effective bar here is "null on ≥1
-        // frame" — a (ruleId, field) lands in `dead` iff SOME corpus frame left its
-        // token unresolved (matching [knownDeadDedupeTemplates]'s KDoc).
-        val seen = mutableMapOf<Pair<String, String>, Boolean>()
-        val exampleKey = mutableMapOf<Pair<String, String>, String>()
+        // Scan post-resolution per fixture: a regression on ANY additional frame must
+        // grow the observed set, even if another frame already pins the same rule/field.
+        val dead = mutableSetOf<String>()
+        val exampleKey = mutableMapOf<String, String>()
 
         val base = File("src/test/resources/snapshots")
         val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
             ?.sortedBy { it.name } ?: emptyList()
         for (dir in dirs) {
-            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+            for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
                 val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
                     screenRuleset.matchFirst(node)
                 } ?: continue
@@ -363,24 +360,21 @@ class ParseOutputGoldenTest {
                         // Reserved tokens resolve post-factory in the
                         // classifier (DedupeTokens, #427) — never raw fields.
                         if (field in DedupeTokens.RESERVED_FIELD_NAMES) continue
-                        val key = result.ruleId to field
-                        seen[key] = (seen[key] ?: false) || (result.fields[field] != null)
+                        val key = "snapshots/${dir.name}/$filename|${result.ruleId}|$field"
+                        if (result.fields[field] == null) dead += key
                         exampleKey.putIfAbsent(key, dk)
                     }
                 }
             }
         }
 
-        val dead = seen.filterValues { !it }.keys
-            .map { (rule, field) -> "$rule:$field" }
-            .toSet()
-        assertEquals(
+        assertRatchet(
             "Dead dedupeKey templates changed (fields that never parse non-null anywhere in " +
                 "the rule's corpus — silently-dead dedupe, the #427/#433 class). Fixed one? " +
-                "Remove it from knownDeadDedupeTemplates. Introduced one? Fix the rule.\n" +
-                dead.joinToString("\n") { "  $it (e.g. '${exampleKey[it.split(":").let { p -> p[0] to p[1] }]}')" },
+                "Remove it from knownDeadDedupeTemplates. Introduced one? Fix the rule.",
             knownDeadDedupeTemplates,
             dead,
+            exampleKey::get,
         )
     }
 
@@ -416,13 +410,14 @@ class ParseOutputGoldenTest {
      * `"Offer - {storeName}"` saved every offer screenshot as the literal
      * filename `Offer - {storeName}.png`. Fixed by switching to `{payAmount}`,
      * a field the rule guarantees non-null via its `fieldNotNull` validator.)
-     * Entries are "ruleId:field".
+     * Entries are "snapshots/<folder>/<file>|<ruleId>|<field>" (#1045).
      */
     private val knownDeadArgTemplates = setOf(
         // Two truncated 2026-01-28 mid-render captures render neither `final_value` nor a
         // scannable 'This offer' sibling, so `DeliveryBreakdown - {totalPay}.png` still ships
         // literal on THOSE frames. A corpus artifact, not rot — see [knownDeadDedupeTemplates].
-        "doordash.screen.delivery_summary_collapsed:totalPay",
+        "snapshots/delivery_summary_collapsed/20260128_173245_145_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+        "snapshots/delivery_summary_collapsed/20260128_173245_150_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
         // (`delivery_summary_expanded:totalPay` was here from the 2026-08-24 intake and came OFF
         // with #1029: the 8.93.7 id-less receipt now resolves `{totalPay}` through the
         // 'This offer' sibling scan, so no expanded frame leaves the token unresolved.)
@@ -435,7 +430,7 @@ class ParseOutputGoldenTest {
     @Test
     fun `effect arg templates reference fields the rule actually parses`() {
         val template = Regex("\\{(\\w+)\\}")
-        // A (ruleId, field) whose {token} SURVIVED resolution in an effect arg
+        // A (fixture, ruleId, field) whose {token} SURVIVED resolution in an effect arg
         // on ≥1 corpus frame — i.e. the template failed to interpolate there and
         // the saved string would carry a literal `{field}`. Args are scanned
         // post-resolution, so a surviving token IS the failure (no non-null
@@ -443,14 +438,14 @@ class ParseOutputGoldenTest {
         // scans every effect ARG value (screenshot prefix, bubble text, log
         // payload, …) — the #606 bug (`"Offer - {storeName}"`) lived in a
         // `prefix` arg the dedupeKey-only lint never looked at.
-        val dead = mutableSetOf<Pair<String, String>>()
-        val exampleArg = mutableMapOf<Pair<String, String>, String>()
+        val dead = mutableSetOf<String>()
+        val exampleArg = mutableMapOf<String, String>()
 
         val base = File("src/test/resources/snapshots")
         val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
             ?.sortedBy { it.name } ?: emptyList()
         for (dir in dirs) {
-            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+            for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
                 val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
                     screenRuleset.matchFirst(node)
                 } ?: continue
@@ -462,7 +457,7 @@ class ParseOutputGoldenTest {
                             // for args — a `{parsedHash}` in a prefix would ship
                             // literal, so it must be flagged here, not skipped.
                             val field = m.groupValues[1]
-                            val key = result.ruleId to field
+                            val key = "snapshots/${dir.name}/$filename|${result.ruleId}|$field"
                             dead += key
                             exampleArg.putIfAbsent(key, argValue)
                         }
@@ -471,23 +466,48 @@ class ParseOutputGoldenTest {
             }
         }
 
-        val deadStrings = dead
-            .map { (rule, field) -> "$rule:$field" }
-            .toSet()
-        assertEquals(
+        assertRatchet(
             "Dead effect-arg {field} templates changed (a screenshot/bubble/log template that " +
                 "left a literal {field} in the saved string on ≥1 corpus frame — i.e. failed to " +
                 "interpolate, the #606 class). Fixed one? Remove it from " +
-                "knownDeadArgTemplates. Introduced one? Fix the rule.\n" +
-                deadStrings.joinToString("\n") { "  $it (e.g. '${exampleArg[it.split(":").let { p -> p[0] to p[1] }]}')" },
+                "knownDeadArgTemplates. Introduced one? Fix the rule.",
             knownDeadArgTemplates,
-            deadStrings,
+            dead,
+            exampleArg::get,
         )
     }
 
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    private fun assertRatchet(
+        label: String,
+        pinned: Set<String>,
+        observed: Set<String>,
+        example: (String) -> String?,
+    ) {
+        assertEquals(
+            label + "\n" + observed.sorted().joinToString("\n") { "  $it (e.g. '${example(it)}')" },
+            pinned,
+            observed,
+        )
+    }
+
+    @Test
+    fun `fixture ratchet accepts unchanged pins`() {
+        assertRatchet("unchanged", setOf("a"), setOf("a")) { null }
+    }
+
+    @Test(expected = AssertionError::class)
+    fun `fixture ratchet rejects an additional dead fixture`() {
+        assertRatchet("new dead fixture", setOf("a"), setOf("a", "b")) { null }
+    }
+
+    @Test(expected = AssertionError::class)
+    fun `fixture ratchet rejects a stale pin`() {
+        assertRatchet("stale pin", setOf("a"), emptySet()) { null }
+    }
 
     private fun compileProductionScreenRules(): List<CompiledRule<UiNode>> {
         val dir = File(TestRulesetFactory.rulesDir)
