@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffSheetRedactionParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.PickupWaitArrivalRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
@@ -118,6 +119,9 @@ import org.junit.runners.Suite
  * - [RuleIdLogSafetyTest] — #862 review LOW-2: every reachable (non-sensitive) rule id is
  *   [cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers]-clean, so a rule id can never
  *   self-scrub the recognized-frame backstop WARN that interpolates it.
+ * - [PickupWaitArrivalRecognitionTest] — #1141: the restaurant wait screen's arrival-chrome branch
+ *   anchors `task:pickup:arrived` (curbside card id + text) and parses the task shape; survey-only
+ *   renders stay flowless; quoted chrome on a dropoff sheet / a combined unassign frame never arrive.
  * - [GoPuffRecognitionTest] — #501: the GoPuff (DoorDash Drive) warehouse batch-pickup branches
  *   (bin-scan arrival anchor, wait-survey/barcode-failure/multi-order-confirm recognize-only,
  *   the hand-built zone-arrival CTA fixtures) against the real production ruleset.
@@ -192,6 +196,7 @@ import org.junit.runners.Suite
     PickupNoCustomerIdentityTest::class,
     RuleIdLogSafetyTest::class,
     GoPuffRecognitionTest::class,
+    PickupWaitArrivalRecognitionTest::class,
     UberOfferKindAndStackStoreTest::class,
     DashSummaryReanchorTest::class,
     DeliverySummaryReanchorTest::class,

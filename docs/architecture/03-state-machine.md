@@ -488,6 +488,17 @@ from a non-task `returnFlow`, the ambient-screen guard). A per-offer `OFFER_EXPI
 (hash-carrying payload, EffectMap-armed, no-ops on an accept-latched offer) resolves an overlay
 offer that vanishes without a frame.
 
+**Pickup arrival anchors (#1141).** `task:pickup:arrived` is declared by the screens whose own chrome
+states the arrival — `pickup_arrival` and, since #1141, the first branch of `pickup_wait_survey` (the
+restaurant "Stay in your car / Merchant notified of your arrival" wait screen, anchored on the curbside
+card's view id inside the `pickup_survey_view` host, rejecting the unassigned-confirmation and GoPuff
+`Pickup steps` chrome). That branch PARSES the pickup task shape (store from `instructions_title` where
+the contact card renders, hashed customer, `Pick up by` deadline, item count) so `TaskLifecycle` resumes
+by store onto the right placeholder on a stacked job; a parse-less arrival would fall to `singleOrNull`
+and mint a store-less pickup with ≥ 2 open placeholders. The survey-only renders stay flowless (the
+#501 GoPuff posture). `TaskLifecycle` stamps only the FIRST arrival, so repeat renders are inert; the
+fielded 16-minute wait that folded to 0.0 dwell was exactly this missing anchor.
+
 **Placeholders and store lineage.** An accepted offer pre-creates **symmetric placeholders**: one
 dropoff per order AND one PICKUP per distinct store, each dropoff stamped with the minting accept's
 `Task.mintedByOfferHash` (#997's per-drop↔offer provenance HINT, not an identity: placeholders

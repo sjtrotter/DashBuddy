@@ -6004,8 +6004,23 @@
     "pickup_wait_survey/2026-08-01_11-35-09-009__doordash__accessibility.window__pickup_wait_survey__c8daf3.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "11:35",
+                "time": 1780313700000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-07_19-46-17-026__doordash__accessibility.window__pickup_wait_survey__7e4609.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6022,8 +6037,23 @@
     "pickup_wait_survey/2026-08-07_20-00-31-049__doordash__accessibility.window__pickup_wait_survey__0bf7d7.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "20:01",
+                "time": 1780344060000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-08_12-45-40-504__doordash__accessibility.window__pickup_wait_survey__608677.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6034,8 +6064,23 @@
     "pickup_wait_survey/2026-08-18_18-45-08-947__doordash__accessibility.window__pickup_wait_survey__1c1273.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "18:49",
+                "time": 1780339740000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Sukhothai Restaurant",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-18_18-46-41-653__doordash__accessibility.window__pickup_wait_survey__24d30f.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6046,14 +6091,44 @@
     "pickup_wait_survey/2026-08-23_15-04-40-021__doordash__accessibility.window__pickup_wait_survey__0bf7d7.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "15:07",
+                "time": 1780326420000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-28_15-37-04-012__doordash__accessibility.window__pickup_wait_survey__6c2e56.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "15:40",
+                "time": 1780328400000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-28_15-41-29-654__doordash__accessibility.window__pickup_wait_survey__38622a.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6064,20 +6139,65 @@
     "pickup_wait_survey/2026-08-28_16-50-28-187__doordash__accessibility.window__pickup_wait_survey__7f49f8.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "16:42",
+                "time": 1780332120000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-09-04_19-53-01-080__doordash__accessibility.window__pickup_wait_survey__a117c8.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "20:02",
+                "time": 1780344120000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-09-27_11-50-25-492__doordash__accessibility.window__pickup_wait_survey__70a359.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "11:55",
+                "time": 1780314900000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Pluckers Wing Bar",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/gopuff_wait_survey.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",

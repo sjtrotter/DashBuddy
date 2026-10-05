@@ -48,6 +48,12 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
+  "Arrived at store" and wait, the pull's `pickup_records` dwell for that stop should reflect the real
+  wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the
+  "Stay in your car / Merchant notified of your arrival" screen.
+  - Confirmed: 0/2
+
 - **Resolved offer cards no longer wear a verdict banner (#864):** after an offer times out or is declined, expand
   its card in the HUD — the big ACCEPT/DECLINE advice banner is gone and only the header's outcome chip (Accepted /
   Declined / Timed out) states what happened; a LIVE card still shows the banner. Working = no resolved card can be

@@ -444,7 +444,7 @@
     {
       "id": "doordash.screen.pickup_wait_survey",
       "priority": 88,
-      "comment": "#992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
+      "comment": "#1141: recognize-only EXCEPT its first branch — the arrival-chrome render (curbside card id + `Merchant notified of your arrival`) declares `task:pickup:arrived` and parses the pickup task shape; every other branch stays flowless. #992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
       "redact": [
         {
           "find": {
@@ -478,6 +478,168 @@
       ],
       "branches": [
         {
+          "reject": [
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "been unassigned from this order"
+                  }
+                },
+                {
+                  "exists": {
+                    "hasTextContaining": "continue to your next stop"
+                  }
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "Pickup steps"
+                  }
+                },
+                {
+                  "exists": {
+                    "any": [
+                      {
+                        "hasTextContaining": "Take receipt photo"
+                      },
+                      {
+                        "hasTextContaining": "Confirm pickup"
+                      },
+                      {
+                        "hasTextContaining": "Scan barcodes on"
+                      },
+                      {
+                        "hasTextContaining": "Complete pickup"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "comment": "#1141 — the 8.99.20 restaurant wait screen whose OWN chrome states the arrival ('Merchant notified of your arrival', with the 'Stay in your car' curbside card or the 'Waiting for your order?' survey beneath). Screen-authoritative: this render IS the pickup arrival, so it declares `task:pickup:arrived` — the fielded 09-27 11:50 frame folded a 16-min wait to 0.0 because the click alone carries no flow and this branch did not exist. `TaskLifecycle` stamps only the FIRST arrival, so a repeat render is inert. The other branches below stay flowless (the survey alone — 'What's causing your wait' — can render before arrival chrome exists, #501's GoPuff posture). Redact is rule-level and unchanged. Astra review r1 of PR #1220: the anchor is view-id FIRST — the curbside card's own `curbside_pickup_instructions_component_view` (present on every arrival render, absent on every survey-only render) inside the `pickup_survey_view` host — so a customer note or chat line QUOTING the words cannot steal a dropoff/chat frame into a false arrival; the two rejects keep a combined unassigned-confirmation frame with rule 107 (`task:unassigned`) and mirror the GoPuff `Pickup steps` reject. Fable review r1: the branch PARSES the same task shape as `pickup_arrival` (store from the EXACT `:id/instructions_title` id INSIDE the REQUIRED `mx_contact_view` bind — required, not optional, because an absent optional bind falls back to the whole tree and would read chrome (Astra r3); every fielded arrival render carries the card — a bare suffix also matched the curbside card's `curbside_pickup_instructions_title`, which read 'Stay in your car' as the store — where the render carries the contact card — the fielded 09-27 frame does; the collapsed curbside renders resolve it null — plus the `Pick up by` deadline and the item count; NO customer identity: pickups belong to a store (#548 — only `pickup_arrival`'s node-pinned parse may read `customer_name` on a pickup surface; this branch's rule-level redact still hashes the node on the envelope), so `TaskLifecycle` can resume BY STORE onto the right placeholder on a stacked job instead of minting a store-less pickup; `modeHint` is omitted because `TransitionPolicy` already infers Online from the arrived flow and an explicit hint buys nothing on a screen a dasher may sit on while paused.",
+          "intent": "pickup_wait_survey",
+          "state": {
+            "flow": "task:pickup:arrived"
+          },
+          "parse": {
+            "as": "task",
+            "fields": {
+              "phase": "PICKUP",
+              "subFlow": "ARRIVED",
+              "storeName": {
+                "from": "contactView",
+                "find": {
+                  "hasIdSuffix": ":id/instructions_title"
+                },
+                "read": "text"
+              },
+              "deadlineText": {
+                "find": {
+                  "hasTextStartsWith": "Pick up by"
+                },
+                "read": "text",
+                "transform": "stripDeadlinePrefix"
+              },
+              "deadlineMillis": {
+                "find": {
+                  "hasTextStartsWith": "Pick up by"
+                },
+                "read": "text",
+                "transform": "parseDeadline"
+              },
+              "itemCount": {
+                "find": {
+                  "hasIdSuffix": "items_title_v2"
+                },
+                "read": "text",
+                "transform": "parseLeadingInt"
+              },
+              "arrivalConfirmed": {
+                "literal": true
+              }
+            }
+          },
+          "bind": {
+            "contactView": {
+              "find": {
+                "hasIdSuffix": "mx_contact_view"
+              }
+            }
+          },
+          "require": {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "mx_contact_view"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "curbside_pickup_instructions_component_view"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "pickup_survey_view"
+                }
+              },
+              {
+                "exists": {
+                  "hasTextContaining": "Merchant notified of your arrival"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "reject": [
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "been unassigned from this order"
+                  }
+                },
+                {
+                  "exists": {
+                    "hasTextContaining": "continue to your next stop"
+                  }
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "Pickup steps"
+                  }
+                },
+                {
+                  "exists": {
+                    "any": [
+                      {
+                        "hasTextContaining": "Take receipt photo"
+                      },
+                      {
+                        "hasTextContaining": "Confirm pickup"
+                      },
+                      {
+                        "hasTextContaining": "Scan barcodes on"
+                      },
+                      {
+                        "hasTextContaining": "Complete pickup"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
           "comment": "Normal DoorDash wait survey.",
           "require": {
             "all": [
@@ -495,14 +657,50 @@
           }
         },
         {
-          "comment": "#501 GoPuff (Drive) at-store wait survey — recognize-only (inherits the parent's no-state), keyed on the GoPuff survey container id + 'Waiting for your order'. Rejects the bin-scan STEPS screen (which also carries pickup_survey_view) so the higher-numbered pickup_steps arrival branch wins it (lower priority = evaluated first, so this 88 must not steal the 104 steps frame).",
           "reject": [
             {
-              "exists": {
-                "hasTextContaining": "Pickup steps"
-              }
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "been unassigned from this order"
+                  }
+                },
+                {
+                  "exists": {
+                    "hasTextContaining": "continue to your next stop"
+                  }
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "Pickup steps"
+                  }
+                },
+                {
+                  "exists": {
+                    "any": [
+                      {
+                        "hasTextContaining": "Take receipt photo"
+                      },
+                      {
+                        "hasTextContaining": "Confirm pickup"
+                      },
+                      {
+                        "hasTextContaining": "Scan barcodes on"
+                      },
+                      {
+                        "hasTextContaining": "Complete pickup"
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           ],
+          "comment": "#501 GoPuff (Drive) at-store wait survey — recognize-only (inherits the parent's no-state), keyed on the GoPuff survey container id + 'Waiting for your order'. Rejects the bin-scan STEPS screen (which also carries pickup_survey_view) so the higher-numbered pickup_steps arrival branch wins it (lower priority = evaluated first, so this 88 must not steal the 104 steps frame).",
           "require": {
             "all": [
               {
@@ -519,6 +717,49 @@
           }
         },
         {
+          "reject": [
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "been unassigned from this order"
+                  }
+                },
+                {
+                  "exists": {
+                    "hasTextContaining": "continue to your next stop"
+                  }
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "exists": {
+                    "hasTextContaining": "Pickup steps"
+                  }
+                },
+                {
+                  "exists": {
+                    "any": [
+                      {
+                        "hasTextContaining": "Take receipt photo"
+                      },
+                      {
+                        "hasTextContaining": "Confirm pickup"
+                      },
+                      {
+                        "hasTextContaining": "Scan barcodes on"
+                      },
+                      {
+                        "hasTextContaining": "Complete pickup"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
           "comment": "#888 — the DoorDash wait survey's SHEET variant: same 'What's causing your wait?' banner + Submit, but rendered as the wait_survey_container scroll sheet whose reason list has not inflated yet, so branch 1's 'Order still being prepared when I arrived' option anchor is absent and the frame fell to UNKNOWN (2026-07-26 21:08:27 in the pull, ~300ms before the fully-inflated frame branch 1 already recognizes). Anchored on the two survey-specific container/button ids plus the same banner copy branch 1 uses; the ids keep this off any other sheet. Same rule, same intent, same recognize-only posture.",
           "require": {
             "all": [
