@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.test.util.CorpusDecoys
+import cloud.trotter.dashbuddy.test.util.DropoffRuleSource
 import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
@@ -1459,14 +1460,8 @@ class CaptureRedactionCorpusTest {
      * source file: the store-ambiguous nav catch-all can win a frame carrying the dropoff address
      * block, which is why #886 and #993 already declare entries on it for the same reason.
      */
-    private fun subpremiseParityRuleIds(): List<String> {
-        val declared = Regex(""""id":\s*"(doordash\.screen\.[A-Za-z_0-9]+)"""")
-            .findAll(File("../matchers/rules/doordash/dropoff.json5").readText())
-            .map { it.groupValues[1] }
-            .toList()
-        assertTrue("expected the dropoff section to declare screen rules", declared.isNotEmpty())
-        return declared + "doordash.screen.navigation_generic"
-    }
+    private fun subpremiseParityRuleIds(): List<String> =
+        DropoffRuleSource.screenRuleIds() + "doordash.screen.navigation_generic"
 
     /**
      * True when [entry] names its node by TEXT SHAPE rather than by id or label — the entries that

@@ -369,9 +369,10 @@ class ParseOutputGoldenTest {
         }
 
         assertRatchet(
-            "Dead dedupeKey templates changed (fields that never parse non-null anywhere in " +
-                "the rule's corpus — silently-dead dedupe, the #427/#433 class). Fixed one? " +
-                "Remove it from knownDeadDedupeTemplates. Introduced one? Fix the rule.",
+            "Dead dedupeKey templates changed (a {field} token that survived interpolation on the " +
+                "named FIXTURE — the field parsed null there, so the key stays partly literal; the " +
+                "#427/#433 class, pinned per fixture since #1045). Fixed one? Remove it from " +
+                "knownDeadDedupeTemplates. A NEW fixture here? The rule regressed on that frame — fix the rule.",
             knownDeadDedupeTemplates,
             dead,
             exampleKey::get,

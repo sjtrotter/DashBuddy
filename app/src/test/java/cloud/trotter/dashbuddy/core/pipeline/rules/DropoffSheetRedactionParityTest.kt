@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Co
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.WHOLE_MASK_HEX
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.test.util.DropoffRuleSource
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -63,18 +64,14 @@ class DropoffSheetRedactionParityTest {
         assertEquals("every dropoff rule must be generated", ruleIds,
             rules.map { it["id"]!!.jsonPrimitive.content }.toSet())
         return rules.map { rule ->
-            rule["id"]!!.jsonPrimitive.content to rule["redact"]!!.jsonArray.map { it.jsonObject }
+            val id = rule["id"]!!.jsonPrimitive.content
+            val redact = rule["redact"]?.jsonArray
+            assertTrue("$id: every dropoff rule must declare a redact block (the #993/#1039/#1107 belts)", redact != null)
+            id to redact!!.map { it.jsonObject }
         }
     }
 
-    private fun screensFromDropoffSource(): Set<String> {
-        val source = listOf("../matchers/rules/doordash/dropoff.json5", "matchers/rules/doordash/dropoff.json5")
-            .map(::File).first { it.isFile }.readText()
-        // The source file also declares the `clicks` section; only screen rules carry a redact.
-        // Both JSON5 quote styles, so a single-quoted id can never drop a rule out of the scan.
-        return Regex("""["']id["']\s*:\s*["']([^"']+)["']""").findAll(source)
-            .map { it.groupValues[1] }.filter { it.startsWith("doordash.screen.") }.toSet()
-    }
+    private fun screensFromDropoffSource(): Set<String> = DropoffRuleSource.screenRuleIds().toSet()
 
     @Test
     fun `every dropoff address line 2 redact entry plain-masks (#1126)`() {
@@ -82,32 +79,31 @@ class DropoffSheetRedactionParityTest {
         assertTrue("the dropoff family must be present", entries.isNotEmpty())
         for ((ruleId, redact) in entries) {
             for (entry in redact) {
-                val suffix = entry["find"]!!.jsonObject["hasIdSuffix"]?.jsonPrimitive?.content
-                if (suffix?.endsWith("address_line_2") == true) {
-                    assertEquals("$ruleId: $suffix must plain-mask", true,
-                        entry["plainMask"]?.jsonPrimitive?.booleanOrNull)
+                // Walk the whole predicate (an entry may name the id inside `all` / `any`), so an
+                // address_line_2 entry in any shape is held to the plainMask bar (review of #1213).
+                for (suffix in idSuffixesIn(entry["find"]!!)) {
+                    if (suffix.endsWith("address_line_2")) {
+                        assertEquals("$ruleId: $suffix must plain-mask", true,
+                            entry["plainMask"]?.jsonPrimitive?.booleanOrNull)
+                    }
                 }
             }
         }
     }
 
-    @Test
-    fun `every Building Name hash entry follows its digit plain entry (#1126)`() {
-        for ((ruleId, redact) in dropoffRedactEntries()) {
-            for ((index, entry) in redact.withIndex()) {
-                val find = entry["find"]!!.jsonObject
-                if (find["hasPrecedingSiblingText"]?.jsonPrimitive?.content != "Building Name" ||
-                    entry["plainMask"]?.jsonPrimitive?.booleanOrNull == true) continue
-                assertTrue("$ruleId: Building Name digits must plain-mask before the hash entry",
-                    redact.take(index).any { earlier ->
-                        val all = earlier["find"]!!.jsonObject["all"]?.jsonArray
-                        earlier["plainMask"]?.jsonPrimitive?.booleanOrNull == true &&
-                            all != null &&
-                            all.any { it.jsonObject["hasPrecedingSiblingText"]?.jsonPrimitive?.content == "Building Name" } &&
-                            all.any { it.jsonObject["hasTextMatchesRegex"]?.jsonPrimitive?.content == "\\d" }
-                    })
-            }
+    /** Every `hasIdSuffix` value anywhere in a redact entry's predicate tree (`comment` skipped). */
+    private fun idSuffixesIn(find: kotlinx.serialization.json.JsonElement): List<String> =
+        predicateValues(find, "hasIdSuffix")
+
+    private fun precedingSiblingTextsIn(find: kotlinx.serialization.json.JsonElement): List<String> =
+        predicateValues(find, "hasPrecedingSiblingText")
+
+    private fun predicateValues(e: kotlinx.serialization.json.JsonElement, key: String): List<String> = when (e) {
+        is JsonObject -> e.entries.filter { it.key != "comment" }.flatMap { (k, v) ->
+            if (k == key && v is kotlinx.serialization.json.JsonPrimitive) listOf(v.content) else predicateValues(v, key)
         }
+        is kotlinx.serialization.json.JsonArray -> e.flatMap { predicateValues(it, key) }
+        else -> emptyList()
     }
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
@@ -353,11 +349,11 @@ class DropoffSheetRedactionParityTest {
 
     @Test
     fun `every dropoff rule with a Building Name entry plain-masks a digit-bearing value and hashes a complex name (#1126, behavioral)`() {
-        // The structural ordering scan above checks only the Building Name entries' relative order;
-        // this runs the COMPLETE compiled redact sequence of every such rule, so an unrelated earlier
-        // entry (a digit-leading street shape, say) that claimed and hashed the value would fail here.
+        // Runs the COMPLETE compiled redact sequence of every rule that declares a Building Name entry,
+        // so an unrelated earlier entry (the id-less street shape, say) that claimed and hashed the
+        // value fails here — which is exactly what it caught on dropoff_pre_arrival_completion (r1).
         val ruleIds = dropoffRedactEntries()
-            .filter { (_, redact) -> redact.any { it["find"]!!.jsonObject["hasPrecedingSiblingText"]?.jsonPrimitive?.content == "Building Name" } }
+            .filter { (_, redact) -> redact.any { "Building Name" in precedingSiblingTextsIn(it["find"]!!) } }
             .map { it.first }
         assertTrue("the dropoff family declares Building Name entries", ruleIds.size >= 3)
         for (id in ruleIds) {

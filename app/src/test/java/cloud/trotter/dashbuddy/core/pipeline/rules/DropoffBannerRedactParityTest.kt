@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.test.util.DropoffRuleSource
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -39,14 +40,7 @@ class DropoffBannerRedactParityTest {
     private val bannerId = "arriving_at_title"
 
     /** Every `doordash.screen.*` id declared in the dropoff surface source file. */
-    private fun dropoffSectionRuleIds(): List<String> {
-        val declared = Regex(""""id":\s*"(doordash\.screen\.[A-Za-z_0-9]+)"""")
-            .findAll(File("../matchers/rules/doordash/dropoff.json5").readText())
-            .map { it.groupValues[1] }
-            .toList()
-        assertTrue("expected the dropoff section to declare rules", declared.isNotEmpty())
-        return declared
-    }
+    private fun dropoffSectionRuleIds(): List<String> = DropoffRuleSource.screenRuleIds()
 
     /** The `hasIdSuffix` values inside [ruleId]'s compiled `redact` block (generated asset). */
     private fun redactIdSuffixes(ruleId: String): List<String> {

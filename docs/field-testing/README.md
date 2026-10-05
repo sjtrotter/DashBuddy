@@ -48,6 +48,13 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Desk-first — #965 / #1126 (PR #1213):** on the next pull, (a) a `ratings` envelope from the LEGACY ratings hub
+  parses `deliveriesLast30Days` as a count (the approved golden now carries 136/72/71/100 on the committed legacy
+  frames; a null on a fielded legacy frame is the thing to report), and (b) every recognized dropoff envelope's
+  `address_line_2` / numeric `Building Name` slot reads plain `[redacted]` — no `[redacted:<4hex>]` on those two
+  slots anywhere in `captures/doordash/`.
+  - Confirmed: 0/2
+
 - **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's
   dash that has a trusted capture → "Classify & draft" → pick the class, mark two id anchors + the parse fields → Preview
   shows a JSON5 draft (or a refusal naming the weak node) → Save (TOTP) → the detail page shows the class chip and the
