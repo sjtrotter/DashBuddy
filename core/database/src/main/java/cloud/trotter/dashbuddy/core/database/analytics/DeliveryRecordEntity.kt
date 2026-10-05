@@ -94,7 +94,12 @@ data class DeliveryRecordEntity(
     val frozenFuelPerMile: Double? = null,
     /** Non-fuel component of [frozenCostPerMile] (per-mile), same OFFER_FROZEN-only rule (#659). */
     val frozenNonFuelPerMile: Double? = null,
-    /** Frozen realized net = realizedPay − realizedMiles × frozenCostPerMile (PR2). */
+    /**
+     * Frozen realized net = realizedPay − realizedMiles × frozenCostPerMile (PR2). Since #1133
+     * (projector v12) a row with NULL [realizedPay] that drove a positive distance carries
+     * `−realizedMiles × frozenCostPerMile` — so `netProfit != null` does NOT imply pay was recorded;
+     * readers that need pay evidence must test [realizedPay] (`NetProfit.realized` is the owner).
+     */
     val netProfit: Double?,
     /** Provenance of the cost basis: "OFFER_FROZEN" | "CAPTURED" | "CURRENT_FALLBACK" | "NONE". */
     val costBasis: String,

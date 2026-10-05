@@ -29,6 +29,12 @@ data class AcceptedOfferOutcomeSample(
      * than a fabricated `$0.00` that would drag the realized mean toward zero.
      */
     val realizedNet: Double?,
+    /**
+     * Σ `realizedPay` over the job's deliveries — nullable, un-`COALESCE`d. Since #1133 a pay-less row
+     * carries `netProfit = −cost`, so [realizedNet] alone no longer proves pay was ever recorded; an
+     * offer is "measured" only when this is non-null (rule 4).
+     */
+    val realizedPay: Double?,
     /** Σ driver-entered `cashTip` over the same deliveries (#688 keeps cash outside `netProfit`). */
     val realizedCashTip: Double,
     /** Σ measured `realizedMinutes` over the same deliveries; null when none was ever measured. */
@@ -146,6 +152,7 @@ data class EstimateVsReality(
                 val jobId = sample.linkedJobId ?: return@mapNotNull null          // rule 2
                 if ((offersPerJob[jobId] ?: 0) > 1) return@mapNotNull null        // rule 3
                 val est = sample.estPerHour ?: return@mapNotNull null             // rule 1 (#936)
+                sample.realizedPay ?: return@mapNotNull null                     // rule 4 (#1133: pay evidence, not net)
                 val net = sample.realizedNet ?: return@mapNotNull null            // rule 4
                 val minutes = sample.realizedMinutes ?: return@mapNotNull null    // rule 4
                 if (minutes <= 0.0) return@mapNotNull null                        // rule 4

@@ -407,9 +407,7 @@ class AnalyticsProjector @Inject constructor(
         val net = when {
             !payChanged && !milesChanged -> row.netProfit
             manual -> NetProfit.net(newPay ?: 0.0, newMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
-            row.frozenCostPerMile != null && newMiles != null ->
-                NetProfit.net(newPay ?: 0.0, newMiles, row.frozenCostPerMile!!)
-            else -> null
+            else -> NetProfit.realized(newPay, newMiles, row.frozenCostPerMile)
         }
         // #159 H1: a driver-supplied newStoreName NULLS the resolved storeKey AND sets the pin, so the
         // driver's fix wins the report-card grouping (its grouping becomes read-side

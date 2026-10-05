@@ -28,6 +28,7 @@ class EstimateVsRealityTest {
         estPerHour: Double? = 20.0,
         linkedJobId: String? = "job-$seq",
         realizedNet: Double? = 30.0,
+        realizedPay: Double? = if (realizedNet == null) null else 35.0,
         realizedCashTip: Double = 0.0,
         realizedMinutes: Double? = 60.0,
     ) = AcceptedOfferOutcomeSample(
@@ -35,6 +36,7 @@ class EstimateVsRealityTest {
         estPerHour = estPerHour,
         linkedJobId = linkedJobId,
         realizedNet = realizedNet,
+        realizedPay = realizedPay,
         realizedCashTip = realizedCashTip,
         realizedMinutes = realizedMinutes,
     )
@@ -140,6 +142,19 @@ class EstimateVsRealityTest {
         assertEquals(1, comparison.offers)
         assertEquals(4, comparison.acceptedOffers)
         assertEquals(20.0, comparison.realizedPerHour!!, 1e-9)
+    }
+
+    @Test
+    fun `a pay-less job's cost-only net is NOT a measurement — excluded, never a negative vote (#1133)`() {
+        // Since #1133 a receipt-less drop carries net = −cost; without pay evidence the offer must
+        // stay out of the sample exactly as an unmeasured one does (it is kept in the denominator).
+        val r = EstimateVsReality.of(listOf(
+            sample(1, realizedNet = -5.98, realizedPay = null, realizedMinutes = 25.0),
+            sample(2, estPerHour = 20.0, realizedNet = 30.0, realizedPay = 35.0, realizedMinutes = 60.0),
+        ))
+        assertEquals(2, r.acceptedOffers)
+        assertEquals(1, r.offers)
+        assertEquals(30.0, r.realizedPerHour!!, 1e-9)
     }
 
     @Test

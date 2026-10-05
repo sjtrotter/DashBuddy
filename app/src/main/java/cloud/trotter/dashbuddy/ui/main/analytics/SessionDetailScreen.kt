@@ -369,6 +369,16 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
                     color = c.text3,
                 )
             }
+            // #1133: a receipt-less drop that drove miles carries net = −cost with NO pay; say so
+            // beside the figure (never-silent, like the re-price disclosure) so a negative net is
+            // read as "cost only", not as a measured loss the dasher should "correct" with $0.
+            if (delivery.realizedPay == null && delivery.netProfit != null) {
+                Text(
+                    text = stringResource(R.string.session_detail_unpaid_drop),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
+            }
             // Net includes the cash tip at display level only (the frozen netProfit column stays
             // cash-free); a null-net row (no cost basis) stays an em dash even with cash present.
             val net = delivery.netProfit?.let { it + (delivery.cashTip ?: 0.0) }

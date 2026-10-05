@@ -959,7 +959,7 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `a pay-less completion with zero miles has zero net (#1133)`() {
+    fun `a pay-less completion with zero miles has NO net — nothing driven, nothing fabricated (#1133 review)`() {
         val s = "PAYLESS_ZERO"
         val (outcomes, _) = foldSession(
             listOf(
@@ -970,7 +970,9 @@ class RecordFoldsTest {
         )
         val d = outcomes[1].delivery!!
         assertEquals(0.0, d.realizedMiles!!, 1e-6)
-        assertEquals(0.0, d.netProfit!!, 1e-6)
+        // A pay-less, mile-less row carries no information: null, never a fabricated $0.00 (the
+        // NetProfit discipline; `NetProfit.realized` is the one owner of this rule).
+        assertNull(d.netProfit)
         assertNull(d.realizedPay)
         assertEquals(PayBasis.NONE, d.payBasis)
     }

@@ -702,6 +702,7 @@ interface AnalyticsDao {
                   o.estDollarsPerHour AS estPerHour,
                   o.linkedJobId AS linkedJobId,
                   SUM(d.netProfit) AS realizedNet,
+                  SUM(d.realizedPay) AS realizedPay,
                   COALESCE(SUM(d.cashTip), 0) AS realizedCashTip,
                   SUM(d.realizedMinutes) AS realizedMinutes
            FROM offer_records o

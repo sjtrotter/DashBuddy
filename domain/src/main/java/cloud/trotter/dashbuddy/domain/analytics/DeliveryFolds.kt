@@ -168,11 +168,7 @@ internal object DeliveryFolds {
         // #1133: a missing receipt does not erase recorded driving cost. Keep realizedPay null and
         // payBasis untouched so unknown pay remains distinguishable from a $0 receipt. A later
         // DELIVERY_ADJUSTMENT supplying pay recomputes net using this row's miles and frozen cpm.
-        val netProfit = if (frozenCpm != null && realizedMiles != null) {
-            NetProfit.net(realizedPay ?: 0.0, realizedMiles, frozenCpm)
-        } else {
-            null
-        }
+        val netProfit = NetProfit.realized(realizedPay, realizedMiles, frozenCpm)
 
         val delivery = DeliveryFold(
             eventSequenceId = event.sequenceId,

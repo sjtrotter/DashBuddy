@@ -95,6 +95,7 @@ internal fun AcceptedOfferRealizedRow.toSample(): AcceptedOfferOutcomeSample = A
     estPerHour = estPerHour,
     linkedJobId = linkedJobId,
     realizedNet = realizedNet,
+    realizedPay = realizedPay,
     realizedCashTip = realizedCashTip,
     realizedMinutes = realizedMinutes,
 )
