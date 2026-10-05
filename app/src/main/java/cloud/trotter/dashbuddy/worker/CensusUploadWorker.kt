@@ -260,7 +260,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 else -> record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
             }
             val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
-            Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%d", remainingSeconds)
+            Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%s", remainingSeconds.toString())
             return Result.success()
         }
         val run = UploadRun()
@@ -511,7 +511,7 @@ class CensusUploadWorker @AssistedInject constructor(
         record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
         val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
-        Timber.tag(TAG).i("census deferred cause=%s seconds=%d", cause.token, coercedSeconds)
+        Timber.tag(TAG).i("census deferred cause=%s seconds=%s", cause.token, coercedSeconds.toString())
         return Result.success()
     }
 
