@@ -154,32 +154,49 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
         // its two tints come from the [offerVerdictLabel]/[offerVerdictColor] SSOT the heads-up
         // notification shares (#942); this used to be three independent `when`s over the raw enum
         // NAME (the #283 stringly-typed shape), which is how "REVIEW" here became "MANUAL REVIEW".
-        snap.evaluationAction?.let { name ->
-            val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
-            val vColor = offerVerdictColor(action, c)
-            val vBg = offerVerdictContainer(action, c)
-            val vIcon = when (action) {
-                OfferAction.ACCEPT -> Icons.Default.Check
-                OfferAction.DECLINE -> Icons.Default.Close
-                else -> Icons.Default.Info
-            }
-            Surface(shape = MaterialTheme.shapes.small, color = vBg) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(vIcon, contentDescription = null, tint = vColor, modifier = Modifier.size(18.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            offerVerdictLabel(action),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = vColor,
-                        )
-                    }
-                    snap.qualityLevel?.let { AppChip(it.displayLabel(), color = c.text3, container = c.surface3) }
+        // #864: the tinted banner is LIVE advice; a resolved card shows its outcome in the header
+        // (`OutcomeChip`) and keeps the evaluation as a one-line caption below, so "what was advised"
+        // stays readable beside "what happened" without being mistaken for it.
+        if (isActive && snap.outcome == null) {
+            snap.evaluationAction?.let { name ->
+                val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
+                val vColor = offerVerdictColor(action, c)
+                val vBg = offerVerdictContainer(action, c)
+                val vIcon = when (action) {
+                    OfferAction.ACCEPT -> Icons.Default.Check
+                    OfferAction.DECLINE -> Icons.Default.Close
+                    else -> Icons.Default.Info
                 }
+                Surface(shape = MaterialTheme.shapes.small, color = vBg) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(vIcon, contentDescription = null, tint = vColor, modifier = Modifier.size(18.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                offerVerdictLabel(action),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = vColor,
+                            )
+                        }
+                        snap.qualityLevel?.let { AppChip(it.displayLabel(), color = c.text3, container = c.surface3) }
+                    }
+                }
+            }
+        } else {
+            snap.evaluationAction?.let { name ->
+                val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
+                val caption = listOfNotNull(offerVerdictLabel(action), snap.qualityLevel?.displayLabel())
+                    .joinToString(" · ")
+                Text(
+                    stringResource(R.string.flow_card_advised_format, caption),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.text3,
+                    maxLines = 1,
+                )
             }
         }
 

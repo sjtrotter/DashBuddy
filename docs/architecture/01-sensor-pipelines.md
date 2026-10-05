@@ -246,7 +246,7 @@ accepted fail-toward-privacy cost). UNKNOWN frames and UNKNOWN clicks remain the
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
 backstop + the #806 scrub + the #910 id scan); the residual (a name-at-start body, an id-less
 address/gate-code line with no customer lead-in) persists on UNKNOWN frames until the surface is
-recognized (#806 direction 1). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
+recognized (#806 direction 1). The on-disk `captures/` directory is excluded from every Android backup channel in BOTH storage domains (`external` and `file`, since `DiskCaptureBus` falls back to `filesDir`) — legacy full backup, cloud backup and device transfer — so a plaintext debug envelope cannot ride a backup or a device transfer (#1202, pinned by `CensusVariantBindingTest`). The UNKNOWN-notification diagnostic in `ObservationClassifier` is DEBUG only when the push carries text; a text-less push (the ~1 Hz ongoing-dash notification) logs at VERBOSE (#1001, principle 7). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
 feeds all collectors, so side effects (captures, dedup state) can never double-run (#361). The
 merged upstream is supervised — a crash logs + counts a restart and resubscribes with backoff
 instead of silencing all sensing (#430) — and `PipelineStats` counts every gate decision, mapping

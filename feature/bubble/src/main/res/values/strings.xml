@@ -43,6 +43,7 @@
     <string name="flow_card_since_last_offer">since last offer</string>
     <string name="flow_card_before_next_offer">before next offer</string>
     <string name="flow_card_score_gauge_label">Score</string>
+    <string name="flow_card_advised_format">Advised %1$s</string>
     <string name="flow_card_hourly_hero_format" translatable="false">%1$s/hr</string>
     <string name="flow_card_net_secondary_format">Net %1$s</string>
     <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>

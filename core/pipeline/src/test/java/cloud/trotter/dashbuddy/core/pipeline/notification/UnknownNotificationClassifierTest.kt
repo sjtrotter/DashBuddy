@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.notification
 
+import android.util.Log
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
@@ -10,10 +11,13 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
+import timber.log.Timber
 
 /**
  * Regression tests for [ObservationClassifier] producing `unknown` notification intent.
@@ -23,6 +27,19 @@ import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
  * intent is added, move the corresponding test to that type's test file.
  */
 class UnknownNotificationClassifierTest {
+
+    private data class LogEntry(val priority: Int, val tag: String?, val message: String)
+
+    private val logs = mutableListOf<LogEntry>()
+    private val tree = object : Timber.Tree() {
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            logs += LogEntry(priority, tag, message)
+        }
+    }
+
+    @Before fun plant() = Timber.plant(tree)
+
+    @After fun uproot() = Timber.uproot(tree)
 
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter>(),
@@ -48,6 +65,38 @@ class UnknownNotificationClassifierTest {
     fun `all-null notification is unknown`() {
         val result = classifyNotification(raw())
         assertEquals("unknown", (result.parsed as ParsedFields.NotificationFields).intent)
+    }
+
+    @Test
+    fun `all-null unknown notification logs only at verbose and preserves empty text`() {
+        val payload = raw()
+        val fields = classifyNotification(payload).parsed as ParsedFields.NotificationFields
+        assertEquals("unknown", fields.intent)
+        assertEquals("", fields.rawText)
+        assertEquals(payload.toFullString(), fields.rawText)
+        assertEquals(listOf(LogEntry(Log.VERBOSE, "Classifier", "UNKNOWN notification — (no text)")), logs)
+        assertTrue(logs.none { it.priority == Log.DEBUG })
+    }
+
+    @Test
+    fun `whitespace-only unknown notification logs only at verbose and preserves whitespace`() {
+        val payload = raw(text = "   ")
+        val fields = classifyNotification(payload).parsed as ParsedFields.NotificationFields
+        assertEquals("unknown", fields.intent)
+        assertEquals("   ", fields.rawText)
+        assertEquals(payload.toFullString(), fields.rawText)
+        assertEquals(listOf(LogEntry(Log.VERBOSE, "Classifier", "UNKNOWN notification — (no text)")), logs)
+        assertTrue(logs.none { it.priority == Log.DEBUG })
+    }
+
+    @Test
+    fun `populated unknown notification logs at debug and preserves text`() {
+        val payload = raw(title = "Peak Pay")
+        val fields = classifyNotification(payload).parsed as ParsedFields.NotificationFields
+        assertEquals("unknown", fields.intent)
+        assertEquals("Peak Pay", fields.rawText)
+        assertEquals(payload.toFullString(), fields.rawText)
+        assertEquals(listOf(LogEntry(Log.DEBUG, "Classifier", "UNKNOWN notification — Peak Pay")), logs)
     }
 
     @Test

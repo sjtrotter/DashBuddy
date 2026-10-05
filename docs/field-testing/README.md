@@ -48,6 +48,18 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Resolved offer cards no longer wear a verdict banner (#864):** after an offer times out or is declined, expand
+  its card in the HUD — the big ACCEPT/DECLINE advice banner is gone and only the header's outcome chip (Accepted /
+  Declined / Timed out) states what happened; a LIVE card still shows the banner. Working = no resolved card can be
+  misread as "declined" from the banner alone.
+  - Confirmed: 0/2
+
+- **Census deferral lines name their cause (#1210):** after any dash, `grep -h 'census deferred cause=' shareable.log`
+  shows `cause=budget|upload_rate_limit|enrol_rate_limit|health_rate_limit|health_budget seconds=<n>` or
+  `cause=stored_deadline remaining=<n>` — never the old bare `census deferred runs=1`. Working = every `deferred`
+  status (skeleton, health or enrolment stage) has a matching line naming its cause.
+  - Confirmed: 0/2
+
 - **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's
   dash that has a trusted capture → "Classify & draft" → pick the class, mark two id anchors + the parse fields → Preview
   shows a JSON5 draft (or a refusal naming the weak node) → Save (TOTP) → the detail page shows the class chip and the
