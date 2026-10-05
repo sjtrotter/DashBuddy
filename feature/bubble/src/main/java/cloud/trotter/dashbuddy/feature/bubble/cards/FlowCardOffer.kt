@@ -154,7 +154,9 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
         // its two tints come from the [offerVerdictLabel]/[offerVerdictColor] SSOT the heads-up
         // notification shares (#942); this used to be three independent `when`s over the raw enum
         // NAME (the #283 stringly-typed shape), which is how "REVIEW" here became "MANUAL REVIEW".
-        // #864: the verdict is live advice; resolved cards show their outcome in the header.
+        // #864: the tinted banner is LIVE advice; a resolved card shows its outcome in the header
+        // (`OutcomeChip`) and keeps the evaluation as a one-line caption below, so "what was advised"
+        // stays readable beside "what happened" without being mistaken for it.
         if (isActive && snap.outcome == null) {
             snap.evaluationAction?.let { name ->
                 val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
@@ -183,6 +185,18 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                         snap.qualityLevel?.let { AppChip(it.displayLabel(), color = c.text3, container = c.surface3) }
                     }
                 }
+            }
+        } else {
+            snap.evaluationAction?.let { name ->
+                val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
+                val caption = listOfNotNull(offerVerdictLabel(action), snap.qualityLevel?.displayLabel())
+                    .joinToString(" · ")
+                Text(
+                    stringResource(R.string.flow_card_advised_format, caption),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = c.text3,
+                    maxLines = 1,
+                )
             }
         }
 

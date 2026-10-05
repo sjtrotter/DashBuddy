@@ -55,8 +55,9 @@ For items with multiple sub-concerns at different statuses, use one
   - Confirmed: 0/2
 
 - **Census deferral lines name their cause (#1210):** after any dash, `grep -h 'census deferred cause=' shareable.log`
-  shows `cause=budget|upload_rate_limit|enrol_rate_limit seconds=<n>` or `cause=stored_deadline remaining=<n>` —
-  never the old bare `census deferred runs=1`. Working = every pause in uploads is attributable from the log.
+  shows `cause=budget|upload_rate_limit|enrol_rate_limit|health_rate_limit|health_budget seconds=<n>` or
+  `cause=stored_deadline remaining=<n>` — never the old bare `census deferred runs=1`. Working = every `deferred`
+  status (skeleton, health or enrolment stage) has a matching line naming its cause.
   - Confirmed: 0/2
 
 - **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's

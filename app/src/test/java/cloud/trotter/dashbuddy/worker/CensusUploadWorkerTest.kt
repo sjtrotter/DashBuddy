@@ -581,6 +581,20 @@ class CensusUploadWorkerTest {
         assertTrue(h.queued.isEmpty())
     }
 
+    @Test fun `a pending enrolment under a stored deadline logs the recheck cause`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
+        h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() + 3_600_000)
+        logs.clear()
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        val entry = deferrals().single()
+        assertTrue(entry.message, entry.message.matches(Regex("census deferred cause=stored_deadline remaining=[0-9]+")))
+        assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
+        assertTrue(h.api.bodies.isEmpty())
+    }
+
     @Test fun `stored deadline logs remaining seconds without uploading`() = runTest {
         val h = harness()
         h.initialize()
@@ -981,6 +995,7 @@ class CensusUploadWorkerTest {
 
     @Test fun `health 429 ends the run without uploading skeletons or changing their deadline`() = runTest {
         for (result in listOf(HealthResult.RateLimited(3600), HealthResult.BudgetExhausted(3600))) {
+            logs.clear()
             val h = harness()
             h.initialize()
             val key = h.health()
@@ -989,6 +1004,8 @@ class CensusUploadWorkerTest {
             h.api.healthResults += result
             h.api.uploads += UploadResult.Duplicate
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            val cause = if (result is HealthResult.BudgetExhausted) "health_budget" else "health_rate_limit"
+            assertEquals(listOf(LogEntry(Log.INFO, "Census", "census deferred cause=$cause seconds=3600")), deferrals())
             assertEquals(1, h.api.healthBodies.size)
             assertTrue(h.api.bodies.isEmpty())
             assertEquals(1, h.queued.size)

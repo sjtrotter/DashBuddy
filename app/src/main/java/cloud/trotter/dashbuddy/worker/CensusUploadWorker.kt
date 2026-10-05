@@ -60,7 +60,16 @@ class CensusUploadWorker @AssistedInject constructor(
         BUDGET("budget"),
         UPLOAD_RATE_LIMIT("upload_rate_limit"),
         ENROL_RATE_LIMIT("enrol_rate_limit"),
+        HEALTH_RATE_LIMIT("health_rate_limit"),
+        HEALTH_BUDGET("health_budget"),
     }
+
+    /** #1210: the one INFO line for a run that pauses — a cause token and integers only (PII-safe). */
+    private fun logDeferral(cause: DeferCause, seconds: Long) =
+        Timber.tag(TAG).i("census deferred cause=%s seconds=%s", cause.token, seconds.toString())
+
+    private fun logStoredDeadline(remainingSeconds: Long) =
+        Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%s", remainingSeconds.toString())
 
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
@@ -155,7 +164,9 @@ class CensusUploadWorker @AssistedInject constructor(
         val deadline = preferences.nextAllowedAtMillis.first()
         val now = System.currentTimeMillis()
         if (deadline > now) {
-            record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
+            record.set(CensusRunOutcome.DEFERRED, remainingSeconds.toInt())
+            logStoredDeadline(remainingSeconds)
             return Enrollment.Stop(Result.success())
         }
         var credential = initial
@@ -227,11 +238,15 @@ class CensusUploadWorker @AssistedInject constructor(
                 HealthResult.BadRequest -> mapOf("bad_request" to 1)
                 HealthResult.PayloadTooLarge -> mapOf("batch_too_large" to 1)
                 is HealthResult.RateLimited -> {
-                    record.set(CensusRunOutcome.DEFERRED, result.retryAfter.coerceIn(1, 86_400).toInt())
+                    val seconds = result.retryAfter.coerceIn(1, 86_400)
+                    record.set(CensusRunOutcome.DEFERRED, seconds.toInt())
+                    logDeferral(DeferCause.HEALTH_RATE_LIMIT, seconds)
                     return Result.success()
                 }
                 is HealthResult.BudgetExhausted -> {
-                    record.set(CensusRunOutcome.DEFERRED, result.retryAfterSeconds.coerceIn(1, 86_400).toInt())
+                    val seconds = result.retryAfterSeconds.coerceIn(1, 86_400)
+                    record.set(CensusRunOutcome.DEFERRED, seconds.toInt())
+                    logDeferral(DeferCause.HEALTH_BUDGET, seconds)
                     return Result.success()
                 }
                 is HealthResult.Unauthorized, is HealthResult.ServerUnavailable,
@@ -254,13 +269,13 @@ class CensusUploadWorker @AssistedInject constructor(
         val deadline = preferences.nextAllowedAtMillis.first()
         val now = System.currentTimeMillis()
         if (now < deadline) {
+            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
             when {
                 record.healthPosted > 0 -> record.set(CensusRunOutcome.HEALTH_POSTED, record.healthPosted)
                 record.healthRejected > 0 -> record.set(CensusRunOutcome.HEALTH_REJECTED, record.healthRejected)
-                else -> record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
+                else -> record.set(CensusRunOutcome.DEFERRED, remainingSeconds.toInt())
             }
-            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
-            Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%s", remainingSeconds.toString())
+            logStoredDeadline(remainingSeconds)
             return Result.success()
         }
         val run = UploadRun()
@@ -511,7 +526,7 @@ class CensusUploadWorker @AssistedInject constructor(
         record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
         val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
-        Timber.tag(TAG).i("census deferred cause=%s seconds=%s", cause.token, coercedSeconds.toString())
+        logDeferral(cause, coercedSeconds)
         return Result.success()
     }
 
