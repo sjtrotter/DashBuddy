@@ -135,6 +135,29 @@ SELECT taskId, realizedMiles FROM delivery_records;
 | #159 | `grep 'downgrade averted'` / `grep 'store-chain resolved'` | monotonic backstop held / shadow resolution milestones |
 | #862 | `grep -e 'Capture scrubbed:' -e 'Capture backstop:'` | the privacy layer firing, now readable IN `shareable.log` (pre-#862 these lines redacted themselves to `[scrubbed:<marker>]`). Each names the marker by **id** — first two alphanumerics + length (`Tr12` = `Transfer out`, `Tr11` = `Transfer in`, `De11` = `Deliver to `); decode against `SensitiveTextMarkers.KEYWORDS` / `CustomerTextMarkers.MARKERS` (ids are pinned collision-free). A `[scrubbed:…]` line remaining in the export is now a REAL upstream leak, not our own diagnostic |
 
+## Census checks (device + server) — #1182 / #1185 / #1197 / #1200 / #1188
+
+Added 2026-10-05. The census is the one path where data leaves the phone, so every pull reads BOTH halves: the
+device's own record (logs + the developer status line) and the server's record over the WireGuard tunnel. The
+server reads need no AWS login: `nmcli connection up wgcensus`, then
+`curl -s --cacert ~/dashbuddy/secrets/wireguard/census-ops-root.crt -H "Authorization: Bearer $(cat ~/dashbuddy/secrets/census-operator-token)" https://10.8.0.1:8443/ops/<path>`
+(call it `ops GET <path>` below). Grep strings are copied from `CensusUploadWorker`, `PersistentCensusEnvelopeSink`,
+`CensusUploadStats.summary()` and `PipelineStats` on 2026-10-05 — verify against the code if a grep is empty.
+
+| Item | Device read (`shareable.log` unless noted) | Server read | Expect |
+|---|---|---|---|
+| #1182 uploads | `grep -h 'census uploaded=' *.log` (one INFO per accepted batch, `uploaded=n duplicate=n rejected=n`); `grep -h 'census batch rejected reasons='` (WARN) | `ops GET /ops/ledger` → `installs[].accepted/duplicate/rejected/batches/bytes` for the phone's 8-char prefix (today only) | every dash day has ≥1 uploaded line; server `accepted` ≈ Σ device `uploaded`; `rejected` empty |
+| #1185 identity | `grep -h -e 'census enrolled installs=1' -e 'census unusable' -e 'census revoked' -e 'census unauthorized'` | `ops GET /ops/installs` → the phone's prefix `trusted:true revoked:false lastSeenDay = today` | exactly ONE install for the phone unless a reset was deliberate; `lastAppVersion` is the version at the last identity op, not the current build |
+| #1197 health | `grep -h -e 'census health rejected' -e 'census health oversized' -e 'census health flush failures' -e 'census health load failed'`; the `PipelineStats` census summary carries `healthPosted=n` / `healthRejected=n` | `ops GET /ops/health` → `fleet[]` has a row for EACH dash day (UTC) × platform × app version with `installsReporting ≥ 1`, `admitted`/`unknown` plausible against the device's own `PipelineStats` counts, `ruleCounts` naming the rules that fired | a dash day missing from `fleet` = the first run after UTC midnight has not happened yet (phone asleep) — re-check next morning before calling it a bug |
+| #1200 envelopes | `grep -h -e 'census envelopes rejected' -e 'census envelopes not_trusted' -e 'census envelope dropped markerId=' -e 'census envelope cleanup failed'`; `PipelineStats` `census{… envelopesPaired=n,envelopesUnpaired=n …}` and `CensusUploadStats` `envelopesHeld/Spooled/Posted/Rejected/NotTrusted` | `ops GET /ops/clusters?platform=<p>&limit=200` → clusters with `lastSeenDay` = the dash day and `seenByTrusted:true`; the cluster JSON `/ops/clusters/<fp>` carries no envelope body (by design) — the wireframe is on `/ops/clusters/<fp>/view` only | `envelopesPosted > 0` on a dash with UNKNOWN screens; ZERO `not_trusted` (else the install id changed — re-trust it); `envelopesSensitiveDropped` is the local marker scan firing — read its `markerId` like the `#862` row |
+| #1188 drafting | — (server-only) | `ops GET /ops/clusters/<fp>` → `screenClass`, `hasDraft`; `GET /ops/clusters/<fp>/draft.json5` for the stored draft | a classified cluster shows its class chip on the list pages; a draft, pasted into the surface file, passes `AllMatchersSuite` |
+
+**Privacy reads that come with the census:** the envelope the phone uploads is the SAME redacted `uinode.v1` capture
+that lands in `captures/` — so the dasher-banking sweep below also covers what was uploaded; additionally grep the pull for
+`"deviceFingerprint"` values (#1206: the committed corpus still carries real ones; the transport projection strips it before
+upload, verify with `grep -c deviceFingerprint` on a few `captures/**/UNKNOWN/**` envelopes = present on disk, and confirm the
+server's stored envelope lacks it via the wireframe page's facts line, which shows app version and day only).
+
 ## Capture-tree checks
 
 - **#501 items 1-2:** multi-order dropoff confirm frames sort into
