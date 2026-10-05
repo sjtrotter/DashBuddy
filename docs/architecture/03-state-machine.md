@@ -420,9 +420,18 @@ B3, moved off the shared global R0 slot so concurrent platforms don't collide; N
 ADR-0007, N>1 waits on #251). The lifecycle (`OfferLifecycle.kt` on the stepper, `OfferEffects.kt`
 on `EffectMap`) runs on THIS platform's own observations: push/replace/enrich on `OfferPresented`,
 click-latch (#594 decline-commit), eval-land by `offerHash`, resolve on leaving offer-presentation.
-**Offer identity is presentation-scoped (#830):** `ParsedFieldsFactory.buildOffer` derives a
-`ParsedOffer.presentationKey = sha256(storeNames|orders.size|orderTypes)` — the STABLE subset —
-alongside the churn-prone `offerHash` (which folds in the ticking pay/distance/time). On a
+**Offer identity is presentation-scoped (#830), with ruleset-declared identity (#1069):**
+`ParsedFieldsFactory.buildOffer` hashes a parsed `assignmentId` as `sha256("assignment|" + assignmentId)`
+into `assignmentIdHash` and uses it as the EXACT `presentationKey`, never a scoring or `offerHash`
+input. Otherwise the rule's `presentationIdentity` literal selects `store` —
+`sha256(storeNames|orders.size|orderTypes)`, the STABLE subset used by Uber — or `economics` —
+a null key, replacing on any hash change, the fail-closed DEFAULT. A false MERGE loses an offer's
+presentation and inherits its predecessor's latches; a false SPLIT only costs a duplicate
+presentation. Fielded evidence (2026-10-05, 1,142 offer envelopes) shows every DoorDash card since
+mid-September uses the 8.97.8 Compose card, renders no `assignment_id_text`, and never re-quotes
+within a presentation (the two pay-change pairs within 12 seconds across 110 runs had different
+routes: new offers). The legacy View card parses its per-assignment UUID; the Compose branch
+uses the economics default. `offerHash` still folds in the ticking pay/distance/time. On a
 live-re-quoting card (Uber re-renders pay/miles/minutes every few seconds), a different-hash frame
 carrying the SAME non-null `presentationKey` as the offer currently on screen is an
 **enrich-as-variant** (update `offerHash`/`offerFields`/targets, CLEAR evaluation → re-eval, but
@@ -434,7 +443,9 @@ the original `presentedAt` (churn can't extend the TTL) and carries the new hash
 heads-up is cancelled (`BubbleManager.offerNotificationId` is per-hash). Fail-CLOSED +
 platform-agnostic (P8): a null `presentationKey` degrades to replace-on-any-hash-change — a false
 MERGE is impossible, and there is no `Platform` branch. A genuinely different presentation still
-REPLACES. **Presentation KIND (#881):** a ruleset may parse `offerKind: match|direct` (Uber
+REPLACES. A REPLACE resolves the old offer through `resolveOfferOutcome` from `OfferEffects`, honouring
+its decline latches: offer 1 gets its true outcome while offer 2 gets its own presentation,
+`presentedAt`, and fresh click/speak latches. **Presentation KIND (#881):** a ruleset may parse `offerKind: match|direct` (Uber
 discriminates on the card's own CTA); it rides `ParsedOffer.offerKind` → `PendingOffer.offerKind` (a
 read-through, never a copy) → `OfferPayload.parsedOffer`, is NOT an input to scoring / `offerHash` /
 `presentationKey`, and is null on any platform whose ruleset lacks the concept. Its one consumer is

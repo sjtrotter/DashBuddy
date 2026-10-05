@@ -126,6 +126,10 @@ object RuleAuthoringVocabulary {
             FieldSpec("deliveryTime", FieldType.LONG, defaultTransform = listOf("parseDeadline")),
             FieldSpec("initialCountdownSeconds", FieldType.INT, defaultTransform = listOf("parseClockSeconds")),
             FieldSpec("offerKind", FieldType.STRING),
+            // #1069: the platform's per-offer assignment token (hashed at the factory into an exact presentation
+            // identity) and the rule-declared fallback literal (`store` | `economics`, load-validated).
+            FieldSpec("assignmentId", FieldType.STRING),
+            FieldSpec("presentationIdentity", FieldType.STRING),
             FieldSpec("storeName", FieldType.STRING),
         ),
     )

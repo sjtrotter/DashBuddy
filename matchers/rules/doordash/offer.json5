@@ -187,6 +187,11 @@
           "parse": {
             "as": "offer",
             "fields": {
+              "assignmentId": {
+                "comment": "#1069: DoorDash's per-assignment UUID on the View card — the EXACT presentation identity (hashed at the factory; never a scoring input). The 8.97.8 Compose card (branch 1) renders no such node and falls to the `economics` default: no key, replace on any hash change — fielded evidence 2026-10-05 shows that card never re-quotes within a presentation.",
+                "find": { "hasIdSuffix": "assignment_id_text" },
+                "read": "text"
+              },
               "initialCountdownSeconds": {
                 // #1104: the Accept button's end text is the remaining countdown ("31") — transition
                 // evidence for the outcome resolver (an exit at the countdown's end is an expiry).

@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.SessionReplay
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 
@@ -262,11 +263,12 @@ class ChurnReplayTest {
         assertEquals("two DoorDash offers (different stores)", 2, frames.size)
         val obs = SessionReplay.replayRecognition(frames)
         val offers = obs.map { (it.parsed as ParsedFields.OfferFields).parsedOffer }
-        // Different stores → different presentationKey → the fix must NOT merge them.
-        org.junit.Assert.assertNotEquals(
-            "distinct-store offers have distinct presentation keys",
-            offers[0].presentationKey,
-            offers[1].presentationKey,
+        // #1069: legacy cards without an assignment token now fail closed with null keys.
+        // Either a null key or distinct exact assignment keys must keep these offers separate.
+        assertTrue(
+            "distinct offers must not share a non-null presentation key",
+            offers[0].presentationKey == null || offers[1].presentationKey == null ||
+                offers[0].presentationKey != offers[1].presentationKey,
         )
         fun hash(i: Int) = offers[i].offerHash
 

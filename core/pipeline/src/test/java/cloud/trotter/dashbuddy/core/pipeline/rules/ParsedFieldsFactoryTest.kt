@@ -1,13 +1,16 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.security.MessageDigest
 
 /**
  * Unit tests for [ParsedFieldsFactory] order-type resolution (#762 D9).
@@ -57,7 +60,7 @@ class ParsedFieldsFactoryTest {
     // -----------------------------------------------------------------------------------------
 
     private fun presentationKeyOf(orders: List<Map<String, Any?>>): String? {
-        val fields = mapOf<String, Any?>("orders" to orders)
+        val fields = mapOf<String, Any?>("orders" to orders, "presentationIdentity" to "store")
         val result = ParsedFieldsFactory.create("offer", fields) as ParsedFields.OfferFields
         return result.parsedOffer.presentationKey
     }
@@ -92,6 +95,84 @@ class ParsedFieldsFactoryTest {
             mapOf<String, Any?>("orderType" to "PICKUP", "storeName" to "Sonic"),
         )
         assertNotNull("a single real store carries identity", presentationKeyOf(mixed))
+    }
+
+    // #1069 — exact assignment identity wins; only declared store identity may merge re-quotes.
+    private fun identityOffer(
+        assignmentId: String? = null,
+        identity: String? = null,
+        pay: Double = 23.20,
+        distance: Double = 3.2,
+        stores: List<String> = listOf("H-E-B"),
+    ): ParsedOffer {
+        val fields = buildMap<String, Any?> {
+            put("payAmount", pay)
+            put("distance", distance)
+            put("orders", stores.map { mapOf("storeName" to it, "orderType" to "SHOP_FOR_ITEMS") })
+            if (assignmentId != null) put("assignmentId", assignmentId)
+            if (identity != null) put("presentationIdentity", identity)
+        }
+        return (ParsedFieldsFactory.create("offer", fields) as ParsedFields.OfferFields).parsedOffer
+    }
+
+    private fun digest(input: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+    @Test
+    fun `assignment identity is trimmed hashed and exact regardless of stores or fallback`() {
+        for (stores in listOf(emptyList(), listOf(""), listOf("H-E-B"), listOf("Sonic", "H-E-B"))) {
+            for (identity in listOf(null, "store", "economics")) {
+                val offer = identityOffer("  assignment-1  ", identity, stores = stores)
+                assertEquals(digest("assignment|assignment-1"), offer.assignmentIdHash)
+                assertEquals(offer.assignmentIdHash, offer.presentationKey)
+            }
+        }
+    }
+
+    @Test
+    fun `different assignments with identical economics have different keys but identical offer hashes`() {
+        val first = identityOffer("assignment-1")
+        val second = identityOffer("assignment-2")
+        assertNotEquals(first.presentationKey, second.presentationKey)
+        assertEquals("assignment is never an offerHash input", first.offerHash, second.offerHash)
+    }
+
+    @Test
+    fun `same assignment with different economics keeps the exact presentation key`() {
+        val first = identityOffer("assignment-1")
+        val second = identityOffer("assignment-1", pay = 17.20, distance = 10.4)
+        assertEquals(first.presentationKey, second.presentationKey)
+        assertNotEquals(first.offerHash, second.offerHash)
+    }
+
+    @Test
+    fun `store fallback is byte equal to the pre-1069 stable subset across re-quotes`() {
+        val first = identityOffer(identity = "store", stores = listOf("H-E-B", "Sonic"))
+        val second = identityOffer(identity = "store", pay = 17.20, distance = 10.4, stores = listOf("H-E-B", "Sonic"))
+        assertNull(first.assignmentIdHash)
+        assertEquals(digest("H-E-B,Sonic|2|SHOP_FOR_ITEMS,SHOP_FOR_ITEMS"), first.presentationKey)
+        assertEquals(first.presentationKey, second.presentationKey)
+        assertNotEquals(first.offerHash, second.offerHash)
+    }
+
+    @Test
+    fun `undeclared and explicit economics fallback produce no presentation key`() {
+        for (identity in listOf(null, "economics")) {
+            val offer = identityOffer(identity = identity)
+            assertNull(offer.assignmentIdHash)
+            assertNull(offer.presentationKey)
+        }
+    }
+
+    @Test
+    fun `empty and whitespace assignment ids are absent and use the declared fallback`() {
+        for (id in listOf("", " \t\n")) {
+            for (identity in listOf(null, "store", "economics")) {
+                val offer = identityOffer(id, identity)
+                assertNull(offer.assignmentIdHash)
+                assertEquals(identityOffer(identity = identity).presentationKey, offer.presentationKey)
+            }
+        }
     }
 
     // -----------------------------------------------------------------------------------------

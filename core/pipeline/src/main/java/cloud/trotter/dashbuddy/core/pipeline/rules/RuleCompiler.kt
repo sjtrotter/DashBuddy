@@ -744,7 +744,9 @@ object RuleCompiler {
         // Declared field names, hoisted once: the SAME set feeds all three checks, and each must be
         // able to see "no parse block ⇒ zero declared fields" (a missing required field for a flow
         // or effect-intent is exactly the no-parse case the #762 guard must catch).
-        val declaredFields = parseBlock?.get("fields")?.jsonObject?.keys ?: emptySet()
+        val parseFields = parseBlock?.get("fields")?.jsonObject
+        parseFields?.get("presentationIdentity")?.let { validatePresentationIdentity(it, ruleId) }
+        val declaredFields = parseFields?.keys ?: emptySet()
         if (parseAs != null) {
             ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
         }
@@ -836,6 +838,18 @@ object RuleCompiler {
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
+    }
+
+    /** #1069: identity is a load-validated declaration, never a value extracted from a frame. */
+    internal fun validatePresentationIdentity(spec: JsonElement, ruleId: String) {
+        val literal = (spec as? JsonObject)?.get("literal") as? JsonPrimitive
+        if (literal == null || !literal.isString || literal.content !in StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES) {
+            val value = literal?.content ?: "non-literal"
+            throw RuleCompileException(
+                "Rule '$ruleId': unknown presentationIdentity '$value' (supported: store, economics)",
+                isolable = true,
+            )
+        }
     }
 
     /**

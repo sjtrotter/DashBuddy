@@ -226,6 +226,10 @@
           "parse": {
             "as": "offer",
             "fields": {
+              "presentationIdentity": {
+                "comment": "#1069: Uber's card re-quotes pay/miles/minutes live every few seconds (#830) — the store|count|types subset IS the presentation; a re-quote enriches in place rather than replacing itself.",
+                "literal": "store"
+              },
               "payAmount": {
                 "find": {
                   "hasTextMatchesRegex": "\\$\\d"

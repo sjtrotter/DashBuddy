@@ -92,6 +92,56 @@ class RuleCompilerTest {
         assertTrue("unknown offerSurface must fail rule load", thrown?.message?.contains("offerSurface") == true)
     }
 
+    @Test
+    fun `presentationIdentity accepts only the supported literal declarations`() {
+        for (identity in listOf("store", "economics")) {
+            RuleCompiler.validatePresentationIdentity(json("literal" to identity), "test.screen.offer")
+        }
+    }
+
+    @Test
+    fun `unknown or non-literal presentationIdentity throws an isolable named rejection`() {
+        val specs = listOf(
+            """{"literal":"bogus"}""",
+            """{"find":{"hasIdSuffix":"identity"},"read":"text"}""",
+            JsonPrimitive("store").toString(),
+            """{"literal":null}""",
+            """{"literal":["store"]}""",
+        )
+        for (spec in specs) {
+            var thrown: RuleCompileException? = null
+            try {
+                RuleCompiler.validatePresentationIdentity(parseJson(spec), "test.screen.offer")
+            } catch (e: RuleCompileException) {
+                thrown = e
+            }
+            assertTrue("$spec must fail with an isolable rejection", thrown?.isolable == true)
+            assertTrue(thrown?.message?.contains("presentationIdentity") == true)
+            assertTrue(thrown?.message?.contains("test.screen.offer") == true)
+            assertTrue(thrown?.message?.contains("supported: store, economics") == true)
+        }
+    }
+
+    @Test
+    fun `rule compilation validates the effective presentationIdentity declaration`() {
+        for (spec in listOf("""{"literal":"store"}""", """{"literal":"economics"}""",
+            """{"literal":"bogus"}""", """{"find":{"hasText":"store"},"read":"text"}""")) {
+            // Exercise both rule-level inherited parse and a branch-local parse.
+            val parse = """"parse":{"as":"offer","fields":{
+                "payAmount":{"literal":23.20},"distance":{"literal":3.2},
+                "timeToCompleteMinutes":{"literal":20},"presentationIdentity":$spec
+            }}"""
+            for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
+                val rules = RuleCompiler.compileRules<UiNode>(
+                    parseJson("""[{"id":"test.screen.offer","priority":10,$body}]""").jsonArray,
+                    RuleContext.SCREEN,
+                )
+                val valid = spec == """{"literal":"store"}""" || spec == """{"literal":"economics"}"""
+                assertEquals("bad declarations must be rejected during load", if (valid) 1 else 0, rules.size)
+            }
+        }
+    }
+
     // compileNodePred — hasAnyTextStartsWith (#1114)
 
     @Test
