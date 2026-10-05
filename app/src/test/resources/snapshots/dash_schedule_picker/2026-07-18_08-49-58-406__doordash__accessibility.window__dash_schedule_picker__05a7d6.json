@@ -1,5 +1,5 @@
 {
-    "captureId": "53d9eb79-9e6c-4439-9833-73f616047edd",
+    "captureId": "00000000-0000-4000-8000-000000000000",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
     "timestamp": 1784382598389,
@@ -20,7 +20,7 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:16/CP1A.260405.005/15001963:user/release-keys"
+        "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys"
     },
     "payload": {
         "class": "android.widget.FrameLayout",

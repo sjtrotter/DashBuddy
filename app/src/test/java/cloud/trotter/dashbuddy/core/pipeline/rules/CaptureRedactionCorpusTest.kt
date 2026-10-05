@@ -5,10 +5,12 @@ import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.test.util.CorpusDecoys
+import cloud.trotter.dashbuddy.test.util.DropoffRuleSource
 import cloud.trotter.dashbuddy.test.util.SnapshotRedactor
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.booleanOrNull
@@ -33,6 +35,46 @@ class CaptureRedactionCorpusTest {
     private val rulesDir = File(TestRulesetFactory.rulesDir)
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
+
+    @Test
+    fun `committed corpus carries no device provenance (#1206)`() {
+        val base = File("src/test/resources/snapshots")
+        val fixtures = base.walkTopDown().filter { file ->
+            val path = file.relativeTo(base).invariantSeparatorsPath
+            file.isFile && file.extension == "json" && file.name != "approved-parse-output.json" &&
+                !path.startsWith("INBOX/") &&
+                (!path.startsWith("UNKNOWN/") || path.startsWith("UNKNOWN/negative/"))
+        }.sortedBy { it.path }.toList()
+        assertTrue("the committed corpus must be present", fixtures.isNotEmpty())
+
+        fun checkProvenance(element: kotlinx.serialization.json.JsonElement, path: String) {
+            when (element) {
+                is kotlinx.serialization.json.JsonObject -> element.forEach { (key, value) ->
+                    val expected = when (key) {
+                        "deviceFingerprint" -> SnapshotRedactor.DEVICE_FINGERPRINT_PLACEHOLDER
+                        "captureId" -> SnapshotRedactor.CAPTURE_ID_PLACEHOLDER
+                        else -> null
+                    }
+                    // Two legacy session fixtures have captureId: null. There is no
+                    // provenance to scrub there; #1206 rewrites string values only.
+                    if (expected != null && value != JsonNull) {
+                        assertEquals("$path/$key", JsonPrimitive(expected), value)
+                    }
+                    checkProvenance(value, "$path/$key")
+                }
+                is kotlinx.serialization.json.JsonArray -> element.forEachIndexed { index, value ->
+                    checkProvenance(value, "$path/$index")
+                }
+                else -> Unit
+            }
+        }
+        for (fixture in fixtures) {
+            checkProvenance(Json.parseToJsonElement(fixture.readText()), fixture.relativeTo(base).path)
+        }
+        val fixture = fixtures.first { it.readText().contains("\"deviceFingerprint\"") }.readText()
+        val sanitized = SnapshotRedactor.sanitizeProvenance(fixture)
+        assertEquals("provenance sanitizing is idempotent", sanitized, SnapshotRedactor.sanitizeProvenance(sanitized))
+    }
 
     companion object {
         /**
@@ -1418,14 +1460,8 @@ class CaptureRedactionCorpusTest {
      * source file: the store-ambiguous nav catch-all can win a frame carrying the dropoff address
      * block, which is why #886 and #993 already declare entries on it for the same reason.
      */
-    private fun subpremiseParityRuleIds(): List<String> {
-        val declared = Regex(""""id":\s*"(doordash\.screen\.[A-Za-z_0-9]+)"""")
-            .findAll(File("../matchers/rules/doordash/dropoff.json5").readText())
-            .map { it.groupValues[1] }
-            .toList()
-        assertTrue("expected the dropoff section to declare screen rules", declared.isNotEmpty())
-        return declared + "doordash.screen.navigation_generic"
-    }
+    private fun subpremiseParityRuleIds(): List<String> =
+        DropoffRuleSource.screenRuleIds() + "doordash.screen.navigation_generic"
 
     /**
      * True when [entry] names its node by TEXT SHAPE rather than by id or label — the entries that

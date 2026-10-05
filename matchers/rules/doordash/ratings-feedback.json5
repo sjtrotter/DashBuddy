@@ -164,12 +164,9 @@
             ]
           },
           // The redesign renamed this factor 'Last 30-day orders' (it is now a
-          // scored rating factor, not a bare counter). The legacy branch's
-          // 'Deliveries (last 30 days)' anchor does NOT match the legacy corpus
-          // either — the fielded legacy label is 'Deliveries last 30 days', with no
-          // parentheses — so that field reads null on every committed legacy frame.
-          // Left as-is deliberately: correcting it would CHANGE a value on a legacy
-          // golden entry, which is out of scope for this re-anchor (#962 follow-up).
+          // scored rating factor, not a bare counter). #965: the legacy anchor is
+          // corrected to the fielded label 'Deliveries last 30 days'. Regenerating
+          // the legacy goldens from null to the actual count is deliberate.
           "deliveriesLast30Days": {
             "coalesce": [
               {
@@ -179,7 +176,7 @@
                       "hasIdSuffix": "textView_title"
                     },
                     {
-                      "hasTextContaining": "Deliveries (last 30 days)"
+                      "hasTextContaining": "Deliveries last 30 days"
                     }
                   ]
                 },

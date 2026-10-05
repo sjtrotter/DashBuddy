@@ -58,6 +58,11 @@ For items with multiple sub-concerns at different statuses, use one
   shows `cause=budget|upload_rate_limit|enrol_rate_limit|health_rate_limit|health_budget seconds=<n>` or
   `cause=stored_deadline remaining=<n>` — never the old bare `census deferred runs=1`. Working = every `deferred`
   status (skeleton, health or enrolment stage) has a matching line naming its cause.
+- **Desk-first — #965 / #1126 (PR #1213):** on the next pull, (a) a `ratings` envelope from the LEGACY ratings hub
+  parses `deliveriesLast30Days` as a count (the approved golden now carries 136/72/71/100 on the committed legacy
+  frames; a null on a fielded legacy frame is the thing to report), and (b) every recognized dropoff envelope's
+  `address_line_2` / numeric `Building Name` slot reads plain `[redacted]` — no `[redacted:<4hex>]` on those two
+  slots anywhere in `captures/doordash/`.
   - Confirmed: 0/2
 
 - **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's

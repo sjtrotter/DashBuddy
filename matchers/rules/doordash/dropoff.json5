@@ -96,9 +96,11 @@
           }
         },
         {
+          "comment": "#1126: city/ST/ZIP is a bounded alphabet — same grade as the #1122 entries.",
           "find": {
             "hasIdSuffix": "bottom_sheet_address_line_2"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#986/#934: plainMask. After the 'Apt/Suite: ' label strip the masked token IS the bare unit number — the same bounded ~10^4 alphabet the fused 'Apt <n>' entries carry (#895/PR #927), sitting ABOVE the #889 short-token floor at 4 digits and therefore earning a 4-hex suffix over 65 536 buckets (~85% injective). Fielded 2026-08-01 on FOUR `dropoff_navigation` envelopes as 'Apt/Suite: [redacted:<4hex>]' (real fielded hex withheld — it is the brute-recoverable token this entry removes). The label is app vocabulary and stays; only the distinctness suffix is dropped, and it buys nothing here — this surface's name/street entries keep per-customer hashes, and a unit number is no one's join key. Capture-only (this node is never parsed), so the goldens are unchanged.",
@@ -1510,6 +1512,20 @@
           "plainMask": true
         },
         {
+          "comment": "#1126 + #1122: digit-bearing Building Name values are bounded designators; plain-mask AHEAD of the id-less street shape (`^\\d{1,5}\\s+\\S` would otherwise claim and HASH `1234 Cedar`) and of the hash entry — redact is first-match-wins; the behavioral parity test pins it.",
+          "find": {
+            "all": [
+              {
+                "hasPrecedingSiblingText": "Building Name"
+              },
+              {
+                "hasTextMatchesRegex": "\\d"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "all": [
               {
@@ -1722,9 +1738,11 @@
           }
         },
         {
+          "comment": "#1126: city/ST/ZIP is a bounded alphabet — same grade as the #1122 entries.",
           "find": {
             "hasIdSuffix": "address_line_2"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "#934: plainMask, the whole-node variant. This entry declares no `keepPrefix`, so the masked token is the ENTIRE 'Apt/Suite: <n>' line — but a constant label prefixed onto a bounded unit number is still a bounded space (the label adds no entropy), so the 4-hex suffix is recoverable exactly as it is on the label-stripping siblings. Family-wide fix, not a fielded sighting: `dropoff_geofence_warning` is a rarely-captured surface and this is the direction the audit closes off before it fields.",
@@ -2046,9 +2064,11 @@
           }
         },
         {
+          "comment": "#1126: city/ST/ZIP is a bounded alphabet — same grade as the #1122 entries.",
           "find": {
             "hasIdSuffix": "address_line_2"
-          }
+          },
+          "plainMask": true
         },
         {
           "comment": "The Apt/Suite VALUE, keeping its app-vocabulary label prefix exactly as `dropoff_pre_arrival` does. #934: and, exactly as that sibling, `plainMask` — this is the #910-added mirror the issue names, and a mirror must inherit the family's posture or the fix has a hole precisely where the surface was copied. Bounded unit number after the label strip; distinctness redundant beside this rule's own `user_name`/`address_line_*` hashes.",
