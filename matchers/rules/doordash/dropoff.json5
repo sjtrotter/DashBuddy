@@ -1512,6 +1512,20 @@
           "plainMask": true
         },
         {
+          "comment": "#1126 + #1122: digit-bearing Building Name values are bounded designators; plain-mask AHEAD of the id-less street shape (`^\\d{1,5}\\s+\\S` would otherwise claim and HASH `1234 Cedar`) and of the hash entry — redact is first-match-wins; the behavioral parity test pins it.",
+          "find": {
+            "all": [
+              {
+                "hasPrecedingSiblingText": "Building Name"
+              },
+              {
+                "hasTextMatchesRegex": "\\d"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "all": [
               {
@@ -1567,20 +1581,6 @@
               },
               {
                 "hasNoId": true
-              }
-            ]
-          },
-          "plainMask": true
-        },
-        {
-          "comment": "#1126 + #1122: digit-bearing Building Name values are bounded designators; plain-mask before the hash entry because redact is first-match-wins.",
-          "find": {
-            "all": [
-              {
-                "hasPrecedingSiblingText": "Building Name"
-              },
-              {
-                "hasTextMatchesRegex": "\\d"
               }
             ]
           },

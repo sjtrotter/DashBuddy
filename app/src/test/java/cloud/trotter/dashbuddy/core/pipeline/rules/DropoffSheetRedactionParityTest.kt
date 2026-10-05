@@ -71,7 +71,8 @@ class DropoffSheetRedactionParityTest {
         val source = listOf("../matchers/rules/doordash/dropoff.json5", "matchers/rules/doordash/dropoff.json5")
             .map(::File).first { it.isFile }.readText()
         // The source file also declares the `clicks` section; only screen rules carry a redact.
-        return Regex(""""id"\s*:\s*"([^"]+)"""").findAll(source)
+        // Both JSON5 quote styles, so a single-quoted id can never drop a rule out of the scan.
+        return Regex("""["']id["']\s*:\s*["']([^"']+)["']""").findAll(source)
             .map { it.groupValues[1] }.filter { it.startsWith("doordash.screen.") }.toSet()
     }
 
@@ -347,6 +348,28 @@ class DropoffSheetRedactionParityTest {
             assertTrue("${rule.id}: an all-letter name with an apostrophe hash-masks", WHOLE_MASK_HEX.matches(valueAfterLabel("O'Neil Towers")))
             val idLine2 = UiNode(className = "android.view.View", children = listOf(tv("Sampleville, TX 75001", id = "com.doordash.driverapp:id/address_line_2"))).restoreParents()
             assertEquals("${rule.id}: address_line_2 plain-masks", "[redacted]", rule.redact.apply(idLine2).children[0].text)
+        }
+    }
+
+    @Test
+    fun `every dropoff rule with a Building Name entry plain-masks a digit-bearing value and hashes a complex name (#1126, behavioral)`() {
+        // The structural ordering scan above checks only the Building Name entries' relative order;
+        // this runs the COMPLETE compiled redact sequence of every such rule, so an unrelated earlier
+        // entry (a digit-leading street shape, say) that claimed and hashed the value would fail here.
+        val ruleIds = dropoffRedactEntries()
+            .filter { (_, redact) -> redact.any { it["find"]!!.jsonObject["hasPrecedingSiblingText"]?.jsonPrimitive?.content == "Building Name" } }
+            .map { it.first }
+        assertTrue("the dropoff family declares Building Name entries", ruleIds.size >= 3)
+        for (id in ruleIds) {
+            val rule = screens.ruleById(id)!!
+            fun valueAfterLabel(value: String): String =
+                rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv(value))).restoreParents()).children[1].text!!
+            for (v in listOf("1234 Cedar", "Bldg 7", "4202", "12B")) {
+                assertEquals("$id: digit-bearing '$v' plain-masks through the whole sequence", "[redacted]", valueAfterLabel(v))
+            }
+            assertTrue("$id: an alphabetic complex name keeps the distinctness hash", WHOLE_MASK_HEX.matches(valueAfterLabel("Maple Court Apartments")))
+            assertEquals("$id: the label is chrome and stays raw", "Building Name",
+                rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv("Bldg 7"))).restoreParents()).children[0].text)
         }
     }
 

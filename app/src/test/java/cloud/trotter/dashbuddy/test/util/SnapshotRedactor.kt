@@ -35,7 +35,9 @@ object SnapshotRedactor {
     const val CAPTURE_ID_PLACEHOLDER = "00000000-0000-4000-8000-000000000000"
 
     // Consume every JSON string token so escaped key-like text inside a value cannot match.
-    private val provenanceStrings = Regex("""("(?:\\.|[^"\\])*")(\s*:\s*("(?:\\.|[^"\\])*"))?""")
+    // Possessive runs (`[^"\\]++`, `*+`) keep the scan iterative — a 10 000-char value must not
+    // recurse per character and blow the stack (Astra review, PR #1213).
+    private val provenanceStrings = Regex("""("(?:[^"\\]++|\\.)*+")(\s*:\s*("(?:[^"\\]++|\\.)*+"))?""")
 
     /** #1206: scrub provenance at any depth without changing other keys or formatting. */
     fun sanitizeProvenance(jsonText: String): String = provenanceStrings.replace(jsonText) { match ->
