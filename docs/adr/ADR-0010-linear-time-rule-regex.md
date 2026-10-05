@@ -343,16 +343,20 @@ thing this change buys: for rule patterns, the ICU/JDK divergence that bit #909 
   which round 2 found it did not. **Execution receipt (#1086, closed 2026-10-05):** the scheduled
   nightly of 2026-10-02 (Actions run `37032966078`, API 30 emulator, `BUILD SUCCESSFUL`) executed all
   three `:core:pipeline` device tests (`Starting 3 tests on emulator-5554` → `Finished 3 tests`),
-  beside the 10 `:core:database` and 1 `:app` device tests; the run log is the evidence, and since
-  #1086 the workflow uploads the instrumented reports on success as well as failure (14-day retention).
+  beside the 10 `:core:database` and 1 `:app` device tests; that run log is the evidence for THAT run (it
+  does not establish every later nightly), and since #1086 the workflow uploads the instrumented reports on
+  success as well as failure (14-day retention), which preserves the downloadable counts and class results.
 
 ## Residuals and the RE2J dependency watch (#1086, closed 2026-10-05)
 
-The residuals accepted at the #1053 merge stay accepted; none is reachable from the shipped corpus on an
-ordinary path, and each is pinned by a test that goes RED the day the engine changes:
-- **Unicode-table lag** (`\p{L}` / `\p{Nd}` predate Adlam, U+1E900 / U+1E951) on the #885 id-less name
-  shape and uber's `Going to <digit>` pair — a **dependency watch**: bump `re2j` in `gradle/libs.versions.toml`
-  when a release ships newer tables; the pinned residual tests fail and say so. No hand-maintained tables.
+The residuals accepted at the #1053 merge stay accepted. They are of two kinds: **input-dependent redaction
+gaps in shipped rules** (an Adlam-letter customer name is not caught by the #885 id-less name shape; an
+Adlam-digit street number selects uber's redact-less pickup rule — no authored pattern needed, only that input),
+and an **authored-pattern** compile-time residue. Nothing in the fielded corpus has produced the inputs.
+- **Unicode-table lag** (`\p{L}` / `\p{Nd}` predate Adlam, U+1E900 / U+1E951) — a **dependency watch**, manual
+  by nature: the `re2j` version is pinned in `gradle/libs.versions.toml`, so an upstream release cannot turn CI
+  red on its own. After upgrading RE2J, `RegexSafetyTest`'s two Adlam assertions FAIL if those repertoire gaps
+  close; update the assertions and this residual list then. No hand-maintained Unicode tables.
 - **Simple vs full case folding**, **ASCII `\b`**: documented approximations (the residual table above).
 - **Compile-time stack residue** on an authored `a{0,200}(?i){0,200}`-class pattern: caught as a whole-file
   `RuleCompileException`; only a hostile/authored pattern reaches it.
