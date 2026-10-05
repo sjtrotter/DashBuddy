@@ -261,10 +261,11 @@ class CaptureWriter @Inject constructor(
     ): UiNode {
         val marker = CustomerTextMarkers.firstUnredactedMarker(tree)
         if (target == UNKNOWN_TARGET) return scrubUnknownTree(tree, marker, kind)
-        // #919 (Astra r2 P1): the two recognized-path scrubs COMPOSE — a marker hit never switches the
-        // unvetted-input scrub off, and vice versa.
-        val markerScrubbed = scrubRecognizedMarker(tree, marker, ruleId, kind)
-        return if (screenAuthority) markerScrubbed else scrubUnvettedInputs(markerScrubbed, ruleId, kind)
+        // #919 (Astra r2/r3 P1): the two recognized-path scrubs COMPOSE, INPUT FIRST — ownership is judged on
+        // the ORIGINAL tree (a marker scrub that masks an input's `text` would otherwise erase the user-text
+        // evidence the input scan keys on, leaving a draft in another field raw), then the marker scrub.
+        val inputScrubbed = if (screenAuthority) tree else scrubUnvettedInputs(tree, ruleId, kind)
+        return scrubRecognizedMarker(inputScrubbed, marker, ruleId, kind)
     }
 
     private fun scrubRecognizedMarker(tree: UiNode, marker: String?, ruleId: String?, kind: String): UiNode {

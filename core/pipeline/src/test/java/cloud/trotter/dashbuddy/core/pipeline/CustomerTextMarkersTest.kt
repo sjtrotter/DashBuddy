@@ -555,6 +555,10 @@ class CustomerTextMarkersTest {
         // An input whose value IS a mask token is skipped (a click node a screen rule already masked).
         assertNull(CustomerTextMarkers.unredactedInputNode(input.copy(text = "[redacted]")))
         assertNull(CustomerTextMarkers.unredactedInputNode(input.copy(text = "[redacted:ab12]")))
+        // Astra r3 P1: a 15-char value ending in the plain mask is NOT the hashed mask.
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.unredactedInputNode(input.copy(text = "Riley[redacted]")))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(input.copy(text = "Riley[redacted]")).text)
+        assertEquals("[redacted]", CustomerTextMarkers.scrubInputs(input.copy(text = "Riley[redacted]")).text)
     }
 
     @Test

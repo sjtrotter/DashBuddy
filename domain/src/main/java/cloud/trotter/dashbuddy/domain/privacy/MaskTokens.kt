@@ -26,7 +26,11 @@ object MaskTokens {
      * TEXT-INPUT skip uses this, not [endsWithMask]: no rule ever keeps a prefix on an input, so a draft that
      * merely ENDS with a typed "[redacted]" ("Riley S wants oat milk [redacted]") is user text and scrubs.
      */
-    fun isMask(value: String): Boolean = value == REDACTED || (value.length == HASHED_MASK_LENGTH && endsWithMask(value))
+    fun isMask(value: String): Boolean =
+        value == REDACTED ||
+            // Astra r3 P1: the hashed form must START with the prefix too — "Riley[redacted]" is 15 chars and
+            // ends with the plain mask, but it is user text.
+            (value.length == HASHED_MASK_LENGTH && value.startsWith("$REDACTED_PREFIX:") && endsWithMask(value))
 
     fun endsWithMask(value: String): Boolean {
         if (value.endsWith(REDACTED)) return true
