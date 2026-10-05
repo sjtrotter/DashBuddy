@@ -52,5 +52,11 @@ class CensusVariantBindingTest {
             assertTrue(extraction.substringAfter("<cloud-backup>").substringBefore("</cloud-backup>").contains(exclusion))
             assertTrue(extraction.substringAfter("<device-transfer>").substringBefore("</device-transfer>").contains(exclusion))
         }
+        for (domain in listOf("external", "file")) {
+            val exclusion = "<exclude domain=\"$domain\" path=\"captures/\""
+            assertTrue(backup.contains(exclusion))
+            assertTrue(extraction.substringAfter("<cloud-backup>").substringBefore("</cloud-backup>").contains(exclusion))
+            assertTrue(extraction.substringAfter("<device-transfer>").substringBefore("</device-transfer>").contains(exclusion))
+        }
     }
 }

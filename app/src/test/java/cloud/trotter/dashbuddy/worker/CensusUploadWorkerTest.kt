@@ -55,6 +55,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,6 +74,21 @@ import java.time.ZoneOffset
 
 @RunWith(RobolectricTestRunner::class)
 class CensusUploadWorkerTest {
+    private data class LogEntry(val priority: Int, val tag: String?, val message: String)
+
+    private val logs = mutableListOf<LogEntry>()
+    private val tree = object : Timber.Tree() {
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            logs += LogEntry(priority, tag, message)
+        }
+    }
+
+    @Before fun plant() = Timber.plant(tree)
+
+    @After fun uproot() = Timber.uproot(tree)
+
+    private fun deferrals(): List<LogEntry> = logs.filter { it.message.startsWith("census deferred") }
+
     @Before fun resetProcessWarnings() {
         CensusUploadWorker.enrolRejectedWarned.set(false)
         CensusUploadWorker.unauthorizedWarnedFor.set(null)
@@ -479,11 +495,14 @@ class CensusUploadWorkerTest {
 
     @Test fun `429 deadlines persist and are honored by subsequent manual runs`() = runTest {
         for (result in listOf(UploadResult.RateLimited(3600), UploadResult.BudgetExhausted(3600))) {
+            logs.clear()
             val h = harness()
             h.initialize()
             h.queue()
             h.api.uploads += result
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            val cause = if (result is UploadResult.BudgetExhausted) "budget" else "upload_rate_limit"
+            assertEquals(listOf(LogEntry(Log.INFO, "Census", "census deferred cause=$cause seconds=3600")), deferrals())
             assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
             val deadline = h.preferences.nextAllowedAtMillis.first()
             assertTrue(deadline > System.currentTimeMillis())
@@ -505,6 +524,7 @@ class CensusUploadWorkerTest {
 
     @Test fun `year long retry after is capped and consent toggle allows upload now`() = runTest {
         for (enrolling in listOf(false, true)) {
+            logs.clear()
             val h = harness()
             h.initialize()
             h.queue()
@@ -517,6 +537,8 @@ class CensusUploadWorkerTest {
             }
             val before = System.currentTimeMillis()
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            val cause = if (enrolling) "enrol_rate_limit" else "upload_rate_limit"
+            assertEquals(listOf(LogEntry(Log.INFO, "Census", "census deferred cause=$cause seconds=86400")), deferrals())
             assertTrue(h.preferences.nextAllowedAtMillis.first() >= before + 86_400_000)
             assertTrue(h.preferences.nextAllowedAtMillis.first() <= System.currentTimeMillis() + 86_460_000)
             assertEquals(0L, h.scheduler.deadline)
@@ -540,6 +562,7 @@ class CensusUploadWorkerTest {
         whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
         h.api.enrollments += EnrolResult.RateLimited(3600)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(listOf(LogEntry(Log.INFO, "Census", "census deferred cause=enrol_rate_limit seconds=3600")), deferrals())
         assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
         val deadline = h.preferences.nextAllowedAtMillis.first()
         assertTrue(deadline > System.currentTimeMillis())
@@ -556,6 +579,27 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(2, h.api.enrolledIds.size)
         assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `stored deadline logs remaining seconds without uploading`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        val deadline = System.currentTimeMillis() + 3_600_000
+        h.preferences.setNextAllowedAtMillis(deadline)
+        val before = System.currentTimeMillis()
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        val after = System.currentTimeMillis()
+        val entry = deferrals().single()
+        assertEquals(Log.INFO, entry.priority)
+        assertEquals("Census", entry.tag)
+        assertTrue(entry.message.matches(Regex("census deferred cause=stored_deadline remaining=[0-9]+")))
+        val remainingSeconds = entry.message.substringAfter("remaining=").toLong()
+        assertTrue(remainingSeconds in ((deadline - after) / 1000).coerceAtLeast(0)..((deadline - before) / 1000).coerceAtLeast(0))
+        assertEquals("deferred $remainingSeconds", h.preferences.censusLastRun.first()?.token())
+        assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
+        assertTrue(h.api.bodies.isEmpty())
+        assertEquals(1, h.queued.size)
     }
 
     @Test fun `unauthorized resigns once with same batch and bytes`() = runTest {

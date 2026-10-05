@@ -56,6 +56,12 @@ class CensusUploadWorker @AssistedInject constructor(
     @param:CensusEnvelopeSpool private val envelopeSpool: CensusSpool,
     private val envelopeSink: CensusEnvelopeSink,
 ) : CoroutineWorker(appContext, workerParams) {
+    private enum class DeferCause(val token: String) {
+        BUDGET("budget"),
+        UPLOAD_RATE_LIMIT("upload_rate_limit"),
+        ENROL_RATE_LIMIT("enrol_rate_limit"),
+    }
+
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
         var detail: Int? = null
@@ -180,7 +186,7 @@ class CensusUploadWorker @AssistedInject constructor(
                     }
                 }
                 EnrolResult.Revoked -> return Enrollment.Stop(revoke(record))
-                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter))
+                is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter, DeferCause.ENROL_RATE_LIMIT))
                 EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(record, 401))
                 is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status))
                 is EnrolResult.ServerUnavailable, is EnrolResult.TransportFailure ->
@@ -253,7 +259,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 record.healthRejected > 0 -> record.set(CensusRunOutcome.HEALTH_REJECTED, record.healthRejected)
                 else -> record.set(CensusRunOutcome.DEFERRED, ((deadline - now) / 1000).toInt().coerceAtLeast(0))
             }
-            Timber.tag(TAG).i("census deferred runs=1")
+            val remainingSeconds = ((deadline - now) / 1000).coerceAtLeast(0)
+            Timber.tag(TAG).i("census deferred cause=stored_deadline remaining=%d", remainingSeconds)
             return Result.success()
         }
         val run = UploadRun()
@@ -417,8 +424,8 @@ class CensusUploadWorker @AssistedInject constructor(
                     record.rejected += result.rejected.values.sum()
                 }
             }
-            is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds)
-            is UploadResult.RateLimited -> return defer(record, result.retryAfter)
+            is UploadResult.BudgetExhausted -> return defer(record, result.retryAfterSeconds, DeferCause.BUDGET)
+            is UploadResult.RateLimited -> return defer(record, result.retryAfter, DeferCause.UPLOAD_RATE_LIMIT)
             is UploadResult.Unauthorized -> {
                 // An unresigned, non-skew 401 means the consent check short-circuited the re-sign: not an identity problem.
                 if (envelopes && !run.resigned && !run.clockSkew) {
@@ -498,13 +505,13 @@ class CensusUploadWorker @AssistedInject constructor(
         Timber.tag(TAG).w("census batch rejected reasons=%s", rejected)
     }
 
-    private suspend fun defer(record: RunRecord, seconds: Long): Result {
+    private suspend fun defer(record: RunRecord, seconds: Long, cause: DeferCause): Result {
         val now = System.currentTimeMillis()
         val coercedSeconds = seconds.coerceIn(1, 86_400)
         record.set(CensusRunOutcome.DEFERRED, coercedSeconds.toInt())
         val deadline = now + coercedSeconds * 1000
         preferences.setNextAllowedAtMillis(deadline)
-        Timber.tag(TAG).i("census deferred runs=1")
+        Timber.tag(TAG).i("census deferred cause=%s seconds=%d", cause.token, coercedSeconds)
         return Result.success()
     }
 
