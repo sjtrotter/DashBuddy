@@ -404,7 +404,8 @@ The catch is deliberately NOT in `PredicateCompiler`. The Perl classes are TRANS
 Unicode classes at the seam (`\d`→`\p{Nd}`, `\s`→`[\s\p{Z}\x{0B}\x{85}]`,
 `\w`→`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]`, negations likewise; `\S`/`\W` inside a class rejected) —
 an APPROXIMATION, not parity: Unicode-table lag (Adlam), simple vs full case folding, ASCII `\b`,
-listed in #1086. Authors keep writing `\d`; byte-SSOT pins are on source bytes. Guards:
+listed in #1086 (closed 2026-10-05 — accepted residuals + an RE2J dependency watch, ADR-0010; the device
+linear-time test is proven to execute on the nightly). Authors keep writing `\d`; byte-SSOT pins are on source bytes. Guards:
 `RuleRegexEngineGuardTest` (no `java.util.regex` in the rule package; every `Regex(…)` literal-only,
 frozen count ledger), `RuleCorpusCompileBudgetTest` (50 ms load budget + program-size max), instrumented
 `RuleRegexIsLinearTimeTest` (nightly on ART). The one corpus cost: uber's `^Going to (?!\d)` became
