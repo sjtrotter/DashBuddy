@@ -183,9 +183,14 @@ class CaptureWriter @Inject constructor(
         // mirroring the screen path: a Compose button's click-action label, hint or tooltip is
         // arbitrary app text (fielded shape: `accept_button` text "Accept" with a customer name in
         // its action label), so a RECOGNIZED click runs the TEXT-marker scrub too — byte-identical
-        // unless a marker hits; the `ID_MARKERS` node-id scan stays UNKNOWN-only (#910). The dedup
+        // unless a marker hits; the `ID_MARKERS` node-id scan and the #919 text-input scan stay UNKNOWN-only. The dedup
         // hash below is still on the ORIGINAL node (envelope-only).
-        val payloadNode = scrubCustomerPii(redactedNode, obs.target, obs.ruleId, kind = "click node")
+        val payloadNode = scrubCustomerPii(
+            redactedNode, obs.target, obs.ruleId, kind = "click node",
+            // #919 (fable review): a click rule vets one label; with NO screen rule there is no authority
+            // over the tapped node's text, so a text input on such a click is masked too.
+            screenAuthority = screenRuleId != null,
+        )
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.CLICK_PIPELINE_ID,
@@ -220,21 +225,7 @@ class CaptureWriter @Inject constructor(
         return obs.copy(captureId = captureId)
     }
 
-    /**
-     * The UNKNOWN-envelope customer scrub shared by the screen and click paths.
-     *
-     * Two structurally different scans, one traversal:
-     *  - the #806 TEXT-marker scan ([textMarker], already computed by the caller so
-     *    the recognized path can reuse it), which owns a lead-in inside one node
-     *    ("Deliver to <name>"); and
-     *  - the #910 node-ID scan, which owns the SPLIT shape that scan is blind to by
-     *    construction — a `user_name_label` reading exactly "Delivery for" beside a
-     *    BARE `user_name` sibling (fielded 07-28 and again 07-29, once per job, as an
-     *    UNKNOWN window; the same `customer_name` shape reached the click path).
-     *
-     * Returns [tree] unchanged when both scans are clean, so a benign UNKNOWN frame
-     * is never rebuilt. Counts ONE scrub per envelope either way.
-     */
+    // The UNKNOWN-envelope customer scrub itself is [scrubUnknownTree] below (three scans since #919).
     /**
      * #1147 review Z1/Z3 — THE dasher-sensitive drop decision shared by the screen tree, the screen's
      * window title and every click: on a [marker] hit, count it, WARN (tag `Pipeline`, the marker's
@@ -254,17 +245,31 @@ class CaptureWriter @Inject constructor(
     /**
      * #1147 review Z3 — THE customer-PII text-marker backstop over an envelope-bound tree, shared by
      * the screen and click paths (one marker SSOT, cross-platform DATA — principle 8):
-     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan);
+     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan AND the #919 text-input scan);
      *  - recognized, no marker → returned unchanged (byte-identical envelope);
      *  - recognized, marker hit (#624 defense-in-depth: a rule that ships raw customer text with
      *    no redact, or — since #1147 — a click label / hint / tooltip) → count, WARN (tag
      *    `Pipeline`, marker log-safe id + rule id only, #862) and scrub the offending field.
      * The VET V1 already-redacted skip keeps a rule's OWN redact output from re-tripping.
      */
-    private fun scrubCustomerPii(tree: UiNode, target: String?, ruleId: String?, kind: String): UiNode {
+    private fun scrubCustomerPii(
+        tree: UiNode,
+        target: String?,
+        ruleId: String?,
+        kind: String,
+        screenAuthority: Boolean = true,
+    ): UiNode {
         val marker = CustomerTextMarkers.firstUnredactedMarker(tree)
+        if (target == UNKNOWN_TARGET) return scrubUnknownTree(tree, marker, kind)
+        // #919 (Astra r2/r3 P1): the two recognized-path scrubs COMPOSE, INPUT FIRST — ownership is judged on
+        // the ORIGINAL tree (a marker scrub that masks an input's `text` would otherwise erase the user-text
+        // evidence the input scan keys on, leaving a draft in another field raw), then the marker scrub.
+        val inputScrubbed = if (screenAuthority) tree else scrubUnvettedInputs(tree, ruleId, kind)
+        return scrubRecognizedMarker(inputScrubbed, marker, ruleId, kind)
+    }
+
+    private fun scrubRecognizedMarker(tree: UiNode, marker: String?, ruleId: String?, kind: String): UiNode {
         return when {
-            target == UNKNOWN_TARGET -> scrubUnknownTree(tree, marker, kind)
             marker == null -> tree
             else -> {
                 stats.onRedactBackstopScrub()
@@ -278,13 +283,30 @@ class CaptureWriter @Inject constructor(
         }
     }
 
+    /**
+     * #919 (fable review): a RECOGNIZED click with no screen rule (`screenRuleId == null`) — the click rule vetted
+     * one label, nothing vetted the tapped node's text — masks every text-input subtree (and only those);
+     * byte-identical when the tap carries no input. Counted with the recognized-path backstop scrubs.
+     */
+    private fun scrubUnvettedInputs(tree: UiNode, ruleId: String?, kind: String): UiNode {
+        val inputNode = CustomerTextMarkers.firstUnredactedInputNode(tree) ?: return tree
+        stats.onRedactBackstopScrub()
+        Timber.tag("Pipeline").w(
+            "Capture backstop: recognized %s with no screen rule carried a text input (input=%s ruleId=%s) — " +
+                "masking the input from envelope",
+            kind, inputNode, ruleId,
+        )
+        return CustomerTextMarkers.scrubInputs(tree)
+    }
+
     private fun scrubUnknownTree(
         tree: UiNode,
         textMarker: String?,
         kind: String = "screen",
     ): UiNode {
         val idMarker = CustomerTextMarkers.firstUnredactedIdMarker(tree)
-        if (textMarker == null && idMarker == null) return tree
+        val inputNode = CustomerTextMarkers.firstUnredactedInputNode(tree) // #919
+        if (textMarker == null && idMarker == null && inputNode == null) return tree
         stats.onUnknownCustomerScrub()
         // Principle 7: a text marker is named by its log-safe id (#862) — the marker
         // constants are themselves scanned by the shareable-log sink, so naming one
@@ -292,11 +314,12 @@ class CaptureWriter @Inject constructor(
         // constant: it is a view-id token ("user_name"), carries no PII and matches
         // no sensitive marker, so it logs verbatim and stays decodable.
         Timber.tag("Pipeline").w(
-            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s) — " +
+            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s input=%s) — " +
                 "scrubbing node from envelope",
             kind,
             textMarker?.let { MarkerLogId.of(it) } ?: "-",
             idMarker ?: "-",
+            inputNode ?: "-",
         )
         return CustomerTextMarkers.scrubUnknown(tree)
     }

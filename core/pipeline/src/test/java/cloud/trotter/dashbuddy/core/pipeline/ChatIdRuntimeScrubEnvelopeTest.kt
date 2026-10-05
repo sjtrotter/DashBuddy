@@ -110,4 +110,94 @@ class ChatIdRuntimeScrubEnvelopeTest {
         )
         assertTrue("the sensitive frame must be dropped", bus.envelopes.size == before)
     }
+
+    private fun captureClick(node: UiNode, recognized: Boolean = false, screenRuleId: String? = null): String {
+        writer.captureClick(
+            Observation.Click(
+                timestamp = 1_000L, captureId = null,
+                ruleId = if (recognized) "doordash.click.test" else null,
+                metadata = ReplayMetadata.EMPTY, flow = null, modeHint = null, parsed = ParsedFields.None,
+                target = if (recognized) "chat_conversation" else UNKNOWN_TARGET,
+            ),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = screenRuleId?.let { "chat_conversation" },
+            screenRuleId = screenRuleId,
+        )
+        return bus.envelopes.single()
+    }
+
+    @Test
+    fun `an UNKNOWN message_input click persists a mask instead of the draft (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.doordash.driverapp:id/message_input",
+            text = draft,
+            isClickable = true,
+        ))
+        assertTrue(envelope, envelope.contains("[redacted]"))
+        assertTrue(envelope, !envelope.contains(draft))
+    }
+
+    @Test
+    fun `an UNKNOWN id-less EditText click persists a mask instead of the draft (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = draft,
+            isClickable = true,
+        ))
+        assertTrue(envelope, envelope.contains("[redacted]"))
+        assertTrue(envelope, !envelope.contains(draft))
+    }
+
+    @Test
+    fun `a recognized EditText click under a SCREEN rule keeps that rule's authority (NoRedaction here) (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.doordash.driverapp:id/message_input",
+            text = draft,
+            isClickable = true,
+        ), recognized = true, screenRuleId = "doordash.screen.chat_conversation")
+        assertTrue(envelope, envelope.contains(draft))
+        assertTrue(envelope, !envelope.contains("[redacted]"))
+    }
+
+    @Test
+    fun `a text-marker hit on a no-screen-rule click does not switch the input scrub off (#919, Astra r2 P1)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = draft,
+            contentDescription = "Deliver to Morgan",
+            isClickable = true,
+        ), recognized = true, screenRuleId = null)
+        assertTrue(envelope, !envelope.contains(draft))
+        assertTrue(envelope, !envelope.contains("Morgan"))
+    }
+
+    @Test
+    fun `the input scrub runs on the ORIGINAL tree - a marker hit in text cannot hide a draft in another field (#919, Astra r3 P1)`() {
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = "Deliver to Morgan",
+            tooltipText = "Riley Smith",
+            isClickable = true,
+        ), recognized = true, screenRuleId = null)
+        assertTrue(envelope, !envelope.contains("Morgan"))
+        assertTrue(envelope, !envelope.contains("Riley"))
+    }
+
+    @Test
+    fun `a recognized EditText click with NO screen rule masks the input - nothing vetted its text (#919, fable review)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = draft,
+            isClickable = true,
+        ), recognized = true, screenRuleId = null)
+        assertTrue(envelope, envelope.contains("[redacted]"))
+        assertTrue(envelope, !envelope.contains(draft))
+    }
 }

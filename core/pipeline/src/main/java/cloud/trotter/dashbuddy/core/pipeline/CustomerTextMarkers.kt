@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
+import cloud.trotter.dashbuddy.domain.model.accessibility.UiNodeTextField
 import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
 import cloud.trotter.dashbuddy.core.pipeline.rules.CompiledRedact
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -225,6 +226,12 @@ object CustomerTextMarkers {
         // structure.
         IdMarker("tvTitle", IdentityKind.EXACT, idProtect = true),
         IdMarker("tvLastMessage", IdentityKind.EXACT),
+        // #919 (fielded 2026-07-29 and 2026-09-13/14, seven UNKNOWN click envelopes): the chat COMPOSE box —
+        // the dasher's in-progress message, naming the customer's order contents and whatever else they typed.
+        // Was intake-only (NEVER); promoted to the runtime UNKNOWN scrub so the known instance is masked by
+        // id even when the widget stops reporting editable semantics. The CLASS half is [unredactedInputNode].
+        // CONTENT: seeds nothing for the census (free text, not an identity).
+        IdMarker("message_input", IdentityKind.CONTENT),
         // #1160 review AL3: the INTAKE-ONLY ids (formerly `PiiShapes.PII_ID_SUFFIXES`, a second hand list with
         // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
         // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
@@ -239,7 +246,6 @@ object CustomerTextMarkers {
         // Chat bodies and inputs.
         IdMarker("message_self_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("message_other_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
-        IdMarker("message_input", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("chat_input_text_field", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         // Bottom-sheet address/instruction blocks (the address lines also end in an ADDRESS row above).
         IdMarker("bottom_sheet_address_line_1", IdentityKind.CONTENT, RuntimeScrub.NEVER),
@@ -438,10 +444,75 @@ object CustomerTextMarkers {
         // #835: every serialized string field counts as "still carrying raw" — a
         // customer-PII node whose only remaining value is its `stateDescription`
         // must still be scrubbed. (XX7: one pass over the fields.)
-        val carriesRaw = node.scrubbableStrings()
-            .any { (_, value) -> !value.isNullOrEmpty() && !value.contains(REDACTED_MARK) }
-        return if (carriesRaw) marker else null
+        return if (carriesRaw(node)) marker else null
     }
+
+    /**
+     * #919 (Astra review P1): a field is "still raw" unless it is EMPTY or ENDS with a mask token
+     * ([MaskTokens.endsWithMask]) — a rule's own output shape. A value that merely contains the prefix
+     * ("[redacted] Riley S wants oat milk", typed by the dasher) is raw and scrubs; the old substring skip
+     * let the whole draft through. Shared by the id and the input scans (the text-marker scan keeps VET V1:
+     * its hit is a lead-in PREFIX, which a mask-bearing rule output cannot start with).
+     */
+    private fun carriesRaw(node: UiNode): Boolean = node.scrubbableStrings()
+        .any { (_, value) -> !value.isNullOrEmpty() && !MaskTokens.endsWithMask(value) }
+
+    /**
+     * #919 (fable review): the fields a USER authors — text, description, state and an input's error echo. An
+     * input whose only value is its app placeholder (`hintText` "Type a message…") is NOT a hit: no WARN, no
+     * counter, hint kept for triage. Once a hit fires, the mask is still whole-node (hint included).
+     */
+    private val USER_AUTHORED_FIELDS = setOf(
+        UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION, UiNodeTextField.STATE_DESCRIPTION, UiNodeTextField.ERROR_TEXT,
+    )
+
+    // Astra r2 P1: an input's value is masked only when it IS a mask token (no kept-prefix shape exists on an input).
+    private fun carriesUserText(node: UiNode): Boolean = node.scrubbableStrings()
+        .any { (field, value) -> field in USER_AUTHORED_FIELDS && !value.isNullOrEmpty() && !MaskTokens.isMask(value) }
+
+    /** [carriesUserText] over [node] and its whole subtree — a composite input owns its descendants' text (#919 P2). */
+    private fun subtreeCarriesUserText(node: UiNode): Boolean =
+        carriesUserText(node) || node.children.any { subtreeCarriesUserText(it) }
+
+    /** The fixed WARN tokens the input scan reports (#919, Astra review P1: a class name is app-controlled text). */
+    const val INPUT_CAUSE_EDITABLE = "editable"
+    const val INPUT_CAUSE_CLASS = "edittext-class"
+
+    /**
+     * #919 — the UNKNOWN-envelope INPUT scan: [node] is a text input ([UiNode.isTextInput]) whose SUBTREE still
+     * carries an un-redacted string, or null. User-authored free text (a chat draft, a search box, a note) is
+     * never corpus material, so the input is masked WHOLE — every [UiNode.scrubbableStrings] field of the node
+     * AND of every descendant (a composite input renders its draft in a child TextView — Astra P2), the hint
+     * and error included — while the HIT itself keys on user-authored fields only ([USER_AUTHORED_FIELDS]:
+     * a placeholder-only empty box is benign, not a WARN) (ACCEPTED RECALL COST: an UNKNOWN frame's "Type a message…" placeholder is lost to
+     * triage; the id, class and structure stay). Returns a FIXED token for the WARN — [INPUT_CAUSE_EDITABLE]
+     * when the live flag fired, else [INPUT_CAUSE_CLASS] — never the class name, which is an app-controlled
+     * `CharSequence` and could itself carry PII (Astra P1). Same already-masked/empty skip as
+     * [unredactedIdMarker]. UNKNOWN envelopes only — a recognized frame keeps its rule's deliberate decisions.
+     */
+    fun unredactedInputNode(node: UiNode): String? {
+        if (!node.isTextInput) return null
+        if (!subtreeCarriesUserText(node)) return null
+        return if (node.isEditable) INPUT_CAUSE_EDITABLE else INPUT_CAUSE_CLASS
+    }
+
+    /**
+     * #919 (fable review): the INPUT-ONLY scrub for a RECOGNIZED click that NO screen rule vetted
+     * (`screenRuleId == null` — a click rule vets one label, never the tapped input's text): every text-input
+     * subtree is masked whole, nothing else moves. There is no rule authority to defer to on that path, and a
+     * draft is never corpus material. Call only after [firstUnredactedInputNode] returned non-null.
+     */
+    fun scrubInputs(tree: UiNode): UiNode = scrubInputs(tree, inputOwned = false)
+
+    private fun scrubInputs(tree: UiNode, inputOwned: Boolean): UiNode {
+        val owned = inputOwned || unredactedInputNode(tree) != null
+        val node = if (owned) tree.mapScrubbableStrings { if (it.isNullOrEmpty() || MaskTokens.isMask(it)) it else CompiledRedact.REDACTED } else tree
+        return node.copy(children = tree.children.map { scrubInputs(it, owned) })
+    }
+
+    /** The first [unredactedInputNode] hit anywhere in [tree], or null when clean (structural scan, no copy). */
+    fun firstUnredactedInputNode(tree: UiNode): String? =
+        unredactedInputNode(tree) ?: tree.children.firstNotNullOfOrNull { firstUnredactedInputNode(it) }
 
     /**
      * The first [ID_MARKERS] hit anywhere in [tree], or null when clean. Cheap
@@ -453,22 +524,36 @@ object CustomerTextMarkers {
 
     /**
      * The UNKNOWN-envelope scrub: a copy of [tree] with every node scrubbed to
-     * [CompiledRedact.REDACTED] that carries EITHER an un-redacted text marker
-     * ([unredactedMarker]) OR a customer-PII view id ([unredactedIdMarker]). One
-     * traversal for both scans, so an UNKNOWN frame is never rebuilt twice. Call
-     * only after one of the two scans returned non-null.
+     * [CompiledRedact.REDACTED] that carries an un-redacted text marker ([unredactedMarker]),
+     * a customer-PII view id ([unredactedIdMarker]), OR text input ([unredactedInputNode], #919).
+     * One traversal for all three scans, so an UNKNOWN frame is never rebuilt twice. Call
+     * only after one of the three scans returned non-null.
      */
-    fun scrubUnknown(tree: UiNode): UiNode {
-        val byId = unredactedIdMarker(tree) != null
-        // An id hit scrubs the node WHOLE (every field of the
+    fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, inputOwned = false)
+
+    private fun scrubUnknown(tree: UiNode, inputOwned: Boolean): UiNode {
+        // #919 (Astra P2): a text input OWNS its subtree — a composite input's draft renders in a child
+        // TextView, so every descendant of an input node is masked whole too.
+        // The mask follows the HIT: an input whose subtree carries no user text (placeholder only) is left alone.
+        val owned = inputOwned || unredactedInputNode(tree) != null
+        val wholeNode = owned || unredactedIdMarker(tree) != null
+        // An id hit OR a text-input subtree (#919) scrubs the node WHOLE (every field of the
         // [UiNode.scrubbableStrings] SSOT, #835); otherwise each field is judged
-        // on its own text marker.
+        // on its own text marker. A value already ending in a mask is left as-is (its hash is kept).
         return tree
             .mapScrubbableStrings {
-                // #1147: a null field stays null (nothing to leak; no phantom keys on the envelope).
-                if (it != null && (byId || unredactedMarker(it) != null)) CompiledRedact.REDACTED else it
+                when {
+                    it == null -> null // #1147: a null field stays null (no phantom keys on the envelope).
+                    it.isEmpty() -> it
+                    // Astra r2 P1: on an INPUT-owned node only an exact mask token is "already masked";
+                    // elsewhere a rule's kept-prefix output ("For [redacted:ab12]") is.
+                    owned && MaskTokens.isMask(it) -> it
+                    !owned && MaskTokens.endsWithMask(it) -> it
+                    wholeNode || unredactedMarker(it) != null -> CompiledRedact.REDACTED
+                    else -> it
+                }
             }
-            .copy(children = tree.children.map { scrubUnknown(it) })
+            .copy(children = tree.children.map { scrubUnknown(it, owned) })
     }
 
     // --- Notification path (#632) --------------------------------------------

@@ -248,6 +248,34 @@ The corpus-wide additive claim is pinned by `CorpusNodeFieldsAdditiveTest` (X4).
 exists** — TalkBack has no `AndroidComposeView`/`testTag` handling; the best anchors for an id-less
 render are a named scope (pane title) + a label/action label + the semantic owner.
 
+**#919 — text inputs on UNKNOWN envelopes:** `isEditable` carries the live editable flag, and
+`UiNode.isTextInput` owns the predicate (editable OR an `EditText` class). Every scrubbable string on
+such a node is plain-masked whole on UNKNOWN screen + click envelopes only; `message_input` also
+moves from NEVER→ALWAYS in the id table, covering the known instance if editable semantics disappear.
+Recognized frames keep rule authority: `chat`, `chat_conversation`, and the two recognize-only
+privacy belts (`pickup_order_picker`, `dropoff_customer_unavailable`) each declare a `message_input`
+plain-mask entry. Accepted recall cost: an UNKNOWN input's hint/placeholder is lost to triage;
+id, class and structure remain. A text input OWNS its subtree (a composite input renders the draft in a
+child TextView — Astra P2), and the already-masked skip is `MaskTokens.endsWithMask` — a value ENDING in a
+mask token (a rule's own output shape), never "contains `[redacted`" (a literal the dasher typed must still
+scrub — Astra P1; the id scan shares the rule). The backstop WARN reports a FIXED token
+(`input=editable` | `input=edittext-class`), never the class name, which is app-controlled text (Astra P1).
+On the recognized chat surfaces the box also masks id-less through a `hasClassNameEndsWith: EditText` entry.
+Fable review additions: the HIT keys on user-authored fields only (text / description / state / error — a
+placeholder-only empty box is benign: no WARN, no counter, hint kept); a RECOGNIZED click with NO screen rule
+(`screenRuleId == null`) masks its text-input subtrees too (`CustomerTextMarkers.scrubInputs`, counted as a
+recognized-path backstop scrub — a click rule vets one label, nothing vetted the input); and the census
+`FrameFilter` withholds every field of a text input or any node under one, exactly like a PII id row, so the
+skeleton never ships as word slots what the envelope masked. The class half also accepts `AutoCompleteTextView`
+(the chat rules declare that class too); on-device the live flag is the authority. Astra r2: an INPUT's value is
+"already masked" only when it IS a mask token (`MaskTokens.isMask` — a typed trailing "[redacted]" is user text),
+and the two recognized-path scrubs compose (a marker hit never switches the unvetted-input scrub off).
+Residuals filed as #1228, not built here: the redact DSL has no descendant/ancestor selector, so a COMPOSITE input on a
+RECOGNIZED frame (draft in a child TextView under an id-less EditText) masks only the parent; and `isEditable`
+is not a node predicate yet, so a rule cannot declare the flag half. An id-row node showing only its placeholder
+(`message_input` with a hint) still trips the id scan — the documented fail-closed id posture (#1160 ZZ1), an
+over-scrub, not a leak.
+
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
 `user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —

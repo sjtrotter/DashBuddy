@@ -1134,6 +1134,11 @@
           "plainMask": true
         },
         {
+          "comment": "#919: the chat compose box — user-authored draft text; `ID_MARKERS` row, plain-masked.",
+          "find": { "hasIdSuffix": "message_input" },
+          "plainMask": true
+        },
+        {
           "comment": "#1139: each row's 'For <customer> by <h:mm>' line. Id-scoped to `instructions` so no other 'For ' text on a combined frame is touched by THIS entry; keepPrefix keeps the 'For ' lead-in for replay context and the whole remainder — name AND the due time — masks to ONE token. normalize customerName keys the hex on the canonical first-token + second-token-initial form, the same normalization the For-family siblings (`pickup_resolution_options` et al.) use, so a customer rendered 'Jane D' here keys to the same canonical `jane d` as their other surfaces. KNOWN LIMITATION (both PR #1216 reviews): a first-name-only row ('For John by 12:28') keys on the 'by' as its initial (`john b`), so it joins NOTHING — not the pickup card's `john`, and it would collide with a real 'John B'; the screen redact has no suffix-strip primitive (`maskGroup` is notification-only) to remove the ' by <h:mm>' tail before normalizing. Tracked as a follow-up; a mask, never a leak. The merchant lives in its own `restaurant_name` node and stays raw (merchant names are driver-owned, not PII).",
           "find": {
             "all": [

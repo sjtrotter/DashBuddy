@@ -117,7 +117,12 @@ internal class FrameFilter(
         // AD7: the marker row is looked up ONCE per node.
         val marker = CustomerTextMarkers.idMarkerFor(node.viewIdResourceName)
         // AL3: ONE list — the intake-only ids are CONTENT/NEVER rows of the same table.
-        val idClass = if (marker != null) IdClass.PII_MARKER else IdClass.NONE
+        // #919 (fable review): a TEXT INPUT — or any node under one (a composite input renders its draft in a
+        // child) — withholds every field exactly like a PII id row: the runtime UNKNOWN scrub and the census
+        // must make the SAME decision about the same node, or the skeleton ships as word slots what the
+        // envelope masked. Seeds nothing (free text is not an identity).
+        val underInput = generateSequence(node) { it.parent }.any { it.isTextInput }
+        val idClass = if (marker != null || underInput) IdClass.PII_MARKER else IdClass.NONE
         val fields = ArrayList<Pair<String, Field>>()
         var textField: Field? = null
         var descField: Field? = null

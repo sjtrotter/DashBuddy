@@ -11,4 +11,33 @@ object MaskTokens {
 
     /** The plain (hash-less) mask. */
     const val REDACTED: String = "$REDACTED_PREFIX]"
+
+    private const val HASHED_MASK_LENGTH = 15 // "[redacted:" + 4 hex + "]"
+
+    /**
+     * #919 (Astra review P1): [value] ENDS with a mask token — the plain [REDACTED] or the hashed
+     * `[redacted:<4hex>]`. This is the already-masked skip the whole-node UNKNOWN scrubs use: a rule's own
+     * output is either the bare mask or a kept prefix FOLLOWED by the mask ("For [redacted:ab12]"), so the
+     * token sits at the end — while a value that merely CONTAINS the prefix ("[redacted] Riley S wants…", a
+     * literal the dasher typed) is NOT masked and must still be scrubbed. Substring presence is not proof.
+     */
+    /**
+     * #919 (Astra r2 P1): [value] IS a mask token — exactly the plain or the hashed form, nothing else. The
+     * TEXT-INPUT skip uses this, not [endsWithMask]: no rule ever keeps a prefix on an input, so a draft that
+     * merely ENDS with a typed "[redacted]" ("Riley S wants oat milk [redacted]") is user text and scrubs.
+     */
+    fun isMask(value: String): Boolean =
+        value == REDACTED ||
+            // Astra r3 P1: the hashed form must START with the prefix too — "Riley[redacted]" is 15 chars and
+            // ends with the plain mask, but it is user text.
+            (value.length == HASHED_MASK_LENGTH && value.startsWith("$REDACTED_PREFIX:") && endsWithMask(value))
+
+    fun endsWithMask(value: String): Boolean {
+        if (value.endsWith(REDACTED)) return true
+        if (value.length < HASHED_MASK_LENGTH) return false
+        val tail = value.substring(value.length - HASHED_MASK_LENGTH)
+        if (!tail.startsWith("$REDACTED_PREFIX:") || !tail.endsWith("]")) return false
+        val hex = tail.substring(REDACTED_PREFIX.length + 1, HASHED_MASK_LENGTH - 1)
+        return hex.all { it in '0'..'9' || it in 'a'..'f' }
+    }
 }

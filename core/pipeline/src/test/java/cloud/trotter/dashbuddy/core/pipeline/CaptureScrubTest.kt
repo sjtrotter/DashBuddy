@@ -371,4 +371,22 @@ class CaptureScrubTest {
         assertTrue(offeredEnvelope().contains("Some new button"))
         assertEquals(0L, stats.unknownCustomerScrubCount)
     }
+
+    @Test
+    fun `UNKNOWN screen with a text input is captured with the input masked and counted (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val tree = UiNode(children = listOf(
+            UiNode(className = "android.widget.TextView", text = "Chat"),
+            UiNode(className = "android.widget.EditText", text = draft),
+        ))
+        writer.captureScreen(unknownObs(), screenEvent(tree))
+
+        // The argumentCaptor helper verifies exactly one offer: the frame is captured, not dropped.
+        val json = offeredEnvelope()
+        assertFalse("draft scrubbed", json.contains(draft))
+        assertTrue("input became [redacted]", json.contains("[redacted]"))
+        assertTrue("chrome survives", json.contains("Chat"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
 }

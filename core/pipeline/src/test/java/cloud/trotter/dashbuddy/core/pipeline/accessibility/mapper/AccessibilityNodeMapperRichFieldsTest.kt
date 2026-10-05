@@ -49,6 +49,7 @@ class AccessibilityNodeMapperRichFieldsTest {
         )
         whenever(m.uniqueId).thenReturn("uid-1")
         whenever(m.isVisibleToUser).thenReturn(false)
+        whenever(m.isEditable).thenReturn(true)
         whenever(m.isFocusable).thenReturn(true)
         whenever(m.isScreenReaderFocusable).thenReturn(true)
         whenever(m.isCheckable).thenReturn(true)
@@ -71,6 +72,7 @@ class AccessibilityNodeMapperRichFieldsTest {
         assertEquals("the ACTION_CLICK entry's label, not the first action's", "Accept offer", n.clickActionLabel)
         assertEquals("uid-1", n.uniqueId)
         assertTrue(n.hasClickAction)
+        assertTrue(n.isEditable)
         assertFalse(n.isVisibleToUser)
         assertTrue(n.isFocusable)
         assertTrue(n.isScreenReaderFocusable)
@@ -173,5 +175,14 @@ class AccessibilityNodeMapperRichFieldsTest {
         } catch (e: StackOverflowError) {
             // expected
         }
+    }
+
+    @Test
+    fun `a plain TextView maps as a non-input (#919)`() {
+        val m = mock<AccessibilityNodeInfo>()
+        whenever(m.className).thenReturn("android.widget.TextView")
+        val n = m.toUiNode()!!
+        assertFalse(n.isEditable)
+        assertFalse(n.isTextInput)
     }
 }

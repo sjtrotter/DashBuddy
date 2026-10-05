@@ -70,6 +70,12 @@ data class UiNode(
      */
     val hasClickAction: Boolean = false,
     /**
+     * #919: `AccessibilityNodeInfo.isEditable()` — the node is a text input. Read through [isTextInput]
+     * (which also accepts the EditText class family); the UNKNOWN-envelope scrub treats such a node's
+     * every string as user-authored and masks it whole. Not in [allText] or any content/structural hash.
+     */
+    val isEditable: Boolean = false,
+    /**
      * #1149 review L3/V1: this node belongs to a DIFFERENT package than its window root, or sits beneath
      * one that does (an embedded foreign subtree — the boundary is inherited). Not in [allText] or any content/structural hash.
      */
@@ -123,6 +129,18 @@ data class UiNode(
     val takesClick: Boolean get() = isClickable || hasClickAction
 
     /**
+     * #919 — THE "this node is a text input" predicate: the editable flag OR a class name whose simple
+     * name ends in `EditText` or `AutoCompleteTextView` (`android.widget.EditText`, `AppCompatEditText`,
+     * `TextInputEditText`, `MultiAutoCompleteTextView`, `SearchView$SearchAutoComplete`'s parent; a Compose
+     * text field reports the EditText class AND the flag). On-device the live flag is the authority — the
+     * class half exists for pre-#919 envelopes and fixtures, which carry no `editable` key, and for a widget
+     * that drops editable semantics. Platform-agnostic: Android widget vocabulary, no app package or id.
+     * Read by the capture scrubs and the census filter.
+     */
+    val isTextInput: Boolean
+        get() = isEditable || className?.let { it.endsWith("EditText") || it.endsWith("AutoCompleteTextView") } == true
+
+    /**
      * Wire the parent back-references for the whole tree (#363). The single
      * mutation point on an otherwise-immutable tree — called once by the
      * construction/deserialization factories before the tree is shared.
@@ -163,6 +181,7 @@ data class UiNode(
         if (isEnabled != other.isEnabled) return false
         if (isChecked != other.isChecked) return false
         if (hasClickAction != other.hasClickAction) return false
+        if (isEditable != other.isEditable) return false
         if (foreignPackage != other.foreignPackage) return false
         if (unreadableChildren != other.unreadableChildren) return false
         if (isVisibleToUser != other.isVisibleToUser) return false
@@ -203,6 +222,7 @@ data class UiNode(
         result = 31 * result + isEnabled.hashCode()
         result = 31 * result + isChecked.hashCode()
         result = 31 * result + hasClickAction.hashCode()
+        result = 31 * result + isEditable.hashCode()
         result = 31 * result + foreignPackage.hashCode()
         result = 31 * result + unreadableChildren
         result = 31 * result + isVisibleToUser.hashCode()
