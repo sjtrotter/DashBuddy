@@ -185,7 +185,12 @@ class CaptureWriter @Inject constructor(
         // its action label), so a RECOGNIZED click runs the TEXT-marker scrub too — byte-identical
         // unless a marker hits; the `ID_MARKERS` node-id scan and the #919 text-input scan stay UNKNOWN-only. The dedup
         // hash below is still on the ORIGINAL node (envelope-only).
-        val payloadNode = scrubCustomerPii(redactedNode, obs.target, obs.ruleId, kind = "click node")
+        val payloadNode = scrubCustomerPii(
+            redactedNode, obs.target, obs.ruleId, kind = "click node",
+            // #919 (fable review): a click rule vets one label; with NO screen rule there is no authority
+            // over the tapped node's text, so a text input on such a click is masked too.
+            screenAuthority = screenRuleId != null,
+        )
         val platform = Platform.fromPackage(event.packageName).wire
         val capture = EnvelopeBuilder.build(
             pipelineId = AccessibilityPipeline.CLICK_PIPELINE_ID,
@@ -220,21 +225,7 @@ class CaptureWriter @Inject constructor(
         return obs.copy(captureId = captureId)
     }
 
-    /**
-     * The UNKNOWN-envelope customer scrub shared by the screen and click paths.
-     *
-     * Two structurally different scans, one traversal:
-     *  - the #806 TEXT-marker scan ([textMarker], already computed by the caller so
-     *    the recognized path can reuse it), which owns a lead-in inside one node
-     *    ("Deliver to <name>"); and
-     *  - the #910 node-ID scan, which owns the SPLIT shape that scan is blind to by
-     *    construction — a `user_name_label` reading exactly "Delivery for" beside a
-     *    BARE `user_name` sibling (fielded 07-28 and again 07-29, once per job, as an
-     *    UNKNOWN window; the same `customer_name` shape reached the click path).
-     *
-     * Returns [tree] unchanged when both scans are clean, so a benign UNKNOWN frame
-     * is never rebuilt. Counts ONE scrub per envelope either way.
-     */
+    // The UNKNOWN-envelope customer scrub itself is [scrubUnknownTree] below (three scans since #919).
     /**
      * #1147 review Z1/Z3 — THE dasher-sensitive drop decision shared by the screen tree, the screen's
      * window title and every click: on a [marker] hit, count it, WARN (tag `Pipeline`, the marker's
@@ -261,10 +252,17 @@ class CaptureWriter @Inject constructor(
      *    `Pipeline`, marker log-safe id + rule id only, #862) and scrub the offending field.
      * The VET V1 already-redacted skip keeps a rule's OWN redact output from re-tripping.
      */
-    private fun scrubCustomerPii(tree: UiNode, target: String?, ruleId: String?, kind: String): UiNode {
+    private fun scrubCustomerPii(
+        tree: UiNode,
+        target: String?,
+        ruleId: String?,
+        kind: String,
+        screenAuthority: Boolean = true,
+    ): UiNode {
         val marker = CustomerTextMarkers.firstUnredactedMarker(tree)
         return when {
             target == UNKNOWN_TARGET -> scrubUnknownTree(tree, marker, kind)
+            marker == null && !screenAuthority -> scrubUnvettedInputs(tree, ruleId, kind)
             marker == null -> tree
             else -> {
                 stats.onRedactBackstopScrub()
@@ -276,6 +274,22 @@ class CaptureWriter @Inject constructor(
                 CustomerTextMarkers.scrub(tree)
             }
         }
+    }
+
+    /**
+     * #919 (fable review): a RECOGNIZED click with no screen rule (`screenRuleId == null`) — the click rule vetted
+     * one label, nothing vetted the tapped node's text — masks every text-input subtree (and only those);
+     * byte-identical when the tap carries no input. Counted with the recognized-path backstop scrubs.
+     */
+    private fun scrubUnvettedInputs(tree: UiNode, ruleId: String?, kind: String): UiNode {
+        val inputNode = CustomerTextMarkers.firstUnredactedInputNode(tree) ?: return tree
+        stats.onRedactBackstopScrub()
+        Timber.tag("Pipeline").w(
+            "Capture backstop: recognized %s with no screen rule carried a text input (input=%s ruleId=%s) — " +
+                "masking the input from envelope",
+            kind, inputNode, ruleId,
+        )
+        return CustomerTextMarkers.scrubInputs(tree)
     }
 
     private fun scrubUnknownTree(

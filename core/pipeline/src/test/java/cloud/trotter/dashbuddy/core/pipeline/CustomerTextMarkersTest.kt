@@ -487,7 +487,7 @@ class CustomerTextMarkersTest {
             text = "they only had one of the juice boxes in stock",
             hintText = "Type a message",
         )
-        assertEquals("android.widget.EditText", CustomerTextMarkers.firstUnredactedInputNode(tree))
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.firstUnredactedInputNode(tree))
         val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
         assertEquals("[redacted]", scrubbed.text)
         assertEquals("[redacted]", scrubbed.hintText)
@@ -497,7 +497,7 @@ class CustomerTextMarkersTest {
     @Test
     fun `an isEditable node of any class is scrubbed (#919)`() {
         val node = UiNode(className = "android.view.View", isEditable = true, text = "4321")
-        assertEquals("android.view.View", CustomerTextMarkers.unredactedInputNode(node))
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_EDITABLE, CustomerTextMarkers.unredactedInputNode(node))
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
     }
 
@@ -526,6 +526,75 @@ class CustomerTextMarkersTest {
         )
         assertNull(CustomerTextMarkers.firstUnredactedMarker(tree))
         assertEquals(tree, CustomerTextMarkers.scrub(tree))
+    }
+
+    @Test
+    fun `a literal mask token inside a draft does not exempt it (#919, Astra P1)`() {
+        val draft = "[redacted] Riley Smith wants oat milk"
+        val input = UiNode(className = "android.widget.EditText", viewIdResourceName = "com.x:id/message_input", text = draft)
+        assertEquals("message_input", CustomerTextMarkers.unredactedIdMarker(input))
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.unredactedInputNode(input))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(input).text)
+        // The id scan too, on a non-input node — the same substring bypass.
+        val named = UiNode(viewIdResourceName = "com.x:id/user_name", text = draft)
+        assertEquals("user_name", CustomerTextMarkers.unredactedIdMarker(named))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(named).text)
+        // A rule's own output shapes stay skipped: the bare mask, the hashed mask, a kept prefix + mask.
+        for (masked in listOf("[redacted]", "[redacted:ab12]", "For [redacted:ab12]")) {
+            assertNull(masked, CustomerTextMarkers.unredactedIdMarker(UiNode(viewIdResourceName = "com.x:id/user_name", text = masked)))
+            assertEquals(masked, CustomerTextMarkers.scrubUnknown(UiNode(viewIdResourceName = "com.x:id/user_name", text = masked)).text)
+        }
+    }
+
+    @Test
+    fun `the input WARN token is fixed, never the app-controlled class name (#919, Astra P1)`() {
+        val node = UiNode(isEditable = true, className = "Riley Smith", text = "hello")
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_EDITABLE, CustomerTextMarkers.unredactedInputNode(node))
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.unredactedInputNode(node.copy(isEditable = false, className = "x.EditText")))
+    }
+
+    @Test
+    fun `a composite input owns its descendants' text (#919, Astra P2)`() {
+        val draft = "Riley Smith wants oat milk"
+        val withHint = UiNode(
+            className = "android.widget.EditText", hintText = "Type a message",
+            children = listOf(UiNode(className = "android.widget.TextView", text = draft)),
+        ).restoreParents()
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.firstUnredactedInputNode(withHint))
+        val scrubbed = CustomerTextMarkers.scrubUnknown(withHint)
+        assertEquals("[redacted]", scrubbed.hintText)
+        assertEquals("[redacted]", scrubbed.children[0].text)
+        // No own string at all: the parent is still a hit through its child, and the child still masks.
+        val bare = UiNode(
+            className = "android.widget.EditText",
+            children = listOf(UiNode(className = "android.widget.TextView", text = draft)),
+        ).restoreParents()
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.firstUnredactedInputNode(bare))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(bare).children[0].text)
+        // A sibling OUTSIDE the input keeps its chrome.
+        val frame = UiNode(children = listOf(UiNode(className = "android.widget.TextView", text = "Chat"), bare)).restoreParents()
+        assertEquals("Chat", CustomerTextMarkers.scrubUnknown(frame).children[0].text)
+    }
+
+    @Test
+    fun `an input showing only its placeholder is not a hit - no WARN, hint kept (#919, fable review)`() {
+        val empty = UiNode(className = "android.widget.EditText", hintText = "Type a message")
+        assertNull(CustomerTextMarkers.unredactedInputNode(empty))
+        assertEquals("Type a message", CustomerTextMarkers.scrubUnknown(empty).hintText)
+        // An error echo IS user-authored evidence.
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.unredactedInputNode(empty.copy(errorText = "'Riley S' is not a valid code")))
+    }
+
+    @Test
+    fun `scrubInputs masks input subtrees and nothing else (#919, fable review)`() {
+        val frame = UiNode(children = listOf(
+            UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/user_name", text = "Riley S"),
+            UiNode(className = "android.widget.EditText", hintText = "Type a message", children = listOf(UiNode(className = "android.widget.TextView", text = "oat milk please"))),
+        )).restoreParents()
+        val out = CustomerTextMarkers.scrubInputs(frame)
+        assertEquals("the id-marked node is NOT this scrub's business", "Riley S", out.children[0].text)
+        assertEquals("[redacted]", out.children[1].hintText)
+        assertEquals("[redacted]", out.children[1].children[0].text)
     }
 
     @Test

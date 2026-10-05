@@ -293,7 +293,8 @@ ALWAYS runtime-scrub projection (#1160 adds `order_cx_name`, `tvTitle`, `tvLastM
 fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line — on EVERY
 platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches), #919 adds `message_input` and a
 CLASS rule — any text-input node (`UiNode.isTextInput`: the editable flag or an `EditText` class) is
-plain-masked whole on UNKNOWN screen + click envelopes (a recognized
+plain-masked whole, subtree included, on UNKNOWN screen + click envelopes; the already-masked skip is
+`MaskTokens.endsWithMask`, never substring presence (a recognized
 frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary

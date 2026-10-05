@@ -255,8 +255,19 @@ moves from NEVER→ALWAYS in the id table, covering the known instance if editab
 Recognized frames keep rule authority: `chat`, `chat_conversation`, and the two recognize-only
 privacy belts (`pickup_order_picker`, `dropoff_customer_unavailable`) each declare a `message_input`
 plain-mask entry. Accepted recall cost: an UNKNOWN input's hint/placeholder is lost to triage;
-id, class and structure remain. The backstop WARN includes `input=<class>` (or `editable` when the
-class is absent), never the typed value.
+id, class and structure remain. A text input OWNS its subtree (a composite input renders the draft in a
+child TextView — Astra P2), and the already-masked skip is `MaskTokens.endsWithMask` — a value ENDING in a
+mask token (a rule's own output shape), never "contains `[redacted`" (a literal the dasher typed must still
+scrub — Astra P1; the id scan shares the rule). The backstop WARN reports a FIXED token
+(`input=editable` | `input=edittext-class`), never the class name, which is app-controlled text (Astra P1).
+On the recognized chat surfaces the box also masks id-less through a `hasClassNameEndsWith: EditText` entry.
+Fable review additions: the HIT keys on user-authored fields only (text / description / state / error — a
+placeholder-only empty box is benign: no WARN, no counter, hint kept); a RECOGNIZED click with NO screen rule
+(`screenRuleId == null`) masks its text-input subtrees too (`CustomerTextMarkers.scrubInputs`, counted as a
+recognized-path backstop scrub — a click rule vets one label, nothing vetted the input); and the census
+`FrameFilter` withholds every field of a text input or any node under one, exactly like a PII id row, so the
+skeleton never ships as word slots what the envelope masked. The class half also accepts `AutoCompleteTextView`;
+on-device the live flag is the authority.
 
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE

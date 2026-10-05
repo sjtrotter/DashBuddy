@@ -181,6 +181,11 @@
           "comment": "#919: the compose box's draft is the dasher's own free text — masked plain on the recognized surface (the UNKNOWN path has the runtime id + class scrub).",
           "find": { "hasIdSuffix": "message_input" },
           "plainMask": true
+        },
+        {
+          "comment": "#919 (Astra P2): the same box when it renders id-less — any EditText-class node on this recognized surface is user-authored text, masked plain. Mirrors the UNKNOWN path's class rule so a recognized chat frame is never the weaker one.",
+          "find": { "hasClassNameEndsWith": "EditText" },
+          "plainMask": true
         }
       ],
       "reject": [
@@ -237,6 +242,11 @@
         {
           "comment": "#919: the compose box's draft is the dasher's own free text — masked plain on the recognized surface (the UNKNOWN path has the runtime id + class scrub).",
           "find": { "hasIdSuffix": "message_input" },
+          "plainMask": true
+        },
+        {
+          "comment": "#919 (Astra P2): the same box when it renders id-less — any EditText-class node on this recognized surface is user-authored text, masked plain. Mirrors the UNKNOWN path's class rule so a recognized chat frame is never the weaker one.",
+          "find": { "hasClassNameEndsWith": "EditText" },
           "plainMask": true
         }
       ],

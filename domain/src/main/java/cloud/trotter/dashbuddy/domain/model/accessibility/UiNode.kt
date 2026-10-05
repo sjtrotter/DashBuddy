@@ -130,11 +130,15 @@ data class UiNode(
 
     /**
      * #919 — THE "this node is a text input" predicate: the editable flag OR a class name whose simple
-     * name ends in `EditText` (`android.widget.EditText`, `AppCompatEditText`, `TextInputEditText`; a
-     * Compose text field reports the EditText class and the flag). Platform-agnostic: Android widget
-     * vocabulary, no app package or id. Read by the UNKNOWN-envelope scrub only.
+     * name ends in `EditText` or `AutoCompleteTextView` (`android.widget.EditText`, `AppCompatEditText`,
+     * `TextInputEditText`, `MultiAutoCompleteTextView`, `SearchView$SearchAutoComplete`'s parent; a Compose
+     * text field reports the EditText class AND the flag). On-device the live flag is the authority — the
+     * class half exists for pre-#919 envelopes and fixtures, which carry no `editable` key, and for a widget
+     * that drops editable semantics. Platform-agnostic: Android widget vocabulary, no app package or id.
+     * Read by the capture scrubs and the census filter.
      */
-    val isTextInput: Boolean get() = isEditable || (className?.endsWith("EditText") == true)
+    val isTextInput: Boolean
+        get() = isEditable || className?.let { it.endsWith("EditText") || it.endsWith("AutoCompleteTextView") } == true
 
     /**
      * Wire the parent back-references for the whole tree (#363). The single

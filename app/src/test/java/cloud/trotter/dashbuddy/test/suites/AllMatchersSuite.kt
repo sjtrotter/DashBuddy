@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.DashSummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DeliverySummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.ChatComposeRedactionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffSheetRedactionParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
@@ -76,6 +77,8 @@ import org.junit.runners.Suite
  *   PII across the corpus + notification redact blocks mask name/body, keep store.
  * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
  *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
+ * - [ChatComposeRedactionTest] — #919: the chat compose box masks on the RECOGNIZED chat frame by id
+ *   AND id-less by `EditText` class (the runtime UNKNOWN scrub never runs there).
  * - [DropoffBannerRedactParityTest] — #993 combined-frame belt: EVERY screen rule in the
  *   dropoff section declares the `arriving_at_title` redact (a rule's redact protects only
  *   the frames that rule wins, and the arrival CTA hands the banner-bearing frame around),
@@ -190,6 +193,7 @@ import org.junit.runners.Suite
     CaptureRedactionCorpusTest::class,
     CaptureBackstopCorpusTest::class,
     DropoffBannerRedactParityTest::class,
+    ChatComposeRedactionTest::class,
     DropoffSheetRedactionParityTest::class,
     SensitiveMarkerAssetCoverageTest::class,
     SensitiveSurfaceBlockTest::class,

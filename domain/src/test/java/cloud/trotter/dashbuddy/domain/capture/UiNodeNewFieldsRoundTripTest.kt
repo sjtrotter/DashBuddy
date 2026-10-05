@@ -5,6 +5,9 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.BoundingBox
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import org.junit.Assert.assertTrue
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
@@ -90,6 +93,18 @@ class UiNodeNewFieldsRoundTripTest {
     }
 
     @Test
+    fun `isEditable serializes as the editable key only when true and round-trips (#919)`() {
+        val on = legacyNode.copy(isEditable = true)
+        val obj = Json.parseToJsonElement(UiNodeSchema.serialize(on)).jsonObject
+        assertEquals(true, obj["editable"]?.jsonPrimitive?.boolean)
+        assertEquals(on, UiNodeSchema.deserialize(UiNodeSchema.serialize(on)))
+        assertTrue(UiNodeSchema.deserialize(UiNodeSchema.serialize(on)).isEditable)
+        assertTrue(UiNodeSchema.deserialize(UiNodeSchema.serialize(on)).isTextInput)
+        // false stays omitted — the pre-#919 key set is pinned by the test above.
+        assertEquals(null, Json.parseToJsonElement(UiNodeSchema.serialize(legacyNode)).jsonObject["editable"])
+    }
+
+    @Test
     fun `a pre-1147 envelope deserializes to the dominant defaults`() {
         val legacyJson = """{"text":"x","bounds":{"left":0,"top":0,"right":1,"bottom":1}}"""
         val n = UiNodeSchema.deserialize(legacyJson)
@@ -113,6 +128,7 @@ class UiNodeNewFieldsRoundTripTest {
             legacyNode.copy(isSelected = true),
             legacyNode.copy(liveRegion = 1),
             legacyNode.copy(itemRow = 0),
+            legacyNode.copy(isEditable = true), // #919
         )) {
             assertNotEquals(legacyNode, variant)
             assertNotEquals(legacyNode.hashCode(), variant.hashCode())

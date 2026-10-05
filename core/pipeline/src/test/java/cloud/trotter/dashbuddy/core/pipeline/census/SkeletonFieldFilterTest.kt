@@ -61,16 +61,45 @@ class SkeletonFieldFilterTest : SkeletonBuilderTestBase() {
     }
 
     @Test
+    fun `step 1 - a text input, and every node under one, withholds like a PII id row (#919, fable review)`() {
+        val draft = "meet me at the side door code 7391"
+        // Id-less EditText: the runtime UNKNOWN scrub masks it; the census must not ship it as word slots.
+        val lone = SkeletonBuilder.build(
+            UiNode(className = "android.widget.EditText", text = draft), null, meta, platform, day,
+        )!!.root
+        assertEquals(TextSlot.WITHHELD, lone.text["text"])
+        // The flag alone (a Compose field reporting a generic class) withholds too.
+        val flagged = SkeletonBuilder.build(
+            UiNode(className = "android.view.View", isEditable = true, text = draft), null, meta, platform, day,
+        )!!.root
+        assertEquals(TextSlot.WITHHELD, flagged.text["text"])
+        // A composite input: the child TextView under the EditText is owned by it; a sibling outside is not.
+        val frame = SkeletonBuilder.build(
+            UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
+                UiNode(className = "android.widget.EditText", hintText = "Type a message", children = listOf(
+                    UiNode(className = "android.widget.TextView", text = draft),
+                )),
+                UiNode(className = "android.widget.TextView", text = "Send"),
+            )).restoreParents(),
+            null, meta, platform, day,
+        )!!.root
+        assertEquals(TextSlot.WITHHELD, frame.children[0].children[0].text["text"])
+        assertEquals(TextSlot.WITHHELD, frame.children[0].text["hint"])
+        assertTrue(frame.children[1].text["text"] != TextSlot.WITHHELD)
+    }
+
+    @Test
     fun `step 1 - a table id or an intake-only id withholds its own field`() {
-        // `order_cx_name` / `tvTitle` are ID_MARKER_TABLE rows (NN2, PP6); `message_input` and
-        // `primaryManeuverText` are the table's intake-only CONTENT/NEVER rows (AL3).
+        // `order_cx_name` / `tvTitle` are ID_MARKER_TABLE rows (NN2, PP6); `chat_input_text_field` and
+        // `primaryManeuverText` are the table's intake-only CONTENT/NEVER rows (AL3; #919 promoted
+        // `message_input` to a runtime ALWAYS row, so it is no longer the example).
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/order_cx_name"))
         assertEquals(TextSlot.WITHHELD, slot("Accept", "com.x:id/tvTitle"))
     }
 
     @Test
     fun `step 1 - an intake-only CONTENT id withholds its own field and seeds nothing (reviews SS6, AL3)`() {
-        listOf("message_input", "primaryManeuverText").forEach { suffix ->
+        listOf("chat_input_text_field", "primaryManeuverText").forEach { suffix ->
             val out = SkeletonBuilder.build(
                 UiNode(className = "android.widget.LinearLayout", viewIdResourceName = "com.x:id/row", children = listOf(
                     UiNode(className = "android.widget.TextView", viewIdResourceName = "com.x:id/$suffix", text = "Turn right"),
