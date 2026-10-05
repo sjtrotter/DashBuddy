@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -227,4 +228,15 @@ class AnalyticsSessionDetailTest {
         assertEquals("delivered 8 − a real reported 0", 8.0, detail.overAttributedPay, 1e-9)
         assertEquals(0.0, detail.unattributedPay, 1e-9)
     }
+    @Test
+    fun `CLEAR removes phantom unattributed pay and preserves machine provenance`() = runBlocking {
+        dao.upsertSession(session("483", 40.14, "early_offline").copy(deliveries = 0, jobsCompleted = 0))
+        assertEquals(40.14, repo.sessionDetail("483").first()!!.unattributedPay, 1e-9)
+        dao.setSessionReportOverride("483", SessionReportOperation.CLEAR, null, base + hour)
+        val detail = repo.sessionDetail("483").first()!!
+        assertEquals(0.0, detail.unattributedPay, 1e-9)
+        assertNull(detail.session.reportedEarnings)
+        assertEquals(40.14, detail.session.machineReportedEarnings!!, 1e-9)
+    }
+
 }

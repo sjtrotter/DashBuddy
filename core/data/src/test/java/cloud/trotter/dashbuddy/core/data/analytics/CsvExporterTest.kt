@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -258,4 +259,18 @@ class CsvExporterTest {
             assertFalse("formula-leading cell leaked: $row", row.startsWith("=") || row.startsWith("@"))
         }
     }
+    @Test fun sessions_driverClearAndSet_exportEffectiveReportAndSummary() {
+        val cleared = session(id = "483", reported = 40.14).copy(
+            reportOverrideMode = SessionReportOperation.CLEAR, reportCorrectedAt = generatedAt,
+        )
+        val set = session(id = "484", reported = 11.75).copy(
+            reportOverrideMode = SessionReportOperation.SET, reportOverride = 12.5, reportCorrectedAt = generatedAt,
+        )
+        val out = CsvExporter.export(emptyList(), listOf(cleared, set), utc, generatedAt)
+        val rows = out.sessionsCsv.trim().lines()
+        assertEquals("", rows[1].split(",")[4])
+        assertEquals("12.50", rows[2].split(",")[4])
+        assertTrue(out.summaryCsv.contains("total_reported_earnings,12.50"))
+    }
+
 }

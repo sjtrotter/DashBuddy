@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
@@ -192,4 +194,18 @@ class AppEventCodecTest {
             // expected — the repo edge logs and degrades, the codec never lies
         }
     }
+    @Test
+    fun `session report corrections round trip all operations and unknown wire strings`() {
+        for ((op, value) in listOf(
+            SessionReportOperation.CLEAR to null,
+            SessionReportOperation.SET to 12.5,
+            SessionReportOperation.SET to 0.0,
+            SessionReportOperation.RESTORE_MACHINE to null,
+            "FUTURE" to null,
+        )) {
+            val payload = SessionReportCorrectionPayload("483", op, value, "driver note")
+            assertEquals(payload, roundTrip(AppEventType.SESSION_REPORT_CORRECTION, payload))
+        }
+    }
+
 }

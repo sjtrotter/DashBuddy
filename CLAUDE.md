@@ -654,6 +654,8 @@ a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against th
 (attribution ONLY — `sessionId` + `sessionAssigned`, no re-pricing — behind five fail-closed guards:
 row exists, row is null-session or already-assigned, target is a real ENDED session, platform
 coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
+`SESSION_REPORT_CORRECTION` (CLEAR / SET / RESTORE_MACHINE — a dash's platform-reported total;
+machine column never rewritten; `SessionReportRule` is the one owner the DAO's CASE mirrors; Room v17, #1134),
 and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
 Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
 anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the

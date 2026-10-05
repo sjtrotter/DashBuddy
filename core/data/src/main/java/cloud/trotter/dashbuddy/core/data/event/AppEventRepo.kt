@@ -114,8 +114,10 @@ class AppEventRepo @Inject constructor(
             AppEventCodec.decodePayload(eventType, eventPayload)
         } catch (e: Exception) {
             // LOUD at the edge (#353), null to the consumer — the fold treats a
-            // missing payload exactly like a legacy empty row.
-            Timber.w(e, "AppEventRepo: failed to decode %s payload", eventType)
+            // missing payload exactly like a legacy empty row. P7 (#1134 Astra r1 P2): the exception's
+            // message embeds the whole payload JSON — a correction's driver NOTE included — so only
+            // the exception CLASS is logged, never the throwable.
+            Timber.w("AppEventRepo: failed to decode %s payload (%s)", eventType, e.javaClass.simpleName)
             null
         },
     )

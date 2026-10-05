@@ -145,6 +145,19 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
+    fun correctSessionReport(operation: String, value: Double?, note: String?) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.correctSessionReport(sessionId, operation, value, note)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // No exception text: a failed write must not disclose the driver's note.
+                Timber.tag(TAG).w("correctSessionReport rejected for session %s", sessionId)
+            }
+        }
+    }
+
     private companion object {
         private const val TAG = "SessionDetailVm"
     }

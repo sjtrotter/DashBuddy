@@ -842,4 +842,13 @@
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
+    <string name="session_detail_gross_set_label">Gross (you set)</string>
+    <string name="session_detail_report_corrected">report corrected</string>
+    <string name="session_detail_correct_total">Correct total</string>
+    <string name="session_report_dialog_title">Correct %1$s total</string>
+    <string name="session_report_dialog_amount">Amount reported</string>
+    <string name="session_report_dialog_set">Set</string>
+    <string name="session_report_dialog_clear">No summary for this dash</string>
+    <string name="session_report_dialog_restore">Restore detected value</string>
+    <string name="session_report_dialog_note">Note (optional)</string>
 </resources>

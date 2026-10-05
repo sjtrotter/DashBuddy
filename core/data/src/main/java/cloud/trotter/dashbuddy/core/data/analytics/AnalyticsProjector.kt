@@ -25,6 +25,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PickupFold
 import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
 import cloud.trotter.dashbuddy.domain.analytics.SessionAssignFold
 import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
+import cloud.trotter.dashbuddy.domain.analytics.SessionReportCorrectionFold
 import cloud.trotter.dashbuddy.domain.analytics.StoreResolution
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -125,6 +126,7 @@ class AnalyticsProjector @Inject constructor(
         val deliveries: Int = 0,
         val sessions: Int = 0,
         val offers: Int = 0,
+        val adjustmentSkips: Int = 0,
     )
 
     /**
@@ -152,6 +154,7 @@ class AnalyticsProjector @Inject constructor(
                 deliveries = acc.deliveries + batch.deliveries,
                 sessions = acc.sessions + batch.sessions,
                 offers = acc.offers + batch.offers,
+                adjustmentSkips = acc.adjustmentSkips + batch.adjustmentSkips,
             )
         }
         return acc
@@ -201,6 +204,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.sessionReportCorrection?.let { adjustments += Adjustment.SessionReportCorrect(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
@@ -238,6 +242,21 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
+                    is Adjustment.SessionReportCorrect -> {
+                        // #1134 (fable review F1/F3): by-PK write only; the written triple (never a re-read) is
+                        // copied onto any in-memory context so a later same-batch upsert cannot wipe it.
+                        val written = analyticsDao.applySessionReportCorrection(adj.fold, adj.occurredAt)
+                        if (written != null) {
+                            contexts[adj.fold.sessionId]?.let { ctx ->
+                                contexts[adj.fold.sessionId] = ctx.copy(
+                                    reportOverrideMode = written.mode,
+                                    reportOverride = written.value,
+                                    reportCorrectedAt = written.correctedAt,
+                                )
+                            }
+                        }
+                        written == null
+                    }
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
@@ -261,7 +280,7 @@ class AnalyticsProjector @Inject constructor(
         if (skips > 0) {
             Timber.tag(TAG).w("batch skipped %d event(s) with a missing/malformed payload", skips)
         }
-        return DrainStats(events.size, deliveries.size, touched.size, offers.size)
+        return DrainStats(events.size, deliveries.size, touched.size, offers.size, adjustmentSkips)
     }
 
     /**
@@ -286,6 +305,11 @@ class AnalyticsProjector @Inject constructor(
             override val sequenceId: Long,
             override val occurredAt: Long,
             val fold: ReceiptRepriceFold,
+        ) : Adjustment
+        data class SessionReportCorrect(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: SessionReportCorrectionFold,
         ) : Adjustment
         data class SessionAssign(
             override val sequenceId: Long,
@@ -863,6 +887,9 @@ class AnalyticsProjector @Inject constructor(
         startOdometer = startOdometer,
         lastOdometer = lastOdometer,
         reportedEarnings = reportedEarnings,
+        reportOverrideMode = reportOverrideMode,
+        reportOverride = reportOverride,
+        reportCorrectedAt = reportCorrectedAt,
         reportedDurationMillis = reportedDurationMillis,
         offersReceived = offersReceived,
         offersAccepted = offersAccepted,
@@ -893,6 +920,9 @@ class AnalyticsProjector @Inject constructor(
         startOdometer = startOdometer,
         lastOdometer = lastOdometer,
         reportedEarnings = reportedEarnings,
+        reportOverrideMode = reportOverrideMode,
+        reportOverride = reportOverride,
+        reportCorrectedAt = reportCorrectedAt,
         reportedDurationMillis = reportedDurationMillis,
         offersAccepted = offersAccepted,
         offersDeclined = offersDeclined,
@@ -1082,7 +1112,7 @@ class AnalyticsProjector @Inject constructor(
          * linkedJobId` ONLY**, and only for rows the old code left unlinked — every other column, and
          * every already-linked row, folds byte-identically. Precedented side effect (as v2 onward): the
          * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
-         * v11 (#1030): `RecordFolds.reportedEarningsOf` (the rule's owner — see its KDoc) now reads a
+         * v11 (#1030): `RecordFolds.reportedEarningsOf` (fold-time normalization — see its KDoc) now reads a
          * DASH_STOP `totalEarnings` of `0.0` as **no report** on every non-summary end source. The
          * stamp side is fixed at the source, but history cannot heal from that: the committed
          * `early_offline` stops carry a literal `"totalEarnings": 0.0` and a refold replays them

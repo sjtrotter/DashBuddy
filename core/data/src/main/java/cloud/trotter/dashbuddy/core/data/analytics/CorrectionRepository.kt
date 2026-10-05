@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
@@ -8,6 +9,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignP
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -200,6 +203,23 @@ class CorrectionRepository @Inject constructor(
             "OFFER_OUTCOME_CORRECTION appended for offer seq %d (attested=%b)",
             targetOfferEventSequenceId, attested,
         )
+    }
+
+    /** #1134 — append a correction. SET requires a finite 0..MAX_REPORTED; CLEAR / RESTORE_MACHINE reject a value. */
+    suspend fun correctSessionReport(sessionId: String, operation: String, value: Double? = null, note: String? = null) {
+        require(operation in setOf(SessionReportOperation.SET, SessionReportOperation.CLEAR, SessionReportOperation.RESTORE_MACHINE)) {
+            "unknown session report operation"
+        }
+        require(if (operation == SessionReportOperation.SET) SessionReportRule.isValidSet(value) else value == null) { "invalid session report value" }
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.SESSION_REPORT_CORRECTION,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = sessionId,
+                payload = SessionReportCorrectionPayload(sessionId, operation, value, note),
+            ),
+        )
+        Timber.tag(TAG).i("SESSION_REPORT_CORRECTION appended for session %s (op=%s)", sessionId, operation)
     }
 
     private companion object {

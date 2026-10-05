@@ -268,6 +268,7 @@ data class FoldOutcome(
      * orchestrator applies the re-attribution (with its fail-closed guards) inside the batch transaction.
      */
     val sessionAssign: SessionAssignFold? = null,
+    val sessionReportCorrection: SessionReportCorrectionFold? = null,
     /**
      * A JOB_ACCEPT_MISMATCH Tier-1 orphan-reconcile trigger (#810 B2): the pure fold cannot read the
      * job's committed offer/delivery rows here, so the orchestrator runs the store-evidence join
@@ -341,6 +342,9 @@ data class ReceiptRepriceFold(
     /** The event's own `occurredAt` — stamped into `delivery_records.receiptRepricedAt`. */
     val repricedAt: Long,
 )
+
+/** #1134 driver report decision; applied by session PK inside the projector transaction. */
+data class SessionReportCorrectionFold(val sessionId: String, val operation: String, val value: Double?)
 
 /**
  * A driver's session-(re)attribution decision (#660 piece 2) — the pure fold's output for a
@@ -433,6 +437,7 @@ object RecordFolds {
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
             AppEventType.DELIVERY_RECEIPT_REPRICE -> CorrectionFolds.foldDeliveryReceiptReprice(event, context)
+            AppEventType.SESSION_REPORT_CORRECTION -> CorrectionFolds.foldSessionReportCorrection(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)
             AppEventType.OFFER_OUTCOME_CORRECTION -> CorrectionFolds.foldOfferOutcomeCorrection(event, context)
             // #810 B2 Tier 1: emit the orphan-reconcile trigger (the orchestrator runs the store-evidence
@@ -626,10 +631,8 @@ object RecordFolds {
      * fabricated zero to trust. A missed summary parse now stamps null and falls through to the
      * context, the same as an early-offline stop.
      *
-     * **This function is the rule's one owner.** Its read-side mirrors —
-     * `AnalyticsDao.grossAndUnattributed` & siblings (SQL, source-keyed the same way) and
-     * `SessionDetail.reportedEarningsOrNull` (the per-dash drill-down) — point back here rather
-     * than restating the reasoning.
+     * This is fold-time stamp normalization; [SessionReportRule] owns the effective read-side report
+     * including driver overrides, mirrored by the DAO SQL.
      */
     private fun reportedEarningsOf(p: SessionStopPayload): Double? =
         p.totalEarnings?.takeIf { it > 0.0 || p.source == SessionEndSource.SUMMARY_SCREEN }

@@ -103,6 +103,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
+        AutoMigration(from = 16, to = 17),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -130,7 +131,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 16
+        const val VERSION = 17
     }
 
 }

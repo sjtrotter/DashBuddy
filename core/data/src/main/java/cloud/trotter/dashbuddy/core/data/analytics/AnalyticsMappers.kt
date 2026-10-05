@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
@@ -46,7 +47,11 @@ internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
     platform = Platform.fromWire(platform) ?: Platform.Unknown,
     startedAt = startedAt,
     endedAt = endedAt,
-    reportedEarnings = reportedEarnings,
+    reportedEarnings = SessionReportRule.effectiveReported(reportedEarnings, endSource, reportOverrideMode, reportOverride),
+    machineReportedEarnings = reportedEarnings,
+    reportOverrideMode = reportOverrideMode,
+    reportOverride = reportOverride,
+    reportCorrectedAt = reportCorrectedAt,
     endSource = endSource,
     reportedDurationMillis = reportedDurationMillis,
     miles = if (startOdometer != null && lastOdometer != null) {

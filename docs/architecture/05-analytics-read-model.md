@@ -592,3 +592,45 @@ survives; an EARLIER one is never superseded. Read side: the drill-down shows "r
 `receiptRepricedAt != null` (the never-silent #689/#691 disclosure family). Named residual:
 `payoutStoreForms` is NOT back-stamped by a re-price, so a job whose only receipt arrived late keeps
 its pre-existing #159 store keys.
+
+### Session report correction (#1134, Room v17)
+
+`SESSION_REPORT_CORRECTION` is an append-only driver statement about a dash's platform-reported
+total. It leaves the original `DASH_STOP`, the machine `session_records.reportedEarnings` column,
+and all delivery economics untouched. The three operations have distinct stored shapes:
+
+| Operation | reportOverrideMode | reportOverride | reportCorrectedAt |
+| --- | --- | --- | --- |
+| CLEAR — no report for this dash | `CLEAR` | NULL | correction occurredAt |
+| SET — the driver's stated total | `SET` | stated value (including 0) | correction occurredAt |
+| RESTORE_MACHINE — undo | NULL | NULL | NULL |
+
+`SessionReportRule.effectiveReported` is the one owner: SET wins, CLEAR means no report,
+otherwise use the machine value under #1030's source-keyed trust rule. The DAO mirrors this in
+`SessionReportSql.EFFECTIVE_REPORTED_SQL`; a source × machine × override matrix tests SQL/Kotlin
+agreement. Domain `SessionRecord.reportedEarnings` is effective; `machineReportedEarnings` retains
+provenance. Cards, drill-down, CSV, period and daily totals all use the effective report.
+
+**Eligibility is judged by the pure fold at the correction's position in the log** (Astra r1 P1): the
+target must already be an ENDED session in the fold context, so one batch or any batch boundary gives the
+same answer and a refold can never flip a correction. **The fold carries NO context back** (fable F1): a
+bookkeeping event must not mark the ended session `touched` and re-upsert its whole row from a hydration
+round-trip (itself batch-dependent) — the by-PK write is the only row effect. The projector applies by
+session PK within the batch transaction, after session upserts and in event order
+(`SessionReportApply.kt`, its own file — `AnalyticsProjector.kt` is past the P3 ceiling), with guards that
+skip and WARN (ids/enum only) as defence-in-depth: a missing session, a session that is not ENDED, an
+unknown operation, or a SET failing `SessionReportRule.isValidSet` (finite, 0..10 000 — the ONE validity
+owner the dialog, the repository and the projector all call). The applied triple — never a re-read — is
+copied onto any in-memory context so a later same-batch upsert cannot wipe it. The SQL mirror lives in
+`SessionReportSql.kt`, interpolating the `:domain` operation / end-source constants, and uses `WHEN
+reportedEarnings > 0` so a NEGATIVE non-summary machine value is no report in SQL exactly as in Kotlin
+(the matrix carries −5.0; the unattributed remainder stays floored at 0). The repository rejects values on
+CLEAR / RESTORE_MACHINE; the dialog disables a tap that would append a no-op duplicate (already SET to the
+same cents, already CLEAR). The decode-error log in `AppEventRepo` names the exception class only — its
+message embeds the payload JSON, a driver note included. Hydration and lifecycle upserts carry all three
+override columns.
+Room v16→v17 adds only these nullable columns; there is no `PROJECTOR_VERSION` bump because this
+event type is absent from history.
+
+Day-one use: clear session 483's phantom $40.14 (`early_offline`, zero deliveries). The Sep 7–13
+week drops from $646.34 to $606.20; Restore detected value brings the machine $40.14 back.

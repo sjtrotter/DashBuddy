@@ -32,6 +32,10 @@ data class SessionFoldContext(
     /** Last non-null metadata.odometer seen — miles = lastOdometer − startOdometer, derived in SQL. */
     val lastOdometer: Double? = null,
     val reportedEarnings: Double? = null,
+    /** #1134 driver override; the machine reportedEarnings column is never rewritten by a correction. */
+    val reportOverrideMode: String? = null,
+    val reportOverride: Double? = null,
+    val reportCorrectedAt: Long? = null,
     val reportedDurationMillis: Long? = null,
     val offersAccepted: Int = 0,
     val offersDeclined: Int = 0,

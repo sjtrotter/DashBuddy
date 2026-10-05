@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import cloud.trotter.dashbuddy.core.database.analytics.SessionReportSql.EFFECTIVE_REPORTED_SQL
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import kotlinx.coroutines.flow.Flow
 
@@ -32,6 +33,10 @@ import kotlinx.coroutines.flow.Flow
 interface AnalyticsDao {
 
     // ── Projector writes ────────────────────────────────────────────────
+
+    /** #1134: the driver statement; machine reportedEarnings is never rewritten. */
+    @Query("UPDATE session_records SET reportOverrideMode = :mode, reportOverride = :value, reportCorrectedAt = :correctedAt WHERE sessionId = :sessionId")
+    suspend fun setSessionReportOverride(sessionId: String, mode: String?, value: Double?, correctedAt: Long?)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDelivery(record: DeliveryRecordEntity)
@@ -464,8 +469,10 @@ interface AnalyticsDao {
      * (`d.deliveredPay`, never `+ d.cashTip`) as `unattributed`, so the #688 cash exclusion holds for
      * both directions. `unattributed` is left byte-for-byte untouched.
      *
+     * #1134: a driver SET / CLEAR override wins; `SessionReportRule.effectiveReported` owns the rule.
+     *
      * **A stored `0.0` on a non-summary end source is no-report (#1030)** — the read-side mirror of
-     * `RecordFolds.reportedEarningsOf`, which owns the rule, kept here for pre-refold rows and
+     * `SessionReportRule.effectiveReported`, which owns the rule, kept here for pre-refold rows and
      * unforeseen writers. The guard is **source-keyed**, not a blanket `NULLIF`: a genuine parsed
      * `$0` summary must stay authoritative (a blanket NULLIF would silently replace it with
      * delivered pay), while the old EARLY_OFFLINE default must not. It is applied to **every** arm,
@@ -474,16 +481,16 @@ interface AnalyticsDao {
      * the wire value of `SessionEndSource.SUMMARY_SCREEN`.
      */
     @Query(
-        """SELECT COALESCE(SUM(COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
+        """SELECT COALESCE(SUM(COALESCE($EFFECTIVE_REPORTED_SQL, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
-                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
-                              AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
-                         THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                    CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
+                              AND ($EFFECTIVE_REPORTED_SQL) > COALESCE(d.deliveredPay, 0)
+                         THEN ($EFFECTIVE_REPORTED_SQL) - COALESCE(d.deliveredPay, 0)
                          ELSE 0 END), 0) AS unattributed,
                   COALESCE(SUM(
-                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
-                              AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
-                         THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
+                    CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
+                              AND ($EFFECTIVE_REPORTED_SQL) < COALESCE(d.deliveredPay, 0)
+                         THEN COALESCE(d.deliveredPay, 0) - ($EFFECTIVE_REPORTED_SQL)
                          ELSE 0 END), 0) AS overAttributed
            FROM session_records s
            LEFT JOIN (
@@ -498,16 +505,16 @@ interface AnalyticsDao {
      *  and the same source-keyed no-report treatment on every arm (#1030). */
     @Query(
         """SELECT s.platform AS platform,
-                  COALESCE(SUM(COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
+                  COALESCE(SUM(COALESCE($EFFECTIVE_REPORTED_SQL, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)), 0) AS gross,
                   COALESCE(SUM(
-                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
-                              AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
-                         THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                    CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
+                              AND ($EFFECTIVE_REPORTED_SQL) > COALESCE(d.deliveredPay, 0)
+                         THEN ($EFFECTIVE_REPORTED_SQL) - COALESCE(d.deliveredPay, 0)
                          ELSE 0 END), 0) AS unattributed,
                   COALESCE(SUM(
-                    CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
-                              AND s.reportedEarnings < COALESCE(d.deliveredPay, 0)
-                         THEN COALESCE(d.deliveredPay, 0) - s.reportedEarnings
+                    CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
+                              AND ($EFFECTIVE_REPORTED_SQL) < COALESCE(d.deliveredPay, 0)
+                         THEN COALESCE(d.deliveredPay, 0) - ($EFFECTIVE_REPORTED_SQL)
                          ELSE 0 END), 0) AS overAttributed
            FROM session_records s
            LEFT JOIN (
@@ -573,6 +580,7 @@ interface AnalyticsDao {
     fun noSessionDailyRows(start: Long, end: Long): Flow<List<NoSessionDailyRow>>
 
     /**
+     * #1134: a driver SET / CLEAR override wins; `SessionReportRule.effectiveReported` owns the rule.
      * Per-session start + reported-authoritative gross for the sessions started in `[start, end)` — the
      * per-day earnings chart input (#315 H6). Gross per session = `reportedEarnings` when present else
      * that session's Σ delivered pay (same definition as [grossAndUnattributed]; the LEFT JOIN is onto a
@@ -598,11 +606,11 @@ interface AnalyticsDao {
      */
     @Query(
         """SELECT s.startedAt AS startedAt,
-                  COALESCE(CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross,
+                  COALESCE($EFFECTIVE_REPORTED_SQL, d.deliveredPay, 0) + COALESCE(d.cashTip, 0) AS gross,
                   COALESCE(d.net, 0) + COALESCE(d.cashTip, 0)
-                    + CASE WHEN (CASE WHEN s.endSource = 'summary_screen' THEN s.reportedEarnings ELSE NULLIF(s.reportedEarnings, 0) END) IS NOT NULL
-                                AND s.reportedEarnings > COALESCE(d.deliveredPay, 0)
-                           THEN s.reportedEarnings - COALESCE(d.deliveredPay, 0)
+                    + CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
+                                AND ($EFFECTIVE_REPORTED_SQL) > COALESCE(d.deliveredPay, 0)
+                           THEN ($EFFECTIVE_REPORTED_SQL) - COALESCE(d.deliveredPay, 0)
                            ELSE 0 END AS net,
                   COALESCE(d.deliveries, 0) AS deliveries
            FROM session_records s
@@ -1109,3 +1117,4 @@ interface AnalyticsDao {
     )
     suspend fun lastOfferNonFuelPerMileInSession(id: String): Double?
 }
+

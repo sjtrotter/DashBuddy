@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.export.Csv
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -126,7 +127,7 @@ object CsvExporter {
                         Csv.isoDateTime(s.endedAt, zone),
                         Csv.textField(platformName(s.platform)),
                         Csv.millisToMinutes(durationMillis),
-                        Csv.money(s.reportedEarnings),
+                        Csv.money(SessionReportRule.effectiveReported(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride)),
                         Csv.int(s.deliveries),
                         Csv.int(s.offersReceived),
                         Csv.int(s.offersAccepted),
@@ -169,7 +170,7 @@ object CsvExporter {
             .groupBy { taxYearOf(it.startedAt, zone) }
             .mapValues { (_, group) -> group.sumOf { sessionMiles(it) ?: 0.0 } }
             .toSortedMap()
-        val totalReported = sessions.mapNotNull { it.reportedEarnings }.sum()
+        val totalReported = sessions.mapNotNull { SessionReportRule.effectiveReported(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride) }.sum()
         val totalRealized = deliveries.mapNotNull { it.realizedPay }.sum()
         val totalCashTips = deliveries.mapNotNull { it.cashTip }.sum()
 

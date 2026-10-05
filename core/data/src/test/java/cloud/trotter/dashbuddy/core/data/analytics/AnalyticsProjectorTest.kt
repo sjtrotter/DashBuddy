@@ -11,12 +11,15 @@ import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateE
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
@@ -27,6 +30,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
@@ -50,6 +55,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
@@ -1885,4 +1891,207 @@ class AnalyticsProjectorTest {
         val totals = analyticsDao.deliveryTotals(0, Long.MAX_VALUE).first()
         assertEquals(10.0, totals.pay, 1e-9)
     }
+    private suspend fun seedEmptyReportSession(sid: String = "483", reported: Double = 40.14) {
+        insert(AppEventType.DASH_START, sid, 1_000,
+            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"))
+        insert(AppEventType.DASH_STOP, sid, 2_000,
+            SessionStopPayload(sid, 2_000, SessionEndSource.EARLY_OFFLINE, totalEarnings = reported))
+    }
+
+    private suspend fun reportCorrection(op: String, value: Double? = null, sid: String = "483", at: Long = 9_000) =
+        insert(AppEventType.SESSION_REPORT_CORRECTION, sid, at, SessionReportCorrectionPayload(sid, op, value))
+
+    @Test
+    fun `a correction logged BEFORE the session ended is skipped identically in one batch and across a batch boundary (Astra r1 P1)`() = runBlocking {
+        // DASH_START(483) → CLEAR(483) → DASH_STOP(483, early_offline, 40.14): the target is LIVE at the
+        // correction's log position, so the fold refuses it — whether or not a batch boundary sits before the stop.
+        suspend fun seedOutOfOrder() {
+            insert(AppEventType.DASH_START, "483", 1_000,
+                SessionStartPayload("483", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"))
+            reportCorrection(SessionReportOperation.CLEAR, at = 1_500)
+            insert(AppEventType.DASH_STOP, "483", 2_000,
+                SessionStopPayload("483", 2_000, SessionEndSource.EARLY_OFFLINE, totalEarnings = 40.14))
+        }
+        seedOutOfOrder()
+        projector().catchUp()
+        val oneBatch = analyticsDao.sessionRecord("483")!!
+        assertEquals(40.14, analyticsDao.grossAndUnattributed(0, 5_000).first().gross, 1e-9)
+        assertNull(oneBatch.reportOverrideMode)
+        // Wipe and refold with the boundary right before DASH_STOP.
+        db.clearAllTables()
+        seedOutOfOrder()
+        val p = projector()
+        p.processBatch(2) // DASH_START + CLEAR
+        p.processBatch(2) // DASH_STOP
+        val split = analyticsDao.sessionRecord("483")!!
+        assertEquals(40.14, analyticsDao.grossAndUnattributed(0, 5_000).first().gross, 1e-9)
+        assertNull(split.reportOverrideMode)
+        assertEquals(oneBatch.copy(lastEventAt = split.lastEventAt), split.copy(lastEventAt = split.lastEventAt))
+    }
+
+    @Test
+    fun `phantom report CLEAR SET zero and RESTORE preserve machine column and original events`() = runBlocking {
+        seedEmptyReportSession()
+        val projector = projector()
+        projector.catchUp()
+        val machine = analyticsDao.sessionRecord("483")!!
+        val originalEvents = eventDao.getEventsAfter(0, 10)
+        suspend fun check(gross: Double, effective: Double?) {
+            val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
+            assertEquals(gross, totals.gross, 1e-9)
+            assertEquals(gross, totals.unattributed, 1e-9)
+            assertEquals(0.0, totals.overAttributed, 1e-9)
+            val byPlatform = analyticsDao.grossAndUnattributedByPlatform(0, 5_000).first().single()
+            assertEquals(gross, byPlatform.gross, 1e-9)
+            assertEquals(gross, byPlatform.unattributed, 1e-9)
+            val daily = analyticsDao.sessionGrossRows(0, 5_000).first().single()
+            assertEquals(gross, daily.gross, 1e-9)
+            assertEquals(gross, daily.net, 1e-9)
+            val row = analyticsDao.sessionRecord("483")!!
+            assertEquals(machine.reportedEarnings, row.reportedEarnings)
+            assertEquals(machine.lastEventAt, row.lastEventAt)
+            assertEquals(machine.endedAt, row.endedAt)
+            assertEquals(effective, row.toDomain().reportedEarnings)
+            assertEquals(0, row.deliveries)
+            assertTrue(analyticsDao.deliveriesBetween(0, Long.MAX_VALUE).isEmpty())
+        }
+        check(40.14, 40.14)
+        reportCorrection(SessionReportOperation.CLEAR)
+        projector.catchUp()
+        check(0.0, null)
+        assertEquals(SessionReportOperation.CLEAR, analyticsDao.sessionRecord("483")!!.reportOverrideMode)
+        assertEquals(9_000L, analyticsDao.sessionRecord("483")!!.reportCorrectedAt)
+        reportCorrection(SessionReportOperation.SET, 12.5)
+        projector.catchUp()
+        check(12.5, 12.5)
+        reportCorrection(SessionReportOperation.SET, 0.0)
+        projector.catchUp()
+        check(0.0, 0.0)
+        reportCorrection(SessionReportOperation.RESTORE_MACHINE)
+        projector.catchUp()
+        check(40.14, 40.14)
+        assertEquals(machine, analyticsDao.sessionRecord("483"))
+        assertEquals(originalEvents, eventDao.getEventsAfter(0, 2))
+    }
+
+    @Test
+    fun `report correction guards skip missing live and malformed values without writes`() = runBlocking {
+        seedEmptyReportSession()
+        insert(AppEventType.DASH_START, "live", 3_000,
+            SessionStartPayload("live", Platform.DoorDash.name, 3_000, SessionStartSource.INTERACTION, "x"))
+        projector().catchUp()
+        val before = analyticsDao.sessionsBetween(0, Long.MAX_VALUE)
+        reportCorrection(SessionReportOperation.CLEAR, sid = "missing")
+        reportCorrection(SessionReportOperation.CLEAR, sid = "live")
+        reportCorrection(SessionReportOperation.SET, 20_000.0)
+        reportCorrection(SessionReportOperation.SET, -1.0)
+        reportCorrection(SessionReportOperation.SET)
+        reportCorrection("UNKNOWN")
+        // "missing" and "live" are refused by the FOLD at the correction's log position (Astra r1 P1) — not
+        // counted as projector adjustment skips; the four value/operation guards still are.
+        assertEquals(4, projector().catchUp().adjustmentSkips)
+        assertEquals(before, analyticsDao.sessionsBetween(0, Long.MAX_VALUE))
+        assertNull(analyticsDao.sessionRecord("missing"))
+
+        // NaN cannot pass the JSON codec; inject the decoded event to test the projector's own guard.
+        val watermark = analyticsDao.getWatermark()!!.watermarkSequenceId
+        val decodedRepo: AppEventRepo = mock()
+        whenever(decodedRepo.getEventsAfter(watermark, 1)).thenReturn(listOf(
+            SequencedAppEvent(watermark + 1, AppEvent(
+                type = AppEventType.SESSION_REPORT_CORRECTION, occurredAt = 10_000, sessionId = "483",
+                payload = SessionReportCorrectionPayload("483", SessionReportOperation.SET, Double.NaN),
+            )),
+        ))
+        val stats = AnalyticsProjector(db, decodedRepo, eventDao, analyticsDao, prefs).processBatch(1)!!
+        assertEquals(1, stats.adjustmentSkips)
+        assertEquals(before, analyticsDao.sessionsBetween(0, Long.MAX_VALUE))
+        assertEquals(watermark + 1, analyticsDao.getWatermark()!!.watermarkSequenceId)
+    }
+
+    @Test
+    fun `correction survives later lifecycle upsert and refolds identically across correction boundary`() = runBlocking {
+        seedEmptyReportSession()
+        reportCorrection(SessionReportOperation.CLEAR)
+        // A later lifecycle write must carry the override hydrated from the earlier batch.
+        insert(AppEventType.DASH_STOP, "483", 2_100,
+            SessionStopPayload("483", 2_100, SessionEndSource.EARLY_OFFLINE, totalEarnings = 40.14))
+        val projector = projector()
+        projector.processBatch(3) // split immediately after the correction
+        projector.processBatch(1)
+        val split = analyticsDao.sessionsBetween(0, Long.MAX_VALUE)
+        assertEquals(SessionReportOperation.CLEAR, split.single().reportOverrideMode)
+        assertEquals(9_000L, split.single().reportCorrectedAt)
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 99, projectorVersion = 99))
+        projector.catchUp() // entire list in one batch
+        assertEquals(split, analyticsDao.sessionsBetween(0, Long.MAX_VALUE))
+    }
+
+    @Test
+    fun `legitimate positive early offline report on another session stays untouched`() = runBlocking {
+        seedEmptyReportSession()
+        seedEmptyReportSession("legitimate", 11.75)
+        projector().catchUp()
+        val legitimate = analyticsDao.sessionRecord("legitimate")!!
+        reportCorrection(SessionReportOperation.CLEAR)
+        projector().catchUp()
+        assertEquals(legitimate, analyticsDao.sessionRecord("legitimate"))
+        assertEquals(11.75, analyticsDao.grossAndUnattributed(0, 5_000).first().gross, 1e-9)
+    }
+
+    @Test
+    fun `SQL effective report agrees with Kotlin for the full source machine override matrix`() = runBlocking {
+        seedEmptyReportSession()
+        projector().catchUp()
+        val template = analyticsDao.sessionRecord("483")!!
+        for (source in listOf(SessionEndSource.SUMMARY_SCREEN, SessionEndSource.EARLY_OFFLINE, null)) {
+            for (machine in listOf(null, 0.0, 40.14, -5.0)) { // -5.0: Astra r1 P2 — a negative non-summary value is no report
+                for ((mode, value) in listOf(
+                    null to null,
+                    SessionReportOperation.SET to 12.5,
+                    SessionReportOperation.SET to 0.0,
+                    SessionReportOperation.CLEAR to null,
+                )) {
+                    val row = template.copy(reportedEarnings = machine, endSource = source,
+                        reportOverrideMode = mode, reportOverride = value)
+                    analyticsDao.upsertSession(row)
+                    val effective = SessionReportRule.effectiveReported(machine, source, mode, value)
+                    val expected = effective ?: 0.0
+                    // The unattributed remainder (and the per-day net that folds it in) is floored at 0 by design —
+                    // a negative summary-screen report counts in gross but never as "unattributed".
+                    val expectedUnattributed = maxOf(expected, 0.0)
+                    val label = "source=$source machine=$machine mode=$mode value=$value"
+                    val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
+                    assertEquals(label, expected, totals.gross, 1e-9)
+                    assertEquals(label, expectedUnattributed, totals.unattributed, 1e-9)
+                    assertEquals(label, effective, row.toDomain().reportedEarnings)
+                    val platform = analyticsDao.grossAndUnattributedByPlatform(0, 5_000).first().single()
+                    assertEquals(label, expected, platform.gross, 1e-9)
+                    assertEquals(label, expectedUnattributed, platform.unattributed, 1e-9)
+                    val day = analyticsDao.sessionGrossRows(0, 5_000).first().single()
+                    assertEquals(label, expected, day.gross, 1e-9)
+                    assertEquals(label, expectedUnattributed, day.net, 1e-9)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `session report changes reconciliation without repricing delivery economics`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+        val deliveries = analyticsDao.deliveriesBetween(0, Long.MAX_VALUE)
+        reportCorrection(SessionReportOperation.SET, 0.0, sid = "S1")
+        projector().catchUp()
+        val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
+        assertEquals(0.0, totals.gross, 1e-9)
+        assertEquals(10.0, totals.overAttributed, 1e-9)
+        reportCorrection(SessionReportOperation.CLEAR, sid = "S1")
+        projector().catchUp()
+        val cleared = analyticsDao.grossAndUnattributed(0, 5_000).first()
+        assertEquals(10.0, cleared.gross, 1e-9)
+        assertEquals(0.0, cleared.unattributed, 1e-9)
+        assertEquals(0.0, cleared.overAttributed, 1e-9)
+        assertEquals(deliveries, analyticsDao.deliveriesBetween(0, Long.MAX_VALUE))
+    }
+
 }
