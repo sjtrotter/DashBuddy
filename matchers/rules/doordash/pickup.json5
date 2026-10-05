@@ -521,7 +521,7 @@
               ]
             }
           ],
-          "comment": "#1141 — the 8.99.20 restaurant wait screen whose OWN chrome states the arrival ('Merchant notified of your arrival', with the 'Stay in your car' curbside card or the 'Waiting for your order?' survey beneath). Screen-authoritative: this render IS the pickup arrival, so it declares `task:pickup:arrived` — the fielded 09-27 11:50 frame folded a 16-min wait to 0.0 because the click alone carries no flow and this branch did not exist. `TaskLifecycle` stamps only the FIRST arrival, so a repeat render is inert. The other branches below stay flowless (the survey alone — 'What's causing your wait' — can render before arrival chrome exists, #501's GoPuff posture). Redact is rule-level and unchanged. Astra review r1 of PR #1220: the anchor is view-id FIRST — the curbside card's own `curbside_pickup_instructions_component_view` (present on every arrival render, absent on every survey-only render) inside the `pickup_survey_view` host — so a customer note or chat line QUOTING the words cannot steal a dropoff/chat frame into a false arrival; the two rejects keep a combined unassigned-confirmation frame with rule 107 (`task:unassigned`) and mirror the GoPuff `Pickup steps` reject. Fable review r1: the branch PARSES the same task shape as `pickup_arrival` (store from the EXACT `:id/instructions_title` id INSIDE the `mx_contact_view` bind — a bare suffix also matched the curbside card's `curbside_pickup_instructions_title`, which read 'Stay in your car' as the store — where the render carries the contact card — the fielded 09-27 frame does; the collapsed curbside renders resolve it null — plus the `Pick up by` deadline and the item count; NO customer identity: pickups belong to a store (#548 — only `pickup_arrival`'s node-pinned parse may read `customer_name` on a pickup surface; this branch's rule-level redact still hashes the node on the envelope), so `TaskLifecycle` can resume BY STORE onto the right placeholder on a stacked job instead of minting a store-less pickup; `modeHint` is omitted because `TransitionPolicy` already infers Online from the arrived flow and an explicit hint buys nothing on a screen a dasher may sit on while paused.",
+          "comment": "#1141 — the 8.99.20 restaurant wait screen whose OWN chrome states the arrival ('Merchant notified of your arrival', with the 'Stay in your car' curbside card or the 'Waiting for your order?' survey beneath). Screen-authoritative: this render IS the pickup arrival, so it declares `task:pickup:arrived` — the fielded 09-27 11:50 frame folded a 16-min wait to 0.0 because the click alone carries no flow and this branch did not exist. `TaskLifecycle` stamps only the FIRST arrival, so a repeat render is inert. The other branches below stay flowless (the survey alone — 'What's causing your wait' — can render before arrival chrome exists, #501's GoPuff posture). Redact is rule-level and unchanged. Astra review r1 of PR #1220: the anchor is view-id FIRST — the curbside card's own `curbside_pickup_instructions_component_view` (present on every arrival render, absent on every survey-only render) inside the `pickup_survey_view` host — so a customer note or chat line QUOTING the words cannot steal a dropoff/chat frame into a false arrival; the two rejects keep a combined unassigned-confirmation frame with rule 107 (`task:unassigned`) and mirror the GoPuff `Pickup steps` reject. Fable review r1: the branch PARSES the same task shape as `pickup_arrival` (store from the EXACT `:id/instructions_title` id INSIDE the REQUIRED `mx_contact_view` bind — required, not optional, because an absent optional bind falls back to the whole tree and would read chrome (Astra r3); every fielded arrival render carries the card — a bare suffix also matched the curbside card's `curbside_pickup_instructions_title`, which read 'Stay in your car' as the store — where the render carries the contact card — the fielded 09-27 frame does; the collapsed curbside renders resolve it null — plus the `Pick up by` deadline and the item count; NO customer identity: pickups belong to a store (#548 — only `pickup_arrival`'s node-pinned parse may read `customer_name` on a pickup surface; this branch's rule-level redact still hashes the node on the envelope), so `TaskLifecycle` can resume BY STORE onto the right placeholder on a stacked job instead of minting a store-less pickup; `modeHint` is omitted because `TransitionPolicy` already infers Online from the arrived flow and an explicit hint buys nothing on a screen a dasher may sit on while paused.",
           "intent": "pickup_wait_survey",
           "state": {
             "flow": "task:pickup:arrived"
@@ -568,12 +568,16 @@
             "contactView": {
               "find": {
                 "hasIdSuffix": "mx_contact_view"
-              },
-              "optional": true
+              }
             }
           },
           "require": {
             "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "mx_contact_view"
+                }
+              },
               {
                 "exists": {
                   "hasIdSuffix": "curbside_pickup_instructions_component_view"

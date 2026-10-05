@@ -105,6 +105,17 @@ class PickupWaitArrivalRecognitionTest {
         }
     }
 
+    // Astra r3: the contact-card bind is REQUIRED — without it an optional bind would fall back to the
+    // whole tree and read chrome as the store; such a render stays a flowless survey instead.
+    @Test
+    fun `an arrival render without the contact card does not take the arrival branch (#1220 r3)`() {
+        fun strip(n: UiNode): UiNode = n.copy(children = n.children.filterNot { it.viewIdResourceName?.endsWith("mx_contact_view") == true }.map(::strip))
+        val noCard = strip(loaded.getValue(fielded)).restoreParents()
+        val r = rules.matchFirst(noCard)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertNull("no contact card ⇒ no arrival (and no chrome read as the store)", r?.flow)
+    }
+
     @Test
     fun `an unassigned confirmation that still shows the curbside labels keeps task-unassigned (#1220 r1)`() {
         val unassigned = load("pickup_unassigned_confirmation/" + File("src/test/resources/snapshots/pickup_unassigned_confirmation").list()!!.first { it.endsWith(".json") })
