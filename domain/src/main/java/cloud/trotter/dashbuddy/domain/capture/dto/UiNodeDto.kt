@@ -27,6 +27,8 @@ data class UiNodeDto(
     // #1149 review J2: default false and omitted when false (encodeDefaults = false), so committed
     // fixtures and captures without it are byte-identical.
     @SerialName("clickAction") val hasClickAction: Boolean = false,
+    // #919: same default-and-omitted contract.
+    @SerialName("editable") val isEditable: Boolean = false,
     // #1149 review L3/L4: same default-and-omitted contract — fixtures stay byte-identical.
     @SerialName("foreign") val foreignPackage: Boolean = false,
     @SerialName("nullKids") val unreadableChildren: Int = 0,

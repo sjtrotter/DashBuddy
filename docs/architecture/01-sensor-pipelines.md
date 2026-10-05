@@ -248,6 +248,16 @@ The corpus-wide additive claim is pinned by `CorpusNodeFieldsAdditiveTest` (X4).
 exists** — TalkBack has no `AndroidComposeView`/`testTag` handling; the best anchors for an id-less
 render are a named scope (pane title) + a label/action label + the semantic owner.
 
+**#919 — text inputs on UNKNOWN envelopes:** `isEditable` carries the live editable flag, and
+`UiNode.isTextInput` owns the predicate (editable OR an `EditText` class). Every scrubbable string on
+such a node is plain-masked whole on UNKNOWN screen + click envelopes only; `message_input` also
+moves from NEVER→ALWAYS in the id table, covering the known instance if editable semantics disappear.
+Recognized frames keep rule authority: `chat`, `chat_conversation`, and the two recognize-only
+privacy belts (`pickup_order_picker`, `dropoff_customer_unavailable`) each declare a `message_input`
+plain-mask entry. Accepted recall cost: an UNKNOWN input's hint/placeholder is lost to triage;
+id, class and structure remain. The backstop WARN includes `input=<class>` (or `editable` when the
+class is absent), never the typed value.
+
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
 `user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —

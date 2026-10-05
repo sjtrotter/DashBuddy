@@ -110,4 +110,57 @@ class ChatIdRuntimeScrubEnvelopeTest {
         )
         assertTrue("the sensitive frame must be dropped", bus.envelopes.size == before)
     }
+
+    private fun captureClick(node: UiNode, recognized: Boolean = false): String {
+        writer.captureClick(
+            Observation.Click(
+                timestamp = 1_000L, captureId = null,
+                ruleId = if (recognized) "doordash.click.test" else null,
+                metadata = ReplayMetadata.EMPTY, flow = null, modeHint = null, parsed = ParsedFields.None,
+                target = if (recognized) "chat_conversation" else UNKNOWN_TARGET,
+            ),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        return bus.envelopes.single()
+    }
+
+    @Test
+    fun `an UNKNOWN message_input click persists a mask instead of the draft (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.doordash.driverapp:id/message_input",
+            text = draft,
+            isClickable = true,
+        ))
+        assertTrue(envelope, envelope.contains("[redacted]"))
+        assertTrue(envelope, !envelope.contains(draft))
+    }
+
+    @Test
+    fun `an UNKNOWN id-less EditText click persists a mask instead of the draft (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = draft,
+            isClickable = true,
+        ))
+        assertTrue(envelope, envelope.contains("[redacted]"))
+        assertTrue(envelope, !envelope.contains(draft))
+    }
+
+    @Test
+    fun `a recognized EditText click keeps its rule authority with NoRedaction (#919)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.doordash.driverapp:id/message_input",
+            text = draft,
+            isClickable = true,
+        ), recognized = true)
+        assertTrue(envelope, envelope.contains(draft))
+        assertTrue(envelope, !envelope.contains("[redacted]"))
+    }
 }

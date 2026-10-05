@@ -176,6 +176,11 @@
             "hasIdSuffix": "tvLastMessage"
           },
           "plainMask": true
+        },
+        {
+          "comment": "#919: the compose box's draft is the dasher's own free text — masked plain on the recognized surface (the UNKNOWN path has the runtime id + class scrub).",
+          "find": { "hasIdSuffix": "message_input" },
+          "plainMask": true
         }
       ],
       "reject": [
@@ -227,6 +232,11 @@
           "find": {
             "hasIdSuffix": "tvLastMessage"
           },
+          "plainMask": true
+        },
+        {
+          "comment": "#919: the compose box's draft is the dasher's own free text — masked plain on the recognized surface (the UNKNOWN path has the runtime id + class scrub).",
+          "find": { "hasIdSuffix": "message_input" },
           "plainMask": true
         }
       ],

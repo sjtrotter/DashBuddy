@@ -183,7 +183,7 @@ class CaptureWriter @Inject constructor(
         // mirroring the screen path: a Compose button's click-action label, hint or tooltip is
         // arbitrary app text (fielded shape: `accept_button` text "Accept" with a customer name in
         // its action label), so a RECOGNIZED click runs the TEXT-marker scrub too — byte-identical
-        // unless a marker hits; the `ID_MARKERS` node-id scan stays UNKNOWN-only (#910). The dedup
+        // unless a marker hits; the `ID_MARKERS` node-id scan and the #919 text-input scan stay UNKNOWN-only. The dedup
         // hash below is still on the ORIGINAL node (envelope-only).
         val payloadNode = scrubCustomerPii(redactedNode, obs.target, obs.ruleId, kind = "click node")
         val platform = Platform.fromPackage(event.packageName).wire
@@ -254,7 +254,7 @@ class CaptureWriter @Inject constructor(
     /**
      * #1147 review Z3 — THE customer-PII text-marker backstop over an envelope-bound tree, shared by
      * the screen and click paths (one marker SSOT, cross-platform DATA — principle 8):
-     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan);
+     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan AND the #919 text-input scan);
      *  - recognized, no marker → returned unchanged (byte-identical envelope);
      *  - recognized, marker hit (#624 defense-in-depth: a rule that ships raw customer text with
      *    no redact, or — since #1147 — a click label / hint / tooltip) → count, WARN (tag
@@ -284,7 +284,8 @@ class CaptureWriter @Inject constructor(
         kind: String = "screen",
     ): UiNode {
         val idMarker = CustomerTextMarkers.firstUnredactedIdMarker(tree)
-        if (textMarker == null && idMarker == null) return tree
+        val inputNode = CustomerTextMarkers.firstUnredactedInputNode(tree) // #919
+        if (textMarker == null && idMarker == null && inputNode == null) return tree
         stats.onUnknownCustomerScrub()
         // Principle 7: a text marker is named by its log-safe id (#862) — the marker
         // constants are themselves scanned by the shareable-log sink, so naming one
@@ -292,11 +293,12 @@ class CaptureWriter @Inject constructor(
         // constant: it is a view-id token ("user_name"), carries no PII and matches
         // no sensitive marker, so it logs verbatim and stays decodable.
         Timber.tag("Pipeline").w(
-            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s) — " +
+            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s input=%s) — " +
                 "scrubbing node from envelope",
             kind,
             textMarker?.let { MarkerLogId.of(it) } ?: "-",
             idMarker ?: "-",
+            inputNode ?: "-",
         )
         return CustomerTextMarkers.scrubUnknown(tree)
     }

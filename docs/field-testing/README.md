@@ -48,6 +48,13 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
+  no file under `captures/doordash/accessibility.click/UNKNOWN/` or `accessibility.window/UNKNOWN/`
+  carries a `message_input` node or an `android.widget.EditText` node with readable `text` — the field
+  reads `[redacted]` — and `app.log` shows `Capture backstop: UNKNOWN click node carried customer PII (… input=android.widget.EditText)`;
+  a recognized `chat_conversation` envelope masks the box through its rule entry.
+  - Confirmed: 0/2
+
 - **"Dash paused" push is recognized (#1090):** after a dash in which you paused, the pull's
   `captures/doordash/notification/` should hold NO UNKNOWN envelope reading "Your current dash has been
   paused" — the envelope lands under `notification/dash_paused/` instead — and `app.log` carries

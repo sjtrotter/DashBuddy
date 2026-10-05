@@ -225,6 +225,12 @@ object CustomerTextMarkers {
         // structure.
         IdMarker("tvTitle", IdentityKind.EXACT, idProtect = true),
         IdMarker("tvLastMessage", IdentityKind.EXACT),
+        // #919 (fielded 2026-07-29 and 2026-09-13/14, seven UNKNOWN click envelopes): the chat COMPOSE box —
+        // the dasher's in-progress message, naming the customer's order contents and whatever else they typed.
+        // Was intake-only (NEVER); promoted to the runtime UNKNOWN scrub so the known instance is masked by
+        // id even when the widget stops reporting editable semantics. The CLASS half is [unredactedInputNode].
+        // CONTENT: seeds nothing for the census (free text, not an identity).
+        IdMarker("message_input", IdentityKind.CONTENT),
         // #1160 review AL3: the INTAKE-ONLY ids (formerly `PiiShapes.PII_ID_SUFFIXES`, a second hand list with
         // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
         // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
@@ -239,7 +245,6 @@ object CustomerTextMarkers {
         // Chat bodies and inputs.
         IdMarker("message_self_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("message_other_message", IdentityKind.CONTENT, RuntimeScrub.NEVER),
-        IdMarker("message_input", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("chat_input_text_field", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         // Bottom-sheet address/instruction blocks (the address lines also end in an ADDRESS row above).
         IdMarker("bottom_sheet_address_line_1", IdentityKind.CONTENT, RuntimeScrub.NEVER),
@@ -444,6 +449,26 @@ object CustomerTextMarkers {
     }
 
     /**
+     * #919 — the UNKNOWN-envelope INPUT scan: [node] is a text input ([UiNode.isTextInput]) still carrying
+     * an un-redacted string, or null. User-authored free text (a chat draft, a search box, a note) is never
+     * corpus material, so the node is masked WHOLE — every [UiNode.scrubbableStrings] field, the hint and
+     * error included (ACCEPTED RECALL COST: an UNKNOWN frame's "Type a message…" placeholder is lost to
+     * triage; the id, class and structure stay). Returns the node's class name (log-safe: widget
+     * vocabulary, never PII) for the WARN. Same already-redacted/empty skip as [unredactedIdMarker].
+     * UNKNOWN envelopes only — a recognized frame keeps its rule's deliberate decisions.
+     */
+    fun unredactedInputNode(node: UiNode): String? {
+        if (!node.isTextInput) return null
+        val carriesRaw = node.scrubbableStrings()
+            .any { (_, value) -> !value.isNullOrEmpty() && !value.contains(REDACTED_MARK) }
+        return if (carriesRaw) (node.className ?: "editable") else null
+    }
+
+    /** The first [unredactedInputNode] hit anywhere in [tree], or null when clean (structural scan, no copy). */
+    fun firstUnredactedInputNode(tree: UiNode): String? =
+        unredactedInputNode(tree) ?: tree.children.firstNotNullOfOrNull { firstUnredactedInputNode(it) }
+
+    /**
      * The first [ID_MARKERS] hit anywhere in [tree], or null when clean. Cheap
      * structural scan (no text comparison); the [scrubUnknown] copy is built only
      * on a hit.
@@ -453,20 +478,20 @@ object CustomerTextMarkers {
 
     /**
      * The UNKNOWN-envelope scrub: a copy of [tree] with every node scrubbed to
-     * [CompiledRedact.REDACTED] that carries EITHER an un-redacted text marker
-     * ([unredactedMarker]) OR a customer-PII view id ([unredactedIdMarker]). One
-     * traversal for both scans, so an UNKNOWN frame is never rebuilt twice. Call
-     * only after one of the two scans returned non-null.
+     * [CompiledRedact.REDACTED] that carries an un-redacted text marker ([unredactedMarker]),
+     * a customer-PII view id ([unredactedIdMarker]), OR text input ([unredactedInputNode], #919).
+     * One traversal for all three scans, so an UNKNOWN frame is never rebuilt twice. Call
+     * only after one of the three scans returned non-null.
      */
     fun scrubUnknown(tree: UiNode): UiNode {
-        val byId = unredactedIdMarker(tree) != null
-        // An id hit scrubs the node WHOLE (every field of the
+        val wholeNode = unredactedIdMarker(tree) != null || unredactedInputNode(tree) != null
+        // An id hit OR a text-input node (#919) scrubs the node WHOLE (every field of the
         // [UiNode.scrubbableStrings] SSOT, #835); otherwise each field is judged
         // on its own text marker.
         return tree
             .mapScrubbableStrings {
                 // #1147: a null field stays null (nothing to leak; no phantom keys on the envelope).
-                if (it != null && (byId || unredactedMarker(it) != null)) CompiledRedact.REDACTED else it
+                if (it != null && (wholeNode || unredactedMarker(it) != null)) CompiledRedact.REDACTED else it
             }
             .copy(children = tree.children.map { scrubUnknown(it) })
     }

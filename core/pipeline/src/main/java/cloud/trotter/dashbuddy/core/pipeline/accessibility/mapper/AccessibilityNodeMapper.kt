@@ -195,6 +195,7 @@ private fun convert(
         isChecked = node.checkedTriState(),
         // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
         hasClickAction = hasClick, // P6: the one live definition (NodeClick.kt)
+        isEditable = node.isEditable, // #919: the text-input flag the UNKNOWN scrub reads.
         // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
         // the executor's package-scoped label scan, which never reads such a subtree).
         foreignPackage = foreign,

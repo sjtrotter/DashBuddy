@@ -3484,6 +3484,11 @@
             "hasIdSuffix": "tvLastMessage"
           },
           "plainMask": true
+        },
+        {
+          "comment": "#919: the chat compose box — user-authored draft text; `ID_MARKERS` row, plain-masked.",
+          "find": { "hasIdSuffix": "message_input" },
+          "plainMask": true
         }
       ],
       "require": {

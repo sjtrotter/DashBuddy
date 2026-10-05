@@ -385,6 +385,8 @@ class CustomerTextMarkersTest {
                 "tvTitle",
                 // #1160 review TT1 — deliberately ADDED: the chat last-message preview is always customer text.
                 "tvLastMessage",
+                // #919 — deliberately ADDED: the chat compose box holds user-authored draft text.
+                "message_input",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -402,6 +404,7 @@ class CustomerTextMarkersTest {
                 "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
+                "message_input" to CustomerTextMarkers.IdentityKind.CONTENT,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
                 .associate { it.suffix to it.kind },
@@ -434,9 +437,11 @@ class CustomerTextMarkersTest {
 
     @Test
     fun `the runtime mode is applied before the first match, on the real table (reviews UU4, AL3)`() {
-        // An intake-only NEVER row never scrubs at runtime …
-        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/message_input"))
+        // An intake-only NEVER row never scrubs at runtime … (#919 promoted `message_input` to ALWAYS, so
+        // the example is its still-intake-only sibling)
+        assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/chat_input_text_field"))
         assertNull(CustomerTextMarkers.idMarkerSuffix("com.x:id/primaryManeuverText"))
+        assertEquals("message_input", CustomerTextMarkers.idMarkerSuffix("com.x:id/message_input"))
         // … and never switches an overlapping ALWAYS row off.
         assertEquals("address_line_1", CustomerTextMarkers.idMarkerSuffix("com.x:id/bottom_sheet_address_line_1"))
         // The intake list IS the table (one list), and the census sees every row.
@@ -473,5 +478,64 @@ class CustomerTextMarkersTest {
             .forEach { assertTrue(it, !pom.seedsRunsFrom(it)) }
         assertTrue(CustomerTextMarkers.IdentityKind.NAME.seedsRunsFrom("Mary Jo Anne Smith"))
         assertTrue(!CustomerTextMarkers.IdentityKind.EXACT.seedsRunsFrom("Riley"))
+    }
+
+    @Test
+    fun `an EditText-class node on an UNKNOWN envelope is scrubbed whole (#919)`() {
+        val tree = UiNode(
+            className = "android.widget.EditText",
+            text = "they only had one of the juice boxes in stock",
+            hintText = "Type a message",
+        )
+        assertEquals("android.widget.EditText", CustomerTextMarkers.firstUnredactedInputNode(tree))
+        val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
+        assertEquals("[redacted]", scrubbed.text)
+        assertEquals("[redacted]", scrubbed.hintText)
+        assertNull(CustomerTextMarkers.firstUnredactedInputNode(scrubbed))
+    }
+
+    @Test
+    fun `an isEditable node of any class is scrubbed (#919)`() {
+        val node = UiNode(className = "android.view.View", isEditable = true, text = "4321")
+        assertEquals("android.view.View", CustomerTextMarkers.unredactedInputNode(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `a non-input node with the same text is untouched by the input scan (#919)`() {
+        val node = UiNode(
+            className = "android.widget.TextView",
+            text = "they only had one of the juice boxes in stock",
+        )
+        assertNull(CustomerTextMarkers.unredactedInputNode(node))
+        assertEquals(node.text, CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `an empty or already-masked input is not a hit (#919)`() {
+        val node = UiNode(className = "android.widget.EditText", text = null, hintText = null)
+        assertNull(CustomerTextMarkers.unredactedInputNode(node))
+        assertNull(CustomerTextMarkers.unredactedInputNode(node.copy(text = "[redacted]")))
+    }
+
+    @Test
+    fun `the recognized-path scan ignores inputs (#919)`() {
+        val tree = UiNode(
+            className = "android.widget.EditText",
+            text = "they only had one of the juice boxes in stock",
+        )
+        assertNull(CustomerTextMarkers.firstUnredactedMarker(tree))
+        assertEquals(tree, CustomerTextMarkers.scrub(tree))
+    }
+
+    @Test
+    fun `message_input scrubs by id alone (#919)`() {
+        val node = UiNode(
+            viewIdResourceName = "com.doordash.driverapp:id/message_input",
+            className = "android.widget.TextView",
+            text = "On my way",
+        )
+        assertEquals("message_input", CustomerTextMarkers.firstUnredactedIdMarker(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
     }
 }
