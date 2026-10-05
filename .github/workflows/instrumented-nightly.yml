@@ -80,7 +80,9 @@ jobs:
           script: ./gradlew :core:database:connectedAndroidTest :core:pipeline:connectedAndroidTest :app:connectedAndroidTest
 
       - name: Upload instrumented test reports
-        if: ${{ failure() }}
+        # #1086: on success too — the device tests' execution receipt (counts, class results) as a
+        # downloadable artifact; not after a cancellation (partial reports).
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-test-reports-${{ github.run_id }}
