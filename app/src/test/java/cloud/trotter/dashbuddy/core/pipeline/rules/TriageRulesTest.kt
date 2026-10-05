@@ -150,6 +150,31 @@ class TriageRulesTest {
         assertEquals("demand_nudge", notif(raw(title = "Dash now in your area")))
     }
 
+    // #1090 — the paused-dash push is recognized INFORMATIONALLY (no flow, no modeHint): it carries no
+    // countdown, so it must never drive the pause-safety timing; the screen stays the authority.
+    @Test
+    fun `dash_paused — the dash-update channel's paused push is informational only (#1090)`() {
+        // Field-pinned to the fielded envelope (pull 2026-09-07, `…08-44-25-186__doordash__notification__UNKNOWN__87397c`):
+        // channel `dasher-notification-channel-dash-update`, title "Dash Update!", and the SAME sentence in
+        // text / bigText / tickerText; only the dasher's first name is replaced.
+        val sentence = "Hey Sam! Your current dash has been paused"
+        val push = RawNotificationData(
+            title = "Dash Update!", text = sentence, bigText = sentence, tickerText = sentence,
+            packageName = "com.doordash.driverapp", postTime = 0L, isClearable = true,
+            channelId = "dasher-notification-channel-dash-update",
+        )
+        val r = notificationRuleset.matchFirst(push)
+        assertEquals("dash_paused", r?.intent)
+        assertNull("informational: no flow", r?.flow)
+        assertNull("informational: no modeHint", r?.modeHint)
+        // Collision coverage: a dash-update push that DOES contain the new anchor but carries a
+        // higher-priority sibling's title still routes to that sibling (lower number wins).
+        assertEquals(
+            "arrived_in_zone",
+            notif(raw(channelId = "dasher-notification-channel-dash-update", title = "You have arrived", text = "Your dash has been paused while you were away")),
+        )
+    }
+
     @Test
     fun `dash_status_ongoing — foreground status channel`() {
         assertEquals(

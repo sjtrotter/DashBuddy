@@ -48,6 +48,13 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **"Dash paused" push is recognized (#1090):** after a dash in which you paused, the pull's
+  `captures/doordash/notification/` should hold NO UNKNOWN envelope reading "Your current dash has been
+  paused" — the envelope lands under `notification/dash_paused/` instead — and `app.log` carries
+  `Rule LOG [NOTIFICATION_RECEIVED]: DASH_PAUSED_PUSH` (a DEBUG line; the `log` verb writes NO
+  `app_events` row) a few seconds BEFORE the screen-derived `DASH_PAUSED`, while the dash's mode and
+  timers behave exactly as before (the push is informational — it must not pause, resume, or shorten
+  the safety net).
 - **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
   shows session start/end, `bubble post requested … canBubble=true` / `bubble post returned`, and activity
   create/start/stop/destroy; swiping the bubble's NOTIFICATION out of the shade logs `bubble notification
