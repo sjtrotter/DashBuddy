@@ -165,8 +165,11 @@ internal object DeliveryFolds {
         // frozenCostPerMile when all present.
         val frozenFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx?.lastEvaluatedFuelPerMile else null
         val frozenNonFuelPerMile = if (costBasis == CostBasis.OFFER_FROZEN) ctx?.lastEvaluatedNonFuelPerMile else null
-        val netProfit = if (frozenCpm != null && realizedPay != null && realizedMiles != null) {
-            NetProfit.net(realizedPay, realizedMiles, frozenCpm)
+        // #1133: a missing receipt does not erase recorded driving cost. Keep realizedPay null and
+        // payBasis untouched so unknown pay remains distinguishable from a $0 receipt. A later
+        // DELIVERY_ADJUSTMENT supplying pay recomputes net using this row's miles and frozen cpm.
+        val netProfit = if (frozenCpm != null && realizedMiles != null) {
+            NetProfit.net(realizedPay ?: 0.0, realizedMiles, frozenCpm)
         } else {
             null
         }
