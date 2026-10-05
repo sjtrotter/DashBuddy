@@ -818,7 +818,7 @@
       "priority": 145,
       "redact": [
         {
-          "comment": "#1122-class belt (Astra review of PR #1216, P1): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a render of this picker that also carries an id-bearing customer slot must still mask it HERE. The four ids are `ID_MARKERS` members (the pickup card's `customer_name`, the dropoff block's `user_name` / `address_line_1` / `address_line_2`); inert on the committed fixture, which renders none of them. Name ids normalize to the customer key; the city/ST/ZIP line plain-masks (bounded alphabet, #1126).",
+          "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. Inert on the committed fixtures, which render none of these ids.",
           "find": {
             "hasIdSuffix": "customer_name"
           },
@@ -832,12 +832,63 @@
         },
         {
           "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
         {
           "find": {
             "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvTitle"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
           },
           "plainMask": true
         },

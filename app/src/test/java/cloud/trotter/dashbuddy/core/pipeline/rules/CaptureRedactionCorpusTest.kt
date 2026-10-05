@@ -699,6 +699,57 @@ class CaptureRedactionCorpusTest {
     )
 
     /**
+     * Astra r2 of PR #1216: a recognize-only privacy rule claims frames that would otherwise be
+     * UNKNOWN, and a RECOGNIZED frame keeps only its rule's redact — so the rule must carry EVERY
+     * runtime `ID_MARKERS` suffix itself, or a combined render loses that slot's protection. Pinned
+     * as belt ⊇ `ID_MARKERS`, so growing the marker table without growing these belts fails here.
+     */
+    @Test
+    fun `recognize-only privacy rules carry the whole ID_MARKERS belt (#1127, #1139)`() {
+        val rulesJson = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
+            .jsonObject["screens"]!!.jsonArray.map { it.jsonObject }
+        for (ruleId in listOf("doordash.screen.dropoff_customer_unavailable", "doordash.screen.pickup_order_picker")) {
+            val rule = rulesJson.single { it["id"]!!.jsonPrimitive.content == ruleId }
+            val declared = mutableSetOf<String>()
+            fun collect(e: kotlinx.serialization.json.JsonElement) {
+                when (e) {
+                    is kotlinx.serialization.json.JsonObject -> e.forEach { (k, v) ->
+                        if (k == "hasIdSuffix" && v is JsonPrimitive) declared += v.content else if (k != "comment") collect(v)
+                    }
+                    is kotlinx.serialization.json.JsonArray -> e.forEach { collect(it) }
+                    else -> Unit
+                }
+            }
+            rule["redact"]!!.jsonArray.forEach { collect(it.jsonObject["find"]!!) }
+            val missing = CustomerTextMarkers.ID_MARKERS.filterNot { it in declared }
+            assertTrue("$ruleId redact misses ID_MARKERS suffixes: $missing", missing.isEmpty())
+        }
+        // The two r2 counterexample frames: a claimed render carrying a marker id the 4-entry belt missed.
+        val picker = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_order_picker")!!
+        val pickerFrame = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(picker.id, TestRulesetFactory.screenRuleset.matchFirst(pickerFrame)?.ruleId)
+        assertFalse(serialize(picker.redact.apply(pickerFrame)).contains("Jane"))
+        val unavailable = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_customer_unavailable")!!
+        val unavailableFrame = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Contact Jane L"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/dasher_instruction_content_collapsed", text = "Ask Jane at the side entrance"),
+            ),
+        ).restoreParents()
+        assertEquals(unavailable.id, TestRulesetFactory.screenRuleset.matchFirst(unavailableFrame)?.ruleId)
+        assertFalse(serialize(unavailable.redact.apply(unavailableFrame)).contains("Jane"))
+    }
+
+    /**
      * #1127 — the 8.99.20 "Can't hand order to customer" page named the customer in its first
      * `step_title` ('Contact <name>') and fell to UNKNOWN capture. Runs the PRODUCTION redact over
      * both committed frames (raw pseudonym, a [CorpusDecoys] entry): the name masks behind the kept
