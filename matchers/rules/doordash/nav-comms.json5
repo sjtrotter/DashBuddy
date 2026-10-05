@@ -186,6 +186,11 @@
           "comment": "#919 (Astra P2): the same box when it renders id-less — any EditText-class node on this recognized surface is user-authored text, masked plain. Mirrors the UNKNOWN path's class rule so a recognized chat frame is never the weaker one.",
           "find": { "hasClassNameEndsWith": "EditText" },
           "plainMask": true
+        },
+        {
+          "comment": "#919 (Astra r2): the other framework input class the runtime `isTextInput` accepts.",
+          "find": { "hasClassNameEndsWith": "AutoCompleteTextView" },
+          "plainMask": true
         }
       ],
       "reject": [
@@ -247,6 +252,11 @@
         {
           "comment": "#919 (Astra P2): the same box when it renders id-less — any EditText-class node on this recognized surface is user-authored text, masked plain. Mirrors the UNKNOWN path's class rule so a recognized chat frame is never the weaker one.",
           "find": { "hasClassNameEndsWith": "EditText" },
+          "plainMask": true
+        },
+        {
+          "comment": "#919 (Astra r2): the other framework input class the runtime `isTextInput` accepts.",
+          "find": { "hasClassNameEndsWith": "AutoCompleteTextView" },
           "plainMask": true
         }
       ],

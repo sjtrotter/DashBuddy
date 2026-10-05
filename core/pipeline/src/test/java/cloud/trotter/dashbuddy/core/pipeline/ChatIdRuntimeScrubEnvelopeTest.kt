@@ -165,6 +165,19 @@ class ChatIdRuntimeScrubEnvelopeTest {
     }
 
     @Test
+    fun `a text-marker hit on a no-screen-rule click does not switch the input scrub off (#919, Astra r2 P1)`() {
+        val draft = "they only had one of the juice boxes in stock"
+        val envelope = captureClick(UiNode(
+            className = "android.widget.EditText",
+            text = draft,
+            contentDescription = "Deliver to Morgan",
+            isClickable = true,
+        ), recognized = true, screenRuleId = null)
+        assertTrue(envelope, !envelope.contains(draft))
+        assertTrue(envelope, !envelope.contains("Morgan"))
+    }
+
+    @Test
     fun `a recognized EditText click with NO screen rule masks the input - nothing vetted its text (#919, fable review)`() {
         val draft = "they only had one of the juice boxes in stock"
         val envelope = captureClick(UiNode(

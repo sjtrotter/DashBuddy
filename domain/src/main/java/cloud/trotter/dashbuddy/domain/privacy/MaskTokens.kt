@@ -21,6 +21,13 @@ object MaskTokens {
      * token sits at the end — while a value that merely CONTAINS the prefix ("[redacted] Riley S wants…", a
      * literal the dasher typed) is NOT masked and must still be scrubbed. Substring presence is not proof.
      */
+    /**
+     * #919 (Astra r2 P1): [value] IS a mask token — exactly the plain or the hashed form, nothing else. The
+     * TEXT-INPUT skip uses this, not [endsWithMask]: no rule ever keeps a prefix on an input, so a draft that
+     * merely ENDS with a typed "[redacted]" ("Riley S wants oat milk [redacted]") is user text and scrubs.
+     */
+    fun isMask(value: String): Boolean = value == REDACTED || (value.length == HASHED_MASK_LENGTH && endsWithMask(value))
+
     fun endsWithMask(value: String): Boolean {
         if (value.endsWith(REDACTED)) return true
         if (value.length < HASHED_MASK_LENGTH) return false

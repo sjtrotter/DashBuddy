@@ -466,8 +466,9 @@ object CustomerTextMarkers {
         UiNodeTextField.TEXT, UiNodeTextField.CONTENT_DESCRIPTION, UiNodeTextField.STATE_DESCRIPTION, UiNodeTextField.ERROR_TEXT,
     )
 
+    // Astra r2 P1: an input's value is masked only when it IS a mask token (no kept-prefix shape exists on an input).
     private fun carriesUserText(node: UiNode): Boolean = node.scrubbableStrings()
-        .any { (field, value) -> field in USER_AUTHORED_FIELDS && !value.isNullOrEmpty() && !MaskTokens.endsWithMask(value) }
+        .any { (field, value) -> field in USER_AUTHORED_FIELDS && !value.isNullOrEmpty() && !MaskTokens.isMask(value) }
 
     /** [carriesUserText] over [node] and its whole subtree — a composite input owns its descendants' text (#919 P2). */
     private fun subtreeCarriesUserText(node: UiNode): Boolean =
@@ -505,7 +506,7 @@ object CustomerTextMarkers {
 
     private fun scrubInputs(tree: UiNode, inputOwned: Boolean): UiNode {
         val owned = inputOwned || unredactedInputNode(tree) != null
-        val node = if (owned) tree.mapScrubbableStrings { if (it.isNullOrEmpty() || MaskTokens.endsWithMask(it)) it else CompiledRedact.REDACTED } else tree
+        val node = if (owned) tree.mapScrubbableStrings { if (it.isNullOrEmpty() || MaskTokens.isMask(it)) it else CompiledRedact.REDACTED } else tree
         return node.copy(children = tree.children.map { scrubInputs(it, owned) })
     }
 
@@ -543,7 +544,11 @@ object CustomerTextMarkers {
             .mapScrubbableStrings {
                 when {
                     it == null -> null // #1147: a null field stays null (no phantom keys on the envelope).
-                    it.isEmpty() || MaskTokens.endsWithMask(it) -> it
+                    it.isEmpty() -> it
+                    // Astra r2 P1: on an INPUT-owned node only an exact mask token is "already masked";
+                    // elsewhere a rule's kept-prefix output ("For [redacted:ab12]") is.
+                    owned && MaskTokens.isMask(it) -> it
+                    !owned && MaskTokens.endsWithMask(it) -> it
                     wholeNode || unredactedMarker(it) != null -> CompiledRedact.REDACTED
                     else -> it
                 }

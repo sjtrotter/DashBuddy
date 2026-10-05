@@ -260,9 +260,15 @@ class CaptureWriter @Inject constructor(
         screenAuthority: Boolean = true,
     ): UiNode {
         val marker = CustomerTextMarkers.firstUnredactedMarker(tree)
+        if (target == UNKNOWN_TARGET) return scrubUnknownTree(tree, marker, kind)
+        // #919 (Astra r2 P1): the two recognized-path scrubs COMPOSE — a marker hit never switches the
+        // unvetted-input scrub off, and vice versa.
+        val markerScrubbed = scrubRecognizedMarker(tree, marker, ruleId, kind)
+        return if (screenAuthority) markerScrubbed else scrubUnvettedInputs(markerScrubbed, ruleId, kind)
+    }
+
+    private fun scrubRecognizedMarker(tree: UiNode, marker: String?, ruleId: String?, kind: String): UiNode {
         return when {
-            target == UNKNOWN_TARGET -> scrubUnknownTree(tree, marker, kind)
-            marker == null && !screenAuthority -> scrubUnvettedInputs(tree, ruleId, kind)
             marker == null -> tree
             else -> {
                 stats.onRedactBackstopScrub()

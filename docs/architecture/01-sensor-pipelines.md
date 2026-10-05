@@ -266,8 +266,15 @@ placeholder-only empty box is benign: no WARN, no counter, hint kept); a RECOGNI
 (`screenRuleId == null`) masks its text-input subtrees too (`CustomerTextMarkers.scrubInputs`, counted as a
 recognized-path backstop scrub — a click rule vets one label, nothing vetted the input); and the census
 `FrameFilter` withholds every field of a text input or any node under one, exactly like a PII id row, so the
-skeleton never ships as word slots what the envelope masked. The class half also accepts `AutoCompleteTextView`;
-on-device the live flag is the authority.
+skeleton never ships as word slots what the envelope masked. The class half also accepts `AutoCompleteTextView`
+(the chat rules declare that class too); on-device the live flag is the authority. Astra r2: an INPUT's value is
+"already masked" only when it IS a mask token (`MaskTokens.isMask` — a typed trailing "[redacted]" is user text),
+and the two recognized-path scrubs compose (a marker hit never switches the unvetted-input scrub off).
+Residuals filed as #1228, not built here: the redact DSL has no descendant/ancestor selector, so a COMPOSITE input on a
+RECOGNIZED frame (draft in a child TextView under an id-less EditText) masks only the parent; and `isEditable`
+is not a node predicate yet, so a rule cannot declare the flag half. An id-row node showing only its placeholder
+(`message_input` with a hint) still trips the id scan — the documented fail-closed id posture (#1160 ZZ1), an
+over-scrub, not a leak.
 
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE

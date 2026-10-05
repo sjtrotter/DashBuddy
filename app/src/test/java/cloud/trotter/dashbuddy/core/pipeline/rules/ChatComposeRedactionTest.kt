@@ -48,6 +48,12 @@ class ChatComposeRedactionTest {
     }
 
     @Test
+    fun `an id-less AutoCompleteTextView compose box masks on the recognized chat frame (Astra r2)`() {
+        val json = masked(chatFrame(UiNode(className = "android.widget.AutoCompleteTextView", text = draft)))
+        assertFalse(json, json.contains(draft))
+    }
+
+    @Test
     fun `the customer's chat title still masks through the normalized name entry`() {
         val json = masked(chatFrame(UiNode(className = "android.widget.EditText", text = draft)))
         assertFalse(json, json.contains("Morgan"))

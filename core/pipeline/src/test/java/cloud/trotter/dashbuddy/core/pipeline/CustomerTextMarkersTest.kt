@@ -547,6 +547,17 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `a TRAILING literal mask inside a draft does not exempt it either (#919, Astra r2 P1)`() {
+        val draft = "Riley Smith wants oat milk [redacted]"
+        val input = UiNode(className = "android.widget.EditText", text = draft)
+        assertEquals(CustomerTextMarkers.INPUT_CAUSE_CLASS, CustomerTextMarkers.unredactedInputNode(input))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(input).text)
+        // An input whose value IS a mask token is skipped (a click node a screen rule already masked).
+        assertNull(CustomerTextMarkers.unredactedInputNode(input.copy(text = "[redacted]")))
+        assertNull(CustomerTextMarkers.unredactedInputNode(input.copy(text = "[redacted:ab12]")))
+    }
+
+    @Test
     fun `the input WARN token is fixed, never the app-controlled class name (#919, Astra P1)`() {
         val node = UiNode(isEditable = true, className = "Riley Smith", text = "hello")
         assertEquals(CustomerTextMarkers.INPUT_CAUSE_EDITABLE, CustomerTextMarkers.unredactedInputNode(node))
