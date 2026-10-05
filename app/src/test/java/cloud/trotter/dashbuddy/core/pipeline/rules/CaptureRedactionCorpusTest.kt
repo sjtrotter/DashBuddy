@@ -673,6 +673,141 @@ class CaptureRedactionCorpusTest {
         )
     }
 
+    /** Every node in [node]'s subtree, depth-first (fixture assertions need node-level reads). */
+    private fun flatten(node: UiNode): List<UiNode> = listOf(node) + node.children.flatMap { flatten(it) }
+
+    /** Load a committed fixture and assert the production ruleset claims it with [ruleId]. */
+    private fun recognizedFixture(folder: String, filename: String, ruleId: String): UiNode {
+        val file = File("src/test/resources/snapshots/$folder/$filename")
+        assertTrue("missing fixture $folder/$filename", file.isFile)
+        val tree = TestResourceLoader.loadNode(file)
+        assertEquals(
+            "$folder/$filename must be recognized by $ruleId (else the redact never runs)",
+            ruleId,
+            TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId,
+        )
+        return tree
+    }
+
+    /** The customer's hex on the pickup card — the cross-surface one-customer-one-hex anchor (#733). */
+    private fun pickupCardHex(name: String): String = hexIn(
+        TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_arrival")!!.redact.apply(
+            UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = name),
+        ).text!!,
+        "the pickup card's customer_name",
+    )
+
+    /**
+     * #1127 — the 8.99.20 "Can't hand order to customer" page named the customer in its first
+     * `step_title` ('Contact <name>') and fell to UNKNOWN capture. Runs the PRODUCTION redact over
+     * both committed frames (raw pseudonym, a [CorpusDecoys] entry): the name masks behind the kept
+     * 'Contact ' lead-in, the hex equals the pickup card's for the same customer, and the step
+     * chrome — 'Take photo' / 'Add description' share the `step_title` id — survives.
+     */
+    @Test
+    fun `dropoff_customer_unavailable masks the Contact step title, keeps the step chrome (#1127)`() {
+        val ruleId = "doordash.screen.dropoff_customer_unavailable"
+        val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+        assertTrue("the pseudonym must be a CorpusDecoys entry", CorpusDecoys.isDecoy("Contact Jane L"))
+        for (filename in listOf(
+            "2026-09-24_16-22-14-420__doordash__accessibility.window__dropoff_customer_unavailable__9537b9.json",
+            "2026-09-24_16-22-31-888__doordash__accessibility.window__dropoff_customer_unavailable__d2fda2.json",
+        )) {
+            val tree = recognizedFixture("dropoff_customer_unavailable", filename, ruleId)
+            assertTrue(
+                "$filename: the raw pre-condition — the fixture must carry the pseudonym unmasked",
+                flatten(tree).any { it.text == "Contact Jane L" },
+            )
+            val masked = rule.redact.apply(tree.restoreParents())
+            val serialized = serialize(masked)
+            assertFalse("$filename: customer name must not persist", serialized.contains("Jane"))
+            val title = flatten(masked).single {
+                it.viewIdResourceName?.endsWith("step_title") == true && it.text!!.startsWith("Contact ")
+            }.text!!
+            assertTrue(
+                "$filename: the Contact title must mask to 'Contact [redacted:<4hex>]'; got '$title'",
+                wholeMaskAfter("Contact ").matches(title),
+            )
+            assertEquals(
+                "$filename: one customer, one hex — the title's mask equals the pickup card's",
+                pickupCardHex("Jane L"),
+                hexIn(title, "the Contact title"),
+            )
+            for (kept in listOf("hand order to customer", "Take photo", "Add description")) {
+                assertTrue("$filename: chrome kept: '$kept'", serialized.contains(kept))
+            }
+        }
+        // 'Contact support' is excluded even if a support row ever shares the step_title id.
+        val support = UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Contact support")
+        assertEquals("Contact support", rule.redact.apply(support.restoreParents()).text)
+    }
+
+    /**
+     * #1128 — the 8.99.20 re-titled resolution sheet ('What do you want to do next?', no
+     * 'Resolution options' header) now recognizes as `pickup_resolution_options`, so the rule's
+     * existing For-family redact (shape owned by the #809 loop) masks its fused header on the
+     * REAL tree. The kept chrome includes 'Contact support' and the new option label.
+     */
+    @Test
+    fun `pickup_resolution_options masks the 8_99_20 sheet's fused For line on the real tree (#1128)`() {
+        val ruleId = "doordash.screen.pickup_resolution_options"
+        val raw = "For Jane D. • H-E-B"
+        assertTrue("the pseudonym must be a CorpusDecoys entry", CorpusDecoys.isDecoy(raw))
+        val tree = recognizedFixture(
+            "pickup_resolution_options",
+            "2026-09-23_15-53-12-742__doordash__accessibility.window__pickup_resolution_options__c1fbb5.json",
+            ruleId,
+        )
+        assertTrue("raw pre-condition", flatten(tree).any { it.text == raw })
+        val masked = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(tree.restoreParents())
+        val serialized = serialize(masked)
+        assertFalse("customer name must not persist", serialized.contains("Jane"))
+        val header = flatten(masked).single { it.text?.startsWith("For ") == true }.text!!
+        assertTrue("fused header must mask to 'For [redacted:<4hex>]'; got '$header'", wholeMaskAfter("For ").matches(header))
+        assertEquals("one customer, one hex with the pickup card", pickupCardHex("Jane D"), hexIn(header, "the For line"))
+        for (kept in listOf("What do you want to do next?", "Ask the store to place the order", "Contact support")) {
+            assertTrue("chrome kept: '$kept'", serialized.contains(kept))
+        }
+    }
+
+    /**
+     * #1139 — the multi-order pickup picker ('Select an Order') rendered each row's customer in an
+     * `instructions` node ('For <name> by <h:mm>') and fell to UNKNOWN capture. On the committed
+     * frame both rows mask behind the kept 'For ' lead-in, the merchant rows (`restaurant_name`)
+     * stay raw, and the 'Jane D' row hashes to the same hex as the pickup card for that customer.
+     */
+    @Test
+    fun `pickup_order_picker masks every instructions row, keeps the merchants (#1139)`() {
+        val ruleId = "doordash.screen.pickup_order_picker"
+        val rows = listOf("For John by 12:28", "For Jane D by 12:35")
+        rows.forEach { assertTrue("'$it' must be a CorpusDecoys entry", CorpusDecoys.isDecoy(it)) }
+        val tree = recognizedFixture(
+            "pickup_order_picker",
+            "2026-09-27_12-01-03-994__doordash__accessibility.window__pickup_order_picker__997c2d.json",
+            ruleId,
+        )
+        rows.forEach { row -> assertTrue("raw pre-condition: '$row'", flatten(tree).any { it.text == row }) }
+        val masked = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(tree.restoreParents())
+        val serialized = serialize(masked)
+        assertFalse("first customer must not persist", serialized.contains("John"))
+        assertFalse("second customer must not persist", serialized.contains("Jane"))
+        val instructions = flatten(masked)
+            .filter { it.viewIdResourceName?.endsWith("instructions") == true }
+            .map { it.text!! }
+        assertEquals("both order rows are present", 2, instructions.size)
+        instructions.forEach {
+            assertTrue("row must mask to 'For [redacted:<4hex>]'; got '$it'", wholeMaskAfter("For ").matches(it))
+        }
+        assertEquals(
+            "the 'Jane D' row keys to the pickup card's hex for that customer (#733)",
+            pickupCardHex("Jane D"),
+            hexIn(instructions[1], "the second row"),
+        )
+        for (kept in listOf("Select an Order", "Pluckers Wing Bar", "Target")) {
+            assertTrue("chrome / merchant kept: '$kept'", serialized.contains(kept))
+        }
+    }
+
     // =========================================================================
     // #501 — the id-less first-name + last-initial customer-name shape. The
     // adversarial-review pledge finding: the runtime redact fail-OPEN on common
@@ -853,6 +988,11 @@ class CaptureRedactionCorpusTest {
             // `CustomerTextMarkers.ID_MARKERS`, so a future intake that forgets to redact the
             // instruction body fails HERE rather than committing green.
             "dropoff_step_instructions",
+            // #1127/#1128/#1139 add the three surfaces this PR gave (or widened) a redact for —
+            // the folders a real pull lands in next. `dropoff_customer_unavailable`'s
+            // `Contact <name>` title is the whole-value name shape's job; the two For-line
+            // folders carry no shape this guard flags, but their decoys must be REACHABLE here.
+            "dropoff_customer_unavailable", "pickup_resolution_options", "pickup_order_picker",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()

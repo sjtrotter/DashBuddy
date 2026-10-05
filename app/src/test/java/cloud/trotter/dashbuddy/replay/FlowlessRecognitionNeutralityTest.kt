@@ -84,6 +84,32 @@ class FlowlessRecognitionNeutralityTest {
         )
     }
 
+    /**
+     * #1127 — the 8.99.20 "Can't hand order to customer" page, recognized purely so its
+     * 'Contact <customer>' step title can be redacted. It is the START of a customer-unavailable
+     * handoff, so whether it should mark the dropoff lifecycle is a real question — and one this
+     * privacy fix must not answer by accident. This pins that it did not.
+     */
+    @Test
+    fun `the customer-unavailable frames recognize, carry no flow, and leave PlatformRegion untouched (#1127)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/dropoff_customer_unavailable",
+            "doordash.screen.dropoff_customer_unavailable",
+        )
+    }
+
+    /**
+     * #1139 — the multi-order pickup picker ('Select an Order'), recognized purely so its
+     * per-row 'For <customer> by <h:mm>' lines can be redacted. Same neutrality claim.
+     */
+    @Test
+    fun `the order-picker frame recognizes, carries no flow, and leaves PlatformRegion untouched (#1139)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/pickup_order_picker",
+            "doordash.screen.pickup_order_picker",
+        )
+    }
+
     private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
         val frames = SessionReplay.loadSession(corpus)
         assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())

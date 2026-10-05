@@ -69,7 +69,7 @@ class SensitiveSurfaceBlockTest {
 
     private fun fixture(filename: String): UiNode {
         val file = File("src/test/resources/$FOLDER/$filename")
-        assertTrue("missing #1059 fixture $FOLDER/$filename", file.isFile)
+        assertTrue("missing sensitive fixture $FOLDER/$filename", file.isFile)
         return TestResourceLoader.loadNode(file)
     }
 
@@ -159,16 +159,24 @@ class SensitiveSurfaceBlockTest {
         const val RED_CARD = "2026-08-27_17-44-28-120__doordash__red_card_wallet__50d631.json"
         const val ID_SCAN_PASSPORT = "2026-08-28_16-58-51-783__doordash__id_scan_passport__407c00.json"
 
+        /**
+         * #1022 — the STORE-EMPLOYEE signature pad (8.91.7). Its labels ('Store Employee
+         * signature', 'Submit signature') are [SensitiveTextMarkers] keywords too, so it is both
+         * rule-claimed (view-id anchors first) and backstopped by the marker scan ([TEXT_BEARING]).
+         */
+        const val STORE_SIGNATURE = "2026-08-01_13-00-07-403__doordash__store_signature__64ba4d.json"
+
         /** Fixture → the `sensitive.known` branch that must claim it. */
         val EXPECTED_INTENTS = listOf(
             PERSONA_RETRY to "sensitive.selfie_verification",
             PERSONA_COMPOSE to "sensitive.selfie_verification",
             RED_CARD to "sensitive.red_card",
             ID_SCAN_PASSPORT to "sensitive.id_verification",
+            STORE_SIGNATURE to "sensitive.store_signature",
         )
 
         /** Every #1059 fixture that renders text (see the note in the backstop test). */
-        val TEXT_BEARING = listOf(PERSONA_RETRY, RED_CARD, ID_SCAN_PASSPORT)
+        val TEXT_BEARING = listOf(PERSONA_RETRY, RED_CARD, ID_SCAN_PASSPORT, STORE_SIGNATURE)
 
         /** The keywords #1059 added to [SensitiveTextMarkers.KEYWORDS]. */
         val NEW_MARKERS = listOf(
@@ -176,6 +184,9 @@ class SensitiveSurfaceBlockTest {
             "Activate a physical card",
             "Request a physical card",
             "Align the character strip",
+            // #1022
+            "Submit signature",
+            "Store Employee signature",
         )
     }
 }

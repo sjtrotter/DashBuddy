@@ -48,6 +48,15 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **8.99.20 privacy rules (#1127 / #1128 / #1139) + the store-signature block (#1022):** on the next dash, if any of
+  these surfaces appears — the "Can't hand order to customer" steps page, the pickup "What do you want to do next?"
+  sheet, the stacked-job "Select an Order" picker, or a return-order store-employee signature pad — the pull should
+  show the first three as RECOGNIZED envelopes (`dropoff_customer_unavailable`, `pickup_resolution_options`,
+  `pickup_order_picker`) with the customer name masked (`Contact [redacted:xxxx]` / `For [redacted:xxxx]`) and NO
+  envelope at all for the signature pad (sensitive, dropped at the gate). Any of them landing in `UNKNOWN/` with a raw
+  name is the thing to report.
+  - Confirmed: 0/2
+
 - **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's
   dash that has a trusted capture → "Classify & draft" → pick the class, mark two id anchors + the parse fields → Preview
   shows a JSON5 draft (or a refusal naming the weak node) → Save (TOTP) → the detail page shows the class chip and the
