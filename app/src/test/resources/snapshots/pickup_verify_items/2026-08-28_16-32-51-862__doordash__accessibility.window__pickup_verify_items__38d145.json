@@ -1,5 +1,5 @@
 {
-    "captureId": "df19ba31-b653-4db7-a47f-d8b83b69798e",
+    "captureId": "00000000-0000-4000-8000-000000000000",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
     "timestamp": 1787952771860,
@@ -20,7 +20,7 @@
         },
         "stateMachineApiVersion": "1.0",
         "appVersion": "0.230.0",
-        "deviceFingerprint": "google/panther/panther:17/CP2A.260705.006/15641320:user/release-keys",
+        "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys",
         "platformAppVersion": "8.93.7"
     },
     "payload": {

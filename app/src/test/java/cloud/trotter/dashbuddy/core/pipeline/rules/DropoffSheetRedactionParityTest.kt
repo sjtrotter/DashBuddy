@@ -5,8 +5,15 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Co
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.WHOLE_MASK_HEX
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.test.util.DropoffRuleSource
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,6 +53,58 @@ class DropoffSheetRedactionParityTest {
     private val screens = TestRulesetFactory.screenRuleset
     private val preArrival = screens.ruleById("doordash.screen.dropoff_pre_arrival")!!
     private val sheet = screens.ruleById("doordash.screen.dropoff_workflow_sheet")!!
+
+    private fun dropoffRedactEntries(): List<Pair<String, List<JsonObject>>> {
+        val ruleIds = screensFromDropoffSource()
+        val rules = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
+            .jsonObject["screens"]!!.jsonArray
+            .map { it.jsonObject }
+            .filter { it["id"]!!.jsonPrimitive.content in ruleIds }
+        assertTrue("the dropoff source must declare rules", ruleIds.isNotEmpty())
+        assertEquals("every dropoff rule must be generated", ruleIds,
+            rules.map { it["id"]!!.jsonPrimitive.content }.toSet())
+        return rules.map { rule ->
+            val id = rule["id"]!!.jsonPrimitive.content
+            val redact = rule["redact"]?.jsonArray
+            assertTrue("$id: every dropoff rule must declare a redact block (the #993/#1039/#1107 belts)", redact != null)
+            id to redact!!.map { it.jsonObject }
+        }
+    }
+
+    private fun screensFromDropoffSource(): Set<String> = DropoffRuleSource.screenRuleIds().toSet()
+
+    @Test
+    fun `every dropoff address line 2 redact entry plain-masks (#1126)`() {
+        val entries = dropoffRedactEntries()
+        assertTrue("the dropoff family must be present", entries.isNotEmpty())
+        for ((ruleId, redact) in entries) {
+            for (entry in redact) {
+                // Walk the whole predicate (an entry may name the id inside `all` / `any`), so an
+                // address_line_2 entry in any shape is held to the plainMask bar (review of #1213).
+                for (suffix in idSuffixesIn(entry["find"]!!)) {
+                    if (suffix.endsWith("address_line_2")) {
+                        assertEquals("$ruleId: $suffix must plain-mask", true,
+                            entry["plainMask"]?.jsonPrimitive?.booleanOrNull)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Every `hasIdSuffix` value anywhere in a redact entry's predicate tree (`comment` skipped). */
+    private fun idSuffixesIn(find: kotlinx.serialization.json.JsonElement): List<String> =
+        predicateValues(find, "hasIdSuffix")
+
+    private fun precedingSiblingTextsIn(find: kotlinx.serialization.json.JsonElement): List<String> =
+        predicateValues(find, "hasPrecedingSiblingText")
+
+    private fun predicateValues(e: kotlinx.serialization.json.JsonElement, key: String): List<String> = when (e) {
+        is JsonObject -> e.entries.filter { it.key != "comment" }.flatMap { (k, v) ->
+            if (k == key && v is kotlinx.serialization.json.JsonPrimitive) listOf(v.content) else predicateValues(v, key)
+        }
+        is kotlinx.serialization.json.JsonArray -> e.flatMap { predicateValues(it, key) }
+        else -> emptyList()
+    }
 
     private fun serialize(tree: UiNode): String = UiNodeSchema.serialize(tree)
     private fun tv(text: String, id: String? = null) =
@@ -285,6 +344,28 @@ class DropoffSheetRedactionParityTest {
             assertTrue("${rule.id}: an all-letter name with an apostrophe hash-masks", WHOLE_MASK_HEX.matches(valueAfterLabel("O'Neil Towers")))
             val idLine2 = UiNode(className = "android.view.View", children = listOf(tv("Sampleville, TX 75001", id = "com.doordash.driverapp:id/address_line_2"))).restoreParents()
             assertEquals("${rule.id}: address_line_2 plain-masks", "[redacted]", rule.redact.apply(idLine2).children[0].text)
+        }
+    }
+
+    @Test
+    fun `every dropoff rule with a Building Name entry plain-masks a digit-bearing value and hashes a complex name (#1126, behavioral)`() {
+        // Runs the COMPLETE compiled redact sequence of every rule that declares a Building Name entry,
+        // so an unrelated earlier entry (the id-less street shape, say) that claimed and hashed the
+        // value fails here — which is exactly what it caught on dropoff_pre_arrival_completion (r1).
+        val ruleIds = dropoffRedactEntries()
+            .filter { (_, redact) -> redact.any { "Building Name" in precedingSiblingTextsIn(it["find"]!!) } }
+            .map { it.first }
+        assertTrue("the dropoff family declares Building Name entries", ruleIds.size >= 3)
+        for (id in ruleIds) {
+            val rule = screens.ruleById(id)!!
+            fun valueAfterLabel(value: String): String =
+                rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv(value))).restoreParents()).children[1].text!!
+            for (v in listOf("1234 Cedar", "Bldg 7", "4202", "12B")) {
+                assertEquals("$id: digit-bearing '$v' plain-masks through the whole sequence", "[redacted]", valueAfterLabel(v))
+            }
+            assertTrue("$id: an alphabetic complex name keeps the distinctness hash", WHOLE_MASK_HEX.matches(valueAfterLabel("Maple Court Apartments")))
+            assertEquals("$id: the label is chrome and stays raw", "Building Name",
+                rule.redact.apply(UiNode(className = "android.view.View", children = listOf(tv("Building Name"), tv("Bldg 7"))).restoreParents()).children[0].text)
         }
     }
 

@@ -314,7 +314,13 @@ class ObservationClassifier @Inject constructor(
 
         // Unknown notification — preserve raw text for future analysis
         val rawText = event.raw.toFullString()
-        Timber.tag("Classifier").d("UNKNOWN notification — $rawText")
+        // #1001: text-less ongoing-dash pushes log ~1 Hz at DEBUG (13.8% of a dash log). Per-frame
+        // noise is VERBOSE under CLAUDE.md logging principle 7; text-bearing UNKNOWNs stay DEBUG.
+        if (rawText.isBlank()) {
+            Timber.tag("Classifier").v("UNKNOWN notification — (no text)")
+        } else {
+            Timber.tag("Classifier").d("UNKNOWN notification — $rawText")
+        }
         return Observation.Notification(
             timestamp = event.raw.postTime,
             captureId = null,

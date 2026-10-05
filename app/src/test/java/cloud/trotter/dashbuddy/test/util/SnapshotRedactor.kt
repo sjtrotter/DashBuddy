@@ -31,6 +31,26 @@ object SnapshotRedactor {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     const val MASK = "[redacted]"
+    const val DEVICE_FINGERPRINT_PLACEHOLDER = "vendor/device/device:16/BUILD.000000.000/1:user/release-keys"
+    const val CAPTURE_ID_PLACEHOLDER = "00000000-0000-4000-8000-000000000000"
+
+    // Consume every JSON string token so escaped key-like text inside a value cannot match.
+    // Possessive runs (`[^"\\]++`, `*+`) keep the scan iterative — a 10 000-char value must not
+    // recurse per character and blow the stack (Astra review, PR #1213).
+    private val provenanceStrings = Regex("""("(?:[^"\\]++|\\.)*+")(\s*:\s*("(?:[^"\\]++|\\.)*+"))?""")
+
+    /** #1206: scrub provenance at any depth without changing other keys or formatting. */
+    fun sanitizeProvenance(jsonText: String): String = provenanceStrings.replace(jsonText) { match ->
+        if (match.groups[3] == null) return@replace match.value
+        val key = runCatching { json.decodeFromString(String.serializer(), match.groupValues[1]) }
+            .getOrElse { return@replace match.value }
+        val placeholder = when (key) {
+            "deviceFingerprint" -> DEVICE_FINGERPRINT_PLACEHOLDER
+            "captureId" -> CAPTURE_ID_PLACEHOLDER
+            else -> return@replace match.value
+        }
+        match.value.dropLast(match.groupValues[3].length) + "\"$placeholder\""
+    }
 
     // ---------------------------------------------------------------------------------------
     // The PII SHAPE vocabulary lives in `:domain` since #1145 (`PiiShapes`, ADR-0011 §2) so the
@@ -75,10 +95,11 @@ object SnapshotRedactor {
     internal val CARD: Regex = PiiShapes.CARD
 
     fun redact(jsonText: String): String {
-        val root = try { json.parseToJsonElement(jsonText) } catch (e: Exception) { return jsonText }
+        val sanitized = sanitizeProvenance(jsonText)
+        val root = try { json.parseToJsonElement(sanitized) } catch (e: Exception) { return sanitized }
         val repl = LinkedHashMap<String, String>() // escaped-original -> escaped-redacted
         collect(root, repl)
-        var out = jsonText
+        var out = sanitized
         for ((orig, red) in repl) if (orig != red) out = out.replace(orig, red)
         return out
     }
