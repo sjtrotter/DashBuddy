@@ -78,6 +78,10 @@
         </service>
 
         <receiver
+            android:name=".ui.bubble.BubbleDismissReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".state.effects.OfferActionReceiver"
             android:exported="false" />
 

@@ -48,6 +48,13 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
+  shows session start/end, bubble post requested/returned, and activity create/destroy; if you swipe the
+  bubble away, it shows `bubble dismissed by user`. Use the sequence to assess whether a vanished
+  bubble was dismissed, torn down, or the process died (an abrupt end without destroy is a clue,
+  not proof of process death). The bubble must not self-heal after deliberate dismissal.
+  - Confirmed: 0/2
+
 - **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
   "Arrived at store" and wait, the pull's `pickup_records` dwell for that stop should reflect the real
   wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the

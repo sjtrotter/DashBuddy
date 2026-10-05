@@ -12,12 +12,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 
 @AndroidEntryPoint
 class BubbleActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Timber.tag("Bubble").i("activity %s isFinishing=%s", "create", isFinishing)
 
         setContent {
             // Shared instance with BubbleScreen's default hiltViewModel() (both scope to this
@@ -35,5 +37,20 @@ class BubbleActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Timber.tag("Bubble").i("activity %s isFinishing=%s", "start", isFinishing)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Timber.tag("Bubble").i("activity %s isFinishing=%s", "stop", isFinishing)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Timber.tag("Bubble").i("activity %s isFinishing=%s", "destroy", isFinishing)
     }
 }

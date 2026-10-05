@@ -18,6 +18,15 @@ Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `Tts
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
 
+**Bubble observability (#916).** The stable `Bubble` tag records INFO session start/end (registry
+platform wire + app-minted session id), bubble post requested/returned (notification id + whether
+bubble metadata was attached), and activity create/start/stop/destroy (`isFinishing`). Failed posts
+log ERROR with only the notification id and exception class, then rethrow unchanged. The non-exported
+`BubbleDismissReceiver`, wired only to the bubble notification's delete intent, logs `bubble dismissed
+by user` so explicit dismissal can be distinguished from loss. These shareable lines carry no message,
+persona display name, or merchant text. Diagnostics only: explicitly NO self-healing, watchdog, or
+re-poster that could resurrect a deliberately dismissed bubble.
+
 **Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
 displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km
 away added **905.37 mi in 18.4 min** (2026-09-03) — freezing `netProfit −302.73` on a $22.95 delivery
