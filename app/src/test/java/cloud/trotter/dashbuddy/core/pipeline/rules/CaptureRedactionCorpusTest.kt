@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -723,6 +724,35 @@ class CaptureRedactionCorpusTest {
             rule["redact"]!!.jsonArray.forEach { collect(it.jsonObject["find"]!!) }
             val missing = CustomerTextMarkers.ID_MARKERS.filterNot { it in declared }
             assertTrue("$ruleId redact misses ID_MARKERS suffixes: $missing", missing.isEmpty())
+        }
+        // Astra r3: presence is not coverage (an entry could gate the id behind `all`/`not`) — so every
+        // marker id is also exercised BEHAVIORALLY on a claimed frame of each rule: the value must mask.
+        val claimedFrames = mapOf(
+            "doordash.screen.pickup_order_picker" to listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+            ),
+            "doordash.screen.dropoff_customer_unavailable" to listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Take photo"),
+            ),
+        )
+        for ((ruleId, chrome) in claimedFrames) {
+            val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+            for (suffix in CustomerTextMarkers.ID_MARKERS) {
+                val secret = "Gate code 7391 Marisol Q"
+                val frame = UiNode(
+                    className = "android.widget.FrameLayout",
+                    children = chrome + UiNode(viewIdResourceName = "com.doordash.driverapp:id/$suffix", text = secret),
+                ).restoreParents()
+                // A higher-ranked rule may legitimately claim the combined frame (`nav_arriving` wins a frame
+                // carrying `arriving_at_title`); what must hold is that WHICHEVER rule wins masks the slot.
+                val winnerId = TestRulesetFactory.screenRuleset.matchFirst(frame)?.ruleId
+                assertNotNull("$ruleId: the frame carrying $suffix must not fall to UNKNOWN", winnerId)
+                val winner = if (winnerId == ruleId) rule else TestRulesetFactory.screenRuleset.ruleById(winnerId!!)!!
+                val masked = serialize(winner.redact.apply(frame))
+                assertFalse("$winnerId (claiming $ruleId's frame): $suffix value must not persist", masked.contains("7391") || masked.contains("Marisol"))
+            }
         }
         // The two r2 counterexample frames: a claimed render carrying a marker id the 4-entry belt missed.
         val picker = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.pickup_order_picker")!!
