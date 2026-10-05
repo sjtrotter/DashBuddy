@@ -42,6 +42,9 @@ import timber.log.Timber
 @Config(sdk = [30])
 class BubbleLifecycleLogTest {
     private val tree = RecordingTree()
+    /** The OS gate the line reports; under Robolectric this is whatever the shadow answers — the test pins the LINE, not the answer. */
+    private val canBubble: Boolean
+        get() = cloud.trotter.dashbuddy.util.PermissionUtils.hasFullBubblePreference(RuntimeEnvironment.getApplication())
     private lateinit var notificationManager: NotificationManager
     private lateinit var manager: BubbleManager
 
@@ -90,7 +93,7 @@ class BubbleLifecycleLogTest {
         manager.postWelcomeMessage()
 
         assertEquals(
-            listOf(info("bubble post requested id=1 canBubble=true"), info("bubble post returned id=1")),
+            listOf(info("bubble post requested id=1 canBubble=$canBubble"), info("bubble post returned id=1")),
             bubbleRecords(),
         )
         val notification = argumentCaptor<Notification>()
@@ -110,7 +113,7 @@ class BubbleLifecycleLogTest {
         val context = RuntimeEnvironment.getApplication()
         BubbleDismissReceiver().onReceive(context, Intent(context, BubbleDismissReceiver::class.java))
 
-        assertEquals(listOf(info("bubble dismissed by user id=1")), tree.records)
+        assertEquals(listOf(info("bubble notification removed (deleteIntent) id=1")), tree.records)
     }
 
     @Test
@@ -156,8 +159,8 @@ class BubbleLifecycleLogTest {
         assertSame(failure, thrown)
         assertEquals(
             listOf(
-                info("bubble post requested id=1 canBubble=true"),
-                RecordingTree.Record(Log.ERROR, "Bubble", "bubble post FAILED id=1 cause=${failure.javaClass.simpleName}"),
+                info("bubble post requested id=1 canBubble=$canBubble"),
+                RecordingTree.Record(Log.ERROR, "Bubble", "bubble post FAILED id=1 cause=${failure.javaClass.name}"),
             ),
             bubbleRecords(),
         )

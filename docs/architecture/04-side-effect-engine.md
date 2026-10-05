@@ -22,10 +22,13 @@ clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decl
 platform wire + app-minted session id), bubble post requested/returned (notification id + whether
 bubble metadata was attached), and activity create/start/stop/destroy (`isFinishing`). Failed posts
 log ERROR with only the notification id and exception class, then rethrow unchanged. The non-exported
-`BubbleDismissReceiver`, wired only to the bubble notification's delete intent, logs `bubble dismissed
-by user` so explicit dismissal can be distinguished from loss. These shareable lines carry no message,
-persona display name, or merchant text. Diagnostics only: explicitly NO self-healing, watchdog, or
-re-poster that could resurrect a deliberately dismissed bubble.
+`BubbleDismissReceiver`, wired only to the bubble notification's delete intent, logs `bubble
+notification removed (deleteIntent)` — which fires on a shade swipe / Clear-all / channel ban, NOT on
+the chathead's dismiss gesture (Android keeps the notification in the shade for that); the reason-coded
+removal through our own `NotificationListener` is #1226. `canBubble` logs the dasher's actual bubble
+preference (`PermissionUtils.hasFullBubblePreference`), the usual "vanished" cause. These shareable
+lines carry no message, persona display name, or merchant text. Diagnostics only: explicitly NO
+watchdog or re-poster — a later chat/offer post still re-notifies as it always did.
 
 **Every odometer fix is gated (#1057/#918).** `OdometerRepository` used to add ANY inter-fix
 displacement over 5 m straight into the persisted cumulative total, so one spurious fused fix ~1,457 km

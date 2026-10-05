@@ -19,7 +19,7 @@ class BubbleActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Timber.tag("Bubble").i("activity %s isFinishing=%s", "create", isFinishing)
+        logLifecycle("create")
 
         setContent {
             // Shared instance with BubbleScreen's default hiltViewModel() (both scope to this
@@ -41,16 +41,21 @@ class BubbleActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        Timber.tag("Bubble").i("activity %s isFinishing=%s", "start", isFinishing)
+        logLifecycle("start")
     }
 
     override fun onStop() {
         super.onStop()
-        Timber.tag("Bubble").i("activity %s isFinishing=%s", "stop", isFinishing)
+        logLifecycle("stop")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Timber.tag("Bubble").i("activity %s isFinishing=%s", "destroy", isFinishing)
+        logLifecycle("destroy")
+    }
+
+    /** #916: one line per lifecycle phase; `isChangingConfigurations` separates a rotate-teardown from a real destroy. */
+    private fun logLifecycle(phase: String) {
+        Timber.tag("Bubble").i("activity %s isFinishing=%s isChangingConfigurations=%s", phase, isFinishing, isChangingConfigurations)
     }
 }
