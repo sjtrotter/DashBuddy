@@ -1026,6 +1026,68 @@ class AnalyticsProjectorTest {
     // ── DELIVERY_ADJUSTMENT (#688) + #703 originalPayBasis ──────────────
 
     @Test
+    fun `pay-less cost survives miles edits and later pay correction with refold parity (#1133)`() = runBlocking {
+        insert(
+            AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0,
+        )
+        insert(
+            AppEventType.OFFER_ACCEPTED, "S1", 2_000,
+            OfferPayload(
+                offerHash = "h1",
+                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
+                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
+                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
+            ),
+        )
+        val seq = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
+            DeliveryPayload(jobId = "J1", taskId = "T1", storeName = "StoreX", phaseStartedAt = 2_400),
+            odometer = 105.0,
+        )
+        projector().catchUp()
+        val initial = analyticsDao.deliveryRecord(seq)!!
+        assertNull(initial.realizedPay)
+        assertEquals("NONE", initial.payBasis)
+        assertEquals(-(5.0 * 0.25), initial.netProfit!!, 1e-9)
+
+        // #1133: v11's null net is deliberately replaced by −cost when history refolds at v12.
+        analyticsDao.upsertDelivery(initial.copy(netProfit = null))
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
+        projector().catchUp()
+        assertEquals(12, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(initial, analyticsDao.deliveryRecord(seq))
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 4_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newMiles = 8.0),
+        )
+        projector().catchUp()
+        val milesEdited = analyticsDao.deliveryRecord(seq)!!
+        assertNull(milesEdited.realizedPay)
+        assertEquals("NONE", milesEdited.payBasis)
+        assertEquals(-(8.0 * 0.25), milesEdited.netProfit!!, 1e-9)
+
+        val payEditSeq = insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 5_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 15.0),
+        )
+        projector().catchUp()
+        val paid = analyticsDao.deliveryRecord(seq)!!
+        assertEquals(15.0, paid.realizedPay!!, 1e-9)
+        assertEquals(8.0, paid.realizedMiles!!, 1e-9)
+        assertEquals(0.25, paid.frozenCostPerMile!!, 1e-9)
+        assertEquals(15.0 - 8.0 * 0.25, paid.netProfit!!, 1e-9)
+        assertEquals("USER_CORRECTED", paid.payBasis)
+        assertEquals("NONE", paid.originalPayBasis)
+
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = payEditSeq, projectorVersion = 11))
+        projector().catchUp()
+        assertEquals("incremental corrections == from-zero refold", paid, analyticsDao.deliveryRecord(seq))
+    }
+
+    @Test
     fun `a DELIVERY_ADJUSTMENT applies every field by-PK and flips a machine row to USER_CORRECTED on a pay edit (#688)`() = runBlocking {
         val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()

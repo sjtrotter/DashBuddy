@@ -333,6 +333,8 @@ data class AcceptedOfferRealizedRow(
     val linkedJobId: String?,
     /** Σ frozen `netProfit` over the job's deliveries; NULL when none carried one. */
     val realizedNet: Double?,
+    /** Σ `realizedPay` over the job's deliveries; NULL when no drop recorded pay (#1133 — net alone no longer proves it). */
+    val realizedPay: Double?,
     /** Σ driver-entered `cashTip` over the same deliveries (#688 — additive at the read site). */
     val realizedCashTip: Double,
     /** Σ measured `realizedMinutes` over the same deliveries; NULL when none was measured. */

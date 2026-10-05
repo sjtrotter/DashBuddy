@@ -85,7 +85,18 @@ true-net waterfall Gross → −Fuel → −Non-fuel → Net; the split rides th
 `costBasis`, computed at projection time against the offer's own frozen
 `OfferEvaluation.operatingCostPerMile` (session granularity — the offer→delivery `jobId` link is
 absent in the log, but cpm is session-uniform), so editing economy settings only affects **future**
-evaluations: a record is an immutable historical fact. Session hydration rehydrates `started` from a
+evaluations: a record is an immutable historical fact.
+
+**#1133 — pay-less driving still costs money:** when realized miles and frozen cpm are known,
+`netProfit = (realizedPay ?: 0.0) − realizedMiles × frozenCostPerMile`; `realizedPay` stays null and
+`payBasis` is unchanged, preserving unknown pay versus a $0 receipt. Zero known miles yield zero net;
+missing miles or cpm keep net null. A later `DELIVERY_ADJUSTMENT` supplying pay recomputes net against
+the row's own miles and frozen cpm; a miles-only edit also retains the pay-less cost.
+`PROJECTOR_VERSION` 12 refolds history with this rule: previously the car cost appeared in
+Σ(fuel + nonfuel) but vanished from net, making “kept” optimistic and falsely tripping the
+“where your money went” split guard (`|Σcost − (gross − net)| > tolerance`).
+
+Session hydration rehydrates `started` from a
 persisted `session_records.startSource` marker (#659), not a "has a real platform" heuristic. Each
 `delivery_record` also carries `cashTip` (driver-entered cash — the tip vocabulary's driver-attested
 source; kept OUTSIDE `realizedPay`/`netProfit` and added to gross/net only at the read sites, so the

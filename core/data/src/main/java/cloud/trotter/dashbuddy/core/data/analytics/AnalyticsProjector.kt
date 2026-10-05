@@ -402,13 +402,12 @@ class AnalyticsProjector @Inject constructor(
         // Net recompute only when a net-bearing term (pay or miles) changed; otherwise the stored
         // netProfit is preserved byte-identically (cash/tip/store/note-only edits do not touch net).
         // MANUAL keeps the missing-terms-as-0 net-additive policy over the FINAL values; a machine row
-        // recomputes against its OWN frozen cpm (null when any term is missing — the #660-family seam).
+        // recomputes against its OWN frozen cpm. #1133: a pay-less miles edit still carries −cost;
+        // missing miles or frozen cpm keeps net null.
         val net = when {
             !payChanged && !milesChanged -> row.netProfit
             manual -> NetProfit.net(newPay ?: 0.0, newMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
-            row.frozenCostPerMile != null && newPay != null && newMiles != null ->
-                NetProfit.net(newPay, newMiles, row.frozenCostPerMile!!)
-            else -> null
+            else -> NetProfit.realized(newPay, newMiles, row.frozenCostPerMile)
         }
         // #159 H1: a driver-supplied newStoreName NULLS the resolved storeKey AND sets the pin, so the
         // driver's fix wins the report-card grouping (its grouping becomes read-side
@@ -1093,6 +1092,7 @@ class AnalyticsProjector @Inject constructor(
          * and a summary-screen row folds byte-identically. Precedented side effect (as v2 onward): the
          * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
          */
-        private const val PROJECTOR_VERSION = 11
+        // 12: #1133 — pay-less rows carry −cost as net
+        private const val PROJECTOR_VERSION = 12
     }
 }

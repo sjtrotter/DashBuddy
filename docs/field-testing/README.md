@@ -58,6 +58,14 @@ For items with multiple sub-concerns at different statuses, use one
   shows `cause=budget|upload_rate_limit|enrol_rate_limit|health_rate_limit|health_budget seconds=<n>` or
   `cause=stored_deadline remaining=<n>` — never the old bare `census deferred runs=1`. Working = every `deferred`
   status (skeleton, health or enrolment stage) has a matching line naming its cause.
+- **Desk-first — #1133 (PR #1219): pay-less rows carry their car cost.** After the first launch on this
+  build (projector v12 refold), the hub's "where your money went" card should show the gas/wear split
+  for a week whose drops all carry a split (the guard no longer trips falsely), "kept" moves down by the
+  receipt-less drops' mileage cost, and a receipt-less drop in a session drill-down reads pay `—` with
+  the caption "pay not recorded — car cost only" above a negative net. Report a drop showing a negative
+  net WITHOUT that caption, or a `$0.00` net on a drop that drove no miles.
+  - Confirmed: 0/2
+
 - **Desk-first — #965 / #1126 (PR #1213):** on the next pull, (a) a `ratings` envelope from the LEGACY ratings hub
   parses `deliveriesLast30Days` as a count (the approved golden now carries 136/72/71/100 on the committed legacy
   frames; a null on a fielded legacy frame is the thing to report), and (b) every recognized dropoff envelope's

@@ -560,7 +560,8 @@ class RecordFoldsTest {
         assertNull("suspect drop records no realized pay", phantom.realizedPay)
         assertNull("suspect drop records no tip", phantom.tip)
         assertNull("suspect drop records no base pay", phantom.basePay)
-        assertNull("no realized pay ⇒ no net", phantom.netProfit)
+        // #1133: suppressing suspect pay deliberately retains the cost of the recorded 8→9 mi.
+        assertEquals("no realized pay ⇒ net is −cost", -(1.0 * 0.20), phantom.netProfit!!, 1e-9)
 
         // The no-double-count invariant: the period SUM over the job's drops equals the receipt.
         val periodSum = outcomes.mapNotNull { it.delivery?.realizedPay }.sum()
@@ -919,10 +920,10 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `a receipt-less drop with NO offer-pay share stays NONE — old payloads refold byte-identically`() {
+    fun `a receipt-less drop with NO offer-pay share stays NONE and carries driving cost (#1133)`() {
         val s = "OP6"
-        // A pre-#691 event carries no offerPayShare (deserializes null) → the fold reproduces today's
-        // NONE row exactly. This is the rebuild-faithful, no-PROJECTOR_VERSION-bump guarantee.
+        // A pre-#691 event carries no offerPayShare (deserializes null) → pay stays unknown/NONE.
+        // #1133 deliberately changes its historical net on the v12 refold to include driving cost.
         val (outcomes, _) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 0.0),
@@ -933,7 +934,64 @@ class RecordFoldsTest {
         val d = outcomes[1].delivery!!
         assertEquals(PayBasis.NONE, d.payBasis)
         assertNull(d.realizedPay)
-        assertNull("no pay ⇒ no net even with a cpm", d.netProfit)
+        // #1133: the known 4 miles at 0.30 cpm now reduce net even without pay.
+        assertEquals("no pay ⇒ net is −cost", -(4.0 * 0.30), d.netProfit!!, 1e-9)
+    }
+
+    @Test
+    fun `a pay-less completion carries its frozen car cost without inventing pay (#1133)`() {
+        val s = "PAYLESS"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 0.0),
+                offerAccepted(s, 2_000, "h1", eval(net = 9.0, dist = 16.08, opCpm = 0.372)),
+                delivery(s, 3_000, "J1", "T1", odo = 16.08),
+            ),
+            currentCpm = 0.50,
+        )
+        val d = outcomes[2].delivery!!
+        assertEquals(16.08, d.realizedMiles!!, 1e-6)
+        assertEquals(0.372, d.frozenCostPerMile!!, 1e-6)
+        assertEquals(CostBasis.OFFER_FROZEN, d.costBasis)
+        assertEquals("−16.08 × 0.372 (−$5.98 displayed)", -5.98176, d.netProfit!!, 1e-6)
+        assertNull(d.realizedPay)
+        assertEquals(PayBasis.NONE, d.payBasis)
+    }
+
+    @Test
+    fun `a pay-less completion with zero miles has NO net — nothing driven, nothing fabricated (#1133 review)`() {
+        val s = "PAYLESS_ZERO"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 3_000, "J1", "T1", odo = 100.0),
+            ),
+            currentCpm = 0.372,
+        )
+        val d = outcomes[1].delivery!!
+        assertEquals(0.0, d.realizedMiles!!, 1e-6)
+        // A pay-less, mile-less row carries no information: null, never a fabricated $0.00 (the
+        // NetProfit discipline; `NetProfit.realized` is the one owner of this rule).
+        assertNull(d.netProfit)
+        assertNull(d.realizedPay)
+        assertEquals(PayBasis.NONE, d.payBasis)
+    }
+
+    @Test
+    fun `a pay-less completion with unknown miles keeps null net (#1133)`() {
+        val s = "PAYLESS_UNKNOWN"
+        val (outcomes, _) = foldSession(
+            listOf(
+                dashStart(s, 1_000, odo = 100.0),
+                delivery(s, 3_000, "J1", "T1", odo = null),
+            ),
+            currentCpm = 0.372,
+        )
+        val d = outcomes[1].delivery!!
+        assertNull(d.realizedMiles)
+        assertNull(d.netProfit)
+        assertNull(d.realizedPay)
+        assertEquals(PayBasis.NONE, d.payBasis)
     }
 
     @Test

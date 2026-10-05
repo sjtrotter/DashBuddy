@@ -22,6 +22,19 @@ object NetProfit {
         grossPay - miles * costPerMile
 
     /**
+     * The realized-record net rule with its nullability — the ONE owner (#1133 review): null when
+     * [miles] or [costPerMile] is unknown (nothing to charge); when [grossPay] is unknown the row
+     * still carries the cost it DROVE, `−miles × cpm`, but only for a positive distance — a
+     * pay-less, mile-less row has no information and stays null (never a fabricated `0.0`).
+     */
+    fun realized(grossPay: Double?, miles: Double?, costPerMile: Double?): Double? = when {
+        miles == null || costPerMile == null -> null
+        grossPay != null -> net(grossPay, miles, costPerMile)
+        miles > 0.0 -> net(0.0, miles, costPerMile)
+        else -> null
+    }
+
+    /**
      * Net dollars per hour, or `null` when [hours] is not positive (rate
      * undefined — e.g. a dash with zero elapsed online time).
      */
