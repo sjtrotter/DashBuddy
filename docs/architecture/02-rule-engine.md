@@ -51,10 +51,6 @@ listed — here the exact label `Decline offer` (#734), which only the confirm s
 card's own bare `Decline` is claimed by `initial_decline` on its `secondary_action_button_dash_plus`
 id. It closes the FIELDED shape only; the general click-vs-window ordering race stays open on #1104.
 
-#1141 adds the restaurant wait screen's arrival-chrome branch (`Merchant notified of your arrival`
-with `Stay in your car` or `Waiting for your order`) in `doordash.screen.pickup_wait_survey` as a
-`task:pickup:arrived` anchor; survey-only renders stay flowless.
-
 **The 8.97.8 Compose offer card (#1114, fielded 2026-09-18).** DoorDash replaced the View-based offer
 card server-side, on the same app build, with an id-less Compose tree: `ComposeView` → `ScrollView`
 holding a standalone currency figure, `incl. tips`, ONE route summary of the shape
