@@ -12,12 +12,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 
 @AndroidEntryPoint
 class BubbleActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        logLifecycle("create")
 
         setContent {
             // Shared instance with BubbleScreen's default hiltViewModel() (both scope to this
@@ -35,5 +37,25 @@ class BubbleActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        logLifecycle("start")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        logLifecycle("stop")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        logLifecycle("destroy")
+    }
+
+    /** #916: one line per lifecycle phase; `isChangingConfigurations` separates a rotate-teardown from a real destroy. */
+    private fun logLifecycle(phase: String) {
+        Timber.tag("Bubble").i("activity %s isFinishing=%s isChangingConfigurations=%s", phase, isFinishing, isChangingConfigurations)
     }
 }

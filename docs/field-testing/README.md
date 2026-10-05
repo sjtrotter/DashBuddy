@@ -55,6 +55,12 @@ For items with multiple sub-concerns at different statuses, use one
   `app_events` row) a few seconds BEFORE the screen-derived `DASH_PAUSED`, while the dash's mode and
   timers behave exactly as before (the push is informational — it must not pause, resume, or shorten
   the safety net).
+- **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
+  shows session start/end, `bubble post requested … canBubble=true` / `bubble post returned`, and activity
+  create/start/stop/destroy; swiping the bubble's NOTIFICATION out of the shade logs `bubble notification
+  removed (deleteIntent)` (dragging the chathead to the X does NOT — that is #1226). Use the sequence to
+  assess whether a vanished bubble was dismissed, torn down, had `canBubble=false`, or the process died
+  (an abrupt end without destroy is a clue, not proof).
   - Confirmed: 0/2
 
 - **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap

@@ -161,6 +161,9 @@ class BubbleManager @Inject constructor(
      * have caught up to — or may belong to — another platform's dash).
      */
     fun startSession(sessionId: String, platformName: String) {
+        Timber.tag("Bubble").i(
+            "session start platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
+        )
         val verb = sessionVerb(platformName)
         postMessage(
             context.getString(R.string.bubble_chat_session_started, verb),
@@ -177,6 +180,9 @@ class BubbleManager @Inject constructor(
      * execute time even single-app (so the line would file session-less).
      */
     fun endSession(platformName: String? = null, sessionId: String? = null) {
+        Timber.tag("Bubble").i(
+            "session end platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
+        )
         val verb = sessionVerb(platformName)
         postMessage(
             context.getString(R.string.bubble_chat_session_done, verb),
@@ -246,6 +252,14 @@ class BubbleManager @Inject constructor(
 
         // Post Notification
         showNotification(text, persona, expand)
+    }
+
+    /** Built once: a constant, extras-less broadcast for the bubble notification's delete intent (#916). */
+    private val dismissIntent: PendingIntent by lazy {
+        PendingIntent.getBroadcast(
+            context, 0, Intent(context, BubbleDismissReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 
     private fun createChannel() {
@@ -346,13 +360,30 @@ class BubbleManager @Inject constructor(
             .setStyle(style)
             .setBubbleMetadata(bubbleMetadata)
             .setContentIntent(contentIntent)
+            .setDeleteIntent(dismissIntent)
             .setShortcutId(shortcutId)
             .setLocusId(LocusIdCompat(shortcutId))
             .addPerson(senderPerson)
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_MAX)
 
-        notificationManager.notify(BUBBLE_NOTIFICATION_ID, builder.build())
+        val notification = builder.build()
+        // `canBubble` is the OS gate that actually decides whether a chathead renders (the dasher's
+        // bubble preference), not the presence of our own metadata — the most common "bubble vanished"
+        // cause is that preference being reverted (fable review of PR #1225).
+        Timber.tag("Bubble").i(
+            "bubble post requested id=%d canBubble=%s",
+            BUBBLE_NOTIFICATION_ID, cloud.trotter.dashbuddy.util.PermissionUtils.hasFullBubblePreference(context),
+        )
+        try {
+            notificationManager.notify(BUBBLE_NOTIFICATION_ID, notification)
+            Timber.tag("Bubble").i("bubble post returned id=%d", BUBBLE_NOTIFICATION_ID)
+        } catch (t: Throwable) {
+            Timber.tag("Bubble").e(
+                "bubble post FAILED id=%d cause=%s", BUBBLE_NOTIFICATION_ID, t.javaClass.name,
+            )
+            throw t
+        }
     }
 
     /**
