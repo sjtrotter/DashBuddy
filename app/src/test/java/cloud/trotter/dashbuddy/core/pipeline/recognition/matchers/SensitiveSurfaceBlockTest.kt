@@ -111,6 +111,20 @@ class SensitiveSurfaceBlockTest {
         }
     }
 
+    /** Astra P2 (PR #1216): a text-less partial render exposing only the pad's line or clear glyph is still blocked. */
+    @Test
+    fun `a degraded store-signature render with only a pad widget id is still claimed sensitive (#1022)`() {
+        for (id in listOf("signature_drawing_line", "signature_clear_img", "signature_drawing_view", "signature_clear_button")) {
+            val tree = UiNode(
+                className = "android.widget.FrameLayout",
+                children = listOf(UiNode(className = "android.view.View", viewIdResourceName = "com.doordash.driverapp:id/$id")),
+            ).restoreParents()
+            val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
+            assertEquals("$id alone must be claimed by the sensitive rule", SENSITIVE_RULE_ID, match?.ruleId)
+            assertEquals("$id alone must land on the store-signature branch", "sensitive.store_signature", match?.intent)
+        }
+    }
+
     @Test
     fun `the rules-independent marker backstop also trips on every text-bearing frame`() {
         for (filename in TEXT_BEARING) {

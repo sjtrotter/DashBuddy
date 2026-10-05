@@ -211,7 +211,7 @@
           }
         },
         {
-          "comment": "#1022: the STORE-EMPLOYEE signature pad ('Store Employee signature' / 'A store employee signature is required for this order' over a 'Store Employee name' field, the drawing canvas, Clear and 'Submit signature'), fielded 2026-08-01 13:00 on 8.91.7 and reaching UNKNOWN capture: the recipient-signature arm of `sensitive.id_verification` above keys on 'A recipient signature is required' / 'provide their signature', which this variant renders neither of. Blocked outright, NOT recognize-and-redact: the Pledge blocks a document-image capture surface (licence scan, signature pad) as a CLASS regardless of whose — the signer here is a store employee, not the dasher or the customer — and the typed-in employee name would be PII on top. Anchored first on the pad's own view ids (locale-immune, #938/#924/#1059): `signature_clear_button` and `signature_drawing_view` are the canvas widget itself, present before either label renders, and appear in the committed corpus ONLY on the already-blocked recipient-signature fixture (whose earlier `id_verification` arm still claims it first). The two English labels together are the belt for a render whose ids change. Over-match surface: the ordinary instruction screens that merely MENTION a signature ('collect a signature at dropoff', 'Collect signature' on the 8.97.8 steps wrapper) carry none of these anchors. Ships independently of #998.",
+          "comment": "#1022: the STORE-EMPLOYEE signature pad ('Store Employee signature' / 'A store employee signature is required for this order' over a 'Store Employee name' field, the drawing canvas, Clear and 'Submit signature'), fielded 2026-08-01 13:00 on 8.91.7 and reaching UNKNOWN capture: the recipient-signature arm of `sensitive.id_verification` above keys on 'A recipient signature is required' / 'provide their signature', which this variant renders neither of. Blocked outright, NOT recognize-and-redact: the Pledge blocks a document-image capture surface (licence scan, signature pad) as a CLASS regardless of whose — the signer here is a store employee, not the dasher or the customer — and the typed-in employee name would be PII on top. Anchored first on the pad's own view ids (locale-immune, #938/#924/#1059): `signature_clear_button` / `signature_drawing_view` / `signature_drawing_line` / `signature_clear_img` are the canvas widget itself (every id the fixture renders, so a partial render exposing only the line or the clear glyph is still caught — Astra review), present before either label renders, and appear in the committed corpus ONLY on the already-blocked recipient-signature fixture (whose earlier `id_verification` arm still claims it first). The two English labels together are the belt for a render whose ids change. Over-match surface: the ordinary instruction screens that merely MENTION a signature ('collect a signature at dropoff', 'Collect signature' on the 8.97.8 steps wrapper) carry none of these anchors. Ships independently of #998.",
           "intent": "sensitive.store_signature",
           "require": {
             "any": [
@@ -223,6 +223,12 @@
                     },
                     {
                       "hasIdSuffix": "signature_drawing_view"
+                    },
+                    {
+                      "hasIdSuffix": "signature_drawing_line"
+                    },
+                    {
+                      "hasIdSuffix": "signature_clear_img"
                     }
                   ]
                 }

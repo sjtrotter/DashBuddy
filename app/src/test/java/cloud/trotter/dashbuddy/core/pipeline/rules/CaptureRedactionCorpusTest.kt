@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -673,8 +674,8 @@ class CaptureRedactionCorpusTest {
         )
     }
 
-    /** Every node in [node]'s subtree, depth-first (fixture assertions need node-level reads). */
-    private fun flatten(node: UiNode): List<UiNode> = listOf(node) + node.children.flatMap { flatten(it) }
+    /** Every node in [node]'s subtree, depth-first, via the file's one tree visitor [walkNodes]. */
+    private fun flatten(node: UiNode): List<UiNode> = buildList { walkNodes(node) { add(it) } }
 
     /** Load a committed fixture and assert the production ruleset claims it with [ruleId]. */
     private fun recognizedFixture(folder: String, filename: String, ruleId: String): UiNode {
@@ -737,9 +738,33 @@ class CaptureRedactionCorpusTest {
                 assertTrue("$filename: chrome kept: '$kept'", serialized.contains(kept))
             }
         }
-        // 'Contact support' is excluded even if a support row ever shares the step_title id.
-        val support = UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Contact support")
-        assertEquals("Contact support", rule.redact.apply(support.restoreParents()).text)
+        // Chrome spellings are excluded even when they share the step_title id — an exact-match
+        // exclusion would have hashed the 8.98.5 'Contact Customer' into a constant (fable review).
+        for (chrome in listOf("Contact support", "Contact Customer", "Contact the store")) {
+            val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = chrome)
+            assertEquals(chrome, rule.redact.apply(node.restoreParents()).text)
+        }
+        // Astra P1 (PR #1216): a title-only render carrying an id-bearing customer slot must NOT be
+        // claimed (it would lose the UNKNOWN-path ID_MARKERS backstop) — the steps structure is required.
+        val titleOnly = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertNotEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(titleOnly)?.ruleId)
+        // And when a steps render DOES carry such a slot, the belt masks it.
+        val withSlot = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Take photo"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(withSlot)?.ruleId)
+        assertFalse(serialize(rule.redact.apply(withSlot)).contains("Jane"))
     }
 
     /**
@@ -806,6 +831,29 @@ class CaptureRedactionCorpusTest {
         for (kept in listOf("Select an Order", "Pluckers Wing Bar", "Target")) {
             assertTrue("chrome / merchant kept: '$kept'", serialized.contains(kept))
         }
+        // Astra P1 (PR #1216): a picker render whose rows carry other text must stay UNKNOWN (and so
+        // keep its ID_MARKERS backstop); the `instructions` anchor demands the `For ` lead-in.
+        val otherRows = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "Tap an order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertNotEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(otherRows)?.ruleId)
+        // And a claimed render that also carries an id-bearing customer slot masks it via the belt.
+        val withSlot = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/customer_name", text = "Jane L"),
+            ),
+        ).restoreParents()
+        assertEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(withSlot)?.ruleId)
+        val beltMasked = serialize(TestRulesetFactory.screenRuleset.ruleById(ruleId)!!.redact.apply(withSlot))
+        assertFalse(beltMasked.contains("Jane"))
     }
 
     // =========================================================================
@@ -990,8 +1038,10 @@ class CaptureRedactionCorpusTest {
             "dropoff_step_instructions",
             // #1127/#1128/#1139 add the three surfaces this PR gave (or widened) a redact for —
             // the folders a real pull lands in next. `dropoff_customer_unavailable`'s
-            // `Contact <name>` title is the whole-value name shape's job; the two For-line
-            // folders carry no shape this guard flags, but their decoys must be REACHABLE here.
+            // `Contact <name>` title is caught by the #1127 GATED `Contact ` lead-in in
+            // `PiiShapes` (tail = the name shape); the two For-line folders carry no shape this
+            // guard flags (`For ` is chrome-ambiguous by the #1064 doctrine — follow-up filed), so
+            // for them the listing buys decoy reachability only.
             "dropoff_customer_unavailable", "pickup_resolution_options", "pickup_order_picker",
         )
         val leaks = mutableListOf<String>()

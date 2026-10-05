@@ -133,7 +133,13 @@ class PiiShapesParityTest {
         // AL3 (deliberate): the same SET of suffixes, now the table's rows; only the match widened (endsWith).
         assertEquals(ORIGINAL_PII_ID_SUFFIXES, CustomerTextMarkers.ID_MARKER_SUFFIXES) // pre-#1145 + the UU3 additions
         assertEquals(ORIGINAL_NAME_PREFIXES, PiiShapes.NAME_PREFIXES)
-        assertEquals(setOf("Return "), PiiShapes.GATED_NAME_PREFIXES.keys)
+        // #1127 added the gated `Contact ` lead-in (tail = the whole name shape; 'Contact support' /
+        // 'Contact Customer' fail the tail and stay chrome).
+        assertEquals(setOf("Return ", "Contact "), PiiShapes.GATED_NAME_PREFIXES.keys)
+        assertEquals("Contact ", PiiShapes.customerLeadIn("Contact Jane L"))
+        for (chrome in listOf("Contact support", "Contact Customer", "Contact")) {
+            assertEquals(chrome, null, PiiShapes.customerLeadIn(chrome))
+        }
     }
 
     @Test

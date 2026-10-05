@@ -231,6 +231,10 @@ object PiiShapes {
     // #909 `<clinit>` class). Keep this block below the name-shape regexes.
     val GATED_NAME_PREFIXES: Map<String, (String) -> Boolean> = mapOf(
         "Return " to { tail -> FIRST_LAST_INITIAL.matches(tail.substringBefore(" to ")) },
+        // #1127: the "Can't hand order to customer" page's `Contact <First L>` step title. Gated on the
+        // name shape so the chrome rows ('Contact support', the 8.98.5 'Contact Customer') never match;
+        // this is what lets intake (SnapshotRedactor) and the FIX 4 corpus guard see the slot at all.
+        "Contact " to { tail -> FIRST_LAST_INITIAL.matches(tail) },
     )
 
     /**

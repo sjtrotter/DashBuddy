@@ -3315,7 +3315,7 @@
       }
     },
     {
-      "comment": "#1127 — the 'Can\u2019t hand order to customer' alternate-handoff steps page (nav title 'Can\u2019t hand order to customer' over 'Follow the alternate method below…' and a step list: 'Contact <customer>' with a wait timer + Call / Text, 'Take photo', 'Add description'), fielded 2026-09-24 16:22 on 8.99.20 in two envelopes and reaching UNKNOWN capture with the customer's first-name + last-initial raw in the first `step_title`. `dropoff_handoff` rejects any frame carrying `steps_screen_content`, and `dropoff_step_instructions` keys on the 'Drop off steps' title, so nothing recognized it. RECOGNIZE-ONLY, the #995/#985/#1107 posture: no `state`, no `parse`, no `bind` — the rule exists so a recognizing rule can carry a `redact` (#806); 'no state block' buys lifecycle NEUTRALITY, not state-inertness (`FlowlessRecognitionNeutralityTest`). Whether this page should mark anything in the dropoff lifecycle (it is the start of a customer-unavailable handoff) is a separate design question a privacy fix must not answer by accident. Anchor: the nav title matched ON its `textView_navBar_title` node, by the apostrophe-free substring 'hand order to customer' so the U+2019 render can never break it (the #888 precedent) — and the id conjunct keeps it off the drop-off HELP sheet, whose `help_menu_item` row carries the same words. The 8.98.5 render of this page reportedly used `cx_unavailable_steps_view` / `contact_cx_step_title`; neither id is in a committed fixture, so it is not an anchor yet (add it as an `any` alternative when a frame lands). Priority 161 sits behind every other rule in this section (`dropoff_step_instructions` 160), so it only claims a frame nothing else recognized. Declares the file-wide #1107/#993/#1039 parity entries verbatim (inert here).",
+      "comment": "#1127 — the 'Can\u2019t hand order to customer' alternate-handoff steps page (nav title 'Can\u2019t hand order to customer' over 'Follow the alternate method below…' and a step list: 'Contact <customer>' with a wait timer + Call / Text, 'Take photo', 'Add description'), fielded 2026-09-24 16:22 on 8.99.20 in two envelopes and reaching UNKNOWN capture with the customer's first-name + last-initial raw in the first `step_title`. `dropoff_handoff` rejects any frame carrying `steps_screen_content`, and `dropoff_step_instructions` keys on the 'Drop off steps' title, so nothing recognized it. RECOGNIZE-ONLY, the #995/#985/#1107 posture: no `state`, no `parse`, no `bind` — the rule exists so a recognizing rule can carry a `redact` (#806); 'no state block' buys lifecycle NEUTRALITY, not state-inertness (`FlowlessRecognitionNeutralityTest`). Whether this page should mark anything in the dropoff lifecycle (it is the start of a customer-unavailable handoff) is a separate design question a privacy fix must not answer by accident. Anchor: the nav title matched ON its `textView_navBar_title` node, by the apostrophe-free substring 'hand order to customer' so the U+2019 render can never break it (the #888 precedent) — and the id conjunct keeps it off the drop-off HELP sheet, whose `help_menu_item` row carries the same words. The 8.98.5 render of this page (fielded 09-23, UNKNOWN pull frame `…9b0404`, not committed) used `cx_unavailable_steps_view` / `contact_cx_step_title` and read 'Contact Customer' with no name; both ids are `any` alternatives here so a rollback or A/B render is claimed and masked too. The require also demands a step row (`step_title` / `contact_cx_step_title`) so a title-only frame with an id-bearing customer slot (Astra's counterexample) cannot be claimed and stripped of its `ID_MARKERS` backstop. Priority 161 sits behind every other rule in this section (`dropoff_step_instructions` 160), so it only claims a frame nothing else recognized. Declares the file-wide #1107/#993/#1039 parity entries verbatim (inert here).",
       "id": "doordash.screen.dropoff_customer_unavailable",
       "priority": 161,
       "redact": [
@@ -3358,7 +3358,7 @@
           "plainMask": true
         },
         {
-          "comment": "#1127: the 'Contact <FirstName L>' step title — the step card names the customer the dasher must try to reach. Id-scoped to `step_title` (the same row family renders the 'Take photo' / 'Add description' chrome, untouched by the prefix) with 'Contact support' excluded in case a support row ever shares the id. keepPrefix keeps 'Contact ' for replay context; the remainder masks to ONE token, and normalize customerName keys the hex on the canonical first-token + second-token-initial form so it equals the first 4 hex of the `customerNameHash` the dropoff parses persist (#623/#733).",
+          "comment": "#1127: the 'Contact <FirstName L>' step title — the step card names the customer the dasher must try to reach. Id-scoped to `step_title` (the same row family renders the 'Take photo' / 'Add description' chrome, untouched by the prefix) with the chrome spellings ('Contact support', the 8.98.5 'Contact Customer', store/merchant variants) excluded by regex — the fable review of PR #1216 showed an exact `hasText` exclusion would hash 'Contact Customer' into a constant masquerading as a customer identity. keepPrefix keeps 'Contact ' for replay context; the remainder masks to ONE token, and normalize customerName keys the hex on the canonical first-token + second-token-initial form so it equals the first 4 hex of the `customerNameHash` the dropoff parses persist (#623/#733).",
           "find": {
             "all": [
               {
@@ -3369,7 +3369,7 @@
               },
               {
                 "not": {
-                  "hasText": "Contact support"
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
                 }
               }
             ]
@@ -3378,19 +3378,88 @@
             "Contact "
           ],
           "normalize": "customerName"
+        },
+        {
+          "comment": "#1127: the 8.98.5 render's own step-title id (`contact_cx_step_title`, 'Contact Customer' on the fielded 09-23 frame — no name) — masked by the same name-shaped rule in case a later build personalises it like 8.99.20 did; the chrome exclusions above keep 'Contact Customer' raw.",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "contact_cx_step_title"
+              },
+              {
+                "hasTextStartsWith": "Contact "
+              },
+              {
+                "not": {
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
+                }
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Contact "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#1122-class belt (Astra review of PR #1216, P1): a RECOGNIZED frame loses the UNKNOWN-path `ID_MARKERS` backstop, so the id-bearing customer slots that could ride a combined render of this page are masked here too (same four ids and postures as `dropoff_pre_arrival`); inert on both committed fixtures.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true
         }
       ],
       "require": {
-        "exists": {
-          "all": [
-            {
-              "hasIdSuffix": "textView_navBar_title"
-            },
-            {
-              "hasTextContaining": "hand order to customer"
+        "all": [
+          {
+            "exists": {
+              "any": [
+                {
+                  "all": [
+                    {
+                      "hasIdSuffix": "textView_navBar_title"
+                    },
+                    {
+                      "hasTextContaining": "hand order to customer"
+                    }
+                  ]
+                },
+                {
+                  "hasIdSuffix": "cx_unavailable_steps_view"
+                }
+              ]
             }
-          ]
-        }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "step_title"
+                },
+                {
+                  "hasIdSuffix": "contact_cx_step_title"
+                }
+              ]
+            }
+          }
+        ]
       }
     }
   ],

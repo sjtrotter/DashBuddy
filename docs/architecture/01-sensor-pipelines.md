@@ -181,9 +181,10 @@ fields (title/text/bigText/tickerText/subText) for
 corpus `SnapshotSecurityScanner`/`SnapshotRedactor`. Recognition is deliberately untouched by #835:
 `UiNode.allText` (what rules match on) still excludes `stateDescription` — widening a scrub layer
 must never be able to move a classification.
-#1022 adds the fourth document-image surface on the same pattern: the **store-employee signature pad**
-of the return-order flow (`sensitive.store_signature` — `signature_clear_button` / `signature_drawing_view`
-first, the `Submit signature` + `Store Employee signature` labels as the belt; both labels are also
+
+**Document-image block + 8.99.20 customer-name surfaces (#1022 / #1127 / #1128 / #1139).** #1022 adds the fourth document-image surface on the same pattern: the **store-employee signature pad**
+of the return-order flow (`sensitive.store_signature` — the pad's four widget ids (`signature_clear_button` / `signature_drawing_view` /
+`signature_drawing_line` / `signature_clear_img`) first, the `Submit signature` + `Store Employee signature` labels as the belt; both labels are also
 `SensitiveTextMarkers` keywords, so the rules-independent backstop covers the pad as well). A signature pad
 is blocked outright regardless of whose signature (#463), and the ordinary return-instruction screens that
 merely mention a signature carry none of its anchors. Three customer-PII surfaces fielded on DoorDash
