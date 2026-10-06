@@ -1237,7 +1237,7 @@ class SideEffectEngineTest {
         val collected = mutableListOf<StateEvent>()
         backgroundScope.launch { engine.events.collect { collected += it } }
         runCurrent()
-        engine.process(AppEffect.EvaluateArrival(Platform.Uber, "arrival-job", "pickup", accepted, 30))
+        engine.process(AppEffect.EvaluateArrival(Platform.Uber, "arrival-job", "pickup", accepted, 30, requestedAt = 1_000L))
         runCurrent()
         val loopback = collected.single() as Observation.Loopback
         assertEquals(Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED, loopback.effect)
@@ -1259,7 +1259,7 @@ class SideEffectEngineTest {
         runCurrent()
         engine.process(AppEffect.EvaluateArrival(
             Platform.Uber, "job", "pickup",
-            AcceptedOfferEconomics("old", estMinutes = 100.0, isShop = true, acceptedAt = 100L), 30,
+            AcceptedOfferEconomics("old", estMinutes = 100.0, isShop = true, acceptedAt = 100L), 30, requestedAt = 1_000L
         ))
         runCurrent()
         assertEquals(emptyList<StateEvent>(), collected)
@@ -1273,7 +1273,7 @@ class SideEffectEngineTest {
         runCurrent()
         engine.process(AppEffect.EvaluateArrival(
             Platform.Uber, "job", "pickup",
-            AcceptedOfferEconomics("offer", estMinutes = 100.0, handlingMinutes = 80.0, isShop = true, acceptedAt = 100L), 30,
+            AcceptedOfferEconomics("offer", estMinutes = 100.0, handlingMinutes = 80.0, isShop = true, acceptedAt = 100L), 30, requestedAt = 1_000L
         ), recovering = true)
         runCurrent()
         assertEquals(Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED, (collected.single() as Observation.Loopback).effect)

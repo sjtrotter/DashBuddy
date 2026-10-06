@@ -71,10 +71,21 @@ class ArrivalReevalTest {
         return effects.diff(state(prev), state(next), observation)
     }
     private val estimate = ArrivalCorrection.compute(accepted, task.taskId, 30, UserEconomy(), 1_100L)!!
-    private fun loopback(jobId: String = "job") = Observation.Loopback(
+    private fun loopback(jobId: String = "job", requestedAt: Long? = 1_000L) = Observation.Loopback(
         timestamp = 1_100L, effect = Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED,
-        targetPlatform = Platform.DoorDash, payload = ObservationPayload.ArrivalEstimated(jobId, estimate),
+        targetPlatform = Platform.DoorDash, payload = ObservationPayload.ArrivalEstimated(jobId, estimate, requestedAt),
     )
+
+    @Test fun `a result for a SUPERSEDED request is inert - the fresh latch owns the answer (Astra r2)`() {
+        // Recovery cleared the first request; a fresh frame re-latched at 5_000. A replayed result for the OLD
+        // request (1_000) arrives first and must not land; the result for the fresh request does.
+        val fresh = region().copy(activeJob = region().activeJob!!.copy(arrivalEstimateRequestedAt = 5_000L, arrivalEstimateObservedItems = 35))
+        val stale = step(fresh, loopback(requestedAt = 1_000L))
+        assertNull(stale.activeJob!!.arrivalEstimate)
+        val landed = step(fresh, loopback(requestedAt = 5_000L))
+        assertEquals(estimate, landed.activeJob!!.arrivalEstimate)
+        assertNull("no requestedAt at all (pre-fix payload) never lands", step(fresh, loopback(requestedAt = null)).activeJob!!.arrivalEstimate)
+    }
 
     @Test fun `first coherent frame requests once and subsequent frames never re-arm`() {
         val before = region()
@@ -170,7 +181,7 @@ class ArrivalReevalTest {
         val base = region().let { it.copy(activeJob = it.activeJob!!.copy(acceptedOffers = listOf(noNetPay))) }
         val before = step(base, obs())
         val arrival = ArrivalCorrection.compute(noNetPay, task.taskId, 30, UserEconomy(), 1_100L)!!
-        val result = loopback().copy(payload = ObservationPayload.ArrivalEstimated("job", arrival))
+        val result = loopback().copy(payload = ObservationPayload.ArrivalEstimated("job", arrival, requestedAt = 1_000L))
         val after = step(before, result)
         assertNull(arrival.correctedDollarsPerHour)
         assertEquals(noNetPay.quotedItemCount, arrival.quotedItems)

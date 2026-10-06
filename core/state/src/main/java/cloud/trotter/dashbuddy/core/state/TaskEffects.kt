@@ -70,7 +70,7 @@ internal fun EffectMap.diffTask(
         ) {
             add(AppEffect.EvaluateArrival(
                 next.platform, job.jobId, nextTask.taskId,
-                job.acceptedOffers.single(), job.arrivalEstimateObservedItems!!,
+                job.acceptedOffers.single(), job.arrivalEstimateObservedItems!!, requestedAt = job.arrivalEstimateRequestedAt!!
             ))
         }
         val estimate = job?.arrivalEstimate

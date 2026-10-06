@@ -214,6 +214,8 @@ sealed class AppEffect {
         val taskId: String,
         val accepted: AcceptedOfferEconomics,
         val observedItems: Int,
+        /** #823 (Astra r2): the request this effect answers — the landing accepts only a result for THIS latch. */
+        val requestedAt: Long,
     ) : AppEffect()
 
     /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */

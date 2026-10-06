@@ -529,7 +529,7 @@ class SideEffectEngine @Inject constructor(
                             timestamp = System.currentTimeMillis(),
                             effect = Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED,
                             targetPlatform = effect.platform,
-                            payload = ObservationPayload.ArrivalEstimated(effect.jobId, estimate),
+                            payload = ObservationPayload.ArrivalEstimated(effect.jobId, estimate, requestedAt = effect.requestedAt),
                         ),
                     )
                 }
