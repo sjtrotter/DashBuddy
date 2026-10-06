@@ -754,8 +754,11 @@ class CaptureRedactionCorpusTest {
         for (ruleId in listOf(
             "doordash.screen.dropoff_customer_unavailable",
             "doordash.screen.pickup_order_picker",
-            // #1079: the recognize-only 8.95.6 going-to-store sheet carries the picker's belt verbatim.
+            // #1079: the recognize-only 8.95.6 going-to-store sheet carries the picker's belt verbatim —
+            // and so does the alcohol warning sheet (Astra r1 of PR #1245: a bottom sheet over the dropoff
+            // flow can carry the arrival card's `user_name`, and a recognized frame has no backstop).
             "doordash.screen.pickup_going_to_store_sheet",
+            "doordash.screen.dropoff_alcohol_warning_sheet",
         )) {
             val rule = rulesJson.single { it["id"]!!.jsonPrimitive.content == ruleId }
             val declared = mutableSetOf<String>()
@@ -1070,6 +1073,7 @@ class CaptureRedactionCorpusTest {
             // #1079: the recognize-only going-to-store sheet copies pickup_receipt_scan's
             // bare-name entry verbatim — an unpinned hand-copy is the drift this test stops.
             "doordash.screen.pickup_going_to_store_sheet",
+            "doordash.screen.dropoff_alcohol_warning_sheet",
         )) {
             assertTrue(
                 "$id must carry the canonical name-shape regex (FIX 3 defense-in-depth)",
@@ -1703,6 +1707,7 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.pickup_pre_arrival" to "address_subpremise_line",
             "doordash.screen.pickup_navigation" to "bottom_sheet_subpremise_line",
             "doordash.screen.pickup_going_to_store_sheet" to "address_subpremise_line",
+            "doordash.screen.dropoff_alcohol_warning_sheet" to "address_subpremise_line",
         )
         for ((ruleId, idSuffix) in byId) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!

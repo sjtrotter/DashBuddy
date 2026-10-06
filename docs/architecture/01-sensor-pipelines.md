@@ -204,14 +204,14 @@ registered in `CorpusDecoys`.
 
 **8.95.6 id-less sheets, round 2 (#1079).** Two more recognize-only rules (no `state`/`parse`/`bind`;
 both in `FlowlessRecognitionNeutralityTest`) take frames off the UNKNOWN path where the #910 `ID_MARKERS`
-backstop was the primary control: `dropoff_alcohol_warning_sheet` (priority 146 — the alcohol-flow "Scan
+backstop was the primary control: `dropoff_alcohol_warning_sheet` (priority 162 — behind every dropoff sibling, so a combined frame that also carries `dropoff_customer_unavailable`'s (161) chrome stays with that rule and its redact (Astra r1 of PR #1245) — the alcohol-flow "Scan
 customer's ID and collect signature…" warning; anchored on the `alcoholWarningBottomSheet` container id +
 its title/message id; an instruction sheet, NOT a document-image surface, so recognized, not blocked; it
-carries the dropoff file's four combined-frame belts verbatim) and `pickup_going_to_store_sheet` (priority
-147 — the going-to-store sheet caught before its merchant row renders, so `pickup_pre_arrival`'s
+carries the COMPLETE customer belt — every `ID_MARKERS` suffix with the family posture plus the two label-anchored Apt/Suite belts and the id-less name shape — because a bottom sheet over the dropoff flow can carry the arrival card's `user_name`, and a recognized frame has no backstop; pinned by the recognize-only-carries-every-id check) and `pickup_going_to_store_sheet` (priority
+163 — behind every pickup sibling; the going-to-store sheet caught before its merchant row renders, so `pickup_pre_arrival`'s
 `Pickup from` anchor misses; anchored on DoorDash chrome only — `address_instructions_view` +
 `lblOrderIncludes`="Order includes" + `going_to_store_map`, the last excluding `dropoff_geofence_warning`;
-redact = a fused `Delivery for ` keepPrefix entry, `pickup_order_picker`'s whole `ID_MARKERS` belt and
+redact = `pickup_order_picker`'s whole `ID_MARKERS` belt FIRST (so a bounded plain-mask field such as `message_input` is claimed before any prefix entry can hash a brute-forceable value), then a fused `Delivery for ` keepPrefix entry, and
 `pickup_receipt_scan`'s bare-name entry, all verbatim and parity-pinned). Both priorities sit behind every
 sibling, so they claim only frames no other rule wants. **Subpremise ruling (decision pass 2026-10-05):**
 `address_subpremise_line` on the PICKUP surfaces is the MERCHANT's suite (exposure nil) but is masked

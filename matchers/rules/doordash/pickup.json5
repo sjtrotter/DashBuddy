@@ -238,9 +238,11 @@
       "priority": 71,
       "redact": [
         {
+          "comment": "#1079 (fable review of PR #1245): `normalize: customerName` so this node masks to the SAME hex as the going-to-store sheet's `user_name` entry on the consecutive frame of one surface, and equals the persisted `customerNameHash` (#623/#733). Pre-#1079 the entry hashed the raw token, so one customer carried two hexes across two frames of the same pickup.",
           "find": {
             "hasIdSuffix": "user_name"
-          }
+          },
+          "normalize": "customerName"
         },
         {
           "find": {
@@ -1139,6 +1141,17 @@
           "plainMask": true
         },
         {
+          "comment": "#1079 (fable review of PR #1245): the `bottom_sheet_` twin of the subpremise id, now an `ID_MARKERS` row — same bounded unit number, same plainMask, so the belt stays ⊇ ID_MARKERS.",
+          "find": {
+            "hasIdSuffix": "bottom_sheet_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
           },
@@ -1223,18 +1236,8 @@
     {
       "comment": "#1079 — DoorDash 8.95.6's going-to-store sheet caught MID-RENDER (fielded 2026-09-05 16:22/16:34/17:15/18:23 and again on 8.96.8 2026-09-08 17:14): the `address_instructions_view` pickup sheet — toolbar `Pick up by <h:mm>`, `Order includes`, `N items`, and below it a `customer_contact_view` with `Delivery for` + the customer's `user_name` — rendered BEFORE the merchant row (`mx_contact_view`'s `user_name_label` is text-free), so `pickup_pre_arrival`'s `Pickup from` anchor cannot match and every frame fell to UNKNOWN, where only the #910 `ID_MARKERS` backstop stood between the frame and a raw customer name (the backstop-as-primary-control posture #1058 argued a rule must own). RECOGNIZE-ONLY (decision pass 2026-10-05, fable + Astra aligned): no `state`, no `parse`, no `bind` — whether these partial renders should assert `task:pickup:navigation` is a lifecycle question a privacy fix must not answer by accident (FlowlessRecognitionNeutralityTest pins that it did not). ANCHORS are DoorDash chrome ONLY — never a name, never a merchant: the `address_instructions_view` id, the `lblOrderIncludes` id carrying `Order includes`, and the `going_to_store_map` id (the pickup-phase discriminator: `dropoff_geofence_warning` also renders `address_instructions_view`, never the store map). OVER-MATCH audit: the triple occurs in the committed corpus only on `pickup_pre_arrival` (71), one `waiting_for_offer` frame and session fixtures, all claimed by rules that out-rank this one; priority 147 (after `pickup_navigation` 60, `pickup_arrival` 70, `pickup_pre_arrival` 71 and every other screen rule but the drawer/catch-all) means it only ever claims a frame NO other rule wants — the golden guard proves no committed frame moved. REDACT is COMPLETE because a recognized frame loses the UNKNOWN-path backstop: the `Delivery for <customer>` fused line, `pickup_order_picker`'s whole `ID_MARKERS` belt verbatim, and `pickup_receipt_scan`'s id-less name-shape entry verbatim (byte-SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN, pinned by the CaptureRedactionCorpusTest parity list).",
       "id": "doordash.screen.pickup_going_to_store_sheet",
-      "priority": 147,
+      "priority": 163,
       "redact": [
-        {
-          "comment": "#1079: a FUSED `Delivery for <customer>` render (the fielded frames split the label and the name across `user_name_label` / `user_name`, which the id entries below own). keepPrefix keeps the lead-in for replay context; normalize customerName keys the hex on the canonical first-token + second-token-initial form, so it equals the persisted `customerNameHash` (#623/#733). The trailing space makes the bare `Delivery for` LABEL a non-match (it stays as chrome). Ordered FIRST: `Delivery for Jane D` also satisfies the id-less name shape below, which would hash the lead-in away with it.",
-          "find": {
-            "hasTextStartsWith": "Delivery for "
-          },
-          "keepPrefix": [
-            "Delivery for "
-          ],
-          "normalize": "customerName"
-        },
         {
           "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. Copied VERBATIM from `pickup_order_picker` by #1079 (same bytes, same mask hex); unlike the picker, this sheet DOES render `user_name` (the customer, under `customer_contact_view`, and the merchant slot under `mx_contact_view` — both normalize, fail-toward-privacy) and the `address_line_1/_2` / `address_subpremise_line` trio.",
           "find": {
@@ -1281,6 +1284,17 @@
           "plainMask": true
         },
         {
+          "comment": "#1079 (fable review of PR #1245): the `bottom_sheet_` twin of the subpremise id, now an `ID_MARKERS` row — same bounded unit number, same plainMask, so the belt stays ⊇ ID_MARKERS.",
+          "find": {
+            "hasIdSuffix": "bottom_sheet_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "dasher_instruction_content_collapsed"
           },
@@ -1316,6 +1330,16 @@
           "plainMask": true
         },
         {
+          "comment": "#1079: a FUSED `Delivery for <customer>` render (the fielded frames split the label and the name across `user_name_label` / `user_name`, which the id entries below own). keepPrefix keeps the lead-in for replay context; normalize customerName keys the hex on the canonical first-token + second-token-initial form, so it equals the persisted `customerNameHash` (#623/#733). The trailing space makes the bare `Delivery for` LABEL a non-match (it stays as chrome). Ordered AFTER every id-bearing entry (Astra r1 of PR #1245: a bounded plain-mask field such as `message_input` whose text happened to start with `Delivery for ` must be claimed by its own plainMask entry first, or this entry would HASH a brute-forceable value) and BEFORE the id-less name shape, which would otherwise hash the lead-in away with the name.",
+          "find": {
+            "hasTextStartsWith": "Delivery for "
+          },
+          "keepPrefix": [
+            "Delivery for "
+          ],
+          "normalize": "customerName"
+        },
+        {
           "comment": "The BARE name node rendered beside the scan target. No id, no lead-in, so the only handle is the shared first-last-initial name SHAPE — byte-SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN (the `\\s{1,4}` interior separator is #885's fix). The parity test `CaptureRedactionCorpusTest.the id-less name-shape redact pattern is SSOT with SnapshotRedactor` pins the copies it ENUMERATES — this rule was added to that list in the same pass, because a hand-copy that is not enumerated there is exactly the drift the test exists to stop. `hasNoId` keeps it off id-bearing chrome, and `hasTextMatchesRegex` reads `text` only, so the desc-only chrome nodes ('Close'/'Flash off'/'Info') are untouched. Over-match audit on this surface: every other text node fails the shape — 'Scan customer name', 'Scan receipt', 'No receipt', 'Pickup complete', 'Start scanning', 'Continue', '0:05' and the two body paragraphs all end in a multi-letter token, and '#fddcf · DoorDash' does not start with a letter — so nothing but the name is masked.",
           "find": {
             "all": [
@@ -1339,14 +1363,7 @@
           },
           {
             "exists": {
-              "all": [
-                {
-                  "hasIdSuffix": "lblOrderIncludes"
-                },
-                {
-                  "hasText": "Order includes"
-                }
-              ]
+              "hasIdSuffix": "lblOrderIncludes"
             }
           },
           {

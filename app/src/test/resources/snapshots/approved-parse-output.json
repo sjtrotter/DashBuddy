@@ -4591,12 +4591,6 @@
         "shape": null,
         "fields": {}
     },
-    "pickup_going_to_store_sheet/2026-09-05_16-22-19-565__doordash__accessibility.window__UNKNOWN__1abd6b.json": {
-        "ruleId": "doordash.screen.pickup_going_to_store_sheet",
-        "intent": "pickup_going_to_store_sheet",
-        "shape": null,
-        "fields": {}
-    },
     "pickup_going_to_store_sheet/2026-09-05_16-34-26-985__doordash__accessibility.window__UNKNOWN__2e2922.json": {
         "ruleId": "doordash.screen.pickup_going_to_store_sheet",
         "intent": "pickup_going_to_store_sheet",

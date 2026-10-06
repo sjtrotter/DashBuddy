@@ -2629,20 +2629,98 @@
     {
       "comment": "#1079 — DoorDash 8.95.6's alcohol-flow WARNING sheet (fielded 2026-09-05 17:00:14, build 0.230.0+38036999): a bottom sheet titled \"Scan customer's ID and collect signature before handing over order\" over a legal body (\"Giving age-restricted items to anyone below the age of 21 is illegal…\") and a `Got it` button. RECOGNIZE-ONLY (decision pass 2026-10-05, fable + Astra aligned): no `state`, no `parse`, no `bind` — an instruction overlay inside an already-established alcohol dropoff, not a lifecycle anchor, so recognizing it only graduates the UNKNOWN capture and gives the frame a rule-owned redact (FlowlessRecognitionNeutralityTest pins the neutrality). NOT a sensitive surface: it is an instruction sheet, not the ID scanner or the signature pad (the Pledge blocks only the literal document-image capture surfaces, #463). Anchors are view ids FIRST (locale-immune, #938): the sheet container `alcoholWarningBottomSheet` (suffix-exact — its `…Title`/`…Message`/`…Handle` children do not end with it) AND its title or message id. Over-match audit: none of the four ids occurs anywhere in the committed corpus or the negative corpus, so priority 146 (after every sibling — 54/55/56/67/68) is behaviourally inert and can never steal an alcohol sibling's frame. Redact: the fielded sheet carries no customer field at all; the block is this file's four combined-frame belts copied VERBATIM from the alcohol siblings (same bytes, same mask hex) — they are what the #1107/#993/#1039 parity tests require of every rule in this file, and they cover the customer nodes a combined frame could inflate under the sheet.",
       "id": "doordash.screen.dropoff_alcohol_warning_sheet",
-      "priority": 146,
+      "priority": 162,
       "redact": [
         {
-          "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",
+          "comment": "#1079 COMPLETE belt (Astra r1 of PR #1245, DO NOT MERGE finding): the sheet is a bottom sheet over the dropoff flow, so a combined frame can carry the arrival card's `user_name` / `customer_name` and the address trio under it — and once this rule RECOGNIZES the frame the UNKNOWN-path `ID_MARKERS` backstop no longer runs (#910), so the four file-wide belts alone would have exported `user_name` raw. Every `CustomerTextMarkers.ID_MARKERS` suffix follows with the family posture, copied VERBATIM from `pickup_going_to_store_sheet` / `pickup_order_picker` (same bytes, same mask hex); the two label-anchored Apt/Suite belts and the id-less name shape close it. Pinned by the recognize-only-carries-every-id check in `CaptureRedactionCorpusTest`.",
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "user_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_1"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_line_2"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "find": {
+            "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1079 (fable review of PR #1245): the `bottom_sheet_` twin of the subpremise id, now an `ID_MARKERS` row — same bounded unit number, same plainMask, so the belt stays ⊇ ID_MARKERS.",
+          "find": {
+            "hasIdSuffix": "bottom_sheet_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_collapsed"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "dasher_instruction_content_expanded"
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "description_text_view"
           },
           "plainMask": true
         },
         {
-          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
           "find": {
-            "hasIdSuffix": "arriving_at_title"
-          }
+            "hasIdSuffix": "tvTitle"
+          },
+          "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "tvLastMessage"
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#919: the chat compose box — user-authored draft text; `ID_MARKERS` row, plain-masked.",
+          "find": { "hasIdSuffix": "message_input" },
+          "plainMask": true
         },
         {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
@@ -2668,6 +2746,30 @@
             ]
           },
           "plainMask": true
+        },
+        {
+          "comment": "#1079: a FUSED `Delivery for <customer>` render (the fielded frames split the label and the name across `user_name_label` / `user_name`, which the id entries below own). keepPrefix keeps the lead-in for replay context; normalize customerName keys the hex on the canonical first-token + second-token-initial form, so it equals the persisted `customerNameHash` (#623/#733). The trailing space makes the bare `Delivery for` LABEL a non-match (it stays as chrome). Ordered FIRST: `Delivery for Jane D` also satisfies the id-less name shape below, which would hash the lead-in away with it.",
+          "find": {
+            "hasTextStartsWith": "Delivery for "
+          },
+          "keepPrefix": [
+            "Delivery for "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "The BARE name node rendered beside the scan target. No id, no lead-in, so the only handle is the shared first-last-initial name SHAPE — byte-SSOT with SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN (the `\\s{1,4}` interior separator is #885's fix). The parity test `CaptureRedactionCorpusTest.the id-less name-shape redact pattern is SSOT with SnapshotRedactor` pins the copies it ENUMERATES — this rule was added to that list in the same pass, because a hand-copy that is not enumerated there is exactly the drift the test exists to stop. `hasNoId` keeps it off id-bearing chrome, and `hasTextMatchesRegex` reads `text` only, so the desc-only chrome nodes ('Close'/'Flash off'/'Info') are untouched. Over-match audit on this surface: every other text node fails the shape — 'Scan customer name', 'Scan receipt', 'No receipt', 'Pickup complete', 'Start scanning', 'Continue', '0:05' and the two body paragraphs all end in a multi-letter token, and '#fddcf · DoorDash' does not start with a letter — so nothing but the name is masked.",
+          "find": {
+            "all": [
+              {
+                "hasNoId": true
+              },
+              {
+                "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
+              }
+            ]
+          },
+          "normalize": "customerName"
         }
       ],
       "require": {
@@ -3520,6 +3622,17 @@
         {
           "find": {
             "hasIdSuffix": "address_subpremise_line"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1079 (fable review of PR #1245): the `bottom_sheet_` twin of the subpremise id, now an `ID_MARKERS` row — same bounded unit number, same plainMask, so the belt stays ⊇ ID_MARKERS.",
+          "find": {
+            "hasIdSuffix": "bottom_sheet_subpremise_line"
           },
           "keepPrefix": [
             "Apt/Suite: ",
