@@ -115,6 +115,11 @@ Five candidates; no picks are final. Each full item appears once, with its origi
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [active] **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the
+  'Pick up by / Order includes' going-to-store sheet no longer appear as UNKNOWN captures (they land in
+  `dropoff_alcohol_warning_sheet/` and `pickup_going_to_store_sheet/`); a pickup card's Apt/Suite line reads
+  `Apt/Suite: [redacted]` in the capture. — Confirmed: 0/2
+
 Ordered by first-line blame date; source order breaks ties. The five §1 proposals are not repeated here.
 
 - [active] **Trip Radar board (#856):** after an Uber dash with Trip Radar open, no file under `captures/uber/accessibility.window/UNKNOWN/` carries a `<Street> & <Street>, <City>` line (except an expired-card frame carrying "This request is no longer available", a known residual); the board's frames sort as `trip_radar_board` with `[redacted:…]` dropoff lines. Known residuals, not failures: a board frame carrying the expired-card overlay ("This request is no longer available") and the HOME-screen Trip Radar browse pill with a half-rendered card stay UNKNOWN (#856 option B / #251). — Confirmed: 0/2

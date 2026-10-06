@@ -52,6 +52,8 @@ class PiiShapesParityTest {
             "address_line_1",
             "address_line_2",
             "address_subpremise_line",
+            // #1079: the in-transit nav sheet's `bottom_sheet_` twin joined the table (fable review of PR #1245).
+            "bottom_sheet_subpremise_line",
             "primaryManeuverText",
             "subManeuverText",
             "secondaryManeuverText",
