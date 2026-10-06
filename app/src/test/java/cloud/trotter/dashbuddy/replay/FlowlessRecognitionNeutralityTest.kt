@@ -121,6 +121,10 @@ class FlowlessRecognitionNeutralityTest {
         assertFlowlessAndNeutral(
             "snapshots/trip_radar_board",
             "uber.screen.trip_radar_board",
+        )
+    }
+
+    /**
      * #1079 — two more recognize-only surfaces from DoorDash 8.95.6: the alcohol-flow warning
      * sheet and the mid-render going-to-store sheet (the latter recognized so its `Delivery for`
      * customer row is masked by a rule rather than only by the UNKNOWN-path backstop). Whether
