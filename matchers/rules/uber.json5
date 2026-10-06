@@ -1528,6 +1528,105 @@
           }
         }
       ]
+    },
+    {
+      // #856 — the Trip Radar BOARD (the list of request cards behind the "Trip Radar"
+      // toolbar), recognized ONLY so its frames carry a `redact` block. A PLEDGE fix, not
+      // an offer feature.
+      //
+      // What leaked: every board card renders its dropoff as a prefix-less customer
+      // cross-street line ("<StreetA> & <StreetB>, <City>", or a single street
+      // "<Street>, <City>"). The board matched no rule, so its frames took the UNKNOWN
+      // capture path, where no rule `redact` applies and a prefix-less line evades the
+      // `CustomerTextMarkers` backstop by construction. 2026-07-25 pull: 34/114 UNKNOWN
+      // window frames and 8/24 UNKNOWN click frames carried ≥ 1 raw cross-street line,
+      // while the recognized `uber.screen.offer` surface leaked 0/102.
+      //
+      // RECOGNIZE-ONLY ON PURPOSE: no `state`, no `parse`, no `bind`. The board is a
+      // multi-offer surface, and what it means for the offer lifecycle (a browse list? N
+      // presentations? the expiry overlay as an "offer:expired" witness?) is #251's design.
+      // A privacy fix must not answer that by accident; FlowlessRecognitionNeutralityTest
+      // pins that it did not. Its taps (the card's "Match" CardView, the 80x80 dismiss X)
+      // now carry screenTarget `trip_radar_board`, which neither `uber.click.accept_offer`
+      // nor `uber.click.decline_offer` (both `screenIs: "offer"`) accepts, so they stay
+      // unclassified as before — they only inherit THIS rule's redact (#910).
+      //
+      // ANCHORS = Uber chrome view ids only (locale-immune; never a street, store or
+      // customer string): the board's toolbar AND its content container, both on all 71
+      // fielded board frames and on no other Uber surface. The home screen's "Trip Radar"
+      // browse PILL (`ub__driver_job_offers_pill_title`) is NOT the board and is not
+      // matched (it is an offer-card surface; its one fielded partial-card frame is a
+      // documented #856 residual).
+      //
+      // No theft from `uber.screen.offer`: the board's cards carry no
+      // `primary_touch_area`, so the offer rule never matches a board card; when a direct
+      // offer card (`primary_touch_area`) IS drawn over the board, the offer rule (priority
+      // 15) is evaluated first and wins whenever it qualifies. This rule (141, behind every
+      // other Uber screen rule; only the 998 sensitive catchall sits behind it) claims only
+      // what every other rule refused.
+      //
+      // The #858 expiry overlay (`image_message_text`, "This request is no longer
+      // available") is REJECTED here so those frames keep their committed must-stay-UNKNOWN
+      // status (UberOfferExpiryOverlayTest, NegativeCorpusStaysUnknownTest). Whether the
+      // board should claim them recognize-only (they carry the same raw dropoff lines — 16
+      // fielded) is a dev decision recorded on #856; until then they are a residual.
+      "id": "uber.screen.trip_radar_board",
+      "priority": 141,
+      "reject": [
+        {
+          "exists": {
+            "hasIdSuffix": "image_message_text"
+          }
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "driver_offers_job_board_toolbar"
+            }
+          },
+          {
+            "exists": {
+              "hasIdSuffix": "driver_offers_job_board_content_container"
+            }
+          }
+        ]
+      },
+      // COMPLETE for a recognized frame (the card dropoff line is id-less, so both entries
+      // are bounded shape selectors; each hashes the whole node to `[redacted:<4hex>]` —
+      // an ADDRESS-class customer value). Merchant/store names and pay stay raw.
+      //
+      // Entry 1 is `uber.screen.offer`'s ", <City>" tail entry VERBATIM, so a card's dropoff
+      // line can never survive here when it would not survive on the offer card.
+      // Entry 2 widens the city tail to the punctuation the verbatim entry cannot read
+      // ("St. Louis", "Winston-Salem", "O'Fallon"); every cross-street "<A> & <B>, <City>"
+      // line and every single-street "<Street>, <City>" line ends in this tail.
+      //
+      // Over-match audit (every other text the 71 fielded board frames render): "Trip
+      // Radar", "Back", "Match", "Delivery", "Shop & Deliver", "Exclusive", "$N.NN",
+      // "Includes expected tip", "Guaranteed (incl. tip)", "N min (N.N mi) total", "Arrive
+      // around H:MM PM • N mins away", "N items (N units)", "More trip requests", "Some may
+      // be outside your preferences", "No requests right now", "We'll let you know when
+      // more requests become available", "Customer verification", "Must verify ID",
+      // "Standard bag required", "Takes longer to match", "Starting soon", "Preview upcoming
+      // trips while the order is being prepared", "Limited to N request while driving",
+      // "New requests", the map's `map_marker_title` merchant pins, and the card store line
+      // "<Store> (<location>)" — none carries ", <words>" at its END (the store line ends
+      // ")"; the one comma-bearing store, "Five Guys (…, Suite N) TX - NNNN", ends in a
+      // digit), so each fails both selectors. Over-match would only mask, never leak.
+      "redact": [
+        {
+          "find": {
+            "hasTextMatchesRegex": ",\\s[A-Z][a-zA-Z]+(\\s[A-Z][a-zA-Z]+){0,4}$"
+          }
+        },
+        {
+          "find": {
+            "hasTextMatchesRegex": ",\\s[A-Z][A-Za-z.'-]*(\\s[A-Z][A-Za-z.'-]*){0,4}$"
+          }
+        }
+      ]
     }
   ],
   "clicks": [

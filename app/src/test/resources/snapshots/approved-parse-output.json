@@ -7601,6 +7601,96 @@
         "shape": null,
         "fields": {}
     },
+    "trip_radar_board/2026-07-23_19-29-54-101__uber__accessibility.window__UNKNOWN__023e6c.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_19-37-30-498__uber__accessibility.window__UNKNOWN__3304b2.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_19-38-20-295__uber__accessibility.window__UNKNOWN__c90e6b.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_19-39-51-895__uber__accessibility.window__UNKNOWN__5def4f.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_19-39-53-884__uber__accessibility.window__UNKNOWN__203425.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_20-14-17-259__uber__accessibility.window__UNKNOWN__74a350.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_20-14-33-672__uber__accessibility.window__UNKNOWN__c66613.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-23_20-55-47-808__uber__accessibility.window__UNKNOWN__4054f4.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_18-44-16-750__uber__accessibility.window__UNKNOWN__048045.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_18-44-31-959__uber__accessibility.window__UNKNOWN__cc5749.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_19-33-07-623__uber__accessibility.window__UNKNOWN__ab527f.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_19-37-08-443__uber__accessibility.window__UNKNOWN__9c0279.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_19-40-16-837__uber__accessibility.window__UNKNOWN__705e3b.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_19-46-42-695__uber__accessibility.window__UNKNOWN__a82418.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
+    "trip_radar_board/2026-07-24_19-46-45-005__uber__accessibility.window__UNKNOWN__def53b.json": {
+        "ruleId": "uber.screen.trip_radar_board",
+        "intent": "trip_radar_board",
+        "shape": null,
+        "fields": {}
+    },
     "waiting_for_offer/2026-08-18_18-41-22-167__doordash__accessibility.window__waiting_for_offer__9bc1ac.json": {
         "ruleId": "doordash.screen.waiting_for_offer",
         "intent": "waiting_for_offer",

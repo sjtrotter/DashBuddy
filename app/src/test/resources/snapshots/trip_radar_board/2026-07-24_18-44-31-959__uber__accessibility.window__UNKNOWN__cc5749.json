@@ -2,10 +2,10 @@
     "captureId": "00000000-0000-4000-8000-000000000000",
     "pipelineId": "accessibility.window",
     "schemaId": "uinode.v1",
-    "timestamp": 1784677166328,
+    "timestamp": 1784936671945,
     "platform": "uber",
-    "ruleId": "uber.screen.offer",
-    "classificationName": "offer",
+    "ruleId": null,
+    "classificationName": "UNKNOWN",
     "metadata": {
         "engineVersion": 1,
         "rulesetFormatVersion": 2,
@@ -239,10 +239,10 @@
                                                                                                                                         "isClickable": true,
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
-                                                                                                                                            "left": 386,
-                                                                                                                                            "top": 906,
-                                                                                                                                            "right": 466,
-                                                                                                                                            "bottom": 1051
+                                                                                                                                            "left": 218,
+                                                                                                                                            "top": 428,
+                                                                                                                                            "right": 298,
+                                                                                                                                            "bottom": 573
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -250,10 +250,10 @@
                                                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 386,
-                                                                                                                                                    "top": 906,
-                                                                                                                                                    "right": 466,
-                                                                                                                                                    "bottom": 986
+                                                                                                                                                    "left": 218,
+                                                                                                                                                    "top": 428,
+                                                                                                                                                    "right": 298,
+                                                                                                                                                    "bottom": 508
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
@@ -261,20 +261,20 @@
                                                                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
-                                                                                                                                                            "left": 408,
-                                                                                                                                                            "top": 906,
-                                                                                                                                                            "right": 444,
-                                                                                                                                                            "bottom": 986
+                                                                                                                                                            "left": 256,
+                                                                                                                                                            "top": 456,
+                                                                                                                                                            "right": 292,
+                                                                                                                                                            "bottom": 536
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
                                                                                                                                                                 "class": "android.widget.ImageView",
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
-                                                                                                                                                                    "left": 408,
-                                                                                                                                                                    "top": 906,
-                                                                                                                                                                    "right": 444,
-                                                                                                                                                                    "bottom": 986
+                                                                                                                                                                    "left": 256,
+                                                                                                                                                                    "top": 456,
+                                                                                                                                                                    "right": 292,
+                                                                                                                                                                    "bottom": 536
                                                                                                                                                                 }
                                                                                                                                                             }
                                                                                                                                                         ]
@@ -286,10 +286,10 @@
                                                                                                                                                 "class": "android.view.View",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 422,
-                                                                                                                                                    "top": 984,
-                                                                                                                                                    "right": 431,
-                                                                                                                                                    "bottom": 1013
+                                                                                                                                                    "left": 254,
+                                                                                                                                                    "top": 506,
+                                                                                                                                                    "right": 263,
+                                                                                                                                                    "bottom": 535
                                                                                                                                                 }
                                                                                                                                             },
                                                                                                                                             {
@@ -297,10 +297,10 @@
                                                                                                                                                 "class": "android.view.View",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 408,
-                                                                                                                                                    "top": 1011,
-                                                                                                                                                    "right": 444,
-                                                                                                                                                    "bottom": 1047
+                                                                                                                                                    "left": 240,
+                                                                                                                                                    "top": 533,
+                                                                                                                                                    "right": 276,
+                                                                                                                                                    "bottom": 569
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -311,10 +311,10 @@
                                                                                                                                         "isClickable": true,
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
-                                                                                                                                            "left": 918,
-                                                                                                                                            "top": 513,
-                                                                                                                                            "right": 998,
-                                                                                                                                            "bottom": 658
+                                                                                                                                            "left": 1653,
+                                                                                                                                            "top": 2103,
+                                                                                                                                            "right": 1080,
+                                                                                                                                            "bottom": 2248
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -322,10 +322,10 @@
                                                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 918,
-                                                                                                                                                    "top": 513,
-                                                                                                                                                    "right": 998,
-                                                                                                                                                    "bottom": 593
+                                                                                                                                                    "left": 1764,
+                                                                                                                                                    "top": 2250,
+                                                                                                                                                    "right": 1080,
+                                                                                                                                                    "bottom": 2330
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
@@ -333,20 +333,20 @@
                                                                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
-                                                                                                                                                            "left": 940,
-                                                                                                                                                            "top": 513,
-                                                                                                                                                            "right": 976,
-                                                                                                                                                            "bottom": 593
+                                                                                                                                                            "left": 1880,
+                                                                                                                                                            "top": 2374,
+                                                                                                                                                            "right": 1080,
+                                                                                                                                                            "bottom": 2400
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
                                                                                                                                                                 "class": "android.widget.ImageView",
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
-                                                                                                                                                                    "left": 940,
-                                                                                                                                                                    "top": 513,
-                                                                                                                                                                    "right": 976,
-                                                                                                                                                                    "bottom": 593
+                                                                                                                                                                    "left": 1880,
+                                                                                                                                                                    "top": 2374,
+                                                                                                                                                                    "right": 1080,
+                                                                                                                                                                    "bottom": 2400
                                                                                                                                                                 }
                                                                                                                                                             }
                                                                                                                                                         ]
@@ -358,10 +358,10 @@
                                                                                                                                                 "class": "android.view.View",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 954,
-                                                                                                                                                    "top": 591,
-                                                                                                                                                    "right": 963,
-                                                                                                                                                    "bottom": 620
+                                                                                                                                                    "left": 1937,
+                                                                                                                                                    "top": 2510,
+                                                                                                                                                    "right": 1080,
+                                                                                                                                                    "bottom": 2400
                                                                                                                                                 }
                                                                                                                                             },
                                                                                                                                             {
@@ -369,10 +369,10 @@
                                                                                                                                                 "class": "android.view.View",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
-                                                                                                                                                    "left": 940,
-                                                                                                                                                    "top": 618,
-                                                                                                                                                    "right": 976,
-                                                                                                                                                    "bottom": 654
+                                                                                                                                                    "left": 1972,
+                                                                                                                                                    "top": 2601,
+                                                                                                                                                    "right": 1080,
+                                                                                                                                                    "bottom": 2400
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -380,6 +380,139 @@
                                                                                                                                 ]
                                                                                                                             }
                                                                                                                         ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "class": "android.view.ViewGroup",
+                                                                                                "isEnabled": true,
+                                                                                                "bounds": {
+                                                                                                    "left": 0,
+                                                                                                    "top": 0,
+                                                                                                    "right": 1080,
+                                                                                                    "bottom": 2400
+                                                                                                },
+                                                                                                "children": [
+                                                                                                    {
+                                                                                                        "class": "android.view.ViewGroup",
+                                                                                                        "isEnabled": true,
+                                                                                                        "bounds": {
+                                                                                                            "left": 0,
+                                                                                                            "top": 136,
+                                                                                                            "right": 1080,
+                                                                                                            "bottom": 2347
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "id": "com.ubercab.driver:id/driver_offers_job_board_content_container",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 136,
+                                                                                                                    "right": 1080,
+                                                                                                                    "bottom": 2347
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "id": "com.ubercab.driver:id/empty_state_view_base",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isClickable": true,
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 136,
+                                                                                                                    "right": 1080,
+                                                                                                                    "bottom": 2347
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "id": "com.ubercab.driver:id/badge_loading_container",
+                                                                                                                        "class": "android.widget.FrameLayout",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 469,
+                                                                                                                            "top": 1033,
+                                                                                                                            "right": 611,
+                                                                                                                            "bottom": 1175
+                                                                                                                        },
+                                                                                                                        "children": [
+                                                                                                                            {
+                                                                                                                                "id": "com.ubercab.driver:id/base_badge_image",
+                                                                                                                                "class": "android.widget.ImageView",
+                                                                                                                                "isEnabled": true,
+                                                                                                                                "bounds": {
+                                                                                                                                    "left": 469,
+                                                                                                                                    "top": 1033,
+                                                                                                                                    "right": 611,
+                                                                                                                                    "bottom": 1175
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "No requests right now",
+                                                                                                                        "id": "com.ubercab.driver:id/base_headline_text",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 213,
+                                                                                                                            "top": 1211,
+                                                                                                                            "right": 868,
+                                                                                                                            "bottom": 1275
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "We'll let you know when more requests become available",
+                                                                                                                        "id": "com.ubercab.driver:id/base_paragraph_text",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 36,
+                                                                                                                            "top": 1302,
+                                                                                                                            "right": 1044,
+                                                                                                                            "bottom": 1406
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "id": "com.ubercab.driver:id/driver_offers_job_board_toolbar",
+                                                                                                                "class": "android.view.ViewGroup",
+                                                                                                                "isEnabled": true,
+                                                                                                                "bounds": {
+                                                                                                                    "left": 0,
+                                                                                                                    "top": 136,
+                                                                                                                    "right": 1080,
+                                                                                                                    "bottom": 278
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                    {
+                                                                                                                        "desc": "Back",
+                                                                                                                        "class": "android.widget.ImageButton",
+                                                                                                                        "isClickable": true,
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 0,
+                                                                                                                            "top": 144,
+                                                                                                                            "right": 125,
+                                                                                                                            "bottom": 269
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "text": "Trip Radar",
+                                                                                                                        "class": "android.widget.TextView",
+                                                                                                                        "isEnabled": true,
+                                                                                                                        "bounds": {
+                                                                                                                            "left": 133,
+                                                                                                                            "top": 179,
+                                                                                                                            "right": 347,
+                                                                                                                            "bottom": 235
+                                                                                                                        }
                                                                                                                     }
                                                                                                                 ]
                                                                                                             }
@@ -430,7 +563,7 @@
                                                                                                 "isEnabled": true,
                                                                                                 "bounds": {
                                                                                                     "left": 0,
-                                                                                                    "top": 1418,
+                                                                                                    "top": 1459,
                                                                                                     "right": 1080,
                                                                                                     "bottom": 2400
                                                                                                 },
@@ -441,9 +574,9 @@
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": {
                                                                                                             "left": 36,
-                                                                                                            "top": 1454,
+                                                                                                            "top": 1735,
                                                                                                             "right": 1044,
-                                                                                                            "bottom": 2311
+                                                                                                            "bottom": 2400
                                                                                                         },
                                                                                                         "children": [
                                                                                                             {
@@ -451,9 +584,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 36,
-                                                                                                                    "top": 1454,
-                                                                                                                    "right": 36,
-                                                                                                                    "bottom": 1454
+                                                                                                                    "top": 1735,
+                                                                                                                    "right": 1044,
+                                                                                                                    "bottom": 2400
                                                                                                                 }
                                                                                                             },
                                                                                                             {
@@ -461,9 +594,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 36,
-                                                                                                                    "top": 1454,
+                                                                                                                    "top": 1735,
                                                                                                                     "right": 1044,
-                                                                                                                    "bottom": 2311
+                                                                                                                    "bottom": 2400
                                                                                                                 },
                                                                                                                 "children": [
                                                                                                                     {
@@ -471,9 +604,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 1454,
+                                                                                                                            "top": 1735,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 1801
+                                                                                                                            "bottom": 2082
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -481,9 +614,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 72,
-                                                                                                                                    "top": 1490,
+                                                                                                                                    "top": 1771,
                                                                                                                                     "right": 1008,
-                                                                                                                                    "bottom": 1774
+                                                                                                                                    "bottom": 2055
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -491,9 +624,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 72,
-                                                                                                                                            "top": 1490,
+                                                                                                                                            "top": 1771,
                                                                                                                                             "right": 1008,
-                                                                                                                                            "bottom": 1774
+                                                                                                                                            "bottom": 2055
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -501,9 +634,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 1490,
+                                                                                                                                                    "top": 1771,
                                                                                                                                                     "right": 1008,
-                                                                                                                                                    "bottom": 1568
+                                                                                                                                                    "bottom": 1849
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
@@ -511,9 +644,9 @@
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 72,
-                                                                                                                                                            "top": 1490,
+                                                                                                                                                            "top": 1771,
                                                                                                                                                             "right": 317,
-                                                                                                                                                            "bottom": 1568
+                                                                                                                                                            "bottom": 1849
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
@@ -521,9 +654,9 @@
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
                                                                                                                                                                     "left": 90,
-                                                                                                                                                                    "top": 1511,
+                                                                                                                                                                    "top": 1792,
                                                                                                                                                                     "right": 126,
-                                                                                                                                                                    "bottom": 1547
+                                                                                                                                                                    "bottom": 1828
                                                                                                                                                                 }
                                                                                                                                                             },
                                                                                                                                                             {
@@ -532,9 +665,9 @@
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
                                                                                                                                                                     "left": 144,
-                                                                                                                                                                    "top": 1490,
+                                                                                                                                                                    "top": 1771,
                                                                                                                                                                     "right": 317,
-                                                                                                                                                                    "bottom": 1568
+                                                                                                                                                                    "bottom": 1849
                                                                                                                                                                 }
                                                                                                                                                             }
                                                                                                                                                         ]
@@ -544,9 +677,9 @@
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 335,
-                                                                                                                                                            "top": 1490,
+                                                                                                                                                            "top": 1771,
                                                                                                                                                             "right": 547,
-                                                                                                                                                            "bottom": 1568
+                                                                                                                                                            "bottom": 1849
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
@@ -555,9 +688,9 @@
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
                                                                                                                                                                     "left": 335,
-                                                                                                                                                                    "top": 1577,
+                                                                                                                                                                    "top": 1771,
                                                                                                                                                                     "right": 547,
-                                                                                                                                                                    "bottom": 1655
+                                                                                                                                                                    "bottom": 1849
                                                                                                                                                                 }
                                                                                                                                                             }
                                                                                                                                                         ]
@@ -569,20 +702,20 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 1568,
-                                                                                                                                                    "right": 321,
-                                                                                                                                                    "bottom": 1696
+                                                                                                                                                    "top": 1849,
+                                                                                                                                                    "right": 373,
+                                                                                                                                                    "bottom": 1977
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
-                                                                                                                                                        "text": "$6.42",
+                                                                                                                                                        "text": "$18.04",
                                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 72,
-                                                                                                                                                            "top": 1699,
-                                                                                                                                                            "right": 321,
-                                                                                                                                                            "bottom": 1827
+                                                                                                                                                            "top": 1849,
+                                                                                                                                                            "right": 373,
+                                                                                                                                                            "bottom": 1977
                                                                                                                                                         }
                                                                                                                                                     }
                                                                                                                                                 ]
@@ -592,9 +725,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 1696,
+                                                                                                                                                    "top": 1977,
                                                                                                                                                     "right": 1008,
-                                                                                                                                                    "bottom": 1774
+                                                                                                                                                    "bottom": 2055
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
@@ -602,9 +735,9 @@
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 72,
-                                                                                                                                                            "top": 1858,
+                                                                                                                                                            "top": 1977,
                                                                                                                                                             "right": 511,
-                                                                                                                                                            "bottom": 1936
+                                                                                                                                                            "bottom": 2055
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
@@ -613,9 +746,9 @@
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
                                                                                                                                                                     "left": 72,
-                                                                                                                                                                    "top": 1858,
+                                                                                                                                                                    "top": 1977,
                                                                                                                                                                     "right": 511,
-                                                                                                                                                                    "bottom": 1936
+                                                                                                                                                                    "bottom": 2055
                                                                                                                                                                 }
                                                                                                                                                             }
                                                                                                                                                         ]
@@ -633,9 +766,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 1801,
+                                                                                                                            "top": 2082,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 1803
+                                                                                                                            "bottom": 2084
                                                                                                                         }
                                                                                                                     },
                                                                                                                     {
@@ -643,9 +776,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 1803,
+                                                                                                                            "top": 2084,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 1912
+                                                                                                                            "bottom": 2193
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -653,9 +786,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 72,
-                                                                                                                                    "top": 2013,
+                                                                                                                                    "top": 2111,
                                                                                                                                     "right": 1008,
-                                                                                                                                    "bottom": 2077
+                                                                                                                                    "bottom": 2175
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -663,9 +796,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 72,
-                                                                                                                                            "top": 2028,
-                                                                                                                                            "right": 559,
-                                                                                                                                            "bottom": 2092
+                                                                                                                                            "top": 2111,
+                                                                                                                                            "right": 579,
+                                                                                                                                            "bottom": 2175
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -673,20 +806,20 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 2018,
+                                                                                                                                                    "top": 2116,
                                                                                                                                                     "right": 125,
-                                                                                                                                                    "bottom": 2071
+                                                                                                                                                    "bottom": 2169
                                                                                                                                                 }
                                                                                                                                             },
                                                                                                                                             {
-                                                                                                                                                "text": "25 min (8.4 mi) total",
+                                                                                                                                                "text": "45 min (21.3 mi) total",
                                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 143,
-                                                                                                                                                    "top": 2013,
-                                                                                                                                                    "right": 559,
-                                                                                                                                                    "bottom": 2077
+                                                                                                                                                    "top": 2111,
+                                                                                                                                                    "right": 579,
+                                                                                                                                                    "bottom": 2175
                                                                                                                                                 }
                                                                                                                                             }
                                                                                                                                         ]
@@ -700,9 +833,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 1912,
+                                                                                                                            "top": 2193,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 1914
+                                                                                                                            "bottom": 2195
                                                                                                                         }
                                                                                                                     },
                                                                                                                     {
@@ -710,9 +843,9 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 36,
-                                                                                                                            "top": 1914,
+                                                                                                                            "top": 2195,
                                                                                                                             "right": 1044,
-                                                                                                                            "bottom": 2133
+                                                                                                                            "bottom": 2373
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
@@ -720,9 +853,9 @@
                                                                                                                                 "isEnabled": true,
                                                                                                                                 "bounds": {
                                                                                                                                     "left": 72,
-                                                                                                                                    "top": 2142,
+                                                                                                                                    "top": 2213,
                                                                                                                                     "right": 1008,
-                                                                                                                                    "bottom": 2325
+                                                                                                                                    "bottom": 2355
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
@@ -730,9 +863,9 @@
                                                                                                                                         "isEnabled": true,
                                                                                                                                         "bounds": {
                                                                                                                                             "left": 72,
-                                                                                                                                            "top": 2151,
-                                                                                                                                            "right": 1008,
-                                                                                                                                            "bottom": 2334
+                                                                                                                                            "top": 2213,
+                                                                                                                                            "right": 928,
+                                                                                                                                            "bottom": 2355
                                                                                                                                         },
                                                                                                                                         "children": [
                                                                                                                                             {
@@ -740,9 +873,9 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 2157,
-                                                                                                                                                    "right": 1008,
-                                                                                                                                                    "bottom": 2228
+                                                                                                                                                    "top": 2213,
+                                                                                                                                                    "right": 928,
+                                                                                                                                                    "bottom": 2284
                                                                                                                                                 },
                                                                                                                                                 "children": [
                                                                                                                                                     {
@@ -750,9 +883,9 @@
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 72,
-                                                                                                                                                            "top": 2160,
+                                                                                                                                                            "top": 2222,
                                                                                                                                                             "right": 125,
-                                                                                                                                                            "bottom": 2213
+                                                                                                                                                            "bottom": 2275
                                                                                                                                                         }
                                                                                                                                                     },
                                                                                                                                                     {
@@ -760,9 +893,9 @@
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": {
                                                                                                                                                             "left": 143,
-                                                                                                                                                            "top": 2164,
-                                                                                                                                                            "right": 1008,
-                                                                                                                                                            "bottom": 2220
+                                                                                                                                                            "top": 2220,
+                                                                                                                                                            "right": 928,
+                                                                                                                                                            "bottom": 2276
                                                                                                                                                         },
                                                                                                                                                         "children": [
                                                                                                                                                             {
@@ -770,23 +903,10 @@
                                                                                                                                                                 "isEnabled": true,
                                                                                                                                                                 "bounds": {
                                                                                                                                                                     "left": 143,
-                                                                                                                                                                    "top": 2164,
-                                                                                                                                                                    "right": 676,
-                                                                                                                                                                    "bottom": 2220
-                                                                                                                                                                },
-                                                                                                                                                                "children": [
-                                                                                                                                                                    {
-                                                                                                                                                                        "text": "Sonic (2314 Thousand Oaks)",
-                                                                                                                                                                        "class": "android.widget.TextView",
-                                                                                                                                                                        "isEnabled": true,
-                                                                                                                                                                        "bounds": {
-                                                                                                                                                                            "left": 143,
-                                                                                                                                                                            "top": 2164,
-                                                                                                                                                                            "right": 676,
-                                                                                                                                                                            "bottom": 2220
-                                                                                                                                                                        }
-                                                                                                                                                                    }
-                                                                                                                                                                ]
+                                                                                                                                                                    "top": 2220,
+                                                                                                                                                                    "right": 624,
+                                                                                                                                                                    "bottom": 2276
+                                                                                                                                                                }
                                                                                                                                                             }
                                                                                                                                                         ]
                                                                                                                                                     }
@@ -797,57 +917,10 @@
                                                                                                                                                 "isEnabled": true,
                                                                                                                                                 "bounds": {
                                                                                                                                                     "left": 72,
-                                                                                                                                                    "top": 2222,
-                                                                                                                                                    "right": 1008,
-                                                                                                                                                    "bottom": 2334
-                                                                                                                                                },
-                                                                                                                                                "children": [
-                                                                                                                                                    {
-                                                                                                                                                        "class": "android.widget.ImageView",
-                                                                                                                                                        "isEnabled": true,
-                                                                                                                                                        "bounds": {
-                                                                                                                                                            "left": 72,
-                                                                                                                                                            "top": 2231,
-                                                                                                                                                            "right": 125,
-                                                                                                                                                            "bottom": 2284
-                                                                                                                                                        }
-                                                                                                                                                    },
-                                                                                                                                                    {
-                                                                                                                                                        "class": "android.widget.LinearLayout",
-                                                                                                                                                        "isEnabled": true,
-                                                                                                                                                        "bounds": {
-                                                                                                                                                            "left": 143,
-                                                                                                                                                            "top": 2222,
-                                                                                                                                                            "right": 1008,
-                                                                                                                                                            "bottom": 2334
-                                                                                                                                                        },
-                                                                                                                                                        "children": [
-                                                                                                                                                            {
-                                                                                                                                                                "class": "android.widget.LinearLayout",
-                                                                                                                                                                "isEnabled": true,
-                                                                                                                                                                "bounds": {
-                                                                                                                                                                    "left": 143,
-                                                                                                                                                                    "top": 2222,
-                                                                                                                                                                    "right": 1008,
-                                                                                                                                                                    "bottom": 2334
-                                                                                                                                                                },
-                                                                                                                                                                "children": [
-                                                                                                                                                                    {
-                                                                                                                                                                        "text": "Anonvale Loop & Decoy Forest Dr, San Antonio",
-                                                                                                                                                                        "class": "android.widget.TextView",
-                                                                                                                                                                        "isEnabled": true,
-                                                                                                                                                                        "bounds": {
-                                                                                                                                                                            "left": 143,
-                                                                                                                                                                            "top": 2222,
-                                                                                                                                                                            "right": 1008,
-                                                                                                                                                                            "bottom": 2334
-                                                                                                                                                                        }
-                                                                                                                                                                    }
-                                                                                                                                                                ]
-                                                                                                                                                            }
-                                                                                                                                                        ]
-                                                                                                                                                    }
-                                                                                                                                                ]
+                                                                                                                                                    "top": 2284,
+                                                                                                                                                    "right": 928,
+                                                                                                                                                    "bottom": 2355
+                                                                                                                                                }
                                                                                                                                             }
                                                                                                                                         ]
                                                                                                                                     }
@@ -860,34 +933,10 @@
                                                                                                                         "isEnabled": true,
                                                                                                                         "bounds": {
                                                                                                                             "left": 72,
-                                                                                                                            "top": 2381,
+                                                                                                                            "top": 2391,
                                                                                                                             "right": 1008,
                                                                                                                             "bottom": 2400
-                                                                                                                        },
-                                                                                                                        "children": [
-                                                                                                                            {
-                                                                                                                                "text": "Accept",
-                                                                                                                                "class": "android.widget.Button",
-                                                                                                                                "isClickable": true,
-                                                                                                                                "isEnabled": true,
-                                                                                                                                "bounds": {
-                                                                                                                                    "left": 72,
-                                                                                                                                    "top": 2384,
-                                                                                                                                    "right": 1008,
-                                                                                                                                    "bottom": 2400
-                                                                                                                                }
-                                                                                                                            },
-                                                                                                                            {
-                                                                                                                                "class": "android.view.View",
-                                                                                                                                "isEnabled": true,
-                                                                                                                                "bounds": {
-                                                                                                                                    "left": 72,
-                                                                                                                                    "top": 2381,
-                                                                                                                                    "right": 1008,
-                                                                                                                                    "bottom": 2400
-                                                                                                                                }
-                                                                                                                            }
-                                                                                                                        ]
+                                                                                                                        }
                                                                                                                     }
                                                                                                                 ]
                                                                                                             },
@@ -897,9 +946,9 @@
                                                                                                                 "isEnabled": true,
                                                                                                                 "bounds": {
                                                                                                                     "left": 902,
-                                                                                                                    "top": 1700,
+                                                                                                                    "top": 1771,
                                                                                                                     "right": 1008,
-                                                                                                                    "bottom": 1806
+                                                                                                                    "bottom": 1877
                                                                                                                 }
                                                                                                             }
                                                                                                         ]
