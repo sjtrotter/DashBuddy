@@ -139,6 +139,13 @@ class ParsedFieldsFactoryTest {
         assertNotEquals(first.offerHash, second.offerHash)
         // Absent token → the pre-#1069 hash input byte for byte.
         assertEquals(identityOffer(identity = "store").offerHash, identityOffer(identity = "economics").offerHash)
+        // Astra r2: a store name that CONTAINS the token segment cannot collide with a token-bearing input.
+        val token = "123e4567-e89b-12d3-a456-426614174000"
+        val withToken = identityOffer(token, pay = 10.0, distance = 2.0, stores = listOf("H-E-B"))
+        val forged = identityOffer(null, pay = 10.0, distance = 2.0, stores = listOf("H-E-B|assignment=$token"))
+        assertNotEquals(withToken.offerHash, forged.offerHash)
+        val forgedLead = identityOffer(null, pay = 10.0, distance = 2.0, stores = listOf("assignment=$token|10.0|2.0|20|H-E-B"))
+        assertNotEquals(withToken.offerHash, forgedLead.offerHash)
     }
 
     @Test
