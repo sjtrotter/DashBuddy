@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- #583: full offer card (expanded ~252dp) — verdict banner + score gauge (bitmap) + $/hr + live
-     countdown + metrics + badges + store + brand-styled Accept/Decline. RemoteViews-legal only. -->
+     countdown + metrics + badges + store + brand-styled Accept/Decline. RemoteViews-legal only.
+     #1254: Accept left, Decline right (native decline is right-side on both platforms). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -83,27 +84,16 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:layoutDirection="ltr"
         android:layout_marginTop="8dp">
 
-        <TextView
-            android:id="@+id/notif_btn_decline"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@drawable/notif_btn_decline"
-            android:gravity="center"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp"
-            android:text="Decline"
-            android:textColor="#E6EDF3"
-            android:textSize="15sp" />
-
+        <!-- #1254: Accept LEFT, Decline RIGHT — both platforms' native decline is a right-side
+             target (DoorDash top-right, Uber card top-right X); our banner floats over DoorDash's. -->
         <TextView
             android:id="@+id/notif_btn_accept"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
             android:background="@drawable/notif_btn_accept"
             android:gravity="center"
             android:paddingTop="10dp"
@@ -112,5 +102,19 @@
             android:textColor="#0B0F14"
             android:textSize="15sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/notif_btn_decline"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="24dp"
+            android:background="@drawable/notif_btn_decline"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="Decline"
+            android:textColor="#E6EDF3"
+            android:textSize="15sp" />
     </LinearLayout>
 </LinearLayout>
