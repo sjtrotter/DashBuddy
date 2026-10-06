@@ -1567,19 +1567,13 @@
       // what every other rule refused.
       //
       // The #858 expiry overlay (`image_message_text`, "This request is no longer
-      // available") is REJECTED here so those frames keep their committed must-stay-UNKNOWN
-      // status (UberOfferExpiryOverlayTest, NegativeCorpusStaysUnknownTest). Whether the
-      // board should claim them recognize-only (they carry the same raw dropoff lines — 16
-      // fielded) is a dev decision recorded on #856; until then they are a residual.
+      // available") is recognized recognize-only here (#856 option B, adopted 2026-10-07).
+      // #858 is safe because this rule has NO `state` block, as pinned by
+      // UberOfferExpiryOverlayTest and FlowlessRecognitionNeutralityTest; safety does not
+      // depend on an UNKNOWN label. `uber.screen.offer` keeps its own overlay reject,
+      // so an expiring DIRECT card still cannot be an offer.
       "id": "uber.screen.trip_radar_board",
       "priority": 141,
-      "reject": [
-        {
-          "exists": {
-            "hasIdSuffix": "image_message_text"
-          }
-        }
-      ],
       "require": {
         "all": [
           {
