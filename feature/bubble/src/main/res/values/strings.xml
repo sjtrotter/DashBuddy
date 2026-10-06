@@ -87,4 +87,5 @@
     <string name="bubble_switcher_label">Showing</string>
     <string name="bubble_switcher_content_desc">Switch which dash the bubble shows</string>
 
+    <string name="bubble_task_est_revised">revised at arrival</string>
 </resources>

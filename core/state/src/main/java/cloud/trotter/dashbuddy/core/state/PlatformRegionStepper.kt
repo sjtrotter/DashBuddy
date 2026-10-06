@@ -108,13 +108,13 @@ class PlatformRegionStepper @Inject constructor() {
                             // Clearing it at the very top means the value `EffectMap` sees is always
                             // the one THIS step decided — and a stale one restored from a snapshot is
                             // dropped before it can be re-emitted.
-                            stepOffers(prev.copy(pendingReceiptReprice = null), obs, policy),
+                            landArrivalEstimate(stepOffers(prev.copy(pendingReceiptReprice = null), obs, policy), obs),
                             prevFlow, obs,
                         ),
                         prevFlow, nextFlow, obs, policy,
                     ),
                 ),
-            ),
+            ).let { requestArrivalEstimate(it, obs) },
         ),
         obs,
     )

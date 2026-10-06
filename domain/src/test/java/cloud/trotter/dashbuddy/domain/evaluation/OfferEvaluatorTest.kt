@@ -1064,4 +1064,41 @@ class OfferEvaluatorTest {
         val result = evaluator.evaluate(offer(pay = 10.0, dist = 5.0), cfg)
         assertTrue(result.isUsingDefaults)
     }
+    @Test
+    fun `handling provenance is populated on every evaluation return path`() {
+        val shop = offer(itemCount = 30, orderType = OrderType.SHOP_FOR_ITEMS)
+        val mixed = shop.copy(orders = shop.orders + offer().orders.single().copy(orderIndex = 1))
+        val configs = listOf(
+            defaultConfig,
+            defaultConfig.copy(allowShopping = false),
+            defaultConfig.copy(protectStatsMode = true),
+            defaultConfig.copy(rules = emptyList()),
+            defaultConfig.copy(rules = listOf(blockRule("Test Store"))),
+        )
+        for (config in configs) {
+            for (parsed in listOf(shop, mixed, offer())) {
+                for (distance in listOf(3.0, null)) {
+                    val result = evaluator.evaluate(parsed.copy(distanceMiles = distance), config)
+                    val isShop = parsed.isShop
+                    val legs = if (parsed == mixed) 1 else 0
+                    val expected = if (isShop) {
+                        maxOf(30 / noCostEconomy.effectiveShopItemsPerMinute, noCostEconomy.basePickupMinutes) +
+                            legs * noCostEconomy.basePickupMinutes
+                    } else noCostEconomy.basePickupMinutes
+                    assertEquals(expected, result.handlingMinutes!!, 0.000001)
+                    assertEquals(legs, result.nonShopLegs)
+                    assertEquals(noCostEconomy.effectiveShopItemsPerMinute, result.pricedShopItemsPerMinute!!, 0.0)
+                    assertEquals(noCostEconomy.basePickupMinutes, result.pricedBasePickupMinutes!!, 0.0)
+                    assertEquals((distance ?: 0.0) * noCostEconomy.avgMinutesPerMile + expected, result.estimatedTimeMinutes, 0.000001)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `ParsedOffer isShop recognizes shopping and pickup-only orders`() {
+        assertTrue(offer(orderType = OrderType.SHOP_FOR_ITEMS).isShop)
+        assertFalse(offer(orderType = OrderType.PICKUP).isShop)
+    }
+
 }

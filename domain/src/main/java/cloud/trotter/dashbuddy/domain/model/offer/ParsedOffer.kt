@@ -117,6 +117,9 @@ data class ParsedOffer(
     /** Store the full extracted text array (joined or as JSON) for this offer screen for later review or parsing. */
     val rawExtractedTexts: String? = null,
 ) {
+    /** #823: the ONE 'is a shopping offer' predicate — the evaluator's handling model and the accept mint read it. */
+    val isShop: Boolean get() = orders.any { it.orderType.isShoppingOrder }
+
     /**
      * The SSOT for "which stores a human should be shown/told for this offer" (#882) — read by
      * `OfferEvaluator.merchantName` (→ TTS, `offer_records.merchantName`, store-entity resolution),

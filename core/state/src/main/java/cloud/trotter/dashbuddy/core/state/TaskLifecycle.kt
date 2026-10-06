@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
+import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -466,4 +468,25 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
     }
 
     return region
+}
+
+/**
+ * #823 Phase 2: called once after task reconciliation, so activation, resume and same-phase
+ * updates all see the freshly absorbed shopping activity. Counts always come from THIS frame,
+ * never the task's accumulated progress fields. Pure and latched for this job's arrival.
+ */
+internal fun requestArrivalEstimate(region: PlatformRegion, obs: Observation): PlatformRegion {
+    if (obs !is Observation.FlowObservation || obs.flow != Flow.TaskPickupArrived) return region
+    val fields = obs.parsed as? ParsedFields.TaskFields ?: return region
+    val task = region.activeTask ?: return region
+    // Astra review: the activity must come from THIS frame — a frame with the pair but no activity (a borrowed,
+    // accumulated SHOPPING on the task) must not consume the one-shot latch.
+    if (task.phase != TaskPhase.PICKUP || fields.activity != PickupActivity.SHOPPING) return region
+    val job = region.activeJob ?: return region
+    if (job.arrivalEstimateRequestedAt != null || !ArrivalCorrection.isEligible(job)) return region
+    val observed = ArrivalCorrection.observedItems(fields) ?: return region
+    return region.copy(activeJob = job.copy(
+        arrivalEstimateRequestedAt = obs.timestamp,
+        arrivalEstimateObservedItems = observed,
+    ))
 }

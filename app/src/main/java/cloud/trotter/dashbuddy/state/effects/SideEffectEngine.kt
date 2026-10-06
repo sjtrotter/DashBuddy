@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.core.state.EffectExecutor
 import cloud.trotter.dashbuddy.core.state.MetadataProvider
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
 import cloud.trotter.dashbuddy.domain.di.DefaultDispatcher
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import kotlinx.coroutines.CancellationException
@@ -514,6 +515,25 @@ class SideEffectEngine @Inject constructor(
             is AppEffect.ProcessTipNotification -> tipEffectHandler.process(engineScope, effect)
 
             // --- LOOPBACKS (Produces Events) ---
+
+            is AppEffect.EvaluateArrival -> {
+                Timber.tag("Effects").d("EvaluateArrival job=%s observed=%d", effect.jobId, effect.observedItems)
+                val config = strategyRepository.evaluationConfig.filterNotNull().first()
+                val economy = config.forPlatform(effect.platform).userEconomy
+                val estimate = ArrivalCorrection.compute(
+                    effect.accepted, effect.taskId, effect.observedItems, economy, System.currentTimeMillis(),
+                )
+                if (estimate != null) {
+                    _events.emit(
+                        Observation.Loopback(
+                            timestamp = System.currentTimeMillis(),
+                            effect = Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED,
+                            targetPlatform = effect.platform,
+                            payload = ObservationPayload.ArrivalEstimated(effect.jobId, estimate, requestedAt = effect.requestedAt),
+                        ),
+                    )
+                }
+            }
 
             is AppEffect.EvaluateOffer -> {
                 // Loopback only: evaluate, then emit the decision back to the state machine. The

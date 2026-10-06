@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.pipeline
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalEstimate
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -46,6 +47,11 @@ sealed interface ObservationPayload {
         val offerHash: String? = null,
         val evaluation: OfferEvaluation? = null,
     ) : ObservationPayload
+
+    /** Display-only arrival correction, correlated to the still-active job. */
+    @Serializable
+    @SerialName("arrivalEstimated")
+    data class ArrivalEstimated(val jobId: String, val estimate: ArrivalEstimate, val requestedAt: Long? = null) : ObservationPayload
 
     /**
      * Identifies WHICH presented offer an [TimeoutType.OFFER_EXPIRY] timer belongs to (#438 B3 /
