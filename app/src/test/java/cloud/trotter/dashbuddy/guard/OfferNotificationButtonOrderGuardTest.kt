@@ -36,6 +36,12 @@ class OfferNotificationButtonOrderGuardTest {
         assertEquals("$message: Decline id must be unique", 1, declines.size)
         val accept = accepts.single()
         val decline = declines.single()
+        // Astra (PR #1256) P3: the id must still carry its own label and drawable, or a swapped label would
+        // show "Decline" on the left while the tap accepts.
+        assertEquals("$message: the Accept id must read Accept", "Accept", accept.getAttributeNS(androidNamespace, "text"))
+        assertEquals("$message: the Decline id must read Decline", "Decline", decline.getAttributeNS(androidNamespace, "text"))
+        assertEquals("$message: Accept keeps its drawable", "@drawable/notif_btn_accept", accept.getAttributeNS(androidNamespace, "background"))
+        assertEquals("$message: Decline keeps its drawable", "@drawable/notif_btn_decline", decline.getAttributeNS(androidNamespace, "background"))
         assertSame("$message: actions must share a parent", accept.parentNode, decline.parentNode)
         val row = accept.parentNode as Element
         assertEquals("$message: actions must be in a LinearLayout", "LinearLayout", row.tagName)
