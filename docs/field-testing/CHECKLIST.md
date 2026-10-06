@@ -115,6 +115,11 @@ Five candidates; no picks are final. Each full item appears once, with its origi
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [active] **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the
+  'Pick up by / Order includes' going-to-store sheet no longer appear as UNKNOWN captures (they land in
+  `dropoff_alcohol_warning_sheet/` and `pickup_going_to_store_sheet/`); a pickup card's Apt/Suite line reads
+  `Apt/Suite: [redacted]` in the capture. — Confirmed: 0/2
+
 Ordered by first-line blame date; source order breaks ties. The five §1 proposals are not repeated here.
 
 - [active] **Per-order handling (#1113 slice 1):** a two-order DoorDash stack's bubble card $/hr should equal

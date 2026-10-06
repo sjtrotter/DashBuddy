@@ -375,7 +375,7 @@ class CustomerTextMarkersTest {
         assertEquals(
             listOf(
                 "customer_name", "user_name", "address_line_1", "address_line_2", "arriving_at_title",
-                "address_subpremise_line", "dasher_instruction_content_collapsed",
+                "address_subpremise_line", "bottom_sheet_subpremise_line", "dasher_instruction_content_collapsed",
                 "dasher_instruction_content_expanded", "description_text_view",
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
@@ -398,6 +398,7 @@ class CustomerTextMarkersTest {
                 "address_line_2" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "arriving_at_title" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "address_subpremise_line" to CustomerTextMarkers.IdentityKind.ADDRESS,
+                "bottom_sheet_subpremise_line" to CustomerTextMarkers.IdentityKind.ADDRESS,
                 "dasher_instruction_content_collapsed" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,

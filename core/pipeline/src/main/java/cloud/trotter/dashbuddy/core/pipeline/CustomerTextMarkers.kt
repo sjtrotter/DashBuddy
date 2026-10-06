@@ -187,6 +187,9 @@ object CustomerTextMarkers {
         // arrival card (the alcohol render, which carries no customer lead-in for the prefix
         // scan) persisted it verbatim.
         IdMarker("address_subpremise_line", IdentityKind.ADDRESS),
+        // #1079 (fable review of PR #1245): the in-transit nav sheet's `bottom_sheet_` twin of the subpremise line —
+        // `dropoff_navigation` already masks it as the CUSTOMER's unit; the UNKNOWN-path scrub had no row for it.
+        IdMarker("bottom_sheet_subpremise_line", IdentityKind.ADDRESS),
         // #1058, same four envelopes: the customer's own free-text delivery instructions. The
         // node holds nothing else — the "Hand it to recipient" label is a separate
         // `instructions_title` sibling — and the fielded value carried a door code. This is the

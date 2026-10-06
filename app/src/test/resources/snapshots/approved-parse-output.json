@@ -1596,6 +1596,12 @@
         "shape": null,
         "fields": {}
     },
+    "dropoff_alcohol_warning_sheet/2026-09-05_17-00-14-603__doordash__accessibility.window__UNKNOWN__cad975.json": {
+        "ruleId": "doordash.screen.dropoff_alcohol_warning_sheet",
+        "intent": "dropoff_alcohol_warning_sheet",
+        "shape": null,
+        "fields": {}
+    },
     "dropoff_completed_confirm/2026-09-21_12-55-01-664__doordash__accessibility.window__dropoff_completed_confirm__f2ead7.json": {
         "ruleId": "doordash.screen.dropoff_completed_confirm",
         "intent": "dropoff_completed_confirm",
@@ -4582,6 +4588,30 @@
     "pickup_confirm_picked_up/2026-07-26_21-10-54-490__doordash__accessibility.window__UNKNOWN__0bdb1d.json": {
         "ruleId": "doordash.screen.pickup_confirm_picked_up",
         "intent": "pickup_confirm_picked_up",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_going_to_store_sheet/2026-09-05_16-34-26-985__doordash__accessibility.window__UNKNOWN__2e2922.json": {
+        "ruleId": "doordash.screen.pickup_going_to_store_sheet",
+        "intent": "pickup_going_to_store_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_going_to_store_sheet/2026-09-05_17-15-11-174__doordash__accessibility.window__UNKNOWN__d3d13a.json": {
+        "ruleId": "doordash.screen.pickup_going_to_store_sheet",
+        "intent": "pickup_going_to_store_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_going_to_store_sheet/2026-09-05_18-23-13-175__doordash__accessibility.window__UNKNOWN__0e7f8b.json": {
+        "ruleId": "doordash.screen.pickup_going_to_store_sheet",
+        "intent": "pickup_going_to_store_sheet",
+        "shape": null,
+        "fields": {}
+    },
+    "pickup_going_to_store_sheet/2026-09-08_17-14-35-961__doordash__accessibility.window__UNKNOWN__8d8cb4.json": {
+        "ruleId": "doordash.screen.pickup_going_to_store_sheet",
+        "intent": "pickup_going_to_store_sheet",
         "shape": null,
         "fields": {}
     },
