@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
+import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
@@ -334,7 +335,16 @@ object ParsedFieldsFactory {
 
         // Compute offer hash from extracted fields (same as Kotlin parser)
         val storeNames = orders.joinToString(",") { it.storeName }
-        val hashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
+        // #1069 (Astra r1 P1): a parsed assignment token is part of the offer's CONTENT identity too — two
+        // different assignments with identical economics must not share an offerHash, or the stepper's
+        // same-hash arm merges them before the presentation key is ever consulted. Absent token → the
+        // pre-#1069 input byte for byte (Uber's churn fixtures keep their hashes).
+        val assignmentId = f.str("assignmentId")?.trim()?.takeIf { it.isNotEmpty() }
+        val baseHashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
+        // Astra r2: the token LEADS the input. A tokenless input always starts with the pay amount (a number
+        // or "null"), so no store name can forge the `assignment=` segment — a suffix could be forged by a
+        // store name that happens to contain it. Tokenless bytes are unchanged.
+        val hashInput = if (assignmentId != null) "assignment=$assignmentId|$baseHashInput" else baseHashInput
         // Fail-closed hash (#362): on digest failure fall back to a
         // non-reversible identity — NEVER the plaintext input.
         val offerHash = f.str("offerHash")
@@ -353,16 +363,34 @@ object ParsedFieldsFactory {
         // "|0|" (or "|N|" over empty stores) — one key every such offer on every platform shares, so
         // two genuinely different order-less offers would enrich-MERGE (offer 2 inheriting offer 1's
         // presentedAt + click latches → a phantom OFFER_ACCEPTED with offer 2's economics). No stable
-        // subset → no presentation identity → null → replace.
+        // subset → no presentation identity → null → replace. (#1069: that guard governs the STORE fallback
+        // only — a parsed assignment token is an exact identity and OUTRANKS it, order rows or not; today
+        // branch 0's anchors keep an order-less View frame UNKNOWN, so the precedence is latent.)
+        //
+        // #1069: identity is ruleset data. A parsed assignment token supplies an EXACT key;
+        // otherwise a declared "store" fallback uses the #830 stable subset above; "economics"
+        // (also the undeclared default) supplies no key, replacing on any hash change. Economics
+        // is the default because a false MERGE is the dangerous failure (lost presentation and
+        // inherited latches); a false SPLIT only costs a duplicate presentation.
         val orderTypes = orders.joinToString(",") { it.orderType.name }
-        val presentationKey = if (orders.isEmpty() || orders.all { it.storeName.isBlank() }) null
-        else sha256OrNull("$storeNames|${orders.size}|$orderTypes")
+        val assignmentIdHash = assignmentId?.let { sha256OrNull("assignment|$it") } // fail-closed null
+        val identity = f.str("presentationIdentity") ?: StateMachineContract.PRESENTATION_IDENTITY_ECONOMICS
+        val presentationKey = when {
+            // Astra r1 P3: a PRESENT token decides, hash or null — a digest failure must never fall through
+            // to a mergeable store key.
+            assignmentId != null -> assignmentIdHash
+            identity == StateMachineContract.PRESENTATION_IDENTITY_STORE ->
+                if (orders.isEmpty() || orders.all { it.storeName.isBlank() }) null
+                else sha256OrNull("$storeNames|${orders.size}|$orderTypes")
+            else -> null // economics: replace on any hash change (the existing fail-closed path)
+        }
 
         return ParsedFields.OfferFields(
             activity = f.str("activity"),
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
                 presentationKey = presentationKey,
+                assignmentIdHash = assignmentIdHash,
                 // #461: the offer's item count is the SHOP item count — sum only the shop orders'
                 // CONFIRMED counts. A pickup order has no items but defaults to itemCount=1
                 // (isItemCountEstimated), so the old `sumOf{itemCount}.coerceAtLeast(1)` added a

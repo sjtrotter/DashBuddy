@@ -471,6 +471,7 @@ object RuleDraft {
         "phase" -> Vocabulary.TASK_PHASES
         "subFlow" -> Vocabulary.TASK_SUB_FLOWS
         "sessionType" -> Vocabulary.SESSION_TYPES
+        "presentationIdentity" -> Vocabulary.PRESENTATION_IDENTITIES // #1069
         else -> null
     }
 

@@ -27,6 +27,8 @@ still ONE file per platform. There are **no committed** `assets/rules/*.json`, s
 value flows straight into recognition tests with no publish step. The corpus↔rules SHA version pin
 is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by
 `ObservationClassifier`.
+
+`presentationIdentity` is a load-validated literal (`StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES`); `assignmentId` is an optional offer field hashed at the factory (#1069).
 Which WINDOW a frame is read from is the sensor layer's decision (§1), never a rule's: platform
 offer overlays (a11y `TYPE_SYSTEM`, `Platform.offerOverlay`) are candidates by size + package
 (#1152) — the recognized `uber.screen.offer` rule is unchanged whichever path delivered the frame.

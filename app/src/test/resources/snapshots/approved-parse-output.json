@@ -3535,7 +3535,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=0e9b7f0d5d3885e6a37895cc7eefae3b69a2f16a6957932e0ffbcba647a81676, presentationKey=68ca7453f9213a289ab6f0e9a7c5cc2c678d970136eff5b1505f1bfdf3607f52, itemCount=0, itemCountIsUnits=false, payAmount=15.01, payTextRaw=null, distanceMiles=17.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=40, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Costco Wholesale (Sonterra Park), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=Costco Wholesale (Sonterra Park), rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=0e9b7f0d5d3885e6a37895cc7eefae3b69a2f16a6957932e0ffbcba647a81676, presentationKey=68ca7453f9213a289ab6f0e9a7c5cc2c678d970136eff5b1505f1bfdf3607f52, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=15.01, payTextRaw=null, distanceMiles=17.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=40, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Costco Wholesale (Sonterra Park), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=Costco Wholesale (Sonterra Park), rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-38-16-682__uber__accessibility.window__offer__9e2877.json": {
@@ -3543,7 +3543,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=fc2cbdc99f2158deb74425dfaf2bf6c2b7395083e2fab646da70449fe5d9e05f, presentationKey=f787cc90ced093254b17cc4833814948e627a3e51e94251389729ef2a57565ef, itemCount=0, itemCountIsUnits=false, payAmount=10.08, payTextRaw=null, distanceMiles=12.3, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=30, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Buttermilk Sky Pie, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Buttermilk Sky Pie, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=fc2cbdc99f2158deb74425dfaf2bf6c2b7395083e2fab646da70449fe5d9e05f, presentationKey=f787cc90ced093254b17cc4833814948e627a3e51e94251389729ef2a57565ef, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=10.08, payTextRaw=null, distanceMiles=12.3, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=30, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Buttermilk Sky Pie, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Buttermilk Sky Pie, rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-40-26-194__uber__accessibility.window__offer__2d8f1d.json": {
@@ -3551,7 +3551,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=554490d501c5d175c5a3aa235d53a57b6912ed72b7162dc68159d1972f9fa8bf, presentationKey=b7124711dcb138944ddaa29934aa29d42d8fa2c7ade9b9cdd558c6f1955386ad, itemCount=0, itemCountIsUnits=false, payAmount=8.54, payTextRaw=null, distanceMiles=12.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=33, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=BJ's Restaurant & Brewhouse (San Antonio #480), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=BJ's Restaurant & Brewhouse (San Antonio #480), rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=554490d501c5d175c5a3aa235d53a57b6912ed72b7162dc68159d1972f9fa8bf, presentationKey=b7124711dcb138944ddaa29934aa29d42d8fa2c7ade9b9cdd558c6f1955386ad, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=8.54, payTextRaw=null, distanceMiles=12.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=33, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=BJ's Restaurant & Brewhouse (San Antonio #480), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=BJ's Restaurant & Brewhouse (San Antonio #480), rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-21_18-44-21-714__uber__accessibility.window__offer__3e789f.json": {
@@ -3559,7 +3559,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=b3dd7bb57085615c51d4de209190f9a34a35e855f691f69ebc9be536a176abb4, presentationKey=9eea16ddc80b8afb2e39480ef75bc32148fd7d517f0930ff438583733dfe1189, itemCount=0, itemCountIsUnits=false, payAmount=7.9, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=19, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Thai Buri (8728401), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=Thai Buri (8728401), rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b3dd7bb57085615c51d4de209190f9a34a35e855f691f69ebc9be536a176abb4, presentationKey=9eea16ddc80b8afb2e39480ef75bc32148fd7d517f0930ff438583733dfe1189, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=7.9, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=19, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Thai Buri (8728401), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=DIRECT, displayStoreName=Thai Buri (8728401), rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-26_20-39-29-425__uber__accessibility.window__offer__867aba.json": {
@@ -3567,7 +3567,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=42a437c68ebee54447995d56a17ea6d18c0383015999db05c5545d499b58d817, presentationKey=c88bd13abc3c42b304d5fa9f150952a24aa9b939925bb16e82888a0893b79391, itemCount=0, itemCountIsUnits=false, payAmount=4.87, payTextRaw=null, distanceMiles=3.1, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=14, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Angkor Bistro, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Angkor Bistro, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=42a437c68ebee54447995d56a17ea6d18c0383015999db05c5545d499b58d817, presentationKey=c88bd13abc3c42b304d5fa9f150952a24aa9b939925bb16e82888a0893b79391, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=4.87, payTextRaw=null, distanceMiles=3.1, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=14, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Angkor Bistro, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Angkor Bistro, rawExtractedTexts=null)"
         }
     },
     "offer/2026-07-26_20-40-24-074__uber__accessibility.window__offer__767f9b.json": {
@@ -3575,7 +3575,7 @@
         "intent": "offer",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=2142626f9b179829832f665436b00fafae2bf21ce11b052c6707f55ca3dd318f, presentationKey=b99b2492a1b22c758035feae76f98b1eaf18771fd1daa091ac745294de70d6f6, itemCount=0, itemCountIsUnits=false, payAmount=13.04, payTextRaw=null, distanceMiles=14.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=39, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Delivery (2), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Sonic (3035 Tpc Pkwy), rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=2142626f9b179829832f665436b00fafae2bf21ce11b052c6707f55ca3dd318f, presentationKey=b99b2492a1b22c758035feae76f98b1eaf18771fd1daa091ac745294de70d6f6, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=13.04, payTextRaw=null, distanceMiles=14.0, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=39, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Delivery (2), itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=MATCH, displayStoreName=Sonic (3035 Tpc Pkwy), rawExtractedTexts=null)"
         }
     },
     "offer_accepting/2026-07-26_11-26-00-810__doordash__accessibility.window__UNKNOWN__c43214.json": {
@@ -3673,7 +3673,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=c43837ce64c22cad3a9c44d31a2474544c06690717c0e0135334c8e4f49537e0, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=46, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=608852036a1163e671955f0d0a168dd01cd1f5c08f93ef6ed12f9fddd622016b, presentationKey=56fe2513eb603231b96e851d3c9e782eb47a148ab19224eab827f003892803f5, assignmentIdHash=56fe2513eb603231b96e851d3c9e782eb47a148ab19224eab827f003892803f5, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=46, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-08-28_15-31-47-225__doordash__accessibility.window__offer_popup__07b9cf.json": {
@@ -3681,7 +3681,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=c43837ce64c22cad3a9c44d31a2474544c06690717c0e0135334c8e4f49537e0, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=608852036a1163e671955f0d0a168dd01cd1f5c08f93ef6ed12f9fddd622016b, presentationKey=56fe2513eb603231b96e851d3c9e782eb47a148ab19224eab827f003892803f5, assignmentIdHash=56fe2513eb603231b96e851d3c9e782eb47a148ab19224eab827f003892803f5, itemCount=0, itemCountIsUnits=false, payAmount=8.3, payTextRaw=null, distanceMiles=3.8, distanceTextRaw=null, dueByTimeText=3:49 PM, dueByTimeMillis=1780328940000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-18_18-15-06-664__doordash__accessibility.window__offer_popup__b9a745.json": {
@@ -3689,7 +3689,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=307310df34c14297dafda5b9f2deaea70a574398ef5a5e7d33573193ef092106, presentationKey=cd17c25a8d730dba2dec8931ac65214e8416ce4e96b337954b1e00365cfacf8e, itemCount=8, itemCountIsUnits=false, payAmount=11.75, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=49, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Sonic Drive-In, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Family Dollar, itemCount=8, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=307310df34c14297dafda5b9f2deaea70a574398ef5a5e7d33573193ef092106, presentationKey=null, assignmentIdHash=null, itemCount=8, itemCountIsUnits=false, payAmount=11.75, payTextRaw=null, distanceMiles=3.9, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=49, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Sonic Drive-In, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Family Dollar, itemCount=8, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_08-51-20-419__doordash__accessibility.window__offer_popup__87e2e3.json": {
@@ -3697,7 +3697,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=7957706e1cdc35ce91b0846a2a3c4458d6a4ce91019f14a44f4dd6ac23b8c338, presentationKey=e30e80e84b1550584e202a15979bde87437e99e902fbee378a82cddab175700e, itemCount=2, itemCountIsUnits=false, payAmount=8.06, payTextRaw=null, distanceMiles=4.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=26, badges=[], initialCountdownSeconds=28, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=2, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=7957706e1cdc35ce91b0846a2a3c4458d6a4ce91019f14a44f4dd6ac23b8c338, presentationKey=null, assignmentIdHash=null, itemCount=2, itemCountIsUnits=false, payAmount=8.06, payTextRaw=null, distanceMiles=4.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=26, badges=[], initialCountdownSeconds=28, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=2, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_09-45-38-229__doordash__accessibility.window__offer_popup__822a68.json": {
@@ -3705,7 +3705,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_09-45-41-384__doordash__accessibility.window__offer_popup__995bbe.json": {
@@ -3713,7 +3713,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=a67e561688c9ddcb480ab88fc44488254bc69ced4676c724e828772e6ec28671, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=44, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=6edcce21bd8b070056742019ce67f66b5d51c1b3de5993a7eb0d51963af4cf8e, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=6.35, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=10, badges=[], initialCountdownSeconds=44, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=McDonald's, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_11-42-11-094__doordash__accessibility.window__offer_popup__b7abab.json": {
@@ -3721,7 +3721,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=e30e80e84b1550584e202a15979bde87437e99e902fbee378a82cddab175700e, itemCount=6, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=16, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=97e79f332fdaada9cabc3a8e889fc2738f77f85e9f4bd99f6d0c6d8251357eb4, presentationKey=null, assignmentIdHash=null, itemCount=6, itemCountIsUnits=false, payAmount=14.75, payTextRaw=null, distanceMiles=8.5, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=45, badges=[], initialCountdownSeconds=16, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=H-E-B, itemCount=6, isItemCountEstimated=false, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_20-38-23-394__doordash__accessibility.window__offer_popup__073fcb.json": {
@@ -3729,7 +3729,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=0df8ca34544265be7e4eb07231f84f5325d8507c40a7aabbc9ced69beb46a691, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_20-38-23-396__doordash__accessibility.window__offer_popup__synthetic-nozip-address-1114.json": {
@@ -3737,7 +3737,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=0df8ca34544265be7e4eb07231f84f5325d8507c40a7aabbc9ced69beb46a691, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=4c4851d381d17fa79cad9670439e503981728ebd49402e733dde5282a9540fd0, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=17.6, payTextRaw=null, distanceMiles=8.2, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=57, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Smoothie King, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=SHOP_FOR_ITEMS, storeName=Target, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/2026-09-19_20-39-03-514__doordash__accessibility.window__offer_popup__858fcf.json": {
@@ -3745,7 +3745,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=8a67bc750192f3a9325624ab686b3eb0122970c84c4ab970961c8d600b944498, presentationKey=8f2919f6cf8cd54688b9b87f377f4f601590824ebac4f2ff8f067517e49177d1, itemCount=0, itemCountIsUnits=false, payAmount=16.3, payTextRaw=null, distanceMiles=7.7, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=San Antonio Burger co, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=KFC, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=8a67bc750192f3a9325624ab686b3eb0122970c84c4ab970961c8d600b944498, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=16.3, payTextRaw=null, distanceMiles=7.7, distanceTextRaw=null, dueByTimeText=null, dueByTimeMillis=null, timeToCompleteMinutes=41, badges=[], initialCountdownSeconds=47, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=San Antonio Burger co, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=KFC, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_163448_533_OFFER_POPUP.json": {
@@ -3753,7 +3753,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=3ec891741cf8177c956bcaabb7912d18d0fa3cc94f8b8bcf390dc103b849eae2, presentationKey=e4325a89086d6f5595fd26f935323dfaf501e0b1df7d4ca2945db8d852a87204, itemCount=4, itemCountIsUnits=false, payAmount=8.15, payTextRaw=null, distanceMiles=5.8, distanceTextRaw=null, dueByTimeText=5:09 PM, dueByTimeMillis=1780333740000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=3ec891741cf8177c956bcaabb7912d18d0fa3cc94f8b8bcf390dc103b849eae2, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=8.15, payTextRaw=null, distanceMiles=5.8, distanceTextRaw=null, dueByTimeText=5:09 PM, dueByTimeMillis=1780333740000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_165601_985_OFFER_POPUP.json": {
@@ -3761,7 +3761,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=37b00b1091504b17700c98c0f6f728a8b140c22ed068e2e2d700dc03320321c7, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=null, assignmentIdHash=null, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_165606_061_OFFER_POPUP.json": {
@@ -3769,7 +3769,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=37b00b1091504b17700c98c0f6f728a8b140c22ed068e2e2d700dc03320321c7, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=null, assignmentIdHash=null, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_165612_046_OFFER_POPUP.json": {
@@ -3777,7 +3777,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=37b00b1091504b17700c98c0f6f728a8b140c22ed068e2e2d700dc03320321c7, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=642140787888d068d91389c207e0e04d31072204747ceac37c12752f06193ba1, presentationKey=null, assignmentIdHash=null, itemCount=9, itemCountIsUnits=false, payAmount=12.25, payTextRaw=null, distanceMiles=5.1, distanceTextRaw=null, dueByTimeText=5:39 PM, dueByTimeMillis=1780335540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Dollar General, itemCount=9, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_173308_715_OFFER_POPUP.json": {
@@ -3785,7 +3785,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=8c66a5d1d7b1abb0eb2a6cc15c22d118a18910237d942d4132ebefc38ee36ecf, presentationKey=d539030b696644980c7b060b066ad160751ffb8625561fb7ad896c5f1d5ab7e1, itemCount=0, itemCountIsUnits=false, payAmount=9.78, payTextRaw=null, distanceMiles=9.6, distanceTextRaw=null, dueByTimeText=6:00 PM, dueByTimeMillis=1780336800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=35, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Peter Piper Pizza, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=8c66a5d1d7b1abb0eb2a6cc15c22d118a18910237d942d4132ebefc38ee36ecf, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=9.78, payTextRaw=null, distanceMiles=9.6, distanceTextRaw=null, dueByTimeText=6:00 PM, dueByTimeMillis=1780336800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=35, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Peter Piper Pizza, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_181353_816_OFFER_POPUP.json": {
@@ -3793,7 +3793,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, presentationKey=a3abb059ff9094ecd9e506061fd949fe12484d0e9969dbc4bb231e5d673bd77c, itemCount=0, itemCountIsUnits=false, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780338720000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=23, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780338720000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=23, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182525_934_OFFER_POPUP.json": {
@@ -3801,7 +3801,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=e4325a89086d6f5595fd26f935323dfaf501e0b1df7d4ca2945db8d852a87204, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=15, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=15, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182536_960_OFFER_POPUP.json": {
@@ -3809,7 +3809,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=e4325a89086d6f5595fd26f935323dfaf501e0b1df7d4ca2945db8d852a87204, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182617_556_OFFER_POPUP.json": {
@@ -3817,7 +3817,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, presentationKey=51b84cf1ff3a7facc040437ee360ffa404009125489df6c574530545076fddfb, itemCount=1, itemCountIsUnits=false, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780340760000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=21, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780340760000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=21, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182655_860_OFFER_POPUP.json": {
@@ -3825,7 +3825,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, presentationKey=6a96e0461b59a0f8371547e8258c8a8f6c9566541ad09eef07489cd706c692ba, itemCount=0, itemCountIsUnits=false, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780339560000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=11, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780339560000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=11, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_185925_772_OFFER_POPUP.json": {
@@ -3833,7 +3833,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, presentationKey=93c1998cb27ddae514e62e3f7d121192cb404c2e06c7c4e1ccb35e1bd9fd6476, itemCount=0, itemCountIsUnits=false, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780341780000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780341780000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_193825_010_OFFER_POPUP.json": {
@@ -3841,7 +3841,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, presentationKey=a47525e3cc17973d3b6458462aeb9c9f85d99b71460f830e6d6117653d25e691, itemCount=0, itemCountIsUnits=false, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780344540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780344540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_202519_909_OFFER_POPUP.json": {
@@ -3849,7 +3849,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=1e82bb40bb58a9011894dae8a0765062cd5cb529b3b4c353aaf25186f1498c09, presentationKey=e4325a89086d6f5595fd26f935323dfaf501e0b1df7d4ca2945db8d852a87204, itemCount=4, itemCountIsUnits=false, payAmount=10.25, payTextRaw=null, distanceMiles=6.6, distanceTextRaw=null, dueByTimeText=8:58 PM, dueByTimeMillis=1780347480000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=30, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=1e82bb40bb58a9011894dae8a0765062cd5cb529b3b4c353aaf25186f1498c09, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=10.25, payTextRaw=null, distanceMiles=6.6, distanceTextRaw=null, dueByTimeText=8:58 PM, dueByTimeMillis=1780347480000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=30, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/523fd0d0.json": {
@@ -3857,7 +3857,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=8858bae42074b1148e63146e4bf2fbef69c85f539999d3731f99f2acbe779a9c, presentationKey=45e30710298a5e9f1533a654cccb5c47605114434d45296a73bb8d91689ff887, itemCount=11, itemCountIsUnits=false, payAmount=16.25, payTextRaw=null, distanceMiles=7.5, distanceTextRaw=null, dueByTimeText=4:21 PM, dueByTimeMillis=1780330860000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=41, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Michaels, itemCount=11, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=8858bae42074b1148e63146e4bf2fbef69c85f539999d3731f99f2acbe779a9c, presentationKey=null, assignmentIdHash=null, itemCount=11, itemCountIsUnits=false, payAmount=16.25, payTextRaw=null, distanceMiles=7.5, distanceTextRaw=null, dueByTimeText=4:21 PM, dueByTimeMillis=1780330860000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=41, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Michaels, itemCount=11, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/d3dc2b32.json": {
@@ -3865,7 +3865,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=8858bae42074b1148e63146e4bf2fbef69c85f539999d3731f99f2acbe779a9c, presentationKey=45e30710298a5e9f1533a654cccb5c47605114434d45296a73bb8d91689ff887, itemCount=11, itemCountIsUnits=false, payAmount=16.25, payTextRaw=null, distanceMiles=7.5, distanceTextRaw=null, dueByTimeText=4:21 PM, dueByTimeMillis=1780330860000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=31, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Michaels, itemCount=11, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=8858bae42074b1148e63146e4bf2fbef69c85f539999d3731f99f2acbe779a9c, presentationKey=null, assignmentIdHash=null, itemCount=11, itemCountIsUnits=false, payAmount=16.25, payTextRaw=null, distanceMiles=7.5, distanceTextRaw=null, dueByTimeText=4:21 PM, dueByTimeMillis=1780330860000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=31, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=Michaels, itemCount=11, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup_confirm_decline/2026-02-06_14-00-00__OFFER_POPUP_CONFIRM_DECLINE__29001e4a.json": {

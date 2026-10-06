@@ -61,8 +61,10 @@ internal fun EffectMap.diffOfferLifecycle(
     // Offer's presented hash changed. TWO sub-cases (#830):
     //   (a) REPLACE — a genuinely different presentation (different or null presentationKey): resolve
     //       the OLD offer (OFFER_TIMEOUT "Replaced by new offer" + cancel its heads-up + bubble),
-    //       exactly as pre-#830. The new offer's OFFER_RECEIVED is intentionally NOT re-emitted (the
-    //       rule-declared screenshot/log dedup by offerHash owns that, matching pre-B3).
+    //       exactly as pre-#830 — AND, since #1069, log the NEW offer's own OFFER_RECEIVED: a replace
+    //       is a second offer (the DoorDash default path for consecutive same-store offers), and
+    //       `AppEffect.LogEvent` is the ONLY `app_events` writer (a rule `log` effect is a DEBUG line),
+    //       so without it the second offer had an outcome row but no received row.
     //   (b) ENRICH-AS-VARIANT — a churned re-render of the SAME physical presentation
     //       (matching non-null presentationKey): the offer did NOT leave, so NO OFFER_TIMEOUT and no
     //       "offer replaced" bubble — that would log a phantom outcome + a resolution card for an
@@ -101,6 +103,19 @@ internal fun EffectMap.diffOfferLifecycle(
             val description = (if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer") +
                 (note?.let { "; $it" } ?: "")
             add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, description)))
+            // #1069 (fable review F1): the replacing offer is a NEW offer — its OFFER_RECEIVED row.
+            add(
+                logEffect(
+                    sessionId, AppEventType.OFFER_RECEIVED, obs.timestamp,
+                    OfferReceivedPayload(
+                        offerHash = nextOffer.offerHash,
+                        parsedOffer = nextOffer.offerFields.parsedOffer,
+                        presentedAt = nextOffer.presentedAt,
+                        platform = platform.name,
+                        returnFlow = nextOffer.returnFlow,
+                    ),
+                ),
+            )
             // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
             if (!directOverMatch) {
                 add(

@@ -13,8 +13,9 @@ data class ParsedOffer(
     val offerHash: String,
 
     /**
-     * Presentation identity — a hash of the STABLE subset of the offer
-     * (store names + order count + order types), excluding the ticking economics
+     * Presentation identity — exact when [assignmentIdHash] is set; the rule-declared fallback
+     * (`presentationIdentity`: `store` = stable subset, `economics` = null) otherwise (#1069).
+     * The stable subset (store names + order count + order types) excludes the ticking economics
      * (pay / distance / time-to-complete) that ALREADY feed [offerHash] (#830).
      *
      * On a platform whose offer card live-re-quotes (Uber re-renders pay/miles/minutes
@@ -24,14 +25,20 @@ data class ParsedOffer(
      * offer already on screen rather than a brand-new offer (no replace-storm, no
      * OFFER_TIMEOUT("replaced"), no re-speak, no discarded click latches).
      *
-     * Nullable + fail-closed (#362): a null key (sha256 failure, or a rule that
+     * Nullable + fail-closed (#362): a null key (economics fallback, sha256 failure, or a rule that
      * emitted no offer fields) degrades to today's replace-on-any-hash-change
      * behavior — never a false MERGE. Platform-agnostic: derived purely from parsed
-     * data, no [cloud.trotter.dashbuddy.domain.state.Platform] branch; a stable card
-     * (DoorDash) simply enriches same-store re-quotes and replaces on a store change,
-     * exactly as before for the fielded corpus.
+     * data, no [cloud.trotter.dashbuddy.domain.state.Platform] branch. The default economics
+     * fallback replaces on any hash change so consecutive same-store offers stay distinct.
      */
     val presentationKey: String? = null,
+
+    /**
+     * #1069: sha256 of the platform's own per-offer assignment token when the ruleset parsed one (DoorDash's
+     * View card renders a per-assignment UUID), else null. Feeds [presentationKey] as an EXACT identity; never
+     * a scoring input, never in [offerHash]. Hashed at the factory (fail-closed null), never the raw token.
+     */
+    val assignmentIdHash: String? = null,
 
     // -- Order Details --
     /** For "Shop for items" orders, the number of items. Set to 1 for pickup order types. */

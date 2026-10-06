@@ -22,6 +22,7 @@ import cloud.trotter.census.contract.authoring.EnvelopeWalk
 import cloud.trotter.census.contract.authoring.FieldType
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.TreeLimits
 import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
+import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import cloud.trotter.dashbuddy.domain.state.SessionType
 import kotlinx.serialization.json.JsonObject
 import cloud.trotter.census.contract.authoring.RuleAuthoringVocabulary as Vocabulary
@@ -67,6 +68,9 @@ class RuleAuthoringVocabularyGuardTest {
         assertEquals(Flow.entries.map { it.wire }, Vocabulary.FLOWS)
         // SessionType has no wire property: ParsedFieldsFactory uses valueOf, i.e. enum names.
         assertEquals(SessionType.entries.map { it.name }, Vocabulary.SESSION_TYPES)
+        // #1069: the draft tool's identity enum mirrors the contract's declaration table.
+        assertEquals(StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES.toList(), Vocabulary.PRESENTATION_IDENTITIES)
+        assertEquals(setOf("presentationIdentity"), StateMachineContract.PARSE_DECLARATION_LITERALS.keys)
         assertEquals(Mode.entries.map { it.wire }, Vocabulary.MODES)
         assertEquals(OfferSurface.entries.map { it.wire }, Vocabulary.OFFER_SURFACES)
         assertEquals(TaskPhase.entries.map { it.name }, Vocabulary.TASK_PHASES)

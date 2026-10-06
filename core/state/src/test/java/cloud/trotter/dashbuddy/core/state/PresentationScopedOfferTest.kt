@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -168,6 +169,62 @@ class PresentationScopedOfferTest {
         val presented = r.presentedOffer()!!
         assertEquals("replaced, not enriched", 2_000L, presented.presentedAt)
         assertNull(presented.acceptClickAt)
+    }
+
+    @Test
+    fun `two same-store offers with null keys replace with a fresh presentation and no old latches`() {
+        val first = pending("H1", null, presentedAt = 1_000L, evaluation = evalOf(),
+            acceptClickAt = 1_050L, firstEvalLandedAt = 1_100L)
+        val prev = region(first)
+        val next = drive(prev, offerObs(15_000L, "H2", null))
+        val second = next.presentedOffer()!!
+        assertEquals(first.offerFields.parsedOffer.orders, second.offerFields.parsedOffer.orders)
+        assertEquals("H2", second.offerHash)
+        assertEquals(15_000L, second.presentedAt)
+        assertEquals(1, next.pendingOffers.size)
+        assertNull(second.acceptClickAt)
+        assertNull(second.declineCommittedAt)
+        assertNull(second.lastClickIntent)
+        assertNull(second.firstEvalLandedAt)
+        assertNull(second.evaluation)
+
+        val logged = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val outcomes = logged.mapNotNull { it.payload as? OfferPayload }
+        assertEquals("the old offer resolves exactly once", 1, outcomes.size)
+        assertEquals("H1", outcomes.single().offerHash)
+        assertEquals(1_000L, outcomes.single().presentedAt)
+        assertEquals(AppEventType.OFFER_TIMEOUT, outcomes.single().outcome)
+        // #1069 (fable F1): the replacing offer is logged as RECEIVED on its own hash.
+        val received = logged.filter { it.type == AppEventType.OFFER_RECEIVED }
+        assertEquals(1, received.size)
+        assertEquals("H2", (received.single().payload as cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload).offerHash)
+    }
+
+    @Test
+    fun `a decline-latched same-store offer with null keys resolves as declined through replace`() {
+        val first = pending("H1", null, presentedAt = 1_000L, firstEvalLandedAt = 1_100L).copy(
+            declineCommittedAt = 1_500L,
+            // A later contradictory click cannot undo the committed decline (#594).
+            lastClickIntent = OfferIntent.ACCEPT,
+            acceptClickAt = 1_600L,
+        )
+        val prev = region(first)
+        val next = drive(prev, offerObs(15_000L, "H2", null))
+        val second = next.presentedOffer()!!
+        assertEquals(first.offerFields.parsedOffer.orders, second.offerFields.parsedOffer.orders)
+        assertEquals("H2", second.offerHash)
+        assertEquals(15_000L, second.presentedAt)
+        assertNull(second.declineCommittedAt)
+        assertNull(second.acceptClickAt)
+        assertNull(second.lastClickIntent)
+        assertNull(second.firstEvalLandedAt)
+
+        val events = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val decline = events.single { it.type == AppEventType.OFFER_DECLINED }.payload as OfferPayload
+        assertEquals("H1", decline.offerHash)
+        assertEquals(1_000L, decline.presentedAt)
+        assertEquals(15_000L, decline.decidedAt)
+        assertFalse(events.any { it.type == AppEventType.OFFER_TIMEOUT || it.type == AppEventType.OFFER_ACCEPTED })
     }
 
     // =============================================================================================

@@ -48,6 +48,12 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Same-store consecutive offers are two offers (#1069):** after a dash with two H-E-B (same store)
+  offers back to back, `app_events` holds TWO `OFFER_RECEIVED` rows with two `offerHash`es, the first
+  offer's outcome reads DECLINED/TIMEOUT on its own row (never 'enriched' into the second), and the
+  bubble spoke both. — KNOWN one-time effect: an offer restored from a pre-#1069 snapshot (install mid-dash / crash-recovery across the upgrade) keeps its old store key, so its next re-render logs one spurious `OFFER_TIMEOUT "Replaced by new offer"` + re-speak — not a regression.
+  - Confirmed: 0/2
+
 - **Session report correction (#1134):** on session 483 (09-10 17:11, `early_offline`, 0 deliveries)
   tap Correct total → No summary; the Sep 7–13 week's Earned drops from $646.34 to $606.20 and the
   dash shows 'report corrected'; Restore detected value brings $40.14 back. — Confirmed: 0/2
