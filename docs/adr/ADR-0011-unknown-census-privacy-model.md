@@ -607,7 +607,16 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). "Only credential
   accepted bundle that carried the token and replayed before a restored server accepts traffic.
 - **Install identity**: secret rotation preserves the install id and its counts; a reset deletes the
   old identity first (the deletion contract), enrols anew, restarts the 7-day quarantine, and
-  requires fresh trusted enrolment.
+  requires fresh trusted enrolment. **A withdrawal survives a restore by construction (#1192,
+  server v0.12):** the withdrawal transaction writes a hashed tombstone (`sha256` of the install id —
+  a record that a withdrawal happened, never of who) that is outside `WITHDRAWAL_TABLES`; the server
+  replays tombstones at EVERY startup (deleting any install the restore resurrected, fail-closed: a
+  replay failure refuses to start) and `restore.sh` merges the off-host journal first. Off-host
+  durability goes through the host, because the census container cannot reach the instance role: a
+  spool notice the host publishes to SNS within minutes (its two lines are a journal row) and a CSV
+  export written beside every backup and uploaded with it. A re-enrolment after the tombstone is never
+  erased. The stated residual: a withdrawal in the window between the last journal export / SNS publish
+  and a total host loss is replayable only from the SNS email.
 
 ## Ownership by milestone (the seams the builders keep)
 
