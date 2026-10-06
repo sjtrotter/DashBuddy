@@ -219,4 +219,7 @@ data class DeliveryRecordEntity(
      * authority on their own money; the machine never overwrites them, in either order.
      */
     val driverAdjustedAt: Long? = null,
+    val jobOfferCount: Int? = null,
+    val soleOfferHash: String? = null,
+    val odometerAtArrival: Double? = null,
 )

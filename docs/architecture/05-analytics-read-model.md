@@ -655,3 +655,71 @@ event type is absent from history.
 
 Day-one use: clear session 483's phantom $40.14 (`early_offline`, zero deliveries). The Sep 7–13
 week drops from $646.34 to $606.20; Restore detected value brings the machine $40.14 back.
+
+
+## Per-platform time learning (#254)
+
+Room **18** adds seven nullable evidence columns: delivery `jobOfferCount`, `soleOfferHash`,
+`odometerAtArrival`; pickup `odometerAtConfirmation`; offer `orderCount`, `orderCountProven`, `isShop`.
+Projector **13** refolds historical payloads to backfill them. Delivery lineage requires a nonempty
+list of entirely nonblank offer hashes, deduplicated before count/singleton projection. Pickup
+confirmation odometer comes from the closing event metadata; delivery arrival odometer comes from
+its payload. Empty orders yield null classification/count; any UNKNOWN order type yields null
+`isShop`, never proven non-shopping. The domain-owned #882 `OrderChipShape` stamps chip multiplicity
+into `orderCount` and permits `orderCountProven == true` only for nonempty orders whose names are
+nonblank stores or explicit `(1)` chips; learning requires that proof as well as `orderCount == 1`.
+`AnalyticsRecordMappers` preserves the existing frozen mappings.
+
+`TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
+all delivery/pickup children and linked accepted offers by `(platform, sessionId, jobId)` before
+selecting singleton children, and counts exact offer-hash matches within the same job/session/platform.
+This avoids fan-out. Its DAO-only repository never decodes events or consults live state/economics.
+
+Eligibility fails closed: known platform, machine session attribution, original pay basis in
+DROP_SHARE/RECEIPT_TOTAL/OFFER_PAY/NONE, exactly one job offer, one delivery, one pickup, one linked
+accepted offer and one exact match; a proven single non-shop order and no resolved orphan outcome.
+Shopping pickup activity also excludes a row. Both machine mileage legs must be finite/nonnegative,
+the dropoff leg positive, and pickup confirmation/arrival and dropoff arrival stamps present.
+Confirmation and arrival odometers must be finite/nonnegative with a positive difference equal to the
+machine dropoff leg within 1e-6 mile. Edited `realizedMiles` and quoted miles are never denominators.
+Manual/suspect rows, bundled offers, add-ons, partial stacks, missing arrivals and mixed measurement
+spans contribute nothing; the #1108 stack family remains excluded even if only one child has arrived.
+Driver pay corrections retain eligibility only through their valid original machine provenance.
+
+The partition anchor is `A = completedAt − realizedMinutes × 60000`. Require
+`A ≤ offerDecidedAt ≤ pickupPhaseStartedAt ≤ pickupArrivedAt ≤ pickupConfirmedAt ≤ phaseStartedAt
+≤ arrivedAt ≤ completedAt` (1 ms tolerance for numerical partition containment).
+Pace is **pickup confirmation → dropoff arrival minutes / machine dropoff miles**. Combined stop
+overhead is **pickup arrival → confirmation dwell + dropoff arrival → completion dwell** per order.
+All derived values must be finite, transit positive, overhead nonnegative, and the partition must
+contain transit plus overhead. Partition minutes include between-job waiting: subtracting dwell
+alone would not isolate driving. The two measurements are independent; no seed residual estimates
+stop overhead. Applying measured transit pace to the offer's entire distance assumes comparable
+travel pace to the store. Store/chain tiers remain #159.
+
+Deduplicate eligible sequence IDs per platform, count **all eligible lifetime history** as `n`, and
+select the latest `min(n, 30)` by descending delivery event sequence ID. Each component gets a separate
+nearest-rank p50 over that same window (lower middle for even windows). Below 10 samples automatic
+values are seeds. Thereafter each component is `seed × 10/(n+10) + median × n/(n+10)`; cumulative `n`,
+not window size, controls trust and blending. Corrections can decrease both count and median.
+
+`StrategyRepository` supervises one distinct-snapshot collector with cancellation-preserving retry.
+It replaces the whole per-platform DataStore map atomically, removing absent entries and rejecting
+partial/nonfinite/invalid tuples. Persisted values are raw medians/counts, never blends or seeds.
+Replay, late joins, corrections and restart recompute the same snapshot; during rebuild the available
+qualifying rows determine the trust gate. Shop pace and items:units learning retain their own keys.
+
+`TimeConstantSeeds` owns per-platform lookup, initially an empty bespoke map referencing the existing
+`UserEconomy` numeric defaults. `forPlatform` clears absent learning and resolves each unset raw time
+field to its platform seed. Each explicit global override marker independently wins, even at the seed
+value; clearing removes only that field's key/marker. Learned tuples live apart from app preferences,
+so vehicle reseeding and Reset defaults cannot touch them. The platformless simulation explicitly
+resolves Unknown (generic seeds plus global overrides). Evaluation uses effective pace/overhead,
+including per-order stack multiplication, shop floors, mixed offers and every accepted pricing
+snapshot. Frozen accepted overhead remains authoritative for arrival correction; legacy snapshots
+fall back to effective overhead. Historical delivery/offer economics are never repriced by learning.
+
+The Economy settings host and shared editor family remain in `:app`. The new presentation section
+receives immutable display data and callbacks; lifecycle-aware collection keeps recommendations,
+effective values, eligible counts, default progress and latest-30 disclosures visible under overrides.
+Automated build/migration/export-drift checks and two field confirmations are separate completion gates.

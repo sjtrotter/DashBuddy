@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.order.OrderChipShape
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /** Provenance of a delivery's realized pay (#314) — mirrors the DB column, owned here as SSOT. */
@@ -159,6 +161,9 @@ data class DeliveryFold(
      * keeps the legacy partition delta.
      */
     val milesToDropoff: Double? = null,
+    val jobOfferCount: Int? = null,
+    val soleOfferHash: String? = null,
+    val odometerAtArrival: Double? = null,
 )
 
 /**
@@ -180,6 +185,7 @@ data class PickupFold(
     val activity: String?,
     /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
     val storeAddress: String?,
+    val odometerAtConfirmation: Double? = null,
 )
 
 /**
@@ -224,6 +230,10 @@ data class OfferFold(
     val estFuelPerMile: Double?,
     /** `nonFuelCostEstimate ÷ distanceMiles` (per-mile); null when distance ≤ 0 (#659). */
     val estNonFuelPerMile: Double?,
+    val orderCount: Int? = null,
+    /** Every parsed entry proves one order (a store name or a type chip explicitly counting 1). */
+    val orderCountProven: Boolean? = null,
+    val isShop: Boolean? = null,
 )
 
 /**
@@ -529,6 +539,10 @@ object RecordFolds {
         val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
         val eval = p.evaluation
         val parsed = p.parsedOffer
+        val chipCounts = parsed.orders.map { OrderChipShape.count(it.storeName) }
+        val orderCountProven = parsed.orders.isNotEmpty() && parsed.orders.indices.all { i ->
+            parsed.orders[i].storeName.isNotBlank() && (chipCounts[i] == null || chipCounts[i] == 1)
+        }
         // Per-mile fuel/non-fuel split from the SAME frozen evaluation the cpm comes from: the eval
         // carries route-total estimates + distance, so per-mile = estimate ÷ distanceMiles. Guard a
         // non-positive distance → null split (the delivery falls back to the 3-step waterfall). By
@@ -570,6 +584,11 @@ object RecordFolds {
             estOperatingCostPerMile = eval?.operatingCostPerMile,
             estFuelPerMile = fuelPerMile,
             estNonFuelPerMile = nonFuelPerMile,
+            orderCount = chipCounts.takeIf { it.isNotEmpty() }?.sumOf { it ?: 1 },
+            orderCountProven = orderCountProven,
+            isShop = parsed.isShop.takeIf {
+                parsed.orders.isNotEmpty() && parsed.orders.none { it.orderType == OrderType.UNKNOWN }
+            },
         )
         val newCtx = ctx?.let {
             it.advance(e.occurredAt, event.metadata?.odometer)

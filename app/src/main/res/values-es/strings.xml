@@ -113,4 +113,23 @@
          mismo idioma que hablaba. -->
     <string name="tts_health_notice_title">DashBuddy dejó de leer las ofertas en voz alta</string>
     <string name="tts_health_notice_text">El motor de texto a voz de tu teléfono dejó de responder, así que los avisos de oferta hablados se apagaron. DashBuddy lo reintenta cada vez que llega una oferta nueva. Si sigue en silencio, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. De todos modos, las ofertas siguen apareciendo en pantalla.</string>
+
+    <!-- #254: local per-platform time learning and independent global overrides. -->
+    <string name="economy_time_title">Estimaciones de tiempo</string>
+    <string name="economy_time_help">Los valores personalizados se aplican a todas las plataformas. Las recomendaciones automáticas siguen aprendiendo. El ritmo se mide desde la salida de la recogida hasta la llegada a la entrega y supone un ritmo similar hacia la tienda. El tiempo de parada incluye la recogida y la entrega.</string>
+    <string name="economy_time_pace">Ritmo de conducción · min/milla</string>
+    <string name="economy_time_overhead">Recogida + entrega · min/pedido</string>
+    <string name="economy_time_automatic">Automático</string>
+    <string name="economy_time_set_override">Usar valor personalizado</string>
+    <string name="economy_time_use_automatic">Usar automático</string>
+    <string name="economy_time_invalid_pace">Introduce un número finito mayor que cero.</string>
+    <string name="economy_time_invalid_overhead">Introduce un número finito mayor o igual que cero.</string>
+    <string name="economy_time_automatic_values">Automático: %1$s min/milla · %2$s min/pedido</string>
+    <string name="economy_time_effective_values">En uso: %1$s min/milla · %2$s min/pedido</string>
+    <string name="economy_time_default_progress">%1$d/%2$d entregas válidas — usando valor predeterminado</string>
+    <string name="economy_time_window">Las medianas usan las últimas %1$d entregas válidas.</string>
+    <plurals name="economy_time_deliveries">
+        <item quantity="one">Aprendido de %d entrega</item>
+        <item quantity="other">Aprendido de %d entregas</item>
+    </plurals>
 </resources>

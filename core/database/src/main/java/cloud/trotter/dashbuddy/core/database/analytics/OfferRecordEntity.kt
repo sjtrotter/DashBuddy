@@ -91,4 +91,8 @@ data class OfferRecordEntity(
      * non-null, so a resolved orphan no longer inflates `accepted`/`received`. Null again ⇒ undo.
      */
     val outcomeResolved: String? = null,
+    val orderCount: Int? = null,
+    /** Every parsed entry proves one order (a store name or a type chip explicitly counting 1). */
+    val orderCountProven: Boolean? = null,
+    val isShop: Boolean? = null,
 )

@@ -619,6 +619,7 @@ the fuel/non-fuel split (#659) are computed at projection time against the offer
 **DAO-only** (no economy dependency). `cashTip` stays outside `realizedPay`/`netProfit` and is added to gross/net only at the read
 sites, so the reconciliation's Σ-attributed stays cash-free (#688);
 `originalPayBasis` is stamped at first fold and never rewritten (#703).
+#254 materializes per-platform time constants from eligible read-model drops, separately from user overrides, using measured transit pace and combined pickup/dropoff dwell.
 A pay-less row that drove miles carries `net = −cost` (#1133; `realizedPay` stays null).
 
 **Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with

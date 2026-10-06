@@ -113,6 +113,9 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- **#254** — verify defaults through 9 eligible deliveries; at 10, Economy shows the platform count and automatic values; confirm pickup-plus-door overhead, independent override/automatic controls, persistence after restart/vehicle change, and exclusion of shops/stacks/missing arrivals. Compare subsequent offer time estimates with observed work.
+  - Confirmed: 0/2
+
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
 - **#1189 notification census: with debug census enabled, an admitted UNKNOWN push produces one notification skeleton; repeat pushes dedup; a customer lead-in is withheld; an action-only sensitive marker produces a refusal and no upload. Screen and notification uploads share the daily budget. Confirm counters and gated ops output without recording payload text. Confirmed: 0/2.**

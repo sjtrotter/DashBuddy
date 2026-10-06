@@ -1,37 +1,61 @@
 package cloud.trotter.dashbuddy.core.data.strategy
 
+import cloud.trotter.dashbuddy.core.data.analytics.TimeConstantRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.MerchantAction
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.state.Platform
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.InternalSerializationApi
 import timber.log.Timber
-import javax.inject.Inject
-import javax.inject.Singleton
-import cloud.trotter.dashbuddy.domain.di.IoDispatcher
-import kotlinx.coroutines.CoroutineDispatcher
 
 @Singleton
 class StrategyRepository @Inject constructor(
     private val dataSource: StrategyDataSource,
     private val appPreferencesRepository: AppPreferencesRepository,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    private val timeConstantRepository: TimeConstantRepository,
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
+
+    init {
+        scope.launch {
+            timeConstantRepository.learnedTimeConstants
+                .distinctUntilChanged()
+                .onEach { dataSource.replaceTimeConstants(it) }
+                .retryWhen { cause, attempt ->
+                    if (cause is CancellationException) throw cause
+                    Timber.tag("Strategy").w(cause, "Time-constant materialization failed; retrying")
+                    delay(1_000L * (attempt + 1).coerceAtMost(60))
+                    true
+                }
+                .collect()
+        }
+    }
 
     private val defaultRules = listOf(
         ScoringRule.MetricRule("pay", true, MetricType.PAYOUT, 7.0f),
@@ -141,11 +165,11 @@ class StrategyRepository @Inject constructor(
         protectStatsMode,
         allowShopping,
         appPreferencesRepository.userEconomy,
-        // #823: combine the two per-platform learned-rate maps into one source so the outer combine
-        // stays within the 5-arg typed overload (shop pace + items:units ratio both live in the
-        // strategy store; both are consumed at eval time by EvaluationConfig.forPlatform).
-        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios) { s, r -> s to r },
-    ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios) ->
+        // One inner source keeps the outer combine within the typed five-source overload.
+        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios, dataSource.learnedTimeConstants) {
+            s, r, t -> Triple(s, r, t)
+        },
+    ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios, timeConstants) ->
         EvaluationConfig(
             protectStatsMode = protect,
             rules = rules,
@@ -158,6 +182,7 @@ class StrategyRepository @Inject constructor(
             shopRates = shopRates,
             // #823 Phase 1: same per-platform discipline for the items:units ratio.
             itemsPerUnitRatios = itemsPerUnitRatios,
+            timeConstants = timeConstants,
         )
     }.stateIn(scope, SharingStarted.Eagerly, null)
 

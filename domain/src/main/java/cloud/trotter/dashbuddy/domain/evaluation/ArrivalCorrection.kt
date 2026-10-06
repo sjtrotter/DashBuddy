@@ -60,7 +60,7 @@ object ArrivalCorrection {
         val estimate = accepted.estMinutes ?: return null
         if (observedItems < 1) return null
         val pace = accepted.pricedShopItemsPerMinute ?: economy.effectiveShopItemsPerMinute
-        val base = accepted.pricedBasePickupMinutes ?: economy.basePickupMinutes
+        val base = accepted.pricedBasePickupMinutes ?: economy.effectiveBasePickupMinutes
         val correctedHandling = maxOf(
             observedItems / pace, base,
         ) + accepted.nonShopLegs * base

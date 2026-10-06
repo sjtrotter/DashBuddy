@@ -170,6 +170,7 @@ internal object DeliveryFolds {
         // DELIVERY_ADJUSTMENT supplying pay recomputes net using this row's miles and frozen cpm.
         val netProfit = NetProfit.realized(realizedPay, realizedMiles, frozenCpm)
 
+        val offerHashes = p.jobOfferHashes.takeIf { it.isNotEmpty() && it.all(String::isNotBlank) }?.distinct()
         val delivery = DeliveryFold(
             eventSequenceId = event.sequenceId,
             sessionId = sid,
@@ -204,6 +205,9 @@ internal object DeliveryFolds {
                 ?.takeIf { it.isNotEmpty() },
             milesToStore = milesToStore,
             milesToDropoff = milesToDropoff,
+            jobOfferCount = offerHashes?.size,
+            soleOfferHash = offerHashes?.singleOrNull(),
+            odometerAtArrival = p.odometerAtArrival,
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
@@ -288,6 +292,7 @@ internal object DeliveryFolds {
             deadlineMillis = p.deadlineMillis,
             activity = p.activity,
             storeAddress = p.storeAddress,
+            odometerAtConfirmation = event.metadata?.odometer,
         )
         // #688: PICKUP_CONFIRMED advances the leg anchor only (parked — keeps the departure point
         // fresh for the to-dropoff leg), alongside the existing liveness advance.

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -1138,6 +1139,71 @@ class OfferEvaluatorTest {
     fun `ParsedOffer isShop recognizes shopping and pickup-only orders`() {
         assertTrue(offer(orderType = OrderType.SHOP_FOR_ITEMS).isShop)
         assertFalse(offer(orderType = OrderType.PICKUP).isShop)
+    }
+
+
+    @Test fun `time learning resolves independently from each explicit override including seed values`() {
+        val platform = Platform.entries.first { it != Platform.Unknown }
+        for (n in listOf(10, 40)) {
+            val learned = LearnedTimeConstants(TimeConstantPair(2.0, 8.0), n)
+            val automatic = TimeConstants.blend(TimeConstantSeeds.seedFor(platform), learned)
+            for (overrides in listOf(emptySet(), setOf(EconomyField.AVG_MIN_PER_MILE),
+                setOf(EconomyField.BASE_PICKUP_MIN), setOf(EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN))) {
+                val cfg = defaultConfig.copy(timeConstants = mapOf(platform to learned),
+                    userEconomy = noCostEconomy.copy(userSetFields = overrides)).forPlatform(platform)
+                val pace = if (EconomyField.AVG_MIN_PER_MILE in overrides) 2.5 else automatic.minutesPerMile
+                val overhead = if (EconomyField.BASE_PICKUP_MIN in overrides) 7.0 else automatic.stopOverheadMinutes
+                val result = evaluator.evaluate(offer(dist = 4.0), cfg)
+                assertEquals(4 * pace + overhead, result.estimatedTimeMinutes, 1e-9)
+                assertEquals(overhead, result.pricedBasePickupMinutes!!, 1e-9)
+            }
+        }
+        val cfg = defaultConfig.copy(timeConstants = mapOf(platform to LearnedTimeConstants(TimeConstantPair(2.0, 8.0), 10)),
+            userEconomy = noCostEconomy.copy(avgMinutesPerMile = 4.0, basePickupMinutes = 12.0,
+                userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE))).forPlatform(platform)
+        assertEquals(4.0, cfg.userEconomy.effectiveAvgMinutesPerMile, 0.0)
+        assertEquals(7.5, cfg.userEconomy.effectiveBasePickupMinutes, 0.0)
+        val other = Platform.entries.first { it != platform && it != Platform.Unknown }
+        val switched = cfg.forPlatform(other).userEconomy
+        assertEquals(null, switched.learnedMinutesPerMile)
+        assertEquals(null, switched.learnedStopOverheadMinutes)
+        assertEquals(0, switched.timeConstantSampleCount)
+        assertEquals(4.0, switched.effectiveAvgMinutesPerMile, 0.0)
+        assertEquals(TimeConstantSeeds.seedFor(other).stopOverheadMinutes, switched.effectiveBasePickupMinutes, 0.0)
+        assertEquals(4 * 4.0 + 7.0, OfferSimulation.simulate(10.0, 4.0, cfg).estimatedTimeMinutes, 0.0)
+    }
+
+    @Test fun `effective overhead multiplies per order and floors shops and mixed offers`() {
+        val economy = noCostEconomy.copy(learnedMinutesPerMile = 2.0, learnedStopOverheadMinutes = 8.0,
+            timeConstantSampleCount = 10)
+        val cfg = defaultConfig.copy(userEconomy = economy)
+        val single = offer(dist = 4.0)
+        val pickup = single.orders.single()
+        val shop = pickup.copy(orderType = OrderType.SHOP_FOR_ITEMS, itemCount = 1)
+        for (orders in listOf(listOf(pickup, pickup), listOf(shop, pickup), listOf(shop))) {
+            val result = evaluator.evaluate(single.copy(orders = orders), cfg)
+            assertEquals(9.0 + 7.5 * orders.size, result.estimatedTimeMinutes, 1e-9)
+            assertEquals(7.5, result.pricedBasePickupMinutes!!, 0.0)
+        }
+    }
+
+    @Test fun `every verdict freezes the effective overhead`() {
+        val eco = noCostEconomy.copy(learnedMinutesPerMile = 2.0, learnedStopOverheadMinutes = 8.0,
+            timeConstantSampleCount = 10)
+        val cfg = defaultConfig.copy(userEconomy = eco)
+        val cases = listOf(
+            offer() to cfg,
+            offer(dist = null) to cfg,
+            offer() to cfg.copy(protectStatsMode = true),
+            offer(orderType = OrderType.SHOP_FOR_ITEMS) to cfg.copy(allowShopping = false),
+            offer() to cfg.copy(rules = listOf(blockRule("Test Store"))),
+            offer() to cfg.copy(rules = listOf(reviewRule("Test Store"))),
+            offer() to cfg.copy(rules = listOf(ScoringRule.MetricRule("hard", metricType = MetricType.PAYOUT,
+                targetValue = 100.0f, autoDeclineOnFail = true))),
+        )
+        cases.forEach { (input, config) ->
+            assertEquals(7.5, evaluator.evaluate(input, config).pricedBasePickupMinutes!!, 0.0)
+        }
     }
 
 }

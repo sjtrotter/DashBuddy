@@ -22,6 +22,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
@@ -1861,6 +1863,68 @@ class RecordFoldsTest {
             SessionReportCorrectionFold("483", SessionReportOperation.CLEAR, null),
             RecordFolds.foldEvent(event, live.copy(endedAt = 2_000L), null).sessionReportCorrection,
         )
+    }
+
+
+    @Test fun `type chip counts survive the fold without proving each parsed entry is one order`() {
+        val pickup = ParsedOrder(0, OrderType.PICKUP, "Store", 1, false, emptySet())
+        val cases = listOf(
+            Triple(listOf("Delivery (2)"), 2, false),
+            Triple(listOf("Delivery (1)"), 1, true),
+            Triple(listOf("Livraison (12)  "), 12, false),
+            Triple(listOf("Delivery (0)"), 0, false),
+            Triple(listOf("McDonald's"), 1, true),
+            Triple(listOf("Store", "Other Store"), 2, true),
+            Triple(listOf("Store", "Delivery (2)"), 3, false),
+            Triple(listOf(" "), 1, false),
+        )
+        for ((stores, count, proven) in cases) {
+            val orders = stores.mapIndexed { index, store -> pickup.copy(orderIndex = index, storeName = store) }
+            val event = ev(AppEventType.OFFER_ACCEPTED, "time", 10,
+                OfferPayload(offerHash = "hash", parsedOffer = ParsedOffer(offerHash = "hash", orders = orders),
+                    evaluation = null, outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 1, decidedAt = 10,
+                    returnFlow = Flow.Idle))
+            val offer = RecordFolds.foldEvent(event, null, cpm).offer!!
+            assertEquals(stores.toString(), count, offer.orderCount)
+            assertEquals(stores.toString(), proven, offer.orderCountProven)
+            assertEquals(false, offer.isShop)
+        }
+    }
+
+    @Test fun `time evidence projects only proven offer classification and delivery lineage`() {
+        val ctx = RecordFolds.foldEvent(dashStart("time", 0, 100.0), null, cpm).context
+        val pickup = ParsedOrder(orderIndex = 0, orderType = OrderType.PICKUP, storeName = "Store",
+            itemCount = 1, isItemCountEstimated = false, badges = emptySet())
+        for (orders in listOf(emptyList(), listOf(pickup), listOf(pickup.copy(orderType = OrderType.UNKNOWN)),
+            listOf(pickup.copy(orderType = OrderType.SHOP_FOR_ITEMS)), listOf(pickup, pickup))) {
+            val event = ev(AppEventType.OFFER_ACCEPTED, "time", 10,
+                OfferPayload(offerHash = "hash", parsedOffer = ParsedOffer(offerHash = "hash", orders = orders),
+                    evaluation = null, outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 1, decidedAt = 10,
+                    returnFlow = Flow.Idle))
+            val offer = RecordFolds.foldEvent(event, ctx, cpm).offer!!
+            assertEquals(orders.size.takeIf { it > 0 }, offer.orderCount)
+            assertEquals(orders.isNotEmpty(), offer.orderCountProven)
+            assertEquals(if (orders.isEmpty() || orders.any { it.orderType == OrderType.UNKNOWN }) null
+                else orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }, offer.isShop)
+        }
+        for (hashes in listOf(emptyList(), listOf(""), listOf("hash", " "), listOf("hash", "hash"), listOf("hash", "addon"))) {
+            val event = ev(AppEventType.DELIVERY_COMPLETED, "time", 100,
+                DeliveryPayload(jobId = "job", taskId = "drop", phaseStartedAt = 50, completedAt = 100,
+                    jobOfferHashes = hashes, odometerAtArrival = 105.0))
+            val drop = RecordFolds.foldEvent(event, ctx, cpm).delivery!!
+            val valid = hashes.takeIf { it.isNotEmpty() && it.none(String::isBlank) }?.distinct()
+            assertEquals(valid?.size, drop.jobOfferCount)
+            assertEquals(valid?.singleOrNull(), drop.soleOfferHash)
+            assertEquals(105.0, drop.odometerAtArrival!!, 0.0)
+        }
+        for (odo in listOf(null, 102.0)) {
+            val folded = RecordFolds.foldEvent(pickupConfirmed("time", 30, "job", "pick", "Store", odo), ctx, cpm).pickup!!
+            assertEquals(odo, folded.odometerAtConfirmation)
+        }
+        val manual = RecordFolds.foldEvent(manualDelivery("time", 100, pay = 10.0, tip = 0.0, miles = 4.0), ctx, cpm).delivery!!
+        assertNull(manual.jobOfferCount)
+        assertNull(manual.soleOfferHash)
+        assertNull(manual.odometerAtArrival)
     }
 
 }

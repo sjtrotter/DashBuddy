@@ -21,9 +21,8 @@ data class EvaluationConfig(
      * [UserEconomy.learnedShopItemsPerMinute] / [UserEconomy.shopSeedItemsPerMin] — those fields on
      * THIS [userEconomy] are whatever the last [forPlatform] call (if any) stamped, which for a
      * freshly-constructed/raw config is the domain default seed, not any platform's real pace. A
-     * consumer that scores a SHOP offer against the raw config (skipping [forPlatform]) silently gets
-     * seed-only pricing — see [OfferSimulation.simulate], which is safe today only because its
-     * simulated offer is never a shop offer.
+     * consumer that scores an offer against the raw config (skipping [forPlatform]) silently gets
+     * seed-only pricing. [OfferSimulation.simulate] explicitly resolves the generic platform.
      */
     val userEconomy: UserEconomy = UserEconomy(),
     /**
@@ -41,6 +40,7 @@ data class EvaluationConfig(
      * [ItemsPerUnitRatioSeeds] seed.
      */
     val itemsPerUnitRatios: Map<Platform, LearnedItemsPerUnitRatio> = emptyMap(),
+    val timeConstants: Map<Platform, LearnedTimeConstants> = emptyMap(),
 ) {
     /**
      * #588: resolve THIS offer's [platform]'s learned pace + seed into [userEconomy], producing the
@@ -50,15 +50,24 @@ data class EvaluationConfig(
      * single evaluator consumer already reads. A platform with no samples yields its seed, never
      * another platform's learned rate (even one past the trust gate).
      *
-     * **Contract:** call this before scoring ANY shop offer. Skipping it (evaluating against the raw
-     * [userEconomy]) is not an error — it just means shop-pace fields are whatever they were on this
+     * **Contract:** call this before scoring ANY offer. Skipping it (evaluating against the raw
+     * [userEconomy]) is not an error — it means learned fields are whatever they were on this
      * config already (seed-only for a freshly-built one), never a platform's real learned pace.
      */
     fun forPlatform(platform: Platform): EvaluationConfig {
         val learned = shopRates[platform]
         val learnedRatio = itemsPerUnitRatios[platform]
+        val time = timeConstants[platform]
+        val seed = TimeConstantSeeds.seedFor(platform)
         return copy(
             userEconomy = userEconomy.copy(
+                learnedMinutesPerMile = time?.median?.minutesPerMile,
+                learnedStopOverheadMinutes = time?.median?.stopOverheadMinutes,
+                timeConstantSampleCount = time?.sampleCount ?: 0,
+                avgMinutesPerMile = if (userEconomy.isUserSet(EconomyField.AVG_MIN_PER_MILE))
+                    userEconomy.avgMinutesPerMile else seed.minutesPerMile,
+                basePickupMinutes = if (userEconomy.isUserSet(EconomyField.BASE_PICKUP_MIN))
+                    userEconomy.basePickupMinutes else seed.stopOverheadMinutes,
                 learnedShopItemsPerMinute = learned?.itemsPerMin,
                 shopRateSampleCount = learned?.sampleCount ?: 0,
                 shopSeedItemsPerMin = ShopRateSeeds.seedFor(platform),

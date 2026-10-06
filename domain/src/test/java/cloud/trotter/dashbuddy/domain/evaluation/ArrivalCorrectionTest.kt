@@ -141,4 +141,15 @@ class ArrivalCorrectionTest {
         assertEquals(30 / 0.79, corrected.correctedHandlingMinutes, 0.000001)
         assertEquals(8 * economy.avgMinutesPerMile + 30 / 0.79, corrected.correctedEstMinutes, 0.000001)
     }
+
+    @Test fun `accepted overhead survives later time learning while legacy uses effective overhead`() {
+        val learned = economy.copy(learnedMinutesPerMile = 2.0, learnedStopOverheadMinutes = 20.0,
+            timeConstantSampleCount = 10)
+        val frozen = accepted.copy(pricedBasePickupMinutes = 7.5, nonShopLegs = 1)
+        assertEquals(15.0, ArrivalCorrection.compute(frozen, "pickup", 1, learned, 2L)!!.correctedHandlingMinutes, 0.0)
+        val legacy = frozen.copy(pricedBasePickupMinutes = null)
+        assertEquals(2 * learned.effectiveBasePickupMinutes,
+            ArrivalCorrection.compute(legacy, "pickup", 1, learned, 2L)!!.correctedHandlingMinutes, 0.0)
+    }
+
 }
