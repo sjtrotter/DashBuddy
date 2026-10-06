@@ -68,15 +68,6 @@ class LogRepository @Inject constructor(
     private val scrubbedCounter = AtomicInteger(0)
     val autoScrubbedLineCount: Int get() = scrubbedCounter.get()
 
-    init {
-        scope.launch {
-            for (item in lines) {
-                writeFirehose(item.text)
-                if (item.priority >= Log.INFO) writeShareable(item.text)
-            }
-        }
-    }
-
     /** Firehose: verbatim, every line. The DEBUG product; on-device only, never exported. */
     private fun writeFirehose(line: String) {
         try {
@@ -131,17 +122,7 @@ class LogRepository @Inject constructor(
 
     // --- Config ---
     // Uses internal storage (filesDir) or external if available
-    private val logDir by lazy {
-        (context.getExternalFilesDir(null) ?: context.filesDir).also { dir ->
-            // #1236: exact directory exclusion, including rotations left by an older build.
-            val legacy = dir.listFiles { file -> file.isFile && file.name.startsWith(rotationPrefix) }
-            if (!legacy.isNullOrEmpty()) {
-                val rotations = File(dir, "logs")
-                rotations.mkdirs()
-                legacy.forEach { it.renameTo(File(rotations, it.name)) }
-            }
-        }
-    }
+    private val logDir by lazy { context.getExternalFilesDir(null) ?: context.filesDir }
     private val rotatedLogDir by lazy { File(logDir, "logs").also { it.mkdirs() } }
 
     private val appLogFile by lazy { File(logDir, "app.log") }
@@ -160,6 +141,40 @@ class LogRepository @Inject constructor(
     private val logRotationFormat = DateTimeFormatter
         .ofPattern("yyyyMMdd_HHmmss", Locale.US)
         .withZone(ZoneId.systemDefault())
+
+    init {
+        scope.launch {
+            moveLegacyRotations()
+            for (item in lines) {
+                writeFirehose(item.text)
+                if (item.priority >= Log.INFO) writeShareable(item.text)
+            }
+        }
+    }
+
+    /**
+     * Move legacy rotations from the active root (external, or internal when unavailable) into
+     * its backup-excluded logs/ directory. Debug rotations are disposable: if a move fails,
+     * attempt deletion so the legacy file does not remain eligible for backup. Warn once without
+     * file contents or exception details. Every initialization scans again, so a failed deletion
+     * can be retried on the next init; there is no persisted or lazy completion flag.
+     */
+    private fun moveLegacyRotations() {
+        val legacy = logDir.listFiles { file ->
+            file.isFile && file.name.startsWith(rotationPrefix) && file.name.endsWith(".log")
+        } ?: return
+        var warned = false
+        for (file in legacy) {
+            val moved = runCatching { file.renameTo(File(rotatedLogDir, file.name)) }.getOrDefault(false)
+            if (!moved) {
+                runCatching { file.delete() }
+                if (!warned) {
+                    warned = true
+                    Log.w("LogRepository", "Legacy debug rotation move failed; attempted deletion")
+                }
+            }
+        }
+    }
 
     /**
      * Appends a pre-formatted line to the log. Always written to the firehose; also written to the

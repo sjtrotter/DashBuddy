@@ -25,20 +25,20 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 
 **Firehose rotations moved:** the device path is now `files/logs/app_log_rotated_*.log`.
 `files/app.log` and `files/shareable.log` stay where they were. `LogRepository` also moves legacy
-root rotations into `logs/` on first log access after upgrade. Android backup excludes these logs;
-pull them explicitly for desk validation. With `D` set to the dated pull directory and the device
+root rotations into `logs/` on every initialization until none remain; failed moves attempt deletion.
+Android backup excludes these logs; pull them explicitly for desk validation. With `D` set to the dated pull directory and the device
 selected through `ANDROID_SERIAL` when needed:
 
 ```bash
-mkdir -p "$D"
+mkdir -p "$D/logs"
 adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/app.log "$D/app.log"
 adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log "$D/shareable.log"
-adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/logs "$D/"
+adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/logs/. "$D/logs/"
 # Optional: the single previous shareable log, if it has rotated.
 adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log.1 "$D/shareable.log.1"
 ```
 
-`logs/` only exists once rotations have been written or migrated. If external storage was unavailable,
+`logs/` only exists on the device once rotations have been written or moved. If external storage was unavailable,
 the same relative paths are under internal `files/` (read them with `adb shell run-as cloud.trotter.dashbuddy`).
 
 ## Step 0 — identify the build
@@ -161,16 +161,17 @@ Added 2026-10-05. The census is the one path where data leaves the phone, so eve
 device's own record (logs + the developer status line) and the server's record over the WireGuard tunnel. The
 server reads need no AWS login: `nmcli connection up wgcensus`, then
 `curl -s --cacert ~/dashbuddy/secrets/wireguard/census-ops-root.crt -H "Authorization: Bearer $(cat ~/dashbuddy/secrets/census-operator-token)" https://10.8.0.1:8443/ops/<path>`
-(call it `ops GET <path>` below). Grep strings are copied from `CensusUploadWorker`, `PersistentCensusEnvelopeSink`,
+(call it `ops GET <path>` below). Run the device greps from `"$D"`; `*.log logs/*.log` includes the pulled firehose rotations.
+Grep strings are copied from `CensusUploadWorker`, `PersistentCensusEnvelopeSink`,
 `CensusUploadStats.summary()` and `PipelineStats` on 2026-10-05 — verify against the code if a grep is empty.
 
 | Item | Device read (`shareable.log` unless noted) | Server read | Expect |
 |---|---|---|---|
-| #1182 uploads | `grep -h 'census uploaded=' *.log` (one INFO per accepted batch, `uploaded=n duplicate=n rejected=n`); `grep -h 'census batch rejected reasons='` (WARN) | `ops GET /ops/ledger` → `installs[].accepted/duplicate/rejected/batches/bytes` for the phone's 8-char prefix (today only) | every dash day has ≥1 uploaded line; server `accepted` ≈ Σ device `uploaded`; `rejected` empty |
-| #1210 deferrals | `grep -h 'census deferred cause=' *.log` (INFO) | — | every DEFERRED status has a line: `cause=budget` / `upload_rate_limit` / `enrol_rate_limit` / `health_rate_limit` / `health_budget` with clamped `seconds=1…86400`, or `cause=stored_deadline remaining=<s>` on a recheck (skeleton stage AND the pending-enrolment stage). A `deferred n` status line with NO `census deferred cause=` line is a bug, not a quiet run |
-| #1185 identity | `grep -h -e 'census enrolled installs=1' -e 'census unusable' -e 'census revoked' -e 'census unauthorized'` | `ops GET /ops/installs` → the phone's prefix `trusted:true revoked:false lastSeenDay = today` | exactly ONE install for the phone unless a reset was deliberate; `lastAppVersion` is the version at the last identity op, not the current build |
-| #1197 health | `grep -h -e 'census health rejected' -e 'census health oversized' -e 'census health flush failures' -e 'census health load failed'`; the `PipelineStats` census summary carries `healthPosted=n` / `healthRejected=n` | `ops GET /ops/health` → `fleet[]` has a row for EACH dash day (UTC) × platform × app version with `installsReporting ≥ 1`, `admitted`/`unknown` plausible against the device's own `PipelineStats` counts, `ruleCounts` naming the rules that fired | a dash day missing from `fleet` = the first run after UTC midnight has not happened yet (phone asleep) — re-check next morning before calling it a bug |
-| #1200 envelopes | `grep -h -e 'census envelopes rejected' -e 'census envelopes not_trusted' -e 'census envelope dropped markerId=' -e 'census envelope cleanup failed'`; `PipelineStats` `census{… envelopesPaired=n,envelopesUnpaired=n …}` and `CensusUploadStats` `envelopesHeld/Spooled/Posted/Rejected/NotTrusted` | `ops GET /ops/clusters?platform=<p>&limit=200` → clusters with `lastSeenDay` = the dash day and `seenByTrusted:true`; the cluster JSON `/ops/clusters/<fp>` carries no envelope body (by design) — the wireframe is on `/ops/clusters/<fp>/view` only | `envelopesPosted > 0` on a dash with UNKNOWN screens; ZERO `not_trusted` (else the install id changed — re-trust it); `envelopesSensitiveDropped` is the local marker scan firing — read its `markerId` like the `#862` row |
+| #1182 uploads | `grep -h 'census uploaded=' *.log logs/*.log` (one INFO per accepted batch, `uploaded=n duplicate=n rejected=n`); `grep -h 'census batch rejected reasons=' *.log logs/*.log` (WARN) | `ops GET /ops/ledger` → `installs[].accepted/duplicate/rejected/batches/bytes` for the phone's 8-char prefix (today only) | every dash day has ≥1 uploaded line; server `accepted` ≈ Σ device `uploaded`; `rejected` empty |
+| #1210 deferrals | `grep -h 'census deferred cause=' *.log logs/*.log` (INFO) | — | every DEFERRED status has a line: `cause=budget` / `upload_rate_limit` / `enrol_rate_limit` / `health_rate_limit` / `health_budget` with clamped `seconds=1…86400`, or `cause=stored_deadline remaining=<s>` on a recheck (skeleton stage AND the pending-enrolment stage). A `deferred n` status line with NO `census deferred cause=` line is a bug, not a quiet run |
+| #1185 identity | `grep -h -e 'census enrolled installs=1' -e 'census unusable' -e 'census revoked' -e 'census unauthorized' *.log logs/*.log` | `ops GET /ops/installs` → the phone's prefix `trusted:true revoked:false lastSeenDay = today` | exactly ONE install for the phone unless a reset was deliberate; `lastAppVersion` is the version at the last identity op, not the current build |
+| #1197 health | `grep -h -e 'census health rejected' -e 'census health oversized' -e 'census health flush failures' -e 'census health load failed' *.log logs/*.log`; the `PipelineStats` census summary carries `healthPosted=n` / `healthRejected=n` | `ops GET /ops/health` → `fleet[]` has a row for EACH dash day (UTC) × platform × app version with `installsReporting ≥ 1`, `admitted`/`unknown` plausible against the device's own `PipelineStats` counts, `ruleCounts` naming the rules that fired | a dash day missing from `fleet` = the first run after UTC midnight has not happened yet (phone asleep) — re-check next morning before calling it a bug |
+| #1200 envelopes | `grep -h -e 'census envelopes rejected' -e 'census envelopes not_trusted' -e 'census envelope dropped markerId=' -e 'census envelope cleanup failed' *.log logs/*.log`; `PipelineStats` `census{… envelopesPaired=n,envelopesUnpaired=n …}` and `CensusUploadStats` `envelopesHeld/Spooled/Posted/Rejected/NotTrusted` | `ops GET /ops/clusters?platform=<p>&limit=200` → clusters with `lastSeenDay` = the dash day and `seenByTrusted:true`; the cluster JSON `/ops/clusters/<fp>` carries no envelope body (by design) — the wireframe is on `/ops/clusters/<fp>/view` only | `envelopesPosted > 0` on a dash with UNKNOWN screens; ZERO `not_trusted` (else the install id changed — re-trust it); `envelopesSensitiveDropped` is the local marker scan firing — read its `markerId` like the `#862` row |
 | #1188 drafting | — (server-only) | `ops GET /ops/clusters/<fp>` → `screenClass`, `hasDraft`; `GET /ops/clusters/<fp>/draft.json5` for the stored draft | a classified cluster shows its class chip on the list pages; a draft, pasted into the surface file, passes `AllMatchersSuite` |
 
 **Privacy reads that come with the census:** the envelope the phone uploads is the SAME redacted `uinode.v1` capture

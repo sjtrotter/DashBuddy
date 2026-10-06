@@ -7,16 +7,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import timber.log.Timber
 import java.io.File
 import java.io.IOException
 
@@ -42,34 +43,40 @@ class EventReceiptConsentDataSourceTest {
     }
 
     @Test
-    fun `first read moves both keys once and restored economy preferences cannot restore consent`() = runTest {
+    fun `first read purges legacy keys without copying and repeated reads skip the edit`() = runTest {
         val old = store("app_prefs")
         val new = store("consent_event_receipt")
         seedLegacy(old)
-        var writes = 0
+        var edits = 0
         val recording = object : DataStore<Preferences> {
-            override val data = new.data
+            override val data = old.data
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
-                writes++
-                // Legacy keys must still exist until this write has succeeded.
-                assertEquals("ALLOWED", old.data.first()[decisionKey])
-                return new.updateData(transform)
+                edits++
+                return old.updateData(transform)
             }
         }
-        val source = EventReceiptConsentDataSource(recording, old)
-        val expected = EventReceiptConsentSnapshot("ALLOWED", receipt)
-        assertEquals(expected, source.snapshot.first())
+        val source = EventReceiptConsentDataSource(new, recording)
+        assertEquals(EventReceiptConsentSnapshot(null, null), source.snapshot.first())
         assertNull(old.data.first()[decisionKey])
         assertNull(old.data.first()[receiptKey])
         assertEquals("my vehicle", old.data.first()[economyKey])
-        assertEquals(expected, source.snapshot.first())
-        assertEquals(expected, EventReceiptConsentDataSource(recording, old).snapshot.first())
-        assertEquals(1, writes)
-        // The backed-up app preferences survive, while the excluded consent store starts empty.
+        assertEquals(EventReceiptConsentSnapshot(null, null), source.snapshot.first())
+        assertEquals(1, edits)
+        assertEquals(emptyMap<Preferences.Key<*>, Any>(), new.data.first().asMap())
+
+        source.setConsent("ALLOWED", receipt)
+        assertEquals(EventReceiptConsentSnapshot("ALLOWED", receipt), source.snapshot.first())
+        assertEquals(1, edits)
+        assertNull(old.data.first()[decisionKey])
+        assertNull(old.data.first()[receiptKey])
+        // A restored app_prefs from BEFORE this upgrade must not restore consent either.
+        seedLegacy(old)
         assertEquals(
             EventReceiptConsentSnapshot(null, null),
             EventReceiptConsentDataSource(store("new_phone"), old).snapshot.first(),
         )
+        assertNull(old.data.first()[decisionKey])
+        assertNull(old.data.first()[receiptKey])
     }
 
     @Test
@@ -92,59 +99,74 @@ class EventReceiptConsentDataSourceTest {
     }
 
     @Test
-    fun `failed destination write preserves legacy keys for retry`() = runTest {
-        val old = store("app_prefs")
-        val new = store("consent_event_receipt")
-        seedLegacy(old)
-        var failWrites = true
-        val failing = object : DataStore<Preferences> {
-            override val data = new.data
-            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
-                if (failWrites) throw IOException("disk full")
-                return new.updateData(transform)
-            }
-        }
-        val source = EventReceiptConsentDataSource(failing, old)
-        try {
-            source.snapshot.first()
-            fail("Migration must not expose consent before it is safely moved")
-        } catch (_: IOException) {
-            assertEquals("ALLOWED", old.data.first()[decisionKey])
-            assertEquals(Json.encodeToString(receipt), old.data.first()[receiptKey])
-        }
-        failWrites = false
-        assertEquals(EventReceiptConsentSnapshot("ALLOWED", receipt), source.snapshot.first())
-        assertNull(old.data.first()[decisionKey])
-        assertNull(old.data.first()[receiptKey])
-    }
-
-    @Test
-    fun `failed legacy cleanup retries without overwriting the destination`() = runTest {
+    fun `failed purge is ignored and retried without copying or blocking a new decision`() = runTest {
         val old = store("app_prefs")
         val new = store("consent_event_receipt")
         seedLegacy(old)
         var failCleanup = true
+        var attempts = 0
         val failing = object : DataStore<Preferences> {
             override val data = old.data
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
-                assertEquals("ALLOWED", new.data.first()[decisionKey])
+                attempts++
                 if (failCleanup) throw IOException("cleanup failed")
                 return old.updateData(transform)
             }
         }
         val source = EventReceiptConsentDataSource(new, failing)
-        try {
-            source.snapshot.first()
-            fail("Cleanup failure should be retried")
-        } catch (_: IOException) {
-            assertEquals("ALLOWED", new.data.first()[decisionKey])
-            assertEquals("ALLOWED", old.data.first()[decisionKey])
+        repeat(2) {
+            assertEquals(EventReceiptConsentSnapshot(null, null), source.snapshot.first())
         }
-        old.edit { it[decisionKey] = "DECLINED" }
+        assertEquals(2, attempts)
+        assertEquals("ALLOWED", old.data.first()[decisionKey])
+        assertNull(new.data.first()[decisionKey])
+        source.setConsent("ALLOWED", receipt)
+        assertEquals("ALLOWED", new.data.first()[decisionKey])
+        assertEquals(2, attempts) // set only touches the dedicated store
         failCleanup = false
         assertEquals(EventReceiptConsentSnapshot("ALLOWED", receipt), source.snapshot.first())
+        assertEquals(3, attempts)
         assertNull(old.data.first()[decisionKey])
         assertNull(old.data.first()[receiptKey])
+    }
+
+    @Test
+    fun `unreadable legacy store cannot block reads or writes of device-local consent`() = runTest {
+        val old = object : DataStore<Preferences> {
+            override val data = flow<Preferences> { throw IOException("unreadable") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("Legacy store must not be written")
+        }
+        val source = EventReceiptConsentDataSource(store("consent_event_receipt"), old)
+        assertEquals(EventReceiptConsentSnapshot(null, null), source.snapshot.first())
+        source.setConsent("ALLOWED", receipt)
+        assertEquals(EventReceiptConsentSnapshot("ALLOWED", receipt), source.snapshot.first())
+    }
+
+    @Test
+    fun `repeated purge failures warn once under Consent without values or exception details`() = runTest {
+        val warnings = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                assertEquals(5, priority) // Android WARN
+                assertEquals("Consent", tag)
+                assertNull(t)
+                warnings += message
+            }
+        }
+        val old = object : DataStore<Preferences> {
+            override val data = flow<Preferences> { throw IOException("ALLOWED private receipt") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("Unreadable store must not be written")
+        }
+        Timber.plant(tree)
+        try {
+            val source = EventReceiptConsentDataSource(store("consent_event_receipt"), old)
+            repeat(3) { assertEquals(EventReceiptConsentSnapshot(null, null), source.snapshot.first()) }
+            assertEquals(listOf("Legacy consent cleanup failed; will retry on next read"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
     }
 
     @Test

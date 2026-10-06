@@ -168,14 +168,17 @@ credentials are also excluded from both backup and transfer (`app/src/main/res/x
   history can be restored on a new phone (§6).
 - Preferences and consents are DataStore files on the device (`core/datastore`). General app/economy preferences
   are backed up; the two dedicated consent stores are excluded from backup and transfer so a new device re-asks.
-  On upgrade, `EventReceiptConsentDataSource` moves the Screen-events decision and receipt out of `app_prefs`
-  into `consent_event_receipt`, then removes the old keys after the new store write succeeds.
+  `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old
+  Screen-events keys from `app_prefs` without copying them: restored app preferences must never restore consent.
+  An empty dedicated store re-asks once after this upgrade as well as on a new phone.
 - Debug builds may keep capture envelopes for rule development under the app's files; release builds bind a no-op
   capture bus (`NoOpCaptureBus`) and keep none. Captures and census files are excluded from Android backup and
   device transfer (`app/src/main/res/xml/backup_rules.xml`).
 - Logs rotate automatically: `app.log` stays in the app's files root, firehose rotations live under `logs/`, and
   the shareable log keeps one `shareable.log.1` backup (`LogRepository`). All these log paths are excluded from
-  Android backup and device transfer, in both external storage and the internal-storage fallback.
+  Android backup and device transfer, in both external storage and the internal-storage fallback. Each log-store
+  initialization moves legacy root rotations into that root's `logs/`; failed moves attempt deletion because
+  debug rotations are disposable, and any remaining legacy rotations are retried on the next initialization.
 - Retention of app-private data is "until you delete it": uninstalling removes the database, the DataStore files,
   the logs and any captures. Android may restore the backed-up database and app/economy preferences on reinstall
   or a new phone; the excluded consent stores and debug logs do not restore. Gallery screenshots (§4) and files
