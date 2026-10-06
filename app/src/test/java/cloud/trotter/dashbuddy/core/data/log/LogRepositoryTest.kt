@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.log
 
+import android.content.ContextWrapper
 import android.util.Log
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,7 +14,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.shadows.ShadowLog
 import java.io.File
+import java.io.FileFilter
 
 /**
  * #364 — log lines must land in submission order (single-writer channel).
@@ -33,6 +36,111 @@ class LogRepositoryTest {
 
     /** Real production scrubber — one marker SSOT, exactly what `:app` DI binds. */
     private val realScrubber = LogScrubber { SensitiveTextMarkers.findMarker(it) }
+
+    @Test
+    fun `internal fallback moves legacy rotations and writes new rotations under internal logs`() = runTest {
+        val internal = RuntimeEnvironment.getApplication().filesDir
+        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+            override fun getExternalFilesDir(type: String?): File? = null
+        }
+        val legacy = File(internal, "app_log_rotated_20260101_000000.log").apply { writeText("legacy") }
+        val externalLegacy = File(logDir(), "app_log_rotated_external.log").apply { writeText("external") }
+        val payload = "x".repeat(2_500_000)
+        File(internal, "app.log").writeText(payload)
+        val repo = LogRepository(context, StandardTestDispatcher(testScheduler), realScrubber)
+        repo.appendLog("after rotation\n")
+        advanceUntilIdle()
+
+        val rotations = File(internal, "logs")
+        assertFalse(legacy.exists())
+        assertEquals("legacy", File(rotations, legacy.name).readText())
+        assertTrue(rotations.listFiles().orEmpty().any { it.readText() == payload })
+        assertTrue(File(internal, "app.log").readText().contains("after rotation"))
+        assertTrue("only the active root is scanned", externalLegacy.exists())
+    }
+
+    @Test
+    fun `failed legacy renames delete disposable files and warn once even without new log lines`() = runTest {
+        val rotations = File(logDir(), "logs").also { it.mkdirs() }
+        val legacy = (1..2).map { index ->
+            File(logDir(), "app_log_rotated_blocked_$index.log").apply {
+                writeText("private debug contents")
+                // A nonempty destination directory makes renameTo fail deterministically.
+                File(rotations, name).mkdirs()
+                File(File(rotations, name), "blocker").writeText("blocker")
+            }
+        }
+        ShadowLog.clear()
+        LogRepository(RuntimeEnvironment.getApplication(), StandardTestDispatcher(testScheduler), realScrubber)
+        advanceUntilIdle()
+
+        assertTrue(legacy.none { it.exists() })
+        val warnings = ShadowLog.getLogsForTag("LogRepository").filter { it.type == Log.WARN }
+        assertEquals(1, warnings.size)
+        assertFalse(warnings.single().msg.contains("private debug contents"))
+    }
+
+    @Test
+    fun `a failed move and deletion are retried on the next initialization`() = runTest {
+        val root = logDir()
+        val legacy = File(root, "app_log_rotated_retry.log").apply { writeText("legacy") }
+        var writable = false
+        var deleteAttempts = 0
+        val failingFile = object : File(legacy.path) {
+            override fun renameTo(dest: File): Boolean = writable && super.renameTo(dest)
+            override fun delete(): Boolean {
+                deleteAttempts++
+                return writable && super.delete()
+            }
+        }
+        val activeRoot = object : File(root.path) {
+            override fun listFiles(filter: FileFilter?): Array<File>? =
+                if (failingFile.exists() && (filter == null || filter.accept(failingFile))) arrayOf(failingFile) else emptyArray()
+        }
+        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+            override fun getExternalFilesDir(type: String?): File = activeRoot
+        }
+        LogRepository(context, StandardTestDispatcher(testScheduler), realScrubber)
+        advanceUntilIdle()
+        assertTrue(legacy.exists())
+        assertEquals(1, deleteAttempts)
+
+        writable = true
+        LogRepository(context, StandardTestDispatcher(testScheduler), realScrubber)
+        advanceUntilIdle()
+        assertFalse(legacy.exists())
+        assertEquals("legacy", File(File(root, "logs"), legacy.name).readText())
+    }
+
+    @Test
+    fun `legacy and new rotations live in the excluded logs directory and are pruned there`() = runTest {
+        val legacy = File(logDir(), "app_log_rotated_20260101_000000.log")
+        legacy.writeText("legacy\n")
+        val rotations = File(logDir(), "logs").also { it.mkdirs() }
+        repeat(50) { index ->
+            File(rotations, "app_log_rotated_old_$index.log").apply {
+                writeText("old\n")
+                setLastModified(1_000L + index)
+            }
+        }
+        val payload = "x".repeat(2_500_000)
+        firehose().writeText(payload)
+        val repo = LogRepository(
+            RuntimeEnvironment.getApplication(), StandardTestDispatcher(testScheduler), realScrubber,
+        )
+        repo.appendLog("after rotation\n")
+        advanceUntilIdle()
+
+        assertFalse("legacy root rotations must move out of backup", legacy.exists())
+        assertEquals("legacy\n", File(rotations, legacy.name).readText())
+        val files = requireNotNull(rotations.listFiles())
+        assertEquals(50, files.size)
+        assertTrue("new rotation contains the previous firehose", files.any { it.readText() == payload })
+        assertFalse(File(rotations, "app_log_rotated_old_0.log").exists())
+        assertFalse(File(rotations, "app_log_rotated_old_1.log").exists())
+        assertTrue(firehose().readText().contains("after rotation"))
+        assertTrue(logDir().listFiles().orEmpty().none { it.name.startsWith("app_log_rotated_") })
+    }
 
     @Test
     fun `lines land in exact submission order`() = runTest {

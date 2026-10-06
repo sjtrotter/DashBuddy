@@ -68,15 +68,6 @@ class LogRepository @Inject constructor(
     private val scrubbedCounter = AtomicInteger(0)
     val autoScrubbedLineCount: Int get() = scrubbedCounter.get()
 
-    init {
-        scope.launch {
-            for (item in lines) {
-                writeFirehose(item.text)
-                if (item.priority >= Log.INFO) writeShareable(item.text)
-            }
-        }
-    }
-
     /** Firehose: verbatim, every line. The DEBUG product; on-device only, never exported. */
     private fun writeFirehose(line: String) {
         try {
@@ -132,6 +123,9 @@ class LogRepository @Inject constructor(
     // --- Config ---
     // Uses internal storage (filesDir) or external if available
     private val logDir by lazy { context.getExternalFilesDir(null) ?: context.filesDir }
+    /** Not cached as created: a read-only root at first init must not freeze a missing `logs/` — [ensureRotatedLogDir] retries before every rotation (Astra r2 of PR #1250). */
+    private val rotatedLogDir by lazy { File(logDir, "logs") }
+    private fun ensureRotatedLogDir(): Boolean = rotatedLogDir.isDirectory || runCatching { rotatedLogDir.mkdirs() }.getOrDefault(false) || rotatedLogDir.isDirectory
 
     private val appLogFile by lazy { File(logDir, "app.log") }
 
@@ -149,6 +143,47 @@ class LogRepository @Inject constructor(
     private val logRotationFormat = DateTimeFormatter
         .ofPattern("yyyyMMdd_HHmmss", Locale.US)
         .withZone(ZoneId.systemDefault())
+
+    init {
+        scope.launch {
+            moveLegacyRotations()
+            for (item in lines) {
+                writeFirehose(item.text)
+                if (item.priority >= Log.INFO) writeShareable(item.text)
+            }
+        }
+    }
+
+    /**
+     * Move legacy rotations from the active root (external, or internal when unavailable) into
+     * its backup-excluded logs/ directory. Debug rotations are disposable: if a move fails,
+     * attempt deletion so the legacy file does not remain eligible for backup. Warn once without
+     * file contents or exception details. Every initialization scans again, so a failed deletion
+     * can be retried on the next init; there is no persisted or lazy completion flag.
+     */
+    private fun moveLegacyRotations() {
+        // BOTH roots (Astra r2 of PR #1250): a rotation written to internal storage while external was
+        // unavailable is still backup-eligible once external storage comes back and becomes the active root.
+        val roots = listOfNotNull(context.getExternalFilesDir(null), context.filesDir).distinct()
+        val legacy = roots.flatMap { root ->
+            root.listFiles { file ->
+                file.isFile && file.name.startsWith(rotationPrefix) && file.name.endsWith(".log")
+            }?.toList().orEmpty()
+        }
+        if (legacy.isEmpty()) return
+        ensureRotatedLogDir()
+        var warned = false
+        for (file in legacy) {
+            val moved = runCatching { file.renameTo(File(rotatedLogDir, file.name)) }.getOrDefault(false)
+            if (!moved) {
+                runCatching { file.delete() }
+                if (!warned) {
+                    warned = true
+                    Log.w("LogRepository", "Legacy debug rotation move failed; attempted deletion")
+                }
+            }
+        }
+    }
 
     /**
      * Appends a pre-formatted line to the log. Always written to the firehose; also written to the
@@ -174,7 +209,8 @@ class LogRepository @Inject constructor(
         try {
             val timestamp = logRotationFormat.format(Instant.now())
             val rotatedName = "${rotationPrefix}${timestamp}.log"
-            val rotatedFile = File(logDir, rotatedName)
+            if (!ensureRotatedLogDir()) return // read-only root: keep appending, retry next rotation
+            val rotatedFile = File(rotatedLogDir, rotatedName)
 
             // Rename current -> rotated
             if (appLogFile.renameTo(rotatedFile)) {
@@ -203,7 +239,7 @@ class LogRepository @Inject constructor(
      * Deletes the oldest rotated logs if we have too many.
      */
     private fun pruneOldLogs() {
-        val files = logDir.listFiles { file ->
+        val files = rotatedLogDir.listFiles { file ->
             file.name.startsWith(rotationPrefix)
         } ?: return
 

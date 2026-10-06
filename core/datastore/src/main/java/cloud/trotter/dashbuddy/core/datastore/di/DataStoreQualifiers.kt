@@ -6,6 +6,11 @@ import javax.inject.Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class AppPreferences
 
+/** Device-local consent; excluded from Android backup and transfer (#1236). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class EventReceiptConsentPreferences
+
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class AppStatePreferences

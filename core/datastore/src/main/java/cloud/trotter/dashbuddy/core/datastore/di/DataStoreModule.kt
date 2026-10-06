@@ -24,6 +24,12 @@ object DataStoreModule {
 
     @Provides
     @Singleton
+    @EventReceiptConsentPreferences
+    fun provideEventReceiptConsentDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("consent_event_receipt") }
+
+    @Provides
+    @Singleton
     @AppStatePreferences
     fun provideAppStateDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("app_state") }
