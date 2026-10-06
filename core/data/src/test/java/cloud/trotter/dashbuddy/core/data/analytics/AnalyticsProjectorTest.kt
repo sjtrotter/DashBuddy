@@ -9,8 +9,10 @@ import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -2049,6 +2051,7 @@ class AnalyticsProjectorTest {
                     null to null,
                     SessionReportOperation.SET to 12.5,
                     SessionReportOperation.SET to 0.0,
+                    SessionReportOperation.SET to null,
                     SessionReportOperation.CLEAR to null,
                 )) {
                     val row = template.copy(reportedEarnings = machine, endSource = source,
@@ -2060,6 +2063,13 @@ class AnalyticsProjectorTest {
                     // a negative summary-screen report counts in gross but never as "unattributed".
                     val expectedUnattributed = maxOf(expected, 0.0)
                     val label = "source=$source machine=$machine mode=$mode value=$value"
+                    val expectedSource = ReportSource.of(machine, source, mode, value)
+                    db.openHelper.readableDatabase.query(
+                        "SELECT ($REPORT_SOURCE_SQL) FROM session_records s WHERE s.sessionId = '483'",
+                    ).use { cursor ->
+                        assertTrue(cursor.moveToFirst())
+                        assertEquals(label, expectedSource.wire, cursor.getString(0))
+                    }
                     val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
                     assertEquals(label, expected, totals.gross, 1e-9)
                     assertEquals(label, expectedUnattributed, totals.unattributed, 1e-9)

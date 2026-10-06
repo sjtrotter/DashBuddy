@@ -48,6 +48,14 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
+  tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars, minus any "DashBuddy recorded … more than
+  was reported" line beneath it, sum to the Earned figure above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from
+  the offer" named when the row was priced from the offer; a dash whose summary exceeded its deliveries
+  shows "reported on dash summaries but not matched to a delivery". Dash detail → the big figure is
+  labelled "Reported — dash summary" / "— in-dash counter" / "— entered by you" / "Recorded by DashBuddy
+  (no report)". Export → `sessions.csv` has a `report_source` column. — Confirmed: 0/2
+
 - **Per-order handling (#1113 slice 1):** a two-order DoorDash stack's bubble card $/hr should equal
   `pay ÷ (2.5 × miles + 14) × 60` (two base overheads), not `… + 7`; e.g. $12.15 / 10.7 mi → ≈ $17.9/hr,
   not $21.6. Check one stacked card against that arithmetic (the card shows no duration field; the $/hr is

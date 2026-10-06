@@ -23,8 +23,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  * nine containers to five by #1024 section B**).
  *
  * Reading order, top→bottom, one container each:
- *  1. **the money story** — `$X came in. $Y went to the car.` over two bars: what came in (base /
- *     tips / bonuses) and where it went (kept / gas / wear). Formerly two cards (#1024 B1).
+ *  1. **the money story** — `$X earned. $Y went to the car.` over two bars: what you earned (base /
+ *     tips / not itemized / not matched — #1135 PR 1) and where it went (kept / gas / wear). Formerly two cards (#1024 B1).
  *  2. **the rates and the days they came from** — net per hour / mile / drop as inline rows above the
  *     earnings-by-day chart. Formerly a tile grid plus a chart card (#1024 B3).
  *  3. **by platform** — one hairline row per platform (#1024 B4). Hidden below two platforms.

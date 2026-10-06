@@ -118,6 +118,23 @@ class AnalyticsRepositoryTest {
         jobsCompleted = jobsCompleted,
     )
 
+    @Test
+    fun `lifetime source composition and pay mix reconcile across platform reads`() = runBlocking {
+        val deliveries = seedMoneySources(dao, base)
+        val period = AnalyticsPeriod.LIFETIME
+        val economics = repo.periodEconomics(period).first()
+        assertMoneySources(economics, repo.payMixParts(period).first(), scale = 3.0, copies = 2)
+        val split = repo.platformEconomics(period).first()
+        assertEquals(2, split.size)
+        for ((platform, e) in split) {
+            val rows = deliveries.filter { it.platform == platform.wire }
+            val scale = if (platform == cloud.trotter.dashbuddy.domain.state.Platform.DoorDash) 1.0 else 2.0
+            assertMoneySources(e, moneyParts(rows), scale)
+            assertEquals(e, repo.periodEconomics(period, platform).first())
+        }
+        assertEquals(economics.grossEarnings, split.sumOf { it.economics.grossEarnings }, 0.001)
+    }
+
     /**
      * The core lock: period net = Σ frozen delivery netProfit + unattributed; gross is the
      * reported total when present, else delivered pay; unattributed is the positive excess.

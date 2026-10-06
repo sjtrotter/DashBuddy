@@ -19,14 +19,17 @@ import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmap
 import cloud.trotter.dashbuddy.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.dashbuddy.domain.analytics.EstimateVsReality
 import cloud.trotter.dashbuddy.domain.analytics.GapStats
+import cloud.trotter.dashbuddy.domain.analytics.GrossSources
 import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSampler
 import cloud.trotter.dashbuddy.domain.analytics.HourOfWeekSamples
 import cloud.trotter.dashbuddy.domain.analytics.OfferFilter
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferCandidate
+import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.analytics.PayMixParts
-import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.Percentiles
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
@@ -36,8 +39,6 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
 import cloud.trotter.dashbuddy.domain.analytics.TimeEconomics
 import cloud.trotter.dashbuddy.domain.analytics.WorkGaps
-import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferCandidate
-import cloud.trotter.dashbuddy.domain.analytics.OrphanOfferGroup
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -45,6 +46,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPaylo
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.Instant
 import java.time.ZoneId
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -54,8 +57,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Read-side repository over the durable analytics tables (#314 PR3) — the home
@@ -143,6 +144,18 @@ class AnalyticsRepository @Inject constructor(
                         gross = g.gross, unattributed = g.unattributed, overAttributed = g.overAttributed,
                         fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
                         noSessionPay = ns.pay + ns.cash, noSessionDeliveries = ns.deliveries,
+                        grossSources = GrossSources(
+                            summaryReported = g.summaryReported,
+                            summaryDashes = g.summaryDashes,
+                            counterReported = g.counterReported,
+                            counterDashes = g.counterDashes,
+                            driverSetReported = g.driverSetReported,
+                            driverSetDashes = g.driverSetDashes,
+                            recordedWithoutReport = g.recordedWithoutReport,
+                            unreportedDashesWithPay = g.unreportedDashesWithPay,
+                            unreportedDashesNoPay = g.unreportedDashesNoPay,
+                            sessionCash = g.sessionCash,
+                        ),
                     )
                 }
             }
@@ -202,6 +215,20 @@ class AnalyticsRepository @Inject constructor(
                             fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
                             noSessionPay = (ns?.pay ?: 0.0) + (ns?.cash ?: 0.0),
                             noSessionDeliveries = ns?.deliveries ?: 0,
+                            grossSources = g?.let {
+                                GrossSources(
+                                    summaryReported = it.summaryReported,
+                                    summaryDashes = it.summaryDashes,
+                                    counterReported = it.counterReported,
+                                    counterDashes = it.counterDashes,
+                                    driverSetReported = it.driverSetReported,
+                                    driverSetDashes = it.driverSetDashes,
+                                    recordedWithoutReport = it.recordedWithoutReport,
+                                    unreportedDashesWithPay = it.unreportedDashesWithPay,
+                                    unreportedDashesNoPay = it.unreportedDashesNoPay,
+                                    sessionCash = it.sessionCash,
+                                )
+                            } ?: GrossSources.EMPTY,
                         ),
                     )
                 }.sortedByDescending { it.economics.grossEarnings }
@@ -215,8 +242,7 @@ class AnalyticsRepository @Inject constructor(
      *
      * Deliberately returns the PARTS, not a finished mix: gross has one owner ([assemble]), and the
      * pure `:domain` [cloud.trotter.dashbuddy.domain.analytics.PayMix.of] composes the two at the read
-     * site. That keeps the "bonuses & other = gross − base − tips − cash" residue rule in one testable
-     * place instead of half here and half in the UI.
+     * site as `PayMix.of(economics, parts)`, keeping the exact decomposition in one testable place.
      */
     fun payMixParts(
         window: AnalyticsWindow,
@@ -236,6 +262,9 @@ class AnalyticsRepository @Inject constructor(
                     cashTips = row.cashTips,
                     deliveries = row.deliveries,
                     deliveriesWithBreakdown = row.withBreakdown,
+                    offerEstimatePay = row.offerEstimatePay,
+                    offerEstimateDeliveries = row.offerEstimateDeliveries,
+                    paylessDeliveries = row.paylessDeliveries,
                 )
             }
         }
@@ -842,6 +871,7 @@ class AnalyticsRepository @Inject constructor(
         cash: Double,
         noSessionPay: Double = 0.0,
         noSessionDeliveries: Int = 0,
+        grossSources: GrossSources,
     ): PeriodEconomics {
         // Locked accounting (#688): cash tips add to BOTH net and gross. [gross] already includes the
         // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
@@ -891,6 +921,7 @@ class AnalyticsRepository @Inject constructor(
             overAttributedPay = overAttributed,
             noSessionPay = noSessionPay,
             noSessionDeliveries = noSessionDeliveries,
+            grossSources = grossSources,
         )
     }
 

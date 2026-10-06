@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import cloud.trotter.dashbuddy.core.database.analytics.SessionReportSql.EFFECTIVE_REPORTED_SQL
+import cloud.trotter.dashbuddy.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import kotlinx.coroutines.flow.Flow
 
@@ -311,8 +312,7 @@ interface AnalyticsDao {
      * driver-entered cash tip, plus the coverage counters. **WHERE shape is byte-identical to
      * [deliveryTotals]** — the same session-anchored join and the same null-session `completedAt`
      * fallback — so the mix describes exactly the delivery population whose pay reaches
-     * `PeriodEconomics.grossEarnings`, and the "bonuses & other" remainder computed against that gross
-     * is a real residue rather than a bucketing artefact.
+     * `PeriodEconomics.grossEarnings`, so the exact pay decomposition uses one population.
      *
      * `withBreakdown` counts the rows that itemized at all. `basePay`/`tip` are stamped ONLY on a job's
      * **sole drop** (a stacked job settles on one receipt that cannot be split per drop — see
@@ -327,7 +327,10 @@ interface AnalyticsDao {
                   COALESCE(SUM(cashTip), 0) AS cashTips,
                   COUNT(*) AS deliveries,
                   COALESCE(SUM(CASE WHEN basePay IS NOT NULL OR tip IS NOT NULL THEN 1 ELSE 0 END), 0)
-                    AS withBreakdown
+                    AS withBreakdown,
+                  COALESCE(SUM(CASE WHEN payBasis = '${PayBasis.OFFER_PAY}' THEN realizedPay ELSE 0 END), 0) AS offerEstimatePay,
+                  COALESCE(SUM(CASE WHEN payBasis = '${PayBasis.OFFER_PAY}' THEN 1 ELSE 0 END), 0) AS offerEstimateDeliveries,
+                  COALESCE(SUM(CASE WHEN realizedPay IS NULL THEN 1 ELSE 0 END), 0) AS paylessDeliveries
            FROM delivery_records
            WHERE sessionId IN (SELECT sessionId FROM session_records
                                WHERE startedAt >= :start AND startedAt < :end)
@@ -491,7 +494,17 @@ interface AnalyticsDao {
                     CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
                               AND ($EFFECTIVE_REPORTED_SQL) < COALESCE(d.deliveredPay, 0)
                          THEN COALESCE(d.deliveredPay, 0) - ($EFFECTIVE_REPORTED_SQL)
-                         ELSE 0 END), 0) AS overAttributed
+                         ELSE 0 END), 0) AS overAttributed,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DASH_SUMMARY' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS summaryReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DASH_SUMMARY' THEN 1 ELSE 0 END), 0) AS summaryDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS counterReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN 1 ELSE 0 END), 0) AS counterDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS driverSetReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
+                  COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
            LEFT JOIN (
              SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
@@ -515,7 +528,17 @@ interface AnalyticsDao {
                     CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL
                               AND ($EFFECTIVE_REPORTED_SQL) < COALESCE(d.deliveredPay, 0)
                          THEN COALESCE(d.deliveredPay, 0) - ($EFFECTIVE_REPORTED_SQL)
-                         ELSE 0 END), 0) AS overAttributed
+                         ELSE 0 END), 0) AS overAttributed,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DASH_SUMMARY' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS summaryReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DASH_SUMMARY' THEN 1 ELSE 0 END), 0) AS summaryDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS counterReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN 1 ELSE 0 END), 0) AS counterDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS driverSetReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
+                  COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
            LEFT JOIN (
              SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip

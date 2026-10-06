@@ -94,8 +94,9 @@ data class AnalyticsUiState(
      */
     val previousEconomics: PeriodEconomics? = null,
     /**
-     * How the window's gross broke down — base pay / tips / bonuses & other (#973, brief §4.2/§7.6).
-     * Composed at the ViewModel from the window's own gross and the measured pay-mix parts, so the
+     * How Earned decomposes — base pay / tips / not itemized / not matched − recorded above reported
+     * (#973 → #1135 PR 1, exact, no residue). Composed at the ViewModel from the window's own economics and
+     * the measured pay-mix parts, so the
      * card can never render a mix against a different window's total than its own headline states.
      */
     val payMix: PayMix = PayMix.EMPTY,

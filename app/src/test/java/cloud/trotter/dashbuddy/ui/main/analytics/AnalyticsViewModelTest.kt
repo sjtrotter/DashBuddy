@@ -262,25 +262,32 @@ class AnalyticsViewModelTest {
     /**
      * #973 — the pay mix is composed at the ViewModel against **this window's own** gross, so the
      * "what made up the gross" bar always reconciles with the figure the recap hero shows. The parts
-     * are measured; the bonuses residue is derived from them and that gross, nowhere else.
+     * are measured; the signed parts are derived from them and that economics, nowhere else.
      */
     @Test
     fun `pay mix is composed against the selected window's gross`() = runTest {
-        economicsByWindow[currentWeek()] = economics(net = 200.0, netPerHour = 20.0, unattributed = 40.0)
+        economicsByWindow[currentWeek()] = economics(net = 200.0, netPerHour = 20.0, unattributed = 40.0).copy(
+            totals = PeriodTotals.EMPTY.copy(earnings = 190.0),
+        )
         payMixParts = PayMixParts(
             basePay = 90.0,
             tips = 100.0,
             cashTips = 10.0,
             deliveries = 6,
             deliveriesWithBreakdown = 4,
+            offerEstimatePay = 0.0,
+            offerEstimateDeliveries = 0,
+            paylessDeliveries = 1,
         )
 
         runWithViewModel { viewModel ->
             val mix = viewModel.uiState.value.payMix
-            // gross = net + unattributed = 240; 240 − 90 − 100 − 10 = 40 left as bonuses/other.
+            // 190 recorded + 10 cash + 40 not matched = 240 earned.
             assertEquals(240.0, mix.gross, 1e-9)
-            assertEquals(40.0, mix.bonusesOther, 1e-9)
-            assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.bonusesOther, 1e-9)
+            assertEquals(0.0, mix.notItemized, 1e-9)
+            assertEquals(40.0, mix.notMatched, 1e-9)
+            assertFalse(mix.unreconciled)
+            assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.notItemized + mix.notMatched - mix.recordedAboveReported, 1e-9)
             assertFalse("4 of 6 itemized — the card must state the coverage", mix.breakdownComplete)
         }
     }

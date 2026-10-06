@@ -106,6 +106,16 @@ data class GrossTotalsRow(
     val gross: Double,
     val unattributed: Double,
     val overAttributed: Double,
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    val unreportedDashesNoPay: Int,
+    val sessionCash: Double,
 )
 
 /** Per-platform gross + unattributed + overAttributed (GROUP BY platform, #701). */
@@ -114,6 +124,16 @@ data class PlatformGrossTotalsRow(
     val gross: Double,
     val unattributed: Double,
     val overAttributed: Double,
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    val unreportedDashesNoPay: Int,
+    val sessionCash: Double,
 )
 
 /**
@@ -170,6 +190,9 @@ data class PayMixTotalsRow(
     val cashTips: Double,
     val deliveries: Int,
     val withBreakdown: Int,
+    val offerEstimatePay: Double,
+    val offerEstimateDeliveries: Int,
+    val paylessDeliveries: Int,
 )
 
 /** Per-platform variant of [NoSessionTotalsRow] (GROUP BY platform) — grouped on the delivery's own

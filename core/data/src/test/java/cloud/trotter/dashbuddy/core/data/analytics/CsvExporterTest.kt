@@ -185,12 +185,13 @@ class CsvExporterTest {
         val out = CsvExporter.export(emptyList(), listOf(session()), utc, generatedAt)
         val lines = out.sessionsCsv.trim().lines()
         assertEquals(
-            "start,end,platform,duration_minutes,reported_earnings,deliveries,offers_received," +
+            "start,end,platform,duration_minutes,reported_earnings,report_source,deliveries,offers_received," +
                 "offers_accepted,offers_declined,offers_timeout,odometer_start,odometer_end,miles",
             lines[0],
         )
         val cols = lines[1].split(",")
         assertEquals("DoorDash", cols[2])
+        assertEquals("DASH_SUMMARY", cols[5])
         assertEquals("60.00", cols[3])        // 1h duration
         assertEquals("42.00", cols.last())    // 1042 - 1000 miles
     }
@@ -259,6 +260,33 @@ class CsvExporterTest {
             assertFalse("formula-leading cell leaked: $row", row.startsWith("=") || row.startsWith("@"))
         }
     }
+    @Test fun sessions_and_summary_name_each_effective_source() {
+        val sessions = listOf(
+            session(id = "summary", reported = 30.0),
+            session(id = "zero", reported = 0.0),
+            session(id = "counter", reported = 20.0).copy(endSource = "early_offline"),
+            session(id = "set", reported = 99.0).copy(reportOverrideMode = SessionReportOperation.SET, reportOverride = 25.0),
+            session(id = "clear", reported = 99.0).copy(reportOverrideMode = SessionReportOperation.CLEAR),
+            session(id = "none", reported = 0.0).copy(endSource = "early_offline"),
+            session(id = "empty", reported = null),
+        )
+        val deliveries = listOf(
+            delivery(1, "S", pay = 7.0, cashTip = 3.0).copy(sessionId = "clear"),
+            delivery(2, "S", pay = 11.0).copy(sessionId = "none"),
+            delivery(3, "S", pay = null).copy(sessionId = "empty"),
+            delivery(4, "S", pay = 13.0).copy(sessionId = null),
+            delivery(5, "S", pay = 25.0).copy(sessionId = "summary"),
+        )
+        val out = CsvExporter.export(deliveries, sessions, utc, generatedAt)
+        assertEquals(listOf("DASH_SUMMARY", "DASH_SUMMARY", "IN_DASH_COUNTER", "DRIVER_SET", "NONE", "NONE", "NONE"),
+            out.sessionsCsv.trim().lines().drop(1).map { it.split(",")[5] })
+        assertTrue(out.summaryCsv.contains("total_dash_summary_earnings,30.00\n"))
+        assertTrue(out.summaryCsv.contains("total_in_dash_counter_earnings,20.00\n"))
+        assertTrue(out.summaryCsv.contains("total_driver_set_earnings,25.00\n"))
+        assertTrue(out.summaryCsv.contains("total_recorded_without_report,18.00\n"))
+        assertFalse(out.summaryCsv.contains("total_reported_earnings,"))
+    }
+
     @Test fun sessions_driverClearAndSet_exportEffectiveReportAndSummary() {
         val cleared = session(id = "483", reported = 40.14).copy(
             reportOverrideMode = SessionReportOperation.CLEAR, reportCorrectedAt = generatedAt,
@@ -270,7 +298,10 @@ class CsvExporterTest {
         val rows = out.sessionsCsv.trim().lines()
         assertEquals("", rows[1].split(",")[4])
         assertEquals("12.50", rows[2].split(",")[4])
-        assertTrue(out.summaryCsv.contains("total_reported_earnings,12.50"))
+        assertEquals("NONE", rows[1].split(",")[5])
+        assertEquals("DRIVER_SET", rows[2].split(",")[5])
+        assertTrue(out.summaryCsv.contains("total_driver_set_earnings,12.50"))
+        assertFalse(out.summaryCsv.contains("total_reported_earnings,"))
     }
 
 }

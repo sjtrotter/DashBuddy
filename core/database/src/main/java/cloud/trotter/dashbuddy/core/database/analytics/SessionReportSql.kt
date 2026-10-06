@@ -17,4 +17,12 @@ object SessionReportSql {
             "WHEN s.reportOverrideMode = '${SessionReportOperation.CLEAR}' THEN NULL " +
             "WHEN s.endSource = '${SessionEndSource.SUMMARY_SCREEN}' THEN s.reportedEarnings " +
             "WHEN s.reportedEarnings > 0 THEN s.reportedEarnings ELSE NULL END"
+
+    /** SQL mirror of ReportSource.of; literals are pinned to ReportSource.wire in tests.
+     * Enum properties cannot be interpolated into Room's compile-time annotation strings. */
+    const val REPORT_SOURCE_SQL =
+        "CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN 'NONE' " +
+            "WHEN s.reportOverrideMode = '${SessionReportOperation.SET}' THEN 'DRIVER_SET' " +
+            "WHEN s.endSource = '${SessionEndSource.SUMMARY_SCREEN}' THEN 'DASH_SUMMARY' " +
+            "ELSE 'IN_DASH_COUNTER' END"
 }

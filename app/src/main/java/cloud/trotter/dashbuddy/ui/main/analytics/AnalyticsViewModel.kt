@@ -156,12 +156,16 @@ class AnalyticsViewModel @Inject constructor(
             economics = data.economics,
             previousEconomics = data.extras.previousEconomics,
             // The mix is composed HERE, against this window's own gross (#973): gross has exactly one
-            // owner (the repository's economics fold) and the "bonuses & other" residue is defined
-            // relative to it, so composing at the read site is what keeps the came-in bar reconciling
+            // owner (the repository's economics fold) and the not-itemized / not-matched terms are defined
+            // relative to it (#1135 PR 1), so composing at the read site is what keeps the earned bar reconciling
             // with the "$X came in." clause it sits under rather than with a second, independently
             // derived total (Principle 5). (Pre-#1024 this said "with the hero" — the hero stated
             // gross then; since part 2 the money card is gross's only surface.)
-            payMix = PayMix.of(data.economics.grossEarnings, data.extras.payMixParts),
+            payMix = PayMix.of(data.economics, data.extras.payMixParts).also { mix ->
+                // #1135: the identity guard is DEBUG-only — economics and parts arrive on separate flows, so one
+                // frame can pair a new gross with older parts (a cash-tip edit) and fire it legitimately.
+                if (mix.unreconciled) Timber.tag("Analytics").d("PayMix unreconciled: gross=%.2f parts=%.2f", mix.gross, mix.basePay + mix.tips + mix.cashTips + mix.notItemized + mix.notMatched - mix.recordedAboveReported)
+            },
             platformSplit = data.extras.platformSplit,
             recentSessions = sessions,
             decisions = data.decisions,

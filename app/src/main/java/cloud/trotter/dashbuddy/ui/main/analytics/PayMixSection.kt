@@ -24,31 +24,16 @@ import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.format.Formats
 
 /**
- * "What made up the gross" (#973 / brief §4.2) — base pay / tips / bonuses & other as one 3-segment
- * bar with a real-dollar legend, plus the one-line insight.
+ * "What you earned" (#973 / #1024 B1 / #1135 PR 1) — Earned decomposed EXACTLY into base pay / tips (cash
+ * labelled) / recorded-not-itemized / reported-not-matched, as one bar with a real-dollar legend plus the
+ * tips insight. Lives inside [MoneyWentCard] as the "what came in" half (a SECTION, not a card — #1024 B1).
  *
- * **#1024 B1 made this a SECTION, not a card.** It was `PayMixCard`, a bordered surface of its own
- * sitting directly under the card that states the same window's gross in its first clause — two
- * containers narrating one number. It now renders inside [MoneyWentCard] as the "what came in" half
- * of that card's two bars. Nothing about the honesty machinery moved: every state below is the state
- * the card had, and the only deletions are the card container and its own copy of the title, which
- * is now the section label.
- *
- * **Percentages are allowed HERE and only here** (brief §4.1 vs §4.2): the cost headline must never
- * restate money as a share, but the tips insight *is* a share statement — that's what makes it an
- * insight rather than a fourth dollar figure.
- *
- * Three honesty behaviours, all from [PayMix] (§9 — thin data is stated, never smoothed over):
- *  - **No itemization at all** → the section says the breakdown wasn't recorded instead of drawing a
- *    bar that claims 100% "bonuses". With zero coverage the residue IS the whole gross, and rendering
- *    it as a bonus figure would be a statement about the data dressed up as a fact about the pay.
- *  - **Partial itemization** (the normal case — `basePay`/`tip` are stamped only on a job's SOLE drop,
- *    so every stacked job goes un-itemized) → the bar renders, with a caption naming the coverage and
- *    the insight downgraded to "at least N%".
- *  - **Parts exceeding gross** → stated outright, never absorbed silently by the floor.
- *
- * Cash tips stay additive and labeled: they ride the tips segment's geometry but the legend note names
- * them separately, so driver-attested money is never silently blended into a platform-reported number.
+ * Honesty behaviours, all from [PayMix] (§9 — thin data is stated, never smoothed over): zero itemization
+ * still renders the bar (the not-itemized segment IS the recorded pay, named as such — no "100 % bonuses"
+ * path exists any more); partial itemization states its coverage with the stacked-order explanation behind
+ * a disclosure; a recorded-above-reported amount, a negative itemization and an unreconciled identity are
+ * each stated outright in the bad tone. Percentages are allowed HERE and only here (the tips insight is a
+ * share statement).
  */
 @Composable
 internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
@@ -62,15 +47,16 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(10.dp))
 
-        if (!mix.hasBreakdown) {
+        // An empty window draws no bar: AppStackBar gives every zero segment the same minimum weight, which
+        // would fabricate a four-way composition out of nothing (Astra r1 P3).
+        if (mix.gross <= UNATTRIBUTED_EPSILON && mix.recorded <= UNATTRIBUTED_EPSILON) {
             Text(
-                text = stringResource(R.string.money_tab_pay_mix_not_recorded),
+                text = stringResource(R.string.money_tab_pay_mix_no_insight),
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.text3,
             )
             return@Column
         }
-
         val segments = payMixSegments(mix)
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -85,9 +71,9 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
 
         if (!mix.breakdownComplete) {
             Spacer(Modifier.height(6.dp))
-            // COLLAPSE: the "N of M" coverage marker stays visible; the stacked-order explanation
-            // behind it moves behind the shared DisclosureRow affordance (§9 — the caveat itself is
-            // never dropped, only its explanation).
+            // COLLAPSE (#1024 B1, kept): the "N of M" coverage marker stays visible; the stacked-order
+            // explanation behind it sits behind the shared DisclosureRow affordance (§9 — the caveat
+            // itself is never dropped, only its explanation).
             DisclosureRow(
                 text = stringResource(
                     R.string.money_tab_pay_mix_partial_coverage_format,
@@ -106,21 +92,49 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
                 )
             }
         }
-        if (mix.partsExceedGross) {
+        // Each gap line renders only when there is a gap to name (§9: state what the rows prove, never a $0 line).
+        if (mix.notItemized > UNATTRIBUTED_EPSILON) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = if (mix.estimatedFromOffers > UNATTRIBUTED_EPSILON) stringResource(
+                    R.string.money_tab_pay_mix_not_itemized_estimate_format,
+                    Formats.money(mix.notItemized), Formats.money(mix.estimatedFromOffers),
+                ) else stringResource(R.string.money_tab_pay_mix_not_itemized_format, Formats.money(mix.notItemized)),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+            )
+        }
+        if (mix.notMatched > UNATTRIBUTED_EPSILON) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.money_tab_pay_mix_not_matched_caption),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+            )
+        }
+        if (mix.recordedAboveReported > UNATTRIBUTED_EPSILON) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.money_tab_over_attributed_callout_format, Formats.money(mix.recordedAboveReported)),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.bad,
+            )
+        }
+        if (mix.notItemizedNegative) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(
-                    R.string.money_tab_pay_mix_exceeds_gross_format,
-                    Formats.money(mix.grossOverflow),
+                    R.string.money_tab_pay_mix_negative_itemization_format,
+                    Formats.money(-mix.notItemized),
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.warn,
+                color = c.bad,
             )
         }
     }
 }
 
-/** base pay / tips (incl. any cash, labeled) / bonuses & other — real dollars in the legend. */
+/** Positive bar geometry; signed amounts and deductions are stated in the legend and captions. */
 @Composable
 private fun payMixSegments(mix: PayMix): List<AppSegment> {
     val c = AppTheme.colors
@@ -147,16 +161,22 @@ private fun payMixSegments(mix: PayMix): List<AppSegment> {
             note = tipsNote,
         ),
         AppSegment(
-            label = stringResource(R.string.money_tab_pay_mix_segment_bonuses),
-            value = mix.bonusesOther.toFloat().coerceAtLeast(0f),
+            label = stringResource(R.string.money_tab_pay_mix_segment_not_itemized),
+            value = mix.notItemized.toFloat().coerceAtLeast(0f),
             color = c.neutral,
-            note = Formats.money(mix.bonusesOther),
+            note = Formats.money(mix.notItemized),
+        ),
+        AppSegment(
+            label = stringResource(R.string.money_tab_pay_mix_segment_not_matched),
+            value = mix.notMatched.toFloat().coerceAtLeast(0f),
+            color = c.warn,
+            note = Formats.money(mix.notMatched),
         ),
     )
 }
 
 /**
- * "tips were 57% of your pay" — or "tips were at least 57% of your pay" when part of the window went
+ * "tips were 57% of what you earned" — or "tips were at least 57% of what you earned" when part of the window went
  * un-itemized, because the un-itemized rows may hold tips too and the measured share is then a floor,
  * not the value.
  */

@@ -675,8 +675,11 @@ instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps 
 **Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
 leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +
 `PeriodBounds.of(window|period)` (#970; Monday weeks, fixed bounds for a paged window, selection persisted
-as `AnalyticsWindowSelection`); pay mix + platform split through the same `assemble` (#973;
-`bonuses & other` is the floored residue, zero coverage renders "not recorded"); Offers tab (#975;
+as `AnalyticsWindowSelection`); pay mix + platform split through the same `assemble` (#973; #1135 PR 1 made the
+bar an EXACT decomposition of Earned — base + tips (cash labelled) + recorded-not-itemized (offer-estimate subset
+named) + reported-not-matched − recorded-above-reported, no residue, no floor, `"bonus"` never said; `ReportSource`
++ `GrossSources` name WHERE each dash's reported total came from, mirrored by `SessionReportSql.REPORT_SOURCE_SQL`);
+Offers tab (#975;
 `AnalyticsTab` order is declaration order, selection transient; estimate-vs-reality keeps the DAO's
 unfiltered accepted-offer LEFT JOIN as the stated denominator, applies its exclusions in the pure factory —
 null estimate, unlinked offer, a stack, missing realized net/minutes — and renders both bars as a MEAN of

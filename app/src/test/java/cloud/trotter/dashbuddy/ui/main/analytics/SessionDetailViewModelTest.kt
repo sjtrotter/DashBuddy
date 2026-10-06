@@ -1,14 +1,16 @@
 package cloud.trotter.dashbuddy.ui.main.analytics
 
 import androidx.lifecycle.SavedStateHandle
+import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
-import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -83,6 +85,35 @@ class SessionDetailViewModelTest {
         assertEquals("s1", detailOut.session.sessionId)
         assertEquals(1, detailOut.deliveries.size)
         job.cancel()
+    }
+
+    @Test
+    fun `phantom counter and driver SET keep their source labels through the view model`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val cases = listOf(
+            session("counter").copy(reportedEarnings = 40.14, machineReportedEarnings = 40.14,
+                endSource = SessionEndSource.EARLY_OFFLINE) to R.string.session_detail_gross_source_counter,
+            session("set").copy(reportedEarnings = 12.5, machineReportedEarnings = 40.14,
+                endSource = SessionEndSource.EARLY_OFFLINE, reportOverrideMode = SessionReportOperation.SET,
+                reportOverride = 12.5) to R.string.session_detail_gross_source_driver,
+            session("clear").copy(reportedEarnings = null, machineReportedEarnings = 40.14,
+                reportOverrideMode = SessionReportOperation.CLEAR) to R.string.session_detail_gross_source_none,
+            session("zero").copy(reportedEarnings = 0.0, machineReportedEarnings = 0.0,
+                endSource = SessionEndSource.SUMMARY_SCREEN) to R.string.session_detail_gross_source_summary,
+            session("null-set").copy(reportedEarnings = null, machineReportedEarnings = 40.14,
+                reportOverrideMode = SessionReportOperation.SET, reportOverride = null) to R.string.session_detail_gross_source_none,
+        )
+        for ((record, label) in cases) {
+            whenever(analyticsRepository.sessionDetail(eq(record.sessionId)))
+                .thenReturn(flowOf(SessionDetail(record, emptyList())))
+            val viewModel = buildViewModel(record.sessionId)
+            val job = launch { viewModel.uiState.collect {} }
+            testScheduler.advanceUntilIdle()
+            val loaded = viewModel.uiState.value.detail!!.session
+            assertEquals(record, loaded)
+            assertEquals(label, sessionGrossSourceLabel(loaded))
+            job.cancel()
+        }
     }
 
     @Test

@@ -474,7 +474,7 @@
     <!-- main/analytics/MoneyTab.kt -->
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">gross per day, by dash start day — (No session) deliveries by completion day</string>
+    <string name="money_tab_earnings_by_day_caption">earned per day, by dash start day — (No session) deliveries by completion day</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
@@ -483,7 +483,7 @@
 
     <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
     <string name="money_tab_where_went_title">WHERE YOUR MONEY WENT</string>
-    <string name="money_tab_where_went_came_in">%1$s came in.</string>
+    <string name="money_tab_where_went_came_in">%1$s earned.</string>
     <string name="money_tab_where_went_car">%1$s went to the car.</string>
     <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
     <string name="money_tab_where_went_kept">%1$s stayed with you.</string>
@@ -499,19 +499,22 @@
     <string name="money_tab_disclosure_expand">Show the details</string>
     <string name="money_tab_disclosure_collapse">Hide the details</string>
 
-    <!-- main/analytics/PayMixCard.kt (brief §4.2) -->
-    <string name="money_tab_pay_mix_title">WHAT MADE UP THE GROSS</string>
+    <!-- main/analytics/PayMixSection.kt (brief §4.2) -->
+    <string name="money_tab_pay_mix_title">WHAT YOU EARNED</string>
     <string name="money_tab_pay_mix_segment_base">Base pay</string>
     <string name="money_tab_pay_mix_segment_tips">Tips</string>
-    <string name="money_tab_pay_mix_segment_bonuses">Bonuses &amp; other</string>
-    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (incl. %2$s cash)</string>
-    <string name="money_tab_pay_mix_insight_format">Tips were %1$s of your pay this window.</string>
-    <string name="money_tab_pay_mix_insight_floor_format">Tips were at least %1$s of your pay this window.</string>
+    <string name="money_tab_pay_mix_segment_not_itemized">Not itemized</string>
+    <string name="money_tab_pay_mix_segment_not_matched">Not matched</string>
+    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (incl. %2$s cash you entered)</string>
+    <string name="money_tab_pay_mix_insight_format">Tips were %1$s of what you earned.</string>
+    <string name="money_tab_pay_mix_insight_floor_format">Tips were at least %1$s of what you earned.</string>
     <string name="money_tab_pay_mix_no_insight">No pay recorded for this window yet.</string>
-    <string name="money_tab_pay_mix_not_recorded">No pay breakdown here — only single-order deliveries itemize base and tips.</string>
     <string name="money_tab_pay_mix_partial_coverage_format">itemized on %1$s of %2$s deliveries</string>
-    <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay sits in bonuses &amp; other.</string>
-    <string name="money_tab_pay_mix_exceeds_gross_format">The itemized pay adds up to %1$s more than the reported total — worth a look.</string>
+    <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay is recorded but not itemized.</string>
+    <string name="money_tab_pay_mix_not_itemized_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records</string>
+    <string name="money_tab_pay_mix_not_itemized_estimate_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records · %2$s of the recorded pay was estimated from the offer</string>
+    <string name="money_tab_pay_mix_not_matched_caption">reported for a dash, not matched to a recorded delivery</string>
+    <string name="money_tab_pay_mix_negative_itemization_format">itemized parts exceed the recorded pay by %1$s</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
     <string name="money_tab_needs_a_look_title_format">NEEDS A LOOK (%1$s)</string>
@@ -519,8 +522,8 @@
     <!-- main/analytics/MoneyBreakdownCards.kt -->
     <string name="money_tab_platform_split_title">BY PLATFORM</string>
     <string name="money_tab_platform_split_kept_format">%1$s kept</string>
-    <string name="money_tab_unattributed_callout_format">%1$s not attributed to any delivery — bonuses or adjustments</string>
-    <string name="money_tab_over_attributed_callout_format">attributed exceeds reported by %1$s — review estimates/corrections</string>
+    <string name="money_tab_unattributed_callout_format">%1$s reported for a dash but not matched to a recorded delivery</string>
+    <string name="money_tab_over_attributed_callout_format">DashBuddy recorded %1$s more than was reported</string>
     <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
     <string name="money_tab_orphan_offers_callout_format">%1$s accepted offer(s) with no matching delivery</string>
@@ -532,13 +535,15 @@
     <!-- main/analytics/SessionDetailScreen.kt -->
     <string name="session_detail_title">Session detail</string>
     <string name="session_detail_not_found">Session not found.</string>
-    <string name="session_detail_unaccounted_format">%1$s unaccounted on this session — the platform reported more than the captured deliveries.</string>
-    <string name="session_detail_over_attributed_format">attributed exceeds reported by %1$s on this session — review estimates/corrections.</string>
+    <string name="session_detail_unaccounted_format">%1$s reported for this dash but not matched to a recorded delivery</string>
+    <string name="session_detail_over_attributed_format">DashBuddy recorded %1$s more than was reported</string>
     <string name="session_detail_add_missed_delivery">Add missed delivery</string>
     <string name="session_detail_deliveries_title">DELIVERIES</string>
-    <string name="session_detail_no_deliveries_yet">No deliveries captured for this session.</string>
-    <string name="session_detail_gross_reported_label">Gross (reported)</string>
-    <string name="session_detail_gross_captured_label">Gross (captured)</string>
+    <string name="session_detail_no_deliveries_yet">No deliveries recorded for this dash.</string>
+    <string name="session_detail_gross_source_summary">Reported — dash summary</string>
+    <string name="session_detail_gross_source_counter">Reported — in-dash counter</string>
+    <string name="session_detail_gross_source_driver">Reported — entered by you</string>
+    <string name="session_detail_gross_source_none">Recorded by DashBuddy (no report)</string>
     <string name="session_detail_stat_miles">Miles</string>
     <string name="session_detail_stat_deliveries">Deliveries</string>
     <string name="session_detail_duration_format">Duration %1$s</string>
@@ -842,7 +847,6 @@
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
-    <string name="session_detail_gross_set_label">Gross (you set)</string>
     <string name="session_detail_report_corrected">report corrected</string>
     <string name="session_detail_correct_total">Correct total</string>
     <string name="session_report_dialog_title">Correct %1$s total</string>
