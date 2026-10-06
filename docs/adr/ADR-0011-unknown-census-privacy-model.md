@@ -492,8 +492,10 @@ no output contains an input token verbatim outside `class`/`id`.
 Only frames that pass today's gates reach the census: rulesets loaded, sensitive/noise dropped,
 disabled platform dropped, `UnknownSuppressor` dedup. On top: a per-install daily budget (300
 skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch upload with backoff, a
-64 KB size cap per skeleton (over → no skeleton, counted). Clicks and notifications are OUT of v1
-(the click envelope is the #919 leak class; a notification body is free text).
+64 KB size cap per skeleton (over → no skeleton, counted). Clicks and notifications were OUT of v1
+(the click envelope is the #919 leak class; a notification body is free text) — §10 (amendment
+2026-10-06, #1189) brings NOTIFICATIONS in under the same grammar and keeps clicks out until a reliable
+screen-fingerprint association exists.
 
 **Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
 today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
@@ -552,6 +554,62 @@ invariant, redact parity) → **human approval** → signing (the runtime signat
 state and a wrong redact ships PII to every phone; both are silent in the field and caught only by
 the corpus plus a reader, so the human gate is structural. The authoring-model consequence is
 recorded as the ADR-0009 amendment.
+
+### 10. Notification skeletons (amendment 2026-10-06, #1189 — PROPOSED; a privacy-model change the developer approves before any code)
+
+**Why.** UNKNOWN notifications carry lifecycle signal the screen census never sees (an offer push, an
+arrival, a pause, an earnings deposit) and are the cheapest surface to keep rules current on — but v1
+excluded them because a body is free text. Fielded evidence (local pulls May→Oct 2026, 691 UNKNOWN
+notification envelopes, 597 DoorDash / 94 Uber): the posting channel is STABLE CHROME — 14 distinct
+`(package, channelId)` pairs in five months, the main one (`dasher-notification-channel-dash-update`)
+seen on 82 distinct days; titles are short (median 16 chars, 12 of 591 over the 40-character cap);
+bodies are long (text / bigText / ticker median 75 chars, ~85 % over the cap). So under the EXISTING
+§1–§2 grammar a notification skeleton is: a platform token, a channel id, a title that mostly hashes
+as `words:N`, and a body that mostly reduces to a coarse kind — exactly the "shape, not content" posture
+of a screen skeleton. No new hash grammar, no new unblinding path.
+
+**Skeleton (the §7(a) allowlist for notifications).**
+- `kind = "notification"` — a wire discriminator; the server clusters notification skeletons apart
+  from screen skeletons and applies the unchanged §4 k-gate, §5 consent, §8 budgets/retention.
+- `platform`: the registry token from `Platform.fromPackage(packageName)` — never the package string.
+- `channelId`: the posting channel id, RAW but GRAMMAR-BOUNDED (`[A-Za-z0-9_.-]{1,64}`, else the skeleton
+  is refused and counted): a channel id is an app-defined constant (chrome), the primary clustering key,
+  and the one field that may be read in clear. The evidence above is the basis for calling it chrome;
+  the bound is the enforcement.
+- One `TextSlot` per field of `RawNotificationData.textFields()` — title, text, subText, tickerText,
+  bigText — through the SAME `KindClassifier` grammar (the five-field enumeration is the SSOT, #666):
+  `words:1..8` hashes with the §3 domain prefix, every other kind is a coarse kind or `withheld`.
+  `actionLabels` are OMITTED in this slice (not even hashed) — a button label is where a customer name
+  rode in the #1147 fielded shape.
+- Fingerprint: `CensusFingerprint` over `(kind, platform, channelId, the five slot kinds + hashes)` —
+  structural identity, so a title that differs only by a customer name (its slot `withheld`) still
+  clusters with its siblings.
+
+**Refusal (fail-closed, independent of capture).** `SensitiveMarkerScan` runs over the five fields AND
+the action labels (the #666 item 2c lesson: a banking marker ONLY in an action label must still refuse);
+any hit refuses the whole skeleton and is counted. The scan is a publication gate of its own — it does
+not rely on `CaptureWriter`, which skips a sensitive UNKNOWN capture without returning a verdict. The
+`CustomerTextMarkers` lead-in scrub applies to the five fields before kind classification, as on screens.
+
+**Where it publishes.** `NotificationPipeline`, after admission + dedup + capture and BEFORE the UNKNOWN
+rejection — the same slot `SkeletonPublisher.publish` occupies on the screen path; UNKNOWN platform
+notifications only; fail-open to the pipeline; debug `HttpCensusSink` only; release `NoOpCensusSink`
+(inert by construction). The 300-per-day budget is SHARED with screens (one budget, one spool).
+
+**Clicks stay OUT.** A click skeleton must cluster under the SCREEN it happened on, which needs the
+screen's census fingerprint at click time; today `Observation.Click` carries only `screenRuleId`, and the
+classifier caches rule/target per platform — not a fingerprint — so an association could be stale across
+a window change. Clicks return as their own amendment once the app computes and carries that fingerprint.
+
+**Residuals (added to the list below).** A channel id is read in clear: a platform could, in principle,
+encode a per-user value in a channel id — the grammar bound and the k-gate (a singleton channel never
+unblinds) are the controls, and the evidence shows app-constant ids. Bodies over the cap lose their
+distinction (a coarse kind) — accepted: the channel + title carry the clustering signal.
+
+**Contract / server / app order.** This section merges FIRST (dev approval); then a versioned
+`NotificationSkeletonDto` + fingerprint in `census-contract/` with a conformance golden; then the server's
+`kind`-aware ingestion/clustering (k/retention unchanged); then the app publisher. Trusted notification
+envelopes (unblinding) are a later slice.
 
 ## Server-side commitments (implemented by #1157, stated here so the client's disclosure can cite them)
 
@@ -667,6 +725,8 @@ to `:domain` moves test-only regexes into a shipped module; `IcuRegexGuardTest` 
 must stay green.
 
 ## Residual risks (stated, not hidden)
+
+- **(§10, proposed) Notification channel ids are read in clear.** An app-defined constant by evidence (14 ids in five months), bounded by grammar and k-gated; a platform encoding a per-user value in a channel id would be a singleton cluster that never unblinds. Bodies over the 40-character cap reduce to a coarse kind — the distinction is lost by design.
 
 1. **A hash of a value that slipped every filter.** A short, marker-free, name-shape-free word that is
    nonetheless personal. Mitigations: the `words:N` restriction, the k gate, the 30-day TTL, the
