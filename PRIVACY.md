@@ -168,8 +168,8 @@ backup encryption and Google's terms — DashBuddy does not send them anywhere i
 user: restoring history and vehicle/economy settings on a new phone is expected.** The capability-grant/receipt
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
-(`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files and census
-credentials are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
+(`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
+credentials and the developer-settings store (census upload/share toggles + the server policy cache) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
 ## 7. Where your data lives, and how long
