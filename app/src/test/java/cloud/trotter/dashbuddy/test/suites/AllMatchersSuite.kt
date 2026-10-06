@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.OfferPipelineT
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
 import cloud.trotter.dashbuddy.core.pipeline.recognition.matchers.SensitiveSurfaceBlockTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.UberTripRadarBoardRedactTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.CurrencyShapePinTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DashSummaryReanchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DeliverySummaryReanchorTest
@@ -182,6 +183,7 @@ import org.junit.runners.Suite
     ScreenRulesetTest::class,
     ClickRulesetTest::class,
     UberDeclineClickRuleTest::class,
+    UberTripRadarBoardRedactTest::class,
     NotificationRulesetTest::class,
     TriageRulesTest::class,
     UberIdleMapOfflineEvidenceTest::class,

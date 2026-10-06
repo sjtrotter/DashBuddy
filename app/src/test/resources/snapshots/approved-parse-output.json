@@ -7685,12 +7685,6 @@
         "shape": null,
         "fields": {}
     },
-    "trip_radar_board/2026-07-24_18-44-31-959__uber__accessibility.window__UNKNOWN__cc5749.json": {
-        "ruleId": "uber.screen.trip_radar_board",
-        "intent": "trip_radar_board",
-        "shape": null,
-        "fields": {}
-    },
     "trip_radar_board/2026-07-24_19-33-07-623__uber__accessibility.window__UNKNOWN__ab527f.json": {
         "ruleId": "uber.screen.trip_radar_board",
         "intent": "trip_radar_board",

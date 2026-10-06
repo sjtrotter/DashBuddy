@@ -572,8 +572,9 @@
       // selection — all fielded fixtures render it as text.
       "redact": [
         {
+          "comment": "#856 (fable review of PR #1247): the `, <City>` tail widened — Unicode letters (`La Cañada`), lowercase particles (`Lake in the Hills`), apostrophes/hyphens (`O'Fallon`, `Winston-Salem`), `St.`, an optional `, ST 12345` suffix and trailing whitespace — the direct card's dropoff line shipped raw on the RECOGNIZED offer frame for those cities. Byte-identical to the Trip Radar board's tail entry (one shape, two owners by verbatim copy — the ruleset's SSOT mechanism).",
           "find": {
-            "hasTextMatchesRegex": ",\\s[A-Z][a-zA-Z]+(\\s[A-Z][a-zA-Z]+){0,4}$"
+            "hasTextMatchesRegex": ",\\s\\p{Lu}[\\p{L}.'-]*(\\s[\\p{L}.'-]+){0,5}(,\\s[A-Z]{2}(\\s\\d{5})?)?\\s*$"
           }
         }
       ]
@@ -1623,14 +1624,9 @@
           }
         },
         {
+          "comment": "#856: the `<Street>, <City>` single-line form (no `&`) with a tolerant tail — Unicode letters, lowercase particles, `.`/`'`/`-`, an optional `, ST` / `, ST 12345` suffix and trailing whitespace (Astra + fable reviews of PR #1247); byte-identical to `uber.screen.offer`'s entry.",
           "find": {
-            "hasTextMatchesRegex": ",\\s[A-Z][a-zA-Z]+(\\s[A-Z][a-zA-Z]+){0,4}$"
-          }
-        },
-        {
-          "comment": "#856: the `<Street>, <City>` single-line form (no `&`) with a tolerant tail — Unicode letters, `.`/`'`/`-`, an optional `, ST` / `, ST 12345` suffix and trailing whitespace (Astra review of PR #1247).",
-          "find": {
-            "hasTextMatchesRegex": ",\\s\\p{Lu}[\\p{L}.'-]*(\\s[\\p{L}.'-]+){0,4}(,\\s[A-Z]{2}(\\s\\d{5})?)?\\s*$"
+            "hasTextMatchesRegex": ",\\s\\p{Lu}[\\p{L}.'-]*(\\s[\\p{L}.'-]+){0,5}(,\\s[A-Z]{2}(\\s\\d{5})?)?\\s*$"
           }
         }
       ]
