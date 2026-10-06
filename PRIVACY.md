@@ -27,7 +27,8 @@ Declared in `app/src/main/res/xml/accessibility_service_config.xml`:
 - `android:isAccessibilityTool="true"` — DashBuddy declares itself an accessibility tool because that is what it
   is: dashers are usually driving when an offer arrives, and the app reads the offer to them for the decision and,
   under the dasher's own rules, acts on it so they do not touch the phone. The flag changes how Android classifies
-  and warns about the service; it grants no extra visibility.
+  and warns about the service and which events it is eligible to receive (since Android 14 the system delivers
+  events an app marks accessibility-data-sensitive only to services carrying it).
 - `android:packageNames` — the service is bound to the delivery apps only: `com.doordash.driverapp`,
   `com.ubercab.driver`, `com.instacart.shopper`, `com.walmart.spark`. Nothing from any other app reaches the
   pipeline. (One opt-in exception, §2.2.)
@@ -59,7 +60,9 @@ evidence screenshot (§4), which is off by default and says so where it is turne
 
 A separate `NotificationListenerService` reads the delivery apps' notifications (offer pushes, arrival and
 pause notices, earnings notices) and recognizes them against the same ruleset (`core/pipeline/.../notification`).
-A notification whose package is not a known platform is dropped at the pipeline's entry (`Platform.fromPackage`).
+A notification from a package that is not an enabled platform is dropped before anything is read
+(`NotificationListener.onNotificationPosted` checks the enabled-package set; `NotificationFilter.isRelevant` gates
+what is forwarded).
 
 ### 2.4 Location
 
@@ -73,7 +76,9 @@ A notification whose package is not a known platform is dropped at the pipeline'
   is read (`FusedLocationDataSource.getUserLocation`) and passed to Android's `Geocoder` to resolve the state for
   the regional price. `Geocoder` is a platform service that may use the network to do that, so on this feature the
   device's coordinates do leave the app, to Android's geocoding provider — not to DashBuddy and not to the EIA.
-  Turning the refresh off stops both the lookup and the request.
+  Turning the refresh off stops the scheduled refresh (`DailyGasPriceWorker` checks the setting first). One
+  exception: the setup wizard attempts a fetch when it opens, and may do so before your saved "off" has loaded
+  (`WizardViewModel.attemptAutoGasPriceFetch` reads the state's initial `true`) — a #1237 follow-up.
 
 ### 2.5 What DashBuddy never processes
 
@@ -143,7 +148,7 @@ other network feature is a separate opt-in:
 | UNKNOWN-screen census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of a screen the ruleset did not recognize: view classes and ids, hashed text slots under a k-anonymity gate, never the text itself — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker backstops — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder you choose (`DataExportViewModel.exportLog`) | the INFO-and-above log, scrubbed at the sink (`LogRepository`, `LogScrubber`): economics, counters, hashes — never raw store, customer or address text. |
-| CSV export | manual | a file you choose | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
+| CSV export | manual | a file you choose (`DataExportViewModel`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
 
 **Android backup and device transfer.** The manifest sets `android:allowBackup="true"`. Unless you turn app backup
 off in Android's settings, the Room database (your event log and analytics tables) and the DataStore files

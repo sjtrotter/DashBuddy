@@ -30,9 +30,9 @@ class EventReceiptConsentDataSource @Inject constructor(
     }
 
     /**
-     * Decision and record from ONE emission — the only read path, so a consumer can never pair a new decision
-     * with an older receipt; `name` is null when nothing has been saved (never asked). Malformed receipt JSON
-     * never changes the decision.
+     * Decision and record from ONE emission — the only read path, so each snapshot is internally consistent
+     * (the repository's separate StateFlows may still be observed mid-update); `name` is null when nothing has
+     * been saved (never asked). Malformed receipt JSON never changes the decision.
      */
     val snapshot: Flow<EventReceiptConsentSnapshot> = ds.data.map { prefs ->
         EventReceiptConsentSnapshot(

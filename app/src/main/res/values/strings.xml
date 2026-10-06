@@ -53,7 +53,7 @@
 
     <string name="perm_title_accessibility">Screen Automation (Accessibility)</string>
     <string name="perm_pitch_accessibility">You\'re usually driving when an offer lands. DashBuddy reads the offer to you and — only under your rules, only for taps you\'ve allowed — acts on it so you never reach for the phone.</string>
-    <string name="perm_hood_accessibility">Android\'s accessibility service, bound to your delivery apps (plus window-change notices from other apps if you allow Screen events). Your own banking, payment and ID screens are dropped at the recognition layer before anything is parsed or stored. What leaves the phone: the gas-price refresh (on by default, can be turned off) and nothing else unless you turn a network feature on. Full detail: PRIVACY.md in the repository.</string>
+    <string name="perm_hood_accessibility">Android\'s accessibility service, bound to your delivery apps (plus window-change notices from other apps if you allow Screen events). Your own banking, payment and ID screens are dropped at the recognition layer before anything is parsed or stored. What leaves the phone: two public-data lookups with no account or identifier (the gas-price refresh, which you can turn off, and the vehicle list in setup) and nothing else unless you turn a network feature on. Full detail: PRIVACY.md in the repository.</string>
     <string name="perm_action_accessibility">Enable Automation</string>
 
     <string name="perm_title_listener">Tip Radar (Notifications)</string>
