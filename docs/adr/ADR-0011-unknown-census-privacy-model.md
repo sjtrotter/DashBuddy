@@ -743,3 +743,32 @@ must stay green.
 - `~/dashbuddy/design/2026-09-30-census-server/PLAN.md` (server plan; outside the repo)
 - CLAUDE.md § Pledges, § Development Principles 6–7, §1 Redaction invariants / Backstops
 - ADR-0009 amendment (same PR): authoring model — drafted and reviewed, not hand-authored
+
+## §11 Region cell (#1194)
+
+The REGION cell grammar is a US Census CBSA (metro or micro statistical area),
+with an explicit STATE cell for counties outside every CBSA. Examples:
+`metro:12420@2023`, `micro:10100@2023`, `state:ND@2023`. The crosswalk vintage
+is pinned to 2023 and embedded in the id; a new vintage must never silently
+re-home an install. The non-metro STATE cell is the rural aggregation floor.
+
+Derivation happens entirely on-device from the dasher's own GPS fixes through
+the offline 2023 county-internal-point→CBSA map: no address, no ZIP, and no
+geocoder (including Android's geocoder, which has no offline guarantee).
+Nearest internal point is an approximation, not point-in-polygon: a border fix
+can select a neighbouring county in another CBSA. The primary-cell policy
+smooths these observations over a rolling 28-day window: most distinct active
+days (UTC) wins, with ties resolved by the most recent activity observation.
+
+The cell id is the **only location-shaped value that may ever leave the device**;
+coordinates, county FIPS, addresses, and ZIPs stay local. With the aggregation
+pulse (#193), each install will store **ONE primary cell**. The `region` field
+on enrol/me and the metro cohort counter (#1137) wait for that pulse; this first
+slice supplies only pure domain derivation and does not wire into the app.
+
+Region cohort counts are reported **ONLY at k ≥ 10 contributors** and are
+**suppressed below 10 even to members**: “you're one of 4” is not shown.
+Suppression is enforced server-side with the pulse. Enrolment alone never
+counts as contributing; observations must come from activity. For Sybil
+purposes the cell is a self-reported field, not proof of location, and the
+cohort count uses the pulse's attestation weighting (#194).

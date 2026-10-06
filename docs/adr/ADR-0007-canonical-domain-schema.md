@@ -33,6 +33,11 @@ partially captures:
    no normalized identifiers (store chain id, zone hash) that would let
    aggregation work across drivers without leaking PII.
 
+The **zone hash** remains a per-record identifier that must not leak off-device.
+The **REGION cell (#1194)** is the coarse, k-anonymous aggregation key derived
+on-device from the dasher's GPS through the offline county→CBSA map, not from
+the zone. These are different identifiers; neither derives from the other.
+
 This ADR defines a **canonical, platform-agnostic domain schema** anchored on
 the questions the business logic and research consumers want answered. It is
 the precursor design for RFCs #193 and #194 and aligns with the framing

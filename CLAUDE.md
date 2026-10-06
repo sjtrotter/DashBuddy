@@ -140,6 +140,8 @@ as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytic
 sibling surface, left for a future extraction.
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
+  the #1194 `region` package (offline county→CBSA map, `RegionCell`, `PrimaryCellPolicy`;
+  the cell id is the only location-shaped value that may ever leave the device),
   pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
   capture schemas/DTOs), the `PlatformPreferences` read interface (#355), and the
   number/money/duration formatting SSOT (`format.Formats` money/decimal/**percent** — #942 pulled
