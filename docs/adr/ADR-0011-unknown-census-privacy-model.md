@@ -555,7 +555,7 @@ state and a wrong redact ships PII to every phone; both are silent in the field 
 the corpus plus a reader, so the human gate is structural. The authoring-model consequence is
 recorded as the ADR-0009 amendment.
 
-### 10. Notification skeletons (amendment 2026-10-06, #1189 — PROPOSED; a privacy-model change the developer approves before any code)
+### 10. Notification skeletons (amendment 2026-10-06, #1189 — APPROVED)
 
 **Why.** UNKNOWN notifications carry lifecycle signal the screen census never sees (an offer push, an
 arrival, a pause, an earnings deposit) and are the cheapest surface to keep rules current on — but v1
@@ -565,8 +565,8 @@ notification envelopes, 597 DoorDash / 94 Uber): the posting channel is STABLE C
 seen on 82 distinct days; titles are short (median 16 chars, 12 of 591 over the 40-character cap);
 bodies are long (text / bigText / ticker median 75 chars, ~85 % over the cap). So under the EXISTING
 §1–§2 grammar a notification skeleton is: a platform token, a channel id, a title that mostly hashes
-as `words:N`, and a body that mostly reduces to a coarse kind — exactly the "shape, not content" posture
-of a screen skeleton. No new hash grammar, no new unblinding path.
+as `words:N`, and a body that mostly becomes `withheld` at the 40-character gate — the same
+"shape, not content" posture as a screen skeleton. No new hash grammar, no new unblinding path.
 
 **Skeleton (the §7(a) allowlist for notifications).**
 - `kind = "notification"` — a wire discriminator; the server clusters notification skeletons apart
@@ -576,14 +576,46 @@ of a screen skeleton. No new hash grammar, no new unblinding path.
   is refused and counted): a channel id is an app-defined constant (chrome), the primary clustering key,
   and the one field that may be read in clear. The evidence above is the basis for calling it chrome;
   the bound is the enforcement.
-- One `TextSlot` per field of `RawNotificationData.textFields()` — title, text, subText, tickerText,
-  bigText — through the SAME `KindClassifier` grammar (the five-field enumeration is the SSOT, #666):
+- One `TextSlot` per field of `RawNotificationData.textFields()` — title, text, bigText, tickerText,
+  subText — through the SAME `KindClassifier` grammar (the five-field enumeration is the SSOT, #666):
   `words:1..8` hashes with the §3 domain prefix, every other kind is a coarse kind or `withheld`.
   `actionLabels` are OMITTED in this slice (not even hashed) — a button label is where a customer name
   rode in the #1147 fielded shape.
 - Fingerprint: `CensusFingerprint` over `(kind, platform, channelId, the five slot kinds + hashes)` —
   structural identity, so a title that differs only by a customer name (its slot `withheld`) still
   clusters with its siblings.
+
+**Wire encoding (Slice 1 contract).** `notification.skeleton.v1` (schema version 1) requires the literal
+`kind: "notification"`. `uinode.skeleton.v1` retains its exact byte shape with no wire `kind`; its
+computed internal kind is `SCREEN`, and adding a wire kind remains an unknown-field error. Both use the
+same envelope validation, strict JSON settings and 65,536-byte item limit. The common envelope is
+`schemaId`, `hashDomain`, `filterRev`, `fingerprint`, `platform`, `platformAppVersion`, `appVersion`,
+`rulesetReleaseTag`, `engineVersion`, `rulesetFormatVersion`, and `day`. The three version strings and
+`rulesetFormatVersion` are optional. Notification fields are declared in order: `kind`, that envelope,
+`channelId`, then `slots`. Defaults/nulls are omitted; the mandatory kind has no default.
+
+The channel regex matches the **whole** value. Missing/null, empty, overlong or malformed channels
+refuse the item; never trim, truncate, normalize or hash them into acceptance. `slots` contains exactly
+`title`, `text`, `bigText`, `tickerText`, `subText`, serialized and fingerprinted in that SSOT order
+regardless of map insertion order. Missing/blank source values become `TextSlot.WITHHELD`; there is no
+empty kind. Slot kinds remain `withheld`, `digits`, `mixed`, `words:1`…`words:8`, `words:8+`, with `h`
+present iff `words:1..8`, as 16 lowercase hex. Unknown keys, including `actionLabels`, fail decoding.
+The existing `hashDomain = 1`, `census.v1:` token prefix, filter revision and normalization stay intact.
+
+For notifications, define `LP(s)` as ASCII decimal UTF-8 byte length, one `0x00`, then UTF-8 bytes.
+Fingerprint bytes are `ASCII("N1") + LP("notification") + LP(platform) + LP(channelId)`, followed for
+each field in SSOT order by `LP(field.wire) + LP(slot.kind)` and either `ASCII("N")` for null `h`, or
+`ASCII("H") + LP(h)`. One SHA-256 yields 64 lowercase hex. Metadata/day are excluded; platform,
+channel case and every slot kind/hash participate. `N1` separates notifications from screen tree
+bytes; all existing screen fingerprints remain unchanged. The inbound rejection vocabulary adds
+`unknown_skeleton_kind`, `kind_schema_mismatch`, `bad_channel`; `bad_kind` still denotes a TextSlot
+kind, and `expired` remains invalid inbound. Production server policy stays screen-only until Slice 2
+storage/ops support lands.
+
+The conformance manifest has `formatVersion: 1`, `totalRecords`, `builtBySchema`, `refusedByReason`, and
+`sha256` (lowercase SHA-256 of the uncompressed, file-sorted JSONL including its final LF). Synthetic
+notification wire rows use the `contract/notification/` namespace. File keys are unique; refusal rows
+contain only `file` and `refused` and are never uploadable payloads.
 
 **Refusal (fail-closed, independent of capture).** `SensitiveMarkerScan` runs over the five fields AND
 the action labels (the #666 item 2c lesson: a banking marker ONLY in an action label must still refuse);
@@ -604,9 +636,10 @@ a window change. Clicks return as their own amendment once the app computes and 
 **Residuals (added to the list below).** A channel id is read in clear: a platform could, in principle,
 encode a per-user value in a channel id — the grammar bound and the k-gate (a singleton channel never
 unblinds) are the controls, and the evidence shows app-constant ids. Bodies over the cap lose their
-distinction (a coarse kind) — accepted: the channel + title carry the clustering signal.
+distinction (`withheld`, because the length gate runs before classification) — accepted: the channel +
+title carry the clustering signal.
 
-**Contract / server / app order.** This section merges FIRST (dev approval); then a versioned
+**Contract / server / app order.** This section was approved and merged first; next a versioned
 `NotificationSkeletonDto` + fingerprint in `census-contract/` with a conformance golden; then the server's
 `kind`-aware ingestion/clustering (k/retention unchanged); then the app publisher. Trusted notification
 envelopes (unblinding) are a later slice.
@@ -726,7 +759,7 @@ must stay green.
 
 ## Residual risks (stated, not hidden)
 
-- **(§10, proposed) Notification channel ids are read in clear.** An app-defined constant by evidence (14 ids in five months), bounded by grammar and k-gated; a platform encoding a per-user value in a channel id would be a singleton cluster that never unblinds. Bodies over the 40-character cap reduce to a coarse kind — the distinction is lost by design.
+- **(§10, approved) Notification channel ids are read in clear.** An app-defined constant by evidence (14 ids in five months), bounded by grammar and k-gated; a platform encoding a per-user value in a channel id would be a singleton cluster that never unblinds. Bodies over the 40-character cap become `withheld` before classification — the distinction is lost by design.
 
 1. **A hash of a value that slipped every filter.** A short, marker-free, name-shape-free word that is
    nonetheless personal. Mitigations: the `words:N` restriction, the k gate, the 30-day TTL, the

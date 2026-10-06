@@ -51,6 +51,34 @@ object CensusFingerprint {
     /** The fingerprint of the tree under [root], or null if the digest failed (fail closed). */
     fun of(root: UiSkeletonNodeDto): String? = sha256OrNull(canonicalBytes(root))
 
+    /** Whole-item dispatch; envelope metadata and day never affect identity. */
+    fun of(item: CensusSkeletonDto): String? = when (item) {
+        is UiSkeletonDto -> of(item.root)
+        is NotificationSkeletonDto -> of(item.platform, item.channelId, item.slots)
+    }
+
+    fun of(platform: String, channelId: String, slots: Map<NotifTextField, TextSlot>): String? =
+        sha256OrNull(canonicalBytes(platform, channelId, slots))
+
+    /** N1 + LP(kind/platform/channel), then LP(field/kind) and N or H + LP(hash) per slot. */
+    fun canonicalBytes(platform: String, channelId: String, slots: Map<NotifTextField, TextSlot>): ByteArray {
+        require(slots.keys == NotifTextField.entries.toSet()) { "exactly five notification slots required" }
+        val out = ByteArrayOutputStream()
+        out.write("N1".toByteArray(Charsets.US_ASCII))
+        writeLengthPrefixed(SkeletonKind.NOTIFICATION.wire, out)
+        writeLengthPrefixed(platform, out)
+        writeLengthPrefixed(channelId, out)
+        NotifTextField.entries.forEach { field ->
+            val slot = slots.getValue(field)
+            writeLengthPrefixed(field.wire, out)
+            writeLengthPrefixed(slot.kind, out)
+            val hash = slot.h
+            out.write(if (hash == null) 'N'.code else 'H'.code)
+            if (hash != null) writeLengthPrefixed(hash, out)
+        }
+        return out.toByteArray()
+    }
+
     /** True when [s] is [HEX_LENGTH] lowercase hex. */
     fun isWellFormed(s: String): Boolean = WireStrings.isLowerHex(s, HEX_LENGTH)
 

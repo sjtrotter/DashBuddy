@@ -69,15 +69,4 @@ data class RawNotificationData(
  * is not part of [RawNotificationData.toFullString]/`contentHash` (dedup
  * identity must stay stable) and is scrubbed by its own path (#666 item 2).
  */
-enum class NotifTextField(val wire: String) {
-    TITLE("title"),
-    TEXT("text"),
-    BIG_TEXT("bigText"),
-    TICKER_TEXT("tickerText"),
-    SUB_TEXT("subText"),
-    ;
-
-    companion object {
-        fun fromWire(wire: String): NotifTextField? = entries.firstOrNull { it.wire == wire }
-    }
-}
+public typealias NotifTextField = cloud.trotter.census.contract.NotifTextField
