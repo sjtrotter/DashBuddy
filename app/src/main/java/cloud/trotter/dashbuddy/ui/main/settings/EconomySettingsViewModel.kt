@@ -3,14 +3,23 @@ package cloud.trotter.dashbuddy.ui.main.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantSeeds
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsPlatformUiState
+import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Backs the Personal Economy settings screen. Pure passthrough to
@@ -20,6 +29,7 @@ import javax.inject.Inject
 @HiltViewModel
 class EconomySettingsViewModel @Inject constructor(
     private val repo: AppPreferencesRepository,
+    strategyRepository: StrategyRepository,
 ) : ViewModel() {
 
     val userEconomy = repo.userEconomy.stateIn(
@@ -27,6 +37,27 @@ class EconomySettingsViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5000),
         UserEconomy(),
     )
+
+    val timeConstants = strategyRepository.evaluationConfig.filterNotNull().map { config ->
+        val economy = config.userEconomy
+        TimeConstantsUiState(
+            paceOverride = economy.avgMinutesPerMile.takeIf { economy.isUserSet(EconomyField.AVG_MIN_PER_MILE) },
+            overheadOverride = economy.basePickupMinutes.takeIf { economy.isUserSet(EconomyField.BASE_PICKUP_MIN) },
+            platforms = Platform.entries.filter { it != Platform.Unknown }.map { platform ->
+                val resolved = config.forPlatform(platform).userEconomy
+                TimeConstantsPlatformUiState(
+                    platform = platform,
+                    automatic = TimeConstants.blend(TimeConstantSeeds.seedFor(platform), config.timeConstants[platform]),
+                    effective = TimeConstantPair(resolved.effectiveAvgMinutesPerMile, resolved.effectiveBasePickupMinutes),
+                    sampleCount = resolved.timeConstantSampleCount,
+                )
+            },
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TimeConstantsUiState())
+
+    fun setTimeConstantOverride(field: EconomyField, value: Double?) = viewModelScope.launch {
+        repo.setTimeConstantOverride(field, value)
+    }
 
     fun setVehicleClass(vc: VehicleClass) = viewModelScope.launch {
         repo.updateVehicleClass(vc)

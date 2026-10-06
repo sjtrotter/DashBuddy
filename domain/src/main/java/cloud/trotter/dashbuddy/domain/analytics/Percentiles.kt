@@ -23,7 +23,10 @@ object Percentiles {
      */
     fun nearestRank(sorted: List<Long>, p: Double): Long? {
         if (sorted.isEmpty()) return null
-        val rank = ceil(p * sorted.size).toInt().coerceIn(1, sorted.size)
-        return sorted[rank - 1]
+        return sorted[rankIndex(sorted.size, p)]
     }
+    fun nearestRankDouble(sorted: List<Double>, p: Double): Double? =
+        if (sorted.isEmpty()) null else sorted[rankIndex(sorted.size, p)]
+
+    private fun rankIndex(size: Int, p: Double): Int = ceil(p * size).toInt().coerceIn(1, size) - 1
 }

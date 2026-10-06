@@ -38,6 +38,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -1064,7 +1067,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(12, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -2102,6 +2105,53 @@ class AnalyticsProjectorTest {
         assertEquals(0.0, cleared.unattributed, 1e-9)
         assertEquals(0.0, cleared.overAttributed, 1e-9)
         assertEquals(deliveries, analyticsDao.deliveriesBetween(0, Long.MAX_VALUE))
+    }
+
+
+    @Test fun `time evidence and learned snapshots agree incrementally after restart and from zero`() = runBlocking {
+        val platform = Platform.entries.first { it != Platform.Unknown }
+        val sid = "time-learning"
+        insert(AppEventType.DASH_START, sid, 0,
+            SessionStartPayload(sid, platform.name, 0, SessionStartSource.INTERACTION, "x"), 100.0)
+        insert(AppEventType.OFFER_ACCEPTED, sid, 60_000,
+            OfferPayload(offerHash = "time-offer", parsedOffer = ParsedOffer(offerHash = "time-offer",
+                orders = listOf(ParsedOrder(0, OrderType.PICKUP, "Store", 1, false, emptySet()))),
+                evaluation = null, outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 1000,
+                decidedAt = 60_000, returnFlow = Flow.Idle))
+        insert(AppEventType.PICKUP_ARRIVED, sid, 240_000,
+            PickupPayload(jobId = "time-job", taskId = "pickup", storeName = "Store",
+                phaseStartedAt = 120_000, arrivedAt = 240_000), 102.0)
+        projector().catchUp()
+        insert(AppEventType.PICKUP_CONFIRMED, sid, 540_000,
+            PickupPayload(jobId = "time-job", taskId = "pickup", storeName = "Store",
+                phaseStartedAt = 120_000, arrivedAt = 240_000, confirmedAt = 540_000), 102.0)
+        projector().catchUp()
+        insert(AppEventType.DELIVERY_ARRIVED, sid, 1_020_000,
+            DeliveryPayload(jobId = "time-job", taskId = "drop", storeName = "Store",
+                phaseStartedAt = 540_000, arrivedAt = 1_020_000, odometerAtArrival = 106.0), 106.0)
+        val seq = insert(AppEventType.DELIVERY_COMPLETED, sid, 1_200_000,
+            DeliveryPayload(jobId = "time-job", taskId = "drop", storeName = "Store",
+                phaseStartedAt = 540_000, arrivedAt = 1_020_000, completedAt = 1_200_000,
+                odometerAtArrival = 106.0, jobOfferHashes = listOf("time-offer")), 106.0)
+        projector().catchUp()
+        val dao = db.timeConstantDao()
+        val rows = dao.observations(AppEventType.OFFER_ACCEPTED.name).first()
+        val learned = TimeConstantRepository(dao).learnedTimeConstants.first()
+        assertEquals(1, rows.single().jobOfferCount)
+        assertEquals("time-offer", rows.single().soleOfferHash)
+        assertEquals(106.0, rows.single().odometerAtArrival!!, 0.0)
+        assertEquals(102.0, rows.single().pickupOdometerAtConfirmation!!, 0.0)
+        assertEquals(1, rows.single().orderCount)
+        assertEquals(false, rows.single().isShop)
+        assertEquals(TimeConstantPair(2.0, 8.0), learned.getValue(platform).median)
+        projector().catchUp()
+        assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
+        assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 12))
+        projector().catchUp()
+        assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
+        assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
+        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
 }

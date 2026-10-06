@@ -113,6 +113,9 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- **#254** — verify defaults through 9 eligible deliveries; at 10, Economy shows the platform count and automatic values; confirm pickup-plus-door overhead, independent override/automatic controls, persistence after restart/vehicle change, and exclusion of shops/stacks/missing arrivals. Compare subsequent offer time estimates with observed work.
+  - Confirmed: 0/2
+
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
 - [active] **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the

@@ -855,4 +855,23 @@
     <string name="session_report_dialog_clear">No summary for this dash</string>
     <string name="session_report_dialog_restore">Restore detected value</string>
     <string name="session_report_dialog_note">Note (optional)</string>
+
+    <!-- #254: local per-platform time learning and independent global overrides. -->
+    <string name="economy_time_title">Time estimates</string>
+    <string name="economy_time_help">Overrides apply across all platforms. Automatic recommendations keep learning while overridden. Driving pace measures pickup departure to dropoff arrival and assumes a similar pace to the store. Stop overhead includes pickup and dropoff dwell.</string>
+    <string name="economy_time_pace">Driving pace · min/mile</string>
+    <string name="economy_time_overhead">Pickup + dropoff · min/order</string>
+    <string name="economy_time_automatic">Automatic</string>
+    <string name="economy_time_set_override">Set override</string>
+    <string name="economy_time_use_automatic">Use automatic</string>
+    <string name="economy_time_invalid_pace">Enter a finite number greater than zero.</string>
+    <string name="economy_time_invalid_overhead">Enter a finite number of zero or more.</string>
+    <string name="economy_time_automatic_values">Automatic: %1$s min/mile · %2$s min/order</string>
+    <string name="economy_time_effective_values">Effective: %1$s min/mile · %2$s min/order</string>
+    <string name="economy_time_default_progress">%1$d/%2$d eligible deliveries — using default</string>
+    <string name="economy_time_window">Medians use the latest %1$d eligible deliveries.</string>
+    <plurals name="economy_time_deliveries">
+        <item quantity="one">Learned from %d delivery</item>
+        <item quantity="other">Learned from %d deliveries</item>
+    </plurals>
 </resources>

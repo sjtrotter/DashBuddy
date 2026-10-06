@@ -377,7 +377,32 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
+    /** Each global override owns its value and marker independently. Null restores automatic. */
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) {
+        val key = when (field) {
+            EconomyField.AVG_MIN_PER_MILE -> Keys.AVG_MIN_PER_MILE
+            EconomyField.BASE_PICKUP_MIN -> Keys.BASE_PICKUP_MIN
+            else -> throw IllegalArgumentException("Not a time constant: $field")
+        }
+        require(value == null || (value.isFinite() &&
+            if (field == EconomyField.AVG_MIN_PER_MILE) value > 0 else value >= 0))
+        ds.edit { prefs ->
+            if (value == null) {
+                prefs.remove(key)
+                prefs[Keys.USER_SET_ECONOMY_FIELDS] =
+                    (prefs[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()).filterNot {
+                        EconomyField.fromPersistedName(it) == field
+                    }.toSet()
+            } else {
+                prefs[key] = value
+                prefs.markUserSet(field)
+            }
+        }
+    }
+
     suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) {
+        require(avgMinPerMile.isFinite() && avgMinPerMile > 0)
+        require(basePickupMin.isFinite() && basePickupMin >= 0)
         ds.edit {
             it[Keys.AVG_MIN_PER_MILE] = avgMinPerMile
             it[Keys.BASE_PICKUP_MIN] = basePickupMin

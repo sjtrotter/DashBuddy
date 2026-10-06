@@ -305,6 +305,9 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) =
         dataSource.updatePhonePlan(total, lines, dashPercent)
 
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) =
+        dataSource.setTimeConstantOverride(field, value)
+
     suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) =
         dataSource.updateTimeConstants(avgMinPerMile, basePickupMin)
 
@@ -369,8 +372,11 @@ class AppPreferencesRepository @Inject constructor(
                 economy.phoneBusinessPercent,
             )
         }
-        if (EconomyField.AVG_MIN_PER_MILE in userSet || EconomyField.BASE_PICKUP_MIN in userSet) {
-            updateTimeConstants(economy.avgMinutesPerMile, economy.basePickupMinutes)
+        if (EconomyField.AVG_MIN_PER_MILE in userSet) {
+            setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, economy.avgMinutesPerMile)
+        }
+        if (EconomyField.BASE_PICKUP_MIN in userSet) {
+            setTimeConstantOverride(EconomyField.BASE_PICKUP_MIN, economy.basePickupMinutes)
         }
     }
 

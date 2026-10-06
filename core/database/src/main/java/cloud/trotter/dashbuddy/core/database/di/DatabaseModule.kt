@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.database.di
 
 import android.content.Context
+import cloud.trotter.dashbuddy.core.database.analytics.TimeConstantDao
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
@@ -93,6 +94,9 @@ object DatabaseModule {
     fun provideObservationDao(db: DashBuddyDatabase): ObservationDao {
         return db.observationDao()
     }
+
+    @Provides
+    fun provideTimeConstantDao(db: DashBuddyDatabase): TimeConstantDao = db.timeConstantDao()
 
     @Provides
     fun provideAnalyticsDao(db: DashBuddyDatabase): AnalyticsDao {

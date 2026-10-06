@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
+import cloud.trotter.dashbuddy.domain.evaluation.LearnedTimeConstants
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
 import cloud.trotter.dashbuddy.domain.evaluation.ItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
@@ -189,6 +191,45 @@ class StrategyDataSource @Inject constructor(
         return LearnedItemsPerUnitRatio(
             prefs[itemsPerUnitRatioKey(platform)], prefs[itemsPerUnitRatioSamplesKey(platform)] ?: 0,
         )
+    }
+
+    private fun timePaceKey(platform: Platform) =
+        doublePreferencesKey("learned_minutes_per_mile:${platform.wire}")
+    private fun timeOverheadKey(platform: Platform) =
+        doublePreferencesKey("learned_stop_overhead_minutes:${platform.wire}")
+    private fun timeCountKey(platform: Platform) =
+        intPreferencesKey("time_constant_sample_count:${platform.wire}")
+
+    /** Raw medians and lifetime counts only. Reject partial/corrupt tuples as a whole. */
+    val learnedTimeConstants: Flow<Map<Platform, LearnedTimeConstants>> = ds.data.map { prefs ->
+        val raw = prefs.asMap().mapKeys { it.key.name }
+        Platform.entries.filter { it != Platform.Unknown }.mapNotNull { platform ->
+            val pace = raw[timePaceKey(platform).name] as? Double
+            val overhead = raw[timeOverheadKey(platform).name] as? Double
+            val count = raw[timeCountKey(platform).name] as? Int
+            if (pace == null || !pace.isFinite() || pace <= 0 ||
+                overhead == null || !overhead.isFinite() || overhead < 0 || count == null || count <= 0) null
+            else platform to LearnedTimeConstants(TimeConstantPair(pace, overhead), count)
+        }.toMap()
+    }
+
+    /** Complete replacement is replay/correction safe, including disappearing platforms. */
+    suspend fun replaceTimeConstants(values: Map<Platform, LearnedTimeConstants>) {
+        require(values.all { (platform, learned) ->
+            platform != Platform.Unknown && learned.sampleCount > 0 &&
+                learned.median.minutesPerMile.isFinite() && learned.median.minutesPerMile > 0 &&
+                learned.median.stopOverheadMinutes.isFinite() && learned.median.stopOverheadMinutes >= 0
+        })
+        ds.edit { prefs ->
+            val prefixes = listOf("learned_minutes_per_mile:", "learned_stop_overhead_minutes:", "time_constant_sample_count:")
+            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) } }
+                .forEach { prefs.remove(it) }
+            values.forEach { (platform, learned) ->
+                prefs[timePaceKey(platform)] = learned.median.minutesPerMile
+                prefs[timeOverheadKey(platform)] = learned.median.stopOverheadMinutes
+                prefs[timeCountKey(platform)] = learned.sampleCount
+            }
+        }
     }
 
     suspend fun setEvidenceMaster(enabled: Boolean) {

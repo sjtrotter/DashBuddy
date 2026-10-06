@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.state.Platform
 
 /**
  * The Strategy Lab's "what would this offer score?" preview — a pure function of (pay, miles,
@@ -21,11 +22,8 @@ object OfferSimulation {
     /**
      * Score a hypothetical [payDollars]/[milesDistance] offer against [config].
      *
-     * #588: intentionally NOT calling [EvaluationConfig.forPlatform] — a simulation has no
-     * platform to resolve against. Safe only because the simulated offer is never a shop offer
-     * (no SHOP order ⇒ the shop-pace path is never exercised; see [EvaluationConfig.userEconomy]);
-     * a shop-capable simulator would need to pick a platform and call `forPlatform()` first, or it
-     * would silently price off seed-only shop pace.
+     * A platformless preview explicitly resolves Unknown: generic seeds plus global overrides.
+     * Non-shop offers also use learned time constants, so a previously resolved config is unsafe.
      */
     fun simulate(payDollars: Double, milesDistance: Double, config: EvaluationConfig): OfferEvaluation {
         val simulatedOffer = ParsedOffer(
@@ -37,7 +35,7 @@ object OfferSimulation {
             itemCount = SIMULATED_ITEM_COUNT,
             orders = emptyList(), // non-shop by construction (no SHOP order)
         )
-        return evaluator.evaluate(simulatedOffer, config)
+        return evaluator.evaluate(simulatedOffer, config.forPlatform(Platform.Unknown))
     }
 
     /** Default average workload for the simulated offer (unchanged from the ViewModel original). */

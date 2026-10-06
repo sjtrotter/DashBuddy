@@ -51,4 +51,5 @@ data class PickupRecordEntity(
      * pickup_records table omitted this column; it is the only row source for `stores.address`.)
      */
     val storeAddress: String? = null,
+    val odometerAtConfirmation: Double? = null,
 )

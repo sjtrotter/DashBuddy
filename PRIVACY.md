@@ -163,6 +163,16 @@ credentials are also excluded from both backup and transfer (`app/src/main/res/x
 
 ## 7. Where your data lives, and how long
 
+Time-estimate learning (#254) stays on-device. The local analytics projection additionally retains
+job offer count/single-offer hash, order count/shop classification, dropoff arrival odometer and pickup
+confirmation odometer from existing event evidence. Numerical/provenance-only queries derive transit
+minutes per mile and combined pickup/dropoff dwell per order. Per-platform preferences store two raw
+medians and the cumulative eligible delivery count, separately from explicit user overrides; medians
+use the latest 30 eligible deliveries. No event decoding or live-state lookup occurs in the learner,
+and this change adds no network transmission, precise-location collection, or merchant/customer
+identity export. Vehicle/default resets preserve these learned preferences.
+
+
 - The event log and the analytics tables are a Room database on the device (`core/database`); the read-model
   tables are a rebuildable projection of your own event log. The database is backed up and transferred so your
   history can be restored on a new phone (§6).

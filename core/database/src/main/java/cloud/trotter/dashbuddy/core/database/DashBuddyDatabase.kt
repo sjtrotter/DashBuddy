@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.database
 
+import cloud.trotter.dashbuddy.core.database.analytics.TimeConstantDao
 import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -94,6 +95,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // drain folds new re-prices; nothing needs refolding. `driverAdjustedAt` likewise re-derives from
     // the immutable correction events on any future refold. Additive ⇒ never wipes app_events or the
     // existing analytics rows.
+    // v17→v18 (#254): six nullable time-learning evidence columns; projector 13 backfills them.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -104,6 +106,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
         AutoMigration(from = 16, to = 17),
+        AutoMigration(from = 17, to = 18),
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -115,6 +118,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun effectsFiredDao(): EffectsFiredDao
     abstract fun observationDao(): ObservationDao
+    abstract fun timeConstantDao(): TimeConstantDao
     abstract fun analyticsDao(): AnalyticsDao
 
     companion object {
@@ -131,7 +135,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 17
+        const val VERSION = 18
     }
 
 }

@@ -34,6 +34,10 @@ data class UserEconomy(
      * replaces it (#556).
      */
     val basePickupMinutes: Double = DEFAULT_BASE_PICKUP_MINUTES,
+    /** Raw read-model medians, kept apart from overrides and vehicle defaults (#254). */
+    val learnedMinutesPerMile: Double? = null,
+    val learnedStopOverheadMinutes: Double? = null,
+    val timeConstantSampleCount: Int = 0,
 
     /**
      * Learned overall **shopping pace** (items/minute, *effective* — measured arrive→leave, so it
@@ -160,6 +164,24 @@ data class UserEconomy(
                     it in ItemsPerUnitRatio.MIN_RATIO..ItemsPerUnitRatio.MAX_RATIO
             }
             ?: itemsPerUnitRatioSeed
+
+    private val automaticTimeConstants: TimeConstantPair
+        get() = TimeConstants.blend(
+            TimeConstantPair(avgMinutesPerMile, basePickupMinutes),
+            learnedMinutesPerMile?.let { pace ->
+                learnedStopOverheadMinutes?.let { overhead ->
+                    LearnedTimeConstants(TimeConstantPair(pace, overhead), timeConstantSampleCount)
+                }
+            },
+        )
+
+    val effectiveAvgMinutesPerMile: Double
+        get() = if (isUserSet(EconomyField.AVG_MIN_PER_MILE)) avgMinutesPerMile
+            else automaticTimeConstants.minutesPerMile
+
+    val effectiveBasePickupMinutes: Double
+        get() = if (isUserSet(EconomyField.BASE_PICKUP_MIN)) basePickupMinutes
+            else automaticTimeConstants.stopOverheadMinutes
 
     fun isUserSet(field: EconomyField): Boolean = field in userSetFields
 

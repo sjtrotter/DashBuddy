@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.economy.EconomyTimeConstantsSection
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
@@ -43,6 +44,7 @@ fun EconomySettingsScreen(
     viewModel: EconomySettingsViewModel = hiltViewModel(),
 ) {
     val eco by viewModel.userEconomy.collectAsStateWithLifecycle()
+    val timeConstants by viewModel.timeConstants.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -98,6 +100,11 @@ fun EconomySettingsScreen(
                 onExpectedAnnualMilesChange = viewModel::setExpectedAnnualMiles,
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+            EconomyTimeConstantsSection(
+                state = timeConstants,
+                onOverrideChange = viewModel::setTimeConstantOverride,
+            )
             Spacer(modifier = Modifier.height(16.dp))
             TrueCostFooter(operatingCostPerMile = eco.operatingCostPerMile)
 

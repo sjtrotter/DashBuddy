@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.Platform
 
 /** Provenance of a delivery's realized pay (#314) — mirrors the DB column, owned here as SSOT. */
@@ -159,6 +160,9 @@ data class DeliveryFold(
      * keeps the legacy partition delta.
      */
     val milesToDropoff: Double? = null,
+    val jobOfferCount: Int? = null,
+    val soleOfferHash: String? = null,
+    val odometerAtArrival: Double? = null,
 )
 
 /**
@@ -180,6 +184,7 @@ data class PickupFold(
     val activity: String?,
     /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
     val storeAddress: String?,
+    val odometerAtConfirmation: Double? = null,
 )
 
 /**
@@ -224,6 +229,8 @@ data class OfferFold(
     val estFuelPerMile: Double?,
     /** `nonFuelCostEstimate ÷ distanceMiles` (per-mile); null when distance ≤ 0 (#659). */
     val estNonFuelPerMile: Double?,
+    val orderCount: Int? = null,
+    val isShop: Boolean? = null,
 )
 
 /**
@@ -570,6 +577,10 @@ object RecordFolds {
             estOperatingCostPerMile = eval?.operatingCostPerMile,
             estFuelPerMile = fuelPerMile,
             estNonFuelPerMile = nonFuelPerMile,
+            orderCount = parsed.orders.size.takeIf { it > 0 },
+            isShop = parsed.isShop.takeIf {
+                parsed.orders.isNotEmpty() && parsed.orders.none { it.orderType == OrderType.UNKNOWN }
+            },
         )
         val newCtx = ctx?.let {
             it.advance(e.occurredAt, event.metadata?.odometer)
