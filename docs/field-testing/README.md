@@ -48,6 +48,8 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Consent receipts (#170):** after re-allowing `expand_earnings` on a fresh install, Automation & Consent shows 'Allowed · <today> · v<build> · disclosure r1' under the row; Screen events shows its own line. — Confirmed: 0/2
+
 - **Same-store consecutive offers are two offers (#1069):** after a dash with two H-E-B (same store)
   offers back to back, `app_events` holds TWO `OFFER_RECEIVED` rows with two `offerHash`es, the first
   offer's outcome reads DECLINED/TIMEOUT on its own row (never 'enriched' into the second), and the

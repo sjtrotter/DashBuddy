@@ -1,10 +1,16 @@
 package cloud.trotter.dashbuddy.core.data.capability
 
+import cloud.trotter.dashbuddy.core.datastore.capability.GrantSnapshot
 import cloud.trotter.dashbuddy.core.datastore.capability.RuleCapabilityDataSource
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
+import cloud.trotter.dashbuddy.domain.capability.PrivacyDisclosure
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
+import javax.inject.Inject
+import javax.inject.Named
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,8 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import timber.log.Timber
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * THE consent SSOT for rule-enabled actions (#417/#422): joins the
@@ -32,6 +36,7 @@ import javax.inject.Singleton
 class RuleCapabilityRepository @Inject constructor(
     private val dataSource: RuleCapabilityDataSource,
     @ApplicationScope scope: CoroutineScope,
+    @param:Named("appVersionName") private val appVersion: String,
 ) : RuleCapabilityGrants {
 
     /**
@@ -50,6 +55,9 @@ class RuleCapabilityRepository @Inject constructor(
 
     override val deniedKeys: StateFlow<Set<String>> = dataSource.denied
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+    override val receipts: StateFlow<Map<String, ConsentReceipt>> = dataSource.receipts
+        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     override suspend fun reconcile(capabilities: List<RuleCapability>) {
         // Publish the enumeration ONLY — grants NOTHING (#843). Bundled and
@@ -104,8 +112,15 @@ class RuleCapabilityRepository @Inject constructor(
     }
 
     override suspend fun setGranted(key: String, granted: Boolean) {
-        dataSource.update { grantedKeys, deniedKeys ->
-            applyGrantChange(key, granted, grantedKeys, deniedKeys)
+        dataSource.update { grantedKeys, deniedKeys, receipts ->
+            val (newGranted, newDenied) = applyGrantChange(key, granted, grantedKeys, deniedKeys)
+            GrantSnapshot(
+                newGranted,
+                newDenied,
+                receipts + (key to ConsentReceipt(
+                    System.currentTimeMillis(), appVersion, PrivacyDisclosure.REVISION, granted,
+                )),
+            )
         }
         // INFO milestone — a consent change is user-meaningful and PII-safe (the
         // key is a sha256 hash, no store/customer text).

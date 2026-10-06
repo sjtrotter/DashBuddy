@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.setup.consent
 
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
@@ -33,6 +34,7 @@ class ConsentPromptViewModelTest {
 
     /** In-memory [RuleCapabilityGrants] — enumeration + granted/denied drivable, writes recorded. */
     private class FakeGrants : RuleCapabilityGrants {
+        override val receipts = MutableStateFlow<Map<String, ConsentReceipt>>(emptyMap())
         private val _capabilities = MutableStateFlow<List<RuleCapability>>(emptyList())
         private val _granted = MutableStateFlow<Set<String>>(emptySet())
         private val _denied = MutableStateFlow<Set<String>>(emptySet())

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.setup.permissions
 
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.Dispatchers
@@ -87,6 +88,7 @@ class ScreenEventsStepTest {
     // ---- ViewModel ------------------------------------------------------------------------
 
     private class FakePrefs(initial: EventReceiptConsent?) : EventReceiptPreferences {
+        override val receipt = MutableStateFlow<ConsentReceipt?>(null)
         val flow = MutableStateFlow(initial)
         override val consent: StateFlow<EventReceiptConsent?> = flow
         val writes = mutableListOf<EventReceiptConsent>()
