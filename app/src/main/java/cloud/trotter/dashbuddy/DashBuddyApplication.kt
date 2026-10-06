@@ -62,6 +62,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     lateinit var ruleCapabilityRepository: cloud.trotter.dashbuddy.core.data.capability.RuleCapabilityRepository
 
     @Inject
+    lateinit var strategyRepository: cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+
+    @Inject
     lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
 
     @Inject
@@ -166,6 +169,12 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // sensing fail-closed); the next launch retries the whole sequence.
         applicationScope.launch {
             ruleCapabilityRepository.migrateConsentSchemaIfNeeded()
+            // #1113: an OPTIONAL cleanup — unlike the consent migration above, a failed purge must never
+            // keep the rules unloaded (that would gate recognition for the whole launch over a stale
+            // preference). Isolated: it runs after the migration, and a failure is a WARN, not a gate.
+            runCatching { strategyRepository.purgeDeadAutomationKeys() }
+                .onSuccess { if (it) Timber.tag("Strategy").i("Purged dead automation keys (#1113)") }
+                .onFailure { Timber.tag("Strategy").w(it, "Dead automation key purge failed; rules load anyway") }
             jsonRuleInterpreter.loadDefaults()
         }
 

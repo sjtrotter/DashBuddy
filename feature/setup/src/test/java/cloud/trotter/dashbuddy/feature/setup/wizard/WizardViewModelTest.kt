@@ -5,7 +5,6 @@ import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
-import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +18,6 @@ import org.junit.After
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.clearInvocations
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
@@ -30,8 +28,7 @@ import org.mockito.kotlin.wheneverBlocking
 /**
  * #347 — the wizard must only persist what it actually collects:
  * - Skip is a TRUE skip (first-run flag only; nothing else written).
- * - Finish preserves automation thresholds it doesn't collect (no more
- *   hardcoded-default resets on re-run) and never touches allowShopping
+ * - Finish persists the strategy and scoring rules and never touches allowShopping
  *   (no wizard step collects it).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,17 +39,6 @@ class WizardViewModelTest {
     private val appStateRepository: AppStateRepository = mock()
     private val vehicleRepository: VehicleRepository = mock()
     private val gasPriceRepository: FuelPriceRepository = mock()
-
-    /** Values a user would have tuned in settings — must survive a wizard pass. */
-    private val tunedAutomation = OfferAutomationConfig(
-        masterAutoPilotEnabled = true,
-        autoAcceptEnabled = true,
-        autoAcceptMinPay = 12.0,
-        autoAcceptMinRatio = 3.25,
-        autoDeclineEnabled = true,
-        autoDeclineMaxPay = 5.25,
-        autoDeclineMinRatio = 0.80,
-    )
 
     private fun stubRepositories() {
         whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf(null))
@@ -66,7 +52,6 @@ class WizardViewModelTest {
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy()))
         whenever(strategyRepository.protectStatsMode).thenReturn(flowOf(false))
         whenever(strategyRepository.scoringRules).thenReturn(flowOf(emptyList()))
-        whenever(strategyRepository.automationConfig).thenReturn(flowOf(tunedAutomation))
         whenever { vehicleRepository.getYears() }.thenReturn(emptyList())
         whenever { gasPriceRepository.fetchGasPriceOnly(any()) }
             .thenReturn(Result.failure(RuntimeException("offline in test")))
@@ -99,7 +84,7 @@ class WizardViewModelTest {
     }
 
     @Test
-    fun `finish preserves automation thresholds the wizard does not collect`() = runTest {
+    fun `finish persists strategy and scoring rules without touching allowShopping`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
         val viewModel = WizardViewModel(
@@ -113,16 +98,8 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         assert(completed)
-        // Strategy default is MANUAL → autoDecline=false (collected); every
-        // threshold must round-trip from the tuned config, not reset to defaults.
-        verify(strategyRepository).updateAutomation(
-            autoAccept = eq(true),
-            acceptMinPay = eq(12.0),
-            acceptMinRatio = eq(3.25),
-            autoDecline = eq(false),
-            declineMaxPay = eq(5.25),
-            declineMinRatio = eq(0.80),
-        )
+        verify(strategyRepository).setProtectStatsMode(false)
+        verify(strategyRepository).updateRules(emptyList())
         verify(strategyRepository, org.mockito.kotlin.never()).setAllowShopping(any())
         verify(appStateRepository).setFirstRunComplete()
     }

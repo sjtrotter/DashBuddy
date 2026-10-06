@@ -827,6 +827,45 @@ class OfferEvaluatorTest {
         assertEquals(100.0, result.score, 0.5)
     }
 
+    @Test
+    fun `time estimate - two non-shop orders carry two base overheads (#1113)`() {
+        val economy = noCostEconomy.copy(basePickupMinutes = 10.0)
+        val cfg = defaultConfig.copy(userEconomy = economy)
+        val stacked = offer(pay = 15.0, dist = 4.0).copy(
+            orders = listOf(
+                ParsedOrder(0, OrderType.PICKUP, "Taco Bell", 1, false, emptySet()),
+                ParsedOrder(1, OrderType.PICKUP, "Pizza Hut", 1, false, emptySet()),
+            ),
+        )
+
+        val result = evaluator.evaluate(stacked, cfg)
+
+        assertEquals(2 * economy.basePickupMinutes, result.handlingMinutes!!, 0.0001)
+        // 4 miles * 2.5 min/mi + 2 orders * 10 min = 30 min; $15 / 0.5 hr = $30/hr.
+        assertEquals(30.0, result.estimatedTimeMinutes, 0.0001)
+        assertEquals(30.0, result.dollarsPerHour, 0.0001)
+    }
+
+    @Test
+    fun `time estimate - single non-shop order keeps one base overhead (#1113)`() {
+        val result = evaluator.evaluate(offer(pay = 15.0, dist = 4.0), defaultConfig)
+
+        assertEquals(noCostEconomy.basePickupMinutes, result.handlingMinutes!!, 0.0001)
+        assertEquals(17.0, result.estimatedTimeMinutes, 0.0001)
+        assertEquals(15.0 / (17.0 / 60.0), result.dollarsPerHour, 0.0001)
+    }
+
+    @Test
+    fun `time estimate - empty orders still carry one base overhead (#1113)`() {
+        val parsed = offer(pay = 15.0, dist = 4.0).copy(orders = emptyList())
+
+        val result = evaluator.evaluate(parsed, defaultConfig)
+
+        assertEquals(noCostEconomy.basePickupMinutes, result.handlingMinutes!!, 0.0001)
+        assertEquals(17.0, result.estimatedTimeMinutes, 0.0001)
+        assertEquals(15.0 / (17.0 / 60.0), result.dollarsPerHour, 0.0001)
+    }
+
     // -------------------------------------------------------------------------
     // Caveat warnings (#80)
     // -------------------------------------------------------------------------

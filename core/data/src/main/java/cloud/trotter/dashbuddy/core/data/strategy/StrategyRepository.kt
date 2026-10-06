@@ -51,31 +51,8 @@ class StrategyRepository @Inject constructor(
         EvidenceConfig(master, offers, delivery, dash)
     }.stateIn(scope, SharingStarted.Eagerly, EvidenceConfig())
 
-    // Nested TYPED combines (#364): the old positional Flow<Any> + index casts
-    // turned any reorder into a runtime ClassCastException.
-    private data class AcceptHalf(val enabled: Boolean, val minPay: Double, val minRatio: Double)
-    private data class DeclineHalf(val enabled: Boolean, val maxPay: Double, val minRatio: Double)
-
-    val automationConfig: Flow<OfferAutomationConfig> = combine(
-        dataSource.autoMaster,
-        combine(
-            dataSource.autoAccept, dataSource.autoAcceptMinPay, dataSource.autoAcceptMinRatio,
-        ) { enabled, minPay, minRatio -> AcceptHalf(enabled, minPay, minRatio) },
-        combine(
-            dataSource.autoDecline, dataSource.autoDeclineMaxPay, dataSource.autoDeclineMinRatio,
-        ) { enabled, maxPay, minRatio -> DeclineHalf(enabled, maxPay, minRatio) },
-        dataSource.quickDeclines,
-    ) { master, accept, decline, quickDeclines ->
-        OfferAutomationConfig(
-            masterAutoPilotEnabled = master,
-            autoAcceptEnabled = accept.enabled,
-            autoAcceptMinPay = accept.minPay,
-            autoAcceptMinRatio = accept.minRatio,
-            autoDeclineEnabled = decline.enabled,
-            autoDeclineMaxPay = decline.maxPay,
-            autoDeclineMinRatio = decline.minRatio,
-            quickDeclinesEnabled = quickDeclines,
-        )
+    val automationConfig: Flow<OfferAutomationConfig> = dataSource.quickDeclines.map {
+        OfferAutomationConfig(quickDeclinesEnabled = it)
     }
 
     // Maps the incoming DTOs to pure Domain Models
@@ -122,7 +99,6 @@ class StrategyRepository @Inject constructor(
 
     suspend fun setProtectStatsMode(enabled: Boolean) = dataSource.setProtectStatsMode(enabled)
     suspend fun setAllowShopping(allowed: Boolean) = dataSource.setAllowShopping(allowed)
-    suspend fun setMasterAutomation(enabled: Boolean) = dataSource.setMasterAutomation(enabled)
     suspend fun setQuickDeclines(enabled: Boolean) = dataSource.setQuickDeclines(enabled) // #577
 
     // Maps Domain Models to DTOs before saving
@@ -149,17 +125,7 @@ class StrategyRepository @Inject constructor(
         dataSource.updateRules(dtos)
     }
 
-    suspend fun updateAutomation(
-        autoAccept: Boolean, acceptMinPay: Double, acceptMinRatio: Double,
-        autoDecline: Boolean, declineMaxPay: Double, declineMinRatio: Double
-    ) = dataSource.updateAutomation(
-        autoAccept,
-        acceptMinPay,
-        acceptMinRatio,
-        autoDecline,
-        declineMaxPay,
-        declineMinRatio
-    )
+    suspend fun purgeDeadAutomationKeys() = dataSource.purgeDeadAutomationKeys()
 
     /**
      * THE materialized evaluation config (#436): eagerly shared so the
