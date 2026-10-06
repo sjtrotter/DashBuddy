@@ -68,11 +68,13 @@ import java.util.Locale
 @Composable
 fun WhenYouEarnCard(
     heatmap: EarningsHeatmap,
+    showMore: Boolean,
     plan: SavedWeeklyPlan?,
     modifier: Modifier = Modifier,
 ) {
     val c = AppTheme.colors
-    var mode by rememberSaveable { mutableStateOf(HeatmapMode.RATE) }
+    var selectedMode by rememberSaveable { mutableStateOf(HeatmapMode.RATE) }
+    val mode = if (showMore) selectedMode else HeatmapMode.RATE
     AppCard(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(
@@ -93,15 +95,17 @@ fun WhenYouEarnCard(
             return@AppCard
         }
 
-        val modeOptions = heatmapModeOptions()
-        val selectedModeLabel = modeOptions.first { it.mode == mode }.label
-        AppSegmented(
-            options = modeOptions.map { it.label },
-            selected = selectedModeLabel,
-            onSelect = { label -> modeOptions.firstOrNull { it.label == label }?.let { mode = it.mode } },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(10.dp))
+        if (showMore) {
+            val modeOptions = heatmapModeOptions()
+            val selectedModeLabel = modeOptions.first { it.mode == mode }.label
+            AppSegmented(
+                options = modeOptions.map { it.label },
+                selected = selectedModeLabel,
+                onSelect = { label -> modeOptions.firstOrNull { it.label == label }?.let { selectedMode = it.mode } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+        }
 
         val maxRate = heatmap.maxDollarsPerHour ?: 0.0
         val maxHours = PatternsModel.maxCoverageHours(heatmap)
@@ -117,7 +121,7 @@ fun WhenYouEarnCard(
         Spacer(Modifier.height(6.dp))
         HeatmapHourAxis()
         Spacer(Modifier.height(12.dp))
-        if (mode == HeatmapMode.RATE) HeatmapLegend(maxRate) else HeatmapHoursLegend()
+        if (mode == HeatmapMode.RATE) HeatmapLegend() else HeatmapHoursLegend()
 
         // Best-hour callout is a Rate concept (the single most-earning cell) — a $/hr figure under a
         // coverage-tinted grid would read as mismatched, so it stays Rate-mode only.
@@ -135,14 +139,14 @@ fun WhenYouEarnCard(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(
-                if (mode == HeatmapMode.RATE) R.string.patterns_tab_heatmap_caption else R.string.patterns_tab_heatmap_caption_hours,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
+        if (mode == HeatmapMode.HOURS) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.patterns_tab_heatmap_caption_hours),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+            )
+        }
         // Only claim the outline exists when it does — otherwise the legend would describe a mark the
         // grid isn't drawing.
         if (plan != null) {
@@ -163,20 +167,7 @@ fun WhenYouEarnCard(
  */
 @Composable
 fun AllTimeBadge(modifier: Modifier = Modifier) {
-    val c = AppTheme.colors
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        AppChip(text = stringResource(R.string.patterns_tab_all_time_badge))
-        Text(
-            text = stringResource(R.string.patterns_tab_all_time_caption),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    AppChip(text = stringResource(R.string.patterns_tab_all_time_badge), modifier = modifier)
 }
 
 /** The heatmap Rate/Hours segments paired with their resolved label (#428 Half A) — selection stays
@@ -195,7 +186,7 @@ private fun heatmapModeOptions(): List<HeatmapModeOption> = listOf(
  * and the low→high positive ramp keyed to the driver's own best hour.
  */
 @Composable
-private fun HeatmapLegend(maxRate: Double) {
+private fun HeatmapLegend() {
     val c = AppTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         LegendSwatch(c.surface3)

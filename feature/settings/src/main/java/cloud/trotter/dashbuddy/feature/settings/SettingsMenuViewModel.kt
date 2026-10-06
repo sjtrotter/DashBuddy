@@ -58,7 +58,6 @@ class SettingsMenuViewModel @Inject constructor(
     // Pass-through flows for the UI
     val evidenceConfig = strategyRepository.evidenceConfig
     val appTheme = appPreferencesRepository.appTheme
-    val isProMode = appPreferencesRepository.isProMode
     /** Driving / glance mode (#318) — surfaced on General settings. */
     val glanceMode = appPreferencesRepository.glanceMode
     /** Spoken-offer language override (#428 Half B) — surfaced on General settings; null ⇒ system. */
@@ -101,10 +100,6 @@ class SettingsMenuViewModel @Inject constructor(
         viewModelScope.launch {
             strategyRepository.updateEvidenceConfig(offers, delivery, dash)
         }
-
-    fun setProMode(enabled: Boolean) = viewModelScope.launch {
-        appPreferencesRepository.setProMode(enabled)
-    }
 
     fun setTheme(theme: String) = viewModelScope.launch {
         appPreferencesRepository.setTheme(theme)

@@ -30,7 +30,7 @@ class AppPreferencesDataSource @Inject constructor(
         val ESTIMATED_MPG = floatPreferencesKey("estimated_mpg")
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
-        val IS_PRO_MODE = booleanPreferencesKey("is_pro_mode")
+        val ANALYTICS_SHOW_MORE = booleanPreferencesKey("analytics_show_more")
         val APP_THEME = stringPreferencesKey("app_theme")
         // Driving / glance mode (#318) — bumps the HUD's LocalGlance multiplier.
         val GLANCE_MODE = booleanPreferencesKey("glance_mode")
@@ -108,7 +108,7 @@ class AppPreferencesDataSource @Inject constructor(
     val estimatedMpg: Flow<Float?> = ds.data.map { it[Keys.ESTIMATED_MPG] }
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: true }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
-    val isProMode: Flow<Boolean> = ds.data.map { it[Keys.IS_PRO_MODE] ?: false }
+    val analyticsShowMore: Flow<Boolean> = ds.data.map { it[Keys.ANALYTICS_SHOW_MORE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
     val glanceMode: Flow<Boolean> = ds.data.map { it[Keys.GLANCE_MODE] ?: false }
     /** #428 Half B — spoken-offer language override (BCP-47 tag); null ⇒ follow system locale. */
@@ -220,8 +220,8 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit { it[Keys.VEHICLE_CLASS] = type }
     }
 
-    suspend fun setProMode(enabled: Boolean) {
-        ds.edit { it[Keys.IS_PRO_MODE] = enabled }
+    suspend fun setAnalyticsShowMore(enabled: Boolean) {
+        ds.edit { it[Keys.ANALYTICS_SHOW_MORE] = enabled }
     }
 
     suspend fun setTheme(theme: String) {

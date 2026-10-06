@@ -68,10 +68,12 @@ import cloud.trotter.dashbuddy.ui.components.PatternsModel.LeaderboardSort
  * Copy keeps its `patterns_tab_*` string ids — same words, and the id is the copy's identity.
  */
 @Composable
-fun WhereYouEarnCard(cards: List<StoreReportCard>, modifier: Modifier = Modifier) {
+fun WhereYouEarnCard(cards: List<StoreReportCard>, showMore: Boolean, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
     var selectedStoreKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var sort by rememberSaveable { mutableStateOf(LeaderboardSort.NET) }
+    var selectedSort by rememberSaveable { mutableStateOf(LeaderboardSort.NET) }
+
+    val sort = if (showMore) selectedSort else LeaderboardSort.NET
 
     // If the selected store leaves the list (e.g. a projector refold re-keys it), clear the selection
     // explicitly — a stale key lingering in rememberSaveable could silently re-open the sheet if that
@@ -83,15 +85,7 @@ fun WhereYouEarnCard(cards: List<StoreReportCard>, modifier: Modifier = Modifier
     }
 
     AppCard(modifier = modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.patterns_tab_stores_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
-        Spacer(Modifier.height(4.dp))
-        // v1 asymmetry: manually-added + unresolved deliveries are in the Money totals but don't
-        // surface as store rows here yet. State it plainly so the lists don't look inconsistent.
-        Text(
-            text = stringResource(R.string.patterns_tab_stores_manual_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
+        Text(text = stringResource(if (showMore) R.string.patterns_tab_stores_title else R.string.patterns_tab_stores_title_by_net), style = MaterialTheme.typography.labelMedium, color = c.text3)
         Spacer(Modifier.height(10.dp))
         if (cards.isEmpty()) {
             Text(
@@ -101,18 +95,21 @@ fun WhereYouEarnCard(cards: List<StoreReportCard>, modifier: Modifier = Modifier
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         } else {
-            val sortOptions = leaderboardSortOptions()
-            val selectedSortLabel = sortOptions.first { it.sort == sort }.label
-            AppSegmented(
-                options = sortOptions.map { it.label },
-                selected = selectedSortLabel,
-                onSelect = { label -> sortOptions.firstOrNull { it.label == label }?.let { sort = it.sort } },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(12.dp))
+            if (showMore) {
+                val sortOptions = leaderboardSortOptions()
+                val selectedSortLabel = sortOptions.first { it.sort == sort }.label
+                AppSegmented(
+                    options = sortOptions.map { it.label },
+                    selected = selectedSortLabel,
+                    onSelect = { label -> sortOptions.firstOrNull { it.label == label }?.let { selectedSort = it.sort } },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+            }
 
             val maxNet = PatternsModel.maxNet(cards)
-            val ranked = PatternsModel.sortedStores(cards, sort)
+            val ranked = if (showMore) PatternsModel.sortedStores(cards, sort)
+            else PatternsModel.sortedStores(cards, LeaderboardSort.NET).take(3)
             ranked.forEachIndexed { index, card ->
                 if (index > 0) Spacer(Modifier.height(14.dp))
                 LeaderboardRow(

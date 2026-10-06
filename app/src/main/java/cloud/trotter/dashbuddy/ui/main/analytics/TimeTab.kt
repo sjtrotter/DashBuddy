@@ -52,6 +52,7 @@ import kotlin.math.roundToLong
 @Composable
 fun TimeTab(
     time: TimeEconomics,
+    showMore: Boolean,
     gaps: GapStats,
     hourComposition: HourComposition,
     netPerHour: NetPerHourPair,
@@ -59,15 +60,18 @@ fun TimeTab(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        TimeSplitCard(time)
-        // #983 (brief §6 + §7.8) — the running-hourly-rate doc's pair, where the hour goes, and the
-        // gaps that both of them are measured against. Rendered by `TimeInsightCards.kt`.
-        NetPerHourPairCard(netPerHour)
-        TypicalOnlineHourCard(hourComposition, netPerHour)
-        GapsBetweenJobsCard(gaps)
-        DeadheadCard(time)
-        OnTimeCard(time)
-        MileageTaxCard(time, window)
+        TierOneFigures(timeFigures(netPerHour, gaps))
+        if (showMore) {
+            TimeSplitCard(time)
+            // #983 (brief §6 + §7.8) — the running-hourly-rate doc's pair, where the hour goes, and the
+            // gaps that both of them are measured against. Rendered by `TimeInsightCards.kt`.
+            NetPerHourPairCard(netPerHour)
+            TypicalOnlineHourCard(hourComposition, netPerHour)
+            GapsBetweenJobsCard(gaps)
+            DeadheadCard(time)
+            OnTimeCard(time)
+            MileageTaxCard(time, window)
+        }
     }
 }
 
@@ -82,20 +86,6 @@ private fun TimeSplitCard(time: TimeEconomics) {
             EmptyRow(stringResource(R.string.time_tab_no_sessions_yet))
             return@AppCard
         }
-
-        Text(text = formatDuration(time.onlineMillis), style = AppTheme.num.heroNum, color = c.text)
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = stringResource(
-                R.string.time_tab_online_across_format,
-                Formats.commaInt(time.sessions),
-                if (time.sessions == 1) stringResource(R.string.time_tab_session_singular)
-                else stringResource(R.string.time_tab_session_plural),
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
-        Spacer(Modifier.height(14.dp))
 
         val onDeliveryLabel = stringResource(R.string.time_tab_segment_on_delivery)
         val onDeliveryMillis = time.deliveryMillis ?: 0L
@@ -241,12 +231,6 @@ private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
             Spacer(Modifier.height(4.dp))
             Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(R.string.time_tab_mileage_tax_disclosure),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
     }
 }
 

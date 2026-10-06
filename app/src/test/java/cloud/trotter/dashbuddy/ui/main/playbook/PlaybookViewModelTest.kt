@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.main.playbook
 
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.WeeklyPlanRepository
@@ -46,7 +48,9 @@ import java.time.LocalDate
 class PlaybookViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
+    private val showMoreFlow = MutableStateFlow(false)
     private val weeklyPlanRepository: WeeklyPlanRepository = mock()
+    private val appPreferencesRepository: AppPreferencesRepository = mock()
 
     private val savedPlans = MutableStateFlow<List<SavedWeeklyPlan>>(emptyList())
 
@@ -76,6 +80,11 @@ class PlaybookViewModelTest {
 
     @Before
     fun setUp() {
+        whenever(appPreferencesRepository.analyticsShowMore).thenReturn(showMoreFlow)
+        whenever(runBlocking { appPreferencesRepository.setAnalyticsShowMore(any()) }).thenAnswer {
+            showMoreFlow.value = it.getArgument(0)
+            Unit
+        }
         whenever(analyticsRepository.hourOfWeekSamples(any())).thenAnswer { flowOf(samples) }
         whenever(analyticsRepository.earningsHeatmap(any())).thenAnswer { flowOf(EarningsHeatmap.EMPTY) }
         whenever(analyticsRepository.storeReportCards()).thenAnswer { flowOf(emptyList<StoreReportCard>()) }
@@ -87,7 +96,7 @@ class PlaybookViewModelTest {
 
     private fun TestScope.runWithViewModel(body: (PlaybookViewModel) -> Unit) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = PlaybookViewModel(analyticsRepository, weeklyPlanRepository)
+        val viewModel = PlaybookViewModel(analyticsRepository, weeklyPlanRepository, appPreferencesRepository)
         val collector = launch { viewModel.uiState.collect { } }
         testScheduler.runCurrent()
         try {
@@ -95,6 +104,32 @@ class PlaybookViewModelTest {
         } finally {
             collector.cancel()
             viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun `shared preference emissions update show more without a local intent`() = runTest {
+        runWithViewModel { viewModel ->
+            showMoreFlow.value = true
+            testScheduler.runCurrent()
+            assertEquals(true, viewModel.uiState.value.showMore)
+            showMoreFlow.value = false
+            testScheduler.runCurrent()
+            assertEquals(false, viewModel.uiState.value.showMore)
+        }
+    }
+
+    @Test
+    fun `show more intent round trips through the shared preference`() = runTest {
+        runWithViewModel { viewModel ->
+            assertEquals(false, viewModel.uiState.value.showMore)
+            viewModel.setShowMore(true)
+            testScheduler.runCurrent()
+            assertEquals(true, showMoreFlow.value)
+            assertEquals(true, viewModel.uiState.value.showMore)
+            viewModel.setShowMore(false)
+            testScheduler.runCurrent()
+            assertEquals(false, viewModel.uiState.value.showMore)
         }
     }
 

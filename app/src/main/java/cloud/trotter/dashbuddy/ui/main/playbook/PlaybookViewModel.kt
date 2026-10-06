@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.core.data.analytics.WeeklyPlanRepository
 import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanGrader
 import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanSchedule
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,9 +17,9 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /**
- * State holder for the **Playbook** (#1024 section C) — UDF state out, no intents in: every surface here
- * is a read of the driver's own record, and the one thing that can be *changed* (the plan itself) is
- * owned by the Weekly Plan screen this one links to.
+ * State holder for the **Playbook** (#1024 section C) — UDF state out, preference intents in: every surface here
+ * is a read of the driver's own record. Plan editing belongs to the Weekly Plan screen; this
+ * ViewModel writes only the shared analytics detail preference.
  *
  * **No new reads.** All four sources already ship: the lifetime heatmap and store report cards were the
  * retired Patterns tab's (#159/#315 H5), the hour-of-week samples are the Weekly Plan's own §7.7 read
@@ -40,15 +42,16 @@ import javax.inject.Inject
 class PlaybookViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val weeklyPlanRepository: WeeklyPlanRepository,
+    private val appPreferencesRepository: AppPreferencesRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<PlaybookUiState> = combine(
         currentLocalDateFlow(),
-        weeklyPlanRepository.savedPlans,
+        combine(weeklyPlanRepository.savedPlans, appPreferencesRepository.analyticsShowMore) { p, m -> p to m },
         analyticsRepository.hourOfWeekSamples(),
         analyticsRepository.earningsHeatmap(),
         analyticsRepository.storeReportCards(),
-    ) { day, savedPlans, samples, heatmap, storeCards ->
+    ) { day, (savedPlans, more), samples, heatmap, storeCards ->
         // The week the driver is IN — `weekStartOf`, not `planWeekStart`: on a Sunday evening those
         // differ, and the Playbook is showing the plan being worked, not the one being drafted (the
         // #981 Home-pointer rule, applied for the same reason).
@@ -63,12 +66,17 @@ class PlaybookViewModel @Inject constructor(
         val plan = savedPlans.firstOrNull { it.weekStart == weekStart && it.windows.isNotEmpty() }
         PlaybookUiState(
             loading = false,
+            showMore = more,
             savedPlan = plan,
             planGrade = plan?.let { WeeklyPlanGrader.grade(it, samples) },
             heatmap = heatmap,
             storeCards = storeCards,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PlaybookUiState())
+
+    fun setShowMore(show: Boolean) {
+        viewModelScope.launch { appPreferencesRepository.setAnalyticsShowMore(show) }
+    }
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

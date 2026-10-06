@@ -24,6 +24,7 @@ import cloud.trotter.dashbuddy.domain.analytics.WeeklyPlanGrade
  * it from the same instant. Neither is copied into this state.
  */
 data class PlaybookUiState(
+    val showMore: Boolean = false,
     /** True until the first read-model emission — the screen renders nothing rather than an empty plan. */
     val loading: Boolean = true,
     /**

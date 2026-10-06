@@ -183,26 +183,26 @@
     <string name="offers_tab_segment_accepted">Accepted</string>
     <string name="offers_tab_segment_declined">Declined</string>
     <string name="offers_tab_segment_timed_out">Timed out</string>
-    <string name="offers_tab_said_no_title">SAID NO TO</string>
+    <string name="offers_tab_said_no_title">DECLINED · EST. NET</string>
     <string name="offers_tab_no_declines_yet">No declines in this window.</string>
     <string name="offers_tab_est_net_skipped_format" translatable="false">~%1$s</string>
-    <string name="offers_tab_said_no_population_format">est. net across %1$s of %2$s %3$s with estimates</string>
+    <string name="offers_tab_said_no_population_format">est. net · %1$s of %2$s %3$s priced</string>
     <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s, none of them priced by a verdict</string>
     <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
-    <string name="offers_tab_avg_score_header">Avg score</string>
+    <string name="offers_tab_avg_score_header">Avg score /100</string>
     <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
     <string name="offers_tab_frozen_disclosure">Offer figures are decision-time estimates; counts and realized figures are measured.</string>
 
     <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
-    <string name="offers_tab_est_vs_reality_title">ESTIMATE VS REALITY</string>
+    <string name="offers_tab_est_vs_reality_title">AVG $/HR PER JOB: EST. VS REAL</string>
     <string name="offers_tab_est_vs_reality_bar_est">Est.</string>
     <string name="offers_tab_est_vs_reality_bar_realized">Realized</string>
     <string name="offers_tab_est_vs_reality_per_hour_format" translatable="false">%1$s/hr</string>
     <string name="offers_tab_est_vs_reality_ratio_format">Realized about %1$s of estimate.</string>
     <string name="offers_tab_est_vs_reality_no_ratio">No positive estimate to compare against.</string>
-    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s with an estimate and a finished job</string>
-    <string name="offers_tab_est_vs_reality_thin_format">Thin data — only %1$s matched %2$s so far.</string>
-    <string name="offers_tab_est_vs_reality_none">Needs accepted offers whose jobs finished with recorded pay and time.</string>
+    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s matched</string>
+    <string name="offers_tab_est_vs_reality_thin_format">Only %1$s matched %2$s — thin</string>
+    <string name="offers_tab_est_vs_reality_none">No comparable offers yet</string>
 
     <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
     <string name="offers_tab_list_title">OFFERS IN THIS WINDOW</string>
@@ -286,10 +286,10 @@
     <string name="time_tab_sessions_stat_label">Sessions</string>
     <string name="time_tab_avg_session_stat_label">Avg session</string>
     <string name="time_tab_segment_on_delivery">On delivery</string>
-    <string name="time_tab_segment_unattributed">Unattributed</string>
+    <string name="time_tab_segment_unattributed">No delivery attached</string>
     <string name="time_tab_deadhead_title">DEADHEAD</string>
     <string name="time_tab_no_miles_measured_yet">No miles measured in this period yet.</string>
-    <string name="time_tab_deadhead_caption">miles with no delivery attached — after the last drop, or sessions with none</string>
+    <string name="time_tab_deadhead_caption">miles with no delivery</string>
     <string name="time_tab_segment_deadhead">Deadhead</string>
     <string name="time_tab_on_time_title">ON TIME</string>
     <string name="time_tab_no_deadline_deliveries_yet">No deliveries carried a deadline in this period.</string>
@@ -305,11 +305,10 @@
     <string name="time_tab_rate_pair_title">NET PER HOUR</string>
     <string name="time_tab_rate_while_working">While working</string>
     <string name="time_tab_rate_whole_shift">Whole shift</string>
-    <string name="time_tab_rate_distinction">While working counts only the time you were on a delivery. Whole shift counts every minute you were online, including the dry gaps between offers.</string>
+    <string name="time_tab_rate_distinction">While working: delivery time only. Whole shift: all online time, gaps included.</string>
     <string name="time_tab_rate_gaps_note_format">Working time is your delivery time minus %1$s measured %2$s between jobs.</string>
-    <string name="time_tab_rate_no_gaps_note">No gap was measured in this window, so working time still includes any waiting inside it — the while-working rate is if anything on the low side.</string>
+    <string name="time_tab_rate_no_gaps_note">No gaps measured — the while-working rate may read low.</string>
     <string name="time_tab_rate_working_unmeasured">No per-delivery time measured — no while-working rate.</string>
-    <string name="time_tab_rate_measurement_detail">How these are measured</string>
     <string name="time_tab_rate_none">No online time in this window yet.</string>
     <string name="time_tab_gap_singular">gap</string>
     <string name="time_tab_gap_plural">gaps</string>
@@ -318,32 +317,29 @@
     <string name="time_tab_segment_at_stops">At stops</string>
     <string name="time_tab_segment_waiting">Waiting</string>
     <string name="time_tab_segment_driving">Driving &amp; other</string>
-    <string name="time_tab_typical_hour_derivation">At stops is measured time parked at a store or at a door. Waiting is measured time between finishing a drop and taking your next offer. The rest is mostly driving — but it also holds the wait before your first offer, the tail after your last drop, and anything we could not time.</string>
-    <string name="time_tab_typical_hour_rest_short">The rest is mostly driving, plus anything we couldn\'t time.</string>
-    <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops; the untimed ones sit in the rest.</string>
+    <string name="time_tab_typical_hour_derivation">At stops: parked at a store or door. Waiting: drop to next offer. The rest: driving, the wait before the first offer, the tail after the last drop, anything untimed.</string>
+    <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops</string>
     <string name="time_tab_typical_hour_all_timed_format">Timed all %1$s stops.</string>
     <string name="time_tab_typical_hour_no_stops_timed">No arrival recorded — at-stops time is unmeasured; it sits in the rest.</string>
     <string name="time_tab_typical_hour_no_stops">No stops in this window.</string>
-    <string name="time_tab_typical_hour_leak_format">Waiting cost you about %1$s in this window — %2$s at your while-working rate.</string>
+    <string name="time_tab_typical_hour_leak_format">%2$s waiting ≈ %1$s at working rate</string>
     <string name="time_tab_typical_hour_leak_unpriced">Waiting can\'t be priced — no while-working rate here.</string>
     <string name="time_tab_gaps_title">GAPS BETWEEN JOBS</string>
     <string name="time_tab_gaps_none">No gap yet — needs a completed drop and a later accept in the same dash.</string>
     <string name="time_tab_gaps_median_label">Typical</string>
-    <string name="time_tab_gaps_p90_label">9 in 10 under</string>
+    <string name="time_tab_gaps_p90_label">90% under</string>
     <string name="time_tab_gaps_longest_label">Longest</string>
-    <string name="time_tab_gaps_coverage_format">%1$s %2$s across %3$s drops — drop to next accept, same dash; the rest end their dash (a tail, not a gap)</string>
-    <string name="time_tab_gaps_long_format">%1$s %2$s ran 2h+ — break or dry market, we can\'t tell, so counted not judged</string>
+    <string name="time_tab_gaps_coverage_format">%1$s %2$s from %3$s drops</string>
+    <string name="time_tab_gaps_long_format">%1$s %2$s 2h+ (break or dry spell)</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
-    <string name="time_tab_mileage_tax_disclosure">standard-mileage method — not the app\'s operating-cost model; confirm with a tax preparer.</string>
+    <string name="time_tab_mileage_tax_disclosure">IRS standard-mileage method, not DashBuddy\'s cost model — check with a tax pro.</string>
 
     <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
          moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
          id IS the copy's identity, so renaming would churn every translation for nothing. -->
     <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
     <string name="patterns_tab_all_time_badge">All time</string>
-    <string name="patterns_tab_all_time_caption">always your whole record</string>
-    <string name="patterns_tab_heatmap_title">YOUR NET $/HR BY HOUR</string>
-    <string name="patterns_tab_heatmap_caption">your own realized net $/hr — where your time pays</string>
+    <string name="patterns_tab_heatmap_title">NET $/HR ONLINE BY HOUR</string>
     <!-- #979: heatmap Rate/Hours toggle — the Hours copy for the same grid, coloring by coverage instead of rate. -->
     <string name="patterns_tab_heatmap_mode_rate">Rate</string>
     <string name="patterns_tab_heatmap_mode_hours">Hours</string>
@@ -472,48 +468,40 @@
     <string name="economy_editor_irs_rate_note" translatable="false">IRS standard mileage rate: $0.67/mi</string>
 
     <!-- main/analytics/MoneyTab.kt -->
-    <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
+    <string name="money_tab_earnings_by_day_title">EARNED BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">earned per day, by dash start day — (No session) deliveries by completion day</string>
+    <string name="money_tab_earnings_by_day_caption">Earned by day counts each dash on its start day; deliveries outside a dash count on their completion day.</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
-    <string name="money_tab_stat_net_per_hour">Net/hr</string>
+    <string name="money_tab_stat_net_per_hour">Net/hr online</string>
     <string name="money_tab_stat_net_per_mile">Net/mi</string>
     <string name="money_tab_stat_net_per_drop">Net/drop</string>
 
     <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
-    <string name="money_tab_where_went_title">WHERE YOUR MONEY WENT</string>
-    <string name="money_tab_where_went_came_in">%1$s earned.</string>
-    <string name="money_tab_where_went_car">%1$s went to the car.</string>
+    <string name="money_tab_where_went_title">KEPT VS COSTS</string>
     <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
-    <string name="money_tab_where_went_kept">%1$s stayed with you.</string>
-    <string name="money_tab_where_went_segment_kept">Stayed with you</string>
+    <string name="money_tab_where_went_kept">Kept %1$s</string>
+    <string name="money_tab_where_went_segment_kept">Kept</string>
     <string name="money_tab_where_went_segment_gas">Gas</string>
-    <string name="money_tab_where_went_segment_wear">Wear on the car</string>
+    <string name="money_tab_where_went_segment_wear">Wear</string>
     <string name="money_tab_where_went_segment_car">Car costs</string>
     <string name="money_tab_where_went_disclosure_format">%1$s mi × %2$s/mi, frozen at accept time</string>
     <string name="money_tab_where_went_disclosure_no_miles">No miles logged — car costs frozen at accept time</string>
     <string name="money_tab_where_went_no_split">Not every delivery recorded gas and wear separately — combined only.</string>
-    <string name="money_tab_where_went_frozen_note">Costs are frozen at the rate each offer was accepted under — changing your cost settings never rewrites past windows.</string>
-    <string name="money_tab_per_mile_format">%1$s/mi</string>
+    <string name="money_tab_where_went_frozen_note">Car costs use the rates in effect when each offer was accepted.</string>
     <string name="money_tab_disclosure_expand">Show the details</string>
     <string name="money_tab_disclosure_collapse">Hide the details</string>
 
     <!-- main/analytics/PayMixSection.kt (brief §4.2) -->
-    <string name="money_tab_pay_mix_title">WHAT YOU EARNED</string>
+    <string name="money_tab_pay_mix_title">EARNED</string>
     <string name="money_tab_pay_mix_segment_base">Base pay</string>
     <string name="money_tab_pay_mix_segment_tips">Tips</string>
     <string name="money_tab_pay_mix_segment_not_itemized">Not itemized</string>
     <string name="money_tab_pay_mix_segment_not_matched">Not matched</string>
     <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (incl. %2$s cash you entered)</string>
-    <string name="money_tab_pay_mix_insight_format">Tips were %1$s of what you earned.</string>
-    <string name="money_tab_pay_mix_insight_floor_format">Tips were at least %1$s of what you earned.</string>
     <string name="money_tab_pay_mix_no_insight">No pay recorded for this window yet.</string>
     <string name="money_tab_pay_mix_partial_coverage_format">itemized on %1$s of %2$s deliveries</string>
     <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay is recorded but not itemized.</string>
-    <string name="money_tab_pay_mix_not_itemized_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records</string>
-    <string name="money_tab_pay_mix_not_itemized_estimate_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records · %2$s of the recorded pay was estimated from the offer</string>
-    <string name="money_tab_pay_mix_not_matched_caption">reported for a dash, not matched to a recorded delivery</string>
     <string name="money_tab_pay_mix_negative_itemization_format">itemized parts exceed the recorded pay by %1$s</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
@@ -522,21 +510,19 @@
     <!-- main/analytics/MoneyBreakdownCards.kt -->
     <string name="money_tab_platform_split_title">BY PLATFORM</string>
     <string name="money_tab_platform_split_kept_format">%1$s kept</string>
-    <string name="money_tab_unattributed_callout_format">%1$s reported for a dash but not matched to a recorded delivery</string>
-    <string name="money_tab_over_attributed_callout_format">DashBuddy recorded %1$s more than was reported</string>
-    <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash</string>
+    <string name="money_tab_unattributed_callout_format">%1$s reported, no matching delivery</string>
+    <string name="money_tab_over_attributed_callout_format">%1$s more than reported</string>
+    <string name="money_tab_no_session_callout_format">%1$s from %2$s %3$s not in a dash</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
     <string name="money_tab_orphan_offers_callout_format">%1$s accepted offer(s) with no matching delivery</string>
     <string name="money_tab_orphan_offers_callout_click_label">Resolve orphan offers</string>
-    <string name="money_tab_recent_sessions_title">RECENT SESSIONS</string>
+    <string name="money_tab_recent_sessions_title">LATEST DASHES · REPORTED</string>
     <string name="money_tab_no_sessions_recorded_yet">No sessions recorded yet.</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
 
     <!-- main/analytics/SessionDetailScreen.kt -->
     <string name="session_detail_title">Session detail</string>
     <string name="session_detail_not_found">Session not found.</string>
-    <string name="session_detail_unaccounted_format">%1$s reported for this dash but not matched to a recorded delivery</string>
-    <string name="session_detail_over_attributed_format">DashBuddy recorded %1$s more than was reported</string>
     <string name="session_detail_add_missed_delivery">Add missed delivery</string>
     <string name="session_detail_deliveries_title">DELIVERIES</string>
     <string name="session_detail_no_deliveries_yet">No deliveries recorded for this dash.</string>
@@ -715,7 +701,7 @@
     <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
-    <string name="analytics_hero_kept_label">You kept</string>
+    <string name="analytics_hero_kept_label">Kept</string>
     <string name="analytics_hero_delta_up_format">▲ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_down_format">▼ %1$s vs %2$s</string>
     <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
@@ -724,9 +710,10 @@
     <string name="analytics_hero_summary_deliveries_format">%1$s %2$s</string>
     <string name="analytics_hero_summary_online_format">%1$s online</string>
     <string name="analytics_hero_summary_miles_format">%1$s mi</string>
-    <string name="analytics_hero_summary_previous_format">vs %1$s the window before</string>
+    <string name="analytics_hero_summary_previous_format">%1$s prior period</string>
+    <string name="analytics_hero_summary_previous_empty">Nothing recorded in the prior period</string>
     <string name="analytics_hero_summary_separator"> · </string>
-    <string name="analytics_hero_no_data">Nothing recorded in this window</string>
+    <string name="analytics_hero_no_data">Nothing recorded</string>
 
     <!-- ============================================================ -->
     <!-- Weekly Plan (#981, redesign stage 6 — brief §8)              -->
@@ -817,7 +804,7 @@
          (money_tab_where_went_frozen_note / offers_tab_frozen_disclosure) so the wording keeps one
          owner; only the cash-tip line is new. -->
     <string name="disclosure_how_numbers_work">How these numbers work</string>
-    <string name="disclosure_cash_tips">Cash tips are the ones you entered yourself — added on top of the recorded pay, never estimated.</string>
+    <string name="disclosure_cash_tips">Cash tips are what you entered — added on top, never estimated.</string>
 
     <!-- ui/main/playbook/* — #1024 section C: the next move (plan progress, when/where you earn).
          Two DISTINCT hour vocabularies, deliberately never mixed inside one sentence (§9): hours
@@ -826,7 +813,7 @@
          never puts them in a shape that invites it. -->
     <string name="playbook_screen_title">Playbook</string>
     <string name="playbook_plan_title">THIS WEEK\'S PLAN</string>
-    <string name="playbook_plan_headline_format">%1$sh worked in your windows · %2$s kept of the %3$s you planned for</string>
+    <string name="playbook_plan_headline_format">%1$sh in your windows · %2$s kept of %3$s planned</string>
     <string name="playbook_plan_hours_left_format">%1$d of %2$d scheduled hours still ahead</string>
     <string name="playbook_plan_all_windows_done">All %1$d scheduled hours have passed.</string>
     <string name="playbook_plan_not_started_format">Not started yet — %1$d hours scheduled, %2$s projected.</string>
@@ -840,7 +827,7 @@
     <string name="playbook_plan_none_title">No plan saved for this week</string>
     <string name="playbook_plan_none_body">A plan picks your best hours from your own record, then grades itself next Sunday.</string>
     <string name="playbook_plan_none_action">Build a plan →</string>
-    <string name="playbook_heatmap_plan_outline_caption">Outlined cells are the hours this week\'s plan picked.</string>
+    <string name="playbook_heatmap_plan_outline_caption">Outlined = this week\'s plan</string>
     <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
     <string name="debug_event_receipt_block_title">Wide event receipt is off</string>
     <string name="debug_event_receipt_block_body">This debug build needs wide event receipt. While it is off, DashBuddy\'s accessibility service is not enabled. Allow it again under %1$s, then turn the service on when asked.</string>
@@ -874,4 +861,20 @@
         <item quantity="one">Learned from %d delivery</item>
         <item quantity="other">Learned from %d deliveries</item>
     </plurals>
+    <!-- #1255: simple analytics and shared detail preference. -->
+    <string name="analytics_tier1_earned">Earned</string>
+    <string name="analytics_tier1_accept_rate">Accept rate</string>
+    <string name="analytics_tier1_real_vs_est">Real vs est. $/hr</string>
+    <string name="analytics_tier1_net_per_hour_working">Net/hr working</string>
+    <string name="analytics_tier1_typical_gap">Typical gap</string>
+    <string name="analytics_tier1_on_time">On time</string>
+    <string name="analytics_tier1_at_least_format">≥%1$s</string>
+    <string name="patterns_tab_stores_title_by_net">YOUR STORES · BY NET</string>
+    <string name="money_tab_where_went_segment_note_format">%1$s · %2$s/mi</string>
+    <string name="offers_tab_est_vs_reality_mean_note">List rates are each offer\'s own estimate; the score table and the bars are averages of per-job rates.</string>
+    <string name="common_more_numbers">More numbers</string>
+    <string name="common_fewer_numbers">Fewer numbers</string>
+    <string name="money_tab_pay_mix_estimated_format">%1$s estimated from offers</string>
+    <string name="money_tab_recent_scope_note">Latest dashes are your %1$d newest, whatever period is picked; amounts are reported totals (your corrections included), cash shown separately.</string>
+    <string name="time_tab_unattributed_note">No delivery attached: online time and miles after your last drop, and dashes with no delivery.</string>
 </resources>

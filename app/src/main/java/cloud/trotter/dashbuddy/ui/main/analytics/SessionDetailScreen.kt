@@ -150,7 +150,7 @@ private fun DashDetailContent(
         if (hasCallout) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppCallout(
-                    text = stringResource(R.string.session_detail_unaccounted_format, Formats.money(detail.unattributedPay)),
+                    text = stringResource(R.string.money_tab_unattributed_callout_format, Formats.money(detail.unattributedPay)),
                     container = AppTheme.colors.warnBg,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -161,7 +161,7 @@ private fun DashDetailContent(
             // badBg (not warnBg) — an over-count is a stronger review flag than an unattributed
             // bonus/adjustment; no add-missed-delivery button (that entry point doesn't apply here).
             AppCallout(
-                text = stringResource(R.string.session_detail_over_attributed_format, Formats.money(detail.overAttributedPay)),
+                text = stringResource(R.string.money_tab_over_attributed_callout_format, Formats.money(detail.overAttributedPay)),
                 container = AppTheme.colors.badBg,
                 modifier = Modifier.fillMaxWidth(),
             )

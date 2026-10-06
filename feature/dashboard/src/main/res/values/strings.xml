@@ -43,8 +43,8 @@
     <string name="dashboard_today_stat_on_dash">On dash</string>
 
     <!-- The plan half of the Today card. Each state names the weekday it is quoting — do not drop it. -->
-    <string name="dashboard_plan_best_tonight_format">Best bet tonight: %1$s · your %2$s run %3$s/hr</string>
-    <string name="dashboard_plan_best_today_format">Best bet today: %1$s · your %2$s run %3$s/hr</string>
+    <string name="dashboard_plan_best_tonight_format">Tonight %1$s · %2$s avg %3$s/hr</string>
+    <string name="dashboard_plan_best_today_format">Today %1$s · %2$s avg %3$s/hr</string>
     <string name="dashboard_plan_no_window_format">No clear stretch left — your %1$s pick up earlier.</string>
     <string name="dashboard_plan_thin_data_format">Only %2$s readable hours on your %1$s so far.</string>
     <!--
@@ -56,14 +56,14 @@
     <!-- This week (brief §2 + #1024 D4) — net + delta + per-day sparkline + Recap, then the plan row. -->
     <string name="dashboard_week_title">THIS WEEK</string>
     <string name="dashboard_week_recap_action">Recap →</string>
-    <string name="dashboard_week_delta_up_format">▲ %1$s vs last week</string>
-    <string name="dashboard_week_delta_down_format">▼ %1$s vs last week</string>
-    <string name="dashboard_week_delta_flat">About the same as last week</string>
-    <string name="dashboard_week_delta_from_nothing">Up from nothing last week</string>
-    <string name="dashboard_week_delta_none">No earlier week to compare with yet</string>
+    <string name="dashboard_week_delta_from_nothing">Nothing recorded last week</string>
+    <string name="dashboard_week_delta_none">No prior week</string>
 
     <!-- components/WeekCard.kt row 2 — the pointer at the Weekly Plan (#981, brief §2 row 3) -->
-    <string name="dashboard_weekly_plan_pointer_title">Your week is planned</string>
-    <string name="dashboard_weekly_plan_pointer_detail_format">%1$d target hours across %2$d windows · %3$s projected</string>
+    <string name="dashboard_weekly_plan_pointer_title">Week plan</string>
+    <string name="dashboard_weekly_plan_pointer_detail_format">%1$dh · %2$s projected</string>
     <string name="dashboard_weekly_plan_pointer_action">Plan →</string>
+    <!-- #1255: simple analytics and shared detail preference. -->
+    <string name="dashboard_week_last_week_format">Last week %1$s</string>
+    <string name="dashboard_dashing_row">Dashing · open bubble</string>
 </resources>

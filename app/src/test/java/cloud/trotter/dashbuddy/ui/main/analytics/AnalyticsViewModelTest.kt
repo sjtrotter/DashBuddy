@@ -72,6 +72,7 @@ import java.time.ZoneId
 class AnalyticsViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
+    private val showMoreFlow = MutableStateFlow(false)
     private val correctionRepository: cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
 
@@ -112,6 +113,11 @@ class AnalyticsViewModelTest {
     /** Every repository read the VM collects is window-shaped now, so one stub block covers them all. */
     @Before
     fun stubRepositories() {
+        whenever(appPreferencesRepository.analyticsShowMore).thenReturn(showMoreFlow)
+        whenever(runBlocking { appPreferencesRepository.setAnalyticsShowMore(any()) }).thenAnswer {
+            showMoreFlow.value = it.getArgument(0)
+            Unit
+        }
         whenever(appPreferencesRepository.analyticsWindow).thenReturn(selectionFlow)
         // The setter writes into the SAME flow the getter exposes — the DataStore-is-SSOT contract
         // the ViewModel depends on (it keeps no local copy of the selection).
@@ -243,6 +249,20 @@ class AnalyticsViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `show more intent round trips through the shared preference`() = runTest {
+        runWithViewModel { viewModel ->
+            assertEquals(false, viewModel.uiState.value.showMore)
+            viewModel.setShowMore(true)
+            testScheduler.runCurrent()
+            assertEquals(true, showMoreFlow.value)
+            assertEquals(true, viewModel.uiState.value.showMore)
+            viewModel.setShowMore(false)
+            testScheduler.runCurrent()
+            assertEquals(false, viewModel.uiState.value.showMore)
+        }
+    }
 
     @Test
     fun `defaults to the current pay week on the Money tab and maps the read-model into state`() = runTest {

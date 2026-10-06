@@ -71,6 +71,7 @@ enum class AnalyticsTab(@param:StringRes val labelRes: Int) {
  * fields are read-model-only — nothing here re-enters the pure state machine.
  */
 data class AnalyticsUiState(
+    val showMore: Boolean = false,
     val selectedTab: AnalyticsTab = AnalyticsTab.Money,
     /**
      * The selected review window (#970) — an arbitrary `[start, end)` span of local days the `‹ ›`

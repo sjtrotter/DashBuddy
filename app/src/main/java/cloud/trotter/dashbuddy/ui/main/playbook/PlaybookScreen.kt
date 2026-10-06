@@ -24,7 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
-import cloud.trotter.dashbuddy.ui.main.plan.AreaDemandRow
+import cloud.trotter.dashbuddy.ui.components.MoreNumbersToggle
 
 /**
  * **Playbook** (#1024 section C) — the app's third destination: *Home = today · Analytics = the past ·
@@ -40,9 +40,10 @@ import cloud.trotter.dashbuddy.ui.main.plan.AreaDemandRow
  *  2. **When you earn** — the lifetime heatmap (Rate/Hours), with the plan's picked cells outlined, so
  *     the plan is visibly derived from the driver's own record;
  *  3. **Where you earn** — the store leaderboard (net / wait / recent);
- *  4. the locked **Demand around you** row — designed in, carrying no data, so the screen doesn't need
- *     reworking when it arrives;
- *  5. one **"How these numbers work"** disclosure for the whole screen (#1024 rule 2).
+ *  4. the shared More numbers preference and one **"How these numbers work"** disclosure.
+ *
+ * Simple mode shows the plan summary, Rate heatmap and top three stores by net; More reveals
+ * per-window progress, the Hours mode and the full sortable store list.
  *
  * UDF: immutable state down, one navigation lambda up. No reads of its own — every source already ships
  * (see [PlaybookViewModel]). The only ticking value on the screen is the plan card's own hour boundary,
@@ -86,6 +87,7 @@ fun PlaybookScreen(
             if (uiState.loading) return@Column
 
             PlanProgressCard(
+                showMore = uiState.showMore,
                 grade = uiState.planGrade,
                 onOpenPlan = onOpenPlan,
             )
@@ -96,19 +98,21 @@ fun PlaybookScreen(
             AllTimeBadge()
             Spacer(Modifier.height(12.dp))
 
-            WhenYouEarnCard(heatmap = uiState.heatmap, plan = uiState.savedPlan)
+            WhenYouEarnCard(heatmap = uiState.heatmap, plan = uiState.savedPlan, showMore = uiState.showMore)
             Spacer(Modifier.height(16.dp))
 
-            WhereYouEarnCard(cards = uiState.storeCards)
+            WhereYouEarnCard(cards = uiState.storeCards, showMore = uiState.showMore)
             Spacer(Modifier.height(16.dp))
-
-            AreaDemandRow()
-            Spacer(Modifier.height(20.dp))
 
             // #1024 part 3 follow-through: the plan-projection line ("lifetime aggregates of your
             // own record — not a guarantee") belongs on every screen that renders plan/best-stretch
             // rates. Home opts in; the Playbook renders the plan itself, so it opts in too.
-            HowNumbersWorkFooter(includePlanProjection = true)
+            MoreNumbersToggle(showMore = uiState.showMore, onToggle = { viewModel.setShowMore(!uiState.showMore) })
+            Spacer(Modifier.height(16.dp))
+            HowNumbersWorkFooter(
+                includePlanProjection = true,
+                extraNotes = listOf(stringResource(R.string.patterns_tab_stores_manual_note)),
+            )
             Spacer(Modifier.height(24.dp))
         }
     }

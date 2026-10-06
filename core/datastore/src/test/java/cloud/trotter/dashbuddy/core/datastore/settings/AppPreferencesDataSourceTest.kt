@@ -42,6 +42,16 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
+    fun `analytics show more defaults false and round trips`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "analytics-more.preferences_pb")
+        assertEquals(false, source.analyticsShowMore.first())
+        source.setAnalyticsShowMore(true)
+        assertEquals(true, source.analyticsShowMore.first())
+        source.setAnalyticsShowMore(false)
+        assertEquals(false, source.analyticsShowMore.first())
+    }
+
+    @Test
     fun `glanceMode defaults to false`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val source = newSource(dispatcher, "prefs1.preferences_pb")

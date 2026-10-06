@@ -16,39 +16,17 @@ import cloud.trotter.dashbuddy.domain.analytics.PayMix
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
-import cloud.trotter.dashbuddy.domain.format.Formats
 
 /**
- * Money tab (#315 H1, reworked by #973 — redesign stage 2 of epic #969, brief §4; **decluttered from
- * nine containers to five by #1024 section B**).
- *
- * Reading order, top→bottom, one container each:
- *  1. **the money story** — `$X earned. $Y went to the car.` over two bars: what you earned (base /
- *     tips / not itemized / not matched — #1135 PR 1) and where it went (kept / gas / wear). Formerly two cards (#1024 B1).
- *  2. **the rates and the days they came from** — net per hour / mile / drop as inline rows above the
- *     earnings-by-day chart. Formerly a tile grid plus a chart card (#1024 B3).
- *  3. **by platform** — one hairline row per platform (#1024 B4). Hidden below two platforms.
- *  4. **needs a look** — the consolidated review rows. Hidden when the window is clean.
- *  5. **recent sessions** — tap through to the per-dash drill-down.
- *
- * The screen's ONE disclosure affordance (#1024 rule 2) — the shared "How these numbers work" footer
- * owning the frozen-cost / estimate / cash-tip wording that used to be reprinted as a footnote per
- * card — is rendered by [AnalyticsScreen] **below the tab content**, not here. It must sit under
- * EVERY tab, because the recap hero states frozen net above the tab switch: a footer that only the
- * Money branch composed would leave the Offers and Time tabs showing that headline with its
- * qualifier nowhere on screen (part-2 review F1).
- *
- * What is deliberately NOT here: the window's kept figure and its measured denominators (the recap
- * hero above the tabs owns them), and the store list (the Playbook's leaderboard owns it since #1024
- * part 1). Gross appears exactly once, as the money story's first clause.
- *
- * Pure data in / lambdas out — no side effects, no clock (every figure is a settled historical value).
- * Every rendered string routes through the [Formats]/`TimeFormats` SSOT, and all economics are
- * frozen-net (an economy edit never rewrites a past window).
+ * Simple Money view: existing economics as tiles, then raised review flags. More reveals the
+ * cost/pay charts, per-mile and per-drop rates, daily/platform breakdowns and latest dashes.
+ * [AnalyticsScreen] owns the shared toggle and the screen's single explanation footer.
+ * Data in / actions out only; the existing read-model and interpretation owners supply every figure.
  */
 @Composable
 fun MoneyTab(
     economics: PeriodEconomics,
+    showMore: Boolean,
     payMix: PayMix,
     platformSplit: List<PlatformEconomics>,
     recentSessions: List<SessionRecord>,
@@ -60,11 +38,7 @@ fun MoneyTab(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        MoneyWentCard(economics, payMix)
-        // The rates render for every window; only the day chart inside is hidden for a single-day /
-        // unbounded / over-long window (the repository returns an empty axis for those).
-        EarningsByDayCard(economics, dailyEarnings)
-        PlatformSplitCard(platformSplit)
+        TierOneFigures(moneyFigures(economics, payMix))
         NeedsALookCard(
             reviewItems(
                 economics = economics,
@@ -73,7 +47,12 @@ fun MoneyTab(
                 onOpenOrphanOffers = onOpenOrphanOffers,
             ),
         )
-        RecentDashesCard(recentSessions, onOpenSession)
+        if (showMore) {
+            MoneyWentCard(economics, payMix)
+            EarningsByDayCard(economics, dailyEarnings)
+            PlatformSplitCard(platformSplit)
+            RecentDashesCard(recentSessions, onOpenSession)
+        }
     }
 }
 
