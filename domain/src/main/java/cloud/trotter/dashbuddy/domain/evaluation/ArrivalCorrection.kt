@@ -43,6 +43,9 @@ object ArrivalCorrection {
      * Swap the accept-time handling term for the arrival-corrected one. Null when the accepted
      * offer carries no [AcceptedOfferEconomics.handlingMinutes] or [AcceptedOfferEconomics.estMinutes]
      * (pre-Phase-2 jobs), or when the result would not be positive.
+     * Re-prices from the accept-time inputs; a Settings/learned-pace change between accept and arrival
+     * cannot masquerade as a count correction. Null pricing inputs fall back to the economy only
+     * for pre-Phase-2 accepted offers.
      * correctedHandling = max(items ÷ pace, base) + nonShopLegs × base;
      * correctedEst = estMinutes − handlingMinutes + correctedHandling.
      */
@@ -56,16 +59,18 @@ object ArrivalCorrection {
         val handling = accepted.handlingMinutes ?: return null
         val estimate = accepted.estMinutes ?: return null
         if (observedItems < 1) return null
+        val pace = accepted.pricedShopItemsPerMinute ?: economy.effectiveShopItemsPerMinute
+        val base = accepted.pricedBasePickupMinutes ?: economy.basePickupMinutes
         val correctedHandling = maxOf(
-            observedItems / economy.effectiveShopItemsPerMinute, economy.basePickupMinutes,
-        ) + accepted.nonShopLegs * economy.basePickupMinutes
+            observedItems / pace, base,
+        ) + accepted.nonShopLegs * base
         val correctedEst = estimate - handling + correctedHandling
         if (!correctedEst.isFinite() || correctedEst <= 0.0) return null
         return ArrivalEstimate(
             taskId = taskId,
             offerHash = accepted.offerHash,
             observedItems = observedItems,
-            quotedItems = null, // AcceptedOfferEconomics preserves units, not a quoted item count.
+            quotedItems = accepted.quotedItemCount,
             correctedHandlingMinutes = correctedHandling,
             correctedEstMinutes = correctedEst,
             correctedDollarsPerHour = accepted.netPay?.let { it / (correctedEst / 60.0) },

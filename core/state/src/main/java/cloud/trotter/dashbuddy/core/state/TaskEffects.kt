@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -63,16 +62,19 @@ internal fun EffectMap.diffTask(
         val prevTask = prev.activeTask
         val nextTask = next.activeTask
         val job = next.activeJob
-        if (prev.activeJob?.arrivalEstimateRequestedAt == null && job?.arrivalEstimateRequestedAt != null) {
-            val fields = (obs as? Observation.FlowObservation)?.parsed as? ParsedFields.TaskFields
-            val observed = fields?.let(ArrivalCorrection::observedItems)
-            val accepted = job.acceptedOffers.singleOrNull()
-            if (observed != null && accepted != null && nextTask != null) {
-                add(AppEffect.EvaluateArrival(next.platform, job.jobId, nextTask.taskId, accepted, observed))
-            }
+        // #823 Phase 2 (Astra review): the edges are judged within the SAME job — a close-and-mint step can replace
+        // job A (request latched) with job B on one frame, and B's own request must still emit.
+        val prevSameJob = prev.activeJob?.takeIf { it.jobId == job?.jobId }
+        if (prevSameJob?.arrivalEstimateRequestedAt == null && job?.arrivalEstimateRequestedAt != null &&
+            job.arrivalEstimateObservedItems != null && nextTask != null && job.acceptedOffers.size == 1
+        ) {
+            add(AppEffect.EvaluateArrival(
+                next.platform, job.jobId, nextTask.taskId,
+                job.acceptedOffers.single(), job.arrivalEstimateObservedItems!!,
+            ))
         }
         val estimate = job?.arrivalEstimate
-        if (prev.activeJob?.arrivalEstimate == null && estimate != null) {
+        if (prevSameJob?.arrivalEstimate == null && estimate?.correctedDollarsPerHour != null) {
             val text = buildString {
                 append("Store lists ${estimate.observedItems} items")
                 estimate.quotedItems?.let { append(" (offer said $it)") }

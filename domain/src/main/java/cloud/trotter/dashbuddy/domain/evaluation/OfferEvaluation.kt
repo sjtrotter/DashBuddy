@@ -51,6 +51,13 @@ data class OfferEvaluation(
      */
     val handlingMinutes: Double? = null,
     val nonShopLegs: Int = 0,
+    /**
+     * #823 Phase 2 — the pace and base this evaluation was priced with; the arrival correction re-prices the
+     * handling term from THESE, never from a later economy, so only the item count moves.
+     */
+    val pricedShopItemsPerMinute: Double? = null,
+    /** See [pricedShopItemsPerMinute] for the accept-time pricing contract. */
+    val pricedBasePickupMinutes: Double? = null,
 ) {
     /**
      * True when this evaluation was computed against a real, positive parsed distance — i.e.

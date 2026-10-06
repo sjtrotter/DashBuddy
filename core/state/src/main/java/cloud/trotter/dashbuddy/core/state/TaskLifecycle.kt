@@ -479,10 +479,14 @@ internal fun requestArrivalEstimate(region: PlatformRegion, obs: Observation): P
     if (obs !is Observation.FlowObservation || obs.flow != Flow.TaskPickupArrived) return region
     val fields = obs.parsed as? ParsedFields.TaskFields ?: return region
     val task = region.activeTask ?: return region
-    if (task.phase != TaskPhase.PICKUP || task.activity != PickupActivity.SHOPPING) return region
+    // Astra review: the activity must come from THIS frame — a frame with the pair but no activity (a borrowed,
+    // accumulated SHOPPING on the task) must not consume the one-shot latch.
+    if (task.phase != TaskPhase.PICKUP || fields.activity != PickupActivity.SHOPPING) return region
     val job = region.activeJob ?: return region
-    if (job.arrivalEstimateRequestedAt != null || !ArrivalCorrection.isEligible(job) ||
-        ArrivalCorrection.observedItems(fields) == null
-    ) return region
-    return region.copy(activeJob = job.copy(arrivalEstimateRequestedAt = obs.timestamp))
+    if (job.arrivalEstimateRequestedAt != null || !ArrivalCorrection.isEligible(job)) return region
+    val observed = ArrivalCorrection.observedItems(fields) ?: return region
+    return region.copy(activeJob = job.copy(
+        arrivalEstimateRequestedAt = obs.timestamp,
+        arrivalEstimateObservedItems = observed,
+    ))
 }

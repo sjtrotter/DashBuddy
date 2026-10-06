@@ -38,7 +38,7 @@ class OfferEvaluator() {
         // shop can't under-count; a non-shop leg keeps the flat base. The old flat base for ALL
         // offers estimated a 25-item grocery run at ~15 min → the ~$116/hr bug.
         val driveMinutes = dist * economy.avgMinutesPerMile
-        val isShop = offer.orders.any { it.orderType.isShoppingOrder }
+        val isShop = offer.isShop
         // #823 Phase 1: a units-denominated shop count (DoorDash "(64 units)") over-states the
         // physical item count the #556 pace model is calibrated on, so convert units→items-equivalent
         // (units × the learned per-platform items:units ratio) for the HANDLING term only. An
@@ -95,6 +95,8 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 handlingMinutes = handlingMinutes,
                 nonShopLegs = nonShopLegs,
+                pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+                pricedBasePickupMinutes = economy.basePickupMinutes,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -118,6 +120,8 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 handlingMinutes = handlingMinutes,
                 nonShopLegs = nonShopLegs,
+                pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+                pricedBasePickupMinutes = economy.basePickupMinutes,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -146,6 +150,8 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 handlingMinutes = handlingMinutes,
                 nonShopLegs = nonShopLegs,
+                pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+                pricedBasePickupMinutes = economy.basePickupMinutes,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -178,6 +184,8 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 handlingMinutes = handlingMinutes,
                 nonShopLegs = nonShopLegs,
+                pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+                pricedBasePickupMinutes = economy.basePickupMinutes,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -218,6 +226,8 @@ class OfferEvaluator() {
                 estimatedTimeMinutes = estTimeMinutes,
                 handlingMinutes = handlingMinutes,
                 nonShopLegs = nonShopLegs,
+                pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+                pricedBasePickupMinutes = economy.basePickupMinutes,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -286,6 +296,8 @@ class OfferEvaluator() {
             estimatedTimeMinutes = estTimeMinutes,
             handlingMinutes = handlingMinutes,
             nonShopLegs = nonShopLegs,
+            pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+            pricedBasePickupMinutes = economy.basePickupMinutes,
             itemCount = items,
             merchantName = merchants,
             isUsingDefaults = economy.isUsingDefaults,

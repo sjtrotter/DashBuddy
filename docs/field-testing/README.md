@@ -50,7 +50,8 @@ For items with multiple sub-concerns at different statuses, use one
 
 - **Arrival re-eval (#823 P2):** on a single-store Shop & Deliver, the pickup card's $/hr changes once
   you are in the store with the item list open and shows 'revised at arrival'; one Dispatcher advisory
-  names the observed vs offered count; a stacked job shows no revision. — Confirmed: 0/2
+  names the observed vs offered count; a stacked job shows no revision; no advisory appears for a job
+  whose offer carried no net pay. — Confirmed: 0/2
 
 - **Same-store consecutive offers are two offers (#1069):** after a dash with two H-E-B (same store)
   offers back to back, `app_events` holds TWO `OFFER_RECEIVED` rows with two `offerHash`es, the first

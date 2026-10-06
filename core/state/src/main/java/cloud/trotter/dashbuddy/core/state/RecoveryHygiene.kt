@@ -124,6 +124,15 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
                     pendingSessionPay = null,
                     pendingModeResume = null,
                     pendingOffers = region.pendingOffers.map { it.copy(declineSheetSeenAt = null) },
+                    // #823 Phase 2 (Astra review): an arrival request whose loopback never landed before the crash
+                    // is in-flight evidence — drop the latch so the next coherent shopping frame re-asks; a LANDED
+                    // estimate is a decision and stays.
+                    activeJob = region.activeJob?.let { job ->
+                        if (job.arrivalEstimate == null) job.copy(
+                            arrivalEstimateRequestedAt = null,
+                            arrivalEstimateObservedItems = null,
+                        ) else job
+                    },
                 )
                 val pend = scrubbed.pendingDestructive ?: return@mapValues scrubbed
                 // The window is measured from the restore anchor once one exists, else from the

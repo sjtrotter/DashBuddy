@@ -21,6 +21,9 @@ class ArrivalCorrectionTest {
     private val accepted = AcceptedOfferEconomics(
         offerHash = "offer", netPay = 30.0, estMinutes = 20.0 + 64 / 0.79,
         handlingMinutes = 64 / 0.79, offerUnitCount = 64, isShop = true, acceptedAt = 1L,
+        quotedItemCount = 64,
+        pricedShopItemsPerMinute = economy.effectiveShopItemsPerMinute,
+        pricedBasePickupMinutes = economy.basePickupMinutes,
     )
     private val pickup = Task(
         taskId = "pickup", jobId = "job", phase = TaskPhase.PICKUP,
@@ -35,7 +38,7 @@ class ArrivalCorrectionTest {
         assertEquals(42L, corrected.computedAt)
         assertEquals("offer", corrected.offerHash)
         assertEquals("pickup", corrected.taskId)
-        assertNull(corrected.quotedItems) // Units are not a quoted item count.
+        assertEquals(accepted.quotedItemCount, corrected.quotedItems)
         assertEquals(20 + 64 / 0.79, accepted.estMinutes!!, 0.000001)
     }
 
@@ -44,6 +47,36 @@ class ArrivalCorrectionTest {
         val corrected = ArrivalCorrection.compute(withLegs, "pickup", 1, economy, 2L)!!
         assertEquals(3 * economy.basePickupMinutes, corrected.correctedHandlingMinutes, 0.000001)
         assertEquals(20 + 3 * economy.basePickupMinutes, corrected.correctedEstMinutes, 0.000001)
+    }
+
+    @Test fun `accept-time pace and base win over later economy changes`() {
+        val priced = accepted.copy(pricedShopItemsPerMinute = 2.0, pricedBasePickupMinutes = 7.0, nonShopLegs = 2)
+        val changed = economy.copy(learnedShopItemsPerMinute = 0.5, basePickupMinutes = 25.0)
+        for (observed in listOf(1, 30)) {
+            val original = ArrivalCorrection.compute(priced, "pickup", observed, economy, 2L)!!
+            val corrected = ArrivalCorrection.compute(priced, "pickup", observed, changed, 2L)!!
+            assertEquals(maxOf(observed / 2.0, 7.0) + 2 * 7.0, corrected.correctedHandlingMinutes, 0.000001)
+            assertEquals(original, corrected)
+        }
+    }
+
+    @Test fun `pre-Phase-2 null pricing inputs fall back to the economy`() {
+        val legacy = accepted.copy(pricedShopItemsPerMinute = null, pricedBasePickupMinutes = null, nonShopLegs = 2)
+        val changed = economy.copy(learnedShopItemsPerMinute = 0.5, basePickupMinutes = 12.0)
+        for (observed in listOf(1, 30)) {
+            val corrected = ArrivalCorrection.compute(legacy, "pickup", observed, changed, 2L)!!
+            val handling = maxOf(observed / changed.effectiveShopItemsPerMinute, changed.basePickupMinutes) +
+                2 * changed.basePickupMinutes
+            assertEquals(handling, corrected.correctedHandlingMinutes, 0.000001)
+            assertEquals(20 + handling, corrected.correctedEstMinutes, 0.000001)
+        }
+    }
+
+    @Test fun `quoted count follows the accepted card including an unknown count`() {
+        for (count in listOf(64, 30, null)) {
+            val quote = accepted.copy(quotedItemCount = count)
+            assertEquals(quote.quotedItemCount, ArrivalCorrection.compute(quote, "pickup", 30, economy, 2L)!!.quotedItems)
+        }
     }
 
     @Test fun `legacy estimates and invalid totals produce no correction`() {
@@ -98,7 +131,11 @@ class ArrivalCorrectionTest {
             )),
         )
         val priced = OfferEvaluator().evaluate(parsed, EvaluationConfig(userEconomy = economy))
-        val accepted = this.accepted.copy(estMinutes = priced.estimatedTimeMinutes, handlingMinutes = priced.handlingMinutes)
+        val accepted = this.accepted.copy(
+            estMinutes = priced.estimatedTimeMinutes, handlingMinutes = priced.handlingMinutes,
+            pricedShopItemsPerMinute = priced.pricedShopItemsPerMinute,
+            pricedBasePickupMinutes = priced.pricedBasePickupMinutes,
+        )
         val corrected = ArrivalCorrection.compute(accepted, "pickup", 30, economy, 2L)!!
         assertEquals(32 / 0.79, priced.handlingMinutes!!, 0.000001)
         assertEquals(30 / 0.79, corrected.correctedHandlingMinutes, 0.000001)

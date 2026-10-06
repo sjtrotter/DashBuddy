@@ -1079,7 +1079,7 @@ class OfferEvaluatorTest {
             for (parsed in listOf(shop, mixed, offer())) {
                 for (distance in listOf(3.0, null)) {
                     val result = evaluator.evaluate(parsed.copy(distanceMiles = distance), config)
-                    val isShop = parsed.orders.any { it.orderType.isShoppingOrder }
+                    val isShop = parsed.isShop
                     val legs = if (parsed == mixed) 1 else 0
                     val expected = if (isShop) {
                         maxOf(30 / noCostEconomy.effectiveShopItemsPerMinute, noCostEconomy.basePickupMinutes) +
@@ -1087,10 +1087,18 @@ class OfferEvaluatorTest {
                     } else noCostEconomy.basePickupMinutes
                     assertEquals(expected, result.handlingMinutes!!, 0.000001)
                     assertEquals(legs, result.nonShopLegs)
+                    assertEquals(noCostEconomy.effectiveShopItemsPerMinute, result.pricedShopItemsPerMinute!!, 0.0)
+                    assertEquals(noCostEconomy.basePickupMinutes, result.pricedBasePickupMinutes!!, 0.0)
                     assertEquals((distance ?: 0.0) * noCostEconomy.avgMinutesPerMile + expected, result.estimatedTimeMinutes, 0.000001)
                 }
             }
         }
+    }
+
+    @Test
+    fun `ParsedOffer isShop recognizes shopping and pickup-only orders`() {
+        assertTrue(offer(orderType = OrderType.SHOP_FOR_ITEMS).isShop)
+        assertFalse(offer(orderType = OrderType.PICKUP).isShop)
     }
 
 }

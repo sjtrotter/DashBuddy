@@ -152,10 +152,14 @@ class CardStackAssemblerTest {
         for ((phase, flow) in listOf(TaskPhase.PICKUP to Flow.TaskPickupArrived, TaskPhase.DROPOFF to Flow.TaskDropoffNavigation)) {
             for (arrival in listOf(null, estimate, null)) {
                 val task = Task("task", "job", phase, storeName = "Store", startedAt = 200L)
+                // Eligibility (#823 review F5) needs exactly ONE pickup task on the job: on the delivery leg that is the
+                // completed shop pickup, kept beside the active dropoff.
+                val tasks = if (phase == TaskPhase.PICKUP) listOf(task)
+                else listOf(Task("pickup", "job", TaskPhase.PICKUP, storeName = "Store", startedAt = 150L, completedAt = 190L), task)
                 val region = PlatformRegion(
                     platform = Platform.DoorDash, mode = Mode.Online,
                     session = Session("session-dd", startedAt = 100L), activeTask = task,
-                    activeJob = job.copy(arrivalEstimate = arrival, tasks = listOf(task)),
+                    activeJob = job.copy(arrivalEstimate = arrival, tasks = tasks),
                 )
                 val state = AppState(regions = Regions(
                     flow = FlowRegion(flow = flow, activePlatform = Platform.DoorDash),
