@@ -49,13 +49,22 @@ class EventReceiptPreferencesRepositoryTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
+    private fun consentSource(ds: DataStore<Preferences>) = EventReceiptConsentDataSource(
+        ds,
+        object : DataStore<Preferences> {
+            override val data = flowOf(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("No legacy consent to migrate")
+        },
+    )
+
     private fun newRepo(scope: TestScope, fileName: String): EventReceiptPreferencesRepository {
         val storeScope = CoroutineScope(StandardTestDispatcher(scope.testScheduler) + Job())
         val ds = PreferenceDataStoreFactory.create(
             scope = storeScope,
             produceFile = { File(tmp.root, fileName) },
         )
-        return EventReceiptPreferencesRepository(EventReceiptConsentDataSource(ds), storeScope, "test-build")
+        return EventReceiptPreferencesRepository(consentSource(ds), storeScope, "test-build")
     }
 
     @Test
@@ -83,7 +92,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(broken), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(broken), storeScope, "test-build")
         runCurrent()
         assertNull("not read yet", repo.consent.value)
 
@@ -115,7 +124,7 @@ class EventReceiptPreferencesRepositoryTest {
             produceFile = { File(tmp.root, "ss1a.preferences_pb") },
         )
         real.edit { it[stringPreferencesKey("event_receipt_consent")] = "ALLOWED" }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(writeFailing(real)), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(writeFailing(real)), storeScope, "test-build")
         advanceUntilIdle()
         assertEquals(EventReceiptConsent.ALLOWED, repo.consent.value)
 
@@ -132,7 +141,7 @@ class EventReceiptPreferencesRepositoryTest {
             produceFile = { File(tmp.root, "ss1b.preferences_pb") },
         )
         real.edit { it[stringPreferencesKey("event_receipt_consent")] = "DECLINED" }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(writeFailing(real)), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(writeFailing(real)), storeScope, "test-build")
         advanceUntilIdle()
 
         // ALLOWED then DECLINED, overlapping, both failing — the pre-SS1 value-compared rollback
@@ -159,7 +168,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(frozenReads), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(frozenReads), storeScope, "test-build")
         advanceUntilIdle()
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
 
@@ -198,7 +207,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(flaky), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(flaky), storeScope, "test-build")
         advanceUntilIdle() // parked on the last failure's gate
         assertEquals(failing, collections)
 
@@ -242,7 +251,7 @@ class EventReceiptPreferencesRepositoryTest {
                 return written
             }
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(flaky), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(flaky), storeScope, "test-build")
         advanceUntilIdle()
         assertEquals(failing, collections)
 
@@ -272,7 +281,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(recording), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(recording), storeScope, "test-build")
         advanceUntilIdle() // exhausted → UNDECIDED, waiting for a poke
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
         val lifetimeCollector = collectorJobs.first()
@@ -304,7 +313,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
                 throw IOException("disk full")
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(readOnly), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(readOnly), storeScope, "test-build")
         advanceUntilIdle()
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
 
@@ -331,7 +340,7 @@ class EventReceiptPreferencesRepositoryTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
                 real.updateData(transform)
         }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(throwOnce), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(throwOnce), storeScope, "test-build")
 
         runCurrent()
         assertNull("while retrying: fail-closed null", repo.consent.value)
@@ -366,7 +375,7 @@ class EventReceiptPreferencesRepositoryTest {
             produceFile = { File(tmp.root, "c.preferences_pb") },
         )
         ds.edit { it[stringPreferencesKey("event_receipt_consent")] = "WIDE_OPEN" }
-        val repo = EventReceiptPreferencesRepository(EventReceiptConsentDataSource(ds), storeScope, "test-build")
+        val repo = EventReceiptPreferencesRepository(consentSource(ds), storeScope, "test-build")
         advanceUntilIdle()
 
         assertEquals(EventReceiptConsent.UNDECIDED, repo.consent.value)
@@ -424,7 +433,7 @@ class EventReceiptPreferencesRepositoryTest {
                 return ds.updateData(transform)
             }
         }
-        val source = EventReceiptConsentDataSource(failing)
+        val source = consentSource(failing)
         val repo = EventReceiptPreferencesRepository(source, storeScope, "test-build")
         assertTrue(repo.set(EventReceiptConsent.ALLOWED))
         advanceUntilIdle()

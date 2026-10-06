@@ -151,26 +151,35 @@ other network feature is a separate opt-in:
 | CSV export | manual | a file you choose (`DataExportViewModel` → `core/data/.../analytics/CsvExporter`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
 
 **Android backup and device transfer.** The manifest sets `android:allowBackup="true"`. Unless you turn app backup
-off in Android's settings, the Room database (your event log and analytics tables) and the DataStore files
-(preferences, consents, consent receipts) are included in your Google account's app backup and in device-to-device
-transfer, under Android's backup encryption and Google's terms — DashBuddy does not send them anywhere itself.
-Captures, census files and the census credentials are excluded (`app/src/main/res/xml/backup_rules.xml`,
-`data_extraction_rules.xml`). Whether the database and the consent stores should be excluded too is an open
-decision (#1236).
+off in Android's settings, the Room database (your event log and analytics tables) and general app/economy
+preferences are included in your Google account's app backup and in device-to-device transfer, under Android's
+backup encryption and Google's terms — DashBuddy does not send them anywhere itself. **The database follows the
+user: restoring history and vehicle/economy settings on a new phone is expected.** The capability-grant/receipt
+store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
+(`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
+(`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files and census
+credentials are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
+`data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
 ## 7. Where your data lives, and how long
 
 - The event log and the analytics tables are a Room database on the device (`core/database`); the read-model
-  tables are a rebuildable projection of your own event log.
-- Preferences and consents are DataStore files on the device (`core/datastore`).
+  tables are a rebuildable projection of your own event log. The database is backed up and transferred so your
+  history can be restored on a new phone (§6).
+- Preferences and consents are DataStore files on the device (`core/datastore`). General app/economy preferences
+  are backed up; the two dedicated consent stores are excluded from backup and transfer so a new device re-asks.
+  On upgrade, `EventReceiptConsentDataSource` moves the Screen-events decision and receipt out of `app_prefs`
+  into `consent_event_receipt`, then removes the old keys after the new store write succeeds.
 - Debug builds may keep capture envelopes for rule development under the app's files; release builds bind a no-op
   capture bus (`NoOpCaptureBus`) and keep none. Captures and census files are excluded from Android backup and
   device transfer (`app/src/main/res/xml/backup_rules.xml`).
-- Logs rotate automatically: the firehose log keeps a bounded set of rotations and the shareable log keeps one
-  backup (`LogRepository`).
+- Logs rotate automatically: `app.log` stays in the app's files root, firehose rotations live under `logs/`, and
+  the shareable log keeps one `shareable.log.1` backup (`LogRepository`). All these log paths are excluded from
+  Android backup and device transfer, in both external storage and the internal-storage fallback.
 - Retention of app-private data is "until you delete it": uninstalling removes the database, the DataStore files,
-  the logs and any captures. Gallery screenshots (§4) and files you exported (§6) live outside the app and stay
-  until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1237.
+  the logs and any captures. Android may restore the backed-up database and app/economy preferences on reinstall
+  or a new phone; the excluded consent stores and debug logs do not restore. Gallery screenshots (§4) and files
+  you exported (§6) live outside the app and stay until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1237.
 
 ## 8. Consent records
 
@@ -179,9 +188,10 @@ the same DataStore write, with the time it was made, the app version, and the re
 in-app disclosure referred to when it was recorded (`PrivacyDisclosure.REVISION`; `RuleCapabilityDataSource`,
 `EventReceiptConsentDataSource`). The app does not verify that you opened this document — the revision records
 which text the disclosure pointed at. They are readable under Automation & Consent. No export carries them today
-(the bug-report export carries the decision log lines, not the receipts); they ride Android backup like the other
-DataStore files (§6). The in-app link opens the current revision of this file; the revision history below says
-what changed since the revision on a receipt.
+(the bug-report export carries the decision log lines, not the receipts). Both decisions and their receipts are
+in dedicated stores excluded from Android backup and device transfer (§6), so a new device re-asks consent while
+the database and general app/economy preferences restore. The in-app link opens the current revision of this file;
+the revision history below says what changed since the revision on a receipt.
 
 ## 9. Verify it
 
@@ -191,4 +201,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
-- **r1 (2026-10-06)** — first revision. The in-app disclosure references this revision.
+- **r2 (2026-10-07)** — consent stores and debug logs excluded from Android backup and device transfer;
+  re-consent on a new device, while the database and app/economy preferences follow the user (#1236, includes #1214).
+  The in-app disclosure references this revision.
+- **r1 (2026-10-06)** — first revision.

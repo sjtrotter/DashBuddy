@@ -131,7 +131,18 @@ class LogRepository @Inject constructor(
 
     // --- Config ---
     // Uses internal storage (filesDir) or external if available
-    private val logDir by lazy { context.getExternalFilesDir(null) ?: context.filesDir }
+    private val logDir by lazy {
+        (context.getExternalFilesDir(null) ?: context.filesDir).also { dir ->
+            // #1236: exact directory exclusion, including rotations left by an older build.
+            val legacy = dir.listFiles { file -> file.isFile && file.name.startsWith(rotationPrefix) }
+            if (!legacy.isNullOrEmpty()) {
+                val rotations = File(dir, "logs")
+                rotations.mkdirs()
+                legacy.forEach { it.renameTo(File(rotations, it.name)) }
+            }
+        }
+    }
+    private val rotatedLogDir by lazy { File(logDir, "logs").also { it.mkdirs() } }
 
     private val appLogFile by lazy { File(logDir, "app.log") }
 
@@ -174,7 +185,7 @@ class LogRepository @Inject constructor(
         try {
             val timestamp = logRotationFormat.format(Instant.now())
             val rotatedName = "${rotationPrefix}${timestamp}.log"
-            val rotatedFile = File(logDir, rotatedName)
+            val rotatedFile = File(rotatedLogDir, rotatedName)
 
             // Rename current -> rotated
             if (appLogFile.renameTo(rotatedFile)) {
@@ -203,7 +214,7 @@ class LogRepository @Inject constructor(
      * Deletes the oldest rotated logs if we have too many.
      */
     private fun pruneOldLogs() {
-        val files = logDir.listFiles { file ->
+        val files = rotatedLogDir.listFiles { file ->
             file.name.startsWith(rotationPrefix)
         } ?: return
 

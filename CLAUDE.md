@@ -802,6 +802,8 @@ Every new feature or refactor holds to these — they are forefront design input
      `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
      (fail-closed); each decision carries a receipt — time, app version,
      `PrivacyDisclosure.REVISION` of `PRIVACY.md` — written in the same DataStore edit (#170).
+     The consent stores and the debug logs are excluded from Android backup (#1236, dev ruling
+     2026-10-07: re-consent on a new device; the database follows the user).
      A one-shot schema migration (`RuleCapabilityDataSource`; v1 #843 cleared pre-consent
      auto-grants and kept denials, v2 #1167 changed the key shape so it clears grants, denials AND
      receipts together) lands every capability undecided for the prompt to re-collect consent.

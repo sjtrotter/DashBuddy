@@ -35,6 +35,36 @@ class LogRepositoryTest {
     private val realScrubber = LogScrubber { SensitiveTextMarkers.findMarker(it) }
 
     @Test
+    fun `legacy and new rotations live in the excluded logs directory and are pruned there`() = runTest {
+        val legacy = File(logDir(), "app_log_rotated_20260101_000000.log")
+        legacy.writeText("legacy\n")
+        val rotations = File(logDir(), "logs").also { it.mkdirs() }
+        repeat(50) { index ->
+            File(rotations, "app_log_rotated_old_$index.log").apply {
+                writeText("old\n")
+                setLastModified(1_000L + index)
+            }
+        }
+        val payload = "x".repeat(2_500_000)
+        firehose().writeText(payload)
+        val repo = LogRepository(
+            RuntimeEnvironment.getApplication(), StandardTestDispatcher(testScheduler), realScrubber,
+        )
+        repo.appendLog("after rotation\n")
+        advanceUntilIdle()
+
+        assertFalse("legacy root rotations must move out of backup", legacy.exists())
+        assertEquals("legacy\n", File(rotations, legacy.name).readText())
+        val files = requireNotNull(rotations.listFiles())
+        assertEquals(50, files.size)
+        assertTrue("new rotation contains the previous firehose", files.any { it.readText() == payload })
+        assertFalse(File(rotations, "app_log_rotated_old_0.log").exists())
+        assertFalse(File(rotations, "app_log_rotated_old_1.log").exists())
+        assertTrue(firehose().readText().contains("after rotation"))
+        assertTrue(logDir().listFiles().orEmpty().none { it.name.startsWith("app_log_rotated_") })
+    }
+
+    @Test
     fun `lines land in exact submission order`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val repo = LogRepository(RuntimeEnvironment.getApplication(), dispatcher, realScrubber)

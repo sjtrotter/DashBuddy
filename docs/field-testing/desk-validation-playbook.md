@@ -21,6 +21,26 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 > *silently* — if a grep returns nothing where a hit was plausible, verify the string
 > against the code before reading "no hits" as "invariant held".
 
+## Pull the logs (#1236)
+
+**Firehose rotations moved:** the device path is now `files/logs/app_log_rotated_*.log`.
+`files/app.log` and `files/shareable.log` stay where they were. `LogRepository` also moves legacy
+root rotations into `logs/` on first log access after upgrade. Android backup excludes these logs;
+pull them explicitly for desk validation. With `D` set to the dated pull directory and the device
+selected through `ANDROID_SERIAL` when needed:
+
+```bash
+mkdir -p "$D"
+adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/app.log "$D/app.log"
+adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log "$D/shareable.log"
+adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/logs "$D/"
+# Optional: the single previous shareable log, if it has rotated.
+adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log.1 "$D/shareable.log.1"
+```
+
+`logs/` only exists once rotations have been written or migrated. If external storage was unavailable,
+the same relative paths are under internal `files/` (read them with `adb shell run-as cloud.trotter.dashbuddy`).
+
 ## Step 0 — identify the build
 
 **Do this first.** Every other reading in this playbook is a reading *of a specific build*, and
@@ -30,10 +50,10 @@ different commits).
 
 ```bash
 # the startup line — one per process, in app.log AND shareable.log (INFO, tag `App`)
-grep -h -m1 -E 'DashBuddy .* starting' "$D"/app.log "$D"/app_log_rotated_*.log "$D"/shareable.log
+grep -h -m1 -E 'DashBuddy .* starting' "$D"/app.log "$D"/logs/app_log_rotated_*.log "$D"/shareable.log
 
 # or off ANY periodic summary line — the build id leads it
-grep -h -o -m1 'app=[^ ]*' "$D"/*.log
+grep -h -o -m1 'app=[^ ]*' "$D"/*.log "$D"/logs/*.log
 ```
 
 Both render `<semver>+<8-hex sha>` with `.dirty` appended when the tree had uncommitted changes.
