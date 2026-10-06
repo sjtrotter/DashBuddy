@@ -524,7 +524,8 @@ earliest-confirmed only when this is the sole activated drop with that hash; els
 tokens, never outside the lineage; fail-null beats fail-wrong). `JobCompleteness.kt`'s per-customer
 coverage arm (#749) proves completion from the pickup side when the strict arm fails — ONLY when pickups
 map 1:1 to orders at distinct stores (their hash set IS the customer set) and every customer hash has a
-finished, arrived drop.
+finished, arrived drop; single-shop arrival projections are display-only — see
+[Arrival re-evaluation (#823 Phase 2)](docs/architecture/03-state-machine.md#arrival-re-evaluation-823-phase-2).
 
 **Unassign-via-help** (`Flow.TaskUnassigned`, #736/#752) is an inline ungraced abandon: `Task.unassignedAt`
 set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFIRMED` close-out sweep and

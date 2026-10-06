@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalEstimate
 import kotlinx.serialization.Serializable
 
 /**
@@ -46,6 +48,15 @@ data class AcceptedOfferEconomics(
      */
     val storeHints: List<String> = emptyList(),
     val acceptedAt: Long,
+    val handlingMinutes: Double? = null,
+    val nonShopLegs: Int = 0,
+    val isShop: Boolean = false,
+    /** The card's count as shown — items or units. */
+    val quotedItemCount: Int? = null,
+    /** The shopping pace this offer was priced with at accept time. */
+    val pricedShopItemsPerMinute: Double? = null,
+    /** The pickup base this offer was priced with at accept time. */
+    val pricedBasePickupMinutes: Double? = null,
 )
 
 /**
@@ -67,6 +78,12 @@ data class Job(
     val acceptedOffers: List<AcceptedOfferEconomics> = emptyList(),
     val tasks: List<Task> = emptyList(),
     val startedAt: Long,
+    /** #823 Phase 2: the live arrival re-evaluation of THIS job's time estimate, or null. Display-only — never read by analytics or scoring. */
+    val arrivalEstimate: ArrivalEstimate? = null,
+    /** #823 Phase 2: set on the first coherent shopping-progress frame of an eligible job; the EffectMap emits ONE EvaluateArrival on its appearance. */
+    val arrivalEstimateRequestedAt: Long? = null,
+    /** The coherent count the request was latched on — the EffectMap reads it from state, never from the observation. */
+    val arrivalEstimateObservedItems: Int? = null,
 ) {
     /** Total accepted gross pay across all offers in this job. */
     val totalPayAmount: Double get() = acceptedOffers.sumOf { it.payAmount ?: 0.0 }
@@ -99,6 +116,16 @@ data class Job(
     /** Estimated minutes denominator for the blended $/hr — null until known, must be > 0. */
     val blendedEstMinutes: Double?
         get() = acceptedOffers.mapNotNull { it.estMinutes }.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
+
+    /**
+     * #823: a second pickup that activates later (a stack whose second store was not in the hints) ends
+     * eligibility — the correction is for a single-shop job only, so it stops being served the moment the job is
+     * not one.
+     */
+    val activeArrivalEstimate: ArrivalEstimate? get() = arrivalEstimate?.takeIf { ArrivalCorrection.isEligible(this) }
+
+    /** The HUD's time denominator — the eligible arrival correction, else the frozen blend; [blendedEstMinutes] itself never moves. */
+    val liveEstMinutes: Double? get() = activeArrivalEstimate?.correctedEstMinutes ?: blendedEstMinutes
 
     /** Total quoted distance in miles across all offers. */
     val totalDistanceMiles: Double get() = acceptedOffers.sumOf { it.distanceMiles ?: 0.0 }

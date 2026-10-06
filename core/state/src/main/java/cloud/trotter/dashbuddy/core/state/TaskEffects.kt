@@ -61,6 +61,30 @@ internal fun EffectMap.diffTask(
     return buildList {
         val prevTask = prev.activeTask
         val nextTask = next.activeTask
+        val job = next.activeJob
+        // #823 Phase 2 (Astra review): the edges are judged within the SAME job — a close-and-mint step can replace
+        // job A (request latched) with job B on one frame, and B's own request must still emit.
+        val prevSameJob = prev.activeJob?.takeIf { it.jobId == job?.jobId }
+        if (prevSameJob?.arrivalEstimateRequestedAt == null && job?.arrivalEstimateRequestedAt != null &&
+            job.arrivalEstimateObservedItems != null && nextTask != null && job.acceptedOffers.size == 1
+        ) {
+            add(AppEffect.EvaluateArrival(
+                next.platform, job.jobId, nextTask.taskId,
+                job.acceptedOffers.single(), job.arrivalEstimateObservedItems!!, requestedAt = job.arrivalEstimateRequestedAt!!
+            ))
+        }
+        val estimate = job?.arrivalEstimate
+        if (prevSameJob?.arrivalEstimate == null && estimate?.correctedDollarsPerHour != null) {
+            val text = buildString {
+                append("Store lists ${estimate.observedItems} items")
+                estimate.quotedItems?.let { append(" (offer said $it)") }
+                estimate.correctedDollarsPerHour?.let {
+                    append(": this job now runs ≈ ${Formats.money(it)}/hr")
+                }
+                append(". Unassigning may affect your completion rate.")
+            }
+            add(AppEffect.UpdateBubble(text, ChatPersona.Dispatcher, sessionId = sessionId))
+        }
 
         // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
         // idempotency) + one "Unassigned: <store>" bubble. Two shapes the abandon can take:

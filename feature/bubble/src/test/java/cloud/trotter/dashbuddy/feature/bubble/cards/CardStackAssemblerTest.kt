@@ -1,6 +1,20 @@
 package cloud.trotter.dashbuddy.feature.bubble.cards
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.cards.TaskEconomics
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
+import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.Mode
+import cloud.trotter.dashbuddy.domain.state.PlatformRegion
+import cloud.trotter.dashbuddy.domain.state.Regions
+import cloud.trotter.dashbuddy.domain.state.Session
+import cloud.trotter.dashbuddy.domain.state.Task
+import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.feature.bubble.session.CardSource
 import org.junit.Assert.assertEquals
@@ -127,4 +141,58 @@ class CardStackAssemblerTest {
         assertEquals(listOf("other"), out.stack.completed.map { it.id })
         assertEquals(live, out.stack.active)
     }
+    @Test
+    fun `live pickup and delivery use corrected hourly and show revision only while estimate exists`() {
+        val accepted = AcceptedOfferEconomics(
+            "offer", netPay = 30.0, estMinutes = 100.0, handlingMinutes = 80.0,
+            isShop = true, acceptedAt = 100L,
+        )
+        val estimate = ArrivalCorrection.compute(accepted, "pickup", 30, UserEconomy(), 500L)!!
+        val job = Job("job", listOf("Store"), "offer", acceptedOffers = listOf(accepted), startedAt = 100L)
+        for ((phase, flow) in listOf(TaskPhase.PICKUP to Flow.TaskPickupArrived, TaskPhase.DROPOFF to Flow.TaskDropoffNavigation)) {
+            for (arrival in listOf(null, estimate, null)) {
+                val task = Task("task", "job", phase, storeName = "Store", startedAt = 200L)
+                // Eligibility (#823 review F5) needs exactly ONE pickup task on the job: on the delivery leg that is the
+                // completed shop pickup, kept beside the active dropoff.
+                val tasks = if (phase == TaskPhase.PICKUP) listOf(task)
+                else listOf(Task("pickup", "job", TaskPhase.PICKUP, storeName = "Store", startedAt = 150L, completedAt = 190L), task)
+                val region = PlatformRegion(
+                    platform = Platform.DoorDash, mode = Mode.Online,
+                    session = Session("session-dd", startedAt = 100L), activeTask = task,
+                    activeJob = job.copy(arrivalEstimate = arrival, tasks = tasks),
+                )
+                val state = AppState(regions = Regions(
+                    flow = FlowRegion(flow = flow, activePlatform = Platform.DoorDash),
+                    platforms = mapOf(Platform.DoorDash to region),
+                ), timestamp = 600L)
+                val live = LiveCardBuilder.build(state)!!
+                val output = CardStackAssembler.assemble(emptyList(), live, Platform.DoorDash, false)
+                assertEquals(live, output.stack.active)
+                val minutes: Double?
+                val netPay: Double?
+                val revised: Boolean
+                when (live) {
+                    is FlowCardSnapshot.Pickup -> {
+                        minutes = live.estMinutes
+                        netPay = live.netPay
+                        revised = live.estRevisedAtArrival
+                    }
+                    is FlowCardSnapshot.Delivery -> {
+                        minutes = live.estMinutes
+                        netPay = live.netPay
+                        revised = live.estRevisedAtArrival
+                    }
+                    else -> error("Expected task card")
+                }
+                assertEquals(arrival != null, revised)
+                assertEquals(arrival?.correctedEstMinutes ?: 100.0, minutes!!, 0.000001)
+                assertEquals(
+                    arrival?.correctedDollarsPerHour ?: 18.0,
+                    TaskEconomics.projectedHourly(netPay, minutes, null, 600L)!!, 0.000001,
+                )
+                assertEquals(100.0, region.activeJob!!.blendedEstMinutes!!, 0.0)
+            }
+        }
+    }
+
 }

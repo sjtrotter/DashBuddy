@@ -43,6 +43,21 @@ data class OfferEvaluation(
      * Shown to the user when configuring rules so they understand why offers are being declined.
      */
     val warnings: List<String> = emptyList(),
+    /**
+     * #823 Phase 2 — the handling term of [estimatedTimeMinutes] as priced at accept time
+     * (shop items ÷ pace floored at the base, plus the non-shop legs' base); the arrival
+     * correction swaps THIS term, never the drive term. Nullable + default so persisted
+     * evaluations and fixtures are unaffected.
+     */
+    val handlingMinutes: Double? = null,
+    val nonShopLegs: Int = 0,
+    /**
+     * #823 Phase 2 — the pace and base this evaluation was priced with; the arrival correction re-prices the
+     * handling term from THESE, never from a later economy, so only the item count moves.
+     */
+    val pricedShopItemsPerMinute: Double? = null,
+    /** See [pricedShopItemsPerMinute] for the accept-time pricing contract. */
+    val pricedBasePickupMinutes: Double? = null,
 ) {
     /**
      * True when this evaluation was computed against a real, positive parsed distance — i.e.
