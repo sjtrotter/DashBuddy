@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.census
 
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.census.CensusUploadPreferences
 import cloud.trotter.dashbuddy.domain.census.CensusUploadScheduler
@@ -24,6 +26,7 @@ class HttpCensusSinkTest {
     private class Preferences : CensusUploadPreferences {
         override val enabled = MutableStateFlow(true)
         override val baseUrl = flowOf("https://example.test")
+        override val acceptedSchemaIds = MutableStateFlow(setOf(SkeletonSchema.SCHEMA_ID))
     }
     private class Scheduler : CensusUploadScheduler {
         var runs = 0
@@ -31,6 +34,24 @@ class HttpCensusSinkTest {
         override fun enqueueNow(replaceQueued: Boolean) { runs++ }
         override fun enqueueSoon() { soon++ }
         override fun deferUntil(epochMillis: Long) = Unit
+    }
+
+    @Test fun `publisher schema snapshot follows policy including an empty accepted set`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val prefs = Preferences()
+        val sink = HttpCensusSink(prefs, CensusSpool(tmp.newFolder(), stats, io), Scheduler(), stats, backgroundScope, io)
+        assertFalse(sink.isEnabled)
+        runCurrent()
+        assertTrue(sink.isEnabled)
+        assertEquals(setOf(SkeletonSchema.SCHEMA_ID), sink.acceptedSchemaIds)
+        prefs.acceptedSchemaIds.value = setOf(NotificationSkeletonSchema.SCHEMA_ID)
+        runCurrent()
+        assertEquals(setOf(NotificationSkeletonSchema.SCHEMA_ID), sink.acceptedSchemaIds)
+        prefs.acceptedSchemaIds.value = emptySet()
+        runCurrent()
+        assertTrue(sink.isEnabled) // Publisher counts the refusal even when no schema is advertised.
+        assertEquals(emptySet<String>(), sink.acceptedSchemaIds)
     }
 
     @Test fun `the first item of an empty spool schedules an upload soon and later items do not`() = runTest {
@@ -96,4 +117,23 @@ class HttpCensusSinkTest {
         runCurrent()
         assertEquals(3, scheduler.runs)
     }
+    @Test fun `both kinds enter one spool and share scheduler thresholds`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(tmp.newFolder(), stats, io)
+        val scheduler = Scheduler()
+        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
+        runCurrent()
+        repeat(50) { index ->
+            assertTrue(sink.offer(if (index % 2 == 0) notificationCensusRecord() else censusRecord(index)))
+        }
+        runCurrent()
+        val items = spool.take(100, 1_000_000)
+        assertEquals(50, items.size)
+        assertEquals(25, items.count { it.itemJson == notificationCensusRecord().skeletonJson })
+        assertEquals(50L, stats.spooled.get())
+        assertEquals(1, scheduler.soon)
+        assertEquals(1, scheduler.runs)
+    }
+
 }

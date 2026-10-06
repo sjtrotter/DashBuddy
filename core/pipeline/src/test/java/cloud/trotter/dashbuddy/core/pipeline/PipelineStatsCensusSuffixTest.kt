@@ -95,4 +95,27 @@ class PipelineStatsCensusSuffixTest {
             " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=1,unattributed=0}",
         ))
     }
+    @Test fun `notifications add to aggregate totals with an optional suffix`() {
+        val stats = PipelineStats()
+        stats.onCensusSkeleton(2, 1)
+        stats.onCensusNotificationSkeleton(1, 4)
+        assertEquals(2L, stats.censusSkeletonCount())
+        assertEquals(1L, stats.censusNotificationCount())
+        assertTrue(stats.summary().endsWith(
+            " census{skeletons=2,hashed=3,withheld=5,sinkRefused=0,failures=0,unattributed=0,notifications=1}",
+        ))
+    }
+
+    @Test fun `every notification refusal renders in enum order without built counts`() {
+        val stats = PipelineStats()
+        val reasons = cloud.trotter.dashbuddy.core.pipeline.census.NotificationSkeletonBuilder.Refusal.entries
+        reasons.reversed().forEach { stats.onCensusNotificationRefused(it) }
+        reasons.forEach { assertEquals(1L, stats.censusNotificationRefusedCount(it)) }
+        assertEquals(0L, stats.censusNotificationCount())
+        assertTrue(stats.summary().endsWith(
+            " census{skeletons=0,hashed=0,withheld=0,sinkRefused=0,failures=0,unattributed=0," +
+                "notificationRefused{" + reasons.joinToString(",") { "$it=1" } + "}}",
+        ))
+    }
+
 }

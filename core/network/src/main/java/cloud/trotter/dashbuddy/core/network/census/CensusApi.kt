@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.network.census
 
-import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.SkeletonRejectionReason
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.RequestSigner
@@ -124,7 +125,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
 
     override suspend fun enrol(cred: Bearer.Credential, appVersion: String): EnrolResult = try {
         val body = "{\"installId\":${JsonPrimitive(cred.installId)},\"appVersion\":${JsonPrimitive(appVersion)}," +
-            "\"schemaIds\":[${JsonPrimitive(SkeletonSchema.SCHEMA_ID)}]}"
+            "\"schemaIds\":[${CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.joinToString(",") { JsonPrimitive(it).toString() }}]}"
         val response = execute(request("/v1/enroll", body.toByteArray(Charsets.UTF_8), cred, signed = false))
         when (response.status) {
             200 -> EnrolResult.Enrolled(response.json())
@@ -302,12 +303,8 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         private fun JsonObject.int(key: String): Int = getValue(key).jsonPrimitive.int.also { require(it >= 0) }
 
         // Never pass arbitrary server strings into counters/logs. Unknown reasons collapse to one code.
-        private val REASONS = setOf(
-            "bad_item", "unknown_schema", "unknown_field", "plaintext_field", "too_deep", "too_many_nodes",
-            "bad_kind", "bad_hash", "hash_on_withheld_kind", "missing_hash", "bad_id", "bad_class",
-            "hash_domain_mismatch", "bad_platform", "bad_day", "stale_day", "bad_version", "too_large", "fingerprint_mismatch",
-            "bad_count", "bad_rule_id",
-        )
+        private val REASONS = SkeletonRejectionReason.entries.map { it.wire }.toSet() +
+            setOf("bad_count", "bad_rule_id") // Health report reasons share this bounded decoder.
 
         private fun reasons(json: JsonObject): Map<String, Int> {
             val result = sortedMapOf<String, Int>()

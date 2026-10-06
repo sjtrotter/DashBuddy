@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.census
 
 import android.content.Context
 import cloud.trotter.dashbuddy.domain.census.EnvelopeProjection
+import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.census.CensusUploadStats
@@ -271,7 +272,7 @@ open class CensusSpool internal constructor(
             require(envelope["fingerprint"] == JsonPrimitive(fingerprint))
             require(envelope["platform"] == wrapper["platform"])
         } else {
-            val skeleton = SkeletonSchema.deserialize(json)
+            val skeleton = CensusSkeletonSchema.deserialize(json)
             require(skeleton.fingerprint == fingerprint)
             require(skeleton.platform == wrapper.getValue("platform").jsonPrimitive.content)
         }

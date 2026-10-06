@@ -12,6 +12,7 @@ class BackupRulesGuardTest {
     private val expectedExcludes = setOf(
         "file" to "datastore/census_credentials.preferences_pb",
         "file" to "datastore/census_health.preferences_pb",
+        "file" to "datastore/dev_settings.preferences_pb",
         "file" to "datastore/rule_capability_grants.preferences_pb",
         "file" to "datastore/consent_event_receipt.preferences_pb",
         "file" to "census/",

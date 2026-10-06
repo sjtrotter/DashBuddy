@@ -3,6 +3,8 @@
     <cloud-backup>
         <exclude domain="file" path="datastore/census_credentials.preferences_pb" />
         <exclude domain="file" path="datastore/census_health.preferences_pb" />
+    <!-- #1189 (Astra review of PR #1252): the developer settings store carries the census upload/share toggles and the server's policy cache (incl. acceptedSchemaIds) — a restored phone must re-enrol and re-fetch policy, and re-decide the debug toggles, never inherit them. -->
+    <exclude domain="file" path="datastore/dev_settings.preferences_pb" />
         <exclude domain="file" path="census/" />
         <!-- #1202: plaintext debug UNKNOWN envelopes must not ride a backup or a device transfer. -->
         <exclude domain="external" path="captures/" />
@@ -23,6 +25,8 @@
     <device-transfer>
         <exclude domain="file" path="datastore/census_credentials.preferences_pb" />
         <exclude domain="file" path="datastore/census_health.preferences_pb" />
+    <!-- #1189 (Astra review of PR #1252): the developer settings store carries the census upload/share toggles and the server's policy cache (incl. acceptedSchemaIds) — a restored phone must re-enrol and re-fetch policy, and re-decide the debug toggles, never inherit them. -->
+    <exclude domain="file" path="datastore/dev_settings.preferences_pb" />
         <exclude domain="file" path="census/" />
         <!-- #1202: plaintext debug UNKNOWN envelopes must not ride a backup or a device transfer. -->
         <exclude domain="external" path="captures/" />

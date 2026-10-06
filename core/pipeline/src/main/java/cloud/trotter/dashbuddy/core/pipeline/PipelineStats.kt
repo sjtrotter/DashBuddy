@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import timber.log.Timber
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.OverlayRejectReason
+import cloud.trotter.dashbuddy.core.pipeline.census.NotificationSkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
@@ -83,6 +84,11 @@ class PipelineStats @Inject constructor(
     private val censusEnvelopesPaired = AtomicLong()
     private val censusEnvelopesUnpaired = AtomicLong()
     private val censusSkeletons = AtomicLong()
+    private val censusNotifications = AtomicLong()
+    private val censusNotificationRefusals: Map<NotificationSkeletonBuilder.Refusal, AtomicLong> =
+        EnumMap<NotificationSkeletonBuilder.Refusal, AtomicLong>(NotificationSkeletonBuilder.Refusal::class.java).apply {
+            NotificationSkeletonBuilder.Refusal.entries.forEach { put(it, AtomicLong()) }
+        }
     private val censusTokensHashed = AtomicLong()
     private val censusTokensWithheld = AtomicLong()
     private val censusSinkRefused = AtomicLong()
@@ -433,6 +439,19 @@ class PipelineStats @Inject constructor(
         censusTokensWithheld.addAndGet(withheld.toLong())
     }
 
+    fun onCensusNotificationSkeleton(hashed: Int, withheld: Int) {
+        onCensusSkeleton(hashed, withheld)
+        censusNotifications.incrementAndGet()
+    }
+
+    fun onCensusNotificationRefused(reason: NotificationSkeletonBuilder.Refusal) {
+        censusNotificationRefusals.getValue(reason).incrementAndGet()
+    }
+
+    fun censusNotificationCount(): Long = censusNotifications.get()
+    fun censusNotificationRefusedCount(reason: NotificationSkeletonBuilder.Refusal): Long =
+        censusNotificationRefusals.getValue(reason).get()
+
     /** The builder refused a census item; the admitted frame is unaffected (#1146). */
     fun onCensusRefused(reason: SkeletonBuilder.Refusal) {
         censusRefusals.getValue(reason).incrementAndGet()
@@ -517,11 +536,14 @@ class PipelineStats @Inject constructor(
             ",envelopesPaired=${censusEnvelopesPaired.get()},envelopesUnpaired=${censusEnvelopesUnpaired.get()}"
         val uploads = censusUploads.summary()
         val refused = reasonSuffix(",refused", censusRefusals)
+        val notifications = censusNotifications.get().let { if (it == 0L) "" else ",notifications=$it" }
+        val notificationRefused = reasonSuffix(",notificationRefused", censusNotificationRefusals)
         if (skeletons == 0L && hashed == 0L && withheld == 0L && sinkRefused == 0L &&
-            failures == 0L && unattributed == 0L && refused.isEmpty() && uploads.isEmpty() && envelopes.isEmpty()
+            failures == 0L && unattributed == 0L && refused.isEmpty() && uploads.isEmpty() &&
+            envelopes.isEmpty() && notifications.isEmpty() && notificationRefused.isEmpty()
         ) return ""
         return " census{skeletons=$skeletons,hashed=$hashed,withheld=$withheld," +
-            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused$envelopes$uploads}"
+            "sinkRefused=$sinkRefused,failures=$failures,unattributed=$unattributed$refused$envelopes$uploads$notifications$notificationRefused}"
     }
 
     /**

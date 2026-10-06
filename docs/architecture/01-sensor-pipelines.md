@@ -648,9 +648,25 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 `Observation.identity()`, the classifier or the capture envelope schema.
 
 **Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — wired behind a NoOp sink (M1b, #1146).**
-The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
+The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
 
-- *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline`, runs post-admission after `captureScreen` on UNKNOWN screens only when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline` and `NotificationPipeline`, runs post-admission/dedup after capture and before the UNKNOWN rejection on UNKNOWN platform screens and notifications when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Notifications (#1189, ADR-0011 §10)* — `NotificationSkeletonBuilder` validates the platform via
+  `Platform.fromPackage` and the original channel against the contract grammar. Its independent
+  `SensitiveMarkerScan` scans all five original fields and actions, individually and whitespace-joined,
+  before `CustomerTextMarkers.scrubNotif` and the shared two-pass `FrameFilter`; absent/blank, customer,
+  mask and over-40-character fields emit constant `withheld`. Actions participate only in refusal.
+  `notification.skeleton.v1` carries five enum-ordered slots and a domain-separated fingerprint.
+  Both kinds are published only when the cached server policy advertises their schema (before the first
+  policy, screens only); unsupported kinds count `POLICY_UNSUPPORTED_SCHEMA` per kind and never enter
+  the spool. Batches are per schema, so a notification `422 batch_quality` cannot delete valid screens (#1252).
+  Capture disabled/refused cannot bypass this publication gate. Publisher failures are fail-open to
+  recognition; cancellation propagates. Notification publishing never calls `CensusEnvelopeSink.pair`.
+  `census{…}` retains aggregate counts and adds nonzero `notifications` / `notificationRefused{REASON=n}`;
+  INFO contains counts and rule/kind names only, never channel ids or payload text. CLICK skeletons stay
+  OUT until clicks reliably carry their screen fingerprint. There are currently no committed field
+  notification fixtures; seven explicitly synthetic envelopes exercise the builder. Export excludes
+  click-context rows and reports an empty field corpus without failing; independent contract vectors remain.
 - *Classify & draft (#1188, server v0.11.0 + the `census-contract/authoring/` package)* — on the census dashboard a
   trusted operator opens a cluster's wireframe, classifies the screen in the `Flow` vocabulary (+ `sensitive`/`noise`),
   marks anchors / parse fields / bind targets / redacts on numbered nodes, and the shared Apache-2.0 generator
@@ -672,6 +688,9 @@ The UNKNOWN-screen census (Epic #1138) is specified by ADR-0011; this layer buil
 - *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
   release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
+  Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool and are advertised at
+  enrollment; rejection codes derive from the contract enum. Screens and notifications share the
+  server-authoritative 300/day ledger and common 429 deferral; no client daily counter is introduced.
   The spool retains at most 2,000 records / 20 MiB, dropping oldest first; corrupt and oversized
   records are deleted and counted. Every 50 appends or at 100 queued items requests unique KEEP
   work. Periodic work runs hourly with connected-network and battery-not-low constraints.

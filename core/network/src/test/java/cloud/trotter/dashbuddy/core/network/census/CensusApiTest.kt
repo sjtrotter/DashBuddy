@@ -74,7 +74,7 @@ class CensusApiTest {
         assertEquals(Bearer.format(credential.installId, credential.secret), request.headers[CensusHeaders.AUTHORIZATION])
         assertEquals("dashbuddy-census/1", request.headers["User-Agent"])
         assertEquals("application/json", request.headers["Content-Type"])
-        assertEquals("{\"installId\":\"${credential.installId}\",\"appVersion\":\"test\",\"schemaIds\":[\"uinode.skeleton.v1\"]}",
+        assertEquals("{\"installId\":\"${credential.installId}\",\"appVersion\":\"test\",\"schemaIds\":[\"uinode.skeleton.v1\",\"notification.skeleton.v1\"]}",
             requireNotNull(request.body).utf8())
         respond(200, "{\"acceptedHashDomains\":[1]}")
         assertTrue(api.policy() is PolicyResult.Available)
@@ -287,4 +287,12 @@ class CensusApiTest {
 
     private val accepted = "{\"status\":\"accepted\",\"accepted\":2,\"duplicate\":1,\"rejected\":{\"bad_hash\":1}," +
         "\"budget\":{\"skeletonsRemainingToday\":298,\"bytesRemainingToday\":1000,\"batchesRemainingToday\":39,\"resetInSeconds\":100}}"
+    @Test fun `contract rejection codes are bounded including notification codes and expired is not inbound`() = runTest {
+        val reasons = cloud.trotter.census.contract.SkeletonRejectionReason.entries
+        val rejected = reasons.joinToString(",") { "\"${it.wire}\":1" }
+        respond(422, """{"error":"batch_quality","rejected":{$rejected,"expired":2,"private server text":3}}""")
+        val result = api.uploadSkeletons(credential, "mixed", emptyList()) as UploadResult.BatchQuality
+        assertEquals(reasons.associate { it.wire to 1 } + ("unknown_reason" to 5), result.rejected)
+    }
+
 }

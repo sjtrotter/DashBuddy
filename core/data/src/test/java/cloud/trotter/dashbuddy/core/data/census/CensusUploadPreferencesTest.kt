@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.DevSettingsDataSource
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
 import cloud.trotter.dashbuddy.domain.census.CensusRunOutcome
 import kotlinx.coroutines.CoroutineScope
@@ -144,7 +146,30 @@ class CensusUploadPreferencesTest {
         }
     }
 
-    @Test fun `policy persists only five integer limits and removes legacy raw JSON`() = runTest {
+    @Test fun `accepted schemas persist across repository recreation distinguish empty and reset to screens only`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(io + Job())
+        try {
+            val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "schemas.preferences_pb") }
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            assertEquals(setOf(SkeletonSchema.SCHEMA_ID), repo.acceptedSchemaIds.first())
+            repo.setCensusPolicy(Json.parseToJsonElement(
+                """{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"],"k":10}""",
+            ).jsonObject)
+            val reopened = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            assertEquals(setOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID), reopened.acceptedSchemaIds.first())
+            repo.setCensusPolicy(Json.parseToJsonElement("""{"acceptedSchemaIds":[]}""").jsonObject)
+            assertEquals(emptySet<String>(), reopened.acceptedSchemaIds.first())
+            repo.setCensusPolicy(Json.parseToJsonElement("""{"acceptedSchemaIds":[null,1,{},"notification.skeleton.v1"]}""").jsonObject)
+            assertEquals(setOf(NotificationSkeletonSchema.SCHEMA_ID), reopened.acceptedSchemaIds.first())
+            repo.recordCensusReset(CensusLastRun(7L, CensusRunOutcome.RESET))
+            assertEquals(setOf(SkeletonSchema.SCHEMA_ID), reopened.acceptedSchemaIds.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `policy persists five integer limits and accepted schemas and removes legacy raw JSON`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(io + Job())
         try {
@@ -157,8 +182,10 @@ class CensusUploadPreferencesTest {
             val expected = mapOf("dailySkeletonBudget" to 300, "maxBatchItems" to 100,
                 "maxBatchBytes" to 921600, "maxSkeletonBytes" to 65536, "k" to 10)
             assertEquals(expected, repo.censusPolicy.first())
-            assertEquals(expected.mapKeys { "census_policy_${it.key}" }, ds.data.first().asMap().mapKeys { it.key.name })
-            assertTrue(ds.data.first().asMap().values.all { it is Int })
+            assertEquals(expected.mapKeys { "census_policy_${it.key}" } +
+                mapOf("census_policy_accepted_schema_ids" to emptySet<String>()),
+                ds.data.first().asMap().mapKeys { it.key.name })
+            assertEquals(emptySet<String>(), repo.acceptedSchemaIds.first())
             repo.setCensusPolicy(Json.parseToJsonElement("""{"k":"10","maxBatchItems":2147483648,"maxBatchBytes":1.5}""").jsonObject)
             assertTrue(repo.censusPolicy.first().isEmpty())
         } finally {

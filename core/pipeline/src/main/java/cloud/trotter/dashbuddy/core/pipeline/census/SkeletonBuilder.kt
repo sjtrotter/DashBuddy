@@ -59,6 +59,8 @@ object SkeletonBuilder {
 
     /** Why no skeleton was produced — the counter reasons #1146 will publish. Never carries text. */
     enum class Refusal {
+        /** Publisher refused this kind because the server policy does not advertise its schema. */
+        POLICY_UNSUPPORTED_SCHEMA,
         /** A [SensitiveTextMarkers] hit anywhere in the tree. */
         SENSITIVE_FRAME,
 
@@ -302,7 +304,7 @@ object SkeletonBuilder {
      * that platform. Truncated to [UiSkeletonDto.MAX_VERSION_LENGTH]; null when not well-formed (a
      * truncation that splits a surrogate pair included). The DTO keeps its hard `require` for decode.
      */
-    private fun stamp(value: String?): String? =
+    internal fun stamp(value: String?): String? =
         // Reviews PP7, AL4: the ONE code-point-safe cut (`UiTextBounds.cap`); AL5: an empty stamp is absent.
         value?.let { UiTextBounds.cap(it, UiSkeletonDto.MAX_VERSION_LENGTH) }?.takeIf { it.isNotEmpty() && WireStrings.isWellFormed(it) }
 

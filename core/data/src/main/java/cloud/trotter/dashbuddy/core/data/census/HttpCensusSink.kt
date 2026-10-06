@@ -30,7 +30,10 @@ class HttpCensusSink @Inject constructor(
     @IoDispatcher io: CoroutineDispatcher,
 ) : CensusSink {
     private val enabled = preferences.enabled.stateIn(scope, SharingStarted.Eagerly, false)
-    override val isEnabled: Boolean get() = enabled.value
+    private val schemas = preferences.acceptedSchemaIds.stateIn(scope, SharingStarted.Eagerly, null)
+    // Wait for the persisted policy snapshot before enabling publication after process restart.
+    override val isEnabled: Boolean get() = enabled.value && schemas.value != null
+    override val acceptedSchemaIds: Set<String> get() = schemas.value.orEmpty()
     private val channel = Channel<CensusRecord>(
         capacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,

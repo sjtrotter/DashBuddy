@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.census
 import cloud.trotter.census.contract.CensusFingerprint
 import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
+import cloud.trotter.dashbuddy.core.pipeline.census.NotificationSkeletonBuilder
 import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.dashbuddy.guard.RepoRoot
 import kotlinx.serialization.json.Json
@@ -44,7 +45,11 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
                 assertTrue("${fixture.path}: a marker-bearing SENSITIVE fixture must be refused", outcome is SkeletonBuilder.Outcome.Refused)
             }
         }
-        val exportedOutcomes = sortedOutcomes.filterNot { it.first.path.startsWith("SENSITIVE/") }
+        // Clicks stay OUT until a reliably carried screen fingerprint can associate them.
+        // Historical tree tests still load click_context.v1; only export omits those rows.
+        val exportedOutcomes = sortedOutcomes.filterNot {
+            it.first.path.startsWith("SENSITIVE/") || it.first.sourceSchema == "click_context.v1"
+        }
         val screenLines = exportedOutcomes.map { (fixture, outcome) ->
             val record = buildJsonObject {
                 put("file", fixture.path)
@@ -65,6 +70,23 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
                 assertFalse("${fixture.path}: redaction marker reached the wire", line.contains("[redacted"))
             }
         }
+        if (NotificationCorpus.fieldFixtures.isEmpty()) {
+            println("Notification field corpus is empty; exporting synthetic notification vectors only")
+        }
+        val notificationBuilderLines = NotificationCorpus.fixtures.map { fixture ->
+            val outcome = NotificationSkeletonBuilder.outcome(fixture.raw, META, fixture.platform, DAY)
+            buildJsonObject {
+                put("file", fixture.exportPath)
+                when (outcome) {
+                    is NotificationSkeletonBuilder.Outcome.Built -> {
+                        put("fingerprint", outcome.skeleton.fingerprint)
+                        put("hashes", JsonArray(outcome.skeleton.slots.values.mapNotNull { it.h }.distinct().sorted().map { JsonPrimitive(it) }))
+                        put("skeleton", Json.parseToJsonElement(outcome.json))
+                    }
+                    is NotificationSkeletonBuilder.Outcome.Refused -> put("refused", outcome.reason.name)
+                }
+            }.toString()
+        }
         val directory = File(RepoRoot.locate(), "census-contract/conformance")
         val notificationLines = File(directory, "notification-vectors.jsonl").readLines()
         assertTrue("synthetic notification vectors must not be empty", notificationLines.isNotEmpty())
@@ -73,7 +95,7 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
             assertTrue("synthetic vector must use the contract/notification namespace", fileKey(row).startsWith("contract/notification/"))
             assertTrue("synthetic vector must be a built notification", row["skeleton"]?.jsonObject?.get("schemaId")?.jsonPrimitive?.content == "notification.skeleton.v1")
         }
-        val lines = (screenLines + notificationLines).sortedBy { fileKey(Json.parseToJsonElement(it).jsonObject) }
+        val lines = (screenLines + notificationLines + notificationBuilderLines).sortedBy { fileKey(Json.parseToJsonElement(it).jsonObject) }
         val records = lines.map { Json.parseToJsonElement(it).jsonObject }
         assertEquals("duplicate conformance file key", records.size, records.map(::fileKey).toSet().size)
         records.forEach { record ->
