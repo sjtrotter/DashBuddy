@@ -1617,13 +1617,20 @@
       // digit), so each fails both selectors. Over-match would only mask, never leak.
       "redact": [
         {
+          "comment": "#856 (Astra review of PR #1247, HIGH): the STRUCTURAL cross-street entry, ordered first — a card dropoff is `<StreetA> & <StreetB>, <tail>` and the tail is whatever Uber renders after the comma (a city with a digit, an accented letter — `La Cañada Flintridge` — a `, TX 78209` state+ZIP, a trailing space), so the line is claimed on its ` & ` + `, ` SHAPE with bounded segments and an unconstrained tail, and hashed whole (an ADDRESS-class customer value: distinctness matters for dedup, so no plainMask). RE2: no lookaround, `.` covers any character. Over-match on THIS surface: the board renders no other `x & y, z` text — a merchant whose name carries `&` (`Max & Miles, …`) would be masked here, which fails toward privacy; `shopping_wrong_item`'s `Max & Miles Potted Premium Succulent, Each` is a DoorDash surface this Uber rule never wins.",
+          "find": {
+            "hasTextMatchesRegex": "^[^,&]{2,60}\\s&\\s[^,&]{2,60},\\s.{2,60}$"
+          }
+        },
+        {
           "find": {
             "hasTextMatchesRegex": ",\\s[A-Z][a-zA-Z]+(\\s[A-Z][a-zA-Z]+){0,4}$"
           }
         },
         {
+          "comment": "#856: the `<Street>, <City>` single-line form (no `&`) with a tolerant tail — Unicode letters, `.`/`'`/`-`, an optional `, ST` / `, ST 12345` suffix and trailing whitespace (Astra review of PR #1247).",
           "find": {
-            "hasTextMatchesRegex": ",\\s[A-Z][A-Za-z.'-]*(\\s[A-Z][A-Za-z.'-]*){0,4}$"
+            "hasTextMatchesRegex": ",\\s\\p{Lu}[\\p{L}.'-]*(\\s[\\p{L}.'-]+){0,4}(,\\s[A-Z]{2}(\\s\\d{5})?)?\\s*$"
           }
         }
       ]

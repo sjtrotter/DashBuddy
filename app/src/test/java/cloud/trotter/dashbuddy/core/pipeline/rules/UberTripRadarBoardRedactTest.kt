@@ -24,8 +24,13 @@ class UberTripRadarBoardRedactTest {
     private val ruleId = "uber.screen.trip_radar_board"
     private val frames = TestResourceLoader.loadSnapshots("snapshots/trip_radar_board")
 
-    /** A card dropoff line: ends in ", <City>" and is not a "<Store> (<location>)" line. */
-    private val dropoffLine = Regex("""^[^()]+,\s[A-Z][A-Za-z.'-]*(\s[A-Z][A-Za-z.'-]*)*$""")
+    /**
+     * A card dropoff line — detected on SHAPE, not on the rule's own selector (Astra review of PR #1247:
+     * a detector copied from the redact cannot catch what the redact misses): any ` & ` cross-street
+     * pair followed by `, <tail>`, or a `<Street>, <Tail>` line whose tail may carry a digit, an accented
+     * letter, a `, ST 12345` suffix or trailing whitespace; a "<Store> (<location>)" line is not one.
+     */
+    private val dropoffLine = Regex("""^(?:[^()&,]+\s&\s[^(),]+,\s.+|[^()]+,\s\p{Lu}.*)\s*$""")
     private val mask = Regex("""^\[redacted:[0-9a-f]{4}]$""")
 
     private fun texts(node: UiNode): List<String> =
@@ -53,5 +58,37 @@ class UberTripRadarBoardRedactTest {
             assertEquals("$file: driver-owned text must stay raw", before.filterNot(dropoffLine::matches), after.filterNot(mask::matches))
         }
         assertTrue("the corpus must exercise the redact (no dropoff line was masked)", masked > 0)
+    }
+
+    /**
+     * Astra review of PR #1247 (HIGH): a synthetic board whose dropoff lines carry the shapes the two
+     * original city-tail selectors missed — a `, TX 78209` state+ZIP suffix, a trailing space, an accented
+     * city, a digit in the city — must mask EVERY one of them while the store line stays raw.
+     */
+    @Test
+    fun `adversarial dropoff tails are masked on a synthetic board frame`() {
+        val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!
+        val dropoffs = listOf(
+            "Anonvale Ln & Decoy Rd, San Antonio, TX 78209",
+            "Anonvale Ln & Decoy Rd, San Antonio ",
+            "Anonvale Ln & Decoy Rd, La Cañada Flintridge",
+            "Anonvale Ln & Decoy Rd, Rio Grande City 2",
+            "Placeholder Rdg, St. Louis Park",
+            "Placeholder Rdg, San Antonio, TX",
+        )
+        val store = "Sample Store (Anonvale Plaza)"
+        fun tv(id: String, text: String) = UiNode(className = "android.widget.TextView", viewIdResourceName = "com.ubercab.driver:id/$id", text = text)
+        val board = UiNode(
+            className = "android.widget.FrameLayout",
+            viewIdResourceName = "com.ubercab.driver:id/driver_offers_job_board_content_container",
+            children = listOf(tv("driver_offers_job_board_toolbar", "Trip Radar"), tv("store_line", store)) +
+                dropoffs.map { UiNode(className = "android.widget.TextView", text = it) },
+        )
+        assertEquals(ruleId, TestRulesetFactory.screenRuleset.matchFirst(board, platformWire = "uber")?.ruleId)
+        val after = texts(rule.redact.apply(board))
+        for (line in dropoffs) assertFalse("survived: '$line'", after.contains(line))
+        assertEquals("every dropoff masked, nothing else touched", dropoffs.size, after.count(mask::matches))
+        assertTrue("store line stays raw", after.contains(store))
+        assertTrue("toolbar chrome stays raw", after.contains("Trip Radar"))
     }
 }
