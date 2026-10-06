@@ -608,7 +608,7 @@ the dictionary-linkage residual on low-entropy hashes (risk 1). "Only credential
 - **Install identity**: secret rotation preserves the install id and its counts; a reset deletes the
   old identity first (the deletion contract), enrols anew, restarts the 7-day quarantine, and
   requires fresh trusted enrolment. **A withdrawal survives a restore by construction (#1192,
-  server v0.12):** the withdrawal transaction writes a hashed tombstone (`sha256` of the install id —
+  dashbuddy-census PR #47 — the release after v0.11.1):** the withdrawal transaction writes a hashed tombstone (`sha256` of the install id —
   a record that a withdrawal happened, never of who) that is outside `WITHDRAWAL_TABLES`; the server
   replays tombstones at EVERY startup (deleting any install the restore resurrected, fail-closed: a
   replay failure refuses to start) and `restore.sh` merges the off-host journal first. Off-host
