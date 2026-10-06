@@ -118,6 +118,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [active] **#1255 analytics:** simple tier readable at a glance; More sticks across restarts and between the hub and Playbook; mid-week change line not red. — Confirmed: 0/2
+
 - **#1189 notification census: with debug census enabled, an admitted UNKNOWN push produces one notification skeleton; repeat pushes dedup; a customer lead-in is withheld; an action-only sensitive marker produces a refusal and no upload. Screen and notification uploads share the daily budget. Confirm counters and gated ops output without recording payload text. Confirmed: 0/2.**
 
 - [active] **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the

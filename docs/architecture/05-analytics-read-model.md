@@ -261,6 +261,22 @@ deterministic across same-millisecond closes), mapped to typed `:domain`
 itself (bounded ingestion is the read's job, not the UI's), and the list feed is its own
 `OffersFeedState` `StateFlow` beside `uiState` (the `pickerMonth` precedent) so a chip tap doesn't
 re-emit every other tile.
+**Simple analytics + More numbers (#1255).** Presentation only: `app_prefs.analytics_show_more`
+defaults to false, inherits the store's backup behavior, and feeds `showMore` in both the Analytics
+and Playbook ViewModels. Setters write the repository and await the flow; no second local preference
+or analytics assembly exists. The unused `is_pro_mode` API is retired without migration.
+The hub starts with its hero and compact tiles: Earned, Car costs, Net/hr online and qualified Tips;
+Accept rate; Net/hr working and Typical gap. Needs-a-look stays visible whenever flags exist.
+Real vs est. and On time remain behind More, along with the charts, distributions and lists;
+tile-owned figures are removed from the expanded sections. The Playbook starts with its plan summary,
+Rate heatmap and top three stores by net. More reveals plan windows, Hours mode and store sorting;
+store scales and outlier marks always use the full list. Each screen has one More toggle and one
+`HowNumbersWorkFooter`, with screen-specific explanations folded into that footer. Home and dash
+detail have no toggle. Home's week comparison is a neutral prior total (or the distinct empty-week
+message); the hub suppresses up/down/flat percentages while a window reaches today, retaining
+completed-window percentages. Latest dashes remain the newest ten across all periods, with reported
+totals and separately shown cash. All read-model queries, interpretation owners and tickers are unchanged.
+
 **Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
 queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
 `PeriodReview` selector, whose windows live on the #970 pager now); **This week** is
@@ -288,7 +304,7 @@ per-row action it would have to strip; the action normalises to *navigate* into 
 the assign/attest dialogs.
 **Heatmap toggle + store leaderboard (#979, stage 5; both renders moved to the Playbook in #1024).**
 UI-only over the already-free `storeReportCards()`/`earningsHeatmap()` reads — **zero** new queries,
-under an `ALL TIME` chip + declaring caption so the lifetime scope reads as deliberate rather than
+under an `ALL TIME` chip so the lifetime scope reads as deliberate rather than
 as ignoring the #970 pager. The Rate/Hours `AppSegmented` toggle runs over the SAME grid
 (`EarningsHeatmapCell.coverageHours` was already computed beside `.dollarsPerHour` and never
 rendered); Hours mode reuses `AppHeatScale.cellColor` UNCHANGED (Principle 5 — no second color path)

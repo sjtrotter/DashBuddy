@@ -31,8 +31,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  * Offers tab (#975 / brief §5 — the tab formerly called *Decisions*): the frozen-decision review for
  * the selected window, top→bottom —
  *
- *  1. the **top pair** (brief §5): the acceptance funnel AND "said no to ~$X" side by side, so the
- *     top of the screen carries two ideas instead of one;
+ *  1. the acceptance funnel and declined estimated net;
  *  2. **estimate vs reality** (§7.5): frozen est. $/hr at decision time against realized net $/hr for
  *     the accepted offers whose jobs actually finished;
  *  3. **score vs outcome**: the avg score / avg est. $/hr comparison this tab already had;
@@ -40,10 +39,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  *
  * Pure data in, lambdas out — no side effects, no repository reads (Principle 1/3).
  *
- * **Everything frozen is labelled "est."** and the standing disclosure (§9) is now VISIBLE on the
- * tab, not just documented here: these are what the verdict projected when the offer arrived, never
- * realized net. The one exception is §7.5's realized bar, which is deliberately labelled
- * *differently* precisely because it IS a realized figure.
+ * The simple view shows Accept rate. More reveals the funnel, declined estimates, comparison
+ * and list. The screen footer owns the frozen-estimate explanation.
  *
  * Privacy: merchant names are driver-owned display data; `offer_records` carries no customer fields
  * at all, so this surface cannot leak one (Principle 6). Every number routes through the [Formats]
@@ -52,6 +49,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 @Composable
 fun OffersTab(
     decisions: DecisionEconomics,
+    showMore: Boolean,
     estimateVsReality: EstimateVsReality,
     offersFeed: OffersFeedState,
     onSelectFilter: (OfferFilter) -> Unit,
@@ -59,29 +57,23 @@ fun OffersTab(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        OfferTopPairCard(decisions)
-        EstimateVsRealityCard(estimateVsReality)
-        ScoreVsOutcomeCard(decisions)
-        OffersListCard(
-            feed = offersFeed,
-            onSelectFilter = onSelectFilter,
-            onShowAll = onShowAllOffers,
-        )
-        FrozenEstimateDisclosure()
+        TierOneFigures(offersFigures(decisions))
+        if (showMore) {
+            OfferTopPairCard(decisions)
+            EstimateVsRealityCard(estimateVsReality)
+            ScoreVsOutcomeCard(decisions)
+            OffersListCard(
+                feed = offersFeed,
+                onSelectFilter = onSelectFilter,
+                onShowAll = onShowAllOffers,
+            )
+        }
     }
 }
 
 /**
- * The top pair (brief §5): acceptance rate and "said no to ~$X" as two headline halves of ONE card,
- * with the accept/decline/timeout bar + legend spanning the full width beneath them.
- *
- * One card rather than two side-by-side cards on purpose: the stacked bar and its legend belong to
- * the funnel half but need the whole width to stay readable on a phone, and splitting them into a
- * half-width card would have cost the per-outcome counts — the legend IS where the raw numbers live.
- *
- * **The declined figure states its population** (#975): `estNetPay` is null on a #936 no-verdict
- * offer, so Σ silently under-counts. When no decline was priced at all the card says so instead of
- * rendering "$0.00", which would read as "you skipped nothing of value" (§9).
+ * Declined estimated net spans the card above the funnel bar and raw outcome counts.
+ * Unpriced declines state their missing-estimate reason rather than fabricating a zero.
  */
 @Composable
 private fun OfferTopPairCard(decisions: DecisionEconomics) {
@@ -99,10 +91,7 @@ private fun OfferTopPairCard(decisions: DecisionEconomics) {
             return@AppCard
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AcceptanceHalf(decisions, Modifier.weight(1f))
-            SaidNoHalf(decisions, Modifier.weight(1f))
-        }
+        SaidNoHalf(decisions, Modifier.fillMaxWidth())
         Spacer(Modifier.height(14.dp))
 
         // Counts drive the bar; the legend surfaces the raw count per segment (the rate is the hero).
@@ -114,34 +103,6 @@ private fun OfferTopPairCard(decisions: DecisionEconomics) {
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
         AppLegend(segments)
-    }
-}
-
-/** Idea 1 of the pair: the acceptance rate over the window's closing offers. */
-@Composable
-private fun AcceptanceHalf(decisions: DecisionEconomics, modifier: Modifier = Modifier) {
-    val c = AppTheme.colors
-    Column(modifier) {
-        Text(
-            text = decisions.acceptanceRate?.let { Formats.percent(it) } ?: EMPTY_VALUE,
-            style = AppTheme.num.heroNum,
-            color = c.text,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = stringResource(R.string.offers_tab_acceptance_rate_caption),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
-        Text(
-            text = stringResource(
-                R.string.offers_tab_offers_count_caption,
-                Formats.commaInt(decisions.received),
-                offerNoun(decisions.received),
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
-        )
     }
 }
 
@@ -253,20 +214,6 @@ private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
             labelColor = c.bad,
         )
     }
-}
-
-/**
- * The standing disclosure (brief §5 + §9), now on screen rather than only in a KDoc: everything
- * above except the realized bar is a frozen decision-time estimate.
- */
-@Composable
-private fun FrozenEstimateDisclosure() {
-    Text(
-        text = stringResource(R.string.offers_tab_frozen_disclosure),
-        style = MaterialTheme.typography.bodySmall,
-        color = AppTheme.colors.text3,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Composable

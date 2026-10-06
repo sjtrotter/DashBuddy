@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
@@ -44,9 +43,8 @@ import cloud.trotter.dashbuddy.feature.dashboard.R
  *
  * Every number is the read-model's own: net is the frozen per-delivery net (an economy edit never
  * rewrites it — §9), the sparkline plots [DailyEarnings.net] so a day whose miles ate it can't look
- * good, the delta routes through the shared [NetDelta] rule (which states "no comparison" rather than
- * dividing by an empty week, and reads a sub-half-percent wobble as flat rather than as a trend), and
- * the plan row's three figures come straight off the frozen [SavedWeeklyPlan] the driver committed to.
+ * good, the neutral comparison shows the prior total, with [NetDelta.isEmpty] preserving the
+ * distinction between a measured zero and an empty week. The plan row's figures come straight off the frozen [SavedWeeklyPlan] the driver committed to.
  * The old `Net frozen at accept-time costs` note is gone (#1024 D4): that disclosure now lives once
  * per screen in the host's `How these numbers work` footer instead of once per card.
  *
@@ -97,9 +95,7 @@ private fun WeekRow(
     onOpenRecap: () -> Unit,
 ) {
     val c = AppTheme.colors
-    // ONE delta computation feeding one dispatch: the wording and the tone are two views of the same
-    // decision, and two parallel `when`s over the same enum are two things that must agree forever.
-    val delta = deltaLine(NetDelta.delta(economics.netProfit, previousEconomics?.netProfit))
+    val previousLine = deltaLine(previousEconomics)
     // The per-day series is derived, not held: recomputing it on an unrelated recomposition would
     // hand AppSparkline a new list every frame.
     val nets = remember(dailyEarnings) { dailyEarnings.map { it.net } }
@@ -120,9 +116,9 @@ private fun WeekRow(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = delta.text,
+            text = previousLine,
             style = MaterialTheme.typography.bodySmall,
-            color = delta.color,
+            color = c.text3,
         )
 
         // Kept money per day (§7.3). Hidden below two points: a one-point "line" is a shape with no
@@ -157,37 +153,16 @@ private fun PlanRow(plan: SavedWeeklyPlan, onOpenPlan: () -> Unit) {
             stringResource(
                 R.string.dashboard_weekly_plan_pointer_detail_format,
                 plan.totalHours,
-                plan.windows.size,
                 Formats.money0(plan.projectedKept),
             ),
         )
     }
 }
 
-/** The delta's wording and its tone, resolved together. */
-private data class DeltaLine(val text: String, val color: Color)
-
-/** "▲ 12% vs last week" and its honest alternatives — one `when`, both outputs. */
+/** The prior total stays neutral while this week is still accumulating. */
 @Composable
-private fun deltaLine(delta: NetDelta.Delta): DeltaLine {
-    val c = AppTheme.colors
-    return when (delta.direction) {
-        // A pay week always HAS a predecessor, so NONE can only mean the previous week's read has not
-        // landed yet — say that rather than implying a comparison was made.
-        NetDelta.Direction.NONE -> DeltaLine(stringResource(R.string.dashboard_week_delta_none), c.text3)
-        NetDelta.Direction.FROM_ZERO ->
-            DeltaLine(stringResource(R.string.dashboard_week_delta_from_nothing), c.good)
-        NetDelta.Direction.FLAT -> DeltaLine(stringResource(R.string.dashboard_week_delta_flat), c.text3)
-        NetDelta.Direction.UP -> DeltaLine(
-            stringResource(R.string.dashboard_week_delta_up_format, Formats.percent(delta.fraction ?: 0.0)),
-            c.good,
-        )
-        NetDelta.Direction.DOWN -> DeltaLine(
-            stringResource(
-                R.string.dashboard_week_delta_down_format,
-                Formats.percent(kotlin.math.abs(delta.fraction ?: 0.0)),
-            ),
-            c.bad,
-        )
-    }
+private fun deltaLine(previous: PeriodEconomics?): String = when {
+    previous == null -> stringResource(R.string.dashboard_week_delta_none)
+    NetDelta.isEmpty(previous) -> stringResource(R.string.dashboard_week_delta_from_nothing)
+    else -> stringResource(R.string.dashboard_week_last_week_format, Formats.money(previous.netProfit))
 }

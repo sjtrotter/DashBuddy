@@ -29,6 +29,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.designsystem.component.AppSegmented
+import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.ui.components.MoreNumbersToggle
 import cloud.trotter.dashbuddy.ui.components.HowNumbersWorkFooter
 
 /**
@@ -107,6 +109,7 @@ fun AnalyticsScreen(
                 today = uiState.today,
                 economics = uiState.economics,
                 previousEconomics = uiState.previousEconomics,
+                inProgress = !uiState.canStepForward && !uiState.window.isLifetime,
             )
             Spacer(Modifier.height(16.dp))
 
@@ -129,6 +132,7 @@ fun AnalyticsScreen(
             // gone (#970); the pager at the top owns the window for all of them.
             when (uiState.selectedTab) {
                 AnalyticsTab.Money -> MoneyTab(
+                    showMore = uiState.showMore,
                     economics = uiState.economics,
                     payMix = uiState.payMix,
                     platformSplit = uiState.platformSplit,
@@ -145,6 +149,7 @@ fun AnalyticsScreen(
                 AnalyticsTab.Offers -> {
                     val offersFeed by viewModel.offersFeed.collectAsStateWithLifecycle()
                     OffersTab(
+                        showMore = uiState.showMore,
                         decisions = uiState.decisions,
                         estimateVsReality = uiState.estimateVsReality,
                         offersFeed = offersFeed,
@@ -154,6 +159,7 @@ fun AnalyticsScreen(
                 }
 
                 AnalyticsTab.Time -> TimeTab(
+                    showMore = uiState.showMore,
                     time = uiState.time,
                     gaps = uiState.gaps,
                     hourComposition = uiState.hourComposition,
@@ -168,7 +174,9 @@ fun AnalyticsScreen(
             // wording used to live on (part-2 review F1). The hub is period-scoped — no plan
             // projection to disclose, unlike Home's copy of the same footer.
             Spacer(Modifier.height(16.dp))
-            HowNumbersWorkFooter()
+            MoreNumbersToggle(showMore = uiState.showMore, onToggle = { viewModel.setShowMore(!uiState.showMore) })
+            Spacer(Modifier.height(16.dp))
+            HowNumbersWorkFooter(extraNotes = footerNotes(uiState))
         }
     }
 
@@ -211,3 +219,30 @@ private data class TabOption(val tab: AnalyticsTab, val label: String)
 @Composable
 private fun tabOptions(): List<TabOption> =
     AnalyticsTab.entries.map { TabOption(it, stringResource(it.labelRes)) }
+
+@Composable
+private fun footerNotes(state: AnalyticsUiState): List<String> = buildList {
+    when (state.selectedTab) {
+        AnalyticsTab.Money -> {
+            if (!state.payMix.breakdownComplete) add(stringResource(R.string.money_tab_pay_mix_partial_detail))
+            if (state.dailyEarnings.isNotEmpty()) add(stringResource(R.string.money_tab_earnings_by_day_caption))
+            val split = MoneyWentModel.from(state.economics)
+            if (!split.hasSplit && split.carCosts > UNATTRIBUTED_EPSILON) {
+                add(stringResource(R.string.money_tab_where_went_no_split))
+            }
+            add(stringResource(R.string.money_tab_recent_scope_note, AnalyticsViewModel.RECENT_SESSIONS_LIMIT))
+        }
+        AnalyticsTab.Offers -> add(stringResource(R.string.offers_tab_est_vs_reality_mean_note))
+        AnalyticsTab.Time -> {
+            add(stringResource(R.string.time_tab_rate_distinction))
+            val count = state.netPerHour.gapsSubtracted
+            add(
+                if (count > 0) stringResource(R.string.time_tab_rate_gaps_note_format, Formats.commaInt(count), pluralGap(count))
+                else stringResource(R.string.time_tab_rate_no_gaps_note),
+            )
+            add(stringResource(R.string.time_tab_typical_hour_derivation))
+            add(stringResource(R.string.time_tab_unattributed_note))
+            add(stringResource(R.string.time_tab_mileage_tax_disclosure))
+        }
+    }
+}

@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import cloud.trotter.dashbuddy.feature.dashboard.R
 import androidx.compose.ui.Modifier
 import cloud.trotter.dashbuddy.core.designsystem.component.AppCard
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
@@ -18,7 +20,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 fun DashingStatusRow(onTap: () -> Unit) {
     AppCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onTap)) {
         Text(
-            text = "🟢 Session active — tap for the bubble",
+            text = stringResource(R.string.dashboard_dashing_row),
             style = MaterialTheme.typography.titleMedium,
             color = AppTheme.colors.text,
         )

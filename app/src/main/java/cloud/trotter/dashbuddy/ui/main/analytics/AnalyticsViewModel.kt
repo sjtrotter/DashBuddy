@@ -95,6 +95,10 @@ class AnalyticsViewModel @Inject constructor(
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, AnalyticsWindowSelection.DEFAULT.resolve(LocalDate.now()))
 
+    fun setShowMore(show: Boolean) {
+        viewModelScope.launch { appPreferencesRepository.setAnalyticsShowMore(show) }
+    }
+
     val uiState: StateFlow<AnalyticsUiState> = combine(
         selectedTab,
         // Re-anchor economics + decisions together on each window switch so a tile never renders one
@@ -146,9 +150,11 @@ class AnalyticsViewModel @Inject constructor(
             }
         },
         analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
-    ) { tab, data, sessions ->
+        appPreferencesRepository.analyticsShowMore,
+    ) { tab, data, sessions, more ->
         AnalyticsUiState(
             selectedTab = tab,
+            showMore = more,
             window = data.window,
             today = data.today,
             canStepBack = AnalyticsWindows.canStepBack(data.window),
@@ -411,8 +417,8 @@ class AnalyticsViewModel @Inject constructor(
         val extras: WindowExtras,
     )
 
-    private companion object {
-        const val RECENT_SESSIONS_LIMIT = 10
-        const val TAG = "AnalyticsVm"
+    companion object {
+        internal const val RECENT_SESSIONS_LIMIT = 10
+        private const val TAG = "AnalyticsVm"
     }
 }

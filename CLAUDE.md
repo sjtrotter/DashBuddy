@@ -709,8 +709,12 @@ dropped, a dash's last drop is a tail not a gap, a gap ≥ 2 h is counted and ST
 `sequenceId` for "which", timestamps for "how long"; while-working vs
 whole-shift net/hr, null never `$0.00/hr`; `HourComposition` states coverage as a field); the **three
 destinations (#1024)**: Home = today, the hub (Money · Offers · Time) = the past, the Playbook = the next
-move, with `HowNumbersWorkFooter` as the one disclosure per screen and `PlanProgress` a VIEW of
-`WeeklyPlanGrade`. Every §9 thin-data state states its reason in a named place. The free-tier **CSV
+move. **Two presentation tiers (#1255)** share the `app_prefs.analytics_show_more` boolean (default false):
+compact tiles on the hub, and the plan summary, Rate heatmap and top three stores on the Playbook;
+More numbers reveals the remaining figures and controls. Both ViewModels read the same preference flow,
+with no optimistic local copy. `HowNumbersWorkFooter` owns base and screen-specific notes in one disclosure;
+`PlanProgress` remains a VIEW of `WeeklyPlanGrade`. Home uses a neutral prior-week total; an in-progress
+hub window suppresses percentage changes, while completed windows retain them. Every §9 thin-data state states its reason in a named place. The free-tier **CSV
 export** (#319) is a row-level read (merchant names exported, customer/address hashes excluded).
 
 ## Development Principles

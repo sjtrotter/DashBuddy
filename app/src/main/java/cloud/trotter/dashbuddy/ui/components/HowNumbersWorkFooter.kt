@@ -39,6 +39,8 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
  * It is opt-in rather than always-on because a screen that projects nothing must not carry a
  * disclaimer about projections — that is the noise #1024 exists to remove.
  *
+ * Screen-specific [extraNotes] join this one disclosure after the base notes.
+ *
  * Collapsed by default and `rememberSaveable`-backed: a disclosure that reopens itself on every
  * rotation is noise, and one that forgets it was opened mid-read is worse.
  */
@@ -46,6 +48,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 fun HowNumbersWorkFooter(
     modifier: Modifier = Modifier,
     includePlanProjection: Boolean = false,
+    extraNotes: List<String> = emptyList(),
 ) {
     val c = AppTheme.colors
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -71,6 +74,7 @@ fun HowNumbersWorkFooter(
                 if (includePlanProjection) {
                     DisclosureNote(stringResource(R.string.weekly_plan_provenance))
                 }
+                extraNotes.forEach { DisclosureNote(it) }
             }
         }
     }

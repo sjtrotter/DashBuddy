@@ -33,7 +33,6 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.format.formatWeekdayMonthDay
-import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.components.HairlineDivider
 import cloud.trotter.dashbuddy.ui.components.NetBar
 import cloud.trotter.dashbuddy.ui.components.PatternsModel
@@ -122,11 +121,6 @@ fun EarningsByDayCard(
                 )
                 Spacer(Modifier.height(4.dp))
             }
-            Text(
-                text = stringResource(R.string.money_tab_earnings_by_day_caption),
-                style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
-            )
         }
     }
 }
@@ -145,7 +139,6 @@ private fun RateRows(economics: PeriodEconomics) {
     val deliveries = economics.totals.deliveries
     val netPerDrop = if (deliveries > 0) economics.netProfit / deliveries else null
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        RateRow(stringResource(R.string.money_tab_stat_net_per_hour), economics.netPerHour)
         RateRow(stringResource(R.string.money_tab_stat_net_per_mile), economics.netPerMile)
         RateRow(stringResource(R.string.money_tab_stat_net_per_drop), netPerDrop)
     }

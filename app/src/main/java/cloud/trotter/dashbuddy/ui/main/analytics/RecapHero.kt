@@ -49,6 +49,7 @@ fun RecapHero(
     today: LocalDate,
     economics: PeriodEconomics,
     previousEconomics: PeriodEconomics?,
+    inProgress: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val c = AppTheme.colors
@@ -62,12 +63,15 @@ fun RecapHero(
         )
         Spacer(Modifier.height(4.dp))
         Text(text = Formats.money(economics.netProfit), style = AppTheme.num.heroNum, color = netColor)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = deltaText(window, today, economics, previousEconomics),
-            style = MaterialTheme.typography.bodySmall,
-            color = deltaColor(economics, previousEconomics),
-        )
+        val direction = NetDelta.delta(economics.netProfit, previousEconomics?.netProfit).direction
+        if (!inProgress || direction == NetDelta.Direction.FROM_ZERO || direction == NetDelta.Direction.NONE) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = deltaText(window, today, economics, previousEconomics),
+                style = MaterialTheme.typography.bodySmall,
+                color = deltaColor(economics, previousEconomics),
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             text = factsLine(economics, previousEconomics),

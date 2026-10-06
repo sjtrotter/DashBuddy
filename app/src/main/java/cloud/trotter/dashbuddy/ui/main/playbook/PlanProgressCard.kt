@@ -65,6 +65,7 @@ import java.util.Locale
 @Composable
 fun PlanProgressCard(
     grade: WeeklyPlanGrade?,
+    showMore: Boolean,
     onOpenPlan: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -102,7 +103,7 @@ fun PlanProgressCard(
         }
 
         PlanHeadline(progress)
-        if (progress.windows.isNotEmpty()) {
+        if (showMore && progress.windows.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             progress.windows.forEachIndexed { index, window ->
                 if (index > 0) HorizontalDivider(color = c.line)
