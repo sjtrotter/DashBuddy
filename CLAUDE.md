@@ -1275,22 +1275,24 @@ Rules, in precedence order:
 **At the START of a field-testing session** — when the developer signals they're about to
 dash or are starting a field test (e.g. "starting a field test", "about to dash", "heading
 out", "field testing now", "what should I look for") — **first read the
-`## Next field test — things to look for` checklist in `docs/field-testing/README.md` and
+`docs/field-testing/CHECKLIST.md` (§1 must-watch first), and
 report it back concisely**: tell the developer, in plain terms, what to watch for and how to
 tell if each item is working. This is the primary job of a field-testing agent launched on
 the phone before a dash. Keep it short and glanceable — they're about to be driving.
 
 **Each checklist item needs two independent field confirmations before it's validated** — a
 single dash can pass by luck or miss the edge case. Track with a `- Confirmed: N/2` sub-line
-(note each sighting's date/conditions). Only on the **second clean** confirmation do you move
-the item into that session's log entry and delete it from the checklist; if an item is found
-**broken**, move it to the log immediately so it gets triaged.
+in `docs/field-testing/CHECKLIST.md` (§1 must-watch first), noting each sighting's date/conditions.
+Keep 2/2 items in §5 and record the evidence in the dated session log; report broken findings
+there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
+desk-verified + 3 clean incidental dashes — pending the dev's confirmation); never record an unwitnessed confirmation.
+An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are the dev's.
 
 **Closing the loop — add items when work needs field validation.** Whenever you open a PR or
 close an issue for a change that **needs or would benefit from field validation** — on-dash
 behavior, bubble/HUD changes, recognition rules or parsers, or anything verified only against
-captured data — **also add a matching item to the `## Next field test — things to look for`
-checklist** (what to watch + how to tell it's working + the PR/issue number, starting at
+captured data — **also add a matching item to `docs/field-testing/CHECKLIST.md`
+(§1 must-watch first)** (what to watch + how to tell it's working + the PR/issue number, starting at
 `Confirmed: 0/2`). Treat this as part of finishing the PR/closing the issue, not an
 afterthought — it's how field-validation work reaches the developer on the next dash.
 

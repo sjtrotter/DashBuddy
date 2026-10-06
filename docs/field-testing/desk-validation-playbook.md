@@ -1,6 +1,6 @@
 # Desk-validation playbook
 
-**Purpose.** Resolve as many `## Next field test` checklist items as possible from a
+**Purpose.** Resolve as many [`CHECKLIST.md`](CHECKLIST.md) items as possible from a
 post-dash data pull alone — no dev eyes needed while driving. Run these checks against
 the pull under `~/dashbuddy/logs/YYYY/MM/DD/`: the Room DB (`sqlite3` on the pulled db —
 remember the WAL sidecar), `app.log` (DEBUG firehose), `shareable.log` (INFO+ only), and
@@ -15,7 +15,7 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 > `app.log` matters: some decision logs are DEBUG by design (reducer steps). Pull it,
 > not just the exported bug report.
 
-> **SSOT caution:** the item list above is a dated snapshot (the README checklist is the
+> **SSOT caution:** the item list above is a dated snapshot ([`CHECKLIST.md`](CHECKLIST.md) is the
 > live SSOT), and the grep strings below are literal copies of log messages verified
 > against the code on 2026-07-12. A later rename of a log string breaks its grep
 > *silently* — if a grep returns nothing where a hit was plausible, verify the string
