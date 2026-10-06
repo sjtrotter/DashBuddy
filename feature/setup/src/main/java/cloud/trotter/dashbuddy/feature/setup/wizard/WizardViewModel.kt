@@ -507,24 +507,9 @@ class WizardViewModel @Inject constructor(
                 )
             }
 
-            val isCherryPicker = finalState.strategy == OfferStrategy.CHERRY_PICKER
             val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS
 
-            // Only write what the wizard actually collects (#347): the strategy-derived
-            // toggles and the SHOPPING step's preference. The threshold values are NOT
-            // wizard inputs — preserve their current values so a re-run + Finish
-            // round-trips losslessly instead of resetting tuned automation config.
-            val currentAutomation = strategyRepository.automationConfig.first()
             strategyRepository.setProtectStatsMode(isProtectStatus)
-            strategyRepository.setMasterAutomation(isCherryPicker)
-            strategyRepository.updateAutomation(
-                autoAccept = currentAutomation.autoAcceptEnabled,
-                acceptMinPay = currentAutomation.autoAcceptMinPay,
-                acceptMinRatio = currentAutomation.autoAcceptMinRatio,
-                autoDecline = isCherryPicker,
-                declineMaxPay = currentAutomation.autoDeclineMaxPay,
-                declineMinRatio = currentAutomation.autoDeclineMinRatio,
-            )
             // allowShopping is NOT collected by any wizard step (SHOPPING collects
             // maxItems only) — settings own that toggle; the wizard must not touch it.
 

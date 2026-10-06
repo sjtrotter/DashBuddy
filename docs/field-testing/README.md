@@ -48,6 +48,12 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Per-order handling (#1113 slice 1):** a two-order DoorDash stack's bubble card shows a longer estimate
+  and a lower $/hr than a same-pay, same-distance single order would (handling 14 min, not 7 — the card's
+  minutes should read roughly `2.5 × miles + 14`). Also: no "auto-accept" / "auto-decline" threshold is
+  reachable anywhere in Settings or the wizard; Strategy still shows the Quick declines switch; one
+  `Strategy: Purged dead automation keys (#1113)` INFO line on the first launch of this build only. — Confirmed: 0/2
+
 - **Arrival re-eval (#823 P2):** on a single-store Shop & Deliver, the pickup card's $/hr changes once
   you are in the store with the item list open and shows 'revised at arrival'; one Dispatcher advisory
   names the observed vs offered count; a stacked job shows no revision; no advisory appears for a job

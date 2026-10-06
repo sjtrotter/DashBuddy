@@ -28,7 +28,11 @@ data class UserEconomy(
 
     /** Minutes per mile of driving — default 2.5 (urban average). */
     val avgMinutesPerMile: Double = DEFAULT_MINUTES_PER_MILE,
-    /** Base overhead per offer (pickup + dropoff) in minutes — default 7.0. */
+    /**
+     * Base overhead per ORDER (one pickup + one dropoff) in minutes — default 7.0.
+     * A stacked offer is charged once per order (#1113); a Shop & Deliver order's shop time
+     * replaces it (#556).
+     */
     val basePickupMinutes: Double = DEFAULT_BASE_PICKUP_MINUTES,
 
     /**

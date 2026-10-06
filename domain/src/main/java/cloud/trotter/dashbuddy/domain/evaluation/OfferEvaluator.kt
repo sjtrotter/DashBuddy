@@ -51,7 +51,9 @@ class OfferEvaluator() {
             maxOf(handlingItems / economy.effectiveShopItemsPerMinute, economy.basePickupMinutes) +
                 nonShopLegs * economy.basePickupMinutes
         } else {
-            economy.basePickupMinutes
+            // #1113 — handling is per ORDER: a two-order non-shop stack carries two base overheads
+            // (the pre-#1113 single base priced 26/40 fielded two-order offers as one pickup+dropoff).
+            economy.basePickupMinutes * maxOf(1, offer.orders.size)
         }
         val estTimeMinutes = driveMinutes + handlingMinutes
         val estTimeHours = estTimeMinutes / 60.0

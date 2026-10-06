@@ -62,6 +62,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     lateinit var ruleCapabilityRepository: cloud.trotter.dashbuddy.core.data.capability.RuleCapabilityRepository
 
     @Inject
+    lateinit var strategyRepository: cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+
+    @Inject
     lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
 
     @Inject
@@ -166,6 +169,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // sensing fail-closed); the next launch retries the whole sequence.
         applicationScope.launch {
             ruleCapabilityRepository.migrateConsentSchemaIfNeeded()
+            if (strategyRepository.purgeDeadAutomationKeys()) {
+                Timber.tag("Strategy").i("Purged dead automation keys (#1113)")
+            }
             jsonRuleInterpreter.loadDefaults()
         }
 
