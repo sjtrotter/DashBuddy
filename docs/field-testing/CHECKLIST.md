@@ -122,6 +122,8 @@ Five candidates; no picks are final. Each full item appears once, with its origi
 
 Ordered by first-line blame date; source order breaks ties. The five §1 proposals are not repeated here.
 
+- [active] **Trip Radar board (#856):** after an Uber dash with Trip Radar open, no file under `captures/uber/accessibility.window/UNKNOWN/` carries a `<Street> & <Street>, <City>` line (except an expired-card frame carrying "This request is no longer available", a known residual); the board's frames sort as `trip_radar_board` with `[redacted:…]` dropoff lines. Known residuals, not failures: a board frame carrying the expired-card overlay ("This request is no longer available") and the HOME-screen Trip Radar browse pill with a half-rendered card stay UNKNOWN (#856 option B / #251). — Confirmed: 0/2
+
 - [active] **Per-order handling (#1113 slice 1):** a two-order DoorDash stack's bubble card $/hr should equal
   `pay ÷ (2.5 × miles + 14) × 60` (two base overheads), not `… + 7`; e.g. $12.15 / 10.7 mi → ≈ $17.9/hr,
   not $21.6. Check one stacked card against that arithmetic (the card shows no duration field; the $/hr is

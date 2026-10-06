@@ -111,6 +111,20 @@ class FlowlessRecognitionNeutralityTest {
     }
 
     /**
+     * #856 — the first UBER recognize-only surface: the Trip Radar board, recognized purely so
+     * its cards' prefix-less customer cross-street dropoff lines can be redacted. The board is a
+     * multi-offer surface whose offer-lifecycle meaning is #251's design; this privacy fix must
+     * not answer it by accident (no flow, no modeHint, no pending offer). This pins that it did not.
+     */
+    @Test
+    fun `the Trip Radar board frames recognize, carry no flow, and leave PlatformRegion untouched (#856)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/trip_radar_board",
+            "uber.screen.trip_radar_board",
+        )
+    }
+
+    /**
      * #1079 — two more recognize-only surfaces from DoorDash 8.95.6: the alcohol-flow warning
      * sheet and the mid-render going-to-store sheet (the latter recognized so its `Delivery for`
      * customer row is masked by a rule rather than only by the UNKNOWN-path backstop). Whether
@@ -165,7 +179,7 @@ class FlowlessRecognitionNeutralityTest {
         )
 
         // (c) NEUTRALITY — and note what it is NOT. Folding these frames through the real state
-        // machine DOES create the DoorDash `PlatformRegion` where none existed (default `Offline`,
+        // machine DOES create the platform's `PlatformRegion` where none existed (default `Offline`,
         // `lastObservedAt` stamped), which is precisely why "state-inert" was the wrong word: the
         // observation reaches the machine and is accounted for. What must hold is that it carries
         // no LIFECYCLE content and moves none.
