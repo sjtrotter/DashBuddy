@@ -211,13 +211,13 @@ leaked 0/102. `uber.screen.trip_radar_board` (priority 141, behind every other U
 recognize-only (no `state`/`parse`/`bind`; the board's multi-offer meaning is #251's) and is anchored on two
 chrome ids (`driver_offers_job_board_toolbar` + `driver_offers_job_board_content_container`). Its
 `redact` is `uber.screen.offer`'s `, <City>` tail entry verbatim plus a punctuation-tolerant city tail.
-It REJECTS the #858 expiry overlay (`image_message_text`), so those frames keep their committed
-must-stay-UNKNOWN status (`UberOfferExpiryOverlayTest`, `NegativeCorpusStaysUnknownTest`). The board
-cards carry no `primary_touch_area`, so it can never take a card from the offer rule. Re-classifying the
-same pull: 55 window frames are now the board (9 others are claimed by rules added since the pull, 50
-stay UNKNOWN), and frames with a raw cross-street go from 34 to 7. The 7 residual frames are 6 that carry
-the overlay (claiming them recognize-only is a dev decision recorded on #856) and 1 home-screen "Trip
-Radar" browse-pill frame with a half-rendered offer card. The 8 click frames mask to 0 under the board's
+Option B adopted 2026-10-07: expiry-overlay frames (`image_message_text`) are recognized recognize-only;
+#858 safety is the absent `state` block, pinned by `UberOfferExpiryOverlayTest` and `FlowlessRecognitionNeutralityTest`.
+The board cards carry no `primary_touch_area`, so it can never take a card from the offer rule.
+Re-classifying the same pull before option B: 55 window frames were the board (9 others were claimed
+by rules added since the pull, 50 stayed UNKNOWN), and frames with a raw cross-street went from 34 to 7.
+Those 7 residual frames were 6 carrying the overlay (now covered by option B) and 1 home-screen "Trip
+Radar" browse-pill frame with a half-rendered offer card (still a residual). The 8 click frames mask to 0 under the board's
 redact. A prefix-less UNKNOWN-path SHAPE scrub (hypothesis 2) was REJECTED: the cross-street shape
 matches a committed non-customer node, the `shopping_wrong_item` item name "Max & Miles Potted Premium
 Succulent, Each". `UberTripRadarBoardRedactTest` pins the redact over the committed
@@ -237,7 +237,7 @@ sibling, so they claim only frames no other rule wants. **Subpremise ruling (dec
 `address_subpremise_line` on the PICKUP surfaces is the MERCHANT's suite (exposure nil) but is masked
 `plainMask` anyway, for consistency with its `ID_MARKERS` classification — `pickup_pre_arrival` gains the
 entry, and `pickup_navigation` gets its first redact block (`address_subpremise_line` + the fielded
-`bottom_sheet_subpremise_line` twin; its fixtures render no customer node, so nothing else is declared). Note (fable review of PR #1247): a parse-less recognized screen has a constant `Observation.identity()`, so `FrameGate` suppresses consecutive board re-renders — the live pipeline stores about one board envelope per visit; the before/after counts above describe the stored 07-25 captures re-classified, not device behaviour.
+`bottom_sheet_subpremise_line` twin; its fixtures render no customer node, so nothing else is declared). Note (fable review of PR #1247): a parse-less recognized screen has a constant `Observation.identity()`, so `FrameGate` suppresses consecutive board re-renders — the live pipeline stores about one board envelope per visit; the before/after counts above describe the stored 07-25 captures re-classified, not device behaviour. Precision (Astra review of PR #1249): the board frame itself cannot mint an offer (no `state`), but like every recognized frame it moves `FrameGate.lastIdentity`, so an offer card re-rendered byte-identically AFTER a board frame is admitted as a new presentation instead of being identity-suppressed — the general dedup rule (§1), not an #858 regression: an expired card is not redrawn by Uber, and an identical NEW offer should be admitted.
 
 
 **Node model fields (#1147, the 2026-09-21 TalkBack study win 3).** The mapper now also reads what

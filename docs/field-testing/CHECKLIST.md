@@ -122,7 +122,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 Ordered by first-line blame date; source order breaks ties. The five §1 proposals are not repeated here.
 
-- [active] **Trip Radar board (#856):** after an Uber dash with Trip Radar open, no file under `captures/uber/accessibility.window/UNKNOWN/` carries a `<Street> & <Street>, <City>` line (except an expired-card frame carrying "This request is no longer available", a known residual); the board's frames sort as `trip_radar_board` with `[redacted:…]` dropoff lines. Known residuals, not failures: a board frame carrying the expired-card overlay ("This request is no longer available") and the HOME-screen Trip Radar browse pill with a half-rendered card stay UNKNOWN (#856 option B / #251). — Confirmed: 0/2
+- [active] **Trip Radar board (#856):** after an Uber dash with Trip Radar open, no file under `captures/uber/accessibility.window/UNKNOWN/` carries a `<Street> & <Street>, <City>` line; the board's frames, including expired-card overlays ("This request is no longer available"), sort as `trip_radar_board` with `[redacted:…]` dropoff lines. Known residual, not a failure: the HOME-screen Trip Radar browse pill with a half-rendered card stays UNKNOWN (#856 / #251). — Confirmed: 0/2
 
 - [active] **Per-order handling (#1113 slice 1):** a two-order DoorDash stack's bubble card $/hr should equal
   `pay ÷ (2.5 × miles + 14) × 60` (two base overheads), not `… + 7`; e.g. $12.15 / 10.7 mi → ≈ $17.9/hr,
@@ -1592,11 +1592,11 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   Triage source: first-line blame 2026-07-27 (`1f4c4a940`, original README L1140).
 
 - [review] **🆕 NEW — #858 / PR #876 — expiring Uber cards no longer mint offers.**
-  The "This request is no longer available" dying card falls UNKNOWN instead of matching the offer
-  rule. **What to watch (Uber):** an offer that expires on screen produces no new offer row, no TTS
+  The "This request is no longer available" dying card is UNKNOWN or a recognize-only Trip Radar
+  board frame with no `state` block: no state, no offer. **What to watch (Uber):** an offer that expires on screen produces no new offer row, no TTS
   read of the error text, no "(offer replaced)" churn on the live offer. **Desk:** zero
   `merchantName` containing "no longer available" / "Unknown Store"-via-overlay in `offer_records`;
-  the dying frames appear as UNKNOWN captures.
+  the dying frames appear as UNKNOWN or `trip_radar_board` captures.
   - Confirmed: 0/2
   desk: desk-verifiable: compare expiring Uber-card captures with offer rows and TTS logs; error overlays must mint no new offer.
   Triage source: first-line blame 2026-07-26 (`a71ad28d8`, original README L1457).

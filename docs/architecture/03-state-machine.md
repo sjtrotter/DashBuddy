@@ -420,6 +420,7 @@ B3, moved off the shared global R0 slot so concurrent platforms don't collide; N
 ADR-0007, N>1 waits on #251). The lifecycle (`OfferLifecycle.kt` on the stepper, `OfferEffects.kt`
 on `EffectMap`) runs on THIS platform's own observations: push/replace/enrich on `OfferPresented`,
 click-latch (#594 decline-commit), eval-land by `offerHash`, resolve on leaving offer-presentation.
+**Future rule (#251/#858, not implemented):** when the board is evaluated (evaluate-all + rank, 07-25 ruling), a card expiring must not trigger re-evaluation of the cards already evaluated.
 **Offer identity is presentation-scoped (#830), with ruleset-declared identity (#1069):**
 `ParsedFieldsFactory.buildOffer` hashes a parsed `assignmentId` as `sha256("assignment|" + assignmentId)`
 into `assignmentIdHash` and uses it as the EXACT `presentationKey`, never a scoring or `offerHash`

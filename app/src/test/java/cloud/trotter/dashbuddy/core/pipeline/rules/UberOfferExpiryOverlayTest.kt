@@ -4,9 +4,15 @@ import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.test.util.SnapshotSecurityScanner
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import java.io.File
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.experimental.runners.Enclosed
@@ -30,14 +36,17 @@ import org.junit.runners.Parameterized
  *
  * The fix is two layers of rule data, both in `matchers/rules/uber.json5`:
  *  1. **primary** — a `notExists` of `image_message_text` in the offer rule's
- *     `require`, so an overlay-bearing frame matches NO rule and falls UNKNOWN;
+ *     `require`, so an overlay-bearing frame cannot match `uber.screen.offer`;
  *  2. **defense in depth** — the overlay's id *and* text added to both `storeName`
  *     negation lists (top-level and `orders[]`), so a future overlay variant that
  *     slips past layer 1 still cannot win the store read.
  *
- * These fixtures are the negative half. UNKNOWN is the *correct* fail-direction: the
- * frame is dropped before the state machine, the pending offer stays live until the
- * next real frame or its own `OFFER_EXPIRY` timer resolves it. Recognizing the
+ * These fixtures are the negative half. UNKNOWN and flow-less board recognition are
+ * both correct fail-directions: the invariant is **no state, no offer**. UNKNOWN is
+ * dropped before the state machine; the recognize-only board has no `state` block
+ * and cannot mint `OFFER_RECEIVED` (also pinned by `FlowlessRecognitionNeutralityTest`).
+ * The pending offer stays live until the next real frame or its own `OFFER_EXPIRY`
+ * timer resolves it. Recognizing the
  * overlay as its own flow — the platform's explicit "this was not a decline" witness
  * — is #251's H3a and is deliberately deferred to the Trip Radar board design.
  *
@@ -47,15 +56,27 @@ import org.junit.runners.Parameterized
 @RunWith(Enclosed::class)
 class UberOfferExpiryOverlayTest {
 
-    /** Every overlay-bearing capture must classify UNKNOWN. */
+    /** Every overlay-bearing capture must be UNKNOWN or a flow-less board frame. */
     @RunWith(Parameterized::class)
-    class OverlayFramesStayUnknown(
+    class OverlayFramesNeverOffer(
         private val filename: String,
         private val node: UiNode,
     ) {
 
         companion object {
             private const val FIXTURES = "fixtures/uber_offer_expiry_overlay"
+
+            // CompiledRule flattens state into branches; retain the generated definition
+            // too, so even an empty state block cannot silently weaken this guard.
+            private val ruleDefinitions by lazy {
+                requireNotNull(File(TestRulesetFactory.rulesDir).listFiles { file -> file.extension == "json" })
+                    .sortedBy { it.name }
+                    .flatMap { file ->
+                        Json.parseToJsonElement(file.readText()).jsonObject["screens"]
+                            ?.jsonArray.orEmpty().map { it.jsonObject }
+                    }
+                    .associateBy { it.getValue("id").jsonPrimitive.content }
+            }
 
             @JvmStatic
             @Parameterized.Parameters(name = "{0}")
@@ -72,7 +93,7 @@ class UberOfferExpiryOverlayTest {
 
         /**
          * Pins that each fixture really is a #858 specimen — it carries the expiry
-         * overlay node. Without this the UNKNOWN assertion below could pass on any
+         * overlay node. Without this the no-offer assertion below could pass on any
          * unrelated tree and the regression would be untested.
          */
         @Test
@@ -85,15 +106,33 @@ class UberOfferExpiryOverlayTest {
         }
 
         @Test
-        fun `an expiring card is not a live offer`() {
-            val intent = TestRulesetFactory.screenRuleset.matchFirst(node)?.intent ?: "UNKNOWN"
-            assertEquals(
-                "$filename classified '$intent' — the platform is saying this request is GONE, " +
+        fun `an expiring card is never a live offer — UNKNOWN or a flow-less board frame`() {
+            val ruleset = TestRulesetFactory.screenRuleset
+            val match = ruleset.matchFirst(node)
+            assertFalse(
+                "$filename matched '${match?.ruleId}' — the platform is saying this request is GONE, " +
                     "so nothing on this frame may mint OFFER_RECEIVED, name a screenshot, or " +
                     "re-identify the presentation (#858)",
-                "UNKNOWN",
-                intent,
+                match?.ruleId == "uber.screen.offer",
             )
+            if (match != null) {
+                val rule = ruleset.ruleById(match.ruleId)
+                assertNotNull("$filename: matched rule '${match.ruleId}' must exist", rule)
+                rule!!.branches.forEach { branch ->
+                    assertNull("$filename: an expiring card must have no flow (#858)", branch.flow)
+                    assertNull("$filename: an expiring card must have no mode hint (#858)", branch.modeHint)
+                    assertNull("$filename: an expiring card must have no offer surface (#858)", branch.offerSurface)
+                }
+                assertNull(
+                    "$filename: an expiring card must have no state, no offer (#858)",
+                    ruleDefinitions.getValue(rule.id)["state"],
+                )
+                assertEquals(
+                    "$filename: only recognize-only board recognition is allowed",
+                    "uber.screen.trip_radar_board",
+                    match.ruleId,
+                )
+            }
         }
 
         /** These are committed captures; hold them to the same bar as the corpus. */
