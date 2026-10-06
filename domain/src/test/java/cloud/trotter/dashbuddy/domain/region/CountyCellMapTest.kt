@@ -29,6 +29,20 @@ class CountyCellMapTest {
         assertEquals("34017", map.countyOf(manhattan)) // Hudson County NJ, same CBSA.
         assertEquals("state:ND@2023", map.cellAt(Coordinates(47.5, -100.9))?.wire)
         assertEquals("metro:46520@2023", map.cellAt(Coordinates(21.3069, -157.8583))?.wire)
+        // Key West (Astra r1): 137.7 km from Monroe County's Everglades-side internal point — inside the guard.
+        assertEquals("micro:28580@2023", map.cellAt(Coordinates(24.5551, -81.7800))?.wire)
+    }
+
+    /**
+     * KNOWN LIMITATION, pinned so a change is deliberate (Astra r1): a border city of a neighbouring country
+     * resolves to the adjacent US cell — a wrong cell, never a privacy leak. The offline containment guard
+     * that replaces the distance cutoff (#1194, before the `region` field ships) must flip these to null.
+     */
+    @Test
+    fun `border cities of neighbouring countries currently resolve to the adjacent US cell`() {
+        assertEquals("metro:19820@2023", map.cellAt(Coordinates(42.3149, -83.0364))?.wire) // Windsor ON → Detroit
+        assertEquals("metro:41740@2023", map.cellAt(Coordinates(32.5149, -117.0382))?.wire) // Tijuana → San Diego
+        assertNull(map.cellAt(Coordinates(51.88, -176.65))) // Adak AK, 256 km from Aleutians West's point — beyond reach
     }
 
     @Test
@@ -46,14 +60,14 @@ class CountyCellMapTest {
     }
 
     @Test
-    fun `distance guard accepts just inside 120 km and rejects just outside`() {
+    fun `distance guard accepts just inside 160 km and rejects just outside`() {
         val isolated = CountyCellMap.read(
             "county_fips,state,lat,lon,cbsa,kind\n01001,AL,0,0,12420,metro\n".reader().buffered(),
         )
         val origin = Coordinates(0.0, 0.0)
         val degreesPerMeter = 1.0 / origin.distanceTo(Coordinates(1.0, 0.0))
-        assertNotNull(isolated.cellAt(Coordinates(119_999.0 * degreesPerMeter, 0.0)))
-        assertNull(isolated.cellAt(Coordinates(120_001.0 * degreesPerMeter, 0.0)))
+        assertNotNull(isolated.cellAt(Coordinates(159_999.0 * degreesPerMeter, 0.0)))
+        assertNull(isolated.cellAt(Coordinates(160_001.0 * degreesPerMeter, 0.0)))
     }
 
     @Test

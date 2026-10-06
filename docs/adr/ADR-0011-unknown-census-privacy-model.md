@@ -756,7 +756,13 @@ Derivation happens entirely on-device from the dasher's own GPS fixes through
 the offline 2023 county-internal-point→CBSA map: no address, no ZIP, and no
 geocoder (including Android's geocoder, which has no offline guarantee).
 Nearest internal point is an approximation, not point-in-polygon: a border fix
-can select a neighbouring county in another CBSA. The primary-cell policy
+can select a neighbouring county in another CBSA, and — the known limitation of
+this slice — a fix in a border city of a neighbouring country within the 160 km
+reach resolves to the adjacent US cell (Windsor ON → Detroit, Tijuana → San
+Diego, Toronto → Buffalo): a wrong cell, never a privacy leak. An offline
+US-containment guard replaces the distance cutoff before the `region` field
+ships. The 160 km reach exists for the Florida Keys (Key West is 137.7 km from
+Monroe County's Everglades-side point). The primary-cell policy
 smooths these observations over a rolling 28-day window: most distinct active
 days (UTC) wins, with ties resolved by the most recent activity observation.
 

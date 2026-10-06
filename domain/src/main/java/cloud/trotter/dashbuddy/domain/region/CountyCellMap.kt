@@ -35,7 +35,15 @@ class CountyCellMap private constructor(internal val rows: List<Row>) {
 
     companion object {
         val V2023: CountyCellMap by lazy { load("/geo/county_cells_2023.csv") }
-        const val MAX_CENTROID_DISTANCE_METERS = 120_000.0
+        /**
+         * Nearest-point reach. 160 km covers the Florida Keys (Key West is 137.7 km from Monroe County's
+         * internal point, which sits on the Everglades mainland) while still refusing the open ocean and
+         * Europe. It does NOT refuse a border city of a neighbouring country: Windsor ON is 18.9 km from
+         * Wayne County's point (→ Detroit), Tijuana 61.6 km from San Diego's, Toronto 62.5 km from Niagara's
+         * (→ Buffalo) — a wrong CELL, never a privacy leak. An offline US-containment guard replaces this
+         * cutoff before the `region` field ships (tracked on #1194); the Aleutians (Adak, 256 km) stay null.
+         */
+        const val MAX_CENTROID_DISTANCE_METERS = 160_000.0
         private val FIPS = Regex("[0-9]{5}")
         private val DECIMAL = Regex("-?[0-9]+(?:\\.[0-9]+)?")
 
