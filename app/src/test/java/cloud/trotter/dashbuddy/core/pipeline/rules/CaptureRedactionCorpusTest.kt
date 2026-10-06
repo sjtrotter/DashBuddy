@@ -751,7 +751,12 @@ class CaptureRedactionCorpusTest {
     fun `recognize-only privacy rules carry the whole ID_MARKERS belt (#1127, #1139)`() {
         val rulesJson = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText())
             .jsonObject["screens"]!!.jsonArray.map { it.jsonObject }
-        for (ruleId in listOf("doordash.screen.dropoff_customer_unavailable", "doordash.screen.pickup_order_picker")) {
+        for (ruleId in listOf(
+            "doordash.screen.dropoff_customer_unavailable",
+            "doordash.screen.pickup_order_picker",
+            // #1079: the recognize-only 8.95.6 going-to-store sheet carries the picker's belt verbatim.
+            "doordash.screen.pickup_going_to_store_sheet",
+        )) {
             val rule = rulesJson.single { it["id"]!!.jsonPrimitive.content == ruleId }
             val declared = mutableSetOf<String>()
             fun collect(e: kotlinx.serialization.json.JsonElement) {
@@ -773,6 +778,11 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.pickup_order_picker" to listOf(
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/header", text = "Select an Order"),
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/instructions", text = "For Jane D by 12:35"),
+            ),
+            "doordash.screen.pickup_going_to_store_sheet" to listOf(
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/going_to_store_map"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/lblOrderIncludes", text = "Order includes"),
+                UiNode(viewIdResourceName = "com.doordash.driverapp:id/address_instructions_view"),
             ),
             "doordash.screen.dropoff_customer_unavailable" to listOf(
                 UiNode(viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title", text = "Can\u2019t hand order to customer"),
@@ -1057,6 +1067,9 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.pickup_receipt_scan",
             "doordash.screen.camera_capture",
             "doordash.screen.pickup_wait_survey",
+            // #1079: the recognize-only going-to-store sheet copies pickup_receipt_scan's
+            // bare-name entry verbatim — an unpinned hand-copy is the drift this test stops.
+            "doordash.screen.pickup_going_to_store_sheet",
         )) {
             assertTrue(
                 "$id must carry the canonical name-shape regex (FIX 3 defense-in-depth)",
@@ -1166,6 +1179,8 @@ class CaptureRedactionCorpusTest {
             // guard flags (`For ` is chrome-ambiguous by the #1064 doctrine — follow-up filed), so
             // for them the listing buys decoy reachability only.
             "dropoff_customer_unavailable", "pickup_resolution_options", "pickup_order_picker",
+            // #1079 adds the two recognize-only 8.95.6 sheets — the folders the next pull lands in.
+            "pickup_going_to_store_sheet", "dropoff_alcohol_warning_sheet",
         )
         val leaks = mutableListOf<String>()
         val decoysSeen = mutableSetOf<String>()
@@ -1552,6 +1567,11 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.dropoff_handoff",
             "doordash.screen.dropoff_pre_arrival_completion",
             "doordash.screen.navigation_generic",
+            // #1079 (decision 2026-10-05): the MERCHANT's suite on the pickup surfaces is masked
+            // for consistency with its ID_MARKERS classification — exposure nil, posture uniform.
+            "doordash.screen.pickup_pre_arrival",
+            "doordash.screen.pickup_navigation",
+            "doordash.screen.pickup_going_to_store_sheet",
         )
         for (id in subpremiseRules) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(id)
@@ -1679,6 +1699,10 @@ class CaptureRedactionCorpusTest {
             "doordash.screen.dropoff_pre_arrival" to "address_subpremise_line",
             "doordash.screen.dropoff_geofence_warning" to "address_subpremise_line",
             "doordash.screen.delivery_summary_collapsed" to "address_subpremise_line",
+            // #1079: the pickup surfaces (the merchant's suite — masked for id-classification consistency).
+            "doordash.screen.pickup_pre_arrival" to "address_subpremise_line",
+            "doordash.screen.pickup_navigation" to "bottom_sheet_subpremise_line",
+            "doordash.screen.pickup_going_to_store_sheet" to "address_subpremise_line",
         )
         for ((ruleId, idSuffix) in byId) {
             val rule = TestRulesetFactory.screenRuleset.ruleById(ruleId)!!

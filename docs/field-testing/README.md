@@ -48,6 +48,11 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the
+  'Pick up by / Order includes' going-to-store sheet no longer appear as UNKNOWN captures (they land in
+  `dropoff_alcohol_warning_sheet/` and `pickup_going_to_store_sheet/`); a pickup card's Apt/Suite line reads
+  `Apt/Suite: [redacted]` in the capture. — Confirmed: 0/2
+
 - **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
   tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars, minus any "DashBuddy recorded … more than
   was reported" line beneath it, sum to the Earned figure above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from

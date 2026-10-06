@@ -2627,6 +2627,72 @@
       }
     },
     {
+      "comment": "#1079 — DoorDash 8.95.6's alcohol-flow WARNING sheet (fielded 2026-09-05 17:00:14, build 0.230.0+38036999): a bottom sheet titled \"Scan customer's ID and collect signature before handing over order\" over a legal body (\"Giving age-restricted items to anyone below the age of 21 is illegal…\") and a `Got it` button. RECOGNIZE-ONLY (decision pass 2026-10-05, fable + Astra aligned): no `state`, no `parse`, no `bind` — an instruction overlay inside an already-established alcohol dropoff, not a lifecycle anchor, so recognizing it only graduates the UNKNOWN capture and gives the frame a rule-owned redact (FlowlessRecognitionNeutralityTest pins the neutrality). NOT a sensitive surface: it is an instruction sheet, not the ID scanner or the signature pad (the Pledge blocks only the literal document-image capture surfaces, #463). Anchors are view ids FIRST (locale-immune, #938): the sheet container `alcoholWarningBottomSheet` (suffix-exact — its `…Title`/`…Message`/`…Handle` children do not end with it) AND its title or message id. Over-match audit: none of the four ids occurs anywhere in the committed corpus or the negative corpus, so priority 146 (after every sibling — 54/55/56/67/68) is behaviourally inert and can never steal an alcohol sibling's frame. Redact: the fielded sheet carries no customer field at all; the block is this file's four combined-frame belts copied VERBATIM from the alcohol siblings (same bytes, same mask hex) — they are what the #1107/#993/#1039 parity tests require of every rule in this file, and they cover the customer nodes a combined frame could inflate under the sheet.",
+      "id": "doordash.screen.dropoff_alcohol_warning_sheet",
+      "priority": 146,
+      "redact": [
+        {
+          "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "description_text_view"
+          },
+          "plainMask": true
+        },
+        {
+          "comment": "#993 belt (the FIX 3 precedent): this dropoff-phase surface can win a frame that STILL carries DoorDash's nav arrival banner — `dropoff_navigation`'s own reject (Continue / Complete Delivery / Mark as delivered / complete_delivery_steps_button) hands the arrival-MOMENT frame to whichever arrived-phase rule matches, and nav_arriving rejects bottom-sheet frames, so neither of the two rules that already masked `arriving_at_title` covers it. The node is id-BEARING, so the id-less name/address entries elsewhere in this block structurally cannot reach it (`hasNoId` conjunct). Whole token, no normalize — it is a customer ADDRESS on every dropoff-phase surface (see dropoff_navigation for the full reasoning). Inert on any frame without the node; `DropoffBannerRedactParityTest` pins that EVERY rule in this file carries it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasIdSuffix": "arriving_at_title"
+          }
+        },
+        {
+          "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
+          "find": {
+            "hasTextStartsWith": "Apt/Suite"
+          },
+          "keepPrefix": [
+            "Apt/Suite: ",
+            "Apt/Suite "
+          ],
+          "plainMask": true
+        },
+        {
+          "comment": "#1039 belt: the LABEL-anchored half of the subpremise mask — an `Apt/Suite` label node followed by its value, whatever spelling that value carries (`Unit 4202` shipped raw 2026-08-14). Both label spellings are enumerated because `hasPrecedingSiblingText` is an exact, un-trimmed equality; whole-node `plainMask` because a unit number is a bounded ~10^4 alphabet. Ordered ahead of every generic shape entry in this block: `maskNode` is first-match-wins, and a digit-leading value (`101 B`) would otherwise be claimed and HASHED by the id-less street shape. See `dropoff_handoff` for the full reasoning. Inert without the label; pinned by the #1039 parity test.",
+          "find": {
+            "any": [
+              {
+                "hasPrecedingSiblingText": "Apt/Suite"
+              },
+              {
+                "hasPrecedingSiblingText": "Apt/Suite:"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
+      "require": {
+        "all": [
+          {
+            "exists": {
+              "hasIdSuffix": "alcoholWarningBottomSheet"
+            }
+          },
+          {
+            "exists": {
+              "any": [
+                {
+                  "hasIdSuffix": "alcoholWarningBottomSheetTitle"
+                },
+                {
+                  "hasIdSuffix": "alcoholWarningBottomSheetMessage"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "comment": "#796 — DoorDash 'Drop-off issues' help/resolution MENU (opened from the in-dropoff Help action: a 'Drop-off issues' title over two options, 'Reached drop-off location' and 'Have not reached drop-off location'). RECOGNIZE-ONLY (dev decision 2026-07-17, recognition-gap batch #796): no state.flow, no parse — a transient help overlay opened over an already-established task:dropoff flow, not a lifecycle anchor, so recognizing it only graduates the recurring UNKNOWN capture with no risk of perturbing task lineage. Anchors are corpus-unique (grep of app/src/test/resources/snapshots shows 0 other frames carry 'Drop-off issues' or 'Have not reached drop-off location'), so priority is behaviorally inert. PRIVACY (corrected by #1031): the fielded menu frames showed option labels only, and this comment used to stop there — but 'no PII observed' is a reading, not a control, and #1031 disproved exactly that reading on the pickup side, where `pickup_issue_menu` shipped with no redact block at all while its four sub-flow siblings masked the same fused 'For <customer> • <store>' header, and one fielded frame carried the customer verbatim. This rule therefore declares the sibling `doordash.screen.dropoff_issue_resolution`'s `For ` entry VERBATIM (mask-hex parity across the sub-flow, #623/#733) plus the shared `Apt/Suite` subpremise entries — all inert on a frame that renders none of those nodes.",
       "id": "doordash.screen.dropoff_issue_menu",
       "priority": 113,

@@ -110,6 +110,29 @@ class FlowlessRecognitionNeutralityTest {
         )
     }
 
+    /**
+     * #1079 — two more recognize-only surfaces from DoorDash 8.95.6: the alcohol-flow warning
+     * sheet and the mid-render going-to-store sheet (the latter recognized so its `Delivery for`
+     * customer row is masked by a rule rather than only by the UNKNOWN-path backstop). Whether
+     * either should assert a `task:*` flow is a lifecycle question this privacy fix must not
+     * answer by accident; these pin that it did not.
+     */
+    @Test
+    fun `the alcohol warning-sheet frames recognize, carry no flow, and leave PlatformRegion untouched (#1079)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/dropoff_alcohol_warning_sheet",
+            "doordash.screen.dropoff_alcohol_warning_sheet",
+        )
+    }
+
+    @Test
+    fun `the going-to-store sheet frames recognize, carry no flow, and leave PlatformRegion untouched (#1079)`() {
+        assertFlowlessAndNeutral(
+            "snapshots/pickup_going_to_store_sheet",
+            "doordash.screen.pickup_going_to_store_sheet",
+        )
+    }
+
     private fun assertFlowlessAndNeutral(corpus: String, expectedRuleId: String) {
         val frames = SessionReplay.loadSession(corpus)
         assertTrue("the $corpus corpus must not be empty", frames.isNotEmpty())
