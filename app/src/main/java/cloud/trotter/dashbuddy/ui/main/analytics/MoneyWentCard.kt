@@ -199,6 +199,7 @@ private fun moneyWentSegments(split: MoneyWentModel.Split): List<AppSegment> {
                 value = split.carCosts.toFloat().coerceAtLeast(0f),
                 color = c.neutral,
                 note = Formats.money(split.carCosts),
+                noteHidden = true,
             ),
         )
     }

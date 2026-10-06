@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.guard
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,6 +13,23 @@ class OneDisclosurePerScreenGuardTest {
             File(repoRoot, module).walkTopDown()
                 .filter { it.isFile && it.extension == "kt" && "/src/main/" in it.invariantSeparatorsPath }
                 .toList()
+        }
+    }
+
+    @Test
+    fun eachHostHasExactlyOneFooterAndAtMostOneToggle() {
+        val footerCall = Regex("""\bHowNumbersWorkFooter\s*\(""")
+        val toggleCall = Regex("""\bMoreNumbersToggle\s*\(""")
+        // SessionDetailScreen does not render a footer; these are the actual footer hosts.
+        val hosts = listOf(
+            "app/src/main/java/cloud/trotter/dashbuddy/ui/main/analytics/AnalyticsScreen.kt",
+            "app/src/main/java/cloud/trotter/dashbuddy/ui/main/playbook/PlaybookScreen.kt",
+            "app/src/main/java/cloud/trotter/dashbuddy/ui/main/dashboard/DashboardScreen.kt",
+        )
+        hosts.forEach { path ->
+            val text = File(repoRoot, path).readText()
+            assertEquals("$path must have exactly one footer", 1, footerCall.findAll(text).count())
+            assertTrue("$path must have at most one toggle", toggleCall.findAll(text).count() <= 1)
         }
     }
 

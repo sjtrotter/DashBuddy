@@ -202,7 +202,7 @@
     <string name="offers_tab_est_vs_reality_no_ratio">No positive estimate to compare against.</string>
     <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s matched</string>
     <string name="offers_tab_est_vs_reality_thin_format">Only %1$s matched %2$s — thin</string>
-    <string name="offers_tab_est_vs_reality_none">No finished accepted offers yet</string>
+    <string name="offers_tab_est_vs_reality_none">No comparable offers yet</string>
 
     <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
     <string name="offers_tab_list_title">OFFERS IN THIS WINDOW</string>
@@ -330,7 +330,7 @@
     <string name="time_tab_gaps_p90_label">90% under</string>
     <string name="time_tab_gaps_longest_label">Longest</string>
     <string name="time_tab_gaps_coverage_format">%1$s %2$s from %3$s drops</string>
-    <string name="time_tab_gaps_long_format">%1$s %2$s over 2h (break or dry spell)</string>
+    <string name="time_tab_gaps_long_format">%1$s %2$s 2h+ (break or dry spell)</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
     <string name="time_tab_mileage_tax_disclosure">IRS standard-mileage method, not DashBuddy\'s cost model — check with a tax pro.</string>
 
@@ -711,6 +711,7 @@
     <string name="analytics_hero_summary_online_format">%1$s online</string>
     <string name="analytics_hero_summary_miles_format">%1$s mi</string>
     <string name="analytics_hero_summary_previous_format">%1$s prior period</string>
+    <string name="analytics_hero_summary_previous_empty">Nothing recorded in the prior period</string>
     <string name="analytics_hero_summary_separator"> · </string>
     <string name="analytics_hero_no_data">Nothing recorded</string>
 

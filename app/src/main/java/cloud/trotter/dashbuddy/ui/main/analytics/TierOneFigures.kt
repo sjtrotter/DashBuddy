@@ -55,16 +55,15 @@ internal fun moneyFigures(economics: PeriodEconomics, payMix: PayMix): List<Figu
         ),
     )
     val share = payMix.tipShare
-    if (share != null) {
+    if (share != null || payMix.hasBreakdown) {
         figures += Figure(
             stringResource(R.string.money_tab_pay_mix_segment_tips),
             when {
-                !payMix.hasBreakdown -> EMPTY_VALUE
+                share == null -> EMPTY_VALUE
                 !payMix.breakdownComplete -> stringResource(R.string.analytics_tier1_at_least_format, Formats.percent(share))
                 else -> Formats.percent(share)
             },
             when {
-                !payMix.hasBreakdown -> stringResource(R.string.money_tab_pay_mix_segment_not_itemized)
                 !payMix.breakdownComplete -> stringResource(
                     R.string.money_tab_pay_mix_partial_coverage_format,
                     Formats.commaInt(payMix.deliveriesWithBreakdown), Formats.commaInt(payMix.deliveries),

@@ -63,8 +63,7 @@ fun RecapHero(
         )
         Spacer(Modifier.height(4.dp))
         Text(text = Formats.money(economics.netProfit), style = AppTheme.num.heroNum, color = netColor)
-        val direction = NetDelta.delta(economics.netProfit, previousEconomics?.netProfit).direction
-        if (!inProgress || direction == NetDelta.Direction.FROM_ZERO || direction == NetDelta.Direction.NONE) {
+        if (!inProgress || previousEconomics == null) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = deltaText(window, today, economics, previousEconomics),
@@ -72,9 +71,24 @@ fun RecapHero(
                 color = deltaColor(economics, previousEconomics),
             )
         }
+        if (previousEconomics != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = if (NetDelta.isEmpty(previousEconomics)) {
+                    stringResource(R.string.analytics_hero_summary_previous_empty)
+                } else {
+                    stringResource(
+                        R.string.analytics_hero_summary_previous_format,
+                        Formats.money(previousEconomics.netProfit),
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = c.text3,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = factsLine(economics, previousEconomics),
+            text = factsLine(economics),
             style = MaterialTheme.typography.bodySmall,
             color = c.text2,
         )
@@ -121,28 +135,20 @@ private fun deltaText(
 }
 
 /**
- * "47 deliveries · 15h 49m online · 208.6 mi · vs $264.10 the window before" — measured facts only,
+ * "47 deliveries · 15h 49m online · 208.6 mi" — measured facts only,
  * and the ONLY place on the screen each of them appears (#1024 rule 1).
  *
  * What left this line and why: **gross** is the first clause of the money card's own headline
  * ("$412.83 earned." — #1135 vocabulary), and **acceptance** is the Offers tab's funnel — restating either here made
  * the hub say the same number twice on one scroll. What arrived: **miles**, which used to sit in the
- * Money tab's rate tiles beside the deliveries count, and the previous window's kept figure, so the
- * delta above resolves to an actual dollar amount rather than a bare percentage.
+ * Money tab's rate tiles beside the deliveries count. The previous window's kept figure is rendered
+ * separately so it remains visible even when this window has no facts.
  *
- * Each clause is omitted when its measurement doesn't exist — no online time logged, no miles, no
- * predecessor worth comparing against — rather than rendered as a zero, and a window with nothing in
- * it says exactly that (§9).
- *
- * **The comparison clause needs a non-EMPTY predecessor, not merely a non-null one** (review F2).
- * `previousEconomics` is null only for Lifetime; a week the driver did not work still arrives as a
- * real `PeriodEconomics` full of zeros, and `vs $0.00 the window before` reads as a measurement of a
- * worked week rather than the absence of one — while the delta line above has already said "Up from
- * nothing in …" in words. [NetDelta.isEmpty] is the same predicate this function's own empty-window
- * branch uses, so the two can't disagree about what "nothing recorded" means.
+ * Each clause is omitted when its measurement doesn't exist — no online time logged or no miles —
+ * rather than rendered as a zero, and a window with nothing in it says exactly that (§9).
  */
 @Composable
-private fun factsLine(economics: PeriodEconomics, previous: PeriodEconomics?): String {
+private fun factsLine(economics: PeriodEconomics): String {
     if (NetDelta.isEmpty(economics)) return stringResource(R.string.analytics_hero_no_data)
     val deliveryWord = if (economics.totals.deliveries == 1) {
         stringResource(R.string.time_tab_delivery_singular)
@@ -170,14 +176,6 @@ private fun factsLine(economics: PeriodEconomics, previous: PeriodEconomics?): S
                 stringResource(
                     R.string.analytics_hero_summary_miles_format,
                     Formats.decimal(economics.totals.miles),
-                ),
-            )
-        }
-        previous?.takeIf { !NetDelta.isEmpty(it) }?.let {
-            add(
-                stringResource(
-                    R.string.analytics_hero_summary_previous_format,
-                    Formats.money(it.netProfit),
                 ),
             )
         }
