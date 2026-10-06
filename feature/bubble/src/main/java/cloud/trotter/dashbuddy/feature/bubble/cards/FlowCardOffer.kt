@@ -28,14 +28,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
@@ -321,21 +324,24 @@ private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> {
 @Composable
 internal fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
     val c = AppTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OutlinedButton(
-            onClick = onDecline,
-            modifier = Modifier.weight(1f),
-            border = BorderStroke(1.5.dp, c.bad),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = c.bad),
-        ) { Text(stringResource(R.string.flow_card_action_decline), fontWeight = FontWeight.Bold) }
-        Button(
-            onClick = onAccept,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.buttonColors(containerColor = c.good, contentColor = c.textInv),
-        ) { Text(stringResource(R.string.flow_card_action_accept), fontWeight = FontWeight.Bold) }
+    // #1254: keep Accept physically left and Decline right, matching the notification rows.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = onAccept,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = c.good, contentColor = c.textInv),
+            ) { Text(stringResource(R.string.flow_card_action_accept), fontWeight = FontWeight.Bold) }
+            OutlinedButton(
+                onClick = onDecline,
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(1.5.dp, c.bad),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = c.bad),
+            ) { Text(stringResource(R.string.flow_card_action_decline), fontWeight = FontWeight.Bold) }
+        }
     }
 }
 
