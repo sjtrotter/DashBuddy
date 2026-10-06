@@ -92,5 +92,7 @@ data class OfferRecordEntity(
      */
     val outcomeResolved: String? = null,
     val orderCount: Int? = null,
+    /** Every parsed entry proves one order (a store name or a type chip explicitly counting 1). */
+    val orderCountProven: Boolean? = null,
     val isShop: Boolean? = null,
 )

@@ -35,6 +35,7 @@ class TimeConstantRepository @Inject constructor(private val dao: TimeConstantDa
                     jobOfferCount = row.jobOfferCount,
                     soleOfferHash = row.soleOfferHash,
                     orderCount = row.orderCount,
+                    orderCountProven = row.orderCountProven,
                     isShop = row.isShop,
                     offerOutcomeResolved = row.offerOutcomeResolved,
                     deliveryCount = row.deliveryCount,

@@ -18,6 +18,7 @@ data class TimeConstantRow(
     val jobOfferCount: Int?,
     val soleOfferHash: String?,
     val orderCount: Int?,
+    val orderCountProven: Boolean?,
     val isShop: Boolean?,
     val offerOutcomeResolved: String?,
     val deliveryCount: Int,

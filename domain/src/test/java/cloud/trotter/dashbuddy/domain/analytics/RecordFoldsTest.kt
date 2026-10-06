@@ -1866,6 +1866,31 @@ class RecordFoldsTest {
     }
 
 
+    @Test fun `type chip counts survive the fold without proving each parsed entry is one order`() {
+        val pickup = ParsedOrder(0, OrderType.PICKUP, "Store", 1, false, emptySet())
+        val cases = listOf(
+            Triple(listOf("Delivery (2)"), 2, false),
+            Triple(listOf("Delivery (1)"), 1, true),
+            Triple(listOf("Livraison (12)  "), 12, false),
+            Triple(listOf("Delivery (0)"), 0, false),
+            Triple(listOf("McDonald's"), 1, true),
+            Triple(listOf("Store", "Other Store"), 2, true),
+            Triple(listOf("Store", "Delivery (2)"), 3, false),
+            Triple(listOf(" "), 1, false),
+        )
+        for ((stores, count, proven) in cases) {
+            val orders = stores.mapIndexed { index, store -> pickup.copy(orderIndex = index, storeName = store) }
+            val event = ev(AppEventType.OFFER_ACCEPTED, "time", 10,
+                OfferPayload(offerHash = "hash", parsedOffer = ParsedOffer(offerHash = "hash", orders = orders),
+                    evaluation = null, outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 1, decidedAt = 10,
+                    returnFlow = Flow.Idle))
+            val offer = RecordFolds.foldEvent(event, null, cpm).offer!!
+            assertEquals(stores.toString(), count, offer.orderCount)
+            assertEquals(stores.toString(), proven, offer.orderCountProven)
+            assertEquals(false, offer.isShop)
+        }
+    }
+
     @Test fun `time evidence projects only proven offer classification and delivery lineage`() {
         val ctx = RecordFolds.foldEvent(dashStart("time", 0, 100.0), null, cpm).context
         val pickup = ParsedOrder(orderIndex = 0, orderType = OrderType.PICKUP, storeName = "Store",
@@ -1878,6 +1903,7 @@ class RecordFoldsTest {
                     returnFlow = Flow.Idle))
             val offer = RecordFolds.foldEvent(event, ctx, cpm).offer!!
             assertEquals(orders.size.takeIf { it > 0 }, offer.orderCount)
+            assertEquals(orders.isNotEmpty(), offer.orderCountProven)
             assertEquals(if (orders.isEmpty() || orders.any { it.orderType == OrderType.UNKNOWN }) null
                 else orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }, offer.isShop)
         }

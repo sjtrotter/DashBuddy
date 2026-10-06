@@ -19,14 +19,14 @@ class AnalyticsMigration17to18Test {
         emptyList(), FrameworkSQLiteOpenHelperFactory(),
     )
 
-    @Test fun preservesLogAndRowsAndAddsSixNullableColumns() {
+    @Test fun preservesLogAndRowsAndAddsSevenNullableColumns() {
         val name = "migration-17-to-18"
         val platform = Platform.entries.first { it != Platform.Unknown }.wire
         val before = mutableMapOf<String, Map<String, String?>>()
         val newColumns = mapOf(
             "delivery_records" to listOf("jobOfferCount", "soleOfferHash", "odometerAtArrival"),
             "pickup_records" to listOf("odometerAtConfirmation"),
-            "offer_records" to listOf("orderCount", "isShop"),
+            "offer_records" to listOf("orderCount", "orderCountProven", "isShop"),
             "app_events" to emptyList(),
         )
         helper.createDatabase(name, 17).use { db ->

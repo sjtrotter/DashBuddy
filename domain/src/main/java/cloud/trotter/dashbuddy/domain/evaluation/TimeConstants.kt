@@ -25,6 +25,7 @@ data class TimeConstantObservation(
     val jobOfferCount: Int?,
     val soleOfferHash: String?,
     val orderCount: Int?,
+    val orderCountProven: Boolean?,
     val isShop: Boolean?,
     val offerOutcomeResolved: String?,
     val deliveryCount: Int,
@@ -59,7 +60,7 @@ object TimeConstants {
         if ((originalPayBasis ?: payBasis) !in eligibleBases) return null
         if (jobOfferCount != 1 || soleOfferHash.isNullOrBlank() ||
             deliveryCount != 1 || pickupCount != 1 || acceptedOfferCount != 1 || matchingOfferCount != 1 ||
-            orderCount != 1 || isShop != false || offerOutcomeResolved != null) return null
+            orderCountProven != true || orderCount != 1 || isShop != false || offerOutcomeResolved != null) return null
         if (pickupActivity == PickupActivity.SHOPPING) return null
         val total = realizedMinutes?.takeIf { it.isFinite() && it > 0 } ?: return null
         milesToStore?.takeIf { it.isFinite() && it >= 0 } ?: return null

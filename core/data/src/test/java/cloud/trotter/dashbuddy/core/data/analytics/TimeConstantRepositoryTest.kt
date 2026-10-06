@@ -40,8 +40,8 @@ class TimeConstantRepositoryTest {
             VALUES (?, ?, ?, 'job', 'pick', 'Store', 120000, 240000, 540000, 102)""", arrayOf<Any>(id, wire, session))
         sql.execSQL("""INSERT INTO offer_records
             (eventSequenceId, platform, sessionId, offerHash, outcome, presentedAt, decidedAt, itemCount,
-             linkedJobId, orderCount, isShop)
-            VALUES (?, ?, ?, 'offer', ?, 1000, 60000, 1, 'job', 1, 0)""", arrayOf<Any>(id, wire, session, accepted))
+             linkedJobId, orderCount, orderCountProven, isShop)
+            VALUES (?, ?, ?, 'offer', ?, 1000, 60000, 1, 'job', 1, 1, 0)""", arrayOf<Any>(id, wire, session, accepted))
     }
     private suspend fun learned() = TimeConstantRepository(db.timeConstantDao()).learnedTimeConstants.first()
     private suspend fun rows() = db.timeConstantDao().observations(accepted).first()
@@ -63,6 +63,7 @@ class TimeConstantRepositoryTest {
         assertNull(row.jobOfferCount)
         assertNull(row.odometerAtArrival)
         assertNull(row.orderCount)
+        assertNull(row.orderCountProven)
         assertEquals(0, row.matchingOfferCount)
         assertEquals(1, learned().getValue(platform).sampleCount)
     }
@@ -96,6 +97,7 @@ class TimeConstantRepositoryTest {
             offer.copy(offerHash = "wrong"), offer.copy(linkedJobId = "wrong"),
             offer.copy(outcome = AppEventType.OFFER_DECLINED.name),
             offer.copy(outcomeResolved = "UNASSIGNED_ATTESTED"), offer.copy(orderCount = 2),
+            offer.copy(orderCountProven = null), offer.copy(orderCountProven = false),
             offer.copy(isShop = null), offer.copy(isShop = true))
         variants.forEach { bad ->
             dao.upsertOffer(bad)

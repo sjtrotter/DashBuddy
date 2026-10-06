@@ -2142,6 +2142,7 @@ class AnalyticsProjectorTest {
         assertEquals(106.0, rows.single().odometerAtArrival!!, 0.0)
         assertEquals(102.0, rows.single().pickupOdometerAtConfirmation!!, 0.0)
         assertEquals(1, rows.single().orderCount)
+        assertEquals(true, rows.single().orderCountProven)
         assertEquals(false, rows.single().isShop)
         assertEquals(TimeConstantPair(2.0, 8.0), learned.getValue(platform).median)
         projector().catchUp()

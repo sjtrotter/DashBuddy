@@ -1,6 +1,16 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
+import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
+import cloud.trotter.dashbuddy.domain.analytics.SessionFoldContext
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.PickupActivity
 import cloud.trotter.dashbuddy.domain.state.Platform
 import org.junit.Assert.*
@@ -14,7 +24,7 @@ class TimeConstantsTest {
         sessionId = "session", sessionAssigned = 0, payBasis = PayBasis.NONE, originalPayBasis = null,
         realizedMinutes = 20.0, milesToStore = 2.0, milesToDropoff = 4.0,
         odometerAtArrival = 106.0, pickupOdometerAtConfirmation = 102.0,
-        jobOfferCount = 1, soleOfferHash = "offer", orderCount = 1, isShop = false,
+        jobOfferCount = 1, soleOfferHash = "offer", orderCount = 1, orderCountProven = true, isShop = false,
         offerOutcomeResolved = null, deliveryCount = 1, pickupCount = 1,
         acceptedOfferCount = 1, matchingOfferCount = 1, offerDecidedAt = 60_000,
         pickupPhaseStartedAt = 2 * 60_000, pickupArrivedAt = 4 * 60_000,
@@ -27,6 +37,35 @@ class TimeConstantsTest {
         return row(seq).copy(offerDecidedAt = 0, pickupPhaseStartedAt = 0,
             pickupArrivedAt = departure, pickupConfirmedAt = departure, phaseStartedAt = departure,
             arrivedAt = arrival, completedAt = completed, realizedMinutes = completed / 60_000.0)
+    }
+
+    @Test fun `chip multiplicity excludes missing sibling drops from counts and medians`() {
+        fun foldedRow(platform: Platform, vararg stores: String): TimeConstantObservation {
+            val parsed = ParsedOffer(offerHash = "offer", orders = stores.mapIndexed { index, store ->
+                ParsedOrder(index, OrderType.PICKUP, store, 1, false, emptySet())
+            })
+            val event = SequencedAppEvent(1, AppEvent(AppEventType.OFFER_ACCEPTED, 60_000, "session",
+                OfferPayload(offerHash = "offer", parsedOffer = parsed, evaluation = null,
+                    outcome = AppEventType.OFFER_ACCEPTED, presentedAt = 0, decidedAt = 60_000,
+                    returnFlow = Flow.Idle)))
+            val offer = RecordFolds.foldEvent(event,
+                SessionFoldContext("session", platform, 0, 0), null).offer!!
+            // All observed child cardinalities are one; the sibling drop may never have been logged.
+            return row().copy(platform = platform, orderCount = offer.orderCount,
+                orderCountProven = offer.orderCountProven, isShop = offer.isShop)
+        }
+        val stackChip = foldedRow(Platform.Uber, "Delivery (2)")
+        val singleChip = foldedRow(Platform.Uber, "Delivery (1)")
+        val singleStore = foldedRow(Platform.DoorDash, "McDonald's")
+        val twoStores = foldedRow(Platform.DoorDash, "McDonald's", "Taco Bell")
+        assertNull(TimeConstants.sample(stackChip))
+        assertEquals(TimeConstantPair(2.0, 8.0), TimeConstants.sample(singleChip))
+        assertEquals(TimeConstantPair(2.0, 8.0), TimeConstants.sample(singleStore))
+        assertNull(TimeConstants.sample(twoStores))
+        val badMeasurement = stackChip.copy(eventSequenceId = 2, arrivedAt = 19 * 60_000)
+        val learned = TimeConstants.estimate(listOf(singleChip, badMeasurement, twoStores))
+        assertEquals(setOf(Platform.Uber), learned.keys)
+        assertEquals(LearnedTimeConstants(TimeConstantPair(2.0, 8.0), 1), learned.getValue(Platform.Uber))
     }
 
     @Test fun `independent measurements exclude the entire pre-departure prefix`() {
@@ -99,6 +138,7 @@ class TimeConstantsTest {
             r.copy(acceptedOfferCount = 0), r.copy(acceptedOfferCount = 2),
             r.copy(matchingOfferCount = 0), r.copy(matchingOfferCount = 2),
             r.copy(orderCount = null), r.copy(orderCount = 0), r.copy(orderCount = 2),
+            r.copy(orderCountProven = null), r.copy(orderCountProven = false),
             r.copy(isShop = null), r.copy(isShop = true), r.copy(offerOutcomeResolved = "UNASSIGNED_INFERRED"),
             r.copy(pickupActivity = PickupActivity.SHOPPING),
             r.copy(realizedMinutes = null), r.copy(realizedMinutes = 0.0), r.copy(realizedMinutes = -1.0),

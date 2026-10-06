@@ -27,7 +27,7 @@ interface TimeConstantDao {
             d.sessionId, d.sessionAssigned, d.payBasis, d.originalPayBasis, d.realizedMinutes,
             d.milesToStore, d.milesToDropoff, d.odometerAtArrival,
             p.odometerAtConfirmation AS pickupOdometerAtConfirmation,
-            d.jobOfferCount, d.soleOfferHash, o.orderCount, o.isShop,
+            d.jobOfferCount, d.soleOfferHash, o.orderCount, o.orderCountProven, o.isShop,
             o.outcomeResolved AS offerOutcomeResolved,
             dc.n AS deliveryCount, COALESCE(pc.n, 0) AS pickupCount,
             COALESCE(ac.n, 0) AS acceptedOfferCount, COALESCE(mc.n, 0) AS matchingOfferCount,

@@ -659,13 +659,16 @@ week drops from $646.34 to $606.20; Restore detected value brings the machine $4
 
 ## Per-platform time learning (#254)
 
-Room **18** adds six nullable evidence columns: delivery `jobOfferCount`, `soleOfferHash`,
-`odometerAtArrival`; pickup `odometerAtConfirmation`; offer `orderCount`, `isShop`.
+Room **18** adds seven nullable evidence columns: delivery `jobOfferCount`, `soleOfferHash`,
+`odometerAtArrival`; pickup `odometerAtConfirmation`; offer `orderCount`, `orderCountProven`, `isShop`.
 Projector **13** refolds historical payloads to backfill them. Delivery lineage requires a nonempty
 list of entirely nonblank offer hashes, deduplicated before count/singleton projection. Pickup
 confirmation odometer comes from the closing event metadata; delivery arrival odometer comes from
 its payload. Empty orders yield null classification/count; any UNKNOWN order type yields null
-`isShop`, never proven non-shopping. `AnalyticsRecordMappers` preserves the existing frozen mappings.
+`isShop`, never proven non-shopping. The domain-owned #882 `OrderChipShape` stamps chip multiplicity
+into `orderCount` and permits `orderCountProven == true` only for nonempty orders whose names are
+nonblank stores or explicit `(1)` chips; learning requires that proof as well as `orderCount == 1`.
+`AnalyticsRecordMappers` preserves the existing frozen mappings.
 
 `TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
 all delivery/pickup children and linked accepted offers by `(platform, sessionId, jobId)` before

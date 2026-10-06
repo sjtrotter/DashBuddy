@@ -762,7 +762,7 @@
       },
       {
         "tableName": "offer_records",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `offerHash` TEXT NOT NULL, `outcome` TEXT NOT NULL, `presentedAt` INTEGER NOT NULL, `decidedAt` INTEGER NOT NULL, `payAmount` REAL, `distanceMiles` REAL, `itemCount` INTEGER NOT NULL, `merchantName` TEXT, `score` REAL, `action` TEXT, `quality` TEXT, `estNetPay` REAL, `estDollarsPerHour` REAL, `estDollarsPerMile` REAL, `estTimeMinutes` REAL, `estOperatingCostPerMile` REAL, `estFuelPerMile` REAL, `estNonFuelPerMile` REAL, `storeKey` TEXT, `linkedJobId` TEXT, `outcomeResolved` TEXT, `orderCount` INTEGER, `isShop` INTEGER, PRIMARY KEY(`eventSequenceId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `offerHash` TEXT NOT NULL, `outcome` TEXT NOT NULL, `presentedAt` INTEGER NOT NULL, `decidedAt` INTEGER NOT NULL, `payAmount` REAL, `distanceMiles` REAL, `itemCount` INTEGER NOT NULL, `merchantName` TEXT, `score` REAL, `action` TEXT, `quality` TEXT, `estNetPay` REAL, `estDollarsPerHour` REAL, `estDollarsPerMile` REAL, `estTimeMinutes` REAL, `estOperatingCostPerMile` REAL, `estFuelPerMile` REAL, `estNonFuelPerMile` REAL, `storeKey` TEXT, `linkedJobId` TEXT, `outcomeResolved` TEXT, `orderCount` INTEGER, `orderCountProven` INTEGER, `isShop` INTEGER, PRIMARY KEY(`eventSequenceId`))",
         "fields": [
           {
             "fieldPath": "eventSequenceId",
@@ -894,6 +894,11 @@
           {
             "fieldPath": "orderCount",
             "columnName": "orderCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "orderCountProven",
+            "columnName": "orderCountProven",
             "affinity": "INTEGER"
           },
           {

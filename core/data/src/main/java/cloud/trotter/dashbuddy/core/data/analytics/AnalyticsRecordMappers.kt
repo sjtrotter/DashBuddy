@@ -95,5 +95,6 @@ internal fun OfferFold.toEntity() = OfferRecordEntity(
     estFuelPerMile = estFuelPerMile,
     estNonFuelPerMile = estNonFuelPerMile,
     orderCount = orderCount,
+    orderCountProven = orderCountProven,
     isShop = isShop,
 )

@@ -95,7 +95,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
     // drain folds new re-prices; nothing needs refolding. `driverAdjustedAt` likewise re-derives from
     // the immutable correction events on any future refold. Additive ⇒ never wipes app_events or the
     // existing analytics rows.
-    // v17→v18 (#254): six nullable time-learning evidence columns; projector 13 backfills them.
+    // v17→v18 (#254): seven nullable time-learning evidence columns; projector 13 backfills them.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
