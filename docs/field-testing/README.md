@@ -48,6 +48,8 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Consent receipts (#170):** after re-allowing `expand_earnings` on a fresh install, Automation & Consent shows 'Allowed · <today> · v<build> · disclosure r1' under the row; Screen events shows its own line. — Confirmed: 0/2
+
 - **Arrival re-eval (#823 P2):** on a single-store Shop & Deliver, the pickup card's $/hr changes once
   you are in the store with the item list open and shows 'revised at arrival'; one Dispatcher advisory
   names the observed vs offered count; a stacked job shows no revision; no advisory appears for a job

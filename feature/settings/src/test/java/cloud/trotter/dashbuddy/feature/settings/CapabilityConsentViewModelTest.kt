@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.feature.settings
 
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
@@ -11,8 +12,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -37,6 +40,7 @@ class CapabilityConsentViewModelTest {
     private class FakeEventReceipt(
         initial: EventReceiptConsent = EventReceiptConsent.UNDECIDED,
     ) : EventReceiptPreferences {
+        override val receipt = MutableStateFlow<ConsentReceipt?>(null)
         private val _consent = MutableStateFlow<EventReceiptConsent?>(initial)
         override val consent: StateFlow<EventReceiptConsent?> = _consent
         val setCalls = mutableListOf<EventReceiptConsent>()
@@ -49,6 +53,7 @@ class CapabilityConsentViewModelTest {
 
     /** In-memory [RuleCapabilityGrants] — the enumeration + granted set are drivable, writes recorded. */
     private class FakeGrants : RuleCapabilityGrants {
+        override val receipts = MutableStateFlow<Map<String, ConsentReceipt>>(emptyMap())
         private val _capabilities = MutableStateFlow<List<RuleCapability>>(emptyList())
         private val _granted = MutableStateFlow<Set<String>>(emptySet())
         private val _denied = MutableStateFlow<Set<String>>(emptySet())
@@ -217,5 +222,27 @@ class CapabilityConsentViewModelTest {
 
         assertEquals(listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED), receipt.setCalls)
         assertTrue("a feature consent never touches the grant store", grants.setGrantedCalls.isEmpty())
+    }
+
+    @Test
+    fun `receipt state is seeded and follows both owners`() = runTest(dispatcher) {
+        val grants = FakeGrants()
+        val events = FakeEventReceipt()
+        val record = ConsentReceipt(123L, "test", 1, true)
+        grants.receipts.value = mapOf("k" to record)
+        events.receipt.value = record
+        val vm = CapabilityConsentViewModel(grants, events)
+        assertEquals(mapOf("k" to record), vm.uiState.value.receipts)
+        assertEquals(record, vm.uiState.value.eventReceipt)
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.collect {}
+        }
+        val denied = record.copy(decidedAt = 456L, granted = false)
+        grants.receipts.value = mapOf("k" to denied)
+        events.receipt.value = denied
+        runCurrent()
+        assertEquals(mapOf("k" to denied), vm.uiState.value.receipts)
+        assertEquals(denied, vm.uiState.value.eventReceipt)
+        collector.cancel()
     }
 }

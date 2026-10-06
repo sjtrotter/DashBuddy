@@ -17,17 +17,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cloud.trotter.dashbuddy.feature.settings.R
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
+import cloud.trotter.dashbuddy.domain.capability.PrivacyDisclosure
+import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.state.Platform
+import java.time.ZoneId
+import java.util.Locale
 
 /**
  * Capability-consent surface (#422 PR 3): a Google-Play-consistent
@@ -47,6 +55,7 @@ fun CapabilityConsentScreen(
     viewModel: CapabilityConsentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
 
     Scaffold(
         topBar = {
@@ -72,6 +81,7 @@ fun CapabilityConsentScreen(
             Spacer(Modifier.height(8.dp))
             EventReceiptSection(
                 allowed = uiState.eventReceiptAllowed,
+                receipt = uiState.eventReceipt,
                 onAllowedChange = viewModel::setEventReceiptAllowed,
             )
             Spacer(Modifier.height(16.dp))
@@ -89,11 +99,19 @@ fun CapabilityConsentScreen(
                     Spacer(Modifier.height(16.dp))
                     ConsentSourceSection(
                         group = group,
+                        receipts = uiState.receipts,
                         onSetGranted = viewModel::setGranted,
                     )
                 }
             }
 
+            TextButton(
+                // No browser (restricted/work profile) throws from openUri — a privacy link must never crash the record screen.
+                onClick = { runCatching { uriHandler.openUri(PrivacyDisclosure.URL) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            ) {
+                Text(stringResource(R.string.consent_privacy_link))
+            }
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -106,6 +124,7 @@ fun CapabilityConsentScreen(
 @Composable
 private fun EventReceiptSection(
     allowed: Boolean,
+    receipt: ConsentReceipt?,
     onAllowedChange: (Boolean) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -130,6 +149,7 @@ private fun EventReceiptSection(
                     checked = allowed,
                     onCheckedChange = onAllowedChange,
                 )
+                receipt?.let { ConsentReceiptCaption(it) }
             }
         }
     }
@@ -165,6 +185,7 @@ private fun DisclosureHeader() {
 @Composable
 private fun ConsentSourceSection(
     group: ConsentSourceGroup,
+    receipts: Map<String, ConsentReceipt>,
     onSetGranted: (key: String, granted: Boolean) -> Unit,
 ) {
     val platformName = group.platform
@@ -208,6 +229,7 @@ private fun ConsentSourceSection(
                 group.capabilities.forEach { cap ->
                     ConsentCapabilityRowView(
                         row = cap,
+                        receipt = receipts[cap.key],
                         platformName = platformName,
                         onSetGranted = onSetGranted,
                     )
@@ -221,6 +243,7 @@ private fun ConsentSourceSection(
 @Composable
 private fun ConsentCapabilityRowView(
     row: ConsentCapabilityRow,
+    receipt: ConsentReceipt?,
     platformName: String,
     onSetGranted: (key: String, granted: Boolean) -> Unit,
 ) {
@@ -232,4 +255,40 @@ private fun ConsentCapabilityRowView(
         checked = row.granted,
         onCheckedChange = { onSetGranted(row.key, it) },
     )
+    receipt?.let { ConsentReceiptCaption(it, Modifier.padding(horizontal = 16.dp)) }
 }
+
+@Composable
+private fun ConsentReceiptCaption(receipt: ConsentReceipt, modifier: Modifier = Modifier) {
+    Text(
+        text = formatConsentReceipt(
+            receipt = receipt,
+            format = stringResource(R.string.consent_receipt_format),
+            allowed = stringResource(R.string.consent_receipt_allowed),
+            denied = stringResource(R.string.consent_receipt_denied),
+            locale = LocalConfiguration.current.locales[0],
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.padding(bottom = 12.dp),
+    )
+}
+
+/** Pure receipt caption; date formatting shares the app's localized calendar-date policy. */
+internal fun formatConsentReceipt(
+    receipt: ConsentReceipt,
+    format: String,
+    allowed: String,
+    denied: String,
+    zone: ZoneId = ZoneId.systemDefault(),
+    locale: Locale = Locale.getDefault(),
+): String = String.format(
+    locale,
+    format,
+    if (receipt.granted) allowed else denied,
+    formatShortDate(receipt.decidedAt, zone, locale),
+    receipt.appVersion,
+    receipt.disclosureRevision,
+)

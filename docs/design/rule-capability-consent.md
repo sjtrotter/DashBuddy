@@ -165,6 +165,19 @@ for that action; the *grant* check is for automation-initiated fires. Target
 verification (the dynamic half) applies to **both** — integrity is never
 skipped.
 
+### Consent records (#170)
+
+Each capability decision and the separate Screen-events decision carries its latest `ConsentReceipt`:
+`decidedAt` (epoch milliseconds), `appVersion`, `disclosureRevision` (`PrivacyDisclosure.REVISION` of
+`PRIVACY.md`), and `granted`. The decision and receipt are written in **one DataStore edit** in the
+same store, so a record cannot commit separately from enforcement; a later decision replaces it.
+The consent-schema migration clears capability receipts together with the decisions. Missing or
+undecodable receipt JSON means no record, without changing grants or the Screen-events decision.
+
+Automation & Consent shows the receipt under each capability and the Screen-events switch, with
+status, local date, app version and disclosure revision, plus a link to the root `PRIVACY.md`.
+Receipts stay on the device and leave it only in a bug-report export the user chooses to share.
+
 ### Source policy (superseded by #843 — no auto-grant)
 
 **As of #843 there is NO auto-grant, from any source.** `reconcile()` only

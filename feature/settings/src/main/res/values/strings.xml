@@ -38,7 +38,7 @@
     <string name="data_export_log_error_format">Log export failed (%1$s). Check the folder and try again.</string>
     <string name="consent_title">Automation &amp; Consent</string>
     <string name="consent_disclosure_heading">Review or change what DashBuddy is allowed to tap</string>
-    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually.</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android\'s Accessibility service to read the screens of the delivery apps you turn on, so it can recognize offers, pickups, and deliveries. This recognition runs entirely on your phone.\n\nDashBuddy can also tap buttons in a delivery app for you — but only the specific actions you allow, only inside that delivery app, and only on a button whose label matches the action (except the icon-only pay-details arrow, which is verified by app boundary only). Nothing is turned on for you: each action below stays off until you allow it, and DashBuddy asks you the first time it can offer one. Turn any action off and DashBuddy will not tap it — you do it manually. Every decision here is recorded on this device with its time, the app version and the privacy-document revision it was made against.</string>
     <string name="consent_empty">No automation actions are available yet. They appear here once your delivery-app rules load and a rule enables an action such as Accept or Decline.</string>
     <string name="consent_layout_count_format">Covers %1$d card layouts</string>
     <string name="consent_platform_unknown">Delivery app</string>
@@ -133,4 +133,8 @@
     <string name="developer_settings_census_share_captures_explainer">Sends the text of UNKNOWN screens to the census server while this install is trusted there. UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details, and the server operator can read them.</string>
     <string name="developer_settings_census_captures_status">Captures shared: %1$d queued · %2$s</string>
     <string name="developer_settings_census_captures_sent">%1$d sent last run</string>
+    <string name="consent_receipt_format">%1$s · %2$s · v%3$s · disclosure r%4$d</string>
+    <string name="consent_receipt_allowed">Allowed</string>
+    <string name="consent_receipt_denied">Not allowed</string>
+    <string name="consent_privacy_link">Privacy — what DashBuddy does</string>
 </resources>

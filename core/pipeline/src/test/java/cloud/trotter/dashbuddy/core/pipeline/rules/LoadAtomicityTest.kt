@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import android.content.Context
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
@@ -36,6 +37,7 @@ class LoadAtomicityTest {
 
     /** Records every reconcile call so a leaked grant is observable. */
     private class RecordingGrants : RuleCapabilityGrants {
+        override val receipts = MutableStateFlow<Map<String, ConsentReceipt>>(emptyMap())
         val reconcileCalls = mutableListOf<List<RuleCapability>>()
         override val grantedKeys: StateFlow<Set<String>> = MutableStateFlow(emptySet())
         override val deniedKeys: StateFlow<Set<String>> = MutableStateFlow(emptySet())

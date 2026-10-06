@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.setup.consent
 
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,7 @@ class EventReceiptConsentViewModelTest {
 
     private class FakePrefs(initial: EventReceiptConsent? = EventReceiptConsent.UNDECIDED) :
         EventReceiptPreferences {
+        override val receipt = MutableStateFlow<ConsentReceipt?>(null)
         val consentFlow = MutableStateFlow(initial)
         override val consent: StateFlow<EventReceiptConsent?> = consentFlow
         val setCalls = mutableListOf<EventReceiptConsent>()

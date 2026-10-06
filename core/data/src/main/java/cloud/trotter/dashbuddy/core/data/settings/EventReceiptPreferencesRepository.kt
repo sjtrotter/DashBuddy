@@ -1,14 +1,18 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.EventReceiptConsentDataSource
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
+import cloud.trotter.dashbuddy.domain.capability.PrivacyDisclosure
 import cloud.trotter.dashbuddy.domain.di.ApplicationScope
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
+import javax.inject.Inject
+import javax.inject.Named
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,10 +21,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * THE owner of the wide-event-receipt consent (#1151). Materialized once for the app's lifetime
@@ -52,10 +55,14 @@ import javax.inject.Singleton
 class EventReceiptPreferencesRepository @Inject constructor(
     private val dataSource: EventReceiptConsentDataSource,
     @param:ApplicationScope private val scope: CoroutineScope,
+    @param:Named("appVersionName") private val appVersion: String,
 ) : EventReceiptPreferences {
 
     private val _consent = MutableStateFlow<EventReceiptConsent?>(null)
     override val consent: StateFlow<EventReceiptConsent?> = _consent.asStateFlow()
+
+    private val _receipt = MutableStateFlow<ConsentReceipt?>(null)
+    override val receipt: StateFlow<ConsentReceipt?> = _receipt.asStateFlow()
 
     /**
      * #1151 review UU1/UU2 — "read again" pokes. CONFLATED: a poke sent while the collector is still
@@ -80,8 +87,8 @@ class EventReceiptPreferencesRepository @Inject constructor(
     /** Reads the store into [consent]; returns only when the retries were exhausted. */
     private suspend fun readOnce() {
         var failuresInEpisode = 0
-        dataSource.consent
-            .map { decode(it) }
+        dataSource.snapshot
+            .map { decode(it.name) to it.receipt }
             .onEach { failuresInEpisode = 0 }
             .retryWhen { cause, _ ->
                 failuresInEpisode++
@@ -100,9 +107,12 @@ class EventReceiptPreferencesRepository @Inject constructor(
             }
             .catch { t ->
                 Timber.tag("Data").e(t, "event-receipt consent unreadable — retries exhausted")
-                emit(_consent.value ?: EventReceiptConsent.UNDECIDED)
+                emit((_consent.value ?: EventReceiptConsent.UNDECIDED) to _receipt.value)
             }
-            .collect { _consent.value = it }
+            .collect { (decision, record) ->
+                _consent.value = decision
+                _receipt.value = record
+            }
     }
 
     /**
@@ -113,7 +123,13 @@ class EventReceiptPreferencesRepository @Inject constructor(
     override suspend fun set(consent: EventReceiptConsent): Boolean =
         scope.async {
             try {
-                dataSource.setConsent(consent.name)
+                dataSource.setConsent(
+                    consent.name,
+                    ConsentReceipt(
+                        System.currentTimeMillis(), appVersion, PrivacyDisclosure.REVISION,
+                        granted = consent == EventReceiptConsent.ALLOWED,
+                    ),
+                )
                 reread.trySend(Unit) // UU1: a collector that gave up re-reads (conflated poke)
                 true
             } catch (e: CancellationException) {
