@@ -119,6 +119,17 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
 - [active] **#1255 analytics:** simple tier readable at a glance; More sticks across restarts and between the hub and Playbook; mid-week change line not red. — Confirmed: 0/2
+- [active] **#1254 heads-up offer card: Decline is now on the RIGHT, Accept on the LEFT (24dp gap).**
+  **On-dash:** when a DoorDash offer arrives with our heads-up floating over DoorDash's top-right Decline,
+  reach for Decline by habit. Working = your finger lands on OUR muted Decline (the offer declines / the
+  confirm sheet appears), never Accept; expanding the banner keeps the same order. Broken = any near-miss
+  onto Accept, or the order flips between collapsed and expanded. Two clean dashes with at least one
+  reflex decline each.
+  On Pixel 7 (Android 16), check the collapsed shade, floating heads-up and expanded view, including
+  enlarged text: both actions must remain visible and tappable. Open the in-bubble offer card and verify
+  the same physical order (its gap remains 8dp); forced RTL must keep Accept left and Decline right on
+  every surface. With TalkBack, verify Accept is the first action in traversal order on every surface.
+  - Confirmed: 0/2
 
 - **#1189 notification census: with debug census enabled, an admitted UNKNOWN push produces one notification skeleton; repeat pushes dedup; a customer lead-in is withheld; an action-only sensitive marker produces a refusal and no upload. Screen and notification uploads share the daily budget. Confirm counters and gated ops output without recording payload text. Confirmed: 0/2.**
 
