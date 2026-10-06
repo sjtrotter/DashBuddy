@@ -48,13 +48,14 @@ There are three "$/hr" surfaces, and they do not share a definition.
 `OfferEvaluator.evaluate()` (`OfferEvaluator.kt:24-29`):
 
 ```
-estTimeMinutes = distance * avgMinutesPerMile + basePickupMinutes   // 2.5 min/mi, +7 min
+estTimeMinutes = distance * avgMinutesPerMile + basePickupMinutes * max(1, orders)   // 2.5 min/mi, +7 min PER ORDER (#1113)
 dollarsPerHour = netPay / (estTimeMinutes / 60)
 ```
 
 This is a pure a-priori projection from the offer's quoted distance and two
 constants from `UserEconomy` (`avgMinutesPerMile = 2.5`, `basePickupMinutes =
-7.0`). It is scale-invariant, so stacks evaluate fairly, and it is the right
+7.0`, charged once per order since #1113 — a Shop & Deliver order's shop time
+replaces its base, #556/#823). It is the right
 *input to the accept/decline decision*. It is **not** a running rate and is not
 the subject of the complaint — but note its denominator: it has no term for shop
 time, wait time, or traffic, even though we measure all three elsewhere.

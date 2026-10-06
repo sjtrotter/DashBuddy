@@ -248,7 +248,8 @@ class OfferPipelineTest(private val case: PipelineTestCase) {
                 fuelCostEstimate = 0.0,
                 netPayAmount = 12.15,
                 dollarsPerMile = 1.135514,
-                dollarsPerHour = 21.6,
+                // #1113: two orders → two base overheads: 10.7 mi × 2.5 + 2 × 7 = 40.75 min; $12.15 / (40.75/60) = $17.89/hr (was 21.6 on one base).
+                dollarsPerHour = 17.89,
                 dollarsPerHourDelta = 0.01,
             ),
         )

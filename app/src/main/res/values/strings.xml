@@ -383,20 +383,20 @@
 
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry Picker</string>
-    <string name="wizard_screen_goal_option1_desc">Maximize profit. Auto-decline unprofitable offers.</string>
+    <string name="wizard_screen_goal_option1_desc">Maximize profit. Flag unprofitable offers in red so you can decline them fast.</string>
     <string name="wizard_screen_goal_option2_title">Protect Status</string>
-    <string name="wizard_screen_goal_option2_desc">Maintain high acceptance rate. Do not auto-decline anything.</string>
+    <string name="wizard_screen_goal_option2_desc">Maintain high acceptance rate. Score every offer to accept.</string>
     <string name="wizard_screen_goal_option3_title">Manual Mode</string>
     <string name="wizard_screen_goal_option3_desc">Just show me the math. I will make my own decisions.</string>
     <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
     <string name="wizard_screen_shopping_footer">We\'ll use this to score shopping offers on the HUD.</string>
     <string name="wizard_screen_hourly_value_format" translatable="false">%1$s / hr</string>
     <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
-    <string name="wizard_screen_min_payout_footer_auto">We will auto-decline offers below this amount.</string>
+    <string name="wizard_screen_min_payout_footer_auto">Offers below this amount fail your rule and are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_min_payout_footer_flag">We will flag offers below this amount in red.</string>
-    <string name="wizard_screen_hourly_footer_auto">We will auto-decline offers below this rate.</string>
+    <string name="wizard_screen_hourly_footer_auto">Offers below this rate fail your rule and are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_hourly_footer_flag">We will flag offers below this rate in red.</string>
-    <string name="wizard_screen_distance_footer_auto">We will auto-decline offers exceeding this distance.</string>
+    <string name="wizard_screen_distance_footer_auto">Offers past this distance fail your rule and are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_distance_footer_flag">We will flag offers exceeding this distance in red.</string>
     <string name="wizard_screen_content_desc_success">Success</string>
     <string name="wizard_screen_all_set_title">You\'re all set!</string>

@@ -34,22 +34,22 @@ class StrategyDataSource @Inject constructor(
         val EVIDENCE_DELIVERY = booleanPreferencesKey("evidence_save_delivery_summary")
         val EVIDENCE_SESSION = booleanPreferencesKey("evidence_save_dash_summary")
 
-        val AUTO_MASTER = booleanPreferencesKey("auto_master_enabled")
-
-        val AUTO_ACCEPT = booleanPreferencesKey("auto_accept_enabled")
-        val AUTO_ACCEPT_MIN_PAY = doublePreferencesKey("auto_accept_min_pay")
-        val AUTO_ACCEPT_MIN_RATIO = doublePreferencesKey("auto_accept_min_ratio")
-
-        val AUTO_DECLINE = booleanPreferencesKey("auto_decline_enabled")
-        val AUTO_DECLINE_MAX_PAY = doublePreferencesKey("auto_decline_max_pay")
-        val AUTO_DECLINE_MIN_RATIO = doublePreferencesKey("auto_decline_min_ratio")
-
         val QUICK_DECLINES = booleanPreferencesKey("quick_declines_enabled") // #577
 
         val RULE_LIST_JSON = stringPreferencesKey("rule_list_config_v1")
         val PROTECT_STATS_MODE = booleanPreferencesKey("protect_stats_mode")
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
 
+        /** #1113: the seven "decide for me" preferences nothing ever read — purged once, never written again. */
+        val DEAD_AUTOMATION: List<Preferences.Key<*>> = listOf(
+            booleanPreferencesKey("auto_master_enabled"),
+            booleanPreferencesKey("auto_accept_enabled"),
+            doublePreferencesKey("auto_accept_min_pay"),
+            doublePreferencesKey("auto_accept_min_ratio"),
+            booleanPreferencesKey("auto_decline_enabled"),
+            doublePreferencesKey("auto_decline_max_pay"),
+            doublePreferencesKey("auto_decline_min_ratio"),
+        )
     }
 
     // #588: learned shopping pace, now keyed **per platform** (was a single global pair — a
@@ -84,15 +84,6 @@ class StrategyDataSource @Inject constructor(
     val evidenceDelivery: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_DELIVERY] ?: EvidenceConfig.DEFAULT_SAVE_DELIVERIES }
     val evidenceSession: Flow<Boolean> = ds.data.map { it[Keys.EVIDENCE_SESSION] ?: EvidenceConfig.DEFAULT_SAVE_SESSIONS }
 
-    val autoMaster: Flow<Boolean> = ds.data.map { it[Keys.AUTO_MASTER] ?: OfferAutomationConfig.DEFAULT_MASTER }
-
-    val autoAccept: Flow<Boolean> = ds.data.map { it[Keys.AUTO_ACCEPT] ?: OfferAutomationConfig.DEFAULT_AUTO_ACCEPT }
-    val autoAcceptMinPay: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_PAY] ?: OfferAutomationConfig.DEFAULT_ACCEPT_MIN_PAY }
-    val autoAcceptMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_ACCEPT_MIN_RATIO] ?: OfferAutomationConfig.DEFAULT_ACCEPT_MIN_RATIO }
-
-    val autoDecline: Flow<Boolean> = ds.data.map { it[Keys.AUTO_DECLINE] ?: OfferAutomationConfig.DEFAULT_AUTO_DECLINE }
-    val autoDeclineMaxPay: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MAX_PAY] ?: OfferAutomationConfig.DEFAULT_DECLINE_MAX_PAY }
-    val autoDeclineMinRatio: Flow<Double> = ds.data.map { it[Keys.AUTO_DECLINE_MIN_RATIO] ?: OfferAutomationConfig.DEFAULT_DECLINE_MIN_RATIO }
     val quickDeclines: Flow<Boolean> = ds.data.map { it[Keys.QUICK_DECLINES] ?: OfferAutomationConfig.DEFAULT_QUICK_DECLINES } // #577
 
     @OptIn(InternalSerializationApi::class)
@@ -231,26 +222,20 @@ class StrategyDataSource @Inject constructor(
         ds.edit { it[Keys.ALLOW_SHOPPING] = allowed }
     }
 
-    suspend fun setMasterAutomation(enabled: Boolean) {
-        ds.edit { it[Keys.AUTO_MASTER] = enabled }
-    }
-
     suspend fun setQuickDeclines(enabled: Boolean) { // #577
         ds.edit { it[Keys.QUICK_DECLINES] = enabled }
     }
 
-    suspend fun updateAutomation(
-        autoAccept: Boolean, acceptMinPay: Double, acceptMinRatio: Double,
-        autoDecline: Boolean, declineMaxPay: Double, declineMinRatio: Double
-    ) {
+    /** #1113: drop unused economics preferences atomically; preserve live quick declines. */
+    suspend fun purgeDeadAutomationKeys(): Boolean {
+        var purged = false
         ds.edit { prefs ->
-            prefs[Keys.AUTO_ACCEPT] = autoAccept
-            prefs[Keys.AUTO_ACCEPT_MIN_PAY] = acceptMinPay
-            prefs[Keys.AUTO_ACCEPT_MIN_RATIO] = acceptMinRatio
-            prefs[Keys.AUTO_DECLINE] = autoDecline
-            prefs[Keys.AUTO_DECLINE_MAX_PAY] = declineMaxPay
-            prefs[Keys.AUTO_DECLINE_MIN_RATIO] = declineMinRatio
+            if (Keys.DEAD_AUTOMATION.any { prefs.contains(it) }) {
+                Keys.DEAD_AUTOMATION.forEach { prefs.remove(it) }
+                purged = true
+            }
         }
+        return purged
     }
 
     suspend fun clear() {
