@@ -106,7 +106,8 @@ data class GrossSources(
     val driverSetDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
-    val unreportedDashesEmpty: Int,
+    /** Dashes with no report and NO recorded pay (a pay-less #1133-class delivery still counts here — this is a pay predicate, not a delivery count). */
+    val unreportedDashesNoPay: Int,
     val sessionCash: Double,
 ) {
     fun sum(noSessionPay: Double): Double = summaryReported + counterReported + driverSetReported +

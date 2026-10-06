@@ -121,7 +121,7 @@ private fun deltaText(
  * and the ONLY place on the screen each of them appears (#1024 rule 1).
  *
  * What left this line and why: **gross** is the first clause of the money card's own headline
- * ("$412.83 came in."), and **acceptance** is the Offers tab's funnel — restating either here made
+ * ("$412.83 earned." — #1135 vocabulary), and **acceptance** is the Offers tab's funnel — restating either here made
  * the hub say the same number twice on one scroll. What arrived: **miles**, which used to sit in the
  * Money tab's rate tiles beside the deliveries count, and the previous window's kept figure, so the
  * delta above resolves to an actual dollar amount rather than a bare percentage.

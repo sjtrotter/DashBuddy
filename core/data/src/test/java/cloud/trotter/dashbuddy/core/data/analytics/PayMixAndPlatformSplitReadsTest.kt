@@ -368,7 +368,7 @@ internal fun assertMoneySources(e: PeriodEconomics, parts: PayMixParts, scale: D
     assertEquals(copies, sources.driverSetDashes)
     assertEquals(18.0 * scale, sources.recordedWithoutReport, 0.001)
     assertEquals(2 * copies, sources.unreportedDashesWithPay)
-    assertEquals(copies, sources.unreportedDashesEmpty)
+    assertEquals(copies, sources.unreportedDashesNoPay)
     assertEquals(3.0 * scale, sources.sessionCash, 0.001)
     assertEquals(15.0 * scale, e.noSessionPay, 0.001)
     assertEquals(111.0 * scale, e.grossEarnings, 0.001)

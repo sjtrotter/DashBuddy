@@ -153,7 +153,7 @@ class AnalyticsRepository @Inject constructor(
                             driverSetDashes = g.driverSetDashes,
                             recordedWithoutReport = g.recordedWithoutReport,
                             unreportedDashesWithPay = g.unreportedDashesWithPay,
-                            unreportedDashesEmpty = g.unreportedDashesEmpty,
+                            unreportedDashesNoPay = g.unreportedDashesNoPay,
                             sessionCash = g.sessionCash,
                         ),
                     )
@@ -225,7 +225,7 @@ class AnalyticsRepository @Inject constructor(
                                     driverSetDashes = it.driverSetDashes,
                                     recordedWithoutReport = it.recordedWithoutReport,
                                     unreportedDashesWithPay = it.unreportedDashesWithPay,
-                                    unreportedDashesEmpty = it.unreportedDashesEmpty,
+                                    unreportedDashesNoPay = it.unreportedDashesNoPay,
                                     sessionCash = it.sessionCash,
                                 )
                             } ?: GrossSources.EMPTY,

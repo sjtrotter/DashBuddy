@@ -87,4 +87,22 @@ class PayMixTest {
         assertIdentity(PayMix.EMPTY)
         assertNull(PayMix.EMPTY.tipShare)
     }
+
+    /** Boundary checks kept from the pre-#1135 suite: an empty mix is not "complete", and a zero gross with tips has no share. */
+    @Test
+    fun `empty mix is not complete and zero gross yields no tip share`() {
+        assertFalse(PayMix.EMPTY.breakdownComplete)
+        assertFalse(PayMix.EMPTY.hasBreakdown)
+        val zeroGross = PayMix.of(economics(0.0), PayMixParts(0.0, 12.0, 0.0, 1, 1, 0.0, 0, 0))
+        assertNull("a rate with no denominator is not a fact", zeroGross.tipShare)
+        assertTrue(zeroGross.notItemizedNegative)
+    }
+
+    /** A sub-cent negative not-itemized is rounding, not an anomaly (kept from the pre-#1135 suite). */
+    @Test
+    fun `a sub-cent negative not-itemized is rounding not an anomaly`() {
+        val mix = PayMix.of(economics(100.0), PayMixParts(60.0, 40.001, 0.0, 2, 2, 0.0, 0, 0))
+        assertFalse(mix.notItemizedNegative)
+        assertIdentity(mix)
+    }
 }

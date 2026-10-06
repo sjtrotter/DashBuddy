@@ -114,7 +114,7 @@ object MoneyWentModel {
  * decompose the SAME window gross, one into where it came from and one into where it went, and
  * standing them side by side as equal-weight containers meant the tab opened with two bordered
  * surfaces narrating one number. Now the headline states that number once and the two bars are its
- * two decompositions, in reading order: what came in ([PayMixSection]) above where it went.
+ * two decompositions, in reading order: what you earned ([PayMixSection]) above where it went.
  *
  * Three things left in the merge, each because something else on the screen already owns it
  * (#1024 rule 1 — one number, one place):

@@ -47,6 +47,16 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(10.dp))
 
+        // An empty window draws no bar: AppStackBar gives every zero segment the same minimum weight, which
+        // would fabricate a four-way composition out of nothing (Astra r1 P3).
+        if (mix.gross <= UNATTRIBUTED_EPSILON && mix.recorded <= UNATTRIBUTED_EPSILON) {
+            Text(
+                text = stringResource(R.string.money_tab_pay_mix_no_insight),
+                style = MaterialTheme.typography.bodyMedium,
+                color = c.text3,
+            )
+            return@Column
+        }
         val segments = payMixSegments(mix)
         AppStackBar(segments, height = 14.dp)
         Spacer(Modifier.height(10.dp))
@@ -83,10 +93,10 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
             }
         }
         // Each gap line renders only when there is a gap to name (§9: state what the rows prove, never a $0 line).
-        if (mix.notItemized > 0.0) {
+        if (mix.notItemized > UNATTRIBUTED_EPSILON) {
             Spacer(Modifier.height(6.dp))
             Text(
-                text = if (mix.estimatedFromOffers > 0.0) stringResource(
+                text = if (mix.estimatedFromOffers > UNATTRIBUTED_EPSILON) stringResource(
                     R.string.money_tab_pay_mix_not_itemized_estimate_format,
                     Formats.money(mix.notItemized), Formats.money(mix.estimatedFromOffers),
                 ) else stringResource(R.string.money_tab_pay_mix_not_itemized_format, Formats.money(mix.notItemized)),
@@ -94,7 +104,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
                 color = c.text3,
             )
         }
-        if (mix.notMatched > 0.0) {
+        if (mix.notMatched > UNATTRIBUTED_EPSILON) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.money_tab_pay_mix_not_matched_caption),
@@ -102,7 +112,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
                 color = c.text3,
             )
         }
-        if (mix.recordedAboveReported > 0.0) {
+        if (mix.recordedAboveReported > UNATTRIBUTED_EPSILON) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.money_tab_over_attributed_callout_format, Formats.money(mix.recordedAboveReported)),
@@ -121,14 +131,6 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
                 color = c.bad,
             )
         }
-        if (mix.unreconciled) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.money_tab_pay_mix_unreconciled),
-                style = MaterialTheme.typography.bodySmall,
-                color = c.bad,
-            )
-        }
     }
 }
 
@@ -136,7 +138,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
 @Composable
 private fun payMixSegments(mix: PayMix): List<AppSegment> {
     val c = AppTheme.colors
-    val tipsNote = if (mix.cashTips > 0.0) {
+    val tipsNote = if (mix.cashTips > UNATTRIBUTED_EPSILON) {
         stringResource(
             R.string.money_tab_pay_mix_tips_with_cash_format,
             Formats.money(mix.tipsTotal),

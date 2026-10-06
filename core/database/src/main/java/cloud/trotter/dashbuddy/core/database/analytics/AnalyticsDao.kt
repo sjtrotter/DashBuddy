@@ -503,7 +503,7 @@ interface AnalyticsDao {
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
-                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesEmpty,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
                   COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
            LEFT JOIN (
@@ -537,7 +537,7 @@ interface AnalyticsDao {
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
-                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesEmpty,
+                  COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
                   COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
            LEFT JOIN (

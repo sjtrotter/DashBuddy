@@ -474,7 +474,7 @@
     <!-- main/analytics/MoneyTab.kt -->
     <string name="money_tab_earnings_by_day_title">EARNINGS BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings in this period yet.</string>
-    <string name="money_tab_earnings_by_day_caption">gross per day, by dash start day — (No session) deliveries by completion day</string>
+    <string name="money_tab_earnings_by_day_caption">earned per day, by dash start day — (No session) deliveries by completion day</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr</string>
@@ -511,11 +511,10 @@
     <string name="money_tab_pay_mix_no_insight">No pay recorded for this window yet.</string>
     <string name="money_tab_pay_mix_partial_coverage_format">itemized on %1$s of %2$s deliveries</string>
     <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay is recorded but not itemized.</string>
-    <string name="money_tab_pay_mix_not_itemized_format">%1$s recorded but not itemized by the platform</string>
-    <string name="money_tab_pay_mix_not_itemized_estimate_format">%1$s recorded but not itemized by the platform · %2$s of it estimated from the offer</string>
-    <string name="money_tab_pay_mix_not_matched_caption">reported on dash summaries, not matched to a delivery</string>
+    <string name="money_tab_pay_mix_not_itemized_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records</string>
+    <string name="money_tab_pay_mix_not_itemized_estimate_format">%1$s recorded without a base/tip breakdown in DashBuddy\'s delivery records · %2$s of the recorded pay was estimated from the offer</string>
+    <string name="money_tab_pay_mix_not_matched_caption">reported for a dash, not matched to a recorded delivery</string>
     <string name="money_tab_pay_mix_negative_itemization_format">itemized parts exceed the recorded pay by %1$s</string>
-    <string name="money_tab_pay_mix_unreconciled">these parts don\'t add up to Earned — please export a bug report</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
     <string name="money_tab_needs_a_look_title_format">NEEDS A LOOK (%1$s)</string>
@@ -523,7 +522,7 @@
     <!-- main/analytics/MoneyBreakdownCards.kt -->
     <string name="money_tab_platform_split_title">BY PLATFORM</string>
     <string name="money_tab_platform_split_kept_format">%1$s kept</string>
-    <string name="money_tab_unattributed_callout_format">%1$s reported on dash summaries but not matched to a delivery</string>
+    <string name="money_tab_unattributed_callout_format">%1$s reported for a dash but not matched to a recorded delivery</string>
     <string name="money_tab_over_attributed_callout_format">DashBuddy recorded %1$s more than was reported</string>
     <string name="money_tab_no_session_callout_format">(No session): %1$s across %2$s %3$s not tied to a dash</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
@@ -536,11 +535,11 @@
     <!-- main/analytics/SessionDetailScreen.kt -->
     <string name="session_detail_title">Session detail</string>
     <string name="session_detail_not_found">Session not found.</string>
-    <string name="session_detail_unaccounted_format">%1$s reported on dash summaries but not matched to a delivery</string>
+    <string name="session_detail_unaccounted_format">%1$s reported for this dash but not matched to a recorded delivery</string>
     <string name="session_detail_over_attributed_format">DashBuddy recorded %1$s more than was reported</string>
     <string name="session_detail_add_missed_delivery">Add missed delivery</string>
     <string name="session_detail_deliveries_title">DELIVERIES</string>
-    <string name="session_detail_no_deliveries_yet">No deliveries captured for this session.</string>
+    <string name="session_detail_no_deliveries_yet">No deliveries recorded for this dash.</string>
     <string name="session_detail_gross_source_summary">Reported — dash summary</string>
     <string name="session_detail_gross_source_counter">Reported — in-dash counter</string>
     <string name="session_detail_gross_source_driver">Reported — entered by you</string>

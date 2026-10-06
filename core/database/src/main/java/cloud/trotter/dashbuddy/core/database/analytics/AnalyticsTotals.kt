@@ -114,7 +114,7 @@ data class GrossTotalsRow(
     val driverSetDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
-    val unreportedDashesEmpty: Int,
+    val unreportedDashesNoPay: Int,
     val sessionCash: Double,
 )
 
@@ -132,7 +132,7 @@ data class PlatformGrossTotalsRow(
     val driverSetDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
-    val unreportedDashesEmpty: Int,
+    val unreportedDashesNoPay: Int,
     val sessionCash: Double,
 )
 

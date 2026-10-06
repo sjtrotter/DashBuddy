@@ -54,7 +54,7 @@ data class PayMix(
     val cashTips: Double,
     /** Recorded, not itemized: `recorded − base − tips`, SIGNED (a negative is flagged by [notItemizedNegative], never floored). */
     val notItemized: Double,
-    /** The subset of [notItemized] priced from the offer (`OFFER_PAY` rows) — named, not folded. */
+    /** Σ recorded pay of the rows priced from the OFFER (`OFFER_PAY`) — stated beside [notItemized], not as a share of it (a corrected row can keep the basis). */
     val estimatedFromOffers: Double,
     /** Reported, not matched to a delivery — [PeriodEconomics.unattributedPay]. */
     val notMatched: Double,
@@ -68,7 +68,11 @@ data class PayMix(
     val paylessDeliveries: Int,
     /** True when the itemized parts exceed the recorded pay (a data gap the UI states). */
     val notItemizedNegative: Boolean,
-    /** Should never fire: the decomposition did not sum to [gross] within [ANALYTICS_MONEY_EPSILON]. */
+    /**
+     * The decomposition did not sum to [gross] within [ANALYTICS_MONEY_EPSILON]. Diagnostic only: economics and
+     * parts are read on separate flows, so a consumer can legitimately see one inconsistent frame (a cash-tip
+     * edit lands in gross before the parts refresh) — never rendered as a user-facing error.
+     */
     val unreconciled: Boolean,
 ) {
     /** Cash is combined for geometry only; the legend names it separately. */
