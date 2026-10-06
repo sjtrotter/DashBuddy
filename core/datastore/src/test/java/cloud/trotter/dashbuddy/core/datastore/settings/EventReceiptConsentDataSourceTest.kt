@@ -55,7 +55,8 @@ class EventReceiptConsentDataSourceTest {
         assertEquals(EventReceiptConsentSnapshot("DECLINED", declined), source.snapshot.first())
 
         ds.edit { it[receiptKey] = "{broken" }
-        assertNull(source.receipt.first())
-        assertEquals("DECLINED", source.consent.first())
+        val snapshot = source.snapshot.first()
+        assertNull(snapshot.receipt)
+        assertEquals("DECLINED", snapshot.name)
     }
 }

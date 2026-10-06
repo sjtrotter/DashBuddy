@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 data class GrantSnapshot(
     val granted: Set<String>,
@@ -64,7 +63,7 @@ class RuleCapabilityDataSource @Inject constructor(
 
     private fun decodeReceipts(prefs: Preferences): Map<String, ConsentReceipt> =
         prefs[Keys.RECEIPTS]?.let { encoded ->
-            runCatching { Json.decodeFromString<Map<String, ConsentReceipt>>(encoded) }.getOrDefault(emptyMap())
+            runCatching { ConsentReceiptJson.decodeFromString<Map<String, ConsentReceipt>>(encoded) }.getOrDefault(emptyMap())
         } ?: emptyMap()
 
     /** Both decisions from one Preferences emission, so concurrent edits cannot split the read. */
@@ -94,7 +93,7 @@ class RuleCapabilityDataSource @Inject constructor(
             )
             prefs[Keys.GRANTED] = newGranted
             prefs[Keys.DENIED] = newDenied
-            prefs[Keys.RECEIPTS] = Json.encodeToString(newReceipts)
+            prefs[Keys.RECEIPTS] = ConsentReceiptJson.encodeToString(newReceipts)
         }
     }
 

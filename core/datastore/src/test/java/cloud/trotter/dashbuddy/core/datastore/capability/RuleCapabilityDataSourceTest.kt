@@ -170,6 +170,23 @@ class RuleCapabilityDataSourceTest {
         }
     }
 
+    /** A newer build's extra receipt field must not erase every older record on a downgrade (#170 review). */
+    @Test
+    fun `a receipt carrying an unknown field still decodes and a decision beside it keeps the map`() = runTest {
+        val ds = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { File(tmp.root, "forward.preferences_pb") },
+        )
+        val source = RuleCapabilityDataSource(ds)
+        ds.edit {
+            it[stringPreferencesKey("consent_receipts_json")] =
+                """{"old":{"decidedAt":1,"appVersion":"0.240.0","disclosureRevision":2,"granted":true,"promptSurface":"sheet"}}"""
+        }
+        assertEquals(mapOf("old" to ConsentReceipt(1, "0.240.0", 2, true)), source.receipts.first())
+        source.update { g, d, r -> GrantSnapshot(g + "k", d, r + ("k" to record)) }
+        assertEquals(setOf("old", "k"), source.receipts.first().keys)
+    }
+
     @Test
     fun `fresh store over the same file reads receipts back`() = runTest {
         val file = File(tmp.root, "reopen.preferences_pb")

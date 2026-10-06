@@ -11,7 +11,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import cloud.trotter.dashbuddy.core.datastore.capability.ConsentReceiptJson
 
 data class EventReceiptConsentSnapshot(val name: String?, val receipt: ConsentReceipt?)
 
@@ -29,24 +29,24 @@ class EventReceiptConsentDataSource @Inject constructor(
         val EVENT_RECEIPT_RECEIPT = stringPreferencesKey("event_receipt_consent_receipt_json")
     }
 
-    /** Decision and record from one emission; malformed receipt JSON never changes the decision. */
+    /**
+     * Decision and record from ONE emission — the only read path, so a consumer can never pair a new decision
+     * with an older receipt; `name` is null when nothing has been saved (never asked). Malformed receipt JSON
+     * never changes the decision.
+     */
     val snapshot: Flow<EventReceiptConsentSnapshot> = ds.data.map { prefs ->
         EventReceiptConsentSnapshot(
             name = prefs[Keys.EVENT_RECEIPT_CONSENT],
             receipt = prefs[Keys.EVENT_RECEIPT_RECEIPT]?.let { encoded ->
-                runCatching { Json.decodeFromString<ConsentReceipt>(encoded) }.getOrNull()
+                runCatching { ConsentReceiptJson.decodeFromString<ConsentReceipt>(encoded) }.getOrNull()
             },
         )
     }
 
-    /** The stored decision name, or null when nothing has been saved (never asked). */
-    val consent: Flow<String?> = snapshot.map { it.name }
-    val receipt: Flow<ConsentReceipt?> = snapshot.map { it.receipt }
-
     suspend fun setConsent(name: String, receipt: ConsentReceipt) {
         ds.edit {
             it[Keys.EVENT_RECEIPT_CONSENT] = name
-            it[Keys.EVENT_RECEIPT_RECEIPT] = Json.encodeToString(receipt)
+            it[Keys.EVENT_RECEIPT_RECEIPT] = ConsentReceiptJson.encodeToString(receipt)
         }
     }
 }

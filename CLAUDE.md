@@ -797,8 +797,9 @@ Every new feature or refactor holds to these — they are forefront design input
      `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
      (fail-closed); each decision carries a receipt — time, app version,
      `PrivacyDisclosure.REVISION` of `PRIVACY.md` — written in the same DataStore edit (#170).
-     A one-shot schema migration (`RuleCapabilityDataSource`, #843) clears any
-     pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
+     A one-shot schema migration (`RuleCapabilityDataSource`; v1 #843 cleared pre-consent
+     auto-grants and kept denials, v2 #1167 changed the key shape so it clears grants, denials AND
+     receipts together) lands every capability undecided for the prompt to re-collect consent.
      **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
      value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
      filtered), a durable decline, asked as the FIRST step of the permission chain — BEFORE the

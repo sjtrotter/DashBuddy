@@ -434,6 +434,6 @@ class EventReceiptPreferencesRepositoryTest {
         advanceUntilIdle()
         assertEquals(EventReceiptConsent.ALLOWED, repo.consent.value)
         assertEquals(record, repo.receipt.value)
-        assertEquals(record, source.receipt.first())
+        assertEquals(record, source.snapshot.first().receipt)
     }
 }

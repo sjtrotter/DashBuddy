@@ -106,7 +106,8 @@ fun CapabilityConsentScreen(
             }
 
             TextButton(
-                onClick = { uriHandler.openUri(PrivacyDisclosure.URL) },
+                // No browser (restricted/work profile) throws from openUri — a privacy link must never crash the record screen.
+                onClick = { runCatching { uriHandler.openUri(PrivacyDisclosure.URL) } },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             ) {
                 Text(stringResource(R.string.consent_privacy_link))
