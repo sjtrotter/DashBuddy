@@ -14,119 +14,106 @@
     <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score. -->
     <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dólares por hora netos. Neto %4$s, %5$s millas, puntuación %6$s.</string>
     <!-- %1$s verdict word, %2$s merchant name, %3$s gross pay (#936). -->
-    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pago %3$s. Sin veredicto: no se pudo leer la distancia.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pago %3$s. Sin veredicto: no se leyó la distancia.</string>
 
     <!-- #907 — folded from values-es-rUS; defaults live in app/src/main/res/values/strings.xml. -->
     <string name="app_name">DashBuddy</string>
-    <string name="this_is_the_bubble">¡Esta es la burbuja!</string>
-    <string name="log_level">Nivel de registro</string>
-    <string name="save_log">Guardar registro</string>
-    <string name="share_log">Compartir registro</string>
-    <string name="accessibility_service_description">DashBuddy lee la información de la pantalla de la app Dasher para rastrear automáticamente tus millas, registrar los detalles de las ofertas y tus ganancias. Este servicio nunca recopila contraseñas ni información personal. Se requiere este permiso para habilitar las funciones de rastreo automático.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="accessibility_service_description">DashBuddy ayuda a repartidores leyendo las pantallas de las aplicaciones de reparto habilitadas y las ofertas en voz alta mientras conduces. El reconocimiento y los cálculos se hacen en el teléfono. Aceptar y Rechazar requieren que pulses en DashBuddy; las acciones automáticas necesitan permisos separados. Eventos de pantalla permite identificar otras aplicaciones en primer plano. Las pantallas reconocidas con tus datos bancarios, de pago o de identidad y las pantallas de captura de documentos se bloquean antes de extraer o guardar datos. Los filtros pueden omitir pantallas no reconocidas en las capturas de depuración. Las capturas de imagen opcionales guardan toda la pantalla. Android puede incluir el historial y los ajustes en copias de seguridad; la galería puede sincronizar las imágenes. Subir capturas de depuración requiere activar opciones de desarrollador.</string>
 
-    <string name="welcome">¡Bienvenido a DashBuddy!</string>
-    <string name="dashbuddy_explainer">¡Te facilitamos el seguimiento de tus carreras! Las interacciones en esta app ocurren dentro de su burbuja. Además de las notificaciones, también necesitamos solicitar otros permisos. Por favor, activa los siguientes servicios:</string>
 
-    <string name="post_notifications">Notificaciones de publicaciones</string>
-    <string name="post_notifications_explainer">Permite que DashBuddy muestre alertas importantes y el botón de burbuja flotante. Tras habilitarlo, toque el botón de burbuja en la notificación para iniciar el servicio.</string>
 
-    <string name="accessibility_service">Servicio de Accesibilidad</string>
-    <string name="accessibility_service_explainer">Este es el permiso principal. Permite que la aplicación lea el texto de la pantalla de Dasher para registrar automáticamente los detalles de las ofertas, seguir el progreso del dash y proporcionar superposiciones.</string>
 
-    <string name="location_access">Acceso a la ubicación</string>
-    <string name="location_access_explainer">Necesario para el seguimiento del kilometraje a efectos fiscales y para proporcionar estimaciones precisas del tiempo de entrega. Su ubicación solo se registra durante una carrera activa.</string>
 
-    <string name="notification_access">Acceso a notificaciones</string>
-    <string name="notification_access_explainer">Se requiere para ver las notificaciones de nuevos pedidos y las alertas de propinas cuando la aplicación Dasher está en segundo plano. Esto ayuda a garantizar que no se pierdan oportunidades.</string>
 
-    <string name="enable">Permitir</string>
-    <string name="enabled">Activada</string>
-    <string name="start_time_stop_time" translatable="false">%1$s - %2$s</string>
-    <string name="orders_miles">%1$d Pedidos • %2$s Millas</string>
-    <string name="offer_summary_status" translatable="false">%1$s: %2$s</string>
-    <string name="total">Total</string>
-    <string name="order_at_store_and_status">Ordene en %1$s: %2$s</string>
-    <string name="show_bubble">Mostrar burbuja</string>
 
-    <string name="total_miles_format" translatable="false">Total: %1$s</string>
-    <string name="actual_stats_time" translatable="false">Time: %1$s</string>
-    <string name="actual_stats_distance" translatable="false">Distance: %1$s</string>
-    <string name="actual_stats_per_mile" translatable="false">$/mi: %1$s</string>
-    <string name="actual_stats_per_hour" translatable="false">$/hr: %1$s</string>
-    <string name="doordash_pays" translatable="false">Doordash Pay(s)</string>
-    <string name="no_pay_data">Sin datos de pago</string>
-    <string name="previous">Anterior</string>
-    <string name="next">Siguiente</string>
-    <string name="export">Exportar</string>
-    <string name="go_to_current">Ir al actual</string>
-    <string name="active_total">Activo/Total</string>
-    <string name="ready_to_dash">Listo para trabajar</string>
-    <string name="all_systems_go">Todos los sistemas listos.</string>
-    <string name="settings">Ajustes</string>
-    <string name="edit">Editar</string>
-    <string name="description_goes_here">La descripción va aquí…</string>
-    <string name="settings_content_frame" translatable="false">settings content frame</string>
 
-    <string name="perm_privacy_guarantee">Tu información se queda en tu dispositivo. Nunca vendemos tus datos.</string>
-    <string name="perm_under_the_hood_title">¿Cómo funciona esto?</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_privacy_guarantee">DashBuddy no vende tus datos. Las copias de seguridad de Android y las funciones de red pueden enviar datos fuera del teléfono.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_under_the_hood_title">Uso de datos</string>
 
-    <string name="perm_title_accessibility">Automatización de Pantalla (Accesibilidad)</string>
-    <string name="perm_pitch_accessibility">Para actuar como tu copiloto, DashBuddy necesita leer las ofertas de Dasher a medida que aparecen y tocar la pantalla para aceptarlas o rechazarlas según tus reglas.</string>
-    <string name="perm_hood_accessibility">Usamos el Servicio de Accesibilidad de Android. Nuestro motor solo observa la pantalla cuando la aplicación Dasher está abierta. Nuestros bloqueadores de \'Pantalla Sensible\' apagan nuestros \'ojos\' inmediatamente si abres tu aplicación bancaria o mensajes personales.</string>
-    <string name="perm_action_accessibility">Habilitar Automatización</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_title_accessibility">Lectura de pantalla (Accesibilidad)</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_pitch_accessibility">DashBuddy lee ofertas en voz alta mientras conduces. Aceptar y Rechazar requieren que pulses; las acciones automáticas necesitan tu permiso.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_hood_accessibility">Accesibilidad de Android lee las aplicaciones de reparto habilitadas. Eventos de pantalla permite identificar otras aplicaciones en primer plano. Las pantallas reconocidas con tus datos bancarios, de pago o de identidad y las pantallas de captura de documentos se bloquean antes de extraer o guardar datos. El reconocimiento y los cálculos se hacen en el dispositivo; los nombres y direcciones de clientes reconocidos se guardan como hashes. Las capturas de depuración pueden conservar datos que los filtros omitan.\n\nLa actualización de gasolina está desactivada hasta que la actives: el geocodificador de Android puede enviar coordenadas a su proveedor; EIA recibe una solicitud de precios regionales. Pulsa el precio de gasolina de la burbuja para usar el modo manual y detener las actualizaciones automáticas. La configuración envía la selección de vehículo a EPA para obtener MPG. Ninguna consulta envía una cuenta ni un identificador de instalación. La búsqueda manual de MPG abre Google con la consulta del vehículo. Subir el censo de depuración requiere activarlo en las opciones de desarrollador; compartir capturas desde instalaciones de confianza puede enviar texto de clientes al operador del servidor configurado. Las versiones de producción no hacen ninguna de estas operaciones. Las imágenes opcionales guardan toda la pantalla en Pictures/DashBuddy; la galería puede sincronizarlas. Android puede copiar el historial y los ajustes a tu cuenta de Google o transferirlos a otro teléfono; los registros de consentimiento quedan excluidos. El historial, los ajustes y las capturas de depuración permanecen hasta borrarlos o desinstalar; Android puede restaurar el historial y los ajustes de una copia de seguridad. Los registros rotan; las imágenes y las exportaciones permanecen hasta borrarlas. Consulta PRIVACY.md.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_action_accessibility">Activar lectura de pantalla</string>
 
-    <string name="perm_title_listener">Radar de Propinas (Notificaciones)</string>
-    <string name="perm_pitch_listener">Para capturar actualizaciones de propinas y otras notificaciones, DashBuddy necesita leer tus notificaciones de Dasher.</string>
-    <string name="perm_hood_listener">Usamos el servicio de notificaciones para escuchar *solo* alertas de Dasher. Ignoramos al instante mensajes personales o correos electrónicos.</string>
-    <string name="perm_action_listener">Habilitar Radar</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_title_listener">Acceso a notificaciones</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_pitch_listener">Leer ofertas y actualizaciones de propinas de las notificaciones de aplicaciones de reparto habilitadas.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_hood_listener">El lector de notificaciones de Android solo lee aplicaciones de reparto habilitadas. Descarta las notificaciones de otras aplicaciones antes de leerlas. Los eventos reconocidos se guardan en tu historial; Android puede copiarlos en una copia de seguridad. Las capturas de depuración pueden conservar texto de notificaciones. Compartir el censo de depuración está desactivado por defecto; las versiones de producción no pueden subirlo.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_action_listener">Activar acceso a notificaciones</string>
 
-    <string name="perm_title_location">Ubicación en Segundo Plano</string>
-    <string name="perm_pitch_location">DashBuddy rastrea tus millas mientras trabajas para que puedas calcular tu ganancia real después de la gasolina y el desgaste.</string>
-    <string name="perm_hood_location">Solo usamos tu GPS durante una carrera activa. Al finalizar el dash, nuestro odómetro se apaga completamente para ahorrar batería y proteger tu privacidad.</string>
-    <string name="perm_action_location">Permitir Ubicación</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_title_location">Ubicación en segundo plano</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_pitch_location">Registrar las millas del dash para estimar las ganancias después de gasolina y desgaste.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_hood_location">El odómetro usa GPS durante un dash y se detiene al terminar, reduciendo el consumo de batería y la recogida de ubicación. La actualización de gasolina puede leer tu última ubicación fuera de un dash y enviar coordenadas al proveedor de geocodificación de Android. Está desactivada hasta que la actives; pulsa el precio de gasolina de la burbuja para usar el modo manual y detener las actualizaciones automáticas. Las millas registradas permanecen en el historial y pueden incluirse en copias de seguridad de Android.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_action_location">Permitir ubicación</string>
 
-    <string name="perm_title_post_notif">Alertas de Burbuja</string>
-    <string name="perm_pitch_post_notif">DashBuddy usa notificaciones para mantener activa la burbuja flotante y avisarte de ofertas bien pagadas.</string>
-    <string name="perm_hood_post_notif">Este es un permiso estándar de Android para asegurar que el sistema no cierre la aplicación en segundo plano mientras trabajas. ¡Para obtener la funcionalidad completa, se recomienda habilitar la burbuja!</string>
-    <string name="perm_action_post_notif">Habilitar Alertas</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_title_post_notif">Notificaciones</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_pitch_post_notif">Las notificaciones mantienen la burbuja activa y muestran ofertas con Aceptar y Rechazar.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_hood_post_notif">El permiso de notificaciones de Android permite mostrar notificaciones de la burbuja y de ofertas. Activa las burbujas para abrir la pantalla flotante.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_action_post_notif">Permitir notificaciones</string>
 
-    <string name="perm_toast_accessibility_hint">Busca \'DashBuddy\' y actívalo.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="perm_toast_accessibility_hint">Busca DashBuddy y actívalo.</string>
 
-    <string name="wizard_title_mpg">Eficiencia del Vehículo</string>
-    <string name="wizard_desc_mpg">¿Cuál es el MPG (millas por galón) promedio de tu auto? Usamos esto para calcular tu ganancia real después de los gastos de gasolina.</string>
 
     <!-- locale/LocaleBoundaryNotifier.kt — el aviso del límite de idioma (#938). Translated here
          even though values-es is otherwise incomplete: this notice exists FOR a dasher whose phone
          is not in English, so an untranslated copy would be the one string that fails its own
          audience. -->
     <string name="app_notice_channel_name">Avisos de la aplicación</string>
-    <string name="app_notice_channel_description">Avisos puntuales sobre cómo funciona DashBuddy en este teléfono</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="app_notice_channel_description">Avisos de estado de DashBuddy</string>
     <string name="locale_notice_title">DashBuddy solo lee pantallas en inglés</string>
-    <string name="locale_notice_text">Tu teléfono está configurado en un idioma distinto del inglés. DashBuddy reconoce las pantallas de reparto por su texto en inglés, así que se le escaparán casi todas las ofertas y entregas — y los filtros de privacidad que ocultan los datos del cliente funcionan con ese mismo texto en inglés, por lo que también cubren menos. Cambiar el teléfono a inglés restablece ambas cosas.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="locale_notice_text">Tu teléfono no está en inglés. DashBuddy reconoce el texto de pantalla en inglés, por lo que puede omitir la mayoría de las ofertas y entregas. Sus filtros de privacidad en inglés también pueden omitir datos de clientes. Cambia el teléfono a inglés para restablecer el reconocimiento y esos filtros; esto no garantiza que se filtre cada dato.</string>
 
     <string name="recognition_health_notice_title">DashBuddy no puede leer %1$s ahora mismo</string>
-    <string name="recognition_health_notice_text">El %2$d%% de las últimas pantallas de %1$s no se reconocieron, lo que suele significar que la aplicación de %1$s se actualizó y cambió de aspecto. Puede que las ofertas, recogidas y entregas no se registren hasta que DashBuddy se actualice.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="recognition_health_notice_text">El %2$d%% de las pantallas recientes de %1$s no se reconocieron. Es probable que la aplicación de %1$s haya cambiado. Las ofertas, recogidas y entregas pueden quedar sin registrar hasta que DashBuddy se actualice.</string>
     <string name="recognition_health_notice_platform_fallback">esta plataforma</string>
 
     <!-- #991 — aviso del motor de voz. Traducido aquí porque la lectura de ofertas en voz alta ya
          respeta el idioma elegido (#428 mitad B): un aviso de que esa voz se apagó debe hablar el
          mismo idioma que hablaba. -->
     <string name="tts_health_notice_title">DashBuddy dejó de leer las ofertas en voz alta</string>
-    <string name="tts_health_notice_text">El motor de texto a voz de tu teléfono dejó de responder, así que los avisos de oferta hablados se apagaron. DashBuddy lo reintenta cada vez que llega una oferta nueva. Si sigue en silencio, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. De todos modos, las ofertas siguen apareciendo en pantalla.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="tts_health_notice_text">El motor de texto a voz del teléfono dejó de responder. DashBuddy reintenta con cada oferta nueva. Si sigue sin voz, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. Las ofertas siguen en pantalla.</string>
 
     <!-- #254: local per-platform time learning and independent global overrides. -->
     <string name="economy_time_title">Estimaciones de tiempo</string>
-    <string name="economy_time_help">Los valores personalizados se aplican a todas las plataformas. Las recomendaciones automáticas siguen aprendiendo. El ritmo se mide desde la salida de la recogida hasta la llegada a la entrega y supone un ritmo similar hacia la tienda. El tiempo de parada incluye la recogida y la entrega.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="economy_time_help">Los valores personalizados se aplican a todas las plataformas; las estimaciones automáticas siguen aprendiendo. El ritmo de conducción usa la salida de la recogida hasta la llegada a la entrega y supone el mismo ritmo hacia la tienda. El tiempo de parada incluye las esperas de recogida y entrega.</string>
     <string name="economy_time_pace">Ritmo de conducción · min/milla</string>
     <string name="economy_time_overhead">Recogida + entrega · min/pedido</string>
     <string name="economy_time_automatic">Automático</string>
     <string name="economy_time_set_override">Usar valor personalizado</string>
     <string name="economy_time_use_automatic">Usar automático</string>
-    <string name="economy_time_invalid_pace">Introduce un número finito mayor que cero.</string>
-    <string name="economy_time_invalid_overhead">Introduce un número finito mayor o igual que cero.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="economy_time_invalid_pace">Introduce un número finito mayor que 0.</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="economy_time_invalid_overhead">Introduce un número finito de 0 o más.</string>
     <string name="economy_time_automatic_values">Automático: %1$s min/milla · %2$s min/pedido</string>
     <string name="economy_time_effective_values">En uso: %1$s min/milla · %2$s min/pedido</string>
-    <string name="economy_time_default_progress">%1$d/%2$d entregas válidas — usando valor predeterminado</string>
+    <!-- copy-audit: retranslated es -->
+    <string name="economy_time_default_progress">%1$d/%2$d entregas válidas; usando el valor predeterminado</string>
     <string name="economy_time_window">Las medianas usan las últimas %1$d entregas válidas.</string>
     <plurals name="economy_time_deliveries">
         <item quantity="one">Aprendido de %d entrega</item>

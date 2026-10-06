@@ -72,13 +72,13 @@ class MileageTaxModelTest {
             100.0, noonUtc(2027, 6, 15), utc,
             window(WindowGranularity.MONTH, LocalDate.of(2027, 6, 15)),
         )
-        // 2027 unpublished → latest known rate (2026 = $0.725/mi), labelled honestly.
+        // 2027 absent from the table → latest known rate (2026 = $0.725/mi), labelled honestly.
         assertTrue(labels.deductionLine.contains("IRS 2027"))
         assertTrue(labels.deductionLine.contains("$0.725/mi"))
         assertTrue(labels.deductionLine.contains("$72.50"))
         assertNull(labels.spansYearsNote)
         assertEquals(
-            "2027 rate not yet published — estimated at the 2026 rate",
+            "2027 rate unavailable in DashBuddy; estimate uses 2026 rate.",
             labels.disclaimer,
         )
     }
@@ -86,7 +86,7 @@ class MileageTaxModelTest {
     @Test fun lifetime_addsMaySpanYearsNote() {
         val labels = MileageTaxModel.from(100.0, noonUtc(2026, 7, 15), utc, AnalyticsWindows.LIFETIME)
         assertEquals(
-            "may span tax years — see the CSV export",
+            "may span tax years; see the CSV export",
             labels.spansYearsNote,
         )
     }
@@ -99,7 +99,7 @@ class MileageTaxModelTest {
             window(WindowGranularity.WEEK, LocalDate.of(2026, 1, 1)),
         )
         assertEquals(
-            "spans tax years — see the CSV export",
+            "spans tax years; see the CSV export",
             labels.spansYearsNote,
         )
         // A year-straddling window falls back to the CURRENT year's rate and says so.
@@ -144,7 +144,7 @@ class MileageTaxModelTest {
             AnalyticsWindows.custom(LocalDate.of(2025, 12, 20), LocalDate.of(2026, 1, 10)),
         )
         assertEquals(
-            "spans tax years — see the CSV export",
+            "spans tax years; see the CSV export",
             labels.spansYearsNote,
         )
     }

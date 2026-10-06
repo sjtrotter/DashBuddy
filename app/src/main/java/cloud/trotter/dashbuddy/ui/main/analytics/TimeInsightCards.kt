@@ -95,7 +95,7 @@ fun TypicalOnlineHourCard(composition: HourComposition, rates: NetPerHourPair, m
         Spacer(Modifier.height(10.dp))
 
         if (!composition.hasData) {
-            EmptyRow(stringResource(R.string.time_tab_typical_hour_none))
+            EmptyRow(stringResource(R.string.time_tab_rate_none))
             return@AppCard
         }
 

@@ -264,7 +264,8 @@ class ObservationClassifier @Inject constructor(
         val nodeId = event.node.viewIdResourceName
             ?.takeIf { it.isNotBlank() && it != NO_ID_FALLBACK }
         val nodeText = event.node.text?.takeIf { it.isNotBlank() }
-        Timber.tag("Classifier").d("UNKNOWN click — id=$nodeId text=$nodeText")
+        // #1131: raw node text and IDs must never enter the diagnostic firehose.
+        Timber.tag("Classifier").d("UNKNOWN click")
         return Observation.Click(
             timestamp = now,
             captureId = null,
@@ -319,7 +320,8 @@ class ObservationClassifier @Inject constructor(
         if (rawText.isBlank()) {
             Timber.tag("Classifier").v("UNKNOWN notification — (no text)")
         } else {
-            Timber.tag("Classifier").d("UNKNOWN notification — $rawText")
+            // #1131: keep the diagnostic without persisting notification payloads.
+            Timber.tag("Classifier").d("UNKNOWN notification")
         }
         return Observation.Notification(
             timestamp = event.raw.postTime,

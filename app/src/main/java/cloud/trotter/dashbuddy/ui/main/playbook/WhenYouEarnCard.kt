@@ -139,14 +139,6 @@ fun WhenYouEarnCard(
                 )
             }
         }
-        if (mode == HeatmapMode.HOURS) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.patterns_tab_heatmap_caption_hours),
-                style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
-            )
-        }
         // Only claim the outline exists when it does — otherwise the legend would describe a mark the
         // grid isn't drawing.
         if (plan != null) {

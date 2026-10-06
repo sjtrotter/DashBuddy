@@ -11,12 +11,7 @@ repository.
 
 ## 1. The one-sentence version
 
-DashBuddy is an **assistive tool for delivery drivers**: it reads the delivery app's screen so it can tell you,
-out loud and on a floating card, what an offer is worth while you are driving, and — only under rules you set
-and only for taps you have individually allowed — accepts or declines on your behalf so you never have to reach
-for the phone. Recognition, evaluation and every economic computation run on your device. Two small network
-features are on by default and carry no account or identifier (the gas-price refresh and the vehicle-list lookup
-in setup, §6); everything else that touches the network is a separate opt-in.
+DashBuddy assists delivery drivers by reading enabled delivery apps and speaking offers while driving. Recognition, evaluation and economic calculations run on the device. Pressing Accept or Decline in DashBuddy requests a verified tap in the delivery app; scoring rules do not accept or decline offers automatically. Automated decline confirmation and pay-breakdown expansion require their own grants. Gas-price refresh is off until the dasher turns it on; setup vehicle lookup is on by default (§6). Other app-managed uploads require separate opt-in. Android backup, gallery sync and a chosen export provider can also copy data off the device.
 
 ## 2. What DashBuddy reads
 
@@ -56,6 +51,8 @@ delivery apps' windows are inspected: another app's window is identified by pack
 stores nothing of its content. The one surface that can still capture another app's content is a whole-display
 evidence screenshot (§4), which is off by default and says so where it is turned on (`event_receipt_body`).
 
+In release builds, declining Screen events retains the supported-package subscription and leaves DashBuddy usable. In debug builds, declining disables the accessibility service until Screen events is allowed again (`ServiceInfoPolicy.shouldDisableSelf`). The debug permission note states this requirement.
+
 ### 2.3 Notifications
 
 A separate `NotificationListenerService` reads the delivery apps' notifications (offer pushes, arrival and
@@ -72,13 +69,11 @@ what is forwarded).
   is active** and stop when the dash ends. Each fix is judged by `OdometerFixPolicy` (accuracy, speed and jump
   limits) before it can move the mileage. A location is never written to a log line — a rejected fix is logged as
   numbers and a reason, never as a coordinate (`domain/.../OdometerFixPolicy`).
-- **The gas-price refresh** (`FuelPriceRepository`, on by default, §6): once per refresh the last known location
+- **The gas-price refresh** (`FuelPriceRepository`, off until the dasher turns it on, §6): once per refresh the last known location
   is read (`FusedLocationDataSource.getUserLocation`) and passed to Android's `Geocoder` to resolve the state for
   the regional price. `Geocoder` is a platform service that may use the network to do that, so on this feature the
   device's coordinates do leave the app, to Android's geocoding provider — not to DashBuddy and not to the EIA.
-  Turning the refresh off stops the scheduled refresh (`DailyGasPriceWorker` checks the setting first). One
-  exception: the setup wizard attempts a fetch when it opens, and may do so before your saved "off" has loaded
-  (`WizardViewModel.attemptAutoGasPriceFetch` reads the state's initial `true`) — a #1237 follow-up.
+  The daily worker checks the saved automatic-refresh setting before fetching. Tap the bubble's gas price to enter manual mode, or turn off daily updates in setup and save setup, to stop automatic refreshes. Setup waits for the saved settings before its initial gas-price fetch (`WizardViewModel.loadExistingSettings`).
 
 ### 2.5 What DashBuddy never processes
 
@@ -93,15 +88,14 @@ pad). The block has two layers: the platform's `sensitive` rules in the ruleset
 data from `census-contract`) that drops a frame even when no rule matched. If the rulesets have not loaded, every
 frame is dropped (fail-closed, #432).
 
+These are recognition and marker filters, not a guarantee that every sensitive layout is recognized. UNKNOWN debug captures can retain text the filters miss; known customer-content gaps are tracked in #1116. The matcher and privacy vocabulary is English-dependent, so non-English delivery screens reduce both recognition and filtering coverage. Returning to English restores those mechanisms, not a guarantee of complete filtering. Whole-display evidence screenshots bypass text redaction and can contain sensitive content (§4).
+
 ## 3. Customers are hashed, not stored
 
 A delivery screen names the customer. DashBuddy needs to tell customers apart (to join a pickup to its drop-off)
 but never needs to know who they are. Customer names and addresses are therefore replaced at the edge by a
 `sha256` digest (`customerNameHash`, `customerAddressHash` — the ruleset's `sha256` parse transform,
-`core/pipeline/.../rules/ParsedFieldsFactory`) before anything is persisted; the plaintext is not kept in the event
-log, the analytics tables or the INFO log. Two surfaces are exceptions and say so where they are turned on: a
-whole-display evidence screenshot (§4) is a raw image of the screen, and on developer builds the trusted-install
-capture sharing (§6) uploads UNKNOWN screens with only the marker backstops as redaction. The dasher's own first
+`core/pipeline/.../rules/ParsedFieldsFactory`) before anything is persisted; the parsed customer plaintext is not kept in the event log or analytics tables. The shareable INFO+ log checks every line against known sensitive markers before writing; that finite filter is not a guarantee against every possible name, address or other sensitive detail. Debug capture envelopes are a separate storage surface: recognized screens receive rule redaction, while UNKNOWN screens rely on marker and customer-PII backstops. Missed details can remain in local debug captures (#1116), even when upload is off. Whole-display evidence screenshots are raw images (§4). With both developer upload/share toggles enabled and server trust granted, UNKNOWN screen captures can also reach the configured census server, whose operator can read them (§6). The dasher's own first
 name and last initial (the main-menu greeting) is processed as the app's own user. Merchant (store) names are kept
 as text: they are the driver's business data, not a person.
 
@@ -120,35 +114,35 @@ Do not enable evidence capture on screens you would not want kept.
 Rules never actuate (#425). A rule may only point at a target ("the Accept button"); the app owns the taps, and
 each tap is gated three ways (`SideEffectEngine`, `UiInteractionHandler`):
 
-1. **Per-tap consent.** Every automated tap is a *capability* that lands **undecided**; nothing is granted
+1. **Per-tap consent.** Every app-initiated automated tap requires a granted *capability* that lands **undecided**; nothing is granted
    automatically (#843). You allow or deny each one in the prompt that appears when the app comes to the foreground,
    or later under Settings → Data & Privacy → Automation & Consent. A denial persists; a changed rule layout
    re-asks. The capabilities shipped today for DoorDash (`matchers/rules/doordash/offer.json5`,
    `dash-lifecycle.json5`): `accept_offer`, `decline_offer`, `confirm_decline`, `expand_earnings`.
-2. **Your rule.** An accept or decline tap fires only when your own thresholds say so (your strategy settings). No
-   machine learning makes acceptance decisions; the logic is deterministic and readable in `domain/.../evaluation/`.
-   `expand_earnings` is different and the consent copy says so: it fires whenever a delivery receipt is shown
-   collapsed, to open the pay breakdown for reading (`EffectMap.diffExpandAction`).
+2. **User initiation and automated follow-ups.** Accept and Decline currently originate from an explicit user press in DashBuddy (`OfferEffects`, `ActionTrigger.USER`); scoring thresholds produce recommendations and flags, not autonomous offer acceptance or rejection. That press is its own consent and does not require a saved automation grant. Automated confirmation of a decline additionally requires quick declines to be enabled and the confirmation capability to be granted. Pay-breakdown expansion requires its capability grant and can run when a collapsed completed-delivery receipt is shown (`EffectMap.diffExpandAction`).
 3. **Fire-time verification.** Before tapping, the handler re-finds the target in the live screen, checks it
    belongs to the delivery app, checks its label against an allowlist where the control has a label
    (`expand_earnings` is an icon-only chevron, verified by app boundary only — `RuleAction`), and aborts to manual
-   on any doubt.
+   on any doubt. Accept verification permits the labels “Accept” and “Add to route”; Decline verification requires a Decline label (`RuleAction`). Turning off an automation grant does not disable explicit user presses.
 
 A tap you make yourself on the floating card (Accept / Decline) is your own action.
 
 ## 6. What leaves the device
 
-There is no account, no analytics SDK, no advertising identifier. Two public-data lookups are on by default; every
-other network feature is a separate opt-in:
+There is no account, no analytics SDK, no advertising identifier. Gas-price refresh is off until the dasher turns it on. Setup vehicle lookup is on by default; other app-managed network features require separate opt-in.
+The setup wizard's EPA lookup asking-first is tracked in #1258.
 
 | Feature | Default | Where it goes | What is sent |
 |---|---|---|---|
-| Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **on** (Settings → Economy turns it off) | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
-| Vehicle list in the setup wizard (`EpaVehicleDataSource`) | on while the wizard runs | the U.S. EPA public vehicle API (`fueleconomy.gov`) | the year / make / model you pick, to fetch its MPG; nothing about you. |
+| Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **off until you turn it on**; tap the bubble gas price for manual mode, or disable daily updates in setup and save | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
+| Vehicle list in the setup wizard (`EpaVehicleDataSource`) | on while the wizard runs | the U.S. EPA public vehicle API (`fueleconomy.gov`) | automatic vehicle-list request when setup opens; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
+| Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker backstops — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
-| Bug-report export | manual | a folder you choose (`DataExportViewModel.exportLog`) | the INFO-and-above log, scrubbed at the sink (`LogRepository`, `LogScrubber`): economics, counters, hashes — never raw store, customer or address text. |
-| CSV export | manual | a file you choose (`DataExportViewModel` → `core/data/.../analytics/CsvExporter`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
+| Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. DashBuddy does not deliver it to the developer. |
+| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and excluding customer/address hashes. A cloud provider may upload the files. |
+
+Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct DashBuddy upload” does not mean that a selected cloud folder keeps the files on the phone.
 
 Notification census publication runs after admission, dedup and capture, before UNKNOWN rejection,
 independently of capture enablement. It scans the original five fields and all action labels with
@@ -225,7 +219,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r3** — corrected user-initiated versus automated taps, accepted button labels, debug-decline behavior, filtering limitations, network recipients and controls, cloud-folder exports, and in-app backup/screenshot disclosures. Fixed the setup startup fetch ordering. Gas refresh is off until the dasher turns it on. Current in-app disclosures reference this revision.
+
 - **r2 (2026-10-07)** — consent stores and debug logs excluded from Android backup and device transfer;
   re-consent on a new device, while the database and app/economy preferences follow the user (#1236, includes #1214).
-  The in-app disclosure references this revision.
+  Receipts created under r2 retain that revision.
 - **r1 (2026-10-06)** — first revision.

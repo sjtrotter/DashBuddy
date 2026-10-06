@@ -198,11 +198,6 @@ private fun ConsentSourceSection(
     } else {
         stringResource(R.string.consent_source_downloaded_format, platformName)
     }
-    val note = if (group.isBundled) {
-        stringResource(R.string.consent_source_bundled_note)
-    } else {
-        stringResource(R.string.consent_source_downloaded_note)
-    }
 
     Column(Modifier.fillMaxWidth()) {
         Text(
@@ -210,12 +205,6 @@ private fun ConsentSourceSection(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-        )
-        Text(
-            text = note,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp),
         )
         Surface(
             modifier = Modifier

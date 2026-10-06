@@ -253,7 +253,7 @@ class CsvExporterTest {
         assertTrue(summary.contains("estimated_mileage_deduction,72.50"))
         // Explicit, clearly-labelled disclaimer line (routed through Csv.textField — formula-safe).
         assertTrue(
-            summary.contains("rate_note,2027 rate not yet published — estimated at the 2026 rate"),
+            summary.contains("rate_note,2027 rate unavailable in DashBuddy; estimate uses 2026 rate."),
         )
         // Disclaimer starts with a digit, so no cell in the summary begins with a formula leader.
         summary.trim().lines().forEach { row ->

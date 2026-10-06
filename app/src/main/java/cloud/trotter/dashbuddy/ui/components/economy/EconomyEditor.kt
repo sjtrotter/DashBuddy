@@ -322,11 +322,6 @@ fun TrueCostFooter(operatingCostPerMile: Double) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Text(
-                text = stringResource(R.string.economy_editor_irs_rate_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
