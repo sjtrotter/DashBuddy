@@ -142,6 +142,17 @@ class RawNotificationDataTest {
         assertEquals(raw.contentHash, sameTextDifferentMeta.contentHash)
     }
 
+    @Test
+    fun `contract enum relocation preserves names order wire names and content hash`() {
+        assertEquals(cloud.trotter.census.contract.NotifTextField::class, NotifTextField::class)
+        assertEquals(listOf("TITLE", "TEXT", "BIG_TEXT", "TICKER_TEXT", "SUB_TEXT"), NotifTextField.entries.map { it.name })
+        assertEquals(listOf("title", "text", "bigText", "tickerText", "subText"), NotifTextField.entries.map { it.wire })
+        NotifTextField.entries.forEach { assertEquals(it, NotifTextField.fromWire(it.wire)) }
+        assertEquals(null, NotifTextField.fromWire("TITLE"))
+        assertEquals(-938478586, fullFixture().contentHash)
+        assertEquals(fullFixture(), fullFixture().withTextFields(fullFixture().textFields().toMap()))
+    }
+
     /** The EXACT pre-#666 implementation, kept only as a regression oracle. */
     private fun legacyToFullString(raw: RawNotificationData): String =
         listOfNotNull(raw.title, raw.text, raw.bigText, raw.tickerText, raw.subText).joinToString(" | ")

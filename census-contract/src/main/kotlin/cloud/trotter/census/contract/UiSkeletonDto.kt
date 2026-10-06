@@ -105,51 +105,29 @@ data class UiSkeletonNodeDto(
  */
 @Serializable
 data class UiSkeletonDto(
-    val schemaId: String,
-    val hashDomain: Int,
-    val filterRev: Int,
-    val fingerprint: String,
-    val platform: String,
-    val platformAppVersion: String? = null,
-    val appVersion: String? = null,
-    val rulesetReleaseTag: String? = null,
-    val engineVersion: Int,
-    val rulesetFormatVersion: Int? = null,
-    val day: String,
+    override val schemaId: String,
+    override val hashDomain: Int,
+    override val filterRev: Int,
+    override val fingerprint: String,
+    override val platform: String,
+    override val platformAppVersion: String? = null,
+    override val appVersion: String? = null,
+    override val rulesetReleaseTag: String? = null,
+    override val engineVersion: Int,
+    override val rulesetFormatVersion: Int? = null,
+    override val day: String,
     val windowTitle: TextSlot? = null,
     val root: UiSkeletonNodeDto,
-) {
+) : CensusSkeletonDto {
+    override val kind: SkeletonKind get() = SkeletonKind.SCREEN
+
     init {
         require(schemaId == SkeletonSchema.SCHEMA_ID) { "not a ${SkeletonSchema.SCHEMA_ID} item" }
-        require(hashDomain == CensusHash.HASH_DOMAIN) { "unsupported hash domain" }
-        require(filterRev >= 1) { "filterRev is mandatory and positive" }
-        require(CensusFingerprint.isWellFormed(fingerprint)) { "fingerprint is 64 lowercase hex" }
-        require(isPlatformWire(platform)) { "platform is a short lowercase wire id" }
-        require(isDay(day)) { "day is YYYY-MM-DD" }
-        listOfNotNull(platformAppVersion, appVersion, rulesetReleaseTag).forEach {
-            require(it.length <= MAX_VERSION_LENGTH) { "a version stamp is at most $MAX_VERSION_LENGTH chars" }
-            require(WireStrings.isWellFormed(it)) { "a version stamp must be well-formed UTF-16 without U+0000" }
-        }
+        validateEnvelope(this)
     }
 
     companion object {
         /** A version stamp is a short release fact, never free text. */
         const val MAX_VERSION_LENGTH: Int = 64
-
-        private const val MAX_PLATFORM_LENGTH = 32
-
-        private fun isPlatformWire(s: String): Boolean =
-            s.isNotEmpty() && s.length <= MAX_PLATFORM_LENGTH &&
-                s.all { it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-' }
-
-        /**
-         * `YYYY-MM-DD` naming a real calendar date (the day bucket at rest; no finer time ever rides the
-         * item). Reviews EE3/GG7: a shape-only check admitted `2026-99-99` and `2026-02-31`.
-         */
-        /**
-         * Review GG7: a REAL calendar date in `YYYY-MM-DD` (ISO_LOCAL_DATE resolves STRICT — `2026-02-31` is
-         * refused); review AL6: the length pins the 4-digit year form, the parse does the rest.
-         */
-        private fun isDay(s: String): Boolean = s.length == 10 && runCatching { java.time.LocalDate.parse(s) }.isSuccess
     }
 }

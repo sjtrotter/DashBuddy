@@ -1,0 +1,10 @@
+{
+    "formatVersion": 1,
+    "totalRecords": 905,
+    "builtBySchema": {
+        "notification.skeleton.v1": 7,
+        "uinode.skeleton.v1": 898
+    },
+    "refusedByReason": {},
+    "sha256": "19f95833da094c9c6111b4ef0b01f725c0fefef19a2d57701e4bb449b225f3b9"
+}
