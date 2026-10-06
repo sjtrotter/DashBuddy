@@ -148,7 +148,7 @@ other network feature is a separate opt-in:
 | UNKNOWN-screen census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of a screen the ruleset did not recognize: view classes and ids, hashed text slots under a k-anonymity gate, never the text itself — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker backstops — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder you choose (`DataExportViewModel.exportLog`) | the INFO-and-above log, scrubbed at the sink (`LogRepository`, `LogScrubber`): economics, counters, hashes — never raw store, customer or address text. |
-| CSV export | manual | a file you choose (`DataExportViewModel`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
+| CSV export | manual | a file you choose (`DataExportViewModel` → `core/data/.../analytics/CsvExporter`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
 
 **Android backup and device transfer.** The manifest sets `android:allowBackup="true"`. Unless you turn app backup
 off in Android's settings, the Room database (your event log and analytics tables) and the DataStore files
