@@ -54,6 +54,7 @@ For items with multiple sub-concerns at different statuses, use one
   the observable). Also: no "auto-accept" / "auto-decline" threshold is
   reachable anywhere in Settings or the wizard; Strategy still shows the Quick declines switch; one
   `Strategy: Purged dead automation keys (#1113)` INFO line on the first launch of this build only. — Confirmed: 0/2
+- **Consent receipts (#170):** after re-allowing `expand_earnings` on a fresh install, Automation & Consent shows 'Allowed · <today> · v<build> · disclosure r1' under the row; Screen events shows its own line. — Confirmed: 0/2
 
 - **Arrival re-eval (#823 P2):** on a single-store Shop & Deliver, the pickup card's $/hr changes once
   you are in the store with the item list open and shows 'revised at arrival'; one Dispatcher advisory

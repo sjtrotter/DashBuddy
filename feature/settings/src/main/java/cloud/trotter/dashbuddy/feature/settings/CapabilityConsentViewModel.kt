@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
 import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
@@ -44,16 +45,26 @@ class CapabilityConsentViewModel @Inject constructor(
             grants.capabilities,
             grants.grantedKeys,
             eventReceipt.consent,
-        ) { capabilities, grantedKeys, consent ->
+            grants.receipts,
+            eventReceipt.receipt,
+        ) { capabilities, grantedKeys, consent, receipts, eventRecord ->
             buildConsentUiState(capabilities, grantedKeys)
-                .copy(eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED)
+                .copy(
+                    eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED,
+                    receipts = receipts,
+                    eventReceipt = eventRecord,
+                )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             // MM7: seeded from the synchronously readable values — the switch never renders OFF
             // for a frame for an ALLOWED dasher.
             initialValue = buildConsentUiState(grants.capabilities.value, grants.grantedKeys.value)
-                .copy(eventReceiptAllowed = eventReceipt.consent.value == EventReceiptConsent.ALLOWED),
+                .copy(
+                    eventReceiptAllowed = eventReceipt.consent.value == EventReceiptConsent.ALLOWED,
+                    receipts = grants.receipts.value,
+                    eventReceipt = eventReceipt.receipt.value,
+                ),
         )
 
     /** Grant or revoke one capability. Revoking is fail-closed (persists a denial). */
@@ -75,6 +86,8 @@ data class ConsentUiState(
     val sources: List<ConsentSourceGroup> = emptyList(),
     /** #1151 — the "Screen events" switch: true only when the consent is ALLOWED. */
     val eventReceiptAllowed: Boolean = false,
+    val receipts: Map<String, ConsentReceipt> = emptyMap(),
+    val eventReceipt: ConsentReceipt? = null,
 )
 
 /** One ruleset source (a bundled asset file, or a future downloaded source). */

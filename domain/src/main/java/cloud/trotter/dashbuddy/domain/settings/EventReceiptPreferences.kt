@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.settings
 
+import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -58,6 +59,9 @@ interface EventReceiptPreferences {
      * dasher never sees it flash. ONE flow, so the two can never disagree for a frame.
      */
     val consent: StateFlow<EventReceiptConsent?>
+
+    /** Latest decision's on-device receipt, absent until a decision is recorded (#170). */
+    val receipt: StateFlow<ConsentReceipt?>
 
     /**
      * Persist a decision. Never throws a storage failure: returns `false` (logged by the

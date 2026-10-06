@@ -42,6 +42,7 @@ info — so an alcohol delivery's ID-CHECK instruction screen and arrival card a
 hashed), only the literal scanner/signature surfaces are blocked. The dasher's own name in
 first-last-initial form (e.g. the main-menu greeting) is fine to process. Network access is opt-in
 per feature. PII scrubbing runs at the edge before any upload.
+`PRIVACY.md` (repo root) is the engineering ground-truth privacy document; a change to what the app reads, stores or sends updates it in the same PR.
 
 **Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
 copy, marketing — describe the academic pillar as **empirical measurement of the visible
@@ -794,8 +795,11 @@ Every new feature or refactor holds to these — they are forefront design input
      (`CapabilityConsentScreen`/`ViewModel`, writing through `RuleCapabilityGrants.setGranted`);
      the settings screen is a consent *record*, never a second gate — enforcement stays at the
      `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
-     (fail-closed). A one-shot schema migration (`RuleCapabilityDataSource`, #843) clears any
-     pre-#843 auto-granted keys on upgrade (denials preserved) so the prompt re-collects consent.
+     (fail-closed); each decision carries a receipt — time, app version,
+     `PrivacyDisclosure.REVISION` of `PRIVACY.md` — written in the same DataStore edit (#170).
+     A one-shot schema migration (`RuleCapabilityDataSource`; v1 #843 cleared pre-consent
+     auto-grants and kept denials, v2 #1167 changed the key shape so it clears grants, denials AND
+     receipts together) lands every capability undecided for the prompt to re-collect consent.
      **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
      value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
      filtered), a durable decline, asked as the FIRST step of the permission chain — BEFORE the

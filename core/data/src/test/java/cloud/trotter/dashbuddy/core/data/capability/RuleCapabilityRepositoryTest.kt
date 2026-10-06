@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.core.data.capability
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import cloud.trotter.dashbuddy.core.datastore.capability.GrantSnapshot
 import cloud.trotter.dashbuddy.core.datastore.capability.RuleCapabilityDataSource
 import cloud.trotter.dashbuddy.domain.action.RuleAction
+import cloud.trotter.dashbuddy.domain.capability.PrivacyDisclosure
 import cloud.trotter.dashbuddy.domain.capability.RuleCapability
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -18,7 +21,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 
 /**
  * Repository glue over a REAL Preferences DataStore (#843): the Play-policy core
@@ -43,7 +45,7 @@ class RuleCapabilityRepositoryTest {
             produceFile = { File(tmp.root, fileName) },
         )
         val dataSource = RuleCapabilityDataSource(ds)
-        return RuleCapabilityRepository(dataSource, storeScope) to dataSource
+        return RuleCapabilityRepository(dataSource, storeScope, "test-build") to dataSource
     }
 
     private fun cap(
@@ -121,15 +123,23 @@ class RuleCapabilityRepositoryTest {
     fun `setGranted round-trips grant then deny with a durable denial`() = runTest {
         val (repo, _) = newRepo(this, "grant1.preferences_pb")
 
+        assertTrue(repo.receipts.value.isEmpty())
+        val before = System.currentTimeMillis()
         repo.setGranted("k1", true)
         advanceUntilIdle()
         assertTrue(repo.grantedKeys.first().contains("k1"))
         assertFalse(repo.deniedKeys.first().contains("k1"))
+        val record = repo.receipts.value.getValue("k1")
+        assertTrue(record.granted)
+        assertEquals("test-build", record.appVersion)
+        assertEquals(PrivacyDisclosure.REVISION, record.disclosureRevision)
+        assertTrue(record.decidedAt in before..System.currentTimeMillis())
 
         repo.setGranted("k1", false)
         advanceUntilIdle()
         assertFalse(repo.grantedKeys.first().contains("k1"))
         assertTrue("a deny persists an explicit denial", repo.deniedKeys.first().contains("k1"))
+        assertFalse(repo.receipts.value.getValue("k1").granted)
     }
 
     // =========================================================================
@@ -142,7 +152,7 @@ class RuleCapabilityRepositoryTest {
         val (repo, ds) = newRepo(this, "migrate1.preferences_pb")
 
         // Pre-#843 store: an auto-granted key AND an explicit denial.
-        ds.update { _, _ -> setOf("stale-auto-grant") to setOf("explicit-deny") }
+        ds.update { _, _, _ -> GrantSnapshot(setOf("stale-auto-grant"), setOf("explicit-deny"), emptyMap()) }
         advanceUntilIdle()
 
         repo.migrateConsentSchemaIfNeeded()

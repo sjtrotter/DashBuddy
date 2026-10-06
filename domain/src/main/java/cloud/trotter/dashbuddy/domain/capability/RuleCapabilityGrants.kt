@@ -40,6 +40,9 @@ interface RuleCapabilityGrants {
      */
     val deniedKeys: StateFlow<Set<String>>
 
+    /** Latest decision's receipt by capability key; a record, never an enforcement input (#170). */
+    val receipts: StateFlow<Map<String, ConsentReceipt>>
+
     /**
      * The capabilities the CURRENTLY loaded rulesets enumerate — the same list
      * the last [reconcile] published, replaced wholesale on each rule load. The
