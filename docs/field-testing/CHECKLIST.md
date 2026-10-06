@@ -11,7 +11,7 @@ The only description correction is #1135's quoted callout, verified against `app
 
 1. Prune superseded items when replacement evidence supports the dev's decision; `[superseded?]` below proposes pruning and preserves the original item pending that decision.
 2. The pre-dash agent reads a MUST-WATCH list of ≤ 5 money / redaction / Pledge / live-UI tap items first; the agent proposes and the dev picks.
-3. Long-tail desk closure requires 1/2 desk-verified + 3 clean incidental dashes; agents may only propose closure and never record a confirmation they did not witness. Closures are the dev's.
+3. Long-tail desk closure is PROPOSED by agents only (fable's seed threshold — 1/2 desk-verified + 3 clean incidental dashes — is the proposed bar, pending the dev's confirmation); agents never record a confirmation they did not witness. Closures are the dev's.
 4. An item untouched for 6 weeks at `Confirmed: 0/2` moves to `[review]`, never auto-retired; on 2026-10-06 the inclusive first-line blame cutoff is 2026-08-25.
 5. This file is the checklist's home; README holds the dated log and a pointer here.
 
@@ -1379,6 +1379,90 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 </details>
 
+### Re-aged by whole-item blame (a sub-line note after 2026-08-25 counts as touched) — newest first
+
+- [active] **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
+  `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
+  Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue
+  task's running-at line — when the verdict is "drop it" and the hero is red, it should read
+  `-$12/hr`; (b) **the Money card headline** on a losing window (Analytics → Money):
+  `$X came in. -$65.94 went to the car.` A stray `$-` anywhere is the bug back. Also worth a
+  glance: a **sub-cent** negative must read a plain `$0.00` with **no** minus in front — but a
+  real negative that just rounds small still keeps its sign (`-$0/hr` is correct, not a defect).
+  Desk-checkable in part: `grep -c '\$-' shareable.log` over the pull should be 0.
+  - Confirmed: 0/2
+    - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
+    - desk 09-09: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0, but no window went negative and the
+      worst offer (score 28, `$5.74/hr`) stayed positive.
+    - desk 09-20: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0 again; no window went negative.
+    - desk 09-21: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0 a third time; no window went
+      negative.
+  Triage source: first-line blame 2026-08-24 (`9b438b76a`, original README L760).
+
+
+- [active] **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
+  **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
+  in Spanish (voice AND words together); System default on an English phone stays English; if the
+  es voice pack is missing the read falls back to English (one WARN in the log, never silence).
+  **Desk:** grep for the `Tts` tag language-apply lines; no per-utterance WARN spam.
+  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — 64 post-install utterances all English, zero WARN
+    spam, but the Spanish path and the missing-voice-pack fallback were never exercised. CAVEAT:
+    the desk grep above has NO corresponding log site in the current code — a no-hit is not
+    evidence; needs the Settings→Español toggle actually flipped on a dash. Desk 07-30: same
+    null — 14 utterances, all English, zero WARN; the toggle was never flipped.)
+    - desk 09-13: seventh mechanism corroboration — the 09-08 expand grant persisted across the 09-11 22:34 restart and fired 11×, while `confirm_decline` was denied fail-closed 31× (13 confirm episodes × 2 + 5 single-denial episodes, exactly accounted). Note: the reconcile line's "(none granted — awaiting consent)" phrase is a CONSTANT in `RuleCapabilityRepository.reconcile`, not a store read.
+  Triage source: first-line blame 2026-07-23 (`3745bc073`, original README L1288).
+
+
+- [active] **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
+  `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
+  `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
+  parsed null saves as `Offer` instead of the literal token.
+  **What to watch (Uber dash, evidence capture ON):** Pictures/DashBuddy holds roughly **one
+  `Offer - <store>.png` per offer you actually saw** — no runs of 3–6 near-identical shots of the
+  same card seconds apart; a *later* offer from the SAME store still gets its own shot (this is the
+  regression to watch for — a missing capture for a repeat store means the dedupe went too far).
+  **Desk (next pull):** `ls` the pulled `screenshots/` — (a) zero filenames containing `{`, (b)
+  offer-screenshot count ≈ offer count for that platform (was 140/112 on 07-25), (c) cross-check a
+  repeat-store hour in `offer_records` against the file list to confirm repeats were captured.
+  - Issue: #859. Confirmed: 0/2 (desk 07-30, the 07-29 dash — SUPPORTING evidence only, the item
+    is Uber-gated and Uber never went online: DoorDash side 12 `Offer - *.png` for 12
+    OFFER_RECEIVED, exactly 1:1, repeat-store offers each captured (7 H-E-B offers, 7 shots),
+    zero `{` filenames. The churn-dedupe target case and the null-field `{storeName}` fallback
+    both remain unexercised.
+    Desk 07-31, the 07-30 dash: still Uber-gated and Uber never went online, so still supporting
+    evidence only — zero `{` filenames, 6 OFFER_RECEIVED with 7 offer screenshots (one physical
+    presentation, offer seq 1338/Target $11.45, produced two identical `Offer - 11.45.png` shots
+    5.1 s apart). Not a data-integrity issue (not the churn-dedupe target class), but a minor
+    off-by-one worth noting — the 07-29 pull was exactly 12/12. Still needs an Uber dash.
+    Desk 09-09, the 09-08 dash: still Uber-gated — DoorDash side 17 `Offer - <pay>.png` for 17
+    `OFFER_RECEIVED`, exactly 1:1, plus 2 `DashSummary` / 1 `Delivery` / 1 `DeliveryBreakdown`, zero `{`
+    filenames, zero placeholders.)
+  Triage source: first-line blame 2026-07-26 (`cc377c2ee`, original README L1263).
+
+
+- [active] **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
+  Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
+  en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
+  then you unassigned), the app now retro-marks **that drop** as unassigned instead of a sibling
+  pickup, so the close-out can't fabricate a `DELIVERY_COMPLETED` for an order you never delivered.
+  On the previous build this dropoff-phase cross-frame shape fabricated a paid delivery and suppressed
+  the pickup's legitimate confirmation.
+  **How to tell it's working (on-dash + desk-side):** unassign an order you've already picked up (mid
+  drive to the customer). Expect the **"Unassigned: <store>" bubble**, the card clears, and the next
+  offer works normally. Desk-side, the exported log / `app_events` should show **exactly one
+  `TASK_UNASSIGNED`** (phase DROPOFF) for that order and **no `DELIVERY_COMPLETED`** for it — no phantom
+  "$0 PAID" delivery in the Money tab. (In the cross-frame shape a `DELIVERY_CONFIRMED` from the earlier
+  grace retire may already have fired on the prior frame — that's read-model row-inert and expected, so
+  don't treat its presence as a failure.) The sibling pickup of a stacked job should still show its
+  normal `PICKUP_CONFIRMED`.
+  - Confirmed: 0/2
+    - desk 09-05: NOT this item's case — the slice's one `TASK_UNASSIGNED` (seq 1806) was
+      PICKUP-phase (arrived at the store, never confirmed); it behaved correctly (the $45.45 quote
+      stayed unattributed, no paid artifact), but the dropoff-phase retro-mark is still unexercised.
+  Triage source: first-line blame 2026-07-11 (`31f0f6905`, original README L1608).
+
+
 ## §3 Review (aged ≥ 6 weeks at 0/2)
 
 95 aged zero-confirmation items: 91 `[review]` and 4 `[superseded?]` proposals. Every `desk:` line is a proposal only. A replay/check proposed here has not been run; missing field exposure is not a pass. The four supersession proposals leave the routine active queue but remain here for the dev to decide.
@@ -1503,33 +1587,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   - Confirmed: 0/2
   desk: needs field: an Uber stack and Match-to-direct hand-off must occur; then compare merchant, trip-time and outcome rows with captures.
   Triage source: first-line blame 2026-07-27 (`1f4c4a940`, original README L1140).
-
-- [review] **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
-  `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
-  `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
-  parsed null saves as `Offer` instead of the literal token.
-  **What to watch (Uber dash, evidence capture ON):** Pictures/DashBuddy holds roughly **one
-  `Offer - <store>.png` per offer you actually saw** — no runs of 3–6 near-identical shots of the
-  same card seconds apart; a *later* offer from the SAME store still gets its own shot (this is the
-  regression to watch for — a missing capture for a repeat store means the dedupe went too far).
-  **Desk (next pull):** `ls` the pulled `screenshots/` — (a) zero filenames containing `{`, (b)
-  offer-screenshot count ≈ offer count for that platform (was 140/112 on 07-25), (c) cross-check a
-  repeat-store hour in `offer_records` against the file list to confirm repeats were captured.
-  - Issue: #859. Confirmed: 0/2 (desk 07-30, the 07-29 dash — SUPPORTING evidence only, the item
-    is Uber-gated and Uber never went online: DoorDash side 12 `Offer - *.png` for 12
-    OFFER_RECEIVED, exactly 1:1, repeat-store offers each captured (7 H-E-B offers, 7 shots),
-    zero `{` filenames. The churn-dedupe target case and the null-field `{storeName}` fallback
-    both remain unexercised.
-    Desk 07-31, the 07-30 dash: still Uber-gated and Uber never went online, so still supporting
-    evidence only — zero `{` filenames, 6 OFFER_RECEIVED with 7 offer screenshots (one physical
-    presentation, offer seq 1338/Target $11.45, produced two identical `Offer - 11.45.png` shots
-    5.1 s apart). Not a data-integrity issue (not the churn-dedupe target class), but a minor
-    off-by-one worth noting — the 07-29 pull was exactly 12/12. Still needs an Uber dash.
-    Desk 09-09, the 09-08 dash: still Uber-gated — DoorDash side 17 `Offer - <pay>.png` for 17
-    `OFFER_RECEIVED`, exactly 1:1, plus 2 `DashSummary` / 1 `Delivery` / 1 `DeliveryBreakdown`, zero `{`
-    filenames, zero placeholders.)
-  desk: desk-verifiable: compare Uber presentation counts and repeat-store offers with screenshot files, checking literal placeholders and duplicate shots.
-  Triage source: first-line blame 2026-07-26 (`cc377c2ee`, original README L1263).
 
 - [review] **🆕 NEW — #858 / PR #876 — expiring Uber cards no longer mint offers.**
   The "This request is no longer available" dying card falls UNKNOWN instead of matching the offer
@@ -2030,28 +2087,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   desk: desk-verifiable: replay a shop offer with allowShopping off and compare verdict, score and computed economics; visible advice still needs a device check.
   Triage source: first-line blame 2026-07-15 (`2115f4c59`, original README L1538).
 
-- [review] **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
-  Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
-  en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
-  then you unassigned), the app now retro-marks **that drop** as unassigned instead of a sibling
-  pickup, so the close-out can't fabricate a `DELIVERY_COMPLETED` for an order you never delivered.
-  On the previous build this dropoff-phase cross-frame shape fabricated a paid delivery and suppressed
-  the pickup's legitimate confirmation.
-  **How to tell it's working (on-dash + desk-side):** unassign an order you've already picked up (mid
-  drive to the customer). Expect the **"Unassigned: <store>" bubble**, the card clears, and the next
-  offer works normally. Desk-side, the exported log / `app_events` should show **exactly one
-  `TASK_UNASSIGNED`** (phase DROPOFF) for that order and **no `DELIVERY_COMPLETED`** for it — no phantom
-  "$0 PAID" delivery in the Money tab. (In the cross-frame shape a `DELIVERY_CONFIRMED` from the earlier
-  grace retire may already have fired on the prior frame — that's read-model row-inert and expected, so
-  don't treat its presence as a failure.) The sibling pickup of a stacked job should still show its
-  normal `PICKUP_CONFIRMED`.
-  - Confirmed: 0/2
-    - desk 09-05: NOT this item's case — the slice's one `TASK_UNASSIGNED` (seq 1806) was
-      PICKUP-phase (arrived at the store, never confirmed); it behaved correctly (the $45.45 quote
-      stayed unattributed, no paid artifact), but the dropoff-phase retro-mark is still unexercised.
-  desk: desk-verifiable: replay a post-pickup unassign and inspect task lineage plus absence of DELIVERY_COMPLETED and paid rows for that drop.
-  Triage source: first-line blame 2026-07-11 (`31f0f6905`, original README L1608).
-
 - [review] **🆕 NEW — multi-pickup stack: symmetric pickup placeholders + store re-attribution (#526 / PR).**
   Accept a **multi-store stack** (two+ orders from DIFFERENT stores in one offer — e.g. the 07-05
   Bill Miller BBQ + Mama Margies). Watch the whole run: both pickups AND both drops.
@@ -2454,25 +2489,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
 
 ### HUD
 
-- [review] **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
-  `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
-  Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue
-  task's running-at line — when the verdict is "drop it" and the hero is red, it should read
-  `-$12/hr`; (b) **the Money card headline** on a losing window (Analytics → Money):
-  `$X came in. -$65.94 went to the car.` A stray `$-` anywhere is the bug back. Also worth a
-  glance: a **sub-cent** negative must read a plain `$0.00` with **no** minus in front — but a
-  real negative that just rounds small still keeps its sign (`-$0/hr` is correct, not a defect).
-  Desk-checkable in part: `grep -c '\$-' shareable.log` over the pull should be 0.
-  - Confirmed: 0/2
-    - desk 09-05: NOT TESTABLE — device ran the pre-#1044 build.
-    - desk 09-09: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0, but no window went negative and the
-      worst offer (score 28, `$5.74/hr`) stayed positive.
-    - desk 09-20: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0 again; no window went negative.
-    - desk 09-21: NOT EXERCISED — `grep -c '\$-' shareable.log` = 0 a third time; no window went
-      negative.
-  desk: needs field: a negative offer/window must render; a zero-hit log grep cannot establish sign placement on screen.
-  Triage source: first-line blame 2026-08-24 (`9b438b76a`, original README L760).
-
 - [review] **🆕 NEW — #1024 part 3 (PR #1027) — Home is four blocks.** One **Today** card (kept big → net/hr
   online · drops · miles · On dash/Online → plan strip), one **This week** card (net + delta +
   sparkline + `Recap →`, the plan row if one is saved, `NEEDS A LOOK` if the week flagged), one row
@@ -2592,7 +2608,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   How to tell it's broken: tiles frozen/stale after a dash, the segmented selector not changing the
   numbers, a live ticking counter still present, or the dashing row showing while offline.
   - Confirmed: 0/2
-  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the segmented Today/This week/Lifetime tile layout and explicitly restores a live On dash tick.
+  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the segmented Today/This week/Lifetime tile layout and explicitly restores a live On dash tick. — RETAIN the post-dash earnings-FRESHNESS check (#657) before pruning: the #1024 part 3 / PR #1027 replacement tests the four-block layout, not that the totals refresh after a dash (Astra review of PR #1246).
   Triage source: first-line blame 2026-07-04 (`2b315e708`, original README L1962).
 
 - [superseded?] **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
@@ -2803,20 +2819,6 @@ No items in this age/counter group.
     throughout; the notice/WARN path needs the language-switch-and-toggle exercise on the phone.)
   desk: needs field: switch language and toggle the service twice to observe the one-notification boundary notice.
   Triage source: first-line blame 2026-07-30 (`d3f31f580`, original README L1072).
-
-- [review] **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
-  **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
-  in Spanish (voice AND words together); System default on an English phone stays English; if the
-  es voice pack is missing the read falls back to English (one WARN in the log, never silence).
-  **Desk:** grep for the `Tts` tag language-apply lines; no per-utterance WARN spam.
-  - Confirmed: 0/2 (desk 07-26: INCONCLUSIVE — 64 post-install utterances all English, zero WARN
-    spam, but the Spanish path and the missing-voice-pack fallback were never exercised. CAVEAT:
-    the desk grep above has NO corresponding log site in the current code — a no-hit is not
-    evidence; needs the Settings→Español toggle actually flipped on a dash. Desk 07-30: same
-    null — 14 utterances, all English, zero WARN; the toggle was never flipped.)
-    - desk 09-13: seventh mechanism corroboration — the 09-08 expand grant persisted across the 09-11 22:34 restart and fired 11×, while `confirm_decline` was denied fail-closed 31× (13 confirm episodes × 2 + 5 single-denial episodes, exactly accounted). Note: the reconcile line's "(none granted — awaiting consent)" phrase is a CONSTANT in `RuleCapabilityRepository.reconcile`, not a store read.
-  desk: needs field: select Español and exercise the missing-voice fallback; the item's own note says the proposed language-apply grep has no log site.
-  Triage source: first-line blame 2026-07-23 (`3745bc073`, original README L1288).
 
 - [review] **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
   Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every

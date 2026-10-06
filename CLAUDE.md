@@ -1284,8 +1284,8 @@ the phone before a dash. Keep it short and glanceable — they're about to be dr
 single dash can pass by luck or miss the edge case. Track with a `- Confirmed: N/2` sub-line
 in `docs/field-testing/CHECKLIST.md` (§1 must-watch first), noting each sighting's date/conditions.
 Keep 2/2 items in §5 and record the evidence in the dated session log; report broken findings
-there immediately for triage. For the long tail, agents may propose desk closure after 1/2
-desk-verified + 3 clean incidental dashes; never record an unwitnessed confirmation.
+there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
+desk-verified + 3 clean incidental dashes — pending the dev's confirmation); never record an unwitnessed confirmation.
 An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are the dev's.
 
 **Closing the loop — add items when work needs field validation.** Whenever you open a PR or
