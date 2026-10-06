@@ -96,6 +96,8 @@ class RuleCompilerTest {
     fun `presentationIdentity accepts only the supported literal declarations`() {
         for (identity in listOf("store", "economics")) {
             RuleCompiler.validatePresentationIdentity(json("literal" to identity), "test.screen.offer")
+            // fable review F5: the bare-string constant form (what the draft tool emits) is accepted too.
+            RuleCompiler.validatePresentationIdentity(JsonPrimitive(identity), "test.screen.offer")
         }
     }
 
@@ -104,7 +106,7 @@ class RuleCompilerTest {
         val specs = listOf(
             """{"literal":"bogus"}""",
             """{"find":{"hasIdSuffix":"identity"},"read":"text"}""",
-            JsonPrimitive("store").toString(),
+            JsonPrimitive("bogus").toString(), // bare form, unknown value
             """{"literal":null}""",
             """{"literal":["store"]}""",
         )

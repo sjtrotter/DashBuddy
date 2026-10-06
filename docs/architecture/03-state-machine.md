@@ -462,7 +462,7 @@ divergence is documented at both sites). Every human-facing read goes through th
 `ParsedOffer.displayStores`/`displayStoreText` SSOT (evaluator `merchantName` → TTS/ledger/store
 resolution, `FlowCardSnapshot.Offer.storeNames`, the fold's eval-less fallback), which prefers ≥2
 real order stores, else the card headline, else the order list — so DoorDash (no top-level
-`storeName` parse) is byte-identical.
+`storeName` parse) is byte-identical. Review-round additions: a parsed assignment token also enters `offerHash` (two assignments with identical economics must not share a hash, or the same-hash arm merges them before the key is consulted); a present token whose digest fails yields NO key (never the store fallback); a REPLACE now logs the replacing offer's own `OFFER_RECEIVED` (`AppEffect.LogEvent` is the only `app_events` writer — a rule `log` effect is a debug line); `presentationIdentity` is one entry in `StateMachineContract.PARSE_DECLARATION_LITERALS`, validated by `RuleCompiler` in the `{literal}` or bare-string form and offered as an enum constant by the census draft tool (`RuleAuthoringVocabulary.PRESENTATION_IDENTITIES`, pinned equal). One-time effect: an offer restored from a pre-#1069 snapshot keeps its store key, so its next re-render logs one spurious "Replaced by new offer".
 
 **Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
 tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,

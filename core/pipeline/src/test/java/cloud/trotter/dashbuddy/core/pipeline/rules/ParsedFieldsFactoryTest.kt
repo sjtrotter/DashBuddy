@@ -130,11 +130,15 @@ class ParsedFieldsFactoryTest {
     }
 
     @Test
-    fun `different assignments with identical economics have different keys but identical offer hashes`() {
+    fun `different assignments with identical economics have different keys AND different offer hashes (Astra r1 P1)`() {
         val first = identityOffer("assignment-1")
         val second = identityOffer("assignment-2")
         assertNotEquals(first.presentationKey, second.presentationKey)
-        assertEquals("assignment is never an offerHash input", first.offerHash, second.offerHash)
+        // The token is part of the CONTENT identity: otherwise the stepper's same-hash arm would merge
+        // two distinct assignments before the presentation key is consulted.
+        assertNotEquals(first.offerHash, second.offerHash)
+        // Absent token → the pre-#1069 hash input byte for byte.
+        assertEquals(identityOffer(identity = "store").offerHash, identityOffer(identity = "economics").offerHash)
     }
 
     @Test

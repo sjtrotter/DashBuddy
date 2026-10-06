@@ -33,6 +33,9 @@ data class FieldSpec(
 
 /** Authoring vocabulary mirrored from the app owners and pinned by its source/enum guards. */
 object RuleAuthoringVocabulary {
+    /** #1069: the `presentationIdentity` literal values (mirrors `StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES`). */
+    val PRESENTATION_IDENTITIES: List<String> = listOf("store", "economics")
+
     val FLOWS: List<String> = listOf(
         "idle", "offer:presented", "task:pickup:navigation", "task:pickup:arrived",
         "task:dropoff:navigation", "task:dropoff:arrived", "post:task", "task:unassigned",

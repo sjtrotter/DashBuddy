@@ -188,12 +188,16 @@ class PresentationScopedOfferTest {
         assertNull(second.firstEvalLandedAt)
         assertNull(second.evaluation)
 
-        val outcomes = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>()
-            .mapNotNull { it.event.payload as? OfferPayload }
+        val logged = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val outcomes = logged.mapNotNull { it.payload as? OfferPayload }
         assertEquals("the old offer resolves exactly once", 1, outcomes.size)
         assertEquals("H1", outcomes.single().offerHash)
         assertEquals(1_000L, outcomes.single().presentedAt)
         assertEquals(AppEventType.OFFER_TIMEOUT, outcomes.single().outcome)
+        // #1069 (fable F1): the replacing offer is logged as RECEIVED on its own hash.
+        val received = logged.filter { it.type == AppEventType.OFFER_RECEIVED }
+        assertEquals(1, received.size)
+        assertEquals("H2", (received.single().payload as cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload).offerHash)
     }
 
     @Test

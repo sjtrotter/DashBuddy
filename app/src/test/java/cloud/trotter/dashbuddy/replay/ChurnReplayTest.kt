@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.SessionReplay
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -263,13 +264,12 @@ class ChurnReplayTest {
         assertEquals("two DoorDash offers (different stores)", 2, frames.size)
         val obs = SessionReplay.replayRecognition(frames)
         val offers = obs.map { (it.parsed as ParsedFields.OfferFields).parsedOffer }
-        // #1069: legacy cards without an assignment token now fail closed with null keys.
-        // Either a null key or distinct exact assignment keys must keep these offers separate.
-        assertTrue(
-            "distinct offers must not share a non-null presentation key",
-            offers[0].presentationKey == null || offers[1].presentationKey == null ||
-                offers[0].presentationKey != offers[1].presentationKey,
-        )
+        // #1069: these legacy View cards render no assignment token and declare no fallback → NO key
+        // (economics: replace on any hash change). Pinned exactly (fable review F4), not vacuously.
+        assertNull("id-less legacy card 0 has no presentation key", offers[0].presentationKey)
+        assertNull("id-less legacy card 1 has no presentation key", offers[1].presentationKey)
+        assertNull(offers[0].assignmentIdHash)
+        assertTrue("two different offers hash differently", offers[0].offerHash != offers[1].offerHash)
         fun hash(i: Int) = offers[i].offerHash
 
         val inputs = listOf(
@@ -282,7 +282,13 @@ class ChurnReplayTest {
         val c = counts(steps)
 
         assertEquals("the first offer still resolves OFFER_TIMEOUT('Replaced by new offer')", 1, c[AppEventType.OFFER_TIMEOUT] ?: 0)
-        assertEquals("exactly one OFFER_RECEIVED (the replacement does not re-emit it, pre-#830)", 1, c[AppEventType.OFFER_RECEIVED] ?: 0)
+        // #1069 (fable F1): a REPLACE is a second offer — it logs its OWN OFFER_RECEIVED now.
+
+        assertEquals(
+
+            "two OFFER_RECEIVED rows — one per distinct offer (#1069)",
+
+            2, c[AppEventType.OFFER_RECEIVED] ?: 0)
         assertEquals(
             "each distinct presentation is spoken — the replacement re-speaks",
             2,

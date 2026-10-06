@@ -143,6 +143,11 @@ class RuleDraftTest {
     fun `constants cannot bypass field types hash handling or overwrite assignments`() {
         assertEquals(listOf("unknown constant custom for shape idle"), errors(base.copy(constants = listOf(Constant("custom", JsonPrimitive(true))))))
         assertEquals(listOf("invalid constant type for startingSession"), errors(base.copy(constants = listOf(Constant("startingSession", JsonPrimitive("true"))))))
+        // #1069 (Astra r1 P2): the presentation-identity literal is an enum constant the draft may declare —
+        // `store` raises no constant error (the offer's required-field errors are unrelated), `bogus` does.
+        val offerShape = base.copy(screenClass = "offer:presented", shape = "offer", offerSurface = "card")
+        assertTrue(errors(offerShape.copy(constants = listOf(Constant("presentationIdentity", JsonPrimitive("store"))))).none { "presentationIdentity" in it })
+        assertTrue("invalid constant type for presentationIdentity" in errors(offerShape.copy(constants = listOf(Constant("presentationIdentity", JsonPrimitive("bogus"))))))
         assertEquals(listOf("hash field customerNameHash requires a node assignment"), errors(base.copy(
             screenClass = "task:dropoff:navigation", shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
         )))

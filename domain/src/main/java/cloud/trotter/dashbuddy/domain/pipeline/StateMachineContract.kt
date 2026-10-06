@@ -28,6 +28,12 @@ object StateMachineContract {
     const val PRESENTATION_IDENTITY_STORE = "store"
     const val PRESENTATION_IDENTITY_ECONOMICS = "economics"
     val SUPPORTED_PRESENTATION_IDENTITIES: Set<String> = setOf(PRESENTATION_IDENTITY_STORE, PRESENTATION_IDENTITY_ECONOMICS)
+    /**
+     * Parse fields that are DECLARATIONS, not extractions (#1069): a literal whose value must come from the
+     * listed vocabulary, load-validated per file by `RuleCompiler` (fail-loud, isolable) and offered as enum
+     * constants by the census draft tool. A new declaration-only field is one entry here, never a compiler hook.
+     */
+    val PARSE_DECLARATION_LITERALS: Map<String, Set<String>> = mapOf("presentationIdentity" to SUPPORTED_PRESENTATION_IDENTITIES)
     val SUPPORTED_VERBS: Set<String> = EffectVerb.entries.map { it.wire }.toSet()
     val SUPPORTED_TRIGGERS: Set<String> = TransitionTrigger.entries.map { it.wire }.toSet()
 

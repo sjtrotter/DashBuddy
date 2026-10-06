@@ -745,7 +745,11 @@ object RuleCompiler {
         // able to see "no parse block ⇒ zero declared fields" (a missing required field for a flow
         // or effect-intent is exactly the no-parse case the #762 guard must catch).
         val parseFields = parseBlock?.get("fields")?.jsonObject
-        parseFields?.get("presentationIdentity")?.let { validatePresentationIdentity(it, ruleId) }
+        // #1069: every declaration-only parse field is validated against its contract vocabulary (one table,
+        // `StateMachineContract.PARSE_DECLARATION_LITERALS`, shared with the census draft tool).
+        parseFields?.forEach { (name, spec) ->
+            StateMachineContract.PARSE_DECLARATION_LITERALS[name]?.let { allowed -> validateDeclarationLiteral(name, spec, allowed, ruleId) }
+        }
         val declaredFields = parseFields?.keys ?: emptySet()
         if (parseAs != null) {
             ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
@@ -840,17 +844,29 @@ object RuleCompiler {
         )
     }
 
-    /** #1069: identity is a load-validated declaration, never a value extracted from a frame. */
-    internal fun validatePresentationIdentity(spec: JsonElement, ruleId: String) {
-        val literal = (spec as? JsonObject)?.get("literal") as? JsonPrimitive
-        if (literal == null || !literal.isString || literal.content !in StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES) {
+    /**
+     * #1069: a declaration-only parse field is a load-validated literal, never a value extracted from a frame.
+     * Accepts the `{"literal": "<v>"}` object form AND the bare string form the notification parse already
+     * accepts as a constant (fable review F5); the message derives its vocabulary from the contract table.
+     */
+    internal fun validateDeclarationLiteral(name: String, spec: JsonElement, allowed: Set<String>, ruleId: String) {
+        val literal = when (spec) {
+            is JsonPrimitive -> spec
+            is JsonObject -> spec["literal"] as? JsonPrimitive
+            else -> null
+        }
+        if (literal == null || !literal.isString || literal.content !in allowed) {
             val value = literal?.content ?: "non-literal"
             throw RuleCompileException(
-                "Rule '$ruleId': unknown presentationIdentity '$value' (supported: store, economics)",
+                "Rule '$ruleId': unknown $name '$value' (supported: ${allowed.joinToString(", ")})",
                 isolable = true,
             )
         }
     }
+
+    /** Test seam kept for the #1069 suite: the `presentationIdentity` entry of the declaration table. */
+    internal fun validatePresentationIdentity(spec: JsonElement, ruleId: String) =
+        validateDeclarationLiteral("presentationIdentity", spec, StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES, ruleId)
 
     /**
      * Compile a click branch's `screenIs` constraint (#1104). Accepts EITHER a single string or a
