@@ -59,6 +59,7 @@ class NotificationPipelineCensusTest {
         val source = NotificationSource()
         val sink = object : CensusSink {
             override val isEnabled = sinkEnabled
+            override val acceptedSchemaIds = cloud.trotter.census.contract.CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet()
             override fun offer(record: CensusRecord): Boolean {
                 order += "census"
                 sinkFailure?.let { throw it }

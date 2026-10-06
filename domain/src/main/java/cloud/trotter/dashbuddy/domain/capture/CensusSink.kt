@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.capture
 
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.census.contract.SkeletonSchema
 
 /**
  * One census item the publisher hands the sink (#1146). Carries NO timestamp — the skeleton's
@@ -26,5 +27,7 @@ data class CensusRecord(
  */
 interface CensusSink {
     val isEnabled: Boolean
+    /** Non-blocking snapshot of the last server policy; no policy means screens only. */
+    val acceptedSchemaIds: Set<String> get() = setOf(SkeletonSchema.SCHEMA_ID)
     fun offer(record: CensusRecord): Boolean
 }

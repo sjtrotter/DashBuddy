@@ -246,7 +246,7 @@ after admission/dedup/capture and before UNKNOWN rejection, independent of captu
 scans original five fields AND action labels (also whitespace-joined) with `SensitiveMarkerScan` before
 customer lead-in scrubbing and the shared two-pass field filter. Notifications have five slots and a
 contract-grammar channel; actions are refusal-only. Both kinds share the debug sink/spool/worker and
-server-authoritative 300/day ledger with common 429 deferral; release `NoOpCensusSink` stays inert.
+server-authoritative 300/day ledger with common 429 deferral; published only when the server's policy advertises the schema; batches are per schema. Before the first policy, only screens are accepted. Release `NoOpCensusSink` stays inert.
 Census failures cannot change recognition, and INFO has counts/reason/kind names only, never text or
 channel ids. Notification counters extend `census{…}`. Trusted envelope pairing remains screen-only;
 CLICK skeletons stay OUT until clicks reliably carry a screen fingerprint (ADR-0011 §10).

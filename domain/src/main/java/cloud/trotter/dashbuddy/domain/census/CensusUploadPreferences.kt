@@ -1,11 +1,15 @@
 package cloud.trotter.dashbuddy.domain.census
 
+import cloud.trotter.census.contract.SkeletonSchema
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /** Read-only consent boundary; default consent is off. */
 interface CensusUploadPreferences {
     val enabled: Flow<Boolean>
     val baseUrl: Flow<String>
+    /** Before the first policy, preserve screen-only publishing. An advertised empty set stays empty. */
+    val acceptedSchemaIds: Flow<Set<String>> get() = flowOf(setOf(SkeletonSchema.SCHEMA_ID))
 }
 
 /** The app owns WorkManager; data and feature modules only request a run. */

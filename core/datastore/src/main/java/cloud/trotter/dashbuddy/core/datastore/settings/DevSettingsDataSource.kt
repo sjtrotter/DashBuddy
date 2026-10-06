@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.DevSettingsPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -28,6 +29,7 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
         val CENSUS_LAST_RUN_ENVELOPES = intPreferencesKey("census_last_run_envelopes")
         val CENSUS_LAST_RUN_DETAIL = intPreferencesKey("census_last_run_detail")
+        val CENSUS_ACCEPTED_SCHEMA_IDS = stringSetPreferencesKey("census_policy_accepted_schema_ids")
         val CENSUS_POLICY = listOf("dailySkeletonBudget", "maxBatchItems", "maxBatchBytes", "maxSkeletonBytes", "k")
             .associateWith { intPreferencesKey("census_policy_$it") }
         val BUBBLE_SESSION_MODE = stringPreferencesKey("bubble_session_mode")
@@ -62,6 +64,9 @@ class DevSettingsDataSource @Inject constructor(
         Keys.CENSUS_POLICY.mapNotNull { (name, key) -> prefs[key]?.let { name to it } }.toMap()
     }
 
+    /** Null distinguishes no cached policy from an explicitly empty accepted set. */
+    val censusAcceptedSchemaIds: Flow<Set<String>?> = ds.data.map { it[Keys.CENSUS_ACCEPTED_SCHEMA_IDS] }
+
     data class RawCensusLastRun(val atMillis: Long, val outcomeWire: String?, val detail: Int?, val envelopesPosted: Int)
 
     /** Raw fields of the last census run; the repository owns the fail-closed decode. */
@@ -88,6 +93,7 @@ class DevSettingsDataSource @Inject constructor(
     suspend fun recordCensusReset(atMillis: Long, outcomeWire: String) {
         ds.edit { prefs ->
             Keys.CENSUS_POLICY.values.forEach { prefs.remove(it) }
+            prefs.remove(Keys.CENSUS_ACCEPTED_SCHEMA_IDS)
             prefs[Keys.CENSUS_LAST_RUN_ENVELOPES] = 0
             prefs[Keys.CENSUS_LAST_RUN_AT] = atMillis
             prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
@@ -112,9 +118,10 @@ class DevSettingsDataSource @Inject constructor(
         ds.edit { it[Keys.CENSUS_NEXT_ALLOWED_AT] = value }
     }
 
-    suspend fun setCensusPolicy(value: Map<String, Int>) {
+    suspend fun setCensusPolicy(value: Map<String, Int>, acceptedSchemaIds: Set<String>) {
         ds.edit { prefs ->
             prefs.remove(stringPreferencesKey("census_policy"))
+            prefs[Keys.CENSUS_ACCEPTED_SCHEMA_IDS] = acceptedSchemaIds
             Keys.CENSUS_POLICY.forEach { (name, key) ->
                 val limit = value[name]
                 if (limit != null) prefs[key] = limit else prefs.remove(key)

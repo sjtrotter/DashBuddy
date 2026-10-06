@@ -19,6 +19,7 @@ import cloud.trotter.dashbuddy.core.network.census.CensusApiFactory
 import cloud.trotter.dashbuddy.core.network.census.CensusTransport
 import cloud.trotter.dashbuddy.core.network.census.EnrolResult
 import cloud.trotter.dashbuddy.core.network.census.UploadResult
+import cloud.trotter.dashbuddy.core.network.census.PolicyResult
 import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.census.CensusLastRun
@@ -95,7 +96,12 @@ class CensusUploadWorker @AssistedInject constructor(
             } else {
                 val api = apis.create(preferences.censusBaseUrl.first())
                 val credential = loadCredential()
-                val enrolled = if (credential.enrolled) Enrollment.Ready(credential) else enrol(api, credential, record)
+                val enrolled = if (credential.enrolled) {
+                    // Refresh capabilities for existing installs too; a failed fetch keeps the last-known policy.
+                    val policy = api.policy()
+                    if (policy is PolicyResult.Available) preferences.setCensusPolicy(policy.policy)
+                    Enrollment.Ready(credential)
+                } else enrol(api, credential, record)
                 when (enrolled) {
                     is Enrollment.Ready -> {
                         val stopped = postHealth(api, enrolled.credential, record)
@@ -301,10 +307,19 @@ class CensusUploadWorker @AssistedInject constructor(
                 record.stale += stale.size
             }
             if (items.isEmpty()) return@repeat
-            val batchId = spool.inFlight()?.batchId ?: CensusApi.batchId(items.map { it.fingerprint })
-            uploadBatch(api, credential, items, batchId, run, record, depth = 0)?.let { return it }
+            // Each group is a subset of the bounded take, so retains the existing count/byte limits.
+            // A legacy mixed in-flight batch must get new IDs; only an identical group may reuse its ID.
+            val groups = items.groupBy {
+                Json.parseToJsonElement(it.itemJson).jsonObject["schemaId"]?.jsonPrimitive?.content
+            }
+            for (group in groups.values) {
+                val inFlight = spool.inFlight()
+                val batchId = inFlight?.takeIf { it.ids == group.map { item -> item.id } }?.batchId
+                    ?: CensusApi.batchId(group.map { it.fingerprint })
+                uploadBatch(api, credential, group, batchId, run, record, depth = 0)?.let { return it }
+            }
         }
-        // Three batches exhausted without ever seeing an empty spool: never claim emptiness.
+        // Three bounded selections exhausted without seeing an empty spool: never claim emptiness.
         summarize(record, spoolEmpty = false)
         return Result.success()
     }

@@ -18,6 +18,8 @@ import kotlin.coroutines.cancellation.CancellationException
 /** Pure ADR-0011 §10 publication gate, independent of capture enablement or its scrubbed payload. */
 object NotificationSkeletonBuilder {
     enum class Refusal {
+        /** Publisher refused this kind because the server policy does not advertise its schema. */
+        POLICY_UNSUPPORTED_SCHEMA,
         SENSITIVE_NOTIFICATION, INVALID_CHANNEL, OVERSIZE,
         FINGERPRINT_FAILED, INVALID_ENVELOPE, BUILD_FAILED,
     }

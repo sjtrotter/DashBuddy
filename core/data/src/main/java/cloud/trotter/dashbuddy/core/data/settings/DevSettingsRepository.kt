@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import cloud.trotter.census.contract.SkeletonSchema
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -37,6 +39,9 @@ class DevSettingsRepository @Inject constructor(
     override val baseUrl: Flow<String> = censusBaseUrl
     val nextAllowedAtMillis = dataSource.nextAllowedAtMillis
     val censusPolicy = dataSource.censusPolicy
+    override val acceptedSchemaIds: Flow<Set<String>> = dataSource.censusAcceptedSchemaIds.map {
+        it ?: setOf(SkeletonSchema.SCHEMA_ID)
+    }
     val censusAvailable: Boolean get() = isDebug
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
         raw?.let { (at, wire, detail, envelopes) -> CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes) }
@@ -53,6 +58,9 @@ class DevSettingsRepository @Inject constructor(
             val number = element as? JsonPrimitive
             number?.takeUnless { it.isString }?.intOrNull?.let { key to it }
         }.toMap(),
+        (value["acceptedSchemaIds"] as? JsonArray).orEmpty().mapNotNull {
+            (it as? JsonPrimitive)?.takeIf { id -> id.isString }?.content
+        }.toSet(),
     )
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())

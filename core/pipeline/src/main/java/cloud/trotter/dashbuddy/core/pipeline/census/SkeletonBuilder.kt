@@ -59,6 +59,8 @@ object SkeletonBuilder {
 
     /** Why no skeleton was produced — the counter reasons #1146 will publish. Never carries text. */
     enum class Refusal {
+        /** Publisher refused this kind because the server policy does not advertise its schema. */
+        POLICY_UNSUPPORTED_SCHEMA,
         /** A [SensitiveTextMarkers] hit anywhere in the tree. */
         SENSITIVE_FRAME,
 

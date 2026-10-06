@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.CensusRecord
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
 import cloud.trotter.census.contract.NotificationSkeletonDto
+import cloud.trotter.census.contract.NotificationSkeletonSchema
+import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.census.contract.KindClassifier
 import cloud.trotter.census.contract.TextSlot
@@ -58,6 +60,10 @@ class SkeletonPublisher internal constructor(
                 stats.onCensusUnattributedPlatform()
                 return
             }
+            if (SkeletonSchema.SCHEMA_ID !in sink.acceptedSchemaIds) {
+                stats.onCensusRefused(SkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA)
+                return
+            }
             val day = Instant.ofEpochMilli(obs.timestamp).atZone(zoneId).toLocalDate()
             when (val outcome = SkeletonBuilder.outcome(
                 event.tree,
@@ -105,6 +111,10 @@ class SkeletonPublisher internal constructor(
             val platform = Platform.fromPackage(raw.packageName)
             if (platform == Platform.Unknown) {
                 stats.onCensusUnattributedPlatform()
+                return
+            }
+            if (NotificationSkeletonSchema.SCHEMA_ID !in sink.acceptedSchemaIds) {
+                stats.onCensusNotificationRefused(NotificationSkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA)
                 return
             }
             val day = Instant.ofEpochMilli(obs.timestamp).atZone(zoneId).toLocalDate()

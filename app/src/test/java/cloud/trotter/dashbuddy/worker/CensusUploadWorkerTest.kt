@@ -131,7 +131,8 @@ class CensusUploadWorkerTest {
             enrolledIds += cred.installId
             return enrollments.removeFirst()
         }
-        override suspend fun policy(): PolicyResult = PolicyResult.Available(JsonObject(emptyMap()))
+        var policyResult: PolicyResult = PolicyResult.Unavailable(503)
+        override suspend fun policy(): PolicyResult = policyResult
         override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
             stages += "skeletons"
             beforeUpload(batchId, itemsJson)
@@ -813,25 +814,97 @@ class CensusUploadWorkerTest {
         }
     }
 
-    @Test fun `transport failure retries mixed batch before new arrivals with original batch id`() = runTest {
+    @Test fun `mixed spool posts separate schema batches and notification quality refusal leaves screen queued`() = runTest {
+        val h = harness()
+        h.initialize()
+        val mixed = h.queueMixedBatch()
+        val screen = mixed.take(1)
+        val notification = mixed.drop(1)
+        h.queued.clear()
+        h.queued += notification + screen // Refusal happens first; screen's transport failure must retain it.
+        h.api.uploads.addAll(listOf(UploadResult.BatchQuality(mapOf("unknown_schema" to 1)),
+            UploadResult.TransportFailure("IOException")))
+        assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
+        assertEquals(listOf(notification, screen).map { batch -> batch.map { it.itemJson } }, h.api.bodies)
+        assertEquals(listOf(notification, screen).map { batch -> CensusApi.batchId(batch.map { it.fingerprint }) }, h.api.batches)
+        assertNotEquals(h.api.batches[0], h.api.batches[1])
+        verify(h.spool).remove(notification.map { it.id })
+        verify(h.spool, never()).remove(screen.map { it.id })
+        assertEquals(screen, h.queued.flatten())
+        assertEquals(screen.map { it.id }, h.pending?.ids)
+        assertEquals(1L, h.stats.rejectedCounts()["unknown_schema"])
+        assertEquals(0L, h.stats.uploaded.get())
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1L, h.stats.uploaded.get())
+        assertEquals(1L, h.stats.rejectedCounts()["unknown_schema"])
+        assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `legacy mixed in-flight batch is replaced by independently identified schema batches`() = runTest {
+        val h = harness()
+        h.initialize()
+        val mixed = h.queueMixedBatch()
+        val legacyId = CensusApi.batchId(mixed.map { it.fingerprint })
+        h.pending = CensusSpool.InFlight(legacyId, mixed.map { it.id })
+        h.api.uploads.addAll(listOf(UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300)),
+            UploadResult.BatchQuality(mapOf("unknown_schema" to 1))))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(mixed.map { listOf(it.itemJson) }, h.api.bodies)
+        assertEquals(mixed.map { CensusApi.batchId(listOf(it.fingerprint)) }, h.api.batches)
+        assertTrue(h.api.batches.none { it == legacyId })
+        assertEquals(1L, h.stats.uploaded.get())
+        assertEquals(1L, h.stats.rejectedCounts()["unknown_schema"])
+        assertTrue(h.queued.isEmpty())
+        assertNull(h.pending)
+    }
+
+    @Test fun `enrollment persists advertised schema ids`() = runTest {
+        val h = harness()
+        h.initialize()
+        whenever(h.credentials.current()).thenReturn(null)
+        whenever(h.credentials.pending()).thenReturn(h.credential.copy(enrolled = false))
+        h.api.enrollments += EnrolResult.Enrolled(Json.parseToJsonElement(
+            """{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"]}""",
+        ).jsonObject)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(setOf("uinode.skeleton.v1", "notification.skeleton.v1"), h.preferences.acceptedSchemaIds.first())
+    }
+
+    @Test fun `existing install refreshes accepted schemas and unavailable policy retains cache`() = runTest {
+        val h = harness()
+        h.initialize()
+        val schemas = setOf("uinode.skeleton.v1", "notification.skeleton.v1")
+        h.api.policyResult = PolicyResult.Available(Json.parseToJsonElement(
+            """{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"]}""",
+        ).jsonObject)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(schemas, h.preferences.acceptedSchemaIds.first())
+        h.api.policyResult = PolicyResult.TransportFailure("IOException")
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(schemas, h.preferences.acceptedSchemaIds.first())
+    }
+
+    @Test fun `transport failure retries schema group before mixed spool and new arrivals with original batch id`() = runTest {
         val h = harness()
         h.initialize()
         val a = h.queueMixedBatch()
         h.api.uploads += UploadResult.TransportFailure("IOException")
         assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
         val originalBatchId = h.api.batches.single()
-        assertEquals(CensusApi.batchId(a.map { it.fingerprint }), originalBatchId)
+        assertEquals(CensusApi.batchId(a.take(1).map { it.fingerprint }), originalBatchId)
         val b = h.queueBatch(1)
-        // Fresh selection would now return both A and B in one batch.
+        // Fresh selection would now include both A and B; the in-flight screen must retry first.
         h.queued.clear()
         h.queued += a + b
-        h.api.uploads.addAll(listOf(UploadResult.Duplicate, UploadResult.Duplicate))
+        h.api.uploads.addAll(listOf(UploadResult.Duplicate, UploadResult.Duplicate, UploadResult.Duplicate))
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-        assertEquals(listOf(a, a, b).map { items -> items.map { it.itemJson } }, h.api.bodies)
-        assertEquals(listOf(originalBatchId, originalBatchId, CensusApi.batchId(b.map { it.fingerprint })), h.api.batches)
+        assertEquals(listOf(a.take(1), a.take(1), a.drop(1), b).map { items -> items.map { it.itemJson } }, h.api.bodies)
+        assertEquals(listOf(originalBatchId, originalBatchId, CensusApi.batchId(a.drop(1).map { it.fingerprint }),
+            CensusApi.batchId(b.map { it.fingerprint })), h.api.batches)
         assertTrue(h.queued.isEmpty())
         assertNull(h.pending)
-        verify(h.spool, times(2)).clearInFlight()
+        verify(h.spool, times(3)).clearInFlight()
     }
 
     @Test fun `413 recursively halves an odd batch in the same run and drops only oversized singleton`() = runTest {
@@ -1535,24 +1608,29 @@ class CensusUploadWorkerTest {
             if (priority == Log.WARN && tag == "Census") warnings += message
         }
     }
-    @Test fun `mixed batch shares budget deferral and retains both kinds for retry`() = runTest {
+    @Test fun `mixed spool stops after screen budget deferral and retains both kinds for retry`() = runTest {
         val h = harness()
         h.initialize()
         val items = h.queueMixedBatch()
+        val screen = items.take(1)
+        val notification = items.drop(1)
         h.api.uploads += UploadResult.BudgetExhausted(300)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-        assertEquals(items.map { it.itemJson }, h.api.bodies.single())
+        assertEquals(screen.map { it.itemJson }, h.api.bodies.single())
         val batchId = h.api.batches.single()
-        assertEquals(items.map { it.id }, h.pending?.ids)
+        assertEquals(screen.map { it.id }, h.pending?.ids)
+        assertEquals(items, h.queued.flatten())
         val deadline = h.preferences.nextAllowedAtMillis.first()
         assertTrue(deadline > System.currentTimeMillis())
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(1, h.api.batches.size)
+        assertEquals(items, h.queued.flatten())
         h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
-        h.api.uploads += UploadResult.Duplicate
+        h.api.uploads.addAll(listOf(UploadResult.Duplicate, UploadResult.Duplicate))
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-        assertEquals(listOf(batchId, batchId), h.api.batches)
-        assertEquals(listOf(items, items).map { batch -> batch.map { it.itemJson } }, h.api.bodies)
+        assertEquals(listOf(batchId, batchId, CensusApi.batchId(notification.map { it.fingerprint })), h.api.batches)
+        assertNotEquals(batchId, h.api.batches.last())
+        assertEquals(listOf(screen, screen, notification).map { batch -> batch.map { it.itemJson } }, h.api.bodies)
         assertTrue(h.queued.isEmpty())
     }
 

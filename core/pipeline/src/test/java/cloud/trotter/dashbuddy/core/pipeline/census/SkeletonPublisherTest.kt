@@ -10,6 +10,8 @@ import cloud.trotter.dashbuddy.domain.capture.NoOpCensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.CensusEnvelopeSink
 import cloud.trotter.dashbuddy.domain.capture.CensusSink
 import cloud.trotter.census.contract.NotificationSkeletonSchema
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
@@ -36,6 +38,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
 
     private class FakeSink(enabled: Boolean, private val accept: Boolean = true) : CensusSink {
         override val isEnabled: Boolean = enabled
+        override var acceptedSchemaIds: Set<String> = CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet()
         val records = mutableListOf<CensusRecord>()
 
         override fun offer(record: CensusRecord): Boolean {
@@ -346,6 +349,54 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     private fun rawNotification() = RawNotificationData("Continue", null, null, null,
         packageName = Platform.DoorDash.packageName!!, postTime = 0, isClearable = true, channelId = "synthetic")
 
+    @Test fun `policy changes gate each kind and count refusals before offering or pairing`() {
+        val sink = FakeSink(true)
+        val stats = PipelineStats()
+        var pairs = 0
+        val envelopes = object : CensusEnvelopeSink {
+            override val isEnabled = true
+            override suspend fun invalidate() = Unit
+            override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
+            override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
+        }
+        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+        sink.acceptedSchemaIds = setOf(SkeletonSchema.SCHEMA_ID)
+        publisher.publish(notification(), rawNotification())
+        assertTrue(sink.records.isEmpty())
+        assertEquals(1L, stats.censusNotificationRefusedCount(NotificationSkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA))
+        assertEquals(0L, stats.censusNotificationCount())
+        sink.acceptedSchemaIds = setOf(NotificationSkeletonSchema.SCHEMA_ID)
+        publisher.publish(notification(), rawNotification())
+        publisher.publish(screen(captureId = "refused"), event(tree("Continue")))
+        assertEquals(1, sink.records.size)
+        assertEquals(1L, stats.censusNotificationCount())
+        assertEquals(1L, stats.censusRefusedCount(Refusal.POLICY_UNSUPPORTED_SCHEMA))
+        assertEquals(0, pairs)
+        sink.acceptedSchemaIds = emptySet()
+        publisher.publish(notification(), rawNotification())
+        assertEquals(1, sink.records.size)
+        assertEquals(2L, stats.censusNotificationRefusedCount(NotificationSkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA))
+        assertTrue(stats.summary().contains("notificationRefused{POLICY_UNSUPPORTED_SCHEMA=2}"))
+        assertTrue(stats.summary().contains("refused{POLICY_UNSUPPORTED_SCHEMA=1}"))
+    }
+
+    @Test fun `no policy defaults to screens only`() {
+        val records = mutableListOf<CensusRecord>()
+        val sink = object : CensusSink {
+            override val isEnabled = true
+            override fun offer(record: CensusRecord): Boolean { records += record; return true }
+        }
+        val stats = PipelineStats()
+        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        publisher.publish(notification(), rawNotification())
+        publisher.publish(screen(), event(tree("Continue")))
+        assertEquals(setOf(SkeletonSchema.SCHEMA_ID), sink.acceptedSchemaIds)
+        assertEquals(1, records.size)
+        assertEquals(1L, stats.censusSkeletonCount())
+        assertEquals(0L, stats.censusNotificationCount())
+        assertEquals(1L, stats.censusNotificationRefusedCount(NotificationSkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA))
+    }
+
     @Test fun `notifications and screens share sink and counts but notifications never pair envelopes`() {
         val sink = FakeSink(true)
         val stats = PipelineStats()
@@ -403,6 +454,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             for (cancel in listOf(false, true)) {
                 val failure = if (cancel) CancellationException("cancelled") else IllegalStateException("private payload")
                 val sink = object : CensusSink {
+                    override val acceptedSchemaIds = CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet()
                     override val isEnabled: Boolean get() = if (getter) throw failure else true
                     override fun offer(record: CensusRecord): Boolean = throw failure
                 }

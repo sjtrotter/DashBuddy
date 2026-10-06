@@ -657,6 +657,9 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   before `CustomerTextMarkers.scrubNotif` and the shared two-pass `FrameFilter`; absent/blank, customer,
   mask and over-40-character fields emit constant `withheld`. Actions participate only in refusal.
   `notification.skeleton.v1` carries five enum-ordered slots and a domain-separated fingerprint.
+  Both kinds are published only when the cached server policy advertises their schema (before the first
+  policy, screens only); unsupported kinds count `POLICY_UNSUPPORTED_SCHEMA` per kind and never enter
+  the spool. Batches are per schema, so a notification `422 batch_quality` cannot delete valid screens (#1252).
   Capture disabled/refused cannot bypass this publication gate. Publisher failures are fail-open to
   recognition; cancellation propagates. Notification publishing never calls `CensusEnvelopeSink.pair`.
   `census{…}` retains aggregate counts and adds nonzero `notifications` / `notificationRefused{REASON=n}`;
