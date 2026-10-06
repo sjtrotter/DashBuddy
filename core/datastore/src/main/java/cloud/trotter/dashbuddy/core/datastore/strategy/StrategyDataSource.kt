@@ -40,17 +40,17 @@ class StrategyDataSource @Inject constructor(
         val PROTECT_STATS_MODE = booleanPreferencesKey("protect_stats_mode")
         val ALLOW_SHOPPING = booleanPreferencesKey("allow_shopping")
 
+        /** #1113: the seven "decide for me" preferences nothing ever read — purged once, never written again. */
+        val DEAD_AUTOMATION: List<Preferences.Key<*>> = listOf(
+            booleanPreferencesKey("auto_master_enabled"),
+            booleanPreferencesKey("auto_accept_enabled"),
+            doublePreferencesKey("auto_accept_min_pay"),
+            doublePreferencesKey("auto_accept_min_ratio"),
+            booleanPreferencesKey("auto_decline_enabled"),
+            doublePreferencesKey("auto_decline_max_pay"),
+            doublePreferencesKey("auto_decline_min_ratio"),
+        )
     }
-
-    private val DEAD_KEYS: List<Preferences.Key<*>> = listOf(
-        booleanPreferencesKey("auto_master_enabled"),
-        booleanPreferencesKey("auto_accept_enabled"),
-        doublePreferencesKey("auto_accept_min_pay"),
-        doublePreferencesKey("auto_accept_min_ratio"),
-        booleanPreferencesKey("auto_decline_enabled"),
-        doublePreferencesKey("auto_decline_max_pay"),
-        doublePreferencesKey("auto_decline_min_ratio"),
-    )
 
     // #588: learned shopping pace, now keyed **per platform** (was a single global pair — a
     // DoorDash-learned pace could price an Instacart/Uber shop and pollute the shared mean). Not a
@@ -230,8 +230,8 @@ class StrategyDataSource @Inject constructor(
     suspend fun purgeDeadAutomationKeys(): Boolean {
         var purged = false
         ds.edit { prefs ->
-            if (DEAD_KEYS.any { prefs.contains(it) }) {
-                DEAD_KEYS.forEach { prefs.remove(it) }
+            if (Keys.DEAD_AUTOMATION.any { prefs.contains(it) }) {
+                Keys.DEAD_AUTOMATION.forEach { prefs.remove(it) }
                 purged = true
             }
         }

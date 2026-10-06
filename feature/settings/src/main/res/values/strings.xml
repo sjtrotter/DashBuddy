@@ -47,9 +47,9 @@
     <string name="consent_source_downloaded_format">%1$s · downloaded rules</string>
     <string name="consent_source_downloaded_note">Downloaded rules are never turned on automatically. Each action stays off until you turn it on here.</string>
     <string name="consent_cap_accept_title">Accept offers</string>
-    <string name="consent_cap_accept_desc">Lets DashBuddy tap the Accept button in the %1$s app for you — when you press Accept in DashBuddy, or when you have armed auto-accept. It only taps a button labeled \"Accept\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_accept_desc">Lets DashBuddy tap the Accept button in the %1$s app for you — when you press Accept in DashBuddy. It only taps a button labeled \"Accept\" inside the %1$s app, and never without your go-ahead.</string>
     <string name="consent_cap_decline_title">Decline offers</string>
-    <string name="consent_cap_decline_desc">Lets DashBuddy tap the Decline button in the %1$s app for you — when you press Decline in DashBuddy, or when you have armed auto-decline. It only taps a button labeled \"Decline\" inside the %1$s app, and never without your go-ahead.</string>
+    <string name="consent_cap_decline_desc">Lets DashBuddy tap the Decline button in the %1$s app for you — when you press Decline in DashBuddy. It only taps a button labeled \"Decline\" inside the %1$s app, and never without your go-ahead.</string>
     <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
     <string name="consent_cap_confirm_decline_desc">Lets DashBuddy tap the second \"Decline\" button on %1$s\'s confirmation dialog, so a decline you started finishes in one step. It only fires when you have turned on quick declines, and only inside the %1$s app.</string>
     <string name="consent_cap_expand_title">Open the pay breakdown</string>
@@ -73,7 +73,7 @@
     <string name="strategy_settings_protect_stats_label">🛡️ Protect Stats Mode</string>
     <string name="strategy_settings_protect_stats_subtitle">Auto-accept everything</string>
     <string name="strategy_settings_allow_shopping_label">🛒 Allow Shopping Orders</string>
-    <string name="strategy_settings_allow_shopping_subtitle">If off, Red Card orders are auto-declined</string>
+    <string name="strategy_settings_allow_shopping_subtitle">If off, Red Card orders are scored as a decline (flagged, never tapped for you)</string>
     <string name="strategy_settings_quick_declines_label">⚡ Single-click declines</string>
     <string name="strategy_settings_quick_declines_subtitle">Auto-confirm DoorDash\'s \'are you sure?\' so a decline is one tap</string>
     <string name="strategy_settings_priorities_title">Priorities (Rack &amp; Stack)</string>
