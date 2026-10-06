@@ -11,14 +11,8 @@ class CountyCellMapTest {
     private val map = CountyCellMap.V2023
 
     @Test
-    fun `map loads all counties and every CBSA has a matching kind and title`() {
-        assertEquals(3_222, map.rows.size)
-        val cbsas = map.rows.map { it.cell }.filter { it.kind != RegionCell.Kind.STATE }.toSet()
-        assertEquals(935, cbsas.size) // Titles export also contains two Census footer rows.
-        cbsas.forEach { assertNotNull(it.wire, CellTitles.titleOf(it)) }
-        assertEquals(1_252, map.rows.count { it.cell.kind == RegionCell.Kind.METRO })
-        assertEquals(663, map.rows.count { it.cell.kind == RegionCell.Kind.MICRO })
-        assertEquals(1_307, map.rows.count { it.cell.kind == RegionCell.Kind.STATE })
+    fun `map loads all county subdivisions`() {
+        assertEquals(36_434, map.rows.size)
     }
 
     @Test
@@ -29,8 +23,13 @@ class CountyCellMapTest {
         assertEquals("34017", map.countyOf(manhattan)) // Hudson County NJ, same CBSA.
         assertEquals("state:ND@2023", map.cellAt(Coordinates(47.5, -100.9))?.wire)
         assertEquals("metro:46520@2023", map.cellAt(Coordinates(21.3069, -157.8583))?.wire)
-        // Key West (Astra r1): 137.7 km from Monroe County's Everglades-side internal point — inside the guard.
+        // Key West: 33.7 km from its own subdivision point.
         assertEquals("micro:28580@2023", map.cellAt(Coordinates(24.5551, -81.7800))?.wire)
+        assertEquals("metro:40140@2023", map.cellAt(Coordinates(34.108, -117.289))?.wire) // San Bernardino
+        assertEquals("metro:40140@2023", map.cellAt(Coordinates(33.9806, -117.3755))?.wire) // Riverside
+        assertEquals("metro:40140@2023", map.cellAt(Coordinates(33.4936, -117.1484))?.wire) // Temecula
+        assertEquals("metro:12620@2023", map.cellAt(Coordinates(44.80, -68.78))?.wire) // Bangor
+        assertEquals("metro:38060@2023", map.cellAt(Coordinates(33.4484, -112.074))?.wire) // Phoenix
     }
 
     /**
@@ -42,7 +41,8 @@ class CountyCellMapTest {
     fun `border cities of neighbouring countries currently resolve to the adjacent US cell`() {
         assertEquals("metro:19820@2023", map.cellAt(Coordinates(42.3149, -83.0364))?.wire) // Windsor ON → Detroit
         assertEquals("metro:41740@2023", map.cellAt(Coordinates(32.5149, -117.0382))?.wire) // Tijuana → San Diego
-        assertNull(map.cellAt(Coordinates(51.88, -176.65))) // Adak AK, 256 km from Aleutians West's point — beyond reach
+        assertNull(map.cellAt(Coordinates(51.88, -176.65))) // Adak AK, 256 km — Aleutian reach hole
+        assertNull(map.cellAt(Coordinates(71.29, -156.79))) // Utqiagvik AK, 239 km — Arctic reach hole
     }
 
     @Test
@@ -62,7 +62,7 @@ class CountyCellMapTest {
     @Test
     fun `distance guard accepts just inside 160 km and rejects just outside`() {
         val isolated = CountyCellMap.read(
-            "county_fips,state,lat,lon,cbsa,kind\n01001,AL,0,0,12420,metro\n".reader().buffered(),
+            "geoid,state,lat,lon,cbsa,kind\n0100190000,AL,0,0,12420,metro\n".reader().buffered(),
         )
         val origin = Coordinates(0.0, 0.0)
         val degreesPerMeter = 1.0 / origin.distanceTo(Coordinates(1.0, 0.0))
@@ -91,30 +91,46 @@ class CountyCellMapTest {
     }
 
     @Test
-    fun `titles decode CSV commas and stay specific to kind and vintage`() {
-        assertEquals("Austin-Round Rock-San Marcos, TX", CellTitles.titleOf(RegionCell(RegionCell.Kind.METRO, "12420")))
-        assertEquals("Aberdeen, SD", CellTitles.titleOf(RegionCell(RegionCell.Kind.MICRO, "10100")))
-        assertNull(CellTitles.titleOf(RegionCell(RegionCell.Kind.STATE, "ND")))
-        assertNull(CellTitles.titleOf(RegionCell(RegionCell.Kind.MICRO, "12420")))
-        assertNull(CellTitles.titleOf(RegionCell(RegionCell.Kind.METRO, "12420", "2024")))
+    fun `direct construction and copy reject invalid identifiers and vintages`() {
+        listOf(RegionCell.Kind.METRO, RegionCell.Kind.MICRO).forEach { kind ->
+            listOf("ND", "00000", "1234", "123456", "12a45", "１２３４５").forEach { id ->
+                assertThrows(IllegalArgumentException::class.java) { RegionCell(kind, id) }
+            }
+        }
+        listOf("ZZ", "nd", "12420", "").forEach { id ->
+            assertThrows(IllegalArgumentException::class.java) { RegionCell(RegionCell.Kind.STATE, id) }
+        }
+        listOf("0000", "", "123", "12345", "20a3").forEach { vintage ->
+            assertThrows(IllegalArgumentException::class.java) {
+                RegionCell(RegionCell.Kind.STATE, "ND", vintage)
+            }
+        }
+        val valid = RegionCell(RegionCell.Kind.METRO, "12420")
+        assertThrows(IllegalArgumentException::class.java) { valid.copy(id = "ND") }
+        assertThrows(IllegalArgumentException::class.java) { valid.copy(vintage = "0000") }
     }
 
     @Test
     fun `corrupt county map rows throw instead of being skipped`() {
-        val header = "county_fips,state,lat,lon,cbsa,kind\n"
-        val valid = "01001,AL,32.5322,-86.6464,33860,metro"
+        val header = "geoid,state,lat,lon,cbsa,kind\n"
+        val valid = "0100190000,AL,32.5322,-86.6464,33860,metro"
         listOf(
             "bad header\n$valid", header, header + "\n", header + valid + ",extra",
             header + valid + "\n" + valid,
-            header + "1001,AL,32.5322,-86.6464,33860,metro",
-            header + "01001,ZZ,32.5322,-86.6464,33860,metro",
-            header + "01001,AL,NaN,-86.6464,33860,metro",
-            header + "01001,AL,91,-86.6464,33860,metro",
-            header + "01001,AL,32.5322,-181,33860,metro",
-            header + "01001,AL,32.5322,-86.6464,,metro",
-            header + "01001,AL,32.5322,-86.6464,33860,none",
-            header + "01001,AL,32.5322,-86.6464,33860,state",
-            header + "01001,AL,32.5322,-86.6464,3386,micro",
+            header + "01001,AL,32.5322,-86.6464,33860,metro",
+            header + "01001900000,AL,32.5322,-86.6464,33860,metro",
+            header + "010019000X,AL,32.5322,-86.6464,33860,metro",
+            header + "0100190000,AL,3e1,-86.6464,33860,metro",
+            header + "0100190000,ZZ,32.5322,-86.6464,33860,metro",
+            header + "0100190000,AL,NaN,-86.6464,33860,metro",
+            header + "0100190000,AL,91,-86.6464,33860,metro",
+            header + "0100190000,AL,32.5322,-181,33860,metro",
+            header + "0100190000,AL,32.5322,-86.6464,,metro",
+            header + "0100190000,AL,32.5322,-86.6464,33860,none",
+            header + "0100190000,AL,32.5322,-86.6464,33860,state",
+            header + "0100190000,AL,32.5322,-86.6464,3386,micro",
+            header + "0100190000,AL,32.5322,-86.6464,00000,metro",
+            header + "0100190000,AL,32.5322,-86.6464,ND,metro",
         ).forEach { csv ->
             assertThrows(IllegalArgumentException::class.java) {
                 CountyCellMap.read(csv.reader().buffered())

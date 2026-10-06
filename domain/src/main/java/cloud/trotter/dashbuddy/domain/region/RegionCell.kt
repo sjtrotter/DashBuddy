@@ -8,6 +8,14 @@ package cloud.trotter.dashbuddy.domain.region
 data class RegionCell(val kind: Kind, val id: String, val vintage: String = VINTAGE) {
     enum class Kind(val wire: String) { METRO("metro"), MICRO("micro"), STATE("state") }
 
+    init {
+        require(when (kind) {
+            Kind.METRO, Kind.MICRO -> CBSA_ID.matches(id) && id != "00000"
+            Kind.STATE -> id in STATE_CODES
+        }) { "Invalid region cell identifier" }
+        require(VINTAGE_ID.matches(vintage) && vintage != "0000") { "Invalid region cell vintage" }
+    }
+
     /** Stable wire form: `metro:12420@2023`, `state:ND@2023`. */
     val wire: String get() = "${kind.wire}:$id@$vintage"
 
@@ -18,19 +26,15 @@ data class RegionCell(val kind: Kind, val id: String, val vintage: String = VINT
                 "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR"
             ).split(' ').toSet()
         private val WIRE = Regex("(metro|micro|state):([0-9]{5}|[A-Z]{2})@([0-9]{4})")
+        private val CBSA_ID = Regex("[0-9]{5}")
+        private val VINTAGE_ID = Regex("[0-9]{4}")
 
         /** Inverse of [wire]; malformed kinds, identifiers, or vintages fail null. */
         fun parse(wire: String): RegionCell? {
             val match = WIRE.matchEntire(wire) ?: return null
             val (kindWire, id, vintage) = match.destructured
             val kind = Kind.entries.first { it.wire == kindWire }
-            if (kind == Kind.STATE) {
-                if (id !in STATE_CODES) return null
-            } else if (id.length != 5 || id == "00000") {
-                return null
-            }
-            if (vintage == "0000") return null
-            return RegionCell(kind, id, vintage)
+            return runCatching { RegionCell(kind, id, vintage) }.getOrNull()
         }
     }
 }

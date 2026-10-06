@@ -2,22 +2,24 @@ package cloud.trotter.dashbuddy.domain.region
 
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import java.io.BufferedReader
+import java.util.zip.GZIPInputStream
 
 /**
- * Offline nearest-county-internal-point approximation, NOT point-in-polygon. Near a county border,
+ * Offline county-subdivision internal points, county→CBSA join; NOT point-in-polygon. Near a county border,
  * a fix can land in the neighbouring county; this matters when the neighbour is in a different
- * CBSA. The rolling 28-day [PrimaryCellPolicy] smooths these observations.
+ * CBSA. The rolling 28-day [PrimaryCellPolicy] cannot correct systematic nearest-point errors.
  *
- * A simple linear scan is intended once per GPS-anchored activity event, not once per GPS fix.
+ * A linear scan over ~36k rows is fine once per GPS-anchored EVENT, not once per GPS fix;
+ * no additional precomputation is needed.
  * The distance guard rejects remote fixes; it does not establish a US boundary or coastline.
  */
 class CountyCellMap private constructor(internal val rows: List<Row>) {
-    internal data class Row(val countyFips: String, val coordinates: Coordinates, val cell: RegionCell)
+    internal data class Row(val geoid: String, val coordinates: Coordinates, val cell: RegionCell)
 
     fun cellAt(coordinates: Coordinates): RegionCell? = nearest(coordinates)?.cell
 
     /** Local test diagnostic only; county FIPS must never be sent as the REGION cell. */
-    internal fun countyOf(coordinates: Coordinates): String? = nearest(coordinates)?.countyFips
+    internal fun countyOf(coordinates: Coordinates): String? = nearest(coordinates)?.geoid?.substring(0, 5)
 
     private fun nearest(coordinates: Coordinates): Row? {
         if (coordinates.latitude !in -90.0..90.0 || coordinates.longitude !in -180.0..180.0) return null
@@ -34,36 +36,36 @@ class CountyCellMap private constructor(internal val rows: List<Row>) {
     }
 
     companion object {
-        val V2023: CountyCellMap by lazy { load("/geo/county_cells_2023.csv") }
+        val V2023: CountyCellMap by lazy { load("/geo/cousub_cells_2023.csv.gz") }
         /**
-         * Nearest-point reach. 160 km covers the Florida Keys (Key West is 137.7 km from Monroe County's
-         * internal point, which sits on the Everglades mainland) while still refusing the open ocean and
-         * Europe. It does NOT refuse a border city of a neighbouring country: Windsor ON is 18.9 km from
-         * Wayne County's point (→ Detroit), Tijuana 61.6 km from San Diego's, Toronto 62.5 km from Niagara's
-         * (→ Buffalo) — a wrong CELL, never a privacy leak. An offline US-containment guard replaces this
-         * cutoff before the `region` field ships (tracked on #1194); the Aleutians (Adak, 256 km) stay null.
+         * Nearest-point reach. Key West is 33.7 km from its own subdivision point. The remaining US
+         * nulls are the Alaska Arctic/Aleutian boroughs (Utqiagvik 239 km, Adak 256 km — no delivery
+         * market). Known limitation: neighbouring-country border cities still resolve to a US cell
+         * (Windsor 8.5 km → Detroit, Tijuana 27.8 km → San Diego, Toronto 52.4 km → Buffalo) — a wrong
+         * cell, never a privacy leak. An offline US-containment guard replaces this cutoff before
+         * the `region` field ships (tracked on #1194).
          */
         const val MAX_CENTROID_DISTANCE_METERS = 160_000.0
-        private val FIPS = Regex("[0-9]{5}")
+        private val GEOID = Regex("[0-9]{10}")
         private val DECIMAL = Regex("-?[0-9]+(?:\\.[0-9]+)?")
 
         private fun load(resource: String): CountyCellMap {
             val stream = checkNotNull(CountyCellMap::class.java.getResourceAsStream(resource)) {
                 "Missing county cell map: $resource"
             }
-            return stream.bufferedReader(Charsets.UTF_8).use { read(it) }
+            return stream.use { GZIPInputStream(it).bufferedReader(Charsets.UTF_8).use { reader -> read(reader) } }
         }
 
         /** Shared by the classpath loader and corruption tests; shipped data must fail loud. */
         internal fun read(reader: BufferedReader): CountyCellMap {
-            require(reader.readLine() == "county_fips,state,lat,lon,cbsa,kind") { "Invalid county map header" }
+            require(reader.readLine() == "geoid,state,lat,lon,cbsa,kind") { "Invalid county map header" }
             val seen = mutableSetOf<String>()
             val rows = reader.lineSequence().mapIndexed { index, line ->
                 val fields = line.split(',')
                 require(fields.size == 6) { "Invalid county map row ${index + 2}" }
-                val (fips, state, lat, lon, cbsa) = fields
-                require(FIPS.matches(fips) && fips != "00000" && seen.add(fips)) {
-                    "Invalid or duplicate county FIPS at row ${index + 2}"
+                val (geoid, state, lat, lon, cbsa) = fields
+                require(GEOID.matches(geoid) && seen.add(geoid)) {
+                    "Invalid or duplicate subdivision GEOID at row ${index + 2}"
                 }
                 require(state in RegionCell.STATE_CODES) { "Invalid state at row ${index + 2}" }
                 require(DECIMAL.matches(lat) && DECIMAL.matches(lon)) { "Invalid county coordinate" }
@@ -80,7 +82,7 @@ class CountyCellMap private constructor(internal val rows: List<Row>) {
                         "Invalid CBSA identifier"
                     }
                 }
-                Row(fips, coordinates, cell)
+                Row(geoid, coordinates, cell)
             }.toList()
             require(rows.isNotEmpty()) { "Empty county cell map" }
             return CountyCellMap(rows)

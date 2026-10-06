@@ -11,6 +11,25 @@ class PrimaryCellPolicyTest {
     private val now = 100 * day
 
     @Test
+    fun `Pacific lunch days beat dinner days locally but UTC midnight biases dinner`() {
+        val hour = 60L * 60 * 1000
+        val pacificOffset = -7 * hour
+        // Cell A: three lunch shifts at 12:00 PDT, each within one UTC day.
+        val lunches = listOf(90L, 92L, 94L).map { localDay ->
+            CellObservation(austin, localDay * day + 12 * hour - pacificOffset)
+        }
+        // Cell B: two separated 16:00–20:00 PDT shifts, each crossing UTC midnight (17:00 PDT).
+        val dinners = listOf(96L, 98L).flatMap { localDay ->
+            listOf(16L, 20L).map { localHour ->
+                CellObservation(rural, localDay * day + localHour * hour - pacificOffset)
+            }
+        }
+        val observations = lunches + dinners
+        assertEquals(austin, PrimaryCellPolicy.primaryCell(observations, now, zoneOffsetMillis = pacificOffset))
+        assertEquals(rural, PrimaryCellPolicy.primaryCell(observations, now)) // Documented UTC bias: 4 vs 3 days.
+    }
+
+    @Test
     fun `three distinct active days beat ten fixes on one day`() {
         val observations = (1L..10).map { CellObservation(austin, now - it) } +
             (1L..3).map { CellObservation(rural, now - it * day) }
