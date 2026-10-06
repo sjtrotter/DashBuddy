@@ -7,7 +7,7 @@ The only description correction is #1135's quoted callout, verified against `app
 
 ## §0 Policy
 
-2026-10-06 — seeds approved by the dev; must-watch picks pending
+2026-10-06 — seeds approved by the dev; 2026-10-07 — the five must-watch picks and the four supersessions confirmed by the dev
 
 1. Prune superseded items when replacement evidence supports the dev's decision; `[superseded?]` below proposes pruning and preserves the original item pending that decision.
 2. The pre-dash agent reads a MUST-WATCH list of ≤ 5 money / redaction / Pledge / live-UI tap items first; the agent proposes and the dev picks.
@@ -19,11 +19,11 @@ Vocabulary (one status per item): `active` · `must-watch` · `review` (aged) ·
 
 The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an additional status or a dev decision; no item is newly desk-verified, confirmed or retired here.
 
-## §1 Must-watch (PROPOSED — dev to confirm ≤ 5)
+## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
-Five candidates; no picks are final. Each full item appears once, with its original counter.
+Five items the dev confirmed on 2026-10-07. Each full item appears once, with its original counter.
 
-- [must-watch?] **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
+- [must-watch] **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
   tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars, minus any "DashBuddy recorded … more than
   was reported" line beneath it, sum to the Earned figure above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from
   the offer" named when the row was priced from the offer; a dash whose summary exceeded its deliveries
@@ -33,13 +33,13 @@ Five candidates; no picks are final. Each full item appears once, with its origi
   Why proposed: Money reconciliation: the labels, segment totals and report provenance must agree to the cent.
   Triage source: first-line blame 2026-10-05 (`e1d50318c`, original README L51).
 
-- [must-watch?] **Session report correction (#1134):** on session 483 (09-10 17:11, `early_offline`, 0 deliveries)
+- [must-watch] **Session report correction (#1134):** on session 483 (09-10 17:11, `early_offline`, 0 deliveries)
   tap Correct total → No summary; the Sep 7–13 week's Earned drops from $646.34 to $606.20 and the
   dash shows 'report corrected'; Restore detected value brings $40.14 back. — Confirmed: 0/2
   Why proposed: Money correction: removing and restoring a false session report directly changes weekly earnings.
   Triage source: first-line blame 2026-10-05 (`30a3624a0`, original README L78).
 
-- [must-watch?] **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
+- [must-watch] **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
   no file under `captures/doordash/accessibility.click/UNKNOWN/` or `accessibility.window/UNKNOWN/`
   carries a `message_input` node or an `android.widget.EditText` node with readable `text` — the field
   reads `[redacted]` — and `app.log` shows `Capture backstop: UNKNOWN click node carried customer PII (… input=edittext-class)` (or `input=editable`);
@@ -48,7 +48,7 @@ Five candidates; no picks are final. Each full item appears once, with its origi
   Why proposed: Pledge: typed chat text must never persist raw in recognized or UNKNOWN captures.
   Triage source: first-line blame 2026-10-05 (`8d8855c9e`, original README L82).
 
-- [must-watch?] **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
+- [must-watch] **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
   UNKNOWN captures are now recognized and redacted.** Leak A is the ALCOHOL variant of the drop-off
   arrival card (the one that asks you to scan an ID and collect a signature): it renders no
   "Delivery for" line, so no rule matched it and the unit number + the customer's instruction body
@@ -94,7 +94,7 @@ Five candidates; no picks are final. Each full item appears once, with its origi
   Why proposed: Redaction: dropoff addresses and door codes must remain masked across the two sheet shapes.
   Triage source: first-line blame 2026-09-05 (`054433e69`, original README L716).
 
-- [must-watch?] **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
+- [must-watch] **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
   control that OWNS the click (#1149).** Taps now resolve the clickable owner first (verified, then
   `refresh()`ed right before the click), and an id-less bind is re-found by its exact label
   fingerprint BEFORE its captured bounds — so a receipt sheet still sliding when it was bound no longer
@@ -1406,7 +1406,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
       negative.
   Triage source: first-line blame 2026-08-24 (`9b438b76a`, original README L760).
 
-
 - [active] **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
   **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
   in Spanish (voice AND words together); System default on an English phone stays English; if the
@@ -1419,7 +1418,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     null — 14 utterances, all English, zero WARN; the toggle was never flipped.)
     - desk 09-13: seventh mechanism corroboration — the 09-08 expand grant persisted across the 09-11 22:34 restart and fired 11×, while `confirm_decline` was denied fail-closed 31× (13 confirm episodes × 2 + 5 single-denial episodes, exactly accounted). Note: the reconcile line's "(none granted — awaiting consent)" phrase is a CONSTANT in `RuleCapabilityRepository.reconcile`, not a store read.
   Triage source: first-line blame 2026-07-23 (`3745bc073`, original README L1288).
-
 
 - [active] **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
@@ -1447,7 +1445,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
     filenames, zero placeholders.)
   Triage source: first-line blame 2026-07-26 (`cc377c2ee`, original README L1263).
 
-
 - [active] **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
   Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
   en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
@@ -1468,7 +1465,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
       PICKUP-phase (arrived at the store, never confirmed); it behaved correctly (the $45.45 quote
       stayed unattributed, no paid artifact), but the dropoff-phase retro-mark is still unexercised.
   Triage source: first-line blame 2026-07-11 (`31f0f6905`, original README L1608).
-
 
 ## §3 Review (aged ≥ 6 weeks at 0/2)
 
@@ -2508,37 +2504,6 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   desk: needs field: inspect the four Home blocks, live On dash tick and hour-boundary plan dimming.
   Triage source: first-line blame 2026-08-12 (`69e72d33b`, original README L796).
 
-- [superseded?] **🆕 NEW — #977 — Home is now "Today" (redesign stage 4).** Open the app's home screen (not the
-  bubble). Top to bottom it should read: **date + a live clock + a status pill** (the pill's word is
-  the same status vocabulary the old card showed — Ready / Looking for offers / Heading to Pickup…),
-  then **TODAY'S PLAN**, **SO FAR TODAY**, **THIS WEEK**, any review chores, then the four entry
-  tiles + Show Bubble. Four things to check.
-  (a) **The clock actually ticks** — watch it roll a minute without leaving the screen. A frozen
-  clock is the defect.
-  (b) **The plan strip:** 24 little cells = *this weekday's* hours across your whole history, green
-  where you've earned well. Every hour before the current one must be visibly **dimmed**, and the
-  dimming must advance on its own when the hour rolls over (park on the screen across e.g. 5:59 →
-  6:00). The headline reads `Best bet tonight: 5–8 PM · your Mondays run $X/hr` with the
-  recommended cells **outlined**, and the line under it must ALWAYS read
-  `from your own <weekday>s, lifetime — not a guarantee`. On a weekday you've barely worked it must
-  say so ("Not enough Mondays on record yet — only N hours…") and show **no rate at all** — a rate
-  on a thin weekday is the bug to report. It should never recommend a window that has already
-  passed.
-  (c) **This week:** kept money for the pay week, a `▲/▼ X% vs last week` line (or "About the same",
-  or "Up from nothing" — never a percentage against an empty week), and a 7-point sparkline. Tap it:
-  `Recap →` must land in Analytics **already showing this week** — if the hub opens on some older
-  window you paged to earlier, that's the bug.
-  (d) **Review chores:** if the week has any (unattributed pay, "(No session)" drops, orphan
-  offers), they appear as one **NEEDS A LOOK** card, each row ending in `Review →` that also lands
-  in Analytics on this week. A clean week must render no card at all.
-  Also confirm nothing was lost: the old Today/Week/Month/Lifetime selector is gone on purpose —
-  those windows live on the Analytics pager now.
-  - Confirmed: 0/2 (desk 07-31, the 07-30 dash: NOT TESTABLE on this build — the pull's device is
-    master @ 3bff50dd (07-30 ~14:22), which predates PR #978 (merged after this build). No redesign
-    UI evidence obtainable from this pull.)
-  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces #977's clock/status/section layout; dev to retain any uncovered plan checks before pruning.
-  Triage source: first-line blame 2026-07-30 (`ed1a0eded`, original README L989).
-
 - [review] **🆕 NEW — #936 / PR #952 — an offer with an unreadable distance says so instead of guessing.**
   If a card's mileage ever fails to parse, the HUD/notification should show `no verdict` +
   `distance didn't parse` (no `$0/hr`, no score gauge) and the voice should say *"No verdict — the
@@ -2605,52 +2570,7 @@ Accept and Decline registered on DoorDash — and moved to that session's entry 
   desk: needs field: inspect and operate the idle gas/vehicle cards to assess touch targets and mode transitions.
   Triage source: first-line blame 2026-07-12 (`e880c6457`, original README L1548).
 
-- [superseded?] **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
-  Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
-  Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
-  each delivery as it completes). Tap the **Today / This week / Lifetime** selector and confirm the
-  three tiles switch to each window's totals. The old live "This dash" ticking hero is **gone** —
-  there should be **no** per-second $/hr counter on this screen. While you're online, a slim
-  "🟢 Dashing — tap for the bubble" row appears above the tiles; tapping it should re-show the bubble.
-  How to tell it's broken: tiles frozen/stale after a dash, the segmented selector not changing the
-  numbers, a live ticking counter still present, or the dashing row showing while offline.
-  - Confirmed: 0/2
-  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the segmented Today/This week/Lifetime tile layout and explicitly restores a live On dash tick. — RETAIN the post-dash earnings-FRESHNESS check (#657) before pruning: the #1024 part 3 / PR #1027 replacement tests the four-block layout, not that the totals refresh after a dash (Astra review of PR #1246).
-  Triage source: first-line blame 2026-07-04 (`2b315e708`, original README L1962).
 
-- [superseded?] **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
-  Open the DashBuddy main app (not the bubble). **Working looks like:** the top row of three stat
-  tiles — **True Net · Net/hr · Miles**, each sub-labelled **"Today"** — shows your **whole day's**
-  frozen net (Σ each completed delivery's frozen net + any unattributed pay), not just the current
-  dash, and it **grows within a few seconds of each delivery receipt** (the projector folds the
-  completed delivery → Room re-emits the flow → the tile updates, no app restart, no state
-  transition). While a dash is running a second **"This dash"** row appears below it (the live
-  per-second ticking glance from #320). How to tell it's right: at end of day the Today **True Net**
-  ≈ your DoorDash app's earnings for the day minus your operating costs, and **editing the Economy
-  settings (gas price etc.) must NOT change a past day's Today number** — historical net is frozen.
-  At local **midnight** the Today figures should reset to the new day without reopening the app.
-  Broken = a Today that only reflects the current dash, a number that changes when you edit economy,
-  a Today that never grows after a delivery completes, or one that doesn't roll over at midnight.
-  - Confirmed: 0/2
-  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the three Today tiles plus separate This dash row; dev to carry forward uncovered midnight/frozen-history checks before pruning.
-  Triage source: first-line blame 2026-07-04 (`07e3092d4`, original README L1987).
-
-- [superseded?] **✨ NEW — the home screen now shows a live "This dash" glance + entry tiles (#320/#316).**
-  Open the DashBuddy main app (not the bubble) **while a dash is running**. **Working looks like:**
-  the "Ready to Dash" area shows three stat tiles — **True Net** (green when positive), **Net/hr**,
-  **Miles** — and the Net/hr + its sub-timer **tick up every second** without needing a state change
-  (that's the reactive glance). True Net should equal session earnings minus miles × your operating
-  cost/mi (same math as an offer's net verdict), and Miles should track the GPS session odometer.
-  Below the tiles is a 2×2 grid — **Analytics · Ratings · Strategy · Economy**: tapping **Ratings**
-  opens a screen showing your real customer-rating / on-time / completion gauges + acceptance /
-  delivery-count / shopping-quality tiles (empty-state message if you haven't opened the platform's
-  Ratings screen yet this run); **Strategy** and **Economy** open their existing editors; **Analytics**
-  is a "Construction Area" placeholder for now. Broken = frozen Net/hr (doesn't tick), True Net that
-  disagrees with the offer-card net math, a Ratings screen that's blank when the platform ratings
-  screen was seen, or a tile that navigates nowhere.
-  - Confirmed: 0/2
-  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the live three-tile glance and old 2×2 navigation grid; dev to retain uncovered Ratings checks before pruning.
-  Triage source: first-line blame 2026-07-03 (`5ed357c6c`, original README L2035).
 
 - [review] **No transient double drop-off card at the door (#458).**
   On an arrival-bearing dropoff (hand-it-to-customer / photo / PIN) the same delivery briefly
@@ -3548,3 +3468,83 @@ No items in this age/counter group.
     frame, no longer `total−1/total`. Two clean sightings → **validated** (the add-on
     case is tracked separately under the #276 watch item). (See 2026-06-12 log entry #4.)
   Triage source: first-line blame 2026-06-06 (`e723d4fe6`, original README L2975).
+
+### Superseded (dev-confirmed 2026-10-07 — the replacing redesign is named on each; the #657 earnings-freshness check is retained in §2)
+
+- [superseded] **🆕 NEW — #977 — Home is now "Today" (redesign stage 4).** Open the app's home screen (not the
+  bubble). Top to bottom it should read: **date + a live clock + a status pill** (the pill's word is
+  the same status vocabulary the old card showed — Ready / Looking for offers / Heading to Pickup…),
+  then **TODAY'S PLAN**, **SO FAR TODAY**, **THIS WEEK**, any review chores, then the four entry
+  tiles + Show Bubble. Four things to check.
+  (a) **The clock actually ticks** — watch it roll a minute without leaving the screen. A frozen
+  clock is the defect.
+  (b) **The plan strip:** 24 little cells = *this weekday's* hours across your whole history, green
+  where you've earned well. Every hour before the current one must be visibly **dimmed**, and the
+  dimming must advance on its own when the hour rolls over (park on the screen across e.g. 5:59 →
+  6:00). The headline reads `Best bet tonight: 5–8 PM · your Mondays run $X/hr` with the
+  recommended cells **outlined**, and the line under it must ALWAYS read
+  `from your own <weekday>s, lifetime — not a guarantee`. On a weekday you've barely worked it must
+  say so ("Not enough Mondays on record yet — only N hours…") and show **no rate at all** — a rate
+  on a thin weekday is the bug to report. It should never recommend a window that has already
+  passed.
+  (c) **This week:** kept money for the pay week, a `▲/▼ X% vs last week` line (or "About the same",
+  or "Up from nothing" — never a percentage against an empty week), and a 7-point sparkline. Tap it:
+  `Recap →` must land in Analytics **already showing this week** — if the hub opens on some older
+  window you paged to earlier, that's the bug.
+  (d) **Review chores:** if the week has any (unattributed pay, "(No session)" drops, orphan
+  offers), they appear as one **NEEDS A LOOK** card, each row ending in `Review →` that also lands
+  in Analytics on this week. A clean week must render no card at all.
+  Also confirm nothing was lost: the old Today/Week/Month/Lifetime selector is gone on purpose —
+  those windows live on the Analytics pager now.
+  - Confirmed: 0/2 (desk 07-31, the 07-30 dash: NOT TESTABLE on this build — the pull's device is
+    master @ 3bff50dd (07-30 ~14:22), which predates PR #978 (merged after this build). No redesign
+    UI evidence obtainable from this pull.)
+  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces #977's clock/status/section layout; dev to retain any uncovered plan checks before pruning.
+  Triage source: first-line blame 2026-07-30 (`ed1a0eded`, original README L989).
+
+- [superseded] **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
+  Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
+  Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
+  each delivery as it completes). Tap the **Today / This week / Lifetime** selector and confirm the
+  three tiles switch to each window's totals. The old live "This dash" ticking hero is **gone** —
+  there should be **no** per-second $/hr counter on this screen. While you're online, a slim
+  "🟢 Dashing — tap for the bubble" row appears above the tiles; tapping it should re-show the bubble.
+  How to tell it's broken: tiles frozen/stale after a dash, the segmented selector not changing the
+  numbers, a live ticking counter still present, or the dashing row showing while offline.
+  - Confirmed: 0/2
+  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the segmented Today/This week/Lifetime tile layout and explicitly restores a live On dash tick. — RETAIN the post-dash earnings-FRESHNESS check (#657) before pruning: the #1024 part 3 / PR #1027 replacement tests the four-block layout, not that the totals refresh after a dash (Astra review of PR #1246).
+  Triage source: first-line blame 2026-07-04 (`2b315e708`, original README L1962).
+
+- [superseded] **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
+  Open the DashBuddy main app (not the bubble). **Working looks like:** the top row of three stat
+  tiles — **True Net · Net/hr · Miles**, each sub-labelled **"Today"** — shows your **whole day's**
+  frozen net (Σ each completed delivery's frozen net + any unattributed pay), not just the current
+  dash, and it **grows within a few seconds of each delivery receipt** (the projector folds the
+  completed delivery → Room re-emits the flow → the tile updates, no app restart, no state
+  transition). While a dash is running a second **"This dash"** row appears below it (the live
+  per-second ticking glance from #320). How to tell it's right: at end of day the Today **True Net**
+  ≈ your DoorDash app's earnings for the day minus your operating costs, and **editing the Economy
+  settings (gas price etc.) must NOT change a past day's Today number** — historical net is frozen.
+  At local **midnight** the Today figures should reset to the new day without reopening the app.
+  Broken = a Today that only reflects the current dash, a number that changes when you edit economy,
+  a Today that never grows after a delivery completes, or one that doesn't roll over at midnight.
+  - Confirmed: 0/2
+  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the three Today tiles plus separate This dash row; dev to carry forward uncovered midnight/frozen-history checks before pruning.
+  Triage source: first-line blame 2026-07-04 (`07e3092d4`, original README L1987).
+
+- [superseded] **✨ NEW — the home screen now shows a live "This dash" glance + entry tiles (#320/#316).**
+  Open the DashBuddy main app (not the bubble) **while a dash is running**. **Working looks like:**
+  the "Ready to Dash" area shows three stat tiles — **True Net** (green when positive), **Net/hr**,
+  **Miles** — and the Net/hr + its sub-timer **tick up every second** without needing a state change
+  (that's the reactive glance). True Net should equal session earnings minus miles × your operating
+  cost/mi (same math as an offer's net verdict), and Miles should track the GPS session odometer.
+  Below the tiles is a 2×2 grid — **Analytics · Ratings · Strategy · Economy**: tapping **Ratings**
+  opens a screen showing your real customer-rating / on-time / completion gauges + acceptance /
+  delivery-count / shopping-quality tiles (empty-state message if you haven't opened the platform's
+  Ratings screen yet this run); **Strategy** and **Economy** open their existing editors; **Analytics**
+  is a "Construction Area" placeholder for now. Broken = frozen Net/hr (doesn't tick), True Net that
+  disagrees with the offer-card net math, a Ratings screen that's blank when the platform ratings
+  screen was seen, or a tile that navigates nowhere.
+  - Confirmed: 0/2
+  desk: superseded by #1024 part 3 / PR #1027, the later “Home is four blocks” item replaces the live three-tile glance and old 2×2 navigation grid; dev to retain uncovered Ratings checks before pruning.
+  Triage source: first-line blame 2026-07-03 (`5ed357c6c`, original README L2035).
