@@ -149,7 +149,7 @@ class EventReceiptPreferencesRepositoryTest {
         assertEquals(EventReceiptConsent.ALLOWED, repo.consent.value)
         assertEquals("ALLOWED", new.data.first()[decisionKey])
         assertEquals(legacyBeforeSet, old.data.first())
-        assertEquals(1, purgeAttempts)
+        assertEquals("a write retries the purge (still failing here)", 2, purgeAttempts)
     }
 
     @Test

@@ -122,10 +122,10 @@ class EventReceiptConsentDataSourceTest {
         assertNull(new.data.first()[decisionKey])
         source.setConsent("ALLOWED", receipt)
         assertEquals("ALLOWED", new.data.first()[decisionKey])
-        assertEquals(2, attempts) // set only touches the dedicated store
+        assertEquals(3, attempts) // a write retries the purge too (Astra r2 of PR #1250); it still fails here
         failCleanup = false
         assertEquals(EventReceiptConsentSnapshot("ALLOWED", receipt), source.snapshot.first())
-        assertEquals(3, attempts)
+        assertEquals(4, attempts)
         assertNull(old.data.first()[decisionKey])
         assertNull(old.data.first()[receiptKey])
     }

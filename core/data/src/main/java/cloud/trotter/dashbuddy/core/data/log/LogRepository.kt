@@ -123,7 +123,9 @@ class LogRepository @Inject constructor(
     // --- Config ---
     // Uses internal storage (filesDir) or external if available
     private val logDir by lazy { context.getExternalFilesDir(null) ?: context.filesDir }
-    private val rotatedLogDir by lazy { File(logDir, "logs").also { it.mkdirs() } }
+    /** Not cached as created: a read-only root at first init must not freeze a missing `logs/` — [ensureRotatedLogDir] retries before every rotation (Astra r2 of PR #1250). */
+    private val rotatedLogDir by lazy { File(logDir, "logs") }
+    private fun ensureRotatedLogDir(): Boolean = rotatedLogDir.isDirectory || runCatching { rotatedLogDir.mkdirs() }.getOrDefault(false) || rotatedLogDir.isDirectory
 
     private val appLogFile by lazy { File(logDir, "app.log") }
 
@@ -160,9 +162,16 @@ class LogRepository @Inject constructor(
      * can be retried on the next init; there is no persisted or lazy completion flag.
      */
     private fun moveLegacyRotations() {
-        val legacy = logDir.listFiles { file ->
-            file.isFile && file.name.startsWith(rotationPrefix) && file.name.endsWith(".log")
-        } ?: return
+        // BOTH roots (Astra r2 of PR #1250): a rotation written to internal storage while external was
+        // unavailable is still backup-eligible once external storage comes back and becomes the active root.
+        val roots = listOfNotNull(context.getExternalFilesDir(null), context.filesDir).distinct()
+        val legacy = roots.flatMap { root ->
+            root.listFiles { file ->
+                file.isFile && file.name.startsWith(rotationPrefix) && file.name.endsWith(".log")
+            }?.toList().orEmpty()
+        }
+        if (legacy.isEmpty()) return
+        ensureRotatedLogDir()
         var warned = false
         for (file in legacy) {
             val moved = runCatching { file.renameTo(File(rotatedLogDir, file.name)) }.getOrDefault(false)
@@ -200,6 +209,7 @@ class LogRepository @Inject constructor(
         try {
             val timestamp = logRotationFormat.format(Instant.now())
             val rotatedName = "${rotationPrefix}${timestamp}.log"
+            if (!ensureRotatedLogDir()) return // read-only root: keep appending, retry next rotation
             val rotatedFile = File(rotatedLogDir, rotatedName)
 
             // Rename current -> rotated

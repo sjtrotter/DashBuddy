@@ -60,6 +60,7 @@ class EventReceiptConsentDataSource @Inject constructor(
     }
 
     suspend fun setConsent(name: String, receipt: ConsentReceipt) {
+        purgeLegacyKeys() // retry on every write too (Astra r2 of PR #1250): onStart runs once per shared collection
         ds.edit {
             it[Keys.EVENT_RECEIPT_CONSENT] = name
             it[Keys.EVENT_RECEIPT_RECEIPT] = ConsentReceiptJson.encodeToString(receipt)
