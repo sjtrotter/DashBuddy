@@ -6,141 +6,85 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * #973 / brief §7.6 — the pay-mix residue rule (`bonuses & other = gross − base − tips − cash`), its
- * negative-remainder floor, and the coverage flags the Money tab's honesty copy branches on.
- *
- * Pure `:domain` math, no Compose and no DB: the interesting part is the *arithmetic contract* the
- * "what made up the gross" bar rests on, and it should be provable without either.
- */
 class PayMixTest {
-
-    private fun parts(
-        basePay: Double = 0.0,
-        tips: Double = 0.0,
-        cashTips: Double = 0.0,
-        deliveries: Int = 0,
-        withBreakdown: Int = 0,
-    ) = PayMixParts(
-        basePay = basePay,
-        tips = tips,
-        cashTips = cashTips,
-        deliveries = deliveries,
-        deliveriesWithBreakdown = withBreakdown,
-    )
-
-    // ── The identity the whole card rests on ────────────────────────────────
-
-    @Test
-    fun `base plus tips plus bonuses equals gross`() {
-        val mix = PayMix.of(
-            gross = 100.0,
-            parts = parts(basePay = 40.0, tips = 25.0, deliveries = 5, withBreakdown = 5),
+    private fun economics(recorded: Double, cash: Double = 0.0, unmatched: Double = 0.0, above: Double = 0.0) =
+        PeriodEconomics.EMPTY.copy(
+            totals = PeriodTotals.EMPTY.copy(earnings = recorded),
+            grossEarnings = recorded + cash + unmatched - above,
+            unattributedPay = unmatched,
+            overAttributedPay = above,
         )
 
-        assertEquals(35.0, mix.bonusesOther, 1e-9)
-        assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.bonusesOther, 1e-9)
+    private fun assertIdentity(mix: PayMix) {
+        assertEquals(mix.gross, mix.basePay + mix.tips + mix.cashTips + mix.notItemized +
+            mix.notMatched - mix.recordedAboveReported, 0.001)
+        assertFalse(mix.unreconciled)
     }
 
     @Test
-    fun `the sum identity holds with cash tips in the mix`() {
-        // Cash rides the tips segment's geometry but is carried separately so the legend can label it.
-        val mix = PayMix.of(
-            gross = 100.0,
-            parts = parts(basePay = 40.0, tips = 25.0, cashTips = 10.0, deliveries = 5, withBreakdown = 5),
+    fun `mixed fixture and desk acceptance figures decompose exactly`() {
+        val fixtures = listOf(
+            economics(557.72, unmatched = 17.85) to PayMixParts(231.30, 249.48, 0.0, 23, 19, 76.94, 3, 1),
+            economics(3853.22, unmatched = 336.77) to PayMixParts(1236.89, 1195.80, 0.0, 204, 110, 1174.50, 65, 5),
+            economics(100.0, cash = 5.0, unmatched = 12.0, above = 8.0) to PayMixParts(30.0, 40.0, 5.0, 8, 4, 20.0, 2, 1),
         )
-
-        assertEquals(35.0, mix.tipsTotal, 1e-9)
-        assertEquals(10.0, mix.cashTips, 1e-9)
-        assertEquals(25.0, mix.bonusesOther, 1e-9)
-        assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.bonusesOther, 1e-9)
+        for ((e, p) in fixtures) {
+            val mix = PayMix.of(e, p)
+            assertIdentity(mix)
+            assertEquals(e.totals.earnings, mix.recorded, 0.001)
+            assertEquals(p.offerEstimatePay, mix.estimatedFromOffers, 0.001)
+            assertEquals(p.paylessDeliveries, mix.paylessDeliveries)
+            assertFalse(mix.notItemizedNegative)
+        }
     }
 
     @Test
-    fun `the sum identity holds for an all-bonus window`() {
-        // Nothing itemized, so the residue IS the gross — arithmetically correct, which is exactly why
-        // `hasBreakdown` exists: the UI must not render this as "100% bonuses".
-        val mix = PayMix.of(gross = 60.0, parts = parts(deliveries = 3, withBreakdown = 0))
+    fun `negative itemization is flagged and never floored`() {
+        val mix = PayMix.of(economics(10.0), PayMixParts.EMPTY.copy(basePay = 8.0, tips = 5.0))
+        assertEquals(-3.0, mix.notItemized, 0.001)
+        assertTrue(mix.notItemizedNegative)
+        assertIdentity(mix)
+        val rounding = PayMix.of(economics(12.999), PayMixParts.EMPTY.copy(basePay = 8.0, tips = 5.0))
+        assertEquals(-0.001, rounding.notItemized, 1e-9)
+        assertFalse(rounding.notItemizedNegative)
+        assertIdentity(rounding)
+    }
 
-        assertEquals(60.0, mix.bonusesOther, 1e-9)
-        assertEquals(mix.gross, mix.basePay + mix.tipsTotal + mix.bonusesOther, 1e-9)
+    @Test
+    fun `zero coverage still has recorded and unmatched parts`() {
+        val mix = PayMix.of(economics(60.0, unmatched = 10.0),
+            PayMixParts.EMPTY.copy(deliveries = 4, offerEstimatePay = 60.0, offerEstimateDeliveries = 3, paylessDeliveries = 1))
         assertFalse(mix.hasBreakdown)
-    }
-
-    // ── The floor ──────────────────────────────────────────────────────────
-
-    @Test
-    fun `a negative remainder floors at zero and is flagged with its overflow`() {
-        // The #701 over-attributed shape: captured per-delivery pay exceeds the reported total.
-        val mix = PayMix.of(
-            gross = 50.0,
-            parts = parts(basePay = 40.0, tips = 18.0, deliveries = 4, withBreakdown = 4),
-        )
-
-        assertEquals(0.0, mix.bonusesOther, 1e-9)
-        assertTrue(mix.partsExceedGross)
-        assertEquals(8.0, mix.grossOverflow, 1e-9)
+        assertFalse(mix.breakdownComplete)
+        assertEquals(60.0, mix.notItemized, 0.001)
+        assertEquals(10.0, mix.notMatched, 0.001)
+        assertIdentity(mix)
     }
 
     @Test
-    fun `a sub-cent negative remainder is rounding, not an anomaly`() {
-        val mix = PayMix.of(
-            gross = 50.0,
-            parts = parts(basePay = 30.0, tips = 20.001, deliveries = 2, withBreakdown = 2),
-        )
-
-        assertEquals(0.0, mix.bonusesOther, 1e-9)
-        assertFalse("a tenth of a cent must not raise the review flag", mix.partsExceedGross)
-        assertEquals(0.0, mix.grossOverflow, 1e-9)
+    fun `recorded above reported is a stated deduction`() {
+        val mix = PayMix.of(economics(30.0, cash = 2.0, above = 8.0),
+            PayMixParts.EMPTY.copy(basePay = 10.0, tips = 15.0, cashTips = 2.0))
+        assertEquals(8.0, mix.recordedAboveReported, 0.001)
+        assertEquals(5.0, mix.notItemized, 0.001)
+        assertIdentity(mix)
     }
 
     @Test
-    fun `an exactly-covered window leaves no bonus residue`() {
-        val mix = PayMix.of(
-            gross = 65.0,
-            parts = parts(basePay = 40.0, tips = 25.0, deliveries = 5, withBreakdown = 5),
-        )
-
-        assertEquals(0.0, mix.bonusesOther, 1e-9)
-        assertFalse(mix.partsExceedGross)
-    }
-
-    // ── Coverage ───────────────────────────────────────────────────────────
-
-    @Test
-    fun `coverage is complete only when every delivery itemized`() {
-        val complete = PayMix.of(gross = 100.0, parts = parts(basePay = 60.0, deliveries = 4, withBreakdown = 4))
-        val partial = PayMix.of(gross = 100.0, parts = parts(basePay = 60.0, deliveries = 4, withBreakdown = 2))
-
-        assertTrue(complete.breakdownComplete)
-        assertTrue(complete.hasBreakdown)
-        assertFalse("a stacked-job window itemizes only its sole-drop rows", partial.breakdownComplete)
-        assertTrue(partial.hasBreakdown)
+    fun `inconsistent economics raises the reconciliation guard`() {
+        assertTrue(PayMix.of(economics(10.0).copy(grossEarnings = 11.0), PayMixParts.EMPTY).unreconciled)
+        assertFalse(PayMix.of(economics(10.0).copy(grossEarnings = 10.001), PayMixParts.EMPTY).unreconciled)
     }
 
     @Test
-    fun `an empty window has neither breakdown nor completeness`() {
-        assertFalse(PayMix.EMPTY.hasBreakdown)
-        assertFalse("zero of zero is not 'complete' — there is nothing to be complete about", PayMix.EMPTY.breakdownComplete)
+    fun `tip share includes cash and coverage is explicit`() {
+        val parts = PayMixParts(60.0, 30.0, 10.0, 4, 4, 0.0, 0, 0)
+        val mix = PayMix.of(economics(90.0, cash = 10.0), parts)
+        assertEquals(0.4, mix.tipShare!!, 1e-9)
+        assertTrue(mix.breakdownComplete)
+        assertFalse(PayMix.of(economics(90.0, cash = 10.0), parts.copy(deliveriesWithBreakdown = 2)).breakdownComplete)
+        assertIdentity(mix)
+        assertIdentity(PayMix.EMPTY)
         assertNull(PayMix.EMPTY.tipShare)
-    }
-
-    // ── The insight share ──────────────────────────────────────────────────
-
-    @Test
-    fun `tip share is tips plus cash over gross`() {
-        val mix = PayMix.of(
-            gross = 200.0,
-            parts = parts(basePay = 80.0, tips = 100.0, cashTips = 14.0, deliveries = 8, withBreakdown = 8),
-        )
-
-        assertEquals(0.57, mix.tipShare!!, 1e-9)
-    }
-
-    @Test
-    fun `tip share is null without a positive gross`() {
-        val mix = PayMix.of(gross = 0.0, parts = parts(tips = 5.0, deliveries = 1, withBreakdown = 1))
-
-        assertNull("a share with no denominator is not a fact", mix.tipShare)
     }
 }

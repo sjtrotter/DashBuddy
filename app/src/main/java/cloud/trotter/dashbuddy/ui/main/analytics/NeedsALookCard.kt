@@ -55,7 +55,7 @@ internal object ReviewFlags {
 
     /** The review signals, in the order the card lists them. */
     enum class Flag {
-        /** Reported pay exceeding the captured deliveries — bonuses/adjustments/a missed capture. */
+        /** Reported pay not matched to a recorded delivery. */
         UNATTRIBUTED,
 
         /** The #701 mirror: captured pay exceeding what the platform reported. Display-only. */

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -48,12 +48,13 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
+import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatClockTime
 import cloud.trotter.dashbuddy.domain.format.formatDuration
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
-import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import kotlin.math.roundToInt
 
 /**
@@ -214,11 +215,20 @@ private fun DashDetailContent(
     }
 }
 
+/** Source labels share the trust-rule owner used by CSV and the DAO mirror. */
+internal fun sessionGrossSourceLabel(session: SessionRecord): Int = when (ReportSource.of(
+    session.machineReportedEarnings, session.endSource, session.reportOverrideMode, session.reportOverride,
+)) {
+    ReportSource.DASH_SUMMARY -> R.string.session_detail_gross_source_summary
+    ReportSource.IN_DASH_COUNTER -> R.string.session_detail_gross_source_counter
+    ReportSource.DRIVER_SET -> R.string.session_detail_gross_source_driver
+    ReportSource.NONE -> R.string.session_detail_gross_source_none
+}
+
 @Composable
 private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
     val c = AppTheme.colors
     val session = detail.session
-    val hasReported = session.reportedEarnings != null
     val gross = session.reportedEarnings ?: detail.deliveredPay
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -251,11 +261,7 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = stringResource(when {
-                    session.reportOverrideMode == SessionReportOperation.SET -> R.string.session_detail_gross_set_label
-                    hasReported -> R.string.session_detail_gross_reported_label
-                    else -> R.string.session_detail_gross_captured_label
-                }),
+                label = stringResource(sessionGrossSourceLabel(session)),
                 value = Formats.money(gross),
                 modifier = Modifier.weight(1f),
             )

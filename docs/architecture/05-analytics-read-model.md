@@ -201,13 +201,34 @@ axis for a single-day, unbounded, or over-`MAX_DAY_AXIS` (400-day) window.
 **Pay mix + platform split (#973, stage 2).** `AnalyticsDao.payMixTotals` sums `basePay`/`tip`/
 `cashTip` over the population `deliveryTotals` describes (byte-identical `WHERE`);
 `AnalyticsRepository.payMixParts(window|period)` serves `:domain` `PayMixParts`, and pure
-`PayMix.of(gross, parts)` composes it with that window's OWN `PeriodEconomics.grossEarnings` at the
-read site — gross keeps one owner (the repository's `assemble` fold), so the bar always reconciles
-with the headline stating it. `bonuses & other` is the RESIDUE `gross − base − tips − cash`,
-**floored at 0**, with `partsExceedGross`/`grossOverflow` recording an over-cent negative rather
-than absorbing it. `basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is
-NORMAL: `deliveriesWithBreakdown`/`deliveries` drive a stated caveat + an "at least N%" tips
-insight, and ZERO coverage renders "not recorded" instead of a 100 %-bonuses lie.
+`PayMix.of(economics, parts)` composes it with that window's OWN `PeriodEconomics` at the read site —
+gross keeps one owner (the repository's `assemble` fold), so the bar always reconciles with the
+headline stating it. **#1135 PR 1 ("Name the money", 2026-10-06) retired `bonuses & other`** — it was
+the floored residue `gross − base − tips − cash`, and because base/tip are stamped only on a sole drop
+with an itemized receipt, every `OFFER_PAY` estimate, collapsed receipt and stacked share landed in it
+whole (lifetime $1,757, 42 % of gross; identifiable bonus $0). The bar is now an EXACT decomposition of
+Earned, by construction: `base + tips + cashTips + notItemized + notMatched − recordedAboveReported ==
+gross`, where `notItemized = recorded − base − tips` (SIGNED; a negative is `notItemizedNegative`, stated,
+never floored), `estimatedFromOffers` names the `OFFER_PAY` subset of it, `notMatched =
+unattributedPay`, `recordedAboveReported = overAttributedPay` (a stated deduction), and `unreconciled`
+is a should-never-fire guard the UI states. Vocabulary (one word per concept, every screen): Earned /
+Reported / Recorded / Not matched / Recorded above reported / Not itemized / Kept — "bonus" is never
+said unless the platform said it. `ReportSource {DASH_SUMMARY, IN_DASH_COUNTER, DRIVER_SET, NONE}`
+(`:domain`) is the Kotlin statement of WHERE a dash's effective reported total came from (the
+#1030/#1134 trust rule; `SessionReportRule.effectiveReported` stays the VALUE owner), mirrored by
+`SessionReportSql.REPORT_SOURCE_SQL` (matrix-tested, wire literals pinned to `ReportSource.wire`);
+`PeriodEconomics.grossSources` (`GrossSources`: per-source Σ + dash counts + `recordedWithoutReport` +
+`sessionCash`) rides the SAME gross query as added columns, with the invariant `Σ sources + sessionCash
++ noSessionPay == grossEarnings`. `payMixTotals` adds `offerEstimatePay`/`offerEstimateDeliveries`/
+`paylessDeliveries` (the `'OFFER_PAY'` wire interpolated from `PayBasis.OFFER_PAY`). The session
+detail header labels its figure by source; `sessions.csv` gains `report_source` and `summary.csv`
+splits `total_reported_earnings` into `total_dash_summary_earnings` / `total_in_dash_counter_earnings`
+/ `total_driver_set_earnings` / `total_recorded_without_report` (free-tier export FORMAT change).
+`basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is NORMAL:
+`deliveriesWithBreakdown`/`deliveries` drive a stated caveat (explanation behind the #1024 B1
+disclosure) + an "at least N%" tips insight; ZERO coverage now renders the bar with the recorded pay
+named as not-itemized (no "100 % bonuses" path exists). PR 2 (Earned as the hero, the ledger card) and
+PR 3 (`PLATFORM_WEEK_TOTAL_ATTESTED`) follow; PR 4 (reading the "This week" pill) is gated on #1035.
 `platformEconomics(window|period)` runs the by-platform aggregates ONCE through the same `assemble`
 (platforms come from the DATA via `Platform.fromWire`, no fixed list) and
 `periodEconomics(window, platform)` DELEGATES into that grouped fold, so a split row and a filtered

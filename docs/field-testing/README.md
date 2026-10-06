@@ -48,6 +48,14 @@ For items with multiple sub-concerns at different statuses, use one
 
 ## Next field test — things to look for
 
+- **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
+  tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars sum to the Earned figure
+  above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from
+  the offer" named when the row was priced from the offer; a dash whose summary exceeded its deliveries
+  shows "reported on dash summaries but not matched to a delivery". Dash detail → the big figure is
+  labelled "Reported — dash summary" / "— in-dash counter" / "— entered by you" / "Recorded by DashBuddy
+  (no report)". Export → `sessions.csv` has a `report_source` column. — Confirmed: 0/2
+
 - **Consent receipts (#170):** after re-allowing `expand_earnings` on a fresh install, Automation & Consent shows 'Allowed · <today> · v<build> · disclosure r1' under the row; Screen events shows its own line. — Confirmed: 0/2
 
 - **Arrival re-eval (#823 P2):** on a single-store Shop & Deliver, the pickup card's $/hr changes once

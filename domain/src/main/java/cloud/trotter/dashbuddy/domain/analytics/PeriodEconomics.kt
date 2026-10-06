@@ -73,6 +73,7 @@ data class PeriodEconomics(
     val noSessionPay: Double = 0.0,
     /** Count of the deliveries behind [noSessionPay] — the "(No session)" bucket's delivery count. */
     val noSessionDeliveries: Int = 0,
+    val grossSources: GrossSources = GrossSources.EMPTY,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(
@@ -88,6 +89,31 @@ data class PeriodEconomics(
             noSessionPay = 0.0,
             noSessionDeliveries = 0,
         )
+    }
+}
+
+/**
+ * Read-time sources of Earned. To [ANALYTICS_MONEY_EPSILON],
+ * `summaryReported + counterReported + driverSetReported + recordedWithoutReport + sessionCash +
+ * noSessionPay == grossEarnings`. Session cash excludes the cash already in no-session pay.
+ */
+data class GrossSources(
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    val unreportedDashesEmpty: Int,
+    val sessionCash: Double,
+) {
+    fun sum(noSessionPay: Double): Double = summaryReported + counterReported + driverSetReported +
+        recordedWithoutReport + sessionCash + noSessionPay
+
+    companion object {
+        val EMPTY = GrossSources(0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 0.0)
     }
 }
 

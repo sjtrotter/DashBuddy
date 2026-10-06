@@ -161,7 +161,7 @@ class AnalyticsViewModel @Inject constructor(
             // with the "$X came in." clause it sits under rather than with a second, independently
             // derived total (Principle 5). (Pre-#1024 this said "with the hero" — the hero stated
             // gross then; since part 2 the money card is gross's only surface.)
-            payMix = PayMix.of(data.economics.grossEarnings, data.extras.payMixParts),
+            payMix = PayMix.of(data.economics, data.extras.payMixParts),
             platformSplit = data.extras.platformSplit,
             recentSessions = sessions,
             decisions = data.decisions,

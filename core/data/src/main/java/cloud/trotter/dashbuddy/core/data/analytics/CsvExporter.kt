@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
+import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.export.Csv
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
@@ -55,7 +56,7 @@ object CsvExporter {
     )
 
     private val SESSION_HEADER = listOf(
-        "start", "end", "platform", "duration_minutes", "reported_earnings", "deliveries",
+        "start", "end", "platform", "duration_minutes", "reported_earnings", "report_source", "deliveries",
         "offers_received", "offers_accepted", "offers_declined", "offers_timeout",
         "odometer_start", "odometer_end", "miles",
     )
@@ -128,6 +129,7 @@ object CsvExporter {
                         Csv.textField(platformName(s.platform)),
                         Csv.millisToMinutes(durationMillis),
                         Csv.money(SessionReportRule.effectiveReported(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride)),
+                        Csv.textField(ReportSource.of(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride).wire),
                         Csv.int(s.deliveries),
                         Csv.int(s.offersReceived),
                         Csv.int(s.offersAccepted),
@@ -170,7 +172,16 @@ object CsvExporter {
             .groupBy { taxYearOf(it.startedAt, zone) }
             .mapValues { (_, group) -> group.sumOf { sessionMiles(it) ?: 0.0 } }
             .toSortedMap()
-        val totalReported = sessions.mapNotNull { SessionReportRule.effectiveReported(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride) }.sum()
+        val sessionsBySource = sessions.groupBy {
+            ReportSource.of(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride)
+        }
+        fun reported(source: ReportSource): Double = sessionsBySource[source].orEmpty().sumOf {
+            SessionReportRule.effectiveReported(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride) ?: 0.0
+        }
+        val payBySession = deliveries.groupBy { it.sessionId }
+            .mapValues { (_, rows) -> rows.sumOf { it.realizedPay ?: 0.0 } }
+        val recordedWithoutReport = sessionsBySource[ReportSource.NONE].orEmpty()
+            .sumOf { payBySession[it.sessionId] ?: 0.0 }
         val totalRealized = deliveries.mapNotNull { it.realizedPay }.sum()
         val totalCashTips = deliveries.mapNotNull { it.cashTip }.sum()
 
@@ -192,7 +203,10 @@ object CsvExporter {
         }
         line("total_sessions", Csv.int(sessions.size))
         line("total_deliveries", Csv.int(deliveries.size))
-        line("total_reported_earnings", Csv.money(totalReported))
+        line("total_dash_summary_earnings", Csv.money(reported(ReportSource.DASH_SUMMARY)))
+        line("total_in_dash_counter_earnings", Csv.money(reported(ReportSource.IN_DASH_COUNTER)))
+        line("total_driver_set_earnings", Csv.money(reported(ReportSource.DRIVER_SET)))
+        line("total_recorded_without_report", Csv.money(recordedWithoutReport))
         line("total_realized_delivery_pay", Csv.money(totalRealized))
         line("total_cash_tips", Csv.money(totalCashTips))
         return sb.toString()
