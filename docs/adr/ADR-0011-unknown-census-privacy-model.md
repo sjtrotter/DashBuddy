@@ -743,3 +743,41 @@ must stay green.
 - `~/dashbuddy/design/2026-09-30-census-server/PLAN.md` (server plan; outside the repo)
 - CLAUDE.md § Pledges, § Development Principles 6–7, §1 Redaction invariants / Backstops
 - ADR-0009 amendment (same PR): authoring model — drafted and reviewed, not hand-authored
+
+## §11 Region cell (#1194)
+
+The REGION cell grammar is a US Census CBSA (metro or micro statistical area),
+with an explicit STATE cell for counties outside every CBSA. Examples:
+`metro:12420@2023`, `micro:10100@2023`, `state:ND@2023`. The crosswalk vintage
+is pinned to 2023 and embedded in the id; a new vintage must never silently
+re-home an install. The non-metro STATE cell is the rural aggregation floor.
+
+Derivation happens entirely on-device from the dasher's own GPS fixes through
+the offline 2023 county-subdivision internal points (~36k), with a county→CBSA join: no address, no ZIP, and no
+geocoder (including Android's geocoder, which has no offline guarantee).
+Nearest internal point is an approximation, not point-in-polygon: a border fix
+can select a neighbouring county in another CBSA, and — the known limitation of
+this slice — a fix in a border city of a neighbouring country within the 160 km
+reach resolves to the adjacent US cell (Windsor 8.5 km → Detroit, Tijuana
+27.8 km → San Diego, Toronto 52.4 km → Buffalo): a wrong cell, never a privacy leak. An offline
+US-containment guard replaces the distance cutoff before the `region` field
+ships. The 160 km reach covers Key West, 33.7 km from its own subdivision point;
+the remaining US nulls are the Alaska Arctic/Aleutian boroughs (Utqiagvik 239 km,
+Adak 256 km — no delivery market). The primary-cell policy chooses the most distinct
+active days over a rolling 28-day window, with ties resolved by the most recent activity
+observation; it cannot correct systematic nearest-point errors. Day buckets use the
+device's zone offset supplied by the caller (UTC by default): UTC midnight is 17:00 PDT,
+so without the offset a Pacific dinner shift spans two "days".
+
+The cell id is the **only location-shaped value that may ever leave the device**;
+coordinates, county FIPS, addresses, and ZIPs stay local. With the aggregation
+pulse (#193), each install will store **ONE primary cell**. The `region` field
+on enrol/me and the metro cohort counter (#1137) wait for that pulse; this first
+slice supplies only pure domain derivation and does not wire into the app.
+
+Region cohort counts are reported **ONLY at k ≥ 10 contributors** and are
+**suppressed below 10 even to members**: “you're one of 4” is not shown.
+Suppression is enforced server-side with the pulse. Enrolment alone never
+counts as contributing; observations must come from activity. For Sybil
+purposes the cell is a self-reported field, not proof of location, and the
+cohort count uses the pulse's attestation weighting (#194).
