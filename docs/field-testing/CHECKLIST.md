@@ -115,6 +115,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- **#1189 notification census: with debug census enabled, an admitted UNKNOWN push produces one notification skeleton; repeat pushes dedup; a customer lead-in is withheld; an action-only sensitive marker produces a refusal and no upload. Screen and notification uploads share the daily budget. Confirm counters and gated ops output without recording payload text. Confirmed: 0/2.**
+
 - [active] **8.95.6 sheets (#1079):** the alcohol warning sheet ("Scan customer's ID and collect signature…") and the
   'Pick up by / Order includes' going-to-store sheet no longer appear as UNKNOWN captures (they land in
   `dropoff_alcohol_warning_sheet/` and `pickup_going_to_store_sheet/`); a pickup card's Apt/Suite line reads

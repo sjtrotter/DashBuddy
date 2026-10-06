@@ -59,4 +59,18 @@ class CensusVariantBindingTest {
             assertTrue(extraction.substringAfter("<device-transfer>").substringBefore("</device-transfer>").contains(exclusion))
         }
     }
+    @Test fun `notification publisher is structurally disabled by release sink and never pairs trusted captures`() {
+        val root = RepoRoot.locate()
+        val noOp = File(root, "core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/NoOpCensusSink.kt").readText()
+        assertTrue(noOp.contains("isEnabled: Boolean = false"))
+        val publisher = File(root, "core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/census/SkeletonPublisher.kt").readText()
+        val notification = publisher.substringAfter("fun publish(obs: Observation.Notification")
+        assertTrue(notification.indexOf("if (!sink.isEnabled) return") < notification.indexOf("NotificationSkeletonBuilder.outcome"))
+        assertFalse(notification.contains("envelopeSink"))
+        val pipeline = File(root, "core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/notification/NotificationPipeline.kt").readText()
+        assertTrue(pipeline.indexOf("frameGate.admit") < pipeline.indexOf("captureWriter.captureNotification"))
+        assertTrue(pipeline.indexOf("captureWriter.captureNotification") < pipeline.indexOf("skeletonPublisher.publish"))
+        assertTrue(pipeline.indexOf("skeletonPublisher.publish") < pipeline.indexOf("val isUnknown ="))
+    }
+
 }

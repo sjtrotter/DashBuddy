@@ -230,4 +230,38 @@ class CensusSpoolTest {
         assertEquals(1L, stats.spoolOversized.get())
         assertEquals(1L, stats.spoolDropped.get())
     }
+    @Test fun `mixed schemas share capacity and restart retries preserve exact bytes and membership`() = runTest {
+        val dir = File(tmp.newFolder(), "spool")
+        val stats = CensusUploadStats()
+        val io = StandardTestDispatcher(testScheduler)
+        val spool = CensusSpool(dir, stats, io, maxFiles = 2, now = { 10L })
+        spool.append(censusRecord(0))
+        spool.append(notificationCensusRecord())
+        val original = spool.take(100, 100_000)
+        assertEquals(listOf(censusRecord(0).skeletonJson, notificationCensusRecord().skeletonJson), original.map { it.itemJson })
+        spool.markInFlight(original.map { it.id }, "mixed-batch")
+        val reopened = CensusSpool(dir, stats, io, maxFiles = 2, now = { 10L })
+        assertEquals(original, reopened.take(1, 1))
+        assertEquals("mixed-batch", reopened.inFlight()?.batchId)
+        reopened.clearInFlight()
+        reopened.append(censusRecord(1))
+        assertEquals(listOf(notificationCensusRecord().skeletonJson, censusRecord(1).skeletonJson), reopened.take(100, 100_000).map { it.itemJson })
+        assertEquals(1L, stats.spoolDropped.get())
+    }
+
+    @Test fun `corrupt notifications retain wrapper platform and fingerprint validation`() = runTest {
+        for (corrupt in listOf(
+            notificationCensusRecord().skeletonJson.replace("synthetic", "bad/channel"),
+            notificationCensusRecord().skeletonJson.replace("doordash", "uber"),
+            notificationCensusRecord().skeletonJson.replace(notificationCensusRecord().fingerprint, "f".repeat(64)),
+            notificationCensusRecord().skeletonJson.replace("\"slots\":{", "\"slots\":{\"unexpected\":{\"kind\":\"withheld\"},"),
+        )) {
+            val stats = CensusUploadStats()
+            val spool = CensusSpool(File(tmp.newFolder(), "spool"), stats, StandardTestDispatcher(testScheduler))
+            spool.append(notificationCensusRecord().copy(skeletonJson = corrupt, itemBytes = corrupt.toByteArray().size))
+            assertTrue(spool.take(100, 100_000).isEmpty())
+            assertEquals(1L, stats.spoolCorrupt.get())
+        }
+    }
+
 }

@@ -302,7 +302,7 @@ object SkeletonBuilder {
      * that platform. Truncated to [UiSkeletonDto.MAX_VERSION_LENGTH]; null when not well-formed (a
      * truncation that splits a surrogate pair included). The DTO keeps its hard `require` for decode.
      */
-    private fun stamp(value: String?): String? =
+    internal fun stamp(value: String?): String? =
         // Reviews PP7, AL4: the ONE code-point-safe cut (`UiTextBounds.cap`); AL5: an empty stamp is absent.
         value?.let { UiTextBounds.cap(it, UiSkeletonDto.MAX_VERSION_LENGTH) }?.takeIf { it.isNotEmpty() && WireStrings.isWellFormed(it) }
 

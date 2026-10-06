@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineEvent
+import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonPublisher
 import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
 import cloud.trotter.dashbuddy.core.pipeline.FrameGate
@@ -35,6 +36,7 @@ class NotificationPipeline @Inject constructor(
     private val captureWriter: CaptureWriter,
     private val platformPreferences: PlatformPreferences,
     private val stats: PipelineStats,
+    private val skeletonPublisher: SkeletonPublisher,
 ) {
     companion object {
         const val PIPELINE_ID = "notification"
@@ -94,7 +96,9 @@ class NotificationPipeline @Inject constructor(
             // accessibility pipeline's. A push that reposts on a timer must not be able to
             // multiply one rotted rule into a hundred counts.
             obs.parseShortfalls.forEach { stats.onParseShortfall(it) }
-            captureWriter.captureNotification(obs, raw)
+            val captured = captureWriter.captureNotification(obs, raw)
+            skeletonPublisher.publish(captured, raw)
+            captured
         }
         // Gate: don't forward UNKNOWN to state machine
         .filter { obs ->

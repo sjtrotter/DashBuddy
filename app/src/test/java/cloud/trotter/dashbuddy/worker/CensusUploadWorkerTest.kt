@@ -271,6 +271,24 @@ class CensusUploadWorkerTest {
             return items
         }
 
+        fun queueMixedBatch(): List<CensusSpool.Spooled> {
+            val day = LocalDate.now(ZoneOffset.UTC)
+            val meta = ReplayMetadata(engineVersion = 1)
+            val screen = cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.outcome(
+                cloud.trotter.dashbuddy.domain.model.accessibility.UiNode(text = "Continue"), null,
+                meta, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash, day,
+            ) as cloud.trotter.dashbuddy.core.pipeline.census.SkeletonBuilder.Outcome.Built
+            val notification = cloud.trotter.dashbuddy.core.pipeline.census.NotificationSkeletonBuilder.outcome(
+                cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData(
+                    "Continue", null, null, null, packageName = cloud.trotter.dashbuddy.domain.state.Platform.DoorDash.packageName!!,
+                    postTime = 0, isClearable = true, channelId = "synthetic",
+                ), meta, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash, day,
+            ) as cloud.trotter.dashbuddy.core.pipeline.census.NotificationSkeletonBuilder.Outcome.Built
+            return listOf(screen.skeleton.fingerprint to screen.json, notification.skeleton.fingerprint to notification.json)
+                .map { (fingerprint, json) -> CensusSpool.Spooled("1-${++sequence}.json", fingerprint, json) }
+                .also { queued += it }
+        }
+
         suspend fun queueEnvelopes(count: Int = 1): List<CensusSpool.Spooled> {
             preferences.setCensusShareCaptures(true)
             return List(count) {
@@ -795,10 +813,10 @@ class CensusUploadWorkerTest {
         }
     }
 
-    @Test fun `transport failure retries original batch before new arrivals with original batch id`() = runTest {
+    @Test fun `transport failure retries mixed batch before new arrivals with original batch id`() = runTest {
         val h = harness()
         h.initialize()
-        val a = h.queueBatch(1)
+        val a = h.queueMixedBatch()
         h.api.uploads += UploadResult.TransportFailure("IOException")
         assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
         val originalBatchId = h.api.batches.single()
@@ -1517,4 +1535,25 @@ class CensusUploadWorkerTest {
             if (priority == Log.WARN && tag == "Census") warnings += message
         }
     }
+    @Test fun `mixed batch shares budget deferral and retains both kinds for retry`() = runTest {
+        val h = harness()
+        h.initialize()
+        val items = h.queueMixedBatch()
+        h.api.uploads += UploadResult.BudgetExhausted(300)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(items.map { it.itemJson }, h.api.bodies.single())
+        val batchId = h.api.batches.single()
+        assertEquals(items.map { it.id }, h.pending?.ids)
+        val deadline = h.preferences.nextAllowedAtMillis.first()
+        assertTrue(deadline > System.currentTimeMillis())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.batches.size)
+        h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(listOf(batchId, batchId), h.api.batches)
+        assertEquals(listOf(items, items).map { batch -> batch.map { it.itemJson } }, h.api.bodies)
+        assertTrue(h.queued.isEmpty())
+    }
+
 }

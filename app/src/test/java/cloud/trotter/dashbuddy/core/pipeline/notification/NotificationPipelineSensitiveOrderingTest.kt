@@ -3,6 +3,9 @@ package cloud.trotter.dashbuddy.core.pipeline.notification
 import android.app.Notification
 import android.os.Process
 import android.service.notification.StatusBarNotification
+import cloud.trotter.dashbuddy.core.pipeline.census.SkeletonPublisher
+import cloud.trotter.dashbuddy.domain.capture.CensusSink
+import cloud.trotter.dashbuddy.domain.capture.NoOpCensusEnvelopeSink
 import cloud.trotter.dashbuddy.core.pipeline.CaptureWriter
 import cloud.trotter.dashbuddy.core.pipeline.ObservationClassifier
 import cloud.trotter.dashbuddy.core.pipeline.PipelineStats
@@ -51,10 +54,11 @@ import cloud.trotter.dashbuddy.core.pipeline.PlatformAppVersions
 @Config(sdk = [35])
 class NotificationPipelineSensitiveOrderingTest {
 
+    private val censusSink: CensusSink = mock { on { isEnabled } doReturn true }
     private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val platformPrefs: PlatformPreferences = mock {
-        on { enabledPlatforms } doReturn MutableStateFlow(setOf<Platform>(Platform.DoorDash))
-        on { enabledPackages } doReturn MutableStateFlow(setOf("com.doordash.driverapp"))
+        on { enabledPlatforms } doReturn MutableStateFlow(setOf(Platform.DoorDash, Platform.Uber))
+        on { enabledPackages } doReturn MutableStateFlow(Platform.watchedPackages)
     }
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
@@ -75,17 +79,19 @@ class NotificationPipelineSensitiveOrderingTest {
         ),
         platformPreferences = platformPrefs,
         stats = PipelineStats(),
+        skeletonPublisher = SkeletonPublisher(censusSink, PipelineStats(), NoOpCensusEnvelopeSink),
     )
 
-    private fun sbn(channelId: String, title: String, text: String): StatusBarNotification {
+    private fun sbn(channelId: String, title: String, text: String, platform: Platform = Platform.DoorDash): StatusBarNotification {
         val n = Notification.Builder(RuntimeEnvironment.getApplication(), channelId)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .build()
+        val packageName = requireNotNull(platform.packageName)
         @Suppress("DEPRECATION")
         return StatusBarNotification(
-            "com.doordash.driverapp", "com.doordash.driverapp",
+            packageName, packageName,
             1, null, 0, 0, 0, n, Process.myUserHandle(), System.currentTimeMillis(),
         )
     }
@@ -110,6 +116,7 @@ class NotificationPipelineSensitiveOrderingTest {
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertTrue("sensitive notification must not be forwarded", forwarded.isEmpty())
+        verify(censusSink, never()).offer(any())
 
         // CONTROL — the harness actually flows: a benign new-order notification
         // is captured AND forwarded (proves the empty assertions above are not
@@ -126,6 +133,17 @@ class NotificationPipelineSensitiveOrderingTest {
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1, forwarded.size)
         assertEquals("new_order", forwarded.single().target)
+        verify(censusSink, never()).offer(any())
         job.cancel()
     }
+    @Test fun `noise notification never reaches capture census or output`() = runTest {
+        val forwarded = mutableListOf<Observation.Notification>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { pipeline.output().collect { forwarded += it } }
+        source.emit(sbn("synthetic-status", "You are currently online", "", Platform.Uber))
+        advanceUntilIdle()
+        verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        verify(censusSink, never()).offer(any())
+        assertTrue(forwarded.isEmpty())
+    }
+
 }

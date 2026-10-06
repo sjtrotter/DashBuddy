@@ -145,10 +145,21 @@ other network feature is a separate opt-in:
 |---|---|---|---|
 | Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **on** (Settings → Economy turns it off) | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | on while the wizard runs | the U.S. EPA public vehicle API (`fueleconomy.gov`) | the year / make / model you pick, to fetch its MPG; nothing about you. |
-| UNKNOWN-screen census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of a screen the ruleset did not recognize: view classes and ids, hashed text slots under a k-anonymity gate, never the text itself — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
+| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker backstops — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder you choose (`DataExportViewModel.exportLog`) | the INFO-and-above log, scrubbed at the sink (`LogRepository`, `LogScrubber`): economics, counters, hashes — never raw store, customer or address text. |
 | CSV export | manual | a file you choose (`DataExportViewModel` → `core/data/.../analytics/CsvExporter`) | your own sessions and deliveries (merchant names included; customer and address hashes excluded). |
+
+Notification census publication runs after admission, dedup and capture, before UNKNOWN rejection,
+independently of capture enablement. It scans the original five fields and all action labels with
+`SensitiveMarkerScan`, including their whitespace-joined values, before the customer lead-in scrub and
+shared 40-character/value filters. Any sensitive marker refuses the entire item; action labels are never
+uploaded. Channel ids must match `[A-Za-z0-9_.-]{1,64}` without repair. The debug screen and notification
+paths share one sink, spool, worker and server-authoritative 300/day budget, with common 429 deferral;
+there is no separate client daily allowance. Release still binds `NoOpCensusSink` and builds nothing.
+Census failures leave recognition unaffected; INFO counters contain counts and reason/kind names,
+never notification text or channel ids. Trusted capture sharing remains screen-only. CLICK skeletons
+stay OUT until a reliable screen fingerprint can accompany clicks (ADR-0011 §10).
 
 **Android backup and device transfer.** The manifest sets `android:allowBackup="true"`. Unless you turn app backup
 off in Android's settings, the Room database (your event log and analytics tables) and general app/economy

@@ -94,18 +94,18 @@ abstract class SkeletonCorpusTestBase {
             dirs.flatMap { dir ->
                 dir.listFiles { f -> f.isFile && f.extension == "json" }.orEmpty().sorted().mapNotNull { file ->
                     val rel = file.relativeTo(snapshotsDir).invariantSeparatorsPath
-                    loadTree(file)?.let { Fixture(rel, it) }
+                    val root = Json.parseToJsonElement(file.readText()).jsonObject
+                    loadTree(file, root)?.let { Fixture(rel, it, (root["schemaId"] as? JsonPrimitive)?.content) }
                 }
             }
         }
 
         /**
          * A screen envelope / bare tree / legacy wrapper decodes to its tree; a CLICK envelope to its
-         * clicked node (a tree too); a NOTIFICATION envelope has no tree and is skipped (the census
-         * never sees notifications in v1, ADR §8).
+         * clicked node (a tree too); a NOTIFICATION envelope has no tree and is skipped here.
+         * NotificationCorpus loads notifications separately through their strict schema (ADR §10).
          */
-        private fun loadTree(file: File): UiNode? {
-            val root = Json.parseToJsonElement(file.readText()).jsonObject
+        private fun loadTree(file: File, root: JsonObject = Json.parseToJsonElement(file.readText()).jsonObject): UiNode? {
             val payload = root["payload"] as? JsonObject
             return when {
                 payload == null -> TestResourceLoader.loadNode(file)
@@ -142,7 +142,7 @@ abstract class SkeletonCorpusTestBase {
         }
     }
 
-    protected data class Fixture(val path: String, val tree: UiNode)
+    protected data class Fixture(val path: String, val tree: UiNode, val sourceSchema: String? = null)
 
     protected val snapshotsDir: File get() = Companion.snapshotsDir
 

@@ -1,0 +1,20 @@
+{
+  "captureId": "00000000-0000-0000-0000-000000000001",
+  "pipelineId": "notification",
+  "schemaId": "notification.v1",
+  "timestamp": 1790726400000,
+  "platform": "doordash",
+  "ruleId": null,
+  "classificationName": "UNKNOWN",
+  "metadata": {
+    "engineVersion": 1,
+    "appVersion": "synthetic-test"
+  },
+  "payload": {
+    "title": "Continue",
+    "packageName": "com.doordash.driverapp",
+    "postTime": 1790726400000,
+    "isClearable": true,
+    "channelId": "synthetic-updates"
+  }
+}

@@ -96,4 +96,23 @@ class HttpCensusSinkTest {
         runCurrent()
         assertEquals(3, scheduler.runs)
     }
+    @Test fun `both kinds enter one spool and share scheduler thresholds`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(tmp.newFolder(), stats, io)
+        val scheduler = Scheduler()
+        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
+        runCurrent()
+        repeat(50) { index ->
+            assertTrue(sink.offer(if (index % 2 == 0) notificationCensusRecord() else censusRecord(index)))
+        }
+        runCurrent()
+        val items = spool.take(100, 1_000_000)
+        assertEquals(50, items.size)
+        assertEquals(25, items.count { it.itemJson == notificationCensusRecord().skeletonJson })
+        assertEquals(50L, stats.spooled.get())
+        assertEquals(1, scheduler.soon)
+        assertEquals(1, scheduler.runs)
+    }
+
 }
