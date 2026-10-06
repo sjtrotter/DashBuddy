@@ -566,3 +566,26 @@ and the retro-mark shapes) + an "Unassigned: <store>" bubble. A misread self-hea
 same-order frame resumes the task (the resume copy sites clear `unassignedAt`) — but ONLY while the
 job stayed OPEN; after a single-order abandon the job closes and a later same-order frame mints a
 NEW jobId the resume lookup can't reach (documented residual).
+
+
+## Arrival re-evaluation (#823 Phase 2)
+
+A single accepted shopping offer with exactly one pickup task can request a display-only time
+correction on its first coherent arrived-shopping frame. Eligibility counts unresolved pickup
+placeholders too, refusing multi-store stacks before their activities resolve; multiple accepted
+offers (add-ons) are also refused. Both `itemsRemaining` and `itemsShopped` must be present in ONE
+frame, nonnegative, with a positive sum. Accumulated fields from different frames never qualify.
+After task reconciliation, `TaskLifecycle` stamps `Job.arrivalEstimateRequestedAt = obs.timestamp`
+once; `TaskEffects` diffs that edge into `EvaluateArrival`, carrying that frame's pair sum.
+
+`SideEffectEngine` resolves the effect's platform economy and learned pace, swaps only the captured
+accept-time handling term (preserving drive minutes), and returns `EFFECT_ARRIVAL_ESTIMATED` with
+`ArrivalEstimated(jobId, estimate)`. Missing legacy handling/time anchors produce no correction.
+`ArrivalEstimateLanding` lands only on the same eligible, requested job with no existing estimate.
+An add-on accept clears both anchors; late, duplicate, unsolicited and closed-job results are inert.
+
+The landing edge emits one Dispatcher completion-rate advisory. Live pickup/delivery cards read
+`Job.liveEstMinutes` and mark the rate “revised at arrival”. Accepted economics, `blendedEstMinutes`,
+scoring, analytics and historical cards remain frozen. No `LogEvent` or `app_events` entry is emitted
+for the correction; its typed payload is serializable for observation-journal replay. Phase 3 list
+peek is outside this flow.

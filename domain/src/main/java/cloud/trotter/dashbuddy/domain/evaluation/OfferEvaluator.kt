@@ -46,8 +46,8 @@ class OfferEvaluator() {
         // TIME estimate uses this; [items] (below, for scoring + the surfaced OfferEvaluation.itemCount)
         // stays the platform-shown number — the card/TTS show what DoorDash said, not a faked items count.
         val handlingItems = if (offer.itemCountIsUnits) items * economy.effectiveItemsPerUnitRatio else items
+        val nonShopLegs = if (isShop) offer.orders.count { !it.orderType.isShoppingOrder } else 0
         val handlingMinutes = if (isShop) {
-            val nonShopLegs = offer.orders.count { !it.orderType.isShoppingOrder }
             maxOf(handlingItems / economy.effectiveShopItemsPerMinute, economy.basePickupMinutes) +
                 nonShopLegs * economy.basePickupMinutes
         } else {
@@ -93,6 +93,8 @@ class OfferEvaluator() {
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
                 estimatedTimeMinutes = estTimeMinutes,
+                handlingMinutes = handlingMinutes,
+                nonShopLegs = nonShopLegs,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -114,6 +116,8 @@ class OfferEvaluator() {
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
                 estimatedTimeMinutes = estTimeMinutes,
+                handlingMinutes = handlingMinutes,
+                nonShopLegs = nonShopLegs,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -140,6 +144,8 @@ class OfferEvaluator() {
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
                 estimatedTimeMinutes = estTimeMinutes,
+                handlingMinutes = handlingMinutes,
+                nonShopLegs = nonShopLegs,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -170,6 +176,8 @@ class OfferEvaluator() {
                 dollarsPerMile = dpm,
                 dollarsPerHour = activeHourly,
                 estimatedTimeMinutes = estTimeMinutes,
+                handlingMinutes = handlingMinutes,
+                nonShopLegs = nonShopLegs,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -208,6 +216,8 @@ class OfferEvaluator() {
                 dollarsPerMile = 0.0,
                 dollarsPerHour = 0.0,
                 estimatedTimeMinutes = estTimeMinutes,
+                handlingMinutes = handlingMinutes,
+                nonShopLegs = nonShopLegs,
                 itemCount = items,
                 merchantName = merchants,
                 isUsingDefaults = economy.isUsingDefaults,
@@ -274,6 +284,8 @@ class OfferEvaluator() {
             dollarsPerMile = dpm,
             dollarsPerHour = activeHourly,
             estimatedTimeMinutes = estTimeMinutes,
+            handlingMinutes = handlingMinutes,
+            nonShopLegs = nonShopLegs,
             itemCount = items,
             merchantName = merchants,
             isUsingDefaults = economy.isUsingDefaults,

@@ -88,6 +88,9 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             netPay = scoredEval?.netPayAmount,
             estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
             distanceMiles = scoredEval?.distanceMiles ?: parsedOffer?.distanceMiles,
+            handlingMinutes = eval?.handlingMinutes,
+            nonShopLegs = eval?.nonShopLegs ?: 0,
+            isShop = parsedOffer?.orders?.any { it.orderType.isShoppingOrder } == true,
             // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.
@@ -214,6 +217,8 @@ internal fun PlatformRegionStepper.appendAddOn(
     return region.copy(
         activeJob = existing.copy(
             acceptedOffers = existing.acceptedOffers + inputs.economics,
+            arrivalEstimate = null,
+            arrivalEstimateRequestedAt = null,
             offerStoreHint = existing.offerStoreHint + inputs.storeHints,
             tasks = existing.tasks + addOnDropoffs + addOnPickups,
         ),

@@ -23,6 +23,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
@@ -749,6 +750,8 @@ class FlowCardMapperTest {
         assertEquals(18.0, pickup.estMinutes!!, 0.001)
         assertEquals(6.50, delivery.netPay!!, 0.001)
         assertEquals(18.0, delivery.estMinutes!!, 0.001)
+        assertTrue("Historical pickup keeps frozen economics", !pickup.estRevisedAtArrival)
+        assertTrue("Historical delivery keeps frozen economics", !delivery.estRevisedAtArrival)
     }
 
     @Test
@@ -797,4 +800,18 @@ class FlowCardMapperTest {
         assertEquals("one completed pickup card despite the double-confirm", 1, pickups.size)
         assertEquals(cards.map { it.id }.distinct().size, cards.size)
     }
+    @Test
+    fun `revised caption is selected only when the snapshot says so`() {
+        val pickup = FlowCardSnapshot.Pickup(
+            phaseStartedAt = 100L, taskId = "pickup", jobId = "job", storeName = "Store",
+        )
+        val delivery = FlowCardSnapshot.Delivery(
+            phaseStartedAt = 100L, taskId = "delivery", jobId = "job", storeName = "Store",
+        )
+        assertNull(arrivalRevisionCaptionResource(pickup.estRevisedAtArrival))
+        assertNull(arrivalRevisionCaptionResource(delivery.estRevisedAtArrival))
+        assertEquals(R.string.bubble_task_est_revised, arrivalRevisionCaptionResource(pickup.copy(estRevisedAtArrival = true).estRevisedAtArrival))
+        assertEquals(R.string.bubble_task_est_revised, arrivalRevisionCaptionResource(delivery.copy(estRevisedAtArrival = true).estRevisedAtArrival))
+    }
+
 }

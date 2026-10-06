@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalEstimate
 import kotlinx.serialization.Serializable
 
 /**
@@ -46,6 +47,9 @@ data class AcceptedOfferEconomics(
      */
     val storeHints: List<String> = emptyList(),
     val acceptedAt: Long,
+    val handlingMinutes: Double? = null,
+    val nonShopLegs: Int = 0,
+    val isShop: Boolean = false,
 )
 
 /**
@@ -67,6 +71,10 @@ data class Job(
     val acceptedOffers: List<AcceptedOfferEconomics> = emptyList(),
     val tasks: List<Task> = emptyList(),
     val startedAt: Long,
+    /** #823 Phase 2: the live arrival re-evaluation of THIS job's time estimate, or null. Display-only — never read by analytics or scoring. */
+    val arrivalEstimate: ArrivalEstimate? = null,
+    /** #823 Phase 2: set on the first coherent shopping-progress frame of an eligible job; the EffectMap emits ONE EvaluateArrival on its appearance. */
+    val arrivalEstimateRequestedAt: Long? = null,
 ) {
     /** Total accepted gross pay across all offers in this job. */
     val totalPayAmount: Double get() = acceptedOffers.sumOf { it.payAmount ?: 0.0 }
@@ -99,6 +107,9 @@ data class Job(
     /** Estimated minutes denominator for the blended $/hr — null until known, must be > 0. */
     val blendedEstMinutes: Double?
         get() = acceptedOffers.mapNotNull { it.estMinutes }.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
+
+    /** The HUD's time denominator — the arrival correction when present, else the frozen blend; [blendedEstMinutes] itself never moves. */
+    val liveEstMinutes: Double? get() = arrivalEstimate?.correctedEstMinutes ?: blendedEstMinutes
 
     /** Total quoted distance in miles across all offers. */
     val totalDistanceMiles: Double get() = acceptedOffers.sumOf { it.distanceMiles ?: 0.0 }

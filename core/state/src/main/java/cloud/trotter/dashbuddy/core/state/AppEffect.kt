@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -202,6 +203,19 @@ sealed class AppEffect {
         val offerHash: String,
         val platform: Platform,
     ) : AppEffect()
+
+    /**
+     * #823 Phase 2 — ask the engine (which owns the economy + learned pace) to re-price a
+     * single-shop job's time at arrival; answered by Loopback(EFFECT_ARRIVAL_ESTIMATED).
+     */
+    data class EvaluateArrival(
+        val platform: Platform,
+        val jobId: String,
+        val taskId: String,
+        val accepted: AcceptedOfferEconomics,
+        val observedItems: Int,
+    ) : AppEffect()
+
     /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
     data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
 

@@ -195,6 +195,7 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
         companion object {
             /** Effect token for the async offer-evaluation loopback (#402). */
             const val EFFECT_OFFER_EVALUATED = "offer_evaluated"
+            const val EFFECT_ARRIVAL_ESTIMATED = "arrival_estimated"
         }
     }
 }

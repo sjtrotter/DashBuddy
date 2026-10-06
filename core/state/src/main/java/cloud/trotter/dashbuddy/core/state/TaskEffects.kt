@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -61,6 +62,27 @@ internal fun EffectMap.diffTask(
     return buildList {
         val prevTask = prev.activeTask
         val nextTask = next.activeTask
+        val job = next.activeJob
+        if (prev.activeJob?.arrivalEstimateRequestedAt == null && job?.arrivalEstimateRequestedAt != null) {
+            val fields = (obs as? Observation.FlowObservation)?.parsed as? ParsedFields.TaskFields
+            val observed = fields?.let(ArrivalCorrection::observedItems)
+            val accepted = job.acceptedOffers.singleOrNull()
+            if (observed != null && accepted != null && nextTask != null) {
+                add(AppEffect.EvaluateArrival(next.platform, job.jobId, nextTask.taskId, accepted, observed))
+            }
+        }
+        val estimate = job?.arrivalEstimate
+        if (prev.activeJob?.arrivalEstimate == null && estimate != null) {
+            val text = buildString {
+                append("Store lists ${estimate.observedItems} items")
+                estimate.quotedItems?.let { append(" (offer said $it)") }
+                estimate.correctedDollarsPerHour?.let {
+                    append(": this job now runs ≈ ${Formats.money(it)}/hr")
+                }
+                append(". Unassigning may affect your completion rate.")
+            }
+            add(AppEffect.UpdateBubble(text, ChatPersona.Dispatcher, sessionId = sessionId))
+        }
 
         // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
         // idempotency) + one "Unassigned: <store>" bubble. Two shapes the abandon can take:

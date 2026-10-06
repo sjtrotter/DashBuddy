@@ -13,7 +13,12 @@ import cloud.trotter.dashbuddy.domain.capability.RuleCapabilityGrants
 import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.config.EvidenceConfig
 import cloud.trotter.dashbuddy.domain.config.OfferAutomationConfig
+import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
+import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
@@ -1217,4 +1222,61 @@ class SideEffectEngineTest {
             Timber.uproot(tree)
         }
     }
+    @Test
+    fun `EvaluateArrival uses the effects platform pace and emits one correlated loopback`() = runTest {
+        val config = EvaluationConfig(shopRates = mapOf(
+            Platform.DoorDash to LearnedShopRate(0.5, 10),
+            Platform.Uber to LearnedShopRate(2.0, 10),
+        ))
+        evaluationConfig.value = config
+        val accepted = AcceptedOfferEconomics(
+            "arrival-offer", netPay = 30.0, estMinutes = 100.0, handlingMinutes = 80.0,
+            isShop = true, acceptedAt = 100L,
+        )
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val collected = mutableListOf<StateEvent>()
+        backgroundScope.launch { engine.events.collect { collected += it } }
+        runCurrent()
+        engine.process(AppEffect.EvaluateArrival(Platform.Uber, "arrival-job", "pickup", accepted, 30))
+        runCurrent()
+        val loopback = collected.single() as Observation.Loopback
+        assertEquals(Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED, loopback.effect)
+        assertEquals(Platform.Uber, loopback.targetPlatform)
+        val payload = loopback.payload as ObservationPayload.ArrivalEstimated
+        assertEquals("arrival-job", payload.jobId)
+        assertEquals(35.0, payload.estimate.correctedEstMinutes, 0.000001)
+        assertEquals(
+            ArrivalCorrection.compute(accepted, "pickup", 30, config.forPlatform(Platform.Uber).userEconomy, payload.estimate.computedAt),
+            payload.estimate,
+        )
+    }
+
+    @Test
+    fun `EvaluateArrival does not emit for pre Phase 2 economics`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val collected = mutableListOf<StateEvent>()
+        backgroundScope.launch { engine.events.collect { collected += it } }
+        runCurrent()
+        engine.process(AppEffect.EvaluateArrival(
+            Platform.Uber, "job", "pickup",
+            AcceptedOfferEconomics("old", estMinutes = 100.0, isShop = true, acceptedAt = 100L), 30,
+        ))
+        runCurrent()
+        assertEquals(emptyList<StateEvent>(), collected)
+    }
+
+    @Test
+    fun `EvaluateArrival follows EvaluateOffer recovery gating`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val collected = mutableListOf<StateEvent>()
+        backgroundScope.launch { engine.events.collect { collected += it } }
+        runCurrent()
+        engine.process(AppEffect.EvaluateArrival(
+            Platform.Uber, "job", "pickup",
+            AcceptedOfferEconomics("offer", estMinutes = 100.0, handlingMinutes = 80.0, isShop = true, acceptedAt = 100L), 30,
+        ), recovering = true)
+        runCurrent()
+        assertEquals(Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED, (collected.single() as Observation.Loopback).effect)
+    }
+
 }
