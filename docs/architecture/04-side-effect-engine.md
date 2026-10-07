@@ -94,6 +94,14 @@ keep the 48h idempotency unchanged. Evidence **filenames** are sanitized at the 
 (`EvidenceFilename.sanitizePrefix`): a rule's `"Offer - {storeName}"` whose field parsed null saves
 as `Offer`, never the literal token — a fail-safe under, not a replacement for, the
 `ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
+
+**Evidence capture-time boundary (partial #883).** After the 500 ms settle delay, `ScreenShotHandler`
+re-reads the active root and maps that same root through the injected `AccessibilitySource` and the bounded
+`toUiNode()` path in `AccessibilityNodeMapper.kt`. Only enabled delivery apps have their window content scanned with
+`SensitiveTextMarkers`. `EvidenceCaptureBoundary` checks the live master/category callback, readability,
+enabled foreground platform and sensitive marker, in that order; any denial skips `takeScreenshot` and logs
+only the verdict under `Effects`. Root or mapping failures fail closed. Pixel redaction remains in #883.
+
 **The engine is a data-integrity boundary and must never die silently (#909).** `AppEffect.LogEvent`
 is the ONLY writer of `app_events`, so a dead drain worker inside a live process is total silent
 loss: `process()` keeps `trySend`-ing into `Channel(UNLIMITED)` while the app looks healthy. That

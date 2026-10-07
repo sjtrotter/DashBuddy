@@ -728,6 +728,7 @@ class SideEffectEngine @Inject constructor(
         screenShotHandler.capture(
             engineScope,
             effect.copy(filenamePrefix = EvidenceFilename.sanitizePrefix(effect.filenamePrefix)),
+            stillAllowed = { strategyRepository.evidenceConfig.value.allows(effect.category) },
         )
         return true
     }

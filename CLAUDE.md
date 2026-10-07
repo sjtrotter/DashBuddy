@@ -857,7 +857,7 @@ User-facing copy follows `docs/design/copy-style.md` (label not sentence beside 
    `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
    (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
    `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 24 files as of #1131) is the visible debt list —
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 23 files as of the #883 capture boundary) is the visible debt list —
    tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
    list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a

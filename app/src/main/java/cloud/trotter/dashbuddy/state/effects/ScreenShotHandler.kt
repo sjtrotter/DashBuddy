@@ -7,9 +7,13 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
 import android.view.Display
+import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
 import cloud.trotter.dashbuddy.core.state.AppEffect
+import cloud.trotter.dashbuddy.domain.config.EvidenceCaptureBoundary
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
+import cloud.trotter.dashbuddy.domain.state.Platform
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +32,7 @@ import javax.inject.Singleton
 class ScreenShotHandler @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val accessibilitySource: AccessibilitySource,
+    private val platformPreferences: PlatformPreferences,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) {
 
@@ -36,13 +41,22 @@ class ScreenShotHandler @Inject constructor(
         const val SETTLE_MS = 500L
     }
 
-    fun capture(scope: CoroutineScope, effect: AppEffect.CaptureScreenshot) {
+    fun capture(
+        scope: CoroutineScope,
+        effect: AppEffect.CaptureScreenshot,
+        stillAllowed: () -> Boolean,
+    ) {
         scope.launch(ioDispatcher) {
             // Let the third-party UI settle before grabbing the frame, so captures
             // aren't taken mid-transition. This is the only screenshot path, so the
             // delay applies to all screenshots everywhere.
             delay(SETTLE_MS)
             val service = accessibilitySource.getService() ?: return@launch
+            val verdict = captureTimeVerdict(service, stillAllowed)
+            if (verdict != EvidenceCaptureBoundary.Verdict.CAPTURE) {
+                Timber.tag("Effects").i("Evidence capture skipped at capture time: %s", verdict)
+                return@launch
+            }
 
             try {
                 service.takeScreenshot(
@@ -62,16 +76,56 @@ class ScreenShotHandler @Inject constructor(
                         }
 
                         override fun onFailure(errorCode: Int) {
-                            Timber.e("Screenshot Failed: Error $errorCode")
+                            Timber.tag("Effects").e("Screenshot Failed: Error $errorCode")
                         }
                     }
                 )
             } catch (e: SecurityException) {
-                Timber.e(e, "Screenshot Failed: Permission denied.")
+                Timber.tag("Effects").e(e, "Screenshot Failed: Permission denied.")
             } catch (e: Exception) {
-                Timber.e(e, "Screenshot Failed: Unexpected error.")
+                Timber.tag("Effects").e(e, "Screenshot Failed: Unexpected error.")
             }
         }
+    }
+
+    private fun captureTimeVerdict(
+        service: AccessibilityService,
+        stillAllowed: () -> Boolean,
+    ): EvidenceCaptureBoundary.Verdict {
+        val enabledPlatforms = platformPreferences.enabledPlatforms.value
+        var frontPlatform: Platform? = null
+        var frontReadable = false
+        var sensitiveMarker: String? = null
+        try {
+            val root = service.rootInActiveWindow
+            if (root != null) {
+                try {
+                    frontPlatform = Platform.fromPackage(root.packageName?.toString())
+                    frontReadable = true
+                    // Other apps are identified by package only; do not inspect their content.
+                    if (frontPlatform != Platform.Unknown && frontPlatform in enabledPlatforms) {
+                        // The injected source uses AccessibilityNodeMapper's toUiNode() and
+                        // TreeLimits, mapping this same root without another active-window read.
+                        val tree = accessibilitySource.getCurrentRootSnapshot(root)?.tree
+                        frontReadable = tree != null
+                        sensitiveMarker = tree?.let(SensitiveTextMarkers::findMarker)
+                    }
+                } finally {
+                    @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
+                    root.recycle()
+                }
+            }
+        } catch (_: Exception) {
+            // A failed root/package/map read must never admit a whole-display capture.
+            frontReadable = false
+        }
+        return EvidenceCaptureBoundary.decide(
+            allowedNow = stillAllowed(),
+            frontPlatform = frontPlatform,
+            enabledPlatforms = enabledPlatforms,
+            sensitiveMarker = sensitiveMarker,
+            frontReadable = frontReadable,
+        )
     }
 
     /**
@@ -91,7 +145,7 @@ class ScreenShotHandler @Inject constructor(
                 result.colorSpace
             )
             if (bitmap == null) {
-                Timber.e("Failed to wrap hardware buffer.")
+                Timber.tag("Effects").e("Failed to wrap hardware buffer.")
                 return
             }
 
@@ -120,7 +174,7 @@ class ScreenShotHandler @Inject constructor(
             val uri: Uri? = resolver.insert(collection, contentValues)
 
             if (uri == null) {
-                Timber.e("Failed to create MediaStore entry.")
+                Timber.tag("Effects").e("Failed to create MediaStore entry.")
                 return
             }
 
@@ -138,13 +192,13 @@ class ScreenShotHandler @Inject constructor(
 
             // #772: the filename embeds the rule-declared prefix, which can carry template-expanded
             // merchant text ("Offer - {storeName}") — the name stays on the DEBUG firehose only.
-            Timber.i("Screenshot saved to Gallery (Pictures/DashBuddy)")
-            Timber.d("Screenshot file: %s", displayName)
+            Timber.tag("Effects").i("Screenshot saved to Gallery (Pictures/DashBuddy)")
+            Timber.tag("Effects").d("Screenshot file: %s", displayName)
 
         } catch (e: IOException) {
-            Timber.e(e, "Failed to write screenshot to MediaStore")
+            Timber.tag("Effects").e(e, "Failed to write screenshot to MediaStore")
         } catch (e: Exception) {
-            Timber.e(e, "Unexpected error saving screenshot")
+            Timber.tag("Effects").e(e, "Unexpected error saving screenshot")
         }
     }
 }

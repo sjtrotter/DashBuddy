@@ -77,7 +77,7 @@
     <string name="strategy_settings_priorities_hint">Drag to reorder. Rules at the top have more weight.</string>
     <string name="evidence_settings_title">Screenshots</string>
     <string name="evidence_settings_master_label">Save screenshots</string>
-    <string name="evidence_settings_master_subtitle">Screenshots are off by default. Saving requires this switch and a category below; categories start on. Images capture the whole display, including customer details and other apps, and are saved to Pictures/DashBuddy. DashBuddy does not upload them; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turning this switch off stops new captures; one already queued can still save. Dash history and debug text captures are separate.</string>
+    <string name="evidence_settings_master_subtitle">Screenshots are off by default. Saving requires this switch and a category below; categories start on. Images capture the whole display, including customer details and other apps, and are saved to Pictures/DashBuddy. DashBuddy does not upload them; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. A capture is skipped if this is off, another app is in front, or a known sensitive screen is up when it fires. Dash history and debug text captures are separate.</string>
     <string name="evidence_settings_section_granular">By type</string>
     <string name="evidence_settings_offers_label">Offers</string>
     <string name="evidence_settings_offers_subtitle">Offer screenshots</string>
