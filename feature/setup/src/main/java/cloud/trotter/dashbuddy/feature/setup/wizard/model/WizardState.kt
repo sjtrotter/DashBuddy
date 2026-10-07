@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 data class WizardState(
     // Economy Variables
     val vehicleClass: VehicleClass = VehicleClass.SEDAN,
+    val vehicleLookupAllowed: Boolean = false,
     val vehicleYear: String = "",
     val vehicleMake: String = "",
     val vehicleModel: String = "",

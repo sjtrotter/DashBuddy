@@ -30,6 +30,7 @@ class AppPreferencesRepository @Inject constructor(
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
     val analyticsShowMore = dataSource.analyticsShowMore
+    val vehicleLookupAllowed = dataSource.vehicleLookupAllowed
     val appTheme = dataSource.appTheme
     /** Driving / glance mode (#318) — the HUD honors this, the main app window never does. */
     val glanceMode = dataSource.glanceMode
@@ -238,6 +239,7 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.setAnalyticsShowMore(enabled)
+    suspend fun setVehicleLookupAllowed(allowed: Boolean) = dataSource.setVehicleLookupAllowed(allowed)
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
     suspend fun setGlanceMode(enabled: Boolean) = dataSource.setGlanceMode(enabled)
 

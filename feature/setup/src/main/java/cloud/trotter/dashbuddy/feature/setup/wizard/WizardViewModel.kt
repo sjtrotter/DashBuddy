@@ -62,7 +62,6 @@ class WizardViewModel @Inject constructor(
     init {
         Timber.tag("WizardViewModel").v("Initializing WizardViewModel")
         loadExistingSettings()
-        fetchVehicleYears()
     }
 
     private fun loadExistingSettings() {
@@ -144,10 +143,22 @@ class WizardViewModel @Inject constructor(
             }
             // Wait for saved preferences before any startup gas/location request.
             attemptAutoGasPriceFetch()
+            val vehicleLookupAllowed = appPreferencesRepository.vehicleLookupAllowed.first()
+            _state.update { it.copy(vehicleLookupAllowed = vehicleLookupAllowed) }
+            if (vehicleLookupAllowed) fetchVehicleYears()
+        }
+    }
+
+    fun allowVehicleLookup() {
+        viewModelScope.launch {
+            appPreferencesRepository.setVehicleLookupAllowed(true)
+            _state.update { it.copy(vehicleLookupAllowed = true) }
+            fetchVehicleYears()
         }
     }
 
     private fun fetchVehicleYears() {
+        if (!_state.value.vehicleLookupAllowed) return
         viewModelScope.launch { _availableYears.value = vehicleRepository.getYears() }
     }
 
@@ -273,6 +284,7 @@ class WizardViewModel @Inject constructor(
     }
 
     fun onYearSelected(year: String) {
+        if (!_state.value.vehicleLookupAllowed || year !in _availableYears.value) return
         _state.update {
             it.copy(
                 vehicleYear = year,
@@ -290,6 +302,9 @@ class WizardViewModel @Inject constructor(
     }
 
     fun onMakeSelected(make: String) {
+        if (make != VEHICLE_NOT_LISTED &&
+            (!_state.value.vehicleLookupAllowed || _state.value.vehicleYear !in _availableYears.value)
+        ) return
         _state.update { it.copy(vehicleMake = make, vehicleModel = "", vehicleTrim = "") }
         _availableModels.value = emptyList(); _availableTrims.value =
             emptyList(); _availableTrimNames.value = emptyList()
@@ -304,6 +319,9 @@ class WizardViewModel @Inject constructor(
     }
 
     fun onModelSelected(model: String) {
+        if (model != VEHICLE_NOT_LISTED &&
+            (!_state.value.vehicleLookupAllowed || _state.value.vehicleYear !in _availableYears.value)
+        ) return
         _state.update { it.copy(vehicleModel = model, vehicleTrim = "") }
         _availableTrims.value = emptyList(); _availableTrimNames.value = emptyList()
 
@@ -327,7 +345,7 @@ class WizardViewModel @Inject constructor(
         _state.update { it.copy(vehicleTrim = trimName) }
 
         // Escape hatch! Don't look up MPG if Not Listed.
-        if (trimName == VEHICLE_NOT_LISTED) return
+        if (trimName == VEHICLE_NOT_LISTED || !_state.value.vehicleLookupAllowed) return
 
         viewModelScope.launch {
             val vehicleId =

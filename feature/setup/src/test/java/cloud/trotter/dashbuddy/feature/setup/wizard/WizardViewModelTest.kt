@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleDetails
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +23,8 @@ import org.junit.After
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.clearInvocations
+import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
@@ -44,6 +48,7 @@ class WizardViewModelTest {
 
     private fun stubRepositories() {
         whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf(null))
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.vehicleModel).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.vehicleTrim).thenReturn(flowOf(null))
@@ -62,6 +67,147 @@ class WizardViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `init never contacts EPA without opt-in even with a saved vehicle`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf("2020"))
+        whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf("Toyota"))
+        whenever(appPreferencesRepository.vehicleModel).thenReturn(flowOf("Corolla"))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(emptyList<String>(), viewModel.availableYears.value)
+        verifyNoInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `saved lookup opt-in fetches years only after settings are applied`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(true))
+        whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf("2020"))
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
+        val economy = CompletableDeferred<UserEconomy>()
+        whenever(appPreferencesRepository.userEconomy).thenReturn(flow { emit(economy.await()) })
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        verifyNoInteractions(vehicleRepository)
+
+        economy.complete(UserEconomy())
+        testScheduler.advanceUntilIdle()
+
+        assertEquals("2020", viewModel.state.value.vehicleYear)
+        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(listOf("2020"), viewModel.availableYears.value)
+        verify(vehicleRepository).getYears()
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `allow lookup persists the choice before enabling and fetching years`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
+        val saved = CompletableDeferred<Unit>()
+        whenever(appPreferencesRepository.setVehicleLookupAllowed(true)).doSuspendableAnswer {
+            saved.await()
+        }
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        viewModel.allowVehicleLookup()
+        testScheduler.advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        verifyNoInteractions(vehicleRepository)
+
+        saved.complete(Unit)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(listOf("2020"), viewModel.availableYears.value)
+        inOrder(appPreferencesRepository, vehicleRepository) {
+            verify(appPreferencesRepository).setVehicleLookupAllowed(true)
+            verify(vehicleRepository).getYears()
+        }
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `selection callbacks and manual MPG entry do not contact EPA without opt-in`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onYearSelected("2020")
+        viewModel.onMakeSelected("Toyota")
+        viewModel.onModelSelected("Corolla")
+        viewModel.onTrimSelected("Automatic")
+        viewModel.onMakeSelected(VEHICLE_NOT_LISTED)
+        viewModel.updateEstimatedMpg(32f)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(VEHICLE_NOT_LISTED, viewModel.state.value.vehicleMake)
+        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        verifyNoInteractions(vehicleRepository)
+        verify(appPreferencesRepository, org.mockito.kotlin.never()).setVehicleLookupAllowed(any())
+    }
+
+    @Test
+    fun `allowed lookup follows the year make model and trim selections`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
+        whenever(vehicleRepository.getMakes("2020")).thenReturn(listOf("Toyota"))
+        whenever(vehicleRepository.getModels("2020", "Toyota")).thenReturn(listOf("Corolla"))
+        whenever(vehicleRepository.getVehicleOptions("2020", "Toyota", "Corolla"))
+            .thenReturn(listOf(VehicleOption("123", "Automatic")))
+        whenever(vehicleRepository.getVehicleDetails("123"))
+            .thenReturn(VehicleDetails(32f, FuelType.REGULAR))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        viewModel.allowVehicleLookup()
+        testScheduler.advanceUntilIdle()
+        viewModel.onYearSelected("2020")
+        testScheduler.advanceUntilIdle()
+        viewModel.onMakeSelected("Toyota")
+        testScheduler.advanceUntilIdle()
+        viewModel.onModelSelected("Corolla")
+        testScheduler.advanceUntilIdle()
+        viewModel.onTrimSelected("Automatic")
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        inOrder(vehicleRepository) {
+            verify(vehicleRepository).getYears()
+            verify(vehicleRepository).getMakes("2020")
+            verify(vehicleRepository).getModels("2020", "Toyota")
+            verify(vehicleRepository).getVehicleOptions("2020", "Toyota", "Corolla")
+            verify(vehicleRepository).getVehicleDetails("123")
+        }
+        verifyNoMoreInteractions(vehicleRepository)
     }
 
     @Test

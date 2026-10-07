@@ -131,6 +131,7 @@ fun WizardScreen(
                         VehicleCard(
                             step = currentStep,
                             vehicleClass = state.vehicleClass,
+                            vehicleLookupAllowed = state.vehicleLookupAllowed,
                             year = state.vehicleYear,
                             make = state.vehicleMake,
                             model = state.vehicleModel,
@@ -141,6 +142,7 @@ fun WizardScreen(
                             availableModels = availableModels,
                             availableTrims = availableTrimNames,
                             onTypeSelected = viewModel::updateVehicleClass,
+                            onAllowVehicleLookup = viewModel::allowVehicleLookup,
                             onYearSelected = viewModel::onYearSelected,
                             onMakeSelected = viewModel::onMakeSelected,
                             onModelSelected = viewModel::onModelSelected,
