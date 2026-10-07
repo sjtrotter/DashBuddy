@@ -56,7 +56,7 @@ class InfoLogPiiGateE2ETest {
         )
     }
 
-    /** Plant a [RecordingTree], run [session] end to end, uproot after draining, then gate. */
+    /** Plant a [RecordingTree], run [session] end to end, uproot after teardown, gate before it. */
     private fun gate(session: String, clickFiles: List<String>) {
         val app = RuntimeEnvironment.getApplication() as ReplayApplication
         val firstMs = SessionReplay.loadSession(session).minOf { it.capturedAtMs }
@@ -69,11 +69,10 @@ class InfoLogPiiGateE2ETest {
             // 200 s past the last capture: every grace the session armed is served by the engine's timer.
             replay.feedSession(session, clickFiles, tailMs = 200_000L)
             replay.drain()
-            Timber.uproot(tree)
             InfoPlusPiiGate.assertClean(session, replay, tree.records, bootstrap)
         } finally {
-            if (tree in Timber.forest()) Timber.uproot(tree)
             replay.close()
+            if (tree in Timber.forest()) Timber.uproot(tree)
         }
     }
 }

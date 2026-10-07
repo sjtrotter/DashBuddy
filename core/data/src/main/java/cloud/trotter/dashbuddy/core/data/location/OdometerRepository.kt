@@ -25,6 +25,8 @@ class OdometerRepository @Inject constructor(
     private val odometerLocalDataSource: OdometerLocalDataSource,
     private val locationDataSource: LocationDataSource,
     @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    /** #1271 seam: the wall clock (production = the system clock, what `System.currentTimeMillis()` read). */
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
     private var trackingJob: Job? = null
@@ -194,7 +196,7 @@ class OdometerRepository @Inject constructor(
      * is never logged, at any level.
      */
     private fun logRejection(verdict: OdometerFixPolicy.Verdict.Reject) {
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
         val openingReason = streakReason
         streakLength++
 
@@ -228,7 +230,7 @@ class OdometerRepository @Inject constructor(
     /** ONE INFO on the first usable fix after a streak — the episode's closing bracket. */
     private fun closeRejectionStreak() {
         if (streakReason == null) return
-        val seconds = (System.currentTimeMillis() - streakStartedAtMs) / 1000L
+        val seconds = (clock.millis() - streakStartedAtMs) / 1000L
         Timber.tag(TAG).i(
             String.format(
                 Locale.ROOT,

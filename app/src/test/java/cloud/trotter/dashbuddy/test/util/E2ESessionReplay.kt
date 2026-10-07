@@ -118,6 +118,19 @@ class E2ESessionReplay(
     val clock: Clock = ReplayEdges.SchedulerClock(scheduler, fixtureEpochMs)
     private val appScope = CoroutineScope(dispatcher + SupervisorJob())
 
+    /** Owns every [await] block, so a block that failed its check is still cancelled on [close]. */
+    private val workScope = CoroutineScope(dispatcher + SupervisorJob())
+
+    /**
+     * The fixtures' real zone. `ObservationClassifier` hands `TransformRegistry` the device-default
+     * zone (production behaviour, deliberately not a seam), so a wall-clock render like "Pick up by
+     * 15:42" parses to the right instant only in the zone it was captured in. Pinned for the
+     * harness's lifetime and restored on [close].
+     */
+    private val hostZone: java.util.TimeZone = java.util.TimeZone.getDefault().also {
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(FIXTURE_ZONE))
+    }
+
     // ── Persistence (real Room, real DAOs) ─────────────────────────────────────────────────────
     val db: DashBuddyDatabase = Room.inMemoryDatabaseBuilder(app, DashBuddyDatabase::class.java)
         .allowMainThreadQueries()
@@ -133,12 +146,12 @@ class E2ESessionReplay(
         TimeConstantRepository(db.timeConstantDao()),
     )
     val grants = RuleCapabilityRepository(
-        RuleCapabilityDataSource(ReplayEdges.MemoryPreferences()), appScope, "e2e-replay",
+        RuleCapabilityDataSource(ReplayEdges.MemoryPreferences()), appScope, "e2e-replay", clock,
     )
 
     // ── External edges ─────────────────────────────────────────────────────────────────────────
     val location = ReplayEdges.FakeLocation(clock)
-    val odometer = OdometerRepository(OdometerLocalDataSource(ReplayEdges.MemoryPreferences()), location, dispatcher)
+    val odometer = OdometerRepository(OdometerLocalDataSource(ReplayEdges.MemoryPreferences()), location, dispatcher, clock)
     val notifications: NotificationManager = app.getSystemService(NotificationManager::class.java)
     val tts = ReplayEdges.FakeTts()
     val accessibility = ReplayEdges.FakeAccessibility()
@@ -186,7 +199,7 @@ class E2ESessionReplay(
             uiInteractionHandler = UiInteractionHandler(accessibility.source),
             effectsFiredDao = db.effectsFiredDao(),
             ttsEffectHandler = TtsEffectHandler(
-                app, appPreferences, appScope, tts.factory, TtsHealthNotifier(app, notifications),
+                app, appPreferences, appScope, tts.factory, TtsHealthNotifier(app, notifications), clock,
             ),
             permissionTierChecker = PermissionTierChecker(app, accessibility.source),
             capabilityGrants = grants,
@@ -257,7 +270,7 @@ class E2ESessionReplay(
 
     /** Run a suspend [block] on the harness dispatcher to completion (no virtual time passes). */
     fun <T> await(block: suspend () -> T): T {
-        val deferred = CoroutineScope(dispatcher).async { block() }
+        val deferred = workScope.async { block() }
         repeat(50) {
             if (deferred.isCompleted) return deferred.getCompleted()
             scheduler.runCurrent()
@@ -340,14 +353,30 @@ class E2ESessionReplay(
         executor.trace.forEach { appendLine("  fx %d %s".format(it.atMs, it.effect::class.simpleName)) }
     }
 
+    /**
+     * Cancel every scope, then run the scheduler at the current instant so the cancellations
+     * actually COMPLETE (a `StandardTestDispatcher` resumes cancelled continuations only when run:
+     * GPS `onCompletion`, collector loops, DAO calls in flight). Only then is Room closed. Fails if a
+     * GPS collector survived. The odometer repository's private scope has no long-lived job besides
+     * the tracking job `stopTracking()` cancels; its fire-and-forget saves finish in the same pass.
+     */
     override fun close() {
-        engine.close()
-        manager.close()
-        strategy.close()
-        odometer.stopTracking()
-        appScope.cancel()
-        app.component = null
-        db.close()
+        try {
+            engine.close()
+            manager.close()
+            strategy.close()
+            odometer.stopTracking()
+            appScope.cancel()
+            workScope.cancel()
+            scheduler.runCurrent()
+            shadowOf(Looper.getMainLooper()).idle()
+            scheduler.runCurrent()
+            check(location.activeCollectors == 0) { "a GPS collector survived teardown (${location.activeCollectors})" }
+        } finally {
+            app.component = null
+            db.close()
+            java.util.TimeZone.setDefault(hostZone)
+        }
     }
 
     /**
@@ -368,6 +397,9 @@ class E2ESessionReplay(
     }
 
     companion object {
+        /** Where every committed DoorDash/Uber fixture was captured (San Antonio, TX). */
+        const val FIXTURE_ZONE = "America/Chicago"
+
         /** Handler tags — an INFO+ line under one of these was written by the effect layer itself. */
         val HANDLER_TAGS = setOf("Effects", "Tts", "Odometer", "ShopRate", "Chat")
 

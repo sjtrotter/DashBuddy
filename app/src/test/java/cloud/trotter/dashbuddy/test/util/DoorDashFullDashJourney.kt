@@ -59,6 +59,9 @@ object DoorDashFullDashJourney {
     const val RECEIPT_COLLAPSED_MS = MAMA_ARRIVAL_MS + 1_000L
     const val RECEIPT_EXPANDED_MS = RECEIPT_COLLAPSED_MS + 3_860L
 
+    /** Past Bill Miller's 10 s TASK_RETIRE grace — his drop is confirmed; a mid-journey milestone. */
+    const val BILL_RETIRED_MS = BILL_RETIRE_ARM_MS + 15_000L
+
     /** Hold past the expanded receipt's 2.5 s retire grace and the 3 s session-pay settle. */
     const val RECEIPT_HELD_MS = RECEIPT_EXPANDED_MS + 10_000L
 
@@ -81,8 +84,12 @@ object DoorDashFullDashJourney {
         val notificationsAfterTap: Set<Int>,
     )
 
-    /** Drive the whole journey through [replay] (already [E2ESessionReplay.start]ed). */
-    fun run(replay: E2ESessionReplay): Checkpoints {
+    /**
+     * Drive the whole journey through [replay] (already [E2ESessionReplay.start]ed). [milestone] is
+     * called after Bill Miller's drop is retired and again after the receipt has settled, so a test
+     * can fold the log incrementally (the projector resuming from partly populated tables).
+     */
+    fun run(replay: E2ESessionReplay, milestone: (String) -> Unit = {}): Checkpoints {
         val frames = SessionReplay.loadSession(STACK).associateBy { it.file.substringBefore('_') }
         fun frame(n: String) = frames.getValue(n)
 
@@ -97,11 +104,14 @@ object DoorDashFullDashJourney {
         replay.click(SessionReplay.loadClickFrame("$STACK/02_accept_offer_click.json"))
         for (n in listOf("03", "04", "05", "06", "07", "08", "09", "10", "12")) replay.screen(frame(n))
         replay.screen(frame("03"), atMs = BILL_RETIRE_ARM_MS)
+        replay.advanceTo(BILL_RETIRED_MS)
+        milestone("bill retired")
         for (n in listOf("13", "11")) replay.screen(frame(n))
         replay.screen(frame("12"), atMs = MAMA_ARRIVAL_MS)
         replay.screen(SessionReplay.loadScreenFrame(COLLAPSED, RECEIPT_COLLAPSED_MS))
         replay.screen(SessionReplay.loadScreenFrame(EXPANDED, RECEIPT_EXPANDED_MS))
         replay.advanceTo(RECEIPT_HELD_MS)
+        milestone("receipt settled")
         val summary = SessionReplay.loadScreenFrame(SUMMARY, SUMMARY_MS)
         replay.screen(summary, node = summary.node.substituted(SUMMARY_SUBSTITUTIONS))
         replay.advanceTo(END_MS)

@@ -49,10 +49,23 @@ class DoorDashFullDashE2ETest {
         try {
             replay.start()
             val bootstrap = tree.records.size
-            val checkpoints = DoorDashFullDashJourney.run(replay)
+            // The projector folds INCREMENTALLY: after Bill Miller's retire, after the receipt settles,
+            // and at the end — so the refold comparison below covers resuming from partial tables.
+            val foldedAt = mutableMapOf<String, Long>()
+            val checkpoints = DoorDashFullDashJourney.run(replay) { milestone ->
+                replay.drain()
+                foldedAt[milestone] = replay.await { replay.db.analyticsDao().getWatermark()!!.watermarkSequenceId }
+            }
             replay.drain()
-            Timber.uproot(tree)
             val trace = replay.trace()
+
+            assertEquals(setOf("bill retired", "receipt settled"), foldedAt.keys)
+            assertTrue(
+                "each mid-journey fold left work for the next (a real incremental resume): $foldedAt",
+                0 < foldedAt.getValue("bill retired") &&
+                    foldedAt.getValue("bill retired") < foldedAt.getValue("receipt settled") &&
+                    foldedAt.getValue("receipt settled") < rowCount(replay, "app_events"),
+            )
 
             // ── Recognition: every journey input reached the state machine ───────────────────────
             val gated = replay.inputs.filterNot { it.forwarded }
@@ -121,6 +134,15 @@ class DoorDashFullDashE2ETest {
             assertEquals(
                 "one session row for the dash",
                 1, replay.await { replay.db.analyticsDao().sessionsBetween(0, Long.MAX_VALUE) }.size,
+            )
+
+            // Time zone: "Pick up by 15:42" on Bill Miller's pickup screen is 15:42 in the fixtures'
+            // zone (CDT) — 2026-07-05T20:42:00Z. A host-zone leak into the transforms moves this.
+            val billPickup = replay.await { replay.db.analyticsDao().pickupRecordsForJob(deliveries.first().jobId) }
+                .single { it.storeName == "Bill Miller BBQ" }
+            assertEquals(
+                "the parsed pickup deadline is the fixture-zone instant",
+                java.time.Instant.parse("2026-07-05T20:42:00Z").toEpochMilli(), billPickup.deadlineMillis,
             )
 
             // ── Effects: executed, once ──────────────────────────────────────────────────────────
@@ -194,8 +216,8 @@ class DoorDashFullDashE2ETest {
             // ── Privacy: the shareable stream the run actually wrote ─────────────────────────────
             InfoPlusPiiGate.assertClean("doordash full dash", replay, tree.records, bootstrap)
         } finally {
-            if (tree in Timber.forest()) Timber.uproot(tree)
             replay.close()
+            if (tree in Timber.forest()) Timber.uproot(tree)
         }
     }
 
