@@ -511,8 +511,50 @@ class CaptureScrubTest {
         for (kept in listOf(
             "Return to dash", "Return to dash to keep earning", "Return [redacted] to Sample Store",
             "Return [redacted:ab12] to Sample Store", "Returned items", "Return", "Return Avery K", "Return Avery K to ",
+            // PR #1277 review r1 #4: the separator is consumed whole before the chrome check.
+            "Return   to dash", "Return  to dash to keep earning", "Return\tto dash",
         )) {
             assertEquals(kept, CustomerTextMarkers.maskReturnName(kept))
         }
+    }
+
+    @Test
+    fun `a merged field with two return task lines masks both names (r1 #5)`() {
+        assertEquals(
+            "Return [redacted] to Sample Store\nReturn [redacted] to Sample Market",
+            CustomerTextMarkers.maskReturnName("Return Avery K to Sample Store\nReturn Jordan T to Sample Market"),
+        )
+        assertEquals(
+            "Pickup at Sample Store\nReturn [redacted] to Sample Market",
+            CustomerTextMarkers.maskReturnName("Pickup at Sample Store\nReturn Jordan T to Sample Market"),
+        )
+    }
+
+    @Test
+    fun `the return-line parse is linear on a maximum-length field (r1 #3)`() {
+        for (input in listOf(
+            "Return" + " ".repeat(4_090),
+            "Return " + "a to ".repeat(817),
+            "Return A" + " to".repeat(1_362),
+        )) {
+            val steps = LongArray(1)
+            ReturnTaskLine.mask(input, steps)
+            ReturnTaskLine.hasRawName(input, steps)
+            assertTrue("${steps[0]} steps for ${input.length} chars", steps[0] <= 8L * input.length)
+        }
+    }
+
+    @Test
+    fun `UNKNOWN click on a node carrying both address lines is masked (r1 #1)`() {
+        val node = UiNode(isClickable = true, text = "1234 Sample Ridge Dr\nSan Antonio, TX 78200-1234")
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse(json.contains("Sample Ridge"))
+        assertFalse(json.contains("78200"))
     }
 }

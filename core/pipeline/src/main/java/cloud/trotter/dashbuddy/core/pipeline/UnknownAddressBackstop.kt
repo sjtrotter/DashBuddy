@@ -78,6 +78,9 @@ object UnknownAddressBackstop {
         private val quoteOrCode = BooleanArray(n)
         private val nodePair = BooleanArray(n)
 
+        /** The node has a non-blank field that is neither quote-led nor a short code (its own "other" text). */
+        private val otherText = BooleanArray(n)
+
         // Subtree facts, filled in one reverse pass.
         private val fieldInSubtree = BooleanArray(n)
         private val fieldChild = BooleanArray(n)
@@ -107,7 +110,7 @@ object UnknownAddressBackstop {
             for ((_, value) in node.scrubbableStrings()) {
                 if (value.isNullOrBlank()) continue
                 hasField[index] = true
-                if (PiiShapes.isQuoteLeading(value) || PiiShapes.isShortCode(value)) quoteOrCode[index] = true
+                if (PiiShapes.isQuoteLeading(value) || PiiShapes.isShortCode(value)) quoteOrCode[index] = true else otherText[index] = true
                 if (PiiShapes.isStreetLine(value)) street[index] = true
                 if (PiiShapes.isCityStateZipLine(value)) city[index] = true
                 if ('\n' in value && hasStreetThenCityLine(value)) nodePair[index] = true
@@ -135,8 +138,15 @@ object UnknownAddressBackstop {
             }
             if (!fieldInSubtree[0]) return Selection(BooleanArray(0), 0, steps)
 
+            val root = collapse(0)
+            // Review r1 #1: a pair carried by the projected ROOT itself (one node holding "street\ncity", or a
+            // tapped node with both shapes, under any field-less wrappers) is never in a sibling list.
+            if (nodePair[root]) {
+                explicit[root] = true
+                markScope(root)
+            }
             val stack = ArrayDeque<Int>()
-            stack.addLast(collapse(0))
+            stack.addLast(root)
             val kids = ArrayList<Int>()
             while (stack.isNotEmpty()) {
                 val p = stack.removeLast()
@@ -176,13 +186,13 @@ object UnknownAddressBackstop {
             return i
         }
 
-        private fun isIntervening(k: Int) = quoteOrCode[k] && !fieldChild[k]
+        private fun isIntervening(k: Int) = quoteOrCode[k] && !otherText[k] && !fieldChild[k]
 
         private fun scanSiblings(p: Int, kids: List<Int>) {
             // Siblings that are neither quote nor code: a pair's parent "holds nothing but the block"
             // when the pair accounts for all of them — counted once per list, never per pair.
             var others = 0
-            for (k in kids) if (!quoteOrCode[k]) others++
+            for (k in kids) if (otherText[k]) others++
             var streetCandidate = -1
             for (j in kids.indices) {
                 steps++
@@ -211,10 +221,15 @@ object UnknownAddressBackstop {
         private fun addScope(p: Int, others: Int, a: Int, b: Int) {
             explicit[a] = true
             explicit[b] = true
-            var pairOthers = if (quoteOrCode[a]) 0 else 1
-            if (b != a && !quoteOrCode[b]) pairOthers++
-            val onlyBlock = others == pairOthers
-            val scope = if (onlyBlock && projParent[p] >= 0) projParent[p] else p
+            var pairOthers = if (otherText[a]) 1 else 0
+            if (b != a && otherText[b]) pairOthers++
+            // Review r1 #2: the parent's OWN text counts too — a "Stop 1" header on the container means the
+            // block does not fill it, so the scope never widens past it.
+            val onlyBlock = others == pairOthers && !otherText[p]
+            markScope(if (onlyBlock && projParent[p] >= 0) projParent[p] else p)
+        }
+
+        private fun markScope(scope: Int) {
             scopeDelta[scope]++
             scopeDelta[end[scope]]--
             scopes++

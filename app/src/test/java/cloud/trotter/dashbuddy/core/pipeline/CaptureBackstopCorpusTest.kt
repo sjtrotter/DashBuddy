@@ -197,10 +197,10 @@ class CaptureBackstopCorpusTest {
         // there; the rule's redact owns those frames). Audited 2026-10-06: each group is the block's street
         // line, its City, ST ZIP line and, where present, the block's quoted note and short code — no chrome.
         private val EXPECTED_HITS = listOf(
-            // street, city
+            // street, city (decoy values since #1278 scrubbed the real ones)
             "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json#29",
             "dropoff_handoff/20260128_180855_435_DROPOFF_DETAILS_PRE_ARRIVAL.json#30",
-            // street, city, quoted note (x3 captures of one screen)
+            // street, city, quoted note (x3 captures of one screen; decoy values since #1278)
             "dropoff_pre_arrival/20260128_183203_985_DROPOFF_DETAILS_PRE_ARRIVAL.json#29",
             "dropoff_pre_arrival/20260128_183203_985_DROPOFF_DETAILS_PRE_ARRIVAL.json#30",
             "dropoff_pre_arrival/20260128_183203_985_DROPOFF_DETAILS_PRE_ARRIVAL.json#42",

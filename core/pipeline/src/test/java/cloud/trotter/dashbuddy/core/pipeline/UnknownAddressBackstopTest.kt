@@ -319,4 +319,33 @@ class UnknownAddressBackstopTest {
         repeat(1_000) { chain = box(chain) }
         assertEquals(2, assertLinear("wrapper chain", chain).count)
     }
+
+    // --- PR #1277 review r1 ------------------------------------------------------------------------------
+
+    @Test
+    fun `a pair carried by the projected root itself is selected, wrapped or not (r1 #1)`() {
+        val joined = "$street\nSan Antonio, TX 78200-1234"
+        for ((what, tree) in mapOf(
+            "bare node" to UiNode(text = joined),
+            "field-less wrappers" to box(box(UiNode(text = joined))),
+            "text + description" to box(UiNode(text = street, contentDescription = city, isClickable = true)),
+        )) {
+            val out = serialize(scrub(tree))
+            assertFalse("$what: street", out.contains("Sample Ridge"))
+            assertFalse("$what: ZIP", out.contains("78200"))
+        }
+        val withCode = UiNode(text = joined, children = listOf(text("000")))
+        assertEquals("the root's own block scope covers its code", "[redacted]", scrub(withCode).children[0].text)
+    }
+
+    @Test
+    fun `the scope never widens past a parent with its own text (r1 #2)`() {
+        val unrelated = box(text("Earnings"), text("12"), text("\"Top Dasher\" status"))
+        val tree = UiNode(children = listOf(UiNode(text = "Stop 1", children = listOf(text(street), text(city))), unrelated))
+        val out = scrub(tree)
+        assertEquals("[redacted]", out.children[0].children[0].text)
+        assertEquals("[redacted]", out.children[0].children[1].text)
+        assertEquals("the header is kept", "Stop 1", out.children[0].text)
+        assertEquals("unrelated container untouched", serialize(unrelated), serialize(out.children[1]))
+    }
 }

@@ -341,13 +341,24 @@ runs a separate recursive UNKNOWN simulation over the committed corpus (sessions
 included) with an audited per-node hit list (every hit is a real address block on a recognized fixture —
 production never runs the detector there) and injects a synthetic block into every tree for recall.
 Residuals (not claimed): unquoted free text outside a block, a lone street or city line, a city line ahead
-of its street, a one-line full address, and a tapped node captured without its block. A merchant address
+of its street, a one-line full address, a tapped node captured without its block, and — confirmed by the
+PR #1277 review — a separate unit line (`Apt 4B`) between the street and the city (it breaks the pair, so
+the whole block stays raw), a unit line or an UNQUOTED note inside a qualifying block (only street, city,
+quote-led and short-code nodes are selected), and a field-bearing wrapper (a city wrapper with its own
+`Address` description is not a city line, so no pair forms). Review r1 also fixed: a pair carried by the
+projected root itself (one node with `street\ncity`, or such a tapped node) is selected, and the scope never
+widens past a parent that carries its own non-block text (a `Stop 1` header). A merchant address
 or a numeric label inside a qualifying UNKNOWN block may be masked: an accepted privacy bias.
 The same PR closes the UNKNOWN half of the #994 return task line: the bare `Return ` prefix stays out of
 `MARKERS` (it is DoorDash's `Return to dash` chrome, #1064), and a GATED runtime lead-in
-(`CustomerTextMarkers.RETURN_TASK_LINE`, `^(Return\s+)(?!to\s)(.+?)(\s+to\s+\S.*)$`) masks only the
-NAME between `Return ` and ` to <store>` to plain `[redacted]` on UNKNOWN screen + click envelopes; the
-store stays raw (#886). The runtime gate is deliberately wider than the intake gate
+(`ReturnTaskLine`) masks only the NAME between `Return ` and ` to <store>` to plain `[redacted]` on
+UNKNOWN screen + click envelopes; the store stays raw (#886). It is a hand-written single pass per `\n` line
+(PR #1277 review r1: the first regex form went cubic on `"Return"` + 4,090 spaces and its backtracking
+whitespace let `Return   to dash` through): skip leading whitespace, the literal `Return`, one whole
+whitespace run, then reject a name slot opening with the word `to`; the separator is the LAST
+whitespace-`to`-whitespace followed by non-blank text, and the name must be non-blank and not already a mask.
+Every line of a merged field is parsed, so two task lines mask both names. Steps are counted, ≤ 4 per
+character (`CaptureScrubTest`). The runtime gate is deliberately wider than the intake gate
 (`PiiShapes.GATED_NAME_PREFIXES`, which also requires the first-name + last-initial shape; `customerLeadIn`
 stays the intake's one owner). `CaptureBackstopCorpusTest` asserts no recognized fixture trips it after its
 rule's redact and audits its raw-tree hits (one: the #994 decoy on a recognized timeline fixture).
