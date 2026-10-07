@@ -492,8 +492,9 @@ class StateManagerV2RecoveryHygieneTest {
 
         assertEquals("the live observation retried the checkpoint", 3, snapshotDao.attempts)
         assertEquals(
-            "and it landed at THIS observation's version, not the stale recovery one",
-            6L,
+            "and it landed at the RECOVERED version — REPLACING the pre-hygiene row (#1271 scenario 4: " +
+                "the drained recovered state, never the live step's, whose effects may not have run)",
+            5L,
             snapshotDao.latest()!!.correlationVersion,
         )
         val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)

@@ -47,8 +47,8 @@ import java.io.File
  *    must write the missing event exactly once.
  *
  * Every cut must end in the SAME durable outcome as the uninterrupted journey ([baseline]): the
- * same event sequence (no duplicate, nothing missing), the same delivery/session/offer rows
- * (except odometer-derived columns — the GPS really is off while the process is dead), and a
+ * same events, payloads included (no duplicate, nothing missing), every read-model table identical
+ * except odometer-derived columns (the GPS really is off while the process is dead), and a
  * projector refold identical to the incremental read model. The external effects that already ran
  * are not run again: the offer is spoken once across both processes and the accept is not
  * re-clicked. (A physical effect itself cannot be made exactly-once across a crash; what is pinned
@@ -208,7 +208,13 @@ class CrashRestartE2ETest {
             restarted.drain()
             val trace = restarted.trace()
 
-            assertEquals("the crash changed nothing durable\n$trace", baseline(), outcome(restarted))
+            val differences = diff(baseline(), outcome(restarted))
+            assertTrue("the crash changed durable data: $differences\n$trace", differences.isEmpty())
+            restarted.rows("SELECT realizedPay, realizedMiles, frozenCostPerMile, netProfit FROM delivery_records").forEach { r ->
+                val (pay, miles, cpm, net) = listOf("realizedPay", "realizedMiles", "frozenCostPerMile", "netProfit").map { r.getValue(it)!!.toDouble() }
+                assertTrue("measured miles after the restart", miles > 0.0)
+                assertEquals("the excluded net still obeys net = pay − miles × frozen cpm (read as text: ~6 digits)", pay - miles * cpm, net, 1e-4)
+            }
             val reissued = restarted.executor.trace.filter { it.recovering }.map { it.effect }
                 .filterIsInstance<AppEffect.LogEvent>().map { it.effectKey }
             if (tailReissuesWrittenEvents) {
@@ -253,7 +259,7 @@ class CrashRestartE2ETest {
             DoorDashFullDashJourney.run(replay)
             replay.drain()
             outcome(replay).also {
-                assertEquals("the reference journey records its two deliveries", 2, it.deliveries.size)
+                assertEquals("the reference journey records its two deliveries", 2, it.tables.getValue("delivery_records").size)
                 baselineCache = it
             }
         } finally {
@@ -262,31 +268,32 @@ class CrashRestartE2ETest {
     }
 
     /**
-     * What a crash must not change, read from the database. Ids minted at runtime are left out
-     * (they are fresh per process run, crash or not); odometer-derived columns are left out because
-     * the GPS is really off while the process is dead. Everything else — the event sequence, who
-     * and what each delivery was, its pay, its basis, WHEN it happened — has to match.
+     * What a crash must not change, read from the database: every event's type, aggregate and
+     * payload in sequence order, and every read-model table complete — minus [EXCLUDED_COLUMNS]
+     * (odometer-derived only). A mismatch is reported field by field ([diff]), never as raw rows.
      */
     data class Outcome(
-        val events: List<String>,
-        val deliveries: List<Map<String, String?>>,
-        val sessions: List<Map<String, String?>>,
-        val offers: List<Map<String, String?>>,
+        val events: List<Map<String, String?>>,
+        val tables: Map<String, List<Map<String, String?>>>,
     )
 
     private fun outcome(replay: E2ESessionReplay) = Outcome(
-        events = replay.eventTypes(),
-        deliveries = replay.rows(
-            "SELECT storeName, customerHash, addressHash, phaseStartedAt, arrivedAt, completedAt, deadlineMillis, " +
-                "realizedPay, payBasis, tip, basePay, costBasis, frozenCostPerMile, originalPayBasis, soleOfferHash, " +
-                "jobOfferCount FROM delivery_records ORDER BY completedAt, storeName",
-        ),
-        sessions = replay.rows(
-            "SELECT platform, startedAt, endedAt, endSource, reportedEarnings, offersReceived, offersAccepted, " +
-                "offersDeclined, offersTimeout, deliveries, jobsCompleted FROM session_records ORDER BY startedAt",
-        ),
-        offers = replay.rows("SELECT offerHash, outcome FROM offer_records ORDER BY offerHash"),
+        events = replay.rows("SELECT eventType, aggregateId, eventPayload FROM app_events ORDER BY sequenceId"),
+        tables = replay.readModel().mapValues { (_, rows) -> rows.map { row -> row.filterKeys { it !in EXCLUDED_COLUMNS } } },
     )
+
+    /** Field-level differences between [expected] and [actual] — readable, and the rows themselves never printed. */
+    private fun diff(expected: Outcome, actual: Outcome): List<String> = buildList {
+        if (expected.events.size != actual.events.size) add("events: ${expected.events.size} vs ${actual.events.size}")
+        expected.events.zip(actual.events).forEachIndexed { i, (e, a) ->
+            e.keys.filter { e[it] != a[it] }.forEach { add("event #$i ${e["eventType"]}.$it") }
+        }
+        expected.tables.forEach { (table, rows) ->
+            val other = actual.tables.getValue(table)
+            if (rows.size != other.size) add("$table: ${rows.size} vs ${other.size} rows")
+            rows.zip(other).forEachIndexed { i, (e, a) -> e.keys.filter { e[it] != a[it] }.forEach { add("$table[$i].$it") } }
+        }
+    }
 
     private fun assertRefoldIdentical(replay: E2ESessionReplay) {
         val incremental = replay.readModel()
@@ -310,6 +317,17 @@ class CrashRestartE2ETest {
 
     private companion object {
         const val JOURNEY_START_MS = DoorDashFullDashJourney.OFFER_MS - 10_000L
+
+        /**
+         * The ONLY columns a crash may change: odometer-derived ones (GPS is really off while the
+         * process is dead, so the miles — and the net that subtracts their cost — move). Measured:
+         * every other column of every read-model table, and every event's type, aggregate and
+         * payload, is identical to the uninterrupted run.
+         */
+        val EXCLUDED_COLUMNS = setOf(
+            "odometerAtCompletion", "odometerAtArrival", "realizedMiles", "milesToStore", "milesToDropoff",
+            "netProfit", "startOdometer", "lastOdometer", "legStateJson",
+        )
 
         /** [baseline], once per JVM. */
         var baselineCache: Outcome? = null

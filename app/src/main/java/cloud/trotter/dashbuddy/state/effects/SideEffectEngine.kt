@@ -31,10 +31,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -134,12 +131,6 @@ class SideEffectEngine @Inject constructor(
 
         /** Entries older than this can never gate again (≥ any declared throttle window). */
         private const val THROTTLE_ENTRY_TTL_MS = 10 * 60 * 1000L
-
-        /** Linear backoff step before the drain worker is restarted (#909). */
-        private const val WORKER_RESTART_BACKOFF_MS = 250L
-
-        /** Ceiling on that backoff — a wedged worker must never stop retrying (#909). */
-        private const val WORKER_RESTART_BACKOFF_MAX_MS = 5_000L
     }
 
     /**
@@ -183,19 +174,8 @@ class SideEffectEngine @Inject constructor(
     private val engineScope =
         CoroutineScope(defaultDispatcher + SupervisorJob() + effectExceptionHandler)
 
-    /** One item of the serialized queue: an effect, or a [Barrier] action (#1271 scenario 4). */
-    private sealed interface Queued
-
-    private data class QueuedEffect(
-        val effect: AppEffect,
-        val recovering: Boolean,
-        val correlationVersion: Long,
-    ) : Queued
-
-    /** [afterProcessed]'s action: runs in queue order, after every effect enqueued before it. */
-    private class Barrier(val action: suspend () -> Unit) : Queued
-
-    private val queue = Channel<Queued>(Channel.UNLIMITED)
+    /** The serialized drain (#351/#909) and its barriers (#1271 scenario 4) — [SerializedEffectQueue]. */
+    private val queue = SerializedEffectQueue(engineScope, ::execute)
 
     init {
         // Startup prune (#364): effects_fired gained a row per logged event and
@@ -203,80 +183,6 @@ class SideEffectEngine @Inject constructor(
         // comfortably exceeds the 24h snapshot window recovery replays over.
         engineScope.launch {
             effectsFiredDao.pruneOlderThan(clock.millis() - EFFECTS_RETENTION_MS)
-        }
-        engineScope.launch { superviseDrainWorker() }
-    }
-
-    /**
-     * Supervisor around [drainQueue] (#909, the #430 pipeline-supervision precedent).
-     *
-     * The engine is a **data-integrity boundary**: `AppEffect.LogEvent` is the only writer of
-     * `app_events`, which is the source of truth the whole analytics read-model is projected from.
-     * A dead worker inside a live process is therefore the worst failure this codebase has — every
-     * effect keeps `trySend`-ing into an UNLIMITED channel that nobody reads, so the app looks
-     * healthy while an evening's earnings evaporate ($82.10 of $89.54 on 2026-07-28).
-     *
-     * [drainQueue] already isolates per item, so the only way out of it is the loop machinery
-     * itself failing — by construction unreachable through the public API today. That is exactly
-     * why it is supervised rather than trusted: the #909 class was also "unreachable" right up
-     * until a one-character regex made it reachable. A restart is logged at ERROR (lost/damaged
-     * subsystem, Principle 7) and backed off; queued effects survive the gap in the UNLIMITED
-     * channel, so a restart costs latency, never data.
-     */
-    private suspend fun superviseDrainWorker() {
-        var restarts = 0
-        while (currentCoroutineContext().isActive) {
-            try {
-                drainQueue()
-                return // channel closed — the only normal way out
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                restarts++
-                Timber.tag("Effects").e(
-                    t,
-                    "Effect drain worker died unexpectedly — restarting (#%d). Effects queued " +
-                        "meanwhile are buffered, not lost (#909)",
-                    restarts,
-                )
-                delay(minOf(WORKER_RESTART_BACKOFF_MS * restarts, WORKER_RESTART_BACKOFF_MAX_MS))
-            }
-        }
-    }
-
-    /**
-     * The serialized drain. **Catches [Throwable], not [Exception] (#909)** — an `Error` is exactly
-     * what killed this worker in the field: a `PatternSyntaxException` from an ICU-invalid `Regex`
-     * in a `val` initializer surfaces as `ExceptionInInitializerError`, and a class-init /
-     * linkage / verify error from *any* future effect handler would do the same.
-     *
-     * **Which fatals are rethrown: only [CancellationException].** The usual Kotlin guidance —
-     * rethrow the fatal subset ([VirtualMachineError] & friends) — assumes rethrowing preserves
-     * some useful failure signal. Here it does the opposite: the scope is a [SupervisorJob] with
-     * [effectExceptionHandler], so a rethrow does NOT crash the process and does NOT surface
-     * anything to the user; it only kills the one consumer of the effect queue and converts a
-     * bounded, loud, per-effect failure into unbounded silent data loss. An `OutOfMemoryError`
-     * raised while executing one effect is also not proof the VM is doomed — and if it is, the
-     * process dies on its own, having at least logged. Isolating everything is strictly the safer
-     * trade for THIS component; nothing here is swallowed silently (every catch logs at ERROR,
-     * which is the always-exported tier).
-     */
-    private suspend fun drainQueue() {
-        for (item in queue) {
-            try {
-                when (item) {
-                    is QueuedEffect -> execute(item.effect, item.recovering, item.correlationVersion)
-                    is Barrier -> item.action()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                Timber.tag("Effects").e(
-                    t,
-                    "Effect failed — isolated, the engine is still draining: %s",
-                    if (item is QueuedEffect) item.effect::class.simpleName else "barrier",
-                )
-            }
         }
     }
 
@@ -290,13 +196,12 @@ class SideEffectEngine @Inject constructor(
         engineScope.cancel()
     }
 
-    override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
-        queue.trySend(QueuedEffect(effect, recovering, correlationVersion))
-    }
+    override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) =
+        queue.enqueue(effect, recovering, correlationVersion)
 
-    override fun afterProcessed(action: suspend () -> Unit) {
-        queue.trySend(Barrier(action))
-    }
+    override fun afterProcessed(action: suspend () -> Unit) = queue.afterProcessed(action)
+
+    override suspend fun awaitProcessed() = queue.awaitProcessed()
 
     private suspend fun execute(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
         // Idempotency: skip keyed effects already fired. Consulted on the LIVE

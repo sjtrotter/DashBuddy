@@ -153,12 +153,23 @@ restores the latest snapshot and replays only the journal after it, so a snapsho
 while N's `LogEvent`s still waited in the engine's queue made them unreachable: a process death in
 between lost them for good (the end-to-end receipt — `CrashRestartE2ETest` — lost a retire's
 `DELIVERY_CONFIRMED`; a session end's `DASH_STOP` had the same exposure, and a backlogged queue widened
-the window to seconds). Every snapshot write — cadence, major transition, the checkpoint retry — is now
-queued BEHIND the step's effects through `EffectExecutor.afterProcessed` (the engine runs it on its
+the window to seconds). Every cadence / major-transition snapshot is now queued BEHIND the step's
+effects through `EffectExecutor.afterProcessed` (the engine's `SerializedEffectQueue` runs it on its
 serialized worker, in queue order), and `finishRestore` first `awaitProcessed()`s the effects the tail
 replay re-issued before the hygiene's clock read and the checkpoint. A snapshot that LAGS is harmless:
 the replay re-issues the keyed effects it covers and `effects_fired` dedupes them. If the process dies
-first, the queued write dies with it — which is the point. Pinned by `StateManagerV2SnapshotOrderTest`.
+first, the queued write dies with it — which is the point. Two consequences, from the review: (a) the
+#1052 round-4 live RETRY no longer writes the live observation's state — that would either race its
+effects or, queued behind them, leave the pre-hygiene row standing longer — it re-writes the CLEANED
+recovered state at its OWN version, synchronously (its effects were drained before it was built;
+REPLACE-by-version overwrites exactly the stale row; the live journal replays on top); (b) with NO
+snapshot, a journal that begins at version 1 is the complete history of an empty `AppState`, so restore
+replays it from there (`completeJournalBase`) — a fresh install's first snapshot now waits behind its
+step's effects, and a journal was otherwise only replayed from a snapshot. A journal that starts later
+(behind an undecodable or pruned snapshot) keeps the start-fresh behaviour; nothing is written at startup.
+Pinned by `StateManagerV2SnapshotOrderTest`. Still open: a `LogEvent` whose insert FAILS (DB error) is
+logged and passed, so a later snapshot can cover it — the barrier orders, it does not acknowledge
+durability (#1289).
 **Recovery: what is dropped, what is re-based, what is re-armed** (#1054) — the rule being *evidence
 is dropped, a decision in flight is re-armed*. `AppState.recoveryHygiene(nowMs)` (the widened
 `droppingSessionPayParks`, taking the ONE wall-clock read of the recovery path) **drops** the settle

@@ -490,10 +490,10 @@ the **pause-safety net** (`PlatformRegion.pauseSafetyDeadline`, real state since
 REGION timer is never executed (`SideEffectEngine` skips `REGION_TIMERS` while `recovering`); the
 reconcile is their sole armer. Replay stamps each journal row's own `correlationVersion`; the cleaned
 state is CHECKPOINTED (`SnapshotStore.checkpoint`, retried once, then ERROR + pending-retry on every
-live observation). **A snapshot never gets ahead of effects (#1271 scenario 4):** every snapshot write
-(cadence, major transition, checkpoint retry) queues behind the step's effects via
-`EffectExecutor.afterProcessed`, and the recovery checkpoint first `awaitProcessed()`s the replay's
-re-issued effects — a snapshot of step N landing before N's `LogEvent`s ran made them unreachable to a
+live observation). **A snapshot never gets ahead of effects (#1271 scenario 4):** every cadence/major snapshot
+queues behind the step's effects via `EffectExecutor.afterProcessed`; the recovery checkpoint first
+`awaitProcessed()`s the replay's re-issued effects, and its live retry re-writes that drained state at its
+OWN version (synchronously); with no snapshot, a journal starting at version 1 replays from an empty state — a snapshot of step N landing before N's `LogEvent`s ran made them unreachable to a
 crash in between; a lagging snapshot is safe (keyed replay dedupes). `initialize()` awaits the collector's subscription before `restoreState`. A legacy
 payload-less `SESSION_PAUSED_SAFETY` fire is honoured when no armed net exists or it lands at/after
 the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.

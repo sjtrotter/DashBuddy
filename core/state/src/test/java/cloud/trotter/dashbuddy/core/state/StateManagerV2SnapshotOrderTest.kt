@@ -43,7 +43,7 @@ class StateManagerV2SnapshotOrderTest {
         val heldEffects get() = held.count { it.first.startsWith("effect") }
 
         override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) =
-            enqueue("effect ${effect::class.simpleName}") {}
+            enqueue("effect ${effect::class.simpleName}${if (recovering) " recovering" else ""}") {}
 
         override fun afterProcessed(action: suspend () -> Unit) = enqueue("barrier", action)
 
@@ -80,14 +80,14 @@ class StateManagerV2SnapshotOrderTest {
         override suspend fun pruneOlderThan(cutoff: Long) = inner.pruneOlderThan(cutoff)
     }
 
-    private fun liveIdle(timestamp: Long) = Observation.Screen(
+    private fun liveIdle(timestamp: Long, sessionPay: Double? = null) = Observation.Screen(
         timestamp = timestamp,
         captureId = null,
         ruleId = "doordash.screen.waiting_for_offer",
         metadata = ReplayMetadata.EMPTY,
         flow = Flow.Idle,
         modeHint = Mode.Online,
-        parsed = ParsedFields.IdleFields(sessionPay = null),
+        parsed = ParsedFields.IdleFields(sessionPay = sessionPay),
     )
 
     @Test
@@ -124,11 +124,15 @@ class StateManagerV2SnapshotOrderTest {
         val log = mutableListOf<String>()
         val snapshots = LoggingSnapshotDao(log)
 
-        // A first process: a session start (snapshotted) and two ordinary frames after it (the tail).
+        // A first process: a session start (snapshotted) and two frames after it (the tail). The
+        // tail frames read a running total, so replaying them re-issues effects (the settle park's
+        // wake timer) — the checkpoint must wait behind those.
         val first = recoveryManager(journal, snapshots, InlineEffectExecutor(dispatcher), dispatcher)
         first.initialize()
         runCurrent()
-        listOf(10_000L, 11_000L, 12_000L).forEach { first.dispatch(liveIdle(it)); runCurrent() }
+        first.dispatch(liveIdle(10_000L)); runCurrent()
+        first.dispatch(liveIdle(11_000L, sessionPay = 12.0)); runCurrent()
+        first.dispatch(liveIdle(12_000L, sessionPay = 12.0)); runCurrent()
         first.close()
         val written = snapshots.inner.inserts
         assertEquals("the tail is the two frames after the snapshot", 1L, snapshots.inner.latest()!!.correlationVersion)
@@ -138,13 +142,49 @@ class StateManagerV2SnapshotOrderTest {
         val second = recoveryManager(journal, snapshots, engine, dispatcher)
         second.initialize()
         runCurrent()
+        assertTrue("the tail replay re-issued effects, still held", engine.heldEffects > 0)
         assertEquals("the checkpoint waits for the replayed effects", written, snapshots.inner.inserts)
         assertEquals("…and so does the install", 0L, second.state.value.correlationVersion)
 
+        log.clear()
         engine.release()
         runCurrent()
+        val checkpoint = log.indexOfFirst { it.startsWith("snapshot") }
+        assertTrue("the checkpoint landed: $log", checkpoint >= 0)
+        assertTrue(
+            "…only after every replayed effect ran: $log",
+            log.subList(0, checkpoint).count { it.startsWith("effect") } > 0 &&
+                log.drop(checkpoint).none { it.startsWith("effect") && it.contains("recovering") },
+        )
         assertEquals("then the checkpoint lands at the restored version", 3L, snapshots.inner.latest()!!.correlationVersion)
         assertEquals("…and the restored state is installed", 3L, second.state.value.correlationVersion)
+        second.close()
+    }
+
+    @Test
+    fun `a crash before the first snapshot lands still replays the complete journal`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journal = FakeObservationDao()
+        val log = mutableListOf<String>()
+        val snapshots = LoggingSnapshotDao(log)
+
+        // The session start is journalled, but its snapshot waits behind effects that never run.
+        val first = recoveryManager(journal, snapshots, GatedEngine(dispatcher, log), dispatcher)
+        first.initialize()
+        runCurrent()
+        first.dispatch(liveIdle(10_000L))
+        runCurrent()
+        first.close()
+        assertEquals("no snapshot reached disk", null, snapshots.inner.latest())
+
+        val second = recoveryManager(journal, snapshots, InlineEffectExecutor(dispatcher), dispatcher)
+        second.initialize()
+        runCurrent()
+        assertEquals("the journalled session start was replayed from the empty state", 1L, second.state.value.correlationVersion)
+        assertTrue(
+            "…so the dash is live again",
+            second.state.value.regions.platforms.values.any { it.session != null },
+        )
         second.close()
     }
 }
