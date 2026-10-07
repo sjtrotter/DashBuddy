@@ -46,8 +46,10 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -228,7 +230,7 @@ class SideEffectEngineTest {
         runCurrent()
 
         val captor = argumentCaptor<AppEffect.CaptureScreenshot>()
-        verify(screenShotHandler).capture(any(), captor.capture())
+        verify(screenShotHandler).capture(any(), captor.capture(), any())
         assertEquals("Offer", captor.firstValue.filenamePrefix)
     }
 
@@ -446,12 +448,12 @@ class SideEffectEngineTest {
         whenever(permissionTierChecker.isGranted(any())).thenReturn(false)
         engine.process(screenshot("denied"))
         runCurrent()
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
 
         whenever(permissionTierChecker.isGranted(any())).thenReturn(true)
         engine.process(screenshot("granted"))
         runCurrent()
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
     }
 
     // =========================================================================
@@ -464,6 +466,25 @@ class SideEffectEngineTest {
     )
 
     @Test
+    fun `queued capture rechecks live master and the original category`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(dashSummaryShot())
+        runCurrent()
+
+        val stillAllowed = argumentCaptor<() -> Boolean>()
+        verify(screenShotHandler).capture(any(), any(), stillAllowed.capture())
+        val check = stillAllowed.firstValue
+        assertTrue(check())
+
+        evidenceConfig.value = evidenceConfig.value.copy(masterEnabled = false)
+        assertFalse(check())
+        evidenceConfig.value = evidenceConfig.value.copy(masterEnabled = true, saveOffers = false)
+        assertTrue(check())
+        evidenceConfig.value = evidenceConfig.value.copy(saveSessionSummaries = false)
+        assertFalse(check())
+    }
+
+    @Test
     fun `master off suppresses an EffectMap-emitted screenshot`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
         evidenceConfig.value = EvidenceConfig(masterEnabled = false)
@@ -471,7 +492,7 @@ class SideEffectEngineTest {
         engine.process(dashSummaryShot())
         runCurrent()
 
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
     }
 
     @Test
@@ -485,13 +506,13 @@ class SideEffectEngineTest {
 
         engine.process(dashSummaryShot())
         runCurrent()
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
 
         engine.process(
             AppEffect.CaptureScreenshot("Offer - Chipotle", category = EvidenceCategory.OFFER),
         )
         runCurrent()
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
     }
 
     @Test
@@ -502,7 +523,7 @@ class SideEffectEngineTest {
         engine.process(AppEffect.CaptureScreenshot("Mystery", category = null))
         runCurrent()
 
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
     }
 
     @Test
@@ -521,7 +542,7 @@ class SideEffectEngineTest {
             ),
         )
         runCurrent()
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
 
         evidenceConfig.value = EvidenceConfig(masterEnabled = true, saveOffers = true)
         engine.process(
@@ -535,7 +556,7 @@ class SideEffectEngineTest {
             ),
         )
         runCurrent()
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
     }
 
     // =========================================================================
@@ -565,7 +586,7 @@ class SideEffectEngineTest {
         engine.process(effect)
         runCurrent()
 
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
         // …and it writes no durable row either — the declared window is the ONE gate.
         verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
     }
@@ -586,7 +607,7 @@ class SideEffectEngineTest {
         engine.process(effect)
         runCurrent()
 
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
     }
 
     @Test
@@ -600,7 +621,7 @@ class SideEffectEngineTest {
             runCurrent()
         }
 
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
     }
 
     @Test
@@ -611,7 +632,7 @@ class SideEffectEngineTest {
         runCurrent()
 
         val captor = argumentCaptor<AppEffect.CaptureScreenshot>()
-        verify(screenShotHandler).capture(any(), captor.capture())
+        verify(screenShotHandler).capture(any(), captor.capture(), any())
         assertEquals("Offer", captor.firstValue.filenamePrefix)
     }
 
@@ -842,7 +863,7 @@ class SideEffectEngineTest {
         evidenceConfig.value = EvidenceConfig(masterEnabled = false)
         engine.process(offerShot("denied"))
         runCurrent()
-        verify(screenShotHandler, never()).capture(any(), any())
+        verify(screenShotHandler, never()).capture(any(), any(), any())
         // Denied ≠ fired (#436): marking it would skip the effect forever
         // (live-path dedupe) once the user enables the Evidence setting.
         verifyBlocking(effectsFiredDao, never()) { markFired(any()) }
@@ -850,7 +871,7 @@ class SideEffectEngineTest {
         evidenceConfig.value = EvidenceConfig(masterEnabled = true, saveOffers = true)
         engine.process(offerShot("granted"))
         runCurrent()
-        verify(screenShotHandler, times(1)).capture(any(), any())
+        verify(screenShotHandler, times(1)).capture(any(), any(), any())
         verifyBlocking(effectsFiredDao, times(1)) { markFired(any()) }
     }
 

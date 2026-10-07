@@ -17,7 +17,6 @@
 
 app/src/main/java/cloud/trotter/dashbuddy/DashBuddyApplication.kt 3
 app/src/main/java/cloud/trotter/dashbuddy/di/DispatchersModule.kt 1
-app/src/main/java/cloud/trotter/dashbuddy/state/effects/ScreenShotHandler.kt 8
 core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/DiskCaptureBus.kt 1
 core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/NoOpCaptureBus.kt 1
 core/data/src/main/java/cloud/trotter/dashbuddy/core/data/event/AppEventRepo.kt 2
@@ -30,7 +29,6 @@ core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/FrameGate.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineStats.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineSupervision.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/AccessibilityPipeline.kt 2
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/mapper/AccessibilityNodeMapper.kt 1
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/JsonRuleInterpreter.kt 14
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/ParsedFieldsFactory.kt 2
 core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/Ruleset.kt 2

@@ -94,6 +94,22 @@ keep the 48h idempotency unchanged. Evidence **filenames** are sanitized at the 
 (`EvidenceFilename.sanitizePrefix`): a rule's `"Offer - {storeName}"` whose field parsed null saves
 as `Offer`, never the literal token — a fail-safe under, not a replacement for, the
 `ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
+
+**Evidence capture-time boundary (partial #883, option 2).** A capture is skipped if this switch is off or
+another app is in front when it fires. Anything else on screen, such as a video or keyboard, can appear in the
+image. After the 500 ms settle delay, `ScreenShotHandler` calls the live master/category callback, `stillAllowed()`.
+If allowed, it reads only `service.rootInActiveWindow?.packageName` and recycles the root in `finally`.
+`EvidenceCaptureBoundary` checks disabled capture, a null front package, DashBuddy's own package (allowed for
+its bubble), then membership in the enabled delivery platforms, in that order. Root or package read failures
+skip the capture. There is no window enumeration, tree mapping, capture budget or sensitive-marker scan.
+Any denial skips `takeScreenshot` and logs `Evidence capture skipped at capture time: %s` at INFO under `Effects`,
+with only the verdict substituted. A capture already being saved finishes. Images contain the whole display
+(`Display.DEFAULT_DISPLAY`), save to `Pictures/DashBuddy`, are not uploaded by DashBuddy and survive uninstall;
+gallery sync or sharing can send them. Pixel redaction remains in #883.
+
+The pipeline's `AccessibilityNodeMapper` recycles every obtained child in `finally`, including rejected children
+and failed conversions. The caller owns the root; the produced `UiNode` tree and ingestion limits are unchanged.
+
 **The engine is a data-integrity boundary and must never die silently (#909).** `AppEffect.LogEvent`
 is the ONLY writer of `app_events`, so a dead drain worker inside a live process is total silent
 loss: `process()` keeps `trySend`-ing into `Channel(UNLIMITED)` while the app looks healthy. That

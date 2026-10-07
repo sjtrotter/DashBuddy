@@ -56,7 +56,7 @@ internal class TreeBudget(
 
     fun logIfTruncated(rootClassName: CharSequence?) {
         if (truncated) {
-            Timber.w(
+            Timber.tag("Mapper").w(
                 "Tree ingestion truncated (maxDepth=%d, maxNodes=%d) — root class=%s. " +
                     "Captured subtree is partial.",
                 maxDepth, maxNodes, rootClassName,
@@ -136,7 +136,12 @@ private fun convert(
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
-            convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
+            try {
+                convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
+            } finally {
+                @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
+                childAccNode.recycle()
+            }
         } else {
             nullChildren++
         }
