@@ -172,13 +172,13 @@
                                                                   "enabled": true,
                                                                   "children": [
                                                                     {
-                                                                      "text": "17907 Maui Sands",
+                                                                      "text": "1234 Sample Ridge Dr",
                                                                       "class": "TextView",
                                                                       "bounds": "[179,608][546,660]",
                                                                       "enabled": true
                                                                     },
                                                                     {
-                                                                      "text": "San Antonio, TX 78255",
+                                                                      "text": "San Antonio, TX 78200",
                                                                       "class": "TextView",
                                                                       "bounds": "[179,660][596,708]",
                                                                       "enabled": true
