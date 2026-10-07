@@ -123,6 +123,14 @@ class UiNodeTest {
         assertEquals(a.hashCode(), b.hashCode())
     }
 
+    @Test
+    fun `hashCode - sparse nodes with null description, state and class hash equally`() {
+        val a = node(text = "Hello", viewIdResourceName = "com.app:id/view")
+        val b = node(text = "Hello", viewIdResourceName = "com.app:id/view")
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+    }
+
     // -------------------------------------------------------------------------
     // restoreParents
     // -------------------------------------------------------------------------

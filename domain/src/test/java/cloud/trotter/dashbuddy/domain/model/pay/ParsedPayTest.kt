@@ -28,10 +28,10 @@ class ParsedPayTest {
     @Test
     fun `total - sums base pay and tips`() {
         val pay = ParsedPay(
-            appPayComponents = listOf(item("Base Pay", 5.00)),
-            customerTips = listOf(item("Taco Bell", 2.00))
+            appPayComponents = listOf(item("Base Pay", 4.25)),
+            customerTips = listOf(item("Taco Bell", 1.75))
         )
-        assertEquals(7.00, pay.total, 0.0001)
+        assertEquals(6.00, pay.total, 0.0001)
     }
 
     @Test
