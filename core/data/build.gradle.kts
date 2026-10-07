@@ -53,6 +53,7 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(testFixtures(project(":domain")))
     // #244 — relocated analytics/odometer tests (from :app) need Robolectric (Room
     // in-memory DB via RuntimeEnvironment.getApplication()), mockito-kotlin, and
     // kotlinx-coroutines-test (runTest/TestDispatcher). Same pattern as

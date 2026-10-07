@@ -12,11 +12,10 @@ import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventEntity
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.acceptedOffer
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.evaluation
 import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
-import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
-import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
@@ -114,17 +113,18 @@ class AnalyticsProjectorTest {
         ),
     )
 
-    private fun eval(opCpm: Double, fuelPerMile: Double = 0.0) = OfferEvaluation(
-        action = OfferAction.ACCEPT, score = 80.0, qualityLevel = OfferQuality.GOOD,
-        payAmount = 12.0,
-        fuelCostEstimate = fuelPerMile * 3.0, nonFuelCostEstimate = (opCpm - fuelPerMile) * 3.0,
-        operatingCostPerMile = opCpm,
-        netPayAmount = 12.0 - 3.0 * opCpm, distanceMiles = 3.0,
-        dollarsPerMile = 3.0, dollarsPerHour = 20.0, estimatedTimeMinutes = 15.0,
-        itemCount = 1.0, merchantName = "StoreX",
+    private fun eval(opCpm: Double, fuelPerMile: Double = 0.0) = evaluation(
+        net = 12.0 - 3.0 * opCpm, dist = 3.0, opCpm = opCpm, fuelPerMile = fuelPerMile,
+        payAmount = 12.0, dollarsPerMile = 3.0,
     )
 
-    private suspend fun seedFullSession(sid: String = "S1", opCpm: Double = 0.25, fuelPerMile: Double = 0.0) {
+    private suspend fun seedFullSession(
+        sid: String = "S1",
+        opCpm: Double = 0.25,
+        fuelPerMile: Double = 0.0,
+        deliveryPay: Double = 10.0,
+        reportedEarnings: Double = 10.0,
+    ): Long {
         insert(
             AppEventType.DASH_START, sid, 1_000,
             SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
@@ -132,26 +132,22 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, sid, 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(opCpm, fuelPerMile), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(opCpm, fuelPerMile)),
         )
-        insert(
+        val deliverySeq = insert(
             AppEventType.DELIVERY_COMPLETED, sid, 3_000,
             DeliveryPayload(
                 jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c",
-                phaseStartedAt = 2_400, arrivedAt = 2_880, completedAt = 3_000, totalPay = 10.0,
+                phaseStartedAt = 2_400, arrivedAt = 2_880, completedAt = 3_000, totalPay = deliveryPay,
             ),
             odometer = 105.0,
         )
         insert(
             AppEventType.DASH_STOP, sid, 4_000,
-            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0),
+            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = reportedEarnings),
             odometer = 110.0,
         )
+        return deliverySeq
     }
 
     // ── Tests ───────────────────────────────────────────────────────────
@@ -216,12 +212,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, sid, 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         // T1 (seq 3): a receipt-derived share → marks jobId J1 receipted.
         insert(
@@ -269,39 +260,6 @@ class AnalyticsProjectorTest {
         val refoldT2 = analyticsDao.deliveryRecord(4)!!
         assertEquals("live order == from-zero refold", liveT2.payBasis, refoldT2.payBasis)
         assertEquals(liveT2.realizedPay, refoldT2.realizedPay)
-    }
-
-    @Test
-    fun `a wholly receipt-less job folds an OFFER_PAY row from the offer-pay share (#691)`() = runBlocking {
-        // No receipt anywhere on the job: T1 carries only an offer-pay estimate → OFFER_PAY, real net.
-        insert(
-            AppEventType.DASH_START, "S1", 1_000,
-            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
-            odometer = 100.0,
-        )
-        insert(
-            AppEventType.OFFER_ACCEPTED, "S1", 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
-        )
-        insert(
-            AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
-            DeliveryPayload(
-                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c1",
-                phaseStartedAt = 2_400, completedAt = 3_000, offerPayShare = 12.95,
-            ),
-            odometer = 105.0,
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(3)!!
-        assertEquals("OFFER_PAY", d.payBasis)
-        assertEquals(12.95, d.realizedPay!!, 1e-9)
-        assertEquals("net = pay − 5mi × 0.25", 12.95 - 5.0 * 0.25, d.netProfit!!, 1e-9)
     }
 
     @Test
@@ -404,12 +362,7 @@ class AnalyticsProjectorTest {
         // routinely land in SEPARATE batches (also: app killed between them).
         insert(
             AppEventType.OFFER_ACCEPTED, "S1", 1_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.30), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 970, decidedAt = 1_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(1_000, eval(0.30)),
         )
         insert(
             AppEventType.DASH_START, "S1", 1_000,
@@ -588,36 +541,7 @@ class AnalyticsProjectorTest {
         sid: String = "S1",
         deliveryPay: Double = 10.0,
         reportedEarnings: Double = 20.0,
-    ): Long {
-        insert(
-            AppEventType.DASH_START, sid, 1_000,
-            SessionStartPayload(sid, Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
-            odometer = 100.0,
-        )
-        insert(
-            AppEventType.OFFER_ACCEPTED, sid, 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
-        )
-        val deliverySeq = insert(
-            AppEventType.DELIVERY_COMPLETED, sid, 3_000,
-            DeliveryPayload(
-                jobId = "J1", taskId = "T1", storeName = "StoreX", customerHash = "c",
-                phaseStartedAt = 2_400, arrivedAt = 2_880, completedAt = 3_000, totalPay = deliveryPay,
-            ),
-            odometer = 105.0, // 5 miles from the DASH_START reading
-        )
-        insert(
-            AppEventType.DASH_STOP, sid, 4_000,
-            SessionStopPayload(sid, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = reportedEarnings),
-            odometer = 110.0,
-        )
-        return deliverySeq
-    }
+    ): Long = seedFullSession(sid = sid, deliveryPay = deliveryPay, reportedEarnings = reportedEarnings)
 
     @Test
     fun `a MANUAL_DELIVERY for a session with no prior rows lands its delivery AND a session row in one drain (the #661 invariant)`() = runBlocking {
@@ -760,12 +684,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, sid, 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         return insert(
             AppEventType.DELIVERY_COMPLETED, sid, 3_000,
@@ -786,12 +705,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, sid, 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         return insert(
             AppEventType.DELIVERY_COMPLETED, sid, 3_000,
@@ -1045,12 +959,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, "S1", 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         val seq = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
@@ -1135,12 +1044,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, "S1", 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         val seq = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
@@ -1153,6 +1057,9 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         val before = analyticsDao.deliveryRecord(seq)!!
         assertEquals("OFFER_PAY", before.payBasis)
+        // #1273: the persisted values the removed receipt-less projector test pinned through Room.
+        assertEquals(12.95, before.realizedPay!!, 1e-9)
+        assertEquals("net = pay − 5mi × 0.25", 12.95 - 5.0 * 0.25, before.netProfit!!, 1e-9)
 
         // A store-name-only edit must NOT flip the basis (which would drop the estimate disclosure).
         insert(
@@ -1560,12 +1467,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, "S1", 2_000,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_970, decidedAt = 2_000, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(2_000, eval(0.25)),
         )
         val t1 = insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 3_000,
@@ -1764,12 +1666,7 @@ class AnalyticsProjectorTest {
         )
         insert(
             AppEventType.OFFER_ACCEPTED, sid, 1_500,
-            OfferPayload(
-                offerHash = "h1",
-                parsedOffer = ParsedOffer(offerHash = "h1", payAmount = 12.0, distanceMiles = 3.0),
-                evaluation = eval(0.25), outcome = AppEventType.OFFER_ACCEPTED,
-                presentedAt = 1_470, decidedAt = 1_500, returnFlow = Flow.Idle,
-            ),
+            acceptedOffer(1_500, eval(0.25)),
         )
         insert(
             AppEventType.PICKUP_ARRIVED, sid, 2_000,
