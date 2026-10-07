@@ -67,8 +67,13 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  *   drinks and desserts…"`, so the same prefix also precedes app copy.
  * Both leaks are owned instead by the rule-declared `redact` — the primary control per the #806
  * doctrine — on `doordash.screen.timeline` and the new `doordash.screen.pickup_receipt_scan`.
- * The residual is the usual one: an UNKNOWN sibling of either surface (the still-unmodelled
- * return flow) is not covered by THIS scan until a rule recognizes it.
+ * The residual is the usual one: an UNKNOWN sibling of either surface is not covered by THIS scan
+ * until a rule recognizes it — except the return task line, which #1116 covers on UNKNOWN screen and
+ * click envelopes through the GATED [RETURN_TASK_LINE] (below): it needs the conjugation's own
+ * `" to <store>"` tail, so `"Return to dash"` never matches, and it masks only the NAME between
+ * `"Return "` and `" to "` (the store stays raw, #886). It is deliberately NOT in [MARKERS] (whole-field,
+ * every path) and is asymmetric with the intake gate (`PiiShapes.GATED_NAME_PREFIXES`, which also
+ * requires the first-name + last-initial shape, #1064): the runtime UNKNOWN side fails toward privacy.
  *
  * ## The node-ID half ([ID_MARKERS], #910)
  *
@@ -368,6 +373,37 @@ object CustomerTextMarkers {
      */
     val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub == RuntimeScrub.ALWAYS }.map { it.suffix }
 
+    /**
+     * #1116 — the GATED return task line `"Return <name> to <store>"`: group 1 keeps the lead-in, group 2 is
+     * the customer's name, group 3 keeps `" to <store>"`. The tail gate is the conjugation's own `" to "` +
+     * a non-space, and a name may not itself open with `"to "`, so the platform's `"Return to dash"`
+     * button (and `"Return to dash to …"`) never matches. Applied on UNKNOWN screen + click envelopes only
+     * ([unredactedReturnName], [scrubUnknown]); a recognized timeline frame keeps its rule's redact.
+     */
+    val RETURN_TASK_LINE = Regex("""^(Return\s+)(?!to\s)(.+?)(\s+to\s+\S.*)$""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+
+    /**
+     * The raw customer name of a `"Return <name> to <store>"` line in [text], or null — null too when the
+     * name slot already IS a mask token. Cheap prefix reject before the regex.
+     */
+    fun unredactedReturnName(text: String?): String? {
+        if (text == null || text.length < 12 || !text.startsWith("Return", ignoreCase = true)) return null
+        val name = RETURN_TASK_LINE.matchEntire(text)?.groupValues?.get(2) ?: return null
+        return if (MaskTokens.isMask(name.trim())) null else name
+    }
+
+    /** [text] with a raw return-line name replaced by [CompiledRedact.REDACTED]; otherwise [text] unchanged. */
+    fun maskReturnName(text: String): String {
+        if (unredactedReturnName(text) == null) return text
+        val m = RETURN_TASK_LINE.matchEntire(text) ?: return text
+        return m.groupValues[1] + CompiledRedact.REDACTED + m.groupValues[3]
+    }
+
+    /** True when any field of any node in [tree] carries a raw return-line name (structural scan, no copy). */
+    fun hasUnredactedReturnName(tree: UiNode): Boolean =
+        tree.scrubbableStrings().any { (_, value) -> unredactedReturnName(value) != null } ||
+            tree.children.any { hasUnredactedReturnName(it) }
+
     /** Substring that classifies a node's text as already-redacted (VET V1). */
     private const val REDACTED_MARK = MaskTokens.REDACTED_PREFIX
 
@@ -530,7 +566,8 @@ object CustomerTextMarkers {
      * [CompiledRedact.REDACTED] that carries an un-redacted text marker ([unredactedMarker]),
      * a customer-PII view id ([unredactedIdMarker]), OR text input ([unredactedInputNode], #919).
      * One traversal for all three scans, so an UNKNOWN frame is never rebuilt twice. Call
-     * only after one of the three scans returned non-null.
+     * only after one of the three scans returned non-null. Since #1116 the same pass also masks the
+     * name of a gated return task line ([maskReturnName]) and the address block passed in.
      */
     fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, UnknownAddressBackstop.Selection.EMPTY)
 
@@ -569,9 +606,11 @@ object CustomerTextMarkers {
                     // Astra r2 P1: on an INPUT-owned node only an exact mask token is "already masked";
                     // elsewhere a rule's kept-prefix output ("For [redacted:ab12]") is.
                     owned && MaskTokens.isMask(it) -> it
-                    !owned && MaskTokens.endsWithMask(it) -> it
+                    // #1116: a value ending in a mask can still open with a raw return-line name.
+                    !owned && MaskTokens.endsWithMask(it) -> maskReturnName(it)
                     wholeNode || unredactedMarker(it) != null -> CompiledRedact.REDACTED
-                    else -> it
+                    // #1116: the gated return task line — only the NAME is masked, the store stays.
+                    else -> maskReturnName(it)
                 }
             }
             .copy(children = tree.children.map { scrubUnknown(it, owned, addressBlock, cursor) })

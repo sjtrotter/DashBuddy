@@ -341,9 +341,16 @@ runs a separate recursive UNKNOWN simulation over the committed corpus (sessions
 included) with an audited per-node hit list (every hit is a real address block on a recognized fixture —
 production never runs the detector there) and injects a synthetic block into every tree for recall.
 Residuals (not claimed): unquoted free text outside a block, a lone street or city line, a city line ahead
-of its street, a one-line full address, a tapped node captured without its block, and the `Return <name>
-to <store>` task line (the runtime marker set rejects the bare `Return ` prefix, #1064). A merchant address
+of its street, a one-line full address, and a tapped node captured without its block. A merchant address
 or a numeric label inside a qualifying UNKNOWN block may be masked: an accepted privacy bias.
+The same PR closes the UNKNOWN half of the #994 return task line: the bare `Return ` prefix stays out of
+`MARKERS` (it is DoorDash's `Return to dash` chrome, #1064), and a GATED runtime lead-in
+(`CustomerTextMarkers.RETURN_TASK_LINE`, `^(Return\s+)(?!to\s)(.+?)(\s+to\s+\S.*)$`) masks only the
+NAME between `Return ` and ` to <store>` to plain `[redacted]` on UNKNOWN screen + click envelopes; the
+store stays raw (#886). The runtime gate is deliberately wider than the intake gate
+(`PiiShapes.GATED_NAME_PREFIXES`, which also requires the first-name + last-initial shape; `customerLeadIn`
+stays the intake's one owner). `CaptureBackstopCorpusTest` asserts no recognized fixture trips it after its
+rule's redact and audits its raw-tree hits (one: the #994 decoy on a recognized timeline fixture).
 
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE

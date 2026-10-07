@@ -310,7 +310,9 @@ plain-masked whole, subtree included, on UNKNOWN screen + click envelopes; the a
 frame keeps its rule's deliberate decisions); #1116 adds `UnknownAddressBackstop` on the same UNKNOWN
 envelopes — rule/id/platform-independent, O(N) — which plain-masks a street → `City, ST ZIP` pair in one
 projected sibling list plus every quote-led note and 1–6-digit code in the block's scope (and a code/note
-directly above a city line), recognition untouched. A click envelope inherits the SCREEN rule's redact
+directly above a city line), recognition untouched, plus a GATED runtime `Return ` lead-in
+(`CustomerTextMarkers.RETURN_TASK_LINE`, needs the ` to <store>` tail so `Return to dash` never matches) that
+masks only the name and keeps the store — asymmetric with the intake gate, which also demands the name shape. A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary
 control. Intake prefixes (`SnapshotRedactor.NAME_PREFIXES`) are deliberately asymmetric with the runtime

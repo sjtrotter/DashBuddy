@@ -73,6 +73,12 @@ class CaptureBackstopCorpusTest {
                     ?.redact?.takeUnless { it.isEmpty() }
                     ?.apply(node)
                     ?: node
+                // #1116: the gated return-line name scan runs on UNKNOWN envelopes only, but vetting it here
+                // proves no recognized fixture's kept text (and no `Return to dash` chrome) would trip it.
+                assertFalse(
+                    "${file.path} (rule ${match.ruleId}) carries a raw return-line name after its redact",
+                    CustomerTextMarkers.hasUnredactedReturnName(redacted),
+                )
                 val marker = CustomerTextMarkers.firstUnredactedMarker(redacted)
                 assertNull(
                     "${file.path} leaked an un-redacted customer marker '$marker' " +
@@ -104,6 +110,8 @@ class CaptureBackstopCorpusTest {
     fun `the address-block backstop hits only the audited nodes and masks an injected block in every tree`() {
         val base = File("src/test/resources/snapshots")
         val hits = sortedSetOf<String>()
+        val returnHits = sortedSetOf<String>()
+        var returnToDashSeen = 0
         var scanned = 0
         base.walkTopDown()
             .filter { it.isFile && it.extension == "json" }
@@ -117,6 +125,8 @@ class CaptureBackstopCorpusTest {
                 }
                 val path = file.relativeTo(base).invariantSeparatorsPath
                 val selection = UnknownAddressBackstop.select(node)
+                if (CustomerTextMarkers.hasUnredactedReturnName(node)) returnHits += path
+                if (containsText(node, "Return to dash")) returnToDashSeen++
                 var index = 0
                 fun walk(n: UiNode) {
                     if (index in selection) hits += "$path#$index"
@@ -141,6 +151,12 @@ class CaptureBackstopCorpusTest {
                 scanned++
             }
         assertTrue("expected a non-empty corpus", scanned > 500)
+        assertTrue("teeth: the corpus carries the Return to dash chrome", returnToDashSeen > 0)
+        assertEquals(
+            "the gated return-line scan's committed-tree hits changed (paths only) — audit each",
+            EXPECTED_RETURN_HITS.joinToString("\n"),
+            returnHits.joinToString("\n"),
+        )
         val added = hits - EXPECTED_HITS.toSet()
         val gone = EXPECTED_HITS.toSet() - hits
         assertTrue(
@@ -149,6 +165,9 @@ class CaptureBackstopCorpusTest {
             added.isEmpty() && gone.isEmpty(),
         )
     }
+
+    private fun containsText(node: UiNode, prefix: String): Boolean =
+        node.text?.startsWith(prefix) == true || node.children.any { containsText(it, prefix) }
 
     private fun injectedBlock() = UiNode(
         className = "android.view.View",
@@ -201,6 +220,15 @@ class CaptureBackstopCorpusTest {
             "timeline_task_detail/2026-07-30_19-40-07-170__doordash__accessibility.window__UNKNOWN__f7dd84.json#18",
             "timeline_task_detail/2026-07-30_19-40-07-170__doordash__accessibility.window__UNKNOWN__f7dd84.json#27",
             "timeline_task_detail/2026-07-30_19-40-07-170__doordash__accessibility.window__UNKNOWN__f7dd84.json#30",
+        )
+
+        /**
+         * Audited raw-tree hits of the gated return-line scan: the #994 return task line on a RECOGNIZED
+         * timeline fixture, a documented `CorpusDecoys` pseudonym. Production never runs the gate there (the
+         * timeline rule's redact masks it; the recognized test above asserts no hit survives that redact).
+         */
+        private val EXPECTED_RETURN_HITS = listOf(
+            "timeline/2026-08-01_12-53-16-000__doordash__accessibility.window__timeline__697a26.json",
         )
 
         /** Top-level snapshot dirs the recognized-frame backstop does not own:

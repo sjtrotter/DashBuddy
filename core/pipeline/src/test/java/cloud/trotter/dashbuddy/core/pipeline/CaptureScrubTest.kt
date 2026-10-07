@@ -452,4 +452,67 @@ class CaptureScrubTest {
         verify(disabled, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.unknownCustomerScrubCount)
     }
+
+    // #1116 follow-up: the gated `Return <name> to <store>` task line on UNKNOWN envelopes — the NAME is
+    // masked, the store is kept (#886), and the platform's `Return to dash` chrome never matches.
+
+    @Test
+    fun `UNKNOWN screen masks only the name of a return task line (#1116)`() {
+        val tree = UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store"), UiNode(text = "Close sheet")))
+        writer.captureScreen(unknownObs(), screenEvent(tree))
+
+        val json = offeredEnvelope()
+        assertFalse("name scrubbed", json.contains("Avery K"))
+        assertTrue("store kept, lead-in kept", json.contains("Return [redacted] to Sample Store"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN screen with Return to dash chrome is untouched (#1116)`() {
+        val tree = UiNode(children = listOf(UiNode(text = "Return to dash"), UiNode(text = "Return to dash to keep earning")))
+        writer.captureScreen(unknownObs(), screenEvent(tree))
+
+        val json = offeredEnvelope()
+        assertTrue(json.contains("\"Return to dash\""))
+        assertTrue(json.contains("Return to dash to keep earning"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN click on a return task row masks only the name (#1116)`() {
+        val node = UiNode(isClickable = true, contentDescription = "Return Jordan T to Sample Market")
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse(json.contains("Jordan T"))
+        assertTrue(json.contains("Return [redacted] to Sample Market"))
+    }
+
+    @Test
+    fun `the return-line gate is UNKNOWN-only (#1116)`() {
+        val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "timeline")
+        writer.captureScreen(recognized, screenEvent(UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store")))))
+        assertTrue("a recognized frame keeps its rule's decisions", offeredEnvelope().contains("Avery K"))
+    }
+
+    @Test
+    fun `return-line gate shapes (#1116)`() {
+        val masked = mapOf(
+            "Return Avery K to Sample Store" to "Return [redacted] to Sample Store",
+            "Return\tAvery K to Sample Store" to "Return\t[redacted] to Sample Store",
+            "return Avery Kim  to  Sample Store #12" to "return [redacted]  to  Sample Store #12",
+            "Return Avery K to [redacted:ab12]" to "Return [redacted] to [redacted:ab12]",
+        )
+        for ((raw, out) in masked) assertEquals(out, CustomerTextMarkers.maskReturnName(raw))
+        for (kept in listOf(
+            "Return to dash", "Return to dash to keep earning", "Return [redacted] to Sample Store",
+            "Return [redacted:ab12] to Sample Store", "Returned items", "Return", "Return Avery K", "Return Avery K to ",
+        )) {
+            assertEquals(kept, CustomerTextMarkers.maskReturnName(kept))
+        }
+    }
 }

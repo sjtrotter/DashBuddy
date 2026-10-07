@@ -226,4 +226,16 @@ class UnknownAddressBackstopReviewCasesTest {
             assertEquals("the city line plain-masks", "[redacted]", block.children[1].text)
         }
     }
+
+    @Test
+    fun `an UNKNOWN return sheet masks the name and keeps the store (r1 P2, r2 P3)`() {
+        for (line in listOf("Return Avery K to Sample Store", "Return\tAvery K to Sample Store")) {
+            val tree = frame(text(line), addressBlock(), text("Leave it at my door"), text("000"))
+            val (target, json) = persist(tree)
+            assertEquals("UNKNOWN on master's rules", UNKNOWN_TARGET, target)
+            assertFalse("name must not persist", json.contains("Avery K"))
+            assertTrue("the store stays raw (#886)", json.contains("[redacted] to Sample Store"))
+            assertFalse("street must not persist", json.contains("Sample Ridge"))
+        }
+    }
 }
