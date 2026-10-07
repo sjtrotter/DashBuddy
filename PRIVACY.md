@@ -104,9 +104,10 @@ as text: they are the driver's business data, not a person.
 `ScreenShotHandler` (`app/.../state/effects/`) can save a PNG of an offer card, a delivery receipt or a dash
 summary to the device's own gallery under `Pictures/DashBuddy/` through `MediaStore`. Nothing fires unless the
 **master toggle AND the matching category toggle** are on (`EvidenceConfig`, #426); the master default is OFF.
-After the 500 ms settle delay, capture is skipped if the master or category toggle is off, the active window
-is not an enabled delivery app, a known sensitive marker is found, or the active window cannot be read or mapped.
-This check uses the bounded accessibility tree; it cannot recognize every sensitive screen. Pixel redaction is
+After the 500 ms settle delay, capture is skipped if the master or category toggle is off, any app other than
+an enabled delivery app shares the screen, a keyboard is up, a window cannot be fully read, or a known sensitive
+screen is showing when it fires. DashBuddy's own windows and system bars are ignored. A capture already being
+saved finishes. This check uses bounded accessibility trees; it cannot recognize every sensitive screen. Pixel redaction is
 not done and remains tracked in #883.
 A screenshot is the **whole display** (`Display.DEFAULT_DISPLAY`), so an offer drawn over another app captures
 that app too. DashBuddy never uploads a screenshot. The file is an ordinary gallery image: your own gallery sync or

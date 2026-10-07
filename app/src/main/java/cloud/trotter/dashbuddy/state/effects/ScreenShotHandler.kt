@@ -7,10 +7,14 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
 import android.view.Display
+import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.dashbuddy.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilitySource
+import cloud.trotter.dashbuddy.core.pipeline.accessibility.mapper.toUiNodeMapping
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.domain.config.EvidenceCaptureBoundary
+import cloud.trotter.dashbuddy.domain.config.EvidenceCaptureBoundary.Kind
+import cloud.trotter.dashbuddy.domain.config.EvidenceCaptureBoundary.WindowSnapshot
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import cloud.trotter.dashbuddy.domain.settings.PlatformPreferences
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -54,7 +58,7 @@ class ScreenShotHandler @Inject constructor(
             val service = accessibilitySource.getService() ?: return@launch
             val verdict = captureTimeVerdict(service, stillAllowed)
             if (verdict != EvidenceCaptureBoundary.Verdict.CAPTURE) {
-                Timber.tag("Effects").i("Evidence capture skipped at capture time: %s", verdict)
+                Timber.tag("Effects").i("%s", verdict.name)
                 return@launch
             }
 
@@ -93,39 +97,71 @@ class ScreenShotHandler @Inject constructor(
         stillAllowed: () -> Boolean,
     ): EvidenceCaptureBoundary.Verdict {
         val enabledPlatforms = platformPreferences.enabledPlatforms.value
-        var frontPlatform: Platform? = null
-        var frontReadable = false
-        var sensitiveMarker: String? = null
-        try {
-            val root = service.rootInActiveWindow
-            if (root != null) {
-                try {
-                    frontPlatform = Platform.fromPackage(root.packageName?.toString())
-                    frontReadable = true
-                    // Other apps are identified by package only; do not inspect their content.
-                    if (frontPlatform != Platform.Unknown && frontPlatform in enabledPlatforms) {
-                        // The injected source uses AccessibilityNodeMapper's toUiNode() and
-                        // TreeLimits, mapping this same root without another active-window read.
-                        val tree = accessibilitySource.getCurrentRootSnapshot(root)?.tree
-                        frontReadable = tree != null
-                        sensitiveMarker = tree?.let(SensitiveTextMarkers::findMarker)
-                    }
-                } finally {
-                    @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
-                    root.recycle()
-                }
-            }
+        val windows = try {
+            // Keep display/type metadata and unreadable windows; the click-root helper drops them.
+            service.windows.orEmpty().map { window -> snapshot(window, enabledPlatforms) }
         } catch (_: Exception) {
-            // A failed root/package/map read must never admit a whole-display capture.
-            frontReadable = false
+            // A failed enumeration cannot certify that the display is safe.
+            emptyList()
         }
         return EvidenceCaptureBoundary.decide(
             allowedNow = stillAllowed(),
-            frontPlatform = frontPlatform,
             enabledPlatforms = enabledPlatforms,
-            sensitiveMarker = sensitiveMarker,
-            frontReadable = frontReadable,
+            windows = windows,
+            targetDisplayId = Display.DEFAULT_DISPLAY,
         )
+    }
+
+    private fun snapshot(
+        window: AccessibilityWindowInfo,
+        enabledPlatforms: Set<Platform>,
+    ): WindowSnapshot {
+        // Unknown metadata must fail closed on the display we are about to capture.
+        var snapshot = WindowSnapshot(
+            displayId = Display.DEFAULT_DISPLAY,
+            platform = Platform.Unknown,
+            isOwnApp = false,
+            kind = Kind.OTHER,
+            complete = false,
+            sensitiveMarker = null,
+        )
+        return try {
+            snapshot = snapshot.copy(displayId = window.displayId)
+            val kind = when (window.type) {
+                AccessibilityWindowInfo.TYPE_APPLICATION -> Kind.APPLICATION
+                AccessibilityWindowInfo.TYPE_SYSTEM -> Kind.SYSTEM
+                AccessibilityWindowInfo.TYPE_INPUT_METHOD -> Kind.INPUT_METHOD
+                AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> Kind.OVERLAY
+                else -> Kind.OTHER
+            }
+            snapshot = snapshot.copy(kind = kind)
+            if (snapshot.displayId != Display.DEFAULT_DISPLAY || kind == Kind.SYSTEM) return snapshot
+            val root = window.root ?: return snapshot
+            try {
+                val packageName = root.packageName?.toString()
+                snapshot = snapshot.copy(
+                    platform = Platform.fromPackage(packageName),
+                    isOwnApp = packageName == context.packageName,
+                )
+                // Foreign apps need only package identification. Never inspect their content.
+                if (!snapshot.isOwnApp && kind != Kind.INPUT_METHOD &&
+                    snapshot.platform != Platform.Unknown && snapshot.platform in enabledPlatforms
+                ) {
+                    val mapping = root.toUiNodeMapping(maxDepth = 40, maxNodes = 1_500)
+                    snapshot = snapshot.copy(
+                        complete = mapping.complete,
+                        sensitiveMarker = mapping.tree?.let(SensitiveTextMarkers::findMarker),
+                    )
+                }
+            } finally {
+                @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
+                root.recycle()
+            }
+            snapshot
+        } catch (_: Exception) {
+            // Do not let failed metadata or recycling exempt a window as our own/system UI.
+            snapshot.copy(isOwnApp = false, kind = Kind.OTHER, complete = false)
+        }
     }
 
     /**

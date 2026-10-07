@@ -27,7 +27,7 @@ object TreeLimits {
  */
 internal class TreeBudget(
     private val maxDepth: Int = MAX_TREE_DEPTH,
-    private val maxNodes: Int = MAX_TREE_NODES,
+    val maxNodes: Int = MAX_TREE_NODES,
 ) {
     private var nodes = 0
     var truncated = false
@@ -56,7 +56,7 @@ internal class TreeBudget(
 
     fun logIfTruncated(rootClassName: CharSequence?) {
         if (truncated) {
-            Timber.w(
+            Timber.tag("Mapper").w(
                 "Tree ingestion truncated (maxDepth=%d, maxNodes=%d) — root class=%s. " +
                     "Captured subtree is partial.",
                 maxDepth, maxNodes, rootClassName,
@@ -97,6 +97,22 @@ fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
     return root.restoreParents()
 }
 
+/** Mapping diagnostics for callers that must reject a partial tree. The caller owns the root. */
+data class UiNodeMapping(
+    val tree: UiNode?,
+    val truncated: Boolean,
+    val nodesExhausted: Boolean,
+) {
+    val complete: Boolean
+        get() = tree != null && !truncated && !nodesExhausted && !tree.hasNode { it.unreadableChildren > 0 }
+}
+
+fun AccessibilityNodeInfo.toUiNodeMapping(maxDepth: Int, maxNodes: Int): UiNodeMapping {
+    val budget = TreeBudget(maxDepth = maxDepth, maxNodes = maxNodes)
+    val tree = convert(this, depth = 0, budget = budget, rootPackage = packageName?.toString())
+    return UiNodeMapping(tree?.restoreParents(), budget.truncated, budget.nodesExhausted)
+}
+
 /**
  * Text-length cap (#590): a pathological node text can't ride verbatim into the
  * [UiNode] / capture envelope. `take` is safe on any String and a no-op below the
@@ -119,7 +135,7 @@ private fun convert(
 
     val childCount = node.childCount
     var nullChildren = 0
-    val children = ArrayList<UiNode>(childCount.coerceAtMost(TreeBudget.MAX_TREE_NODES))
+    val children = ArrayList<UiNode>(childCount.coerceAtMost(budget.maxNodes))
     for (i in 0 until childCount) {
         // Breadth short-circuit (#590): stop issuing getChild() binder IPC once no
         // further child could be kept, so a node reporting a hostile childCount (e.g.
@@ -128,15 +144,20 @@ private fun convert(
         //    only flips when children MATERIALIZE and consume budget, so a hostile fan
         //    of ALL-NULL children (getChild(i)==null never calls admit(), a FIELDED
         //    shape — see the 👻 NULL CHILDREN log) would still spin every index;
-        //  - i >= MAX_TREE_NODES caps the loop index itself, so even an all-null fan
-        //    issues at most MAX_TREE_NODES binder calls (#590 review F1).
+        //  - i >= maxNodes caps the loop index itself, so even an all-null fan
+        //    respects this walk's budget (#590 review F1).
         // nodesExhausted stays keyed on node budget (not truncated) so a deep branch
         // hitting the depth cap does NOT suppress this node's shallower siblings.
-        if (budget.nodesExhausted || i >= TreeBudget.MAX_TREE_NODES) break
+        if (budget.nodesExhausted || i >= budget.maxNodes) break
 
         val childAccNode = node.getChild(i)
         if (childAccNode != null) {
-            convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
+            try {
+                convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
+            } finally {
+                @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
+                childAccNode.recycle()
+            }
         } else {
             nullChildren++
         }

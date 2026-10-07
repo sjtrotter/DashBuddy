@@ -96,11 +96,17 @@ as `Offer`, never the literal token — a fail-safe under, not a replacement for
 `ParseOutputGoldenTest` arg-template lint that still flags the un-interpolating rule.
 
 **Evidence capture-time boundary (partial #883).** After the 500 ms settle delay, `ScreenShotHandler`
-re-reads the active root and maps that same root through the injected `AccessibilitySource` and the bounded
-`toUiNode()` path in `AccessibilityNodeMapper.kt`. Only enabled delivery apps have their window content scanned with
-`SensitiveTextMarkers`. `EvidenceCaptureBoundary` checks the live master/category callback, readability,
-enabled foreground platform and sensitive marker, in that order; any denial skips `takeScreenshot` and logs
-only the verdict under `Effects`. Root or mapping failures fail closed. Pixel redaction remains in #883.
+enumerates `service.windows` and judges every window on `Display.DEFAULT_DISPLAY`. DashBuddy's own windows
+and system windows (status/navigation bars) are ignored. A capture is skipped if the live master/category
+callback is off, any app other than an enabled delivery app shares the screen, a keyboard is up, a window
+cannot be fully read, or a known sensitive screen is showing when it fires. A capture already being saved finishes.
+Only enabled delivery apps have their window content mapped and scanned with `SensitiveTextMarkers`.
+The shared mapper uses a capture budget of 1,500 nodes and depth 40; truncation, node-budget exhaustion,
+and unreadable children all make a window incomplete. Every obtained root and child is recycled in `finally`.
+`EvidenceCaptureBoundary` checks disabled capture, no considered windows, keyboards, foreign/disabled apps,
+incomplete trees, sensitive markers, and the presence of an enabled platform, in that order.
+Any denial skips `takeScreenshot` and logs only the verdict name at INFO under `Effects`.
+Enumeration, root, or mapping failures fail closed. Pixel redaction remains in #883.
 
 **The engine is a data-integrity boundary and must never die silently (#909).** `AppEffect.LogEvent`
 is the ONLY writer of `app_events`, so a dead drain worker inside a live process is total silent
