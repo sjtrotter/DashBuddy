@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +29,8 @@ class AppEventRepo @Inject constructor(
     private val db: DashBuddyDatabase,
     private val dao: AppEventDao,
     private val effectsFiredDao: EffectsFiredDao,
+    /** Stamps the `effects_fired` mark (#1271 seam; production = the system clock). */
+    private val clock: Clock = Clock.systemUTC(),
 ) {
 
     /**
@@ -47,7 +50,7 @@ class AppEventRepo @Inject constructor(
             effectsFiredDao.markFired(
                 EffectsFiredEntity(
                     effectKey = effectKey,
-                    firedAt = System.currentTimeMillis(),
+                    firedAt = clock.millis(),
                     correlationVersion = correlationVersion,
                 )
             )
@@ -117,7 +120,7 @@ class AppEventRepo @Inject constructor(
             // missing payload exactly like a legacy empty row. P7 (#1134 Astra r1 P2): the exception's
             // message embeds the whole payload JSON — a correction's driver NOTE included — so only
             // the exception CLASS is logged, never the throwable.
-            Timber.w("AppEventRepo: failed to decode %s payload (%s)", eventType, e.javaClass.simpleName)
+            Timber.tag("AppEventRepo").w("AppEventRepo: failed to decode %s payload (%s)", eventType, e.javaClass.simpleName)
             null
         },
     )
@@ -138,7 +141,7 @@ class AppEventRepo @Inject constructor(
         try {
             metadataJson.decodeFromString<EventMetadata>(json)
         } catch (e: Exception) {
-            Timber.w(e, "AppEventRepo: failed to decode %s metadata", eventType)
+            Timber.tag("AppEventRepo").w(e, "AppEventRepo: failed to decode %s metadata", eventType)
             null
         }
 

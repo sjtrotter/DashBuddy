@@ -13,6 +13,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import timber.log.Timber
+import java.time.Clock
 
 /**
  * Handles the offer notification's **Accept / Decline** action buttons. Each fires the same
@@ -30,10 +31,14 @@ class OfferActionReceiver : BroadcastReceiver() {
     @InstallIn(SingletonComponent::class)
     interface Deps {
         fun stateManager(): StateManagerV2
+
+        /** The instant a tap is stamped at (#1271 seam; production binds the system clock). */
+        fun clock(): Clock
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val uiInput = uiInputFrom(intent) ?: return
+        val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
+        val uiInput = uiInputFrom(intent, deps.clock().millis()) ?: return
         // #731 desk-observability: the offer hash (PII-safe by construction) lets a desk pull join
         // this tap to the resolved OFFER_ACCEPTED/OFFER_DECLINED event's hash (#438 B4). Logged in
         // FULL — the same rendering as OfferEffects' offerHash= lines — so the join is an exact
@@ -48,7 +53,6 @@ class OfferActionReceiver : BroadcastReceiver() {
         // not every offer heads-up — a concurrent/replacement offer keeps its banner.
         NotificationManagerCompat.from(context)
             .cancel(BubbleManager.offerNotificationId(uiInput.offerHash))
-        val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
         deps.stateManager().dispatch(uiInput)
     }
 
@@ -64,10 +68,10 @@ class OfferActionReceiver : BroadcastReceiver() {
          * targets the owning region — an Unknown-platform tap steps no region post-#682. Pure +
          * Hilt-free so the dispatch shape is unit-testable without the receiver's entry-point lookup.
          */
-        fun uiInputFrom(intent: Intent): Observation.UiInput? {
+        fun uiInputFrom(intent: Intent, nowMs: Long = System.currentTimeMillis()): Observation.UiInput? {
             val action = intent.getStringExtra(EXTRA_ACTION) ?: return null
             return Observation.UiInput(
-                timestamp = System.currentTimeMillis(),
+                timestamp = nowMs,
                 action = action,
                 targetPlatform = intent.getStringExtra(EXTRA_PLATFORM)?.let(Platform::fromWire),
                 offerHash = intent.getStringExtra(EXTRA_OFFER_HASH),

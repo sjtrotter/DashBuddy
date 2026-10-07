@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +21,8 @@ import javax.inject.Singleton
 @Singleton
 class SnapshotStore @Inject constructor(
     private val snapshotDao: AppStateSnapshotDao,
+    /** Stamps `capturedAt` and the retention cutoff (#1271 seam; production = the system clock). */
+    private val clock: Clock = Clock.systemUTC(),
 ) {
 
     companion object {
@@ -83,7 +86,7 @@ class SnapshotStore @Inject constructor(
             snapshotDao.insert(
                 AppStateSnapshotEntity(
                     correlationVersion = state.correlationVersion,
-                    capturedAt = System.currentTimeMillis(),
+                    capturedAt = clock.millis(),
                     sessionId = activeSession?.sessionId,
                     stateJson = StateJson.encodeToString(state),
                 )
@@ -91,12 +94,12 @@ class SnapshotStore @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            Timber.e(e, "Failed to write state snapshot")
+            Timber.tag("StateMachine").e(e, "Failed to write state snapshot")
             return false
         }
         // Prune snapshots older than the retention window.
         try {
-            snapshotDao.pruneOlderThan(System.currentTimeMillis() - SNAPSHOT_RETENTION_MS)
+            snapshotDao.pruneOlderThan(clock.millis() - SNAPSHOT_RETENTION_MS)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -118,7 +121,7 @@ class SnapshotStore @Inject constructor(
                 correlationVersion = snapshot.correlationVersion,
             )
         } catch (e: Exception) {
-            Timber.e(e, "Failed to deserialize snapshot — starting fresh")
+            Timber.tag("StateMachine").e(e, "Failed to deserialize snapshot — starting fresh")
             null
         }
     }

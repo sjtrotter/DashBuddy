@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,9 +36,24 @@ class StateManagerV2 @Inject constructor(
     private val snapshots: SnapshotStore,
     @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    /**
+     * The live boundary's clock (#1271 seam): the journal-prune cutoff and the recovery hygiene's
+     * `nowMs`. Production binds the system clock — exactly the `System.currentTimeMillis()` these
+     * read before; the end-to-end harness binds a virtual one.
+     */
+    private val clock: Clock = Clock.systemUTC(),
 ) {
 
     private val scope = CoroutineScope(defaultDispatcher + SupervisorJob())
+
+    /**
+     * Cancel this manager's coroutines — the event loop, the journal writer, snapshot writes (#1271).
+     * The process-lifetime singleton never calls it; a test that builds a manager per case does, so
+     * nothing it launched outlives the case.
+     */
+    fun close() {
+        scope.cancel()
+    }
 
     // UI input stream (clicks, debug buttons)
     private val uiInputChannel = Channel<StateEvent>(Channel.UNLIMITED)
@@ -75,7 +92,7 @@ class StateManagerV2 @Inject constructor(
     private var recoveryCheckpointPending = false
 
     fun initialize() {
-        Timber.i("Initializing V2 State Machine (multi-region)...")
+        Timber.tag("StateMachine").i("Initializing V2 State Machine (multi-region)...")
         journal.start(scope, ioDispatcher)
         scope.launch {
             // Collect BEFORE restoring (#352): the pipeline flows are hot and don't
@@ -108,7 +125,7 @@ class StateManagerV2 @Inject constructor(
             restoreState()
 
             for (stateEvent in buffer) {
-                Timber.d("PROCESSING: ${stateEvent::class.simpleName}")
+                Timber.tag("StateMachine").d("PROCESSING: %s", stateEvent::class.simpleName)
                 processEvent(stateEvent)
             }
         }
@@ -167,7 +184,7 @@ class StateManagerV2 @Inject constructor(
         // exceeds snapshot retention, so replay-since-snapshot stays intact.
         if (transition.newState.correlationVersion % JOURNAL_PRUNE_EVERY == 0L) {
             scope.launch(ioDispatcher) {
-                journal.pruneOlderThan(System.currentTimeMillis() - JOURNAL_RETENTION_MS)
+                journal.pruneOlderThan(clock.millis() - JOURNAL_RETENTION_MS)
             }
         }
 
@@ -188,7 +205,7 @@ class StateManagerV2 @Inject constructor(
     private fun reconcileOdometerAfterRecovery(restored: AppState) {
         val effects = OdometerArbiter.recoveryReconciliation(restored)
         if (effects.isEmpty()) return
-        Timber.i("Recovery odometer reconciliation: %s", effects.map { it::class.simpleName })
+        Timber.tag("StateMachine").i("Recovery odometer reconciliation: %s", effects.map { it::class.simpleName })
         effects.forEach { engine.process(it, correlationVersion = restored.correlationVersion) }
     }
 
@@ -206,7 +223,7 @@ class StateManagerV2 @Inject constructor(
         try {
             val restored = snapshots.restoreLatest()
             if (restored == null) {
-                Timber.i("No usable snapshot — starting fresh")
+                Timber.tag("StateMachine").i("No usable snapshot — starting fresh")
                 _state.value = AppState()
                 return
             }
@@ -232,12 +249,12 @@ class StateManagerV2 @Inject constructor(
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {
-                Timber.i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
+                Timber.tag("StateMachine").i("Restored from snapshot at cv=%d, no tail", restored.correlationVersion)
                 finishRestore(base)
                 return
             }
 
-            Timber.i(
+            Timber.tag("StateMachine").i(
                 "Replaying %d observations after snapshot cv=%d",
                 tail.size, restored.correlationVersion,
             )
@@ -267,9 +284,9 @@ class StateManagerV2 @Inject constructor(
             }
 
             finishRestore(finalState)
-            Timber.i("Recovery complete — state at cv=%d", finalState.correlationVersion)
+            Timber.tag("StateMachine").i("Recovery complete — state at cv=%d", finalState.correlationVersion)
         } catch (e: Exception) {
-            Timber.e(e, "State recovery failed — starting fresh")
+            Timber.tag("StateMachine").e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
         }
     }
@@ -307,7 +324,7 @@ class StateManagerV2 @Inject constructor(
      * while `recovering == true`, so the replay never armed one to cancel.
      */
     private suspend fun finishRestore(restored: AppState) {
-        val cleaned = restored.recoveryHygiene(System.currentTimeMillis())
+        val cleaned = restored.recoveryHygiene(clock.millis())
         checkpointRecovery(cleaned)
         rearmRecoveredTimers(cleaned)
         _state.value = cleaned
@@ -405,7 +422,7 @@ class StateManagerV2 @Inject constructor(
             )
 
             else -> {
-                Timber.w("Unhandled StateEvent type: ${event::class.simpleName}")
+                Timber.tag("StateMachine").w("Unhandled StateEvent type: %s", event::class.simpleName)
                 null
             }
         }

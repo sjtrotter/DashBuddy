@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -18,10 +20,12 @@ import javax.inject.Singleton
 class TipEffectHandler @Inject constructor(
     private val bubbleManager: BubbleManager,
     @param:ApplicationContext private val context: Context,
+    /** Where the tip line is formatted and posted (#1271 seam): IO in production, virtual in tests. */
+    @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
     fun process(scope: CoroutineScope, effect: AppEffect.ProcessTipNotification) {
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             try {
                 // #551 P7: the tip amount is the dasher's own economics (INFO-safe); the store name
                 // is raw third-party UI text, so it stays on the DEBUG firehose.

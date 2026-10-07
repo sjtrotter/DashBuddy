@@ -29,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -64,6 +66,13 @@ class SideEffectEngine @Inject constructor(
     private val capabilityGrants: RuleCapabilityGrants,
     private val metadataProvider: MetadataProvider,
     @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
+    /**
+     * Every instant this engine reads (#1271 seam): throttle stamps, loopback/timeout timestamps,
+     * the absolute-deadline remainder, `effects_fired` marks and the retention cutoff. Production
+     * binds the system clock — exactly the `System.currentTimeMillis()` these read before; the
+     * end-to-end harness binds a virtual one so a timer's fire time and its delay agree.
+     */
+    private val clock: Clock = Clock.systemUTC(),
 ) : EffectExecutor {
 
     // 1. OUTPUT STREAM: Events going BACK to the StateMachine (The Loopback)
@@ -187,7 +196,7 @@ class SideEffectEngine @Inject constructor(
         // grew unbounded — pruneOlderThan had zero callers. 48h retention
         // comfortably exceeds the 24h snapshot window recovery replays over.
         engineScope.launch {
-            effectsFiredDao.pruneOlderThan(System.currentTimeMillis() - EFFECTS_RETENTION_MS)
+            effectsFiredDao.pruneOlderThan(clock.millis() - EFFECTS_RETENTION_MS)
         }
         engineScope.launch { superviseDrainWorker() }
     }
@@ -260,6 +269,16 @@ class SideEffectEngine @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Stop this engine (#1271): close the queue and cancel the drain worker, every armed timer and
+     * every delayed post. The process-lifetime singleton never calls it; a test that builds an
+     * engine per case does, so no timer or worker outlives the case.
+     */
+    fun close() {
+        queue.close()
+        engineScope.cancel()
     }
 
     override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
@@ -353,7 +372,7 @@ class SideEffectEngine @Inject constructor(
                 // (sourceRuleId, action); a USER fire is its own consent),
                 // and the package + label verification in the handler.
                 val throttleKey = "action:${effect.action.wire}:${effect.platform.wire}"
-                val now = System.currentTimeMillis()
+                val now = clock.millis()
                 if ((actionLastFiredAt[throttleKey] ?: 0L) + RULE_ACTION_THROTTLE_MS > now) {
                     // .i not .v (#457): a throttled USER offer tap would otherwise be
                     // invisible under release log filtering — one of the silent drop
@@ -417,7 +436,7 @@ class SideEffectEngine @Inject constructor(
                     // bounded #602 retry can exhaust ~1.5 s, and rolling the window back would
                     // let a queued duplicate start another retry that could land on a
                     // REPLACEMENT offer's button — PerformRuleAction carries no offer identity.
-                    stampThrottle(throttleKey, System.currentTimeMillis())
+                    stampThrottle(throttleKey, clock.millis())
                 } else {
                     // #1102: a tap that did NOT land is not a fire. The fielded receipt failures
                     // were all the same shape — the bind's bounds were captured while the sheet
@@ -439,7 +458,7 @@ class SideEffectEngine @Inject constructor(
 
             is AppEffect.RequestEffect -> {
                 val effectKey = effect.effectKey
-                val now = System.currentTimeMillis()
+                val now = clock.millis()
                 val throttle = effect.effect.throttleMs ?: DEFAULT_ACTION_THROTTLE_MS
                 val lastFired = actionLastFiredAt[effectKey] ?: 0L
                 if (lastFired + throttle > now) {
@@ -521,12 +540,12 @@ class SideEffectEngine @Inject constructor(
                 val config = strategyRepository.evaluationConfig.filterNotNull().first()
                 val economy = config.forPlatform(effect.platform).userEconomy
                 val estimate = ArrivalCorrection.compute(
-                    effect.accepted, effect.taskId, effect.observedItems, economy, System.currentTimeMillis(),
+                    effect.accepted, effect.taskId, effect.observedItems, economy, clock.millis(),
                 )
                 if (estimate != null) {
                     _events.emit(
                         Observation.Loopback(
-                            timestamp = System.currentTimeMillis(),
+                            timestamp = clock.millis(),
                             effect = Observation.Loopback.EFFECT_ARRIVAL_ESTIMATED,
                             targetPlatform = effect.platform,
                             payload = ObservationPayload.ArrivalEstimated(effect.jobId, estimate, requestedAt = effect.requestedAt),
@@ -552,7 +571,7 @@ class SideEffectEngine @Inject constructor(
                 // OfferEvaluationEvent was a 1:1 shim the bridge re-typed.
                 _events.emit(
                     Observation.Loopback(
-                        timestamp = System.currentTimeMillis(),
+                        timestamp = clock.millis(),
                         effect = Observation.Loopback.EFFECT_OFFER_EVALUATED,
                         // #438 item 8a: stamp the offer's platform (carried on the effect) so the
                         // loopback lands on the owning region — an Unknown-platform loopback steps
@@ -629,7 +648,7 @@ class SideEffectEngine @Inject constructor(
             effectsFiredDao.markFired(
                 EffectsFiredEntity(
                     effectKey = key,
-                    firedAt = System.currentTimeMillis(),
+                    firedAt = clock.millis(),
                     correlationVersion = correlationVersion,
                 )
             )
@@ -769,7 +788,7 @@ class SideEffectEngine @Inject constructor(
 
     private fun sessionStartFromArgs(args: Map<String, String>) {
         val platformName = args["platformName"] ?: "Unknown"
-        val sessionId = "session-${System.currentTimeMillis()}"
+        val sessionId = "session-${clock.millis()}"
         bubbleManager.startSession(sessionId, platformName)
     }
 
@@ -823,7 +842,7 @@ class SideEffectEngine @Inject constructor(
         activeTimers[key]?.cancel()
         val job = engineScope.launch(start = CoroutineStart.LAZY) {
             // Evaluated here, inside the coroutine: this is the moment the wait actually starts.
-            delay(deadlineMs?.let { (it - System.currentTimeMillis()).coerceAtLeast(1L) } ?: durationMs)
+            delay(deadlineMs?.let { (it - clock.millis()).coerceAtLeast(1L) } ?: durationMs)
             // #692 P7: level is per-type, not one blanket WARN under the catch-all `App` tag.
             // GRACE_COMMIT/MODE_RESUME_COMMIT/SESSION_PAUSED_SAFETY are all "a grace timer waking
             // a commit" verbatim — the taxonomy's defended-invariant WARN bucket (a graced
@@ -851,7 +870,7 @@ class SideEffectEngine @Inject constructor(
             }
             _events.emit(
                 TimeoutEvent(
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = clock.millis(),
                     type = type,
                     platform = platform,
                     payload = payload,
