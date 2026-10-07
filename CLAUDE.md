@@ -1152,16 +1152,21 @@ the Subagent Model Policy applied to review. Record the outcome in a `### Advers
 in the PR description; fix findings in-PR or file + link them. A PR merges only once the adversarial
 pass is clean or its findings are triaged.
 
-**Review-loop convergence (2026-09-30 audit of PRs #1149 (15 rounds) and #1160 (17 rounds)).**
-Both loops were productive for their first ~5 rounds (real Pledge defects) and then oscillated:
-on #1160 four rule decisions were each re-decided 4–10 times because every re-run reviewer finds
-something in the previous round's fix, and ~225 of ~228 findings were accepted. Rules, from
-round 3 on: (a) scope each reviewer to the DELTA since the last adjudicated head, not the whole
-PR; (b) fix follow-ups IN the PR that found them (dev rule 2026-10-07) — file an issue only when the follow-up is wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding that REVERSES an earlier
-accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
-subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose
-codex verdict is MERGE / MERGE WITH FIXES and whose `/code-review` has no CONFIRMED defect is
-the last round. The adjudicator's job is to reject, not to relay.
+**Review-loop convergence (2026-09-30 audit of PRs #1149 (15 rounds) and #1160 (17 rounds); revised 2026-10-07).**
+Those loops were productive for their first ~5 rounds (real Pledge defects) and then oscillated: on #1160 four
+rule decisions were each re-decided 4–10 times. The signal is not the round number but the PATTERN of findings.
+Rules for every review round: (a) after round 1, scope each reviewer to the DELTA since the last adjudicated head;
+(b) fix follow-ups IN the PR that found them (dev rule 2026-10-07) — file an issue only when the follow-up is
+wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding
+that REVERSES an earlier accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
+subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose verdict is MERGE /
+MERGE WITH FIXES with no confirmed defect is the last round. **(e) Oscillation means redesign (dev, 2026-10-07):**
+when a round finds a new defect of the SAME CLASS the previous fix was meant to close (widen an anchor → it
+over-matches; narrow it → the leak returns), stop patching. Write down what the rounds taught, then restart on a
+fresh branch with a redesigned approach that removes the fragile dependency (receipts: #1264's every-window
+screenshot check became a 495-lines-smaller lean check; #1265's recognize-to-redact anchor gave way to a
+rule-independent backstop). Prefer the cheap design on hot paths (the app is an observer and must be fast). The
+adjudicator's job is to reject, not to relay.
 
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
