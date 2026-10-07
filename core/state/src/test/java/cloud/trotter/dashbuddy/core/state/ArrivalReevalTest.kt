@@ -176,6 +176,28 @@ class ArrivalReevalTest {
         assertTrue(diff(landed, step(landed, loopback()), loopback()).filterIsInstance<AppEffect.UpdateBubble>().isEmpty())
     }
 
+    @Test fun `no advisory when the store lists exactly the quoted count (#1291)`() {
+        val requested = step(region(), obs(remaining = 62, shopped = 2))
+        val same = ArrivalCorrection.compute(accepted, task.taskId, 64, UserEconomy(), 1_100L)!!
+        val result = loopback().copy(payload = ObservationPayload.ArrivalEstimated("job", same, requestedAt = 1_000L))
+        val landed = step(requested, result)
+        assertEquals(64, same.quotedItems)
+        assertEquals("the estimate still lands (display-only state)", same, landed.activeJob!!.arrivalEstimate)
+        assertTrue("an unchanged count says nothing new", diff(requested, landed, result).filterIsInstance<AppEffect.UpdateBubble>().isEmpty())
+    }
+
+    @Test fun `the advisory still speaks when the offer quoted no count (#1291)`() {
+        val unquoted = accepted.copy(quotedItemCount = null)
+        val base = region().let { it.copy(activeJob = it.activeJob!!.copy(acceptedOffers = listOf(unquoted))) }
+        val requested = step(base, obs())
+        val arrival = ArrivalCorrection.compute(unquoted, task.taskId, 30, UserEconomy(), 1_100L)!!
+        val result = loopback().copy(payload = ObservationPayload.ArrivalEstimated("job", arrival, requestedAt = 1_000L))
+        val landed = step(requested, result)
+        assertNull(arrival.quotedItems)
+        val advisory = diff(requested, landed, result).filterIsInstance<AppEffect.UpdateBubble>().single()
+        assertTrue("no quote to compare, so no '(offer said …)'", advisory.text.startsWith("Store lists 30 items: this job now runs ≈ "))
+    }
+
     @Test fun `no advisory is emitted when the landed estimate has no hourly`() {
         val noNetPay = accepted.copy(netPay = null)
         val base = region().let { it.copy(activeJob = it.activeJob!!.copy(acceptedOffers = listOf(noNetPay))) }
