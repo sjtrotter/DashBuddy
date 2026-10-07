@@ -257,7 +257,7 @@ private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
 object MileageTaxModel {
 
     data class Labels(
-        /** "$X.XX est. IRS <year> standard-mileage deduction ($0.725/mi)". */
+        /** "$X.XX est. IRS <year> mileage deduction". */
         val deductionLine: String,
         /** Non-null only when the labelled year has no rate in the table — [IrsMileage.fallbackNote]. */
         val disclaimer: String?,
@@ -274,7 +274,7 @@ object MileageTaxModel {
         // back to the current year and says so.
         val year = if (spansYears) currentYear else startYear
         val deductionLine = "${Formats.money(IrsMileage.deduction(miles, year))} " +
-            "est. IRS $year mileage deduction (${Formats.money3(IrsMileage.effectiveRate(year))}/mi)"
+            "est. IRS $year mileage deduction"
         val spansYearsNote = when {
             window.isLifetime -> "may span tax years; see the CSV export"
             spansYears -> "spans tax years; see the CSV export"

@@ -51,8 +51,16 @@ class OneDisclosurePerScreenGuardTest {
     @Test
     fun baseNotesBelongOnlyToFooter() {
         assertOwners(
-            listOf("offers_tab_frozen_disclosure", "money_tab_where_went_frozen_note", "disclosure_cash_tips"),
+            listOf("disclosure_cash_tips"),
             setOf("app/src/main/java/cloud/trotter/dashbuddy/ui/components/HowNumbersWorkFooter.kt"),
+        )
+    }
+
+    @Test
+    fun offerEstimateNoteBelongsOnlyToAnalytics() {
+        assertOwners(
+            listOf("offers_tab_frozen_disclosure"),
+            setOf("app/src/main/java/cloud/trotter/dashbuddy/ui/main/analytics/AnalyticsScreen.kt"),
         )
     }
 

@@ -1157,8 +1157,7 @@ Both loops were productive for their first ~5 rounds (real Pledge defects) and t
 on #1160 four rule decisions were each re-decided 4–10 times because every re-run reviewer finds
 something in the previous round's fix, and ~225 of ~228 findings were accepted. Rules, from
 round 3 on: (a) scope each reviewer to the DELTA since the last adjudicated head, not the whole
-PR; (b) fix in-PR only a correctness/Pledge defect with a concrete failing input, or a trivial
-wording fix — everything else is filed and linked; (c) a finding that REVERSES an earlier
+PR; (b) fix follow-ups IN the PR that found them (dev rule 2026-10-07) — file an issue only when the follow-up is wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding that REVERSES an earlier
 accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
 subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose
 codex verdict is MERGE / MERGE WITH FIXES and whose `/code-review` has no CONFIRMED defect is

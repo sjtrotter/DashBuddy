@@ -26,10 +26,13 @@ The full prose discipline is the dev's `prose-whip` skill; this file is the subs
 9. **Delete before you shorten.** If a string's only job is to explain another string, remove it and fix the label.
 10. **Errors and empty states say what happened and what would change it,** in one line each. No apology, no
     encouragement.
+11. **History is a ledger.** Recorded numbers do not change, so never say they won't ('frozen at accept time').
+    Do not explain how a number is calculated beside it; the setup wizard covers costs. A label says what the
+    number is, not how it was made.
 
 ## How to apply it
 
-- When a string is added or changed, read it against the ten rules. The reviewer does too.
+- When a string is added or changed, read it against the eleven rules. The reviewer does too.
 - A number without a label is a defect; a label with a verb is a smell; a second sentence is a disclosure in the
   wrong place.
 - Translations follow the English (en is authoritative; es/fr language-level only, see the locale allowlist).
