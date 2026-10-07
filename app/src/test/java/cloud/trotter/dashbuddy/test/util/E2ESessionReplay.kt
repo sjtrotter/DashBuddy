@@ -246,9 +246,13 @@ class E2ESessionReplay(
      * minus the parts that live outside this boundary. Returns once the manager is collecting.
      */
     fun start() {
-        // Production order (DashBuddyApplication): the one-shot consent-schema migration runs BEFORE
-        // the rules go live, so rules never load over an un-migrated (pre-#1167) grant store.
+        // Production order (DashBuddyApplication.onCreate): the one-shot consent-schema migration runs
+        // first, so rules never load over an un-migrated (pre-#1167) grant store…
         await { grants.migrateConsentSchemaIfNeeded() }
+        // …then the #1113 optional dead-automation-key purge, isolated exactly as production isolates
+        // it (a failure never keeps the rules unloaded) …
+        await { runCatching { strategy.purgeDeadAutomationKeys() } }
+        // …then the rules go live.
         await { interpreter.loadDefaults() }
         check(interpreter.isLoaded) { "the production rule loader loaded nothing" }
         tts.reportReady()
