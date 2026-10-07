@@ -409,7 +409,7 @@
             "isHeadingBackToZone": false,
             "sessionPay": null,
             "sessionType": null,
-            "spotSaveDeadline": 1780337340000,
+            "spotSaveDeadline": 1780250940000,
             "startingSession": false,
             "waitTimeEstimate": null,
             "zoneName": null
@@ -1834,7 +1834,7 @@
             "customerNameHash": "c6b5dc311092ab26fda68e99e21bacae6f834a47ff2ec17e4453f47898ba18d8",
             "deadline": {
                 "text": "6:02 PM",
-                "time": 1780336920000
+                "time": 1780250520000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1855,7 +1855,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1876,7 +1876,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1897,7 +1897,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1918,7 +1918,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1939,7 +1939,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1960,7 +1960,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -1981,7 +1981,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2002,7 +2002,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2023,7 +2023,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2044,7 +2044,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2065,7 +2065,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2086,7 +2086,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2107,7 +2107,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2128,7 +2128,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2149,7 +2149,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2284,7 +2284,7 @@
             "customerNameHash": "186e551d1cb0c1ba693c1fd402a27140214a18eea49fc1948c1555826ec701f7",
             "deadline": {
                 "text": "20:04",
-                "time": 1780344240000
+                "time": 1780257840000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2305,7 +2305,7 @@
             "customerNameHash": "186e551d1cb0c1ba693c1fd402a27140214a18eea49fc1948c1555826ec701f7",
             "deadline": {
                 "text": "20:04",
-                "time": 1780344240000
+                "time": 1780257840000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2389,7 +2389,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:40 PM",
-                "time": 1780346400000
+                "time": 1780260000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2452,7 +2452,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "7:09 PM",
-                "time": 1780340940000
+                "time": 1780254540000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2515,7 +2515,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:10 PM",
-                "time": 1780337400000
+                "time": 1780251000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2536,7 +2536,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:32 PM",
-                "time": 1780338720000
+                "time": 1780252320000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2557,7 +2557,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:32 PM",
-                "time": 1780338720000
+                "time": 1780252320000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2578,7 +2578,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:46 PM",
-                "time": 1780339560000
+                "time": 1780253160000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2599,7 +2599,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:46 PM",
-                "time": 1780339560000
+                "time": 1780253160000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2620,7 +2620,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:46 PM",
-                "time": 1780339560000
+                "time": 1780253160000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2641,7 +2641,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "6:46 PM",
-                "time": 1780339560000
+                "time": 1780253160000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2662,7 +2662,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:02 PM",
-                "time": 1780344120000
+                "time": 1780257720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2683,7 +2683,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:02 PM",
-                "time": 1780344120000
+                "time": 1780257720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2704,7 +2704,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:02 PM",
-                "time": 1780344120000
+                "time": 1780257720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2725,7 +2725,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2746,7 +2746,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2767,7 +2767,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -2788,7 +2788,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "8:16 PM",
-                "time": 1780344960000
+                "time": 1780258560000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -3799,7 +3799,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780338720000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=23, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=557b56c07af05fd45d36f3468acaa7fdc7f7f1d5cc922d8062779b86bebc323b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=7.6, payTextRaw=null, distanceMiles=2.9, distanceTextRaw=null, dueByTimeText=6:32 PM, dueByTimeMillis=1780252320000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=23, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=True Texas BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182525_934_OFFER_POPUP.json": {
@@ -3807,7 +3807,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=15, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780253400000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=15, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182536_960_OFFER_POPUP.json": {
@@ -3815,7 +3815,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780339800000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=b436a4fe27c8cceb17c746a488e66816cfdb0fc396f4f461a6dc71406c77d350, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=5.0, payTextRaw=null, distanceMiles=4.5, distanceTextRaw=null, dueByTimeText=6:50 PM, dueByTimeMillis=1780253400000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182617_556_OFFER_POPUP.json": {
@@ -3823,7 +3823,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780340760000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=21, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=6dfe7dbc4fa70c5bc217f9dbfc76e9203359119daaf871683f66b45f6a17cba1, presentationKey=null, assignmentIdHash=null, itemCount=1, itemCountIsUnits=false, payAmount=6.85, payTextRaw=null, distanceMiles=6.4, distanceTextRaw=null, dueByTimeText=7:06 PM, dueByTimeMillis=1780254360000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=21, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=1, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Bill Miller BBQ, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_182655_860_OFFER_POPUP.json": {
@@ -3831,7 +3831,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780339560000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=11, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=0dda70d10932eba701ef1d2df425fe01b33876a325ebcbfc3e3ed3e4e59e2b3b, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.95, payTextRaw=null, distanceMiles=4.4, distanceTextRaw=null, dueByTimeText=6:46 PM, dueByTimeMillis=1780253160000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=11, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Taco Bell, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_185925_772_OFFER_POPUP.json": {
@@ -3839,7 +3839,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780341780000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=bb47312390e65ec432e318298828ec0a671c00ab3aa620a6c8fcb985781ef300, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=5.45, payTextRaw=null, distanceMiles=2.8, distanceTextRaw=null, dueByTimeText=7:23 PM, dueByTimeMillis=1780255380000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Raising Cane's, itemCount=1, isItemCountEstimated=true, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_193825_010_OFFER_POPUP.json": {
@@ -3847,7 +3847,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780344540000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=a7b89a7758c44f9fa0b6316623df9fd1019b7e03135096abe0a019b9dcb68bac, presentationKey=null, assignmentIdHash=null, itemCount=0, itemCountIsUnits=false, payAmount=12.15, payTextRaw=null, distanceMiles=10.7, distanceTextRaw=null, dueByTimeText=8:09 PM, dueByTimeMillis=1780258140000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=null, orders=[ParsedOrder(orderIndex=0, orderType=PICKUP, storeName=Tarka Indian Kitchen, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS), ParsedOrder(orderIndex=1, orderType=PICKUP, storeName=Torchy's Tacos, itemCount=1, isItemCountEstimated=true, badges=[], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/20260128_202519_909_OFFER_POPUP.json": {
@@ -3855,7 +3855,7 @@
         "intent": "offer_popup",
         "shape": "offer",
         "fields": {
-            "parsedOffer": "ParsedOffer(offerHash=1e82bb40bb58a9011894dae8a0765062cd5cb529b3b4c353aaf25186f1498c09, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=10.25, payTextRaw=null, distanceMiles=6.6, distanceTextRaw=null, dueByTimeText=8:58 PM, dueByTimeMillis=1780347480000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=30, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
+            "parsedOffer": "ParsedOffer(offerHash=1e82bb40bb58a9011894dae8a0765062cd5cb529b3b4c353aaf25186f1498c09, presentationKey=null, assignmentIdHash=null, itemCount=4, itemCountIsUnits=false, payAmount=10.25, payTextRaw=null, distanceMiles=6.6, distanceTextRaw=null, dueByTimeText=8:58 PM, dueByTimeMillis=1780261080000, timeToCompleteMinutes=null, badges=[], initialCountdownSeconds=30, orders=[ParsedOrder(orderIndex=0, orderType=SHOP_FOR_ITEMS, storeName=CVS, itemCount=4, isItemCountEstimated=false, badges=[RED_CARD], countUnit=ITEMS)], offerKind=null, displayStoreName=null, rawExtractedTexts=null)"
         }
     },
     "offer_popup/523fd0d0.json": {
@@ -4244,7 +4244,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4265,7 +4265,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4286,7 +4286,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4307,7 +4307,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4328,7 +4328,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:43",
-                "time": 1780342980000
+                "time": 1780256580000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4349,7 +4349,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:43",
-                "time": 1780342980000
+                "time": 1780256580000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4370,7 +4370,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:43",
-                "time": 1780342980000
+                "time": 1780256580000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4391,7 +4391,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4412,7 +4412,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4433,7 +4433,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4454,7 +4454,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4475,7 +4475,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4496,7 +4496,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4517,7 +4517,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4538,7 +4538,7 @@
             "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4667,7 +4667,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4688,7 +4688,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4709,7 +4709,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4730,7 +4730,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4751,7 +4751,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4772,7 +4772,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4793,7 +4793,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4814,7 +4814,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4835,7 +4835,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4856,7 +4856,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4877,7 +4877,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4898,7 +4898,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4919,7 +4919,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4940,7 +4940,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -4961,7 +4961,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:43",
-                "time": 1780346580000
+                "time": 1780260180000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5081,7 +5081,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:21",
-                "time": 1780338060000
+                "time": 1780251660000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5102,7 +5102,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:21",
-                "time": 1780338060000
+                "time": 1780251660000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5123,7 +5123,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:34",
-                "time": 1780338840000
+                "time": 1780252440000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5144,7 +5144,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:34",
-                "time": 1780338840000
+                "time": 1780252440000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5165,7 +5165,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:34",
-                "time": 1780338840000
+                "time": 1780252440000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5186,7 +5186,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5207,7 +5207,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:12",
-                "time": 1780341120000
+                "time": 1780254720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5228,7 +5228,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:43",
-                "time": 1780342980000
+                "time": 1780256580000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5249,7 +5249,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:43",
-                "time": 1780342980000
+                "time": 1780256580000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5270,7 +5270,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5291,7 +5291,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -5312,7 +5312,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "19:50",
-                "time": 1780343400000
+                "time": 1780257000000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -6074,7 +6074,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:01",
-                "time": 1780344060000
+                "time": 1780257660000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -6101,7 +6101,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "18:49",
-                "time": 1780339740000
+                "time": 1780253340000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -6197,7 +6197,7 @@
             "customerNameHash": null,
             "deadline": {
                 "text": "20:02",
-                "time": 1780344120000
+                "time": 1780257720000
             },
             "itemsRemaining": null,
             "itemsShopped": null,
@@ -7413,9 +7413,9 @@
             "offerEarnings": 31.35,
             "sessionEarnings": 17.25,
             "tasks": [
-                "TimelineTaskEntry(taskType=Pickup for, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:09, time=1780337340000), storeHint=Hai, isCurrent=false)",
-                "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:42, time=1780339320000), storeHint=null, isCurrent=false)",
-                "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:42, time=1780339320000), storeHint=null, isCurrent=false)"
+                "TimelineTaskEntry(taskType=Pickup for, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:09, time=1780250940000), storeHint=Hai, isCurrent=false)",
+                "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:42, time=1780252920000), storeHint=null, isCurrent=false)",
+                "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 18:42, time=1780252920000), storeHint=null, isCurrent=false)"
             ]
         }
     },
@@ -7436,7 +7436,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780340400000,
+            "endsAtMillis": 1780254000000,
             "endsAtText": "19:00",
             "offerEarnings": null,
             "sessionEarnings": 52.66,
@@ -7448,7 +7448,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780351200000,
+            "endsAtMillis": 1780264800000,
             "endsAtText": "22:00",
             "offerEarnings": null,
             "sessionEarnings": 40.74,
@@ -7487,7 +7487,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780351200000,
+            "endsAtMillis": 1780264800000,
             "endsAtText": "22:00",
             "offerEarnings": null,
             "sessionEarnings": 0.0,
@@ -7499,7 +7499,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780351200000,
+            "endsAtMillis": 1780264800000,
             "endsAtText": "22:00",
             "offerEarnings": null,
             "sessionEarnings": 0.0,
@@ -7523,7 +7523,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780338600000,
+            "endsAtMillis": 1780252200000,
             "endsAtText": "18:30",
             "offerEarnings": 25.63,
             "sessionEarnings": 16.45,
@@ -7537,7 +7537,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780338600000,
+            "endsAtMillis": 1780252200000,
             "endsAtText": "18:30",
             "offerEarnings": null,
             "sessionEarnings": 54.58,
@@ -7549,12 +7549,12 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780351200000,
+            "endsAtMillis": 1780264800000,
             "endsAtText": "22:00",
             "offerEarnings": 29.25,
             "sessionEarnings": 15.75,
             "tasks": [
-                "TimelineTaskEntry(taskType=Pickup for, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 20:27, time=1780345620000), storeHint=H-E-B, isCurrent=false)",
+                "TimelineTaskEntry(taskType=Pickup for, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=by 20:27, time=1780259220000), storeHint=H-E-B, isCurrent=false)",
                 "TimelineTaskEntry(taskType=Deliver to, nameHash=017ad73325fcf108a972edac618f9edfc957c5b1de10f8b371b0a8bfa4f59e2d, deadline=ParsedTime(text=53 min to complete, time=null), storeHint=null, isCurrent=false)"
             ]
         }
@@ -7600,7 +7600,7 @@
         "intent": "timeline",
         "shape": "timeline",
         "fields": {
-            "endsAtMillis": 1780342200000,
+            "endsAtMillis": 1780255800000,
             "endsAtText": "19:30",
             "offerEarnings": null,
             "sessionEarnings": 0.0,
