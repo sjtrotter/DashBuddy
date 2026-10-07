@@ -13,8 +13,8 @@
     <string name="wizard_desc_goal">Pick how offers are scored.</string>
     <string name="wizard_title_shopping">Shop &amp; Deliver</string>
     <string name="wizard_desc_shopping">Maximum items for a shopping offer.</string>
-    <string name="wizard_title_min_payout">Minimum pay</string>
-    <string name="wizard_desc_min_payout">Lowest offer pay you would consider.</string>
+    <string name="wizard_title_min_payout">Minimum net pay</string>
+    <string name="wizard_desc_min_payout">Lowest net offer pay you would consider.</string>
     <string name="wizard_title_hourly">Target $/hr</string>
     <string name="wizard_desc_hourly">Your target net pay per delivery hour.</string>
     <string name="wizard_title_distance">Max distance</string>
@@ -29,7 +29,7 @@
     <string name="wizard_gas_price_ev_title">EV charging cost</string>
     <string name="wizard_gas_price_ev_desc">Charging prices vary, so enter your cost per gallon-equivalent.</string>
     <string name="wizard_gas_price_auto_update_title">Update gas price daily</string>
-    <string name="wizard_gas_price_auto_update_desc">Off until you turn it on. Fetches your fuel type\'s regional average daily. Android\'s geocoder may send your last coordinates to its provider; EIA receives a regional fuel-price request, without an account or install ID. This can run outside a dash. Turn this off and save setup to stop automatic refreshes.</string>
+    <string name="wizard_gas_price_auto_update_desc">Off by default on new installs; an existing setting is kept. Fetches your fuel type\'s regional average daily. Android\'s geocoder may send your last coordinates to its provider; EIA receives a regional fuel-price request, without an account or install ID. This can run outside a dash. Turn this off and save setup to stop automatic refreshes.</string>
     <string name="wizard_gas_price_current_regional_average">Regional average</string>
     <string name="wizard_vehicle_card_type_car">Car</string>
     <string name="wizard_vehicle_card_type_ebike">E-bike</string>

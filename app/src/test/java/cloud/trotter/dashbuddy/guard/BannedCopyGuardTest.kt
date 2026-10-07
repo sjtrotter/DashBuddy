@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 
+/** Checks English XML resource copy; does not cover Kotlin literals. */
 class BannedCopyGuardTest {
     private val banned = Regex(
         """\b(delve|leverage|robust|streamline|harness|seamless|effortless|unlock|supercharge|quietly|deeply|fundamentally|remarkably|utilize)\b""",
@@ -23,7 +24,7 @@ class BannedCopyGuardTest {
                 .filter { file ->
                     val folder = file.parentFile?.name.orEmpty()
                     file.isFile &&
-                        file.name == "strings.xml" &&
+                        file.extension == "xml" &&
                         "/src/main/res/" in file.invariantSeparatorsPath &&
                         (
                             folder == "values" ||
@@ -70,11 +71,18 @@ class BannedCopyGuardTest {
         files.forEach { file ->
             val path = file.relativeTo(root).invariantSeparatorsPath
             val nodes = factory.newDocumentBuilder()
-                .parse(file).getElementsByTagName("string")
+                .parse(file).getElementsByTagName("*")
 
             for (i in 0 until nodes.length) {
                 val node = nodes.item(i) as Element
-                val id = "$path:${node.getAttribute("name")}"
+                val parent = node.parentNode as? Element
+                val key = when {
+                    node.tagName == "string" -> node.getAttribute("name")
+                    node.tagName == "item" && parent?.tagName == "plurals" ->
+                        "${parent.getAttribute("name")}[${node.getAttribute("quantity")}]"
+                    else -> continue
+                }
+                val id = "$path:$key"
                 val value = node.textContent
 
                 assertFalse("$id contains a banned word", banned.containsMatchIn(value))

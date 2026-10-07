@@ -62,7 +62,7 @@
     <string name="fake_offer_metric_miles_label">miles</string>
     <string name="fake_offer_metric_est_time_label">est. time</string>
     <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
-    <string name="fake_offer_warning_format" translatable="false">Warning: %1$s</string>
+    <string name="fake_offer_warning_format">Warning: %1$s</string>
     <string name="strategy_settings_the_lab_title">Test offer</string>
     <string name="strategy_settings_sim_pay_format">Pay: %1$s</string>
     <string name="strategy_settings_sim_dist_format">Dist: %1$s mi</string>
@@ -77,7 +77,7 @@
     <string name="strategy_settings_priorities_hint">Drag to reorder. Rules at the top have more weight.</string>
     <string name="evidence_settings_title">Screenshots</string>
     <string name="evidence_settings_master_label">Save screenshots</string>
-    <string name="evidence_settings_master_subtitle">Screenshots are off by default. Saving requires this switch and a category below; categories start on. Images capture the whole display, including customer details and other apps, and are saved to Pictures/DashBuddy. DashBuddy does not upload them; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turn this switch off to stop new captures. Dash history and debug text captures are separate.</string>
+    <string name="evidence_settings_master_subtitle">Screenshots are off by default. Saving requires this switch and a category below; categories start on. Images capture the whole display, including customer details and other apps, and are saved to Pictures/DashBuddy. DashBuddy does not upload them; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turning this switch off stops new captures; one already queued can still save. Dash history and debug text captures are separate.</string>
     <string name="evidence_settings_section_granular">By type</string>
     <string name="evidence_settings_offers_label">Offers</string>
     <string name="evidence_settings_offers_subtitle">Offer screenshots</string>
@@ -106,7 +106,7 @@
          on the permission-chain step and on the Automation & Consent switch row. -->
     <string name="event_receipt_requirement_note">Optional. If declined, DashBuddy stays usable and receives events only from supported delivery apps. Change this under Settings → Data &amp; Privacy → Automation &amp; Consent.</string>
     <string name="event_receipt_settings_path">Settings → Data &amp; Privacy → Automation &amp; Consent</string>
-    <string name="event_receipt_body">Allow Android Accessibility events from every app to notice delivery offers over other apps. Only enabled delivery apps\' window content is inspected or captured; other windows are identified by app name, with no content stored. Offer screenshots are off by default. If enabled under Settings → Data &amp; Privacy, they save the whole display, including apps behind the offer, to Pictures/DashBuddy. DashBuddy does not upload these images; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turn Screen events off in %1$s. This decision, time, app version and privacy revision stay on this phone and are excluded from backup and device transfer. Release stays usable when declined; debug disables the service.</string>
+    <string name="event_receipt_body">Allow Android Accessibility events from every app to notice delivery offers over other apps. Only enabled delivery apps\' window content is inspected or captured; other windows are identified by app name, with no content stored. Offer screenshots are off by default. If enabled under Settings → Data &amp; Privacy, they save the whole display, including apps behind the offer, to Pictures/DashBuddy. DashBuddy does not upload these images; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turn Screen events off in %1$s. This decision receipt with its time, app version and privacy revision stays on this phone and is excluded from backup and device transfer. The app log also records each grant or revocation; it leaves the phone only in a bug report you export. Release stays usable when declined; debug disables the service.</string>
     <string name="event_receipt_allow">Allow</string>
     <string name="event_receipt_deny">Don\'t allow</string>
     <!-- The front door's ONE "Not now" (the :app FrontDoorSheet button; review NN6). -->

@@ -358,7 +358,7 @@ class OfferEvaluator() {
                 else null
 
                 MetricType.PAYOUT -> if (target > REALISTIC_MAX_PAYOUT)
-                    "Minimum pay ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
+                    "Minimum net pay ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
                 else null
 
                 else -> null

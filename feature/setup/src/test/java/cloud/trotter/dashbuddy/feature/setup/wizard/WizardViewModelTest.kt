@@ -107,6 +107,28 @@ class WizardViewModelTest {
     }
 
     @Test
+    fun `finish saves default gas price when no price is saved and auto is off`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.isGasPriceAuto)
+        assertEquals(3.50f, viewModel.state.value.gasPrice, 0.0f)
+        viewModel.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+
+        verify(appPreferencesRepository).updateEconomySettings(
+            "", "", "", "", 0.0f, false, 3.50f,
+        )
+        verify(appStateRepository).setFirstRunComplete()
+        verifyNoInteractions(gasPriceRepository)
+    }
+
+    @Test
     fun `skip never reads or fetches anything new`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()

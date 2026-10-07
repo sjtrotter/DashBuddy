@@ -76,7 +76,7 @@ class WizardViewModel @Inject constructor(
             val currentFuelType =
                 appPreferencesRepository.fuelType.first() // Already non-null in Repo
             val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
-            val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: 0.0f
+            val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: WizardState().gasPrice
 
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =

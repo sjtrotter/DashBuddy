@@ -25,9 +25,9 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_shopping">Máximo de artículos para una oferta de compras.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_title_min_payout">Pago mínimo</string>
+    <string name="wizard_title_min_payout">Pago neto mínimo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_min_payout">Pago mínimo de una oferta que considerarías.</string>
+    <string name="wizard_desc_min_payout">Pago neto mínimo de una oferta que considerarías.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_hourly">Meta $/h</string>
     <!-- copy-audit: retranslated es -->
