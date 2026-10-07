@@ -1052,6 +1052,9 @@ moves only by `advanceTo` (never `advanceUntilIdle`). `DoorDashFullDashE2ETest` 
 REQUIRES handler-written INFO+ lines; `CrashRestartE2ETest` is scenario 4 — a disk-backed DB +
 surviving stores (`ReplayEdges.DurableStores`), `crash()` mid-grace / mid-commit, a relaunched harness,
 and the same durable outcome as the uninterrupted run.
+`PrivacyExportE2ETest` / `PrivacyExportReplay` is scenario 6: real sensor → capture → census spool → worker → signed request bytes, plus the shareable log.
+Fakes: Android accessibility service/nodes and notifications, Keystore (reversible sealer), HTTP (recording interceptor), memory preference stores, the upload scheduler and replay metadata, and platform preferences.
+Release DI, Android event delivery and screenshots are out of scope.
 
 ## Key Technologies
 
