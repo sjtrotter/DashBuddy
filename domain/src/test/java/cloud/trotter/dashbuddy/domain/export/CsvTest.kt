@@ -1,9 +1,6 @@
 package cloud.trotter.dashbuddy.domain.export
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
 
@@ -12,200 +9,97 @@ import java.time.ZoneId
  * and the IRS deduction math (#319).
  */
 class CsvTest {
-
     private val utc = ZoneId.of("UTC")
 
-    // ── RFC-4180 quoting (textField) ────────────────────────────────────
-
-    @Test fun plainField_isUnquoted() {
-        assertEquals("H-E-B", Csv.textField("H-E-B"))
+    @Test fun `text quoting and formula injection cases`() {
+        listOf(
+            "H-E-B" to "H-E-B",
+            "Chili's, Cedar Park" to "\"Chili's, Cedar Park\"",
+            "Joe \"The Rock\" Bar" to "\"Joe \"\"The Rock\"\" Bar\"",
+            "line1\nline2" to "\"line1\nline2\"",
+            null to "",
+            "=cmd()" to "'=cmd()",
+            "+1+1" to "'+1+1",
+            "-2+3" to "'-2+3",
+            "@SUM(A1)" to "'@SUM(A1)",
+            "\tX" to "'\tX",
+            "\ra" to "\"'\ra\"",
+            "=a,b" to "\"'=a,b\"",
+            "H-E-B Plus=1" to "H-E-B Plus=1",
+        ).forEachIndexed { index, (input, expected) ->
+            assertEquals("text row $index input=<$input>", expected, Csv.textField(input))
+        }
     }
 
-    @Test fun fieldWithComma_isQuoted() {
-        assertEquals("\"Chili's, Cedar Park\"", Csv.textField("Chili's, Cedar Park"))
+    @Test fun `encoded row assembly`() {
+        listOf(
+            listOf("a", "b,c", "d\"e") to "a,\"b,c\",\"d\"\"e\"",
+            listOf("a", null, "c") to "a,,c",
+        ).forEach { (cells, expected) ->
+            assertEquals("cells=$cells", expected, Csv.row(cells.map(Csv::textField)))
+        }
     }
 
-    @Test fun fieldWithQuote_doublesTheQuote() {
-        assertEquals("\"Joe \"\"The Rock\"\" Bar\"", Csv.textField("Joe \"The Rock\" Bar"))
+    private data class FormatCase(val name: String, val expected: String, val format: () -> String)
+
+    @Test fun `machine numbers remain bare and nulls remain empty`() {
+        listOf(
+            FormatCase("Csv.money(-2.5)", "-2.50") { Csv.money(-2.5) },
+            FormatCase("Csv.decimal(-4.2)", "-4.20") { Csv.decimal(-4.2) },
+            FormatCase("Csv.int(-3)", "-3") { Csv.int(-3) },
+            FormatCase("Csv.money(1234.5)", "1234.50") { Csv.money(1234.5) },
+            FormatCase("Csv.money(null)", "") { Csv.money(null) },
+            FormatCase("Csv.money(0.0)", "0.00") { Csv.money(0.0) },
+            FormatCase("Csv.money(0.165, digits = 3)", "0.165") { Csv.money(0.165, digits = 3) },
+            FormatCase("Csv.decimal(null)", "") { Csv.decimal(null) },
+            FormatCase("Csv.int(7)", "7") { Csv.int(7) },
+            FormatCase("Csv.int(null)", "") { Csv.int(null) },
+            FormatCase("Csv.millisToMinutes(1_800_000L)", "30.00") { Csv.millisToMinutes(1_800_000L) },
+            FormatCase("Csv.millisToMinutes(null)", "") { Csv.millisToMinutes(null) },
+        ).forEach { (name, expected, format) -> assertEquals(name, expected, format()) }
     }
 
-    @Test fun fieldWithNewline_isQuoted() {
-        assertEquals("\"line1\nline2\"", Csv.textField("line1\nline2"))
+    @Test fun `ISO timestamps respect the zone and preserve nulls`() {
+        val ms = 1_783_260_207_000L // 2026-07-05T14:03:27Z
+        listOf(
+            FormatCase("UTC date", "2026-07-05") { Csv.isoDate(ms, utc) },
+            FormatCase("UTC time", "14:03:27") { Csv.isoTime(ms, utc) },
+            FormatCase("UTC date time", "2026-07-05T14:03:27") { Csv.isoDateTime(ms, utc) },
+            FormatCase("New York date time", "2026-07-05T10:03:27") {
+                Csv.isoDateTime(ms, ZoneId.of("America/New_York"))
+            },
+            FormatCase("null date", "") { Csv.isoDate(null, utc) },
+            FormatCase("null time", "") { Csv.isoTime(null, utc) },
+            FormatCase("null date time", "") { Csv.isoDateTime(null, utc) },
+        ).forEach { (name, expected, format) -> assertEquals(name, expected, format()) }
     }
 
-    @Test fun nullField_isEmpty() {
-        assertEquals("", Csv.textField(null))
+    @Test fun `IRS published rates and fallback disclosure`() {
+        data class Case(val year: Int, val rate: Double?, val effective: Double, val note: String?)
+        listOf(
+            Case(2025, 0.70, 0.70, null),
+            Case(2026, 0.725, 0.725, null),
+            Case(2027, null, 0.725, "2027 rate unavailable in DashBuddy; estimate uses 2026 rate."),
+            Case(2024, null, 0.725, "2024 rate unavailable in DashBuddy; estimate uses 2026 rate."),
+        ).forEach { (year, rate, effective, note) ->
+            val name = "year=$year"
+            assertEquals(name, rate, IrsMileage.rateFor(year))
+            assertEquals("$name known", rate != null, IrsMileage.isKnown(year))
+            assertEquals("$name effective", effective, IrsMileage.effectiveRate(year), 0.0)
+            assertEquals("$name note", note, IrsMileage.fallbackNote(year))
+        }
+        assertEquals("latest published rate", 2026 to 0.725, IrsMileage.latestKnown())
     }
 
-    // ── Formula-injection neutralization (textField only) ───────────────
-
-    @Test fun leadingEquals_isNeutralized() {
-        assertEquals("'=cmd()", Csv.textField("=cmd()"))
-    }
-
-    @Test fun leadingPlus_isNeutralized() {
-        assertEquals("'+1+1", Csv.textField("+1+1"))
-    }
-
-    @Test fun leadingMinus_isNeutralized() {
-        assertEquals("'-2+3", Csv.textField("-2+3"))
-    }
-
-    @Test fun leadingAt_isNeutralized() {
-        assertEquals("'@SUM(A1)", Csv.textField("@SUM(A1)"))
-    }
-
-    @Test fun leadingTab_isNeutralized() {
-        assertEquals("'\tX", Csv.textField("\tX"))
-    }
-
-    @Test fun leadingCarriageReturn_isNeutralizedAndQuoted() {
-        // CR is both a formula leader AND an RFC-4180 quote trigger: '-prefixed, then quoted.
-        assertEquals("\"'\ra\"", Csv.textField("\ra"))
-    }
-
-    @Test fun neutralizedFieldWithComma_isAlsoQuoted() {
-        assertEquals("\"'=a,b\"", Csv.textField("=a,b"))
-    }
-
-    @Test fun interiorFormulaChars_areNotNeutralized() {
-        // Only a LEADING dangerous char triggers the guard.
-        assertEquals("H-E-B Plus=1", Csv.textField("H-E-B Plus=1"))
-    }
-
-    @Test fun numericEmitters_stayBare_negativeMoneyNotNeutralized() {
-        // Program-generated numbers are safe by construction and must stay machine-parseable.
-        assertEquals("-2.50", Csv.money(-2.5))
-        assertEquals("-4.20", Csv.decimal(-4.2))
-        assertEquals("-3", Csv.int(-3))
-    }
-
-    // ── Row assembly (pre-encoded cells) ────────────────────────────────
-
-    @Test fun row_joinsEncodedCells() {
-        assertEquals(
-            "a,\"b,c\",\"d\"\"e\"",
-            Csv.row(listOf(Csv.textField("a"), Csv.textField("b,c"), Csv.textField("d\"e"))),
-        )
-    }
-
-    @Test fun row_nullTextBecomesEmptyCell() {
-        assertEquals("a,,c", Csv.row(listOf(Csv.textField("a"), Csv.textField(null), Csv.textField("c"))))
-    }
-
-    // ── Money / decimal (machine, Locale.ROOT, ungrouped) ───────────────
-
-    @Test fun money_twoDecimals_noGrouping() {
-        assertEquals("1234.50", Csv.money(1234.5))
-    }
-
-    @Test fun money_null_isEmpty_notZero() {
-        assertEquals("", Csv.money(null))
-    }
-
-    @Test fun money_zero_isFormatted() {
-        assertEquals("0.00", Csv.money(0.0))
-    }
-
-    @Test fun money_threeDecimals_forCostPerMile() {
-        assertEquals("0.165", Csv.money(0.165, digits = 3))
-    }
-
-    @Test fun decimal_null_isEmpty() {
-        assertEquals("", Csv.decimal(null))
-    }
-
-    @Test fun intFormatting_andNull() {
-        assertEquals("7", Csv.int(7))
-        assertEquals("", Csv.int(null))
-    }
-
-    @Test fun millisToMinutes() {
-        assertEquals("30.00", Csv.millisToMinutes(1_800_000L))
-        assertEquals("", Csv.millisToMinutes(null))
-    }
-
-    // ── ISO-8601 timestamps ─────────────────────────────────────────────
-
-    @Test fun isoDate_utc() {
-        // 2026-07-05T14:03:27Z
-        val ms = 1_783_260_207_000L
-        assertEquals("2026-07-05", Csv.isoDate(ms, utc))
-    }
-
-    @Test fun isoTime_utc() {
-        val ms = 1_783_260_207_000L
-        assertEquals("14:03:27", Csv.isoTime(ms, utc))
-    }
-
-    @Test fun isoDateTime_utc() {
-        val ms = 1_783_260_207_000L
-        assertEquals("2026-07-05T14:03:27", Csv.isoDateTime(ms, utc))
-    }
-
-    @Test fun isoDateTime_respectsZone() {
-        val ms = 1_783_260_207_000L // 14:03:27 UTC → EDT (UTC-4) in July
-        assertEquals("2026-07-05T10:03:27", Csv.isoDateTime(ms, ZoneId.of("America/New_York")))
-    }
-
-    @Test fun isoTimestamps_null_areEmpty() {
-        assertEquals("", Csv.isoDate(null, utc))
-        assertEquals("", Csv.isoTime(null, utc))
-        assertEquals("", Csv.isoDateTime(null, utc))
-    }
-
-    // ── IRS per-year mileage rates (#689) ───────────────────────────────
-
-    @Test fun irsRate_knownYears() {
-        assertEquals(0.70, IrsMileage.rateFor(2025)!!, 0.0)
-        assertEquals(0.725, IrsMileage.rateFor(2026)!!, 0.0)
-    }
-
-    @Test fun irsRate_unknownYear_isNull() {
-        assertNull(IrsMileage.rateFor(2027))
-        assertNull(IrsMileage.rateFor(2024))
-    }
-
-    @Test fun irsIsKnown_tracksThePublishedTable() {
-        assertTrue(IrsMileage.isKnown(2025))
-        assertTrue(IrsMileage.isKnown(2026))
-        assertFalse(IrsMileage.isKnown(2027))
-    }
-
-    @Test fun irsLatestKnown_isTheMaxYearsRate() {
-        assertEquals(2026 to 0.725, IrsMileage.latestKnown())
-    }
-
-    @Test fun irsDeduction_perYearRate() {
-        assertEquals(70.0, IrsMileage.deduction(100.0, 2025), 1e-9)
-        assertEquals(72.5, IrsMileage.deduction(100.0, 2026), 1e-9)
-        assertEquals(0.0, IrsMileage.deduction(0.0, 2025), 0.0)
-    }
-
-    @Test fun irsDeduction_unknownYear_fallsBackToLatestKnownRate() {
-        // 2027 has no published rate → latest known (2026 = $0.725/mi).
-        assertEquals(72.5, IrsMileage.deduction(100.0, 2027), 1e-9)
-    }
-
-    @Test fun irsEffectiveRate_publishedRate_orLatestKnownFallback() {
-        assertEquals(0.70, IrsMileage.effectiveRate(2025), 0.0)
-        assertEquals(0.725, IrsMileage.effectiveRate(2026), 0.0)
-        assertEquals(0.725, IrsMileage.effectiveRate(2027), 0.0) // future unknown → latest
-        assertEquals(0.725, IrsMileage.effectiveRate(2024), 0.0) // pre-table → latest (disclaimed below)
-    }
-
-    @Test fun irsFallbackNote_isNeutralForMissingYears_andNullForShippedYears() {
-        assertNull(IrsMileage.fallbackNote(2025))
-        assertNull(IrsMileage.fallbackNote(2026))
-        // Future year: absent from the shipped table.
-        assertEquals(
-            "2027 rate unavailable in DashBuddy; estimate uses 2026 rate.",
-            IrsMileage.fallbackNote(2027),
-        )
-        // Past year: absent from the shipped table; publication status is not inferred.
-        assertEquals(
-            "2024 rate unavailable in DashBuddy; estimate uses 2026 rate.",
-            IrsMileage.fallbackNote(2024),
-        )
+    @Test fun `IRS deductions use the year rate or latest fallback`() {
+        data class Case(val miles: Double, val year: Int, val expected: Double, val delta: Double)
+        listOf(
+            Case(100.0, 2025, 70.0, 1e-9),
+            Case(100.0, 2026, 72.5, 1e-9),
+            Case(0.0, 2025, 0.0, 0.0),
+            Case(100.0, 2027, 72.5, 1e-9),
+        ).forEach { (miles, year, expected, delta) ->
+            assertEquals("miles=$miles year=$year", expected, IrsMileage.deduction(miles, year), delta)
+        }
     }
 }

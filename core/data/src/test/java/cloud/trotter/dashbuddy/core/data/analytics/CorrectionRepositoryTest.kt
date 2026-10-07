@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
-import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
@@ -38,17 +37,33 @@ class CorrectionRepositoryTest {
         assertThrows(IllegalArgumentException::class.java) { runBlocking { repo.block() } }
     }
 
-    // ── addManualDelivery ───────────────────────────────────────────────
+    @Test
+    fun `invalid delivery numbers are rejected`() {
+        val cases = listOf<Pair<String, suspend CorrectionRepository.() -> Unit>>(
+            "addManualDelivery rejects a zero pay" to { manual(pay = 0.0) },
+            "addManualDelivery rejects a negative pay" to { manual(pay = -1.0) },
+            "addManualDelivery rejects a NaN pay" to { manual(pay = Double.NaN) },
+            "addManualDelivery rejects an infinite pay" to { manual(pay = Double.POSITIVE_INFINITY) },
+            "addManualDelivery rejects a negative tip" to { manual(pay = 5.0, tip = -0.01) },
+            "addManualDelivery rejects an infinite cash tip" to { manual(pay = 5.0, cashTip = Double.POSITIVE_INFINITY) },
+            "addManualDelivery rejects a NaN cash tip" to { manual(pay = 5.0, cashTip = Double.NaN) },
+            "addManualDelivery rejects a negative miles" to { manual(pay = 5.0, miles = -0.5) },
+            "addManualDelivery rejects an infinite miles" to { manual(pay = 5.0, miles = Double.NEGATIVE_INFINITY) },
+            "adjustDelivery rejects a zero newPay" to { adjust(newPay = 0.0) },
+            "adjustDelivery rejects a negative newPay" to { adjust(newPay = -1.0) },
+            "adjustDelivery rejects a NaN newPay" to { adjust(newPay = Double.NaN) },
+            "adjustDelivery rejects an infinite newPay" to { adjust(newPay = Double.POSITIVE_INFINITY) },
+            "adjustDelivery rejects a negative newTip" to { adjust(newTip = -1.0) },
+            "adjustDelivery rejects an infinite newCashTip" to { adjust(newCashTip = Double.NEGATIVE_INFINITY) },
+            "adjustDelivery rejects a negative newMiles" to { adjust(newMiles = -0.5) },
+            "adjustDelivery rejects a NaN newMiles" to { adjust(newMiles = Double.NaN) },
+        )
+        cases.forEach { (name, input) ->
+            assertThrows(name, IllegalArgumentException::class.java) { runBlocking { repo.input() } }
+        }
+    }
 
-    @Test fun `addManualDelivery rejects a zero pay`() = rejects { manual(pay = 0.0) }
-    @Test fun `addManualDelivery rejects a negative pay`() = rejects { manual(pay = -1.0) }
-    @Test fun `addManualDelivery rejects a NaN pay`() = rejects { manual(pay = Double.NaN) }
-    @Test fun `addManualDelivery rejects an infinite pay`() = rejects { manual(pay = Double.POSITIVE_INFINITY) }
-    @Test fun `addManualDelivery rejects a negative tip`() = rejects { manual(pay = 5.0, tip = -0.01) }
-    @Test fun `addManualDelivery rejects an infinite cash tip`() = rejects { manual(pay = 5.0, cashTip = Double.POSITIVE_INFINITY) }
-    @Test fun `addManualDelivery rejects a NaN cash tip`() = rejects { manual(pay = 5.0, cashTip = Double.NaN) }
-    @Test fun `addManualDelivery rejects a negative miles`() = rejects { manual(pay = 5.0, miles = -0.5) }
-    @Test fun `addManualDelivery rejects an infinite miles`() = rejects { manual(pay = 5.0, miles = Double.NEGATIVE_INFINITY) }
+    // ── addManualDelivery ───────────────────────────────────────────────
 
     @Test
     fun `addManualDelivery accepts a finite positive pay with zero and null optionals`() = runTest {
@@ -61,15 +76,6 @@ class CorrectionRepositoryTest {
 
     @Test
     fun `adjustDelivery rejects an empty edit with no note`() = rejects { adjustDelivery(targetEventSequenceId = 1L, sessionId = "S1") }
-
-    @Test fun `adjustDelivery rejects a zero newPay`() = rejects { adjust(newPay = 0.0) }
-    @Test fun `adjustDelivery rejects a negative newPay`() = rejects { adjust(newPay = -1.0) }
-    @Test fun `adjustDelivery rejects a NaN newPay`() = rejects { adjust(newPay = Double.NaN) }
-    @Test fun `adjustDelivery rejects an infinite newPay`() = rejects { adjust(newPay = Double.POSITIVE_INFINITY) }
-    @Test fun `adjustDelivery rejects a negative newTip`() = rejects { adjust(newTip = -1.0) }
-    @Test fun `adjustDelivery rejects an infinite newCashTip`() = rejects { adjust(newCashTip = Double.NEGATIVE_INFINITY) }
-    @Test fun `adjustDelivery rejects a negative newMiles`() = rejects { adjust(newMiles = -0.5) }
-    @Test fun `adjustDelivery rejects a NaN newMiles`() = rejects { adjust(newMiles = Double.NaN) }
 
     @Test
     fun `adjustDelivery accepts a note-only edit and a finite positive pay edit`() = runTest {

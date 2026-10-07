@@ -1,8 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mockito.kotlin.mock
 
@@ -13,75 +12,32 @@ import org.mockito.kotlin.mock
  * reconstructed end-to-end through the fold.
  */
 class StoreResolutionRunnerLadderTest {
-
     private val runner = StoreResolutionRunner(mock<AnalyticsDao>())
 
-    // ── keyTier ─────────────────────────────────────────────────────────
-
-    @Test
-    fun `keyTier orders chain-only below address below receipt`() {
-        assertTrue(runner.keyTier("doordash|heb|") == 0)
-        assertTrue(runner.keyTier("doordash|heb|@12125") == 1)
-        assertTrue(runner.keyTier("doordash|target|02426") == 2)
+    @Test fun `key tiers`() {
+        listOf("doordash|heb|" to 0, "doordash|heb|@12125" to 1, "doordash|target|02426" to 2)
+            .forEach { (key, tier) -> assertEquals(key, tier, runner.keyTier(key)) }
     }
 
-    // ── upgrades (NOT downgrades) ───────────────────────────────────────
-
-    @Test
-    fun `chain-only to address is an upgrade — re-stamp allowed`() {
-        assertFalse(runner.isMonotonicDowngrade("doordash|heb|", "doordash|heb|@12125"))
-    }
-
-    @Test
-    fun `chain-only to receipt is an upgrade`() {
-        assertFalse(runner.isMonotonicDowngrade("doordash|target|", "doordash|target|02426"))
-    }
-
-    @Test
-    fun `address to receipt is an upgrade — re-stamp allowed`() {
-        assertFalse(runner.isMonotonicDowngrade("doordash|heb|@12125", "doordash|heb|799"))
-    }
-
-    // ── blocked downgrades ──────────────────────────────────────────────
-
-    @Test
-    fun `receipt to address is BLOCKED — the genuinely new #773 edge`() {
-        assertTrue(runner.isMonotonicDowngrade("doordash|target|02426", "doordash|target|@12125"))
-    }
-
-    @Test
-    fun `address to chain-only is BLOCKED`() {
-        assertTrue(runner.isMonotonicDowngrade("doordash|heb|@12125", "doordash|heb|"))
-    }
-
-    @Test
-    fun `receipt to chain-only is BLOCKED`() {
-        assertTrue(runner.isMonotonicDowngrade("doordash|target|02426", "doordash|target|"))
-    }
-
-    // ── no-churn + platform-upgrade + guards ────────────────────────────
-
-    @Test
-    fun `an identical key is not a downgrade (value-compare no-churn)`() {
-        assertFalse(runner.isMonotonicDowngrade("doordash|heb|@12125", "doordash|heb|@12125"))
-    }
-
-    @Test
-    fun `a platform upgrade across platforms is allowed at every tier (FIX 7 stays intact)`() {
-        // _unknown|heb|… → doordash|heb|… : different platform+chain prefix, so never a downgrade even
-        // though the tiers are equal. This is the FIX 7 re-stamp the ladder must not break.
-        assertFalse(runner.isMonotonicDowngrade("_unknown|heb|", "doordash|heb|"))
-        assertFalse(runner.isMonotonicDowngrade("_unknown|heb|@12125", "doordash|heb|@12125"))
-        assertFalse(runner.isMonotonicDowngrade("_unknown|target|02426", "doordash|target|02426"))
-    }
-
-    @Test
-    fun `a null current key is never a downgrade`() {
-        assertFalse(runner.isMonotonicDowngrade(null, "doordash|heb|@12125"))
-    }
-
-    @Test
-    fun `a different chain is never a downgrade (prefix guard)`() {
-        assertFalse(runner.isMonotonicDowngrade("doordash|target|02426", "doordash|heb|"))
+    @Test fun `tier transitions and prefix exceptions`() {
+        data class Case(val name: String, val current: String?, val next: String, val downgrade: Boolean)
+        val cases = listOf(
+            Case("chain to address", "doordash|heb|", "doordash|heb|@12125", false),
+            Case("chain to receipt", "doordash|target|", "doordash|target|02426", false),
+            Case("address to receipt", "doordash|heb|@12125", "doordash|heb|799", false),
+            Case("receipt to address", "doordash|target|02426", "doordash|target|@12125", true),
+            Case("address to chain", "doordash|heb|@12125", "doordash|heb|", true),
+            Case("receipt to chain", "doordash|target|02426", "doordash|target|", true),
+            Case("identical key", "doordash|heb|@12125", "doordash|heb|@12125", false),
+            // FIX 7: changing the platform prefix permits re-stamping at every tier.
+            Case("platform upgrade chain", "_unknown|heb|", "doordash|heb|", false),
+            Case("platform upgrade address", "_unknown|heb|@12125", "doordash|heb|@12125", false),
+            Case("platform upgrade receipt", "_unknown|target|02426", "doordash|target|02426", false),
+            Case("null current", null, "doordash|heb|@12125", false),
+            Case("different chain", "doordash|target|02426", "doordash|heb|", false),
+        )
+        cases.forEach { (name, current, next, downgrade) ->
+            assertEquals(name, downgrade, runner.isMonotonicDowngrade(current, next))
+        }
     }
 }

@@ -4,126 +4,61 @@ import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import cloud.trotter.dashbuddy.domain.model.location.UserLocation
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import org.junit.Assert.assertEquals
-import org.junit.Before
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.mockito.kotlin.mock
 
 class EiaFuelPriceTest {
+    // EiaApi is never called: these tables exercise pure logic.
+    private val fuel = EiaFuelPrice(mock<EiaApi>())
 
-    // EiaApi is never called in these tests — the methods under test are pure logic.
-    private val mockApi = mock<EiaApi>()
-    private lateinit var fuel: EiaFuelPrice
-
-    @Before
-    fun setUp() {
-        fuel = EiaFuelPrice(mockApi)
+    @Test fun `state regions`() {
+        listOf(
+            "New York" to "R10",
+            "Florida" to "R10",
+            "Virginia" to "R10",
+            "Ohio" to "R20",
+            "Illinois" to "R20",
+            "Minnesota" to "R20",
+            "Texas" to "R30",
+            "Louisiana" to "R30",
+            "Colorado" to "R40",
+            "Montana" to "R40",
+            "California" to "R50",
+            "Washington" to "R50",
+            "Hawaii" to "R50",
+            "Puerto Rico" to "NUS",
+            "Unknown Territory" to "NUS",
+            "california" to "R50",
+            "CALIFORNIA" to "R50",
+            "new york" to "R10",
+        ).forEach { (state, region) -> assertEquals(state, region, fuel.mapStateToPaddRegion(state)) }
     }
 
-    // -------------------------------------------------------------------------
-    // mapStateToPaddRegion — spot-check one state per PADD region
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `East Coast states map to R10`() {
-        assertEquals("R10", fuel.mapStateToPaddRegion("New York"))
-        assertEquals("R10", fuel.mapStateToPaddRegion("Florida"))
-        assertEquals("R10", fuel.mapStateToPaddRegion("Virginia"))
+    @Test fun `location fallback`() {
+        val coords = Coordinates(0.0, 0.0)
+        listOf(
+            Triple("null location", null, "NUS"),
+            Triple("null state", UserLocation(coordinates = coords, stateName = null), "NUS"),
+            Triple("blank state", UserLocation(coordinates = coords, stateName = ""), "NUS"),
+            Triple("valid state", UserLocation(coordinates = coords, stateName = "Oregon"), "R50"),
+        ).forEach { (name, location, region) -> assertEquals(name, region, fuel.getRegionCode(location)) }
     }
 
-    @Test
-    fun `Midwest states map to R20`() {
-        assertEquals("R20", fuel.mapStateToPaddRegion("Ohio"))
-        assertEquals("R20", fuel.mapStateToPaddRegion("Illinois"))
-        assertEquals("R20", fuel.mapStateToPaddRegion("Minnesota"))
-    }
-
-    @Test
-    fun `Gulf Coast states map to R30`() {
-        assertEquals("R30", fuel.mapStateToPaddRegion("Texas"))
-        assertEquals("R30", fuel.mapStateToPaddRegion("Louisiana"))
-    }
-
-    @Test
-    fun `Rocky Mountain states map to R40`() {
-        assertEquals("R40", fuel.mapStateToPaddRegion("Colorado"))
-        assertEquals("R40", fuel.mapStateToPaddRegion("Montana"))
-    }
-
-    @Test
-    fun `West Coast states map to R50`() {
-        assertEquals("R50", fuel.mapStateToPaddRegion("California"))
-        assertEquals("R50", fuel.mapStateToPaddRegion("Washington"))
-        assertEquals("R50", fuel.mapStateToPaddRegion("Hawaii"))
-    }
-
-    @Test
-    fun `unrecognized state falls back to NUS`() {
-        assertEquals("NUS", fuel.mapStateToPaddRegion("Puerto Rico"))
-        assertEquals("NUS", fuel.mapStateToPaddRegion("Unknown Territory"))
-    }
-
-    @Test
-    fun `state name matching is case-insensitive`() {
-        assertEquals("R50", fuel.mapStateToPaddRegion("california"))
-        assertEquals("R50", fuel.mapStateToPaddRegion("CALIFORNIA"))
-        assertEquals("R10", fuel.mapStateToPaddRegion("new york"))
-    }
-
-    // -------------------------------------------------------------------------
-    // getRegionCode — null / missing location
-    // -------------------------------------------------------------------------
-
-    private val dummyCoords = Coordinates(0.0, 0.0)
-
-    @Test
-    fun `null UserLocation falls back to NUS`() {
-        assertEquals("NUS", fuel.getRegionCode(null))
-    }
-
-    @Test
-    fun `UserLocation with null stateName falls back to NUS`() {
-        val location = UserLocation(coordinates = dummyCoords, stateName = null)
-        assertEquals("NUS", fuel.getRegionCode(location))
-    }
-
-    @Test
-    fun `UserLocation with blank stateName falls back to NUS`() {
-        val location = UserLocation(coordinates = dummyCoords, stateName = "")
-        assertEquals("NUS", fuel.getRegionCode(location))
-    }
-
-    @Test
-    fun `UserLocation with valid stateName returns correct region`() {
-        val location = UserLocation(coordinates = dummyCoords, stateName = "Oregon")
-        assertEquals("R50", fuel.getRegionCode(location))
-    }
-
-    // -------------------------------------------------------------------------
-    // buildSeriesId
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `buildSeriesId for REGULAR fuel produces correct string`() {
-        assertEquals("EMM_EPMRU_PTE_R50_DPG", fuel.buildSeriesId(FuelType.REGULAR, "R50"))
-    }
-
-    @Test
-    fun `buildSeriesId for MIDGRADE fuel produces correct string`() {
-        assertEquals("EMM_EPMMU_PTE_NUS_DPG", fuel.buildSeriesId(FuelType.MIDGRADE, "NUS"))
-    }
-
-    @Test
-    fun `buildSeriesId for PREMIUM fuel produces correct string`() {
-        assertEquals("EMM_EPMPU_PTE_R10_DPG", fuel.buildSeriesId(FuelType.PREMIUM, "R10"))
-    }
-
-    @Test
-    fun `buildSeriesId for DIESEL fuel produces correct string`() {
-        assertEquals("EMD_EPD2D_PTE_R30_DPG", fuel.buildSeriesId(FuelType.DIESEL, "R30"))
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `buildSeriesId for ELECTRICITY throws IllegalArgumentException`() {
-        fuel.buildSeriesId(FuelType.ELECTRICITY, "NUS")
+    @Test fun `fuel series`() {
+        listOf(
+            Triple(FuelType.REGULAR, "R50", "EMM_EPMRU_PTE_R50_DPG"),
+            Triple(FuelType.MIDGRADE, "NUS", "EMM_EPMMU_PTE_NUS_DPG"),
+            Triple(FuelType.PREMIUM, "R10", "EMM_EPMPU_PTE_R10_DPG"),
+            Triple(FuelType.DIESEL, "R30", "EMD_EPD2D_PTE_R30_DPG"),
+            Triple(FuelType.ELECTRICITY, "NUS", null),
+        ).forEach { (type, region, series) ->
+            val name = "$type in $region"
+            if (series == null) {
+                assertThrows(name, IllegalArgumentException::class.java) { fuel.buildSeriesId(type, region) }
+            } else {
+                assertEquals(name, series, fuel.buildSeriesId(type, region))
+            }
+        }
     }
 }

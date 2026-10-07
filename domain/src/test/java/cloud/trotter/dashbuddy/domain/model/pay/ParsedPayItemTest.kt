@@ -11,51 +11,26 @@ import org.junit.Test
  * still token-matched raw by [cloud.trotter.dashbuddy.domain.state.StoreChainProjector]).
  */
 class ParsedPayItemTest {
-
-    @Test
-    fun `bare 2-6 digit type displays as Store number`() {
-        assertEquals("Store #618", ParsedPayItem(type = "618", amount = 10.0).displayLabel)
-        assertEquals("Store #99", ParsedPayItem(type = "99", amount = 1.0).displayLabel)
-        assertEquals("Store #123456", ParsedPayItem(type = "123456", amount = 1.0).displayLabel)
-    }
-
-    @Test
-    fun `bare digit type does not mutate the raw type field`() {
-        val item = ParsedPayItem(type = "618", amount = 10.0)
-        assertEquals("Store #618", item.displayLabel)
-        assertEquals("618", item.type)
-    }
-
-    @Test
-    fun `full merchant name passes through verbatim`() {
-        assertEquals("Chipotle", ParsedPayItem(type = "Chipotle", amount = 3.0).displayLabel)
-        assertEquals("Sake Cafe", ParsedPayItem(type = "Sake Cafe", amount = 3.0).displayLabel)
-    }
-
-    @Test
-    fun `app pay labels like Base Pay pass through verbatim`() {
-        assertEquals("Base Pay", ParsedPayItem(type = "Base Pay", amount = 5.0).displayLabel)
-        assertEquals("Peak Pay", ParsedPayItem(type = "Peak Pay", amount = 2.5).displayLabel)
-    }
-
-    @Test
-    fun `single digit is too short to be a store number - passes through verbatim`() {
-        assertEquals("7", ParsedPayItem(type = "7", amount = 1.0).displayLabel)
-    }
-
-    @Test
-    fun `seven-plus digit run is too long to be a store number - passes through verbatim`() {
-        assertEquals("1234567", ParsedPayItem(type = "1234567", amount = 1.0).displayLabel)
-    }
-
-    @Test
-    fun `digits mixed with other characters are not treated as a bare store number`() {
-        assertEquals("Store 618", ParsedPayItem(type = "Store 618", amount = 1.0).displayLabel)
-        assertEquals("618A", ParsedPayItem(type = "618A", amount = 1.0).displayLabel)
-    }
-
-    @Test
-    fun `blank type passes through verbatim`() {
-        assertEquals("", ParsedPayItem(type = "", amount = 0.0).displayLabel)
+    @Test fun `display labels preserve the raw type`() {
+        listOf(
+            Triple("618", 10.0, "Store #618"),
+            Triple("99", 1.0, "Store #99"),
+            Triple("123456", 1.0, "Store #123456"),
+            Triple("618", 10.0, "Store #618"),
+            Triple("Chipotle", 3.0, "Chipotle"),
+            Triple("Sake Cafe", 3.0, "Sake Cafe"),
+            Triple("Base Pay", 5.0, "Base Pay"),
+            Triple("Peak Pay", 2.5, "Peak Pay"),
+            Triple("7", 1.0, "7"),
+            Triple("1234567", 1.0, "1234567"),
+            Triple("Store 618", 1.0, "Store 618"),
+            Triple("618A", 1.0, "618A"),
+            Triple("", 0.0, ""),
+        ).forEachIndexed { index, (type, amount, label) ->
+            val name = "row $index type=<$type> amount=$amount"
+            val item = ParsedPayItem(type = type, amount = amount)
+            assertEquals(name, label, item.displayLabel)
+            assertEquals("$name raw type", type, item.type)
+        }
     }
 }
