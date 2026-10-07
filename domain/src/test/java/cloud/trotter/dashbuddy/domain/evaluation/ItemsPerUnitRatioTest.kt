@@ -35,6 +35,11 @@ class ItemsPerUnitRatioTest {
         val expected = (63.0 / 79.0 + 22.0 / 31.0) / 2.0
         assertEquals(expected, pair.first!!, 1e-9)
         assertEquals(2, pair.second)
+
+        var reversed = ItemsPerUnitRatio.fold(null, 0, units = 31, items = 22)
+        reversed = ItemsPerUnitRatio.fold(reversed.first, reversed.second, units = 79, items = 63)
+        assertEquals(expected, reversed.first!!, 1e-9)
+        assertEquals(2, reversed.second)
     }
 
     @Test

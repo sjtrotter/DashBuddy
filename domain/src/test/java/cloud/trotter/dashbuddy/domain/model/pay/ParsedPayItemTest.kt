@@ -22,8 +22,8 @@ class ParsedPayItemTest {
     @Test
     fun `bare digit type does not mutate the raw type field`() {
         val item = ParsedPayItem(type = "618", amount = 10.0)
-        assertEquals("618", item.type)
         assertEquals("Store #618", item.displayLabel)
+        assertEquals("618", item.type)
     }
 
     @Test

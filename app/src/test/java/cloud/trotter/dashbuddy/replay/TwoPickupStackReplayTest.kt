@@ -239,51 +239,6 @@ class TwoPickupStackReplayTest {
         )
     }
 
-    @Test
-    fun `receipted jobs' dropRealizedPay shares sum to their receipt total (#630 mainline pin)`() {
-        // The #630 no-regression invariant over the whole trace. Two honesty fixes vs the naive pin:
-        //  (a) DEDUP-AWARE: SessionReplay has NO effects_fired dedup, so a taskId re-emitted (null at a
-        //      non-final PostTask exit, then its share at close) appears TWICE in the raw trace. The
-        //      live engine persists only the FIRST emission per taskId — mirror that here (first wins)
-        //      so the summed Σ matches what actually lands in app_events.
-        //  (b) OBSERVED-RECEIPT total: derive the expected total from the PostTask OBSERVATION's
-        //      parsedPay (the receipt the dasher actually saw), NOT from the row payloads — a #630
-        //      withheld receipt (mid-stack exit stamps parsedPay = null on the row) would otherwise
-        //      silently drop the whole job from the assertion, hiding the exact shape #630 defends.
-        // (With the CAPTURED-only `run()` sequence no DELIVERY_COMPLETED is reached — the assertion
-        // is vacuous here — but it pins the mainline the moment a job closes cleanly. The #700 close
-        // is driven by `runToClose()`; those completions are receipt-LESS shop drops (no per-drop
-        // receipt on this job), so they carry no `dropRealizedPay` and are correctly out of scope for
-        // this receipt-total pin.)
-        val steps = run()
-
-        // Per job, the receipt total the dasher observed on a PostTask frame (max across the trace —
-        // the FINAL receipt is the largest; keyed on the active job at that step).
-        val observedReceiptByJob = HashMap<String, Double>()
-        steps.forEach { s ->
-            val fields = (s.observation as? Observation.Screen)?.parsed as? ParsedFields.PostTaskFields
-            val total = fields?.parsedPay?.total ?: return@forEach
-            val jobId = dd(s)?.activeJob?.jobId ?: return@forEach
-            observedReceiptByJob[jobId] = maxOf(observedReceiptByJob[jobId] ?: 0.0, total)
-        }
-
-        // DELIVERY_COMPLETED rows, deduped to the FIRST emission per taskId (live-engine persistence).
-        val persistedRows = steps.flatMap { it.events }
-            .filter { it.type == AppEventType.DELIVERY_COMPLETED }
-            .mapNotNull { it.payload as? DeliveryPayload }
-            .distinctBy { it.taskId }
-        persistedRows.groupBy { it.jobId }.forEach { (jobId, rows) ->
-            val receiptTotal = observedReceiptByJob[jobId] ?: return@forEach
-            val summed = rows.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) }
-            assertEquals(
-                "job $jobId: Σ dropRealizedPay (first-emission-per-taskId) must equal the OBSERVED " +
-                    "receipt total (cents-exact)",
-                Math.round(receiptTotal * 100.0),
-                summed,
-            )
-        }
-    }
-
     // =============================================================================================
     // #700 — the two drops drive to a clean job close, both completions minted. The close fires via
     // the STRICT #596/#615 arm of `isJobPhysicallyComplete` (both placeholders resolved + finished +

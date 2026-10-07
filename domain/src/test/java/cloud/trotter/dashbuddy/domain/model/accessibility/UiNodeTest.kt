@@ -70,12 +70,6 @@ class UiNodeTest {
     }
 
     @Test
-    fun `equals - same node identity is equal to itself`() {
-        val a = node(text = "Test")
-        assertEquals(a, a)
-    }
-
-    @Test
     fun `equals - nodes with different children but same fields are equal`() {
         // equals intentionally excludes children and parent (avoids recursive comparison)
         val child = node(text = "Child")

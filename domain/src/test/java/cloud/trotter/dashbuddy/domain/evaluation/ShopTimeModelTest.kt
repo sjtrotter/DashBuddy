@@ -106,6 +106,12 @@ class ShopTimeModelTest {
         ShopRate.fold(avg, n, 24, 30.0).let { avg = it.first; n = it.second } // 0.8
         ShopRate.fold(avg, n, 20, 20.0).let { avg = it.first; n = it.second } // 1.0
         assertEquals(2, n); assertEquals(0.9, avg!!, 1e-9)
+
+        var reversed = ShopRate.fold(null, 0, 20, 20.0)
+        reversed = ShopRate.fold(reversed.first, reversed.second, 24, 30.0)
+        assertEquals(2, reversed.second)
+        assertEquals(0.9, reversed.first!!, 1e-9)
+
         // a sub-floor 2-item / 0.5-min blip is ignored (no poisoning)
         val (avg2, n2) = ShopRate.fold(avg, n, 2, 0.5)
         assertEquals(2, n2); assertEquals(0.9, avg2!!, 1e-9)

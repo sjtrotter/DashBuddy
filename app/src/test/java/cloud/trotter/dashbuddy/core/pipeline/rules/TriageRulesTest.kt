@@ -2,13 +2,13 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
+import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -274,10 +274,10 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `dropoff_photo — recognized and sets a (non-null) dropoff-arrived flow`() {
+    fun `dropoff_photo — recognized and sets dropoff-arrived flow`() {
         val t = tree(node(id = "drop_off_workflow_host_fragment"), node(text = "Take photo of drop-off location"))
         assertEquals("dropoff_photo", screen(t))
-        assertNotNull("dropoff completion implies arrival → must carry a flow", screenRuleset.matchFirst(t)?.flow)
+        assertEquals("dropoff completion implies arrival", Flow.TaskDropoffArrived, screenRuleset.matchFirst(t)?.flow)
     }
 
     @Test
@@ -468,7 +468,7 @@ class TriageRulesTest {
     fun `navigation_generic — ETA path keeps flow idle (so a declined offer returns to idle)`() {
         val t = tree(node(text = "5 min"), node(text = "Exit 23"), node(text = "1.2 mi"))
         assertEquals("navigation_generic", screen(t))
-        assertNotNull("ETA nav must stay idle to exit the offer flow", screenRuleset.matchFirst(t)?.flow)
+        assertEquals("ETA nav must stay idle to exit the offer flow", Flow.Idle, screenRuleset.matchFirst(t)?.flow)
     }
 
     @Test

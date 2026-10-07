@@ -1,9 +1,7 @@
 package cloud.trotter.dashbuddy.domain.pipeline
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EffectVerbTest {
@@ -107,8 +105,18 @@ class EffectVerbTest {
         val noneVerbs = EffectVerb.entries.filter {
             it.tier == PermissionTier.NONE
         }
-        // BUBBLE, LOG, EVALUATE_OFFER, SESSION_START, SESSION_END, SCHEDULE_TIMEOUT, CANCEL_TIMEOUT
-        assertTrue("Expected multiple NONE-tier verbs", noneVerbs.size >= 7)
+        assertEquals(
+            setOf(
+                EffectVerb.BUBBLE,
+                EffectVerb.LOG,
+                EffectVerb.EVALUATE_OFFER,
+                EffectVerb.SESSION_START,
+                EffectVerb.SESSION_END,
+                EffectVerb.SCHEDULE_TIMEOUT,
+                EffectVerb.CANCEL_TIMEOUT,
+            ),
+            noneVerbs.toSet(),
+        )
     }
 
     // =========================================================================

@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.domain.model.offer
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,14 +18,6 @@ class OfferBadgeTest {
                 "displayName for $badge should be non-blank",
                 badge.displayName.isNotBlank()
             )
-        }
-    }
-
-    @Test
-    fun `valueOf round-trips the serialized name for every badge`() {
-        // DataTypeConverters persists/restores badges by enum name — guard that contract.
-        OfferBadge.entries.forEach { badge ->
-            assertEquals(badge, OfferBadge.valueOf(badge.name))
         }
     }
 }

@@ -46,14 +46,6 @@ class TransitionDefaultsTest {
         }
     }
 
-    @Test
-    fun `defaults map has no extra keys beyond TransitionTrigger entries`() {
-        val triggerSet = TransitionTrigger.entries.toSet()
-        for (key in TransitionDefaults.defaults.keys) {
-            assertTrue("Unknown trigger in defaults: $key", key in triggerSet)
-        }
-    }
-
     // =========================================================================
     // TransitionDefaults — specific mappings
     // =========================================================================
