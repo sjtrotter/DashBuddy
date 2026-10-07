@@ -617,7 +617,9 @@ unsolicited and closed-job results are inert. Recovery drops an unanswered reque
 count so a fresh coherent frame can re-ask; a landed estimate is retained.
 
 The landing edge emits one Dispatcher completion-rate advisory only when a corrected hourly is
-known: no advisory without an hourly, though the HUD still uses the revised minutes. Live
+known AND the store's item count differs from the offer's quote (#1291 — an equal count says nothing
+new; an offer that quoted no count still gets it): no advisory without an hourly, though the HUD still
+uses the revised minutes. Live
 pickup/delivery cards read `Job.liveEstMinutes` and mark the rate “revised at arrival” only while
 `Job.activeArrivalEstimate` is present. A landed estimate is served only while the job stays
 eligible: a second pickup activating later stops it being served immediately, keeps the stored
