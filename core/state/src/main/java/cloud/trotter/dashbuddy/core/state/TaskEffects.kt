@@ -74,7 +74,11 @@ internal fun EffectMap.diffTask(
             ))
         }
         val estimate = job?.arrivalEstimate
-        if (prevSameJob?.arrivalEstimate == null && estimate?.correctedDollarsPerHour != null) {
+        // #1291: the advisory speaks only when the store's count says something the offer did not —
+        // a count equal to the quote changes nothing the dasher needs to hear. An offer that quoted
+        // no count gets the advisory: the store's count is then new information.
+        val countChanged = estimate != null && estimate.quotedItems != estimate.observedItems
+        if (prevSameJob?.arrivalEstimate == null && estimate?.correctedDollarsPerHour != null && countChanged) {
             val text = buildString {
                 append("Store lists ${estimate.observedItems} items")
                 estimate.quotedItems?.let { append(" (offer said $it)") }
