@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.main.analytics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,11 +25,12 @@ internal data class Figure(val label: String, val value: String, val sub: String
 @Composable
 internal fun TierOneFigures(figures: List<Figure>) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        figures.chunked(3).forEach { row ->
+        figures.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { figure ->
                     AppStatTile(figure.label, figure.value, Modifier.weight(1f), sub = figure.sub)
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -37,17 +39,15 @@ internal fun TierOneFigures(figures: List<Figure>) {
 @Composable
 internal fun moneyFigures(economics: PeriodEconomics, payMix: PayMix): List<Figure> {
     val split = MoneyWentModel.from(economics)
-    val rate = split.ratePerMile
     val figures = mutableListOf(
         Figure(stringResource(R.string.analytics_tier1_earned), Formats.money(split.cameIn)),
         Figure(
             stringResource(R.string.money_tab_where_went_segment_car),
             Formats.money(split.carCosts),
-            if (rate == null) stringResource(R.string.money_tab_where_went_disclosure_no_miles)
-            else stringResource(
-                R.string.money_tab_where_went_disclosure_format,
-                Formats.decimal(split.miles), Formats.money(rate),
-            ),
+            if (split.miles > 0.0) stringResource(
+                R.string.analytics_hero_summary_miles_format,
+                Formats.decimal(split.miles),
+            ) else stringResource(R.string.time_tab_no_miles_measured_yet),
         ),
         Figure(
             stringResource(R.string.money_tab_stat_net_per_hour),

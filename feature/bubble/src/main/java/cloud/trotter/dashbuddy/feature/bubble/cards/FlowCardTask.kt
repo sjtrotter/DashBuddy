@@ -103,7 +103,6 @@ internal fun PickupBody(snap: FlowCardSnapshot.Pickup, isActive: Boolean) {
         primary = snap.storeName,
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
-        estRevisedAtArrival = snap.estRevisedAtArrival,
         perMile = snap.perMile,
         confirmedAt = snap.confirmedAt,
         itemsShopped = snap.itemsShopped,
@@ -126,7 +125,6 @@ internal fun DeliveryBody(snap: FlowCardSnapshot.Delivery, isActive: Boolean) {
         primary = dropoffOrderLabel(snap.storeName),
         netPay = snap.netPay,
         estMinutes = snap.estMinutes,
-        estRevisedAtArrival = snap.estRevisedAtArrival,
         perMile = snap.perMile,
         confirmedAt = null,
         itemsShopped = null,
@@ -154,7 +152,6 @@ private fun TaskBody(
     primary: String,
     netPay: Double?,
     estMinutes: Double?,
-    estRevisedAtArrival: Boolean,
     perMile: Double?,
     confirmedAt: Long?,
     itemsShopped: Int?,
@@ -230,8 +227,6 @@ private fun TaskBody(
                 color = hourly?.let { hourlyColor(it, c) } ?: c.text3,
             )
         }
-
-        arrivalRevisionCaptionResource(estRevisedAtArrival)?.let { Caption(stringResource(it)) }
 
         // ---- arrival / deadline caption ----
         val caption = buildString {
@@ -370,7 +365,3 @@ private fun deadlineColor(remainingMs: Long): Color {
 
 @Composable
 private fun formatTime(millis: Long): String = rememberTimeFormatter().invoke(millis)
-
-/** Resource selection stays a pure function of the snapshot's arrival anchor. */
-internal fun arrivalRevisionCaptionResource(estRevisedAtArrival: Boolean): Int? =
-    if (estRevisedAtArrival) R.string.bubble_task_est_revised else null

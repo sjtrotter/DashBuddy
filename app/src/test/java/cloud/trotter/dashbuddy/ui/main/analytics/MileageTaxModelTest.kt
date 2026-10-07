@@ -34,7 +34,7 @@ class MileageTaxModelTest {
         AnalyticsWindows.current(granularity, today)
 
     // Formats.money* pins Locale.getDefault(); fix it (and restore — repo convention, see
-    // FormatsTest) so the "$0.725/mi" assertions are deterministic without leaking Locale.US
+    // FormatsTest) so the money assertions are deterministic without leaking Locale.US
     // into later test classes in the shared test JVM.
     private lateinit var originalLocale: Locale
 
@@ -50,9 +50,7 @@ class MileageTaxModelTest {
             100.0, noonUtc(2026, 7, 15), utc,
             window(WindowGranularity.WEEK, LocalDate.of(2026, 7, 15)),
         )
-        assertTrue(labels.deductionLine.contains("IRS 2026"))
-        assertTrue(labels.deductionLine.contains("$0.725/mi"))
-        assertTrue(labels.deductionLine.contains("$72.50")) // 100 * 0.725
+        assertEquals("$72.50 est. IRS 2026 mileage deduction", labels.deductionLine) // 100 * 0.725
         assertNull(labels.disclaimer)
         assertNull(labels.spansYearsNote)
     }
@@ -62,9 +60,7 @@ class MileageTaxModelTest {
             100.0, noonUtc(2025, 6, 15), utc,
             window(WindowGranularity.DAY, LocalDate.of(2025, 6, 15)),
         )
-        assertTrue(labels.deductionLine.contains("IRS 2025"))
-        assertTrue(labels.deductionLine.contains("$0.700/mi"))
-        assertTrue(labels.deductionLine.contains("$70.00"))
+        assertEquals("$70.00 est. IRS 2025 mileage deduction", labels.deductionLine)
     }
 
     @Test fun unknownYear_fallsBackToLatestRate_withDisclaimer() {
@@ -73,9 +69,7 @@ class MileageTaxModelTest {
             window(WindowGranularity.MONTH, LocalDate.of(2027, 6, 15)),
         )
         // 2027 absent from the table → latest known rate (2026 = $0.725/mi), labelled honestly.
-        assertTrue(labels.deductionLine.contains("IRS 2027"))
-        assertTrue(labels.deductionLine.contains("$0.725/mi"))
-        assertTrue(labels.deductionLine.contains("$72.50"))
+        assertEquals("$72.50 est. IRS 2027 mileage deduction", labels.deductionLine)
         assertNull(labels.spansYearsNote)
         assertEquals(
             "2027 rate unavailable in DashBuddy; estimate uses 2026 rate.",
@@ -131,9 +125,7 @@ class MileageTaxModelTest {
             zone = utc,
             window = window(WindowGranularity.MONTH, LocalDate.of(2025, 6, 15)), // … window is June 2025
         )
-        assertTrue(labels.deductionLine.contains("IRS 2025"))
-        assertTrue(labels.deductionLine.contains("$0.700/mi"))
-        assertTrue(labels.deductionLine.contains("$70.00"))
+        assertEquals("$70.00 est. IRS 2025 mileage deduction", labels.deductionLine)
         assertNull(labels.spansYearsNote)
     }
 

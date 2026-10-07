@@ -258,8 +258,7 @@
          described as pure driving, and a long gap is counted, not judged (§9). -->
     <string name="time_tab_rate_pair_title">NET/HR</string>
     <string name="time_tab_rate_whole_shift">Online</string>
-    <string name="time_tab_rate_distinction">Working: delivery time with measured gaps removed. Online: all online time, gaps included.</string>
-    <string name="time_tab_rate_gaps_note_format">Working time is delivery time minus %1$s measured %2$s between deliveries.</string>
+    <string name="time_tab_rate_distinction">Working: delivery time excluding measured gaps. Online: all online time.</string>
     <string name="time_tab_rate_no_gaps_note">No gaps measured; the working rate may read low.</string>
     <string name="time_tab_rate_working_unmeasured">No delivery time measured; working rate unavailable.</string>
     <string name="time_tab_rate_none">No online time</string>
@@ -269,12 +268,12 @@
     <string name="time_tab_segment_at_stops">At stops</string>
     <string name="time_tab_segment_waiting">Waiting</string>
     <string name="time_tab_segment_driving">Driving &amp; other</string>
-    <string name="time_tab_typical_hour_derivation">At stops: parked at a store or door. Waiting: drop-off to next accepted offer. The rest: driving, the wait before the first offer, the tail after the last drop-off, anything untimed.</string>
+    <string name="time_tab_typical_hour_derivation">At stops: parked at stores or doors. Waiting: drop-off to next accept. Driving &amp; other includes untimed activity and time before the first offer or after the last drop-off.</string>
     <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops</string>
     <string name="time_tab_typical_hour_all_timed_format">All %1$s stops timed</string>
     <string name="time_tab_typical_hour_no_stops_timed">No arrivals recorded; at-stops time is unmeasured and included in Driving &amp; other.</string>
     <string name="time_tab_typical_hour_no_stops">No stops recorded.</string>
-    <string name="time_tab_typical_hour_leak_format">%2$s waiting ≈ %1$s at working rate</string>
+    <string name="time_tab_typical_hour_leak_format">%2$s waiting · ≈ %1$s at your net working rate</string>
     <string name="time_tab_typical_hour_leak_unpriced">Waiting not priced: no working rate</string>
     <string name="time_tab_gaps_title">Gaps between deliveries</string>
     <string name="time_tab_gaps_none">No gaps: needs a completed drop-off and a later accept in the same dash.</string>
@@ -283,7 +282,7 @@
     <string name="time_tab_gaps_coverage_format">%1$s %2$s from %3$s deliveries</string>
     <string name="time_tab_gaps_long_format">%1$s %2$s 2h+ (break or dry spell)</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
-    <string name="time_tab_mileage_tax_disclosure">IRS standard-mileage method, separate from DashBuddy\'s cost model; check with a tax pro.</string>
+    <string name="time_tab_mileage_tax_disclosure">Estimated standard-mileage deduction; check with a tax pro.</string>
 
     <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
          moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
@@ -417,7 +416,6 @@
     <!-- main/analytics/MoneyTab.kt -->
     <string name="money_tab_earnings_by_day_title">EARNED BY DAY</string>
     <string name="money_tab_no_earnings_yet">No earnings recorded.</string>
-    <string name="money_tab_earnings_by_day_caption">Earned by day counts each dash on its start day; deliveries outside a dash count on their completion day.</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
     <string name="money_tab_stat_net_per_hour">Net/hr online</string>
@@ -432,10 +430,7 @@
     <string name="money_tab_where_went_segment_gas">Gas</string>
     <string name="money_tab_where_went_segment_wear">Wear</string>
     <string name="money_tab_where_went_segment_car">Car costs</string>
-    <string name="money_tab_where_went_disclosure_format">%1$s mi × %2$s/mi, frozen at accept time</string>
-    <string name="money_tab_where_went_disclosure_no_miles">No miles logged; car costs frozen at accept time</string>
     <string name="money_tab_where_went_no_split">Some deliveries lack separate gas and wear costs; their costs are combined.</string>
-    <string name="money_tab_where_went_frozen_note">Car costs use the rates in effect when each offer was accepted.</string>
     <string name="money_tab_disclosure_expand">Show details</string>
     <string name="money_tab_disclosure_collapse">Hide details</string>
 
@@ -487,7 +482,7 @@
     <string name="session_detail_est_offer_pay">est. offer pay</string>
     <!-- #1033 layer 2: the receipt was expanded after this delivery was already recorded, so the
          row was re-priced from the receipt's own itemization instead of the offer-pay estimate. -->
-    <string name="session_detail_receipt_repriced">re-priced from the receipt</string>
+    <string name="session_detail_receipt_repriced">receipt pay</string>
     <string name="session_detail_unpaid_drop">no pay recorded · car costs only</string>
     <string name="session_detail_net_format">kept %1$s</string>
     <string name="session_detail_content_desc_adjust">Adjust delivery</string>
@@ -686,7 +681,7 @@
     <string name="weekly_plan_value_no_baseline">Too little history for a random-hours comparison.</string>
     <string name="weekly_plan_value_shortfall_format">Placed %1$d of %2$d target hours; your record supports no more</string>
     <string name="weekly_plan_value_unpriced_format">%1$d hours with no record</string>
-    <string name="weekly_plan_provenance">Projected from your lifetime record; not a promise.</string>
+    <string name="weekly_plan_provenance">Projection · your lifetime record.</string>
 
     <!-- Suggested windows -->
     <string name="weekly_plan_windows_title">Suggested windows</string>
@@ -744,12 +739,9 @@
     <string name="weekly_plan_notice_grade_format">Last week: %1$s of %2$d planned hours worked, %3$s kept of %4$s projected. Tap to plan the week ahead.</string>
     <string name="weekly_plan_notice_grade_unworked_format">Last week: 0 of %1$d planned hours worked. Tap to plan the week ahead.</string>
 
-    <!-- ui/components/HowNumbersWorkFooter.kt — #1024 rule 2: ONE disclosure per screen. The
-         frozen-cost and estimate lines reuse the strings their originating cards already ship
-         (money_tab_where_went_frozen_note / offers_tab_frozen_disclosure) so the wording keeps one
-         owner; only the cash-tip line is new. -->
+    <!-- ui/components/HowNumbersWorkFooter.kt — shared cash-tip inclusion; screen-specific notes join it. -->
     <string name="disclosure_how_numbers_work">How these numbers work</string>
-    <string name="disclosure_cash_tips">Cash tips are what you entered; added on top, never estimated.</string>
+    <string name="disclosure_cash_tips">Totals include cash tips you entered.</string>
 
     <!-- ui/main/playbook/* — #1024 section C: the next move (plan progress, when/where you earn).
          Two DISTINCT hour vocabularies, deliberately never mixed inside one sentence (§9): hours
@@ -814,10 +806,10 @@
     <string name="analytics_tier1_at_least_format">≥%1$s</string>
     <string name="patterns_tab_stores_title_by_net">YOUR STORES · BY NET</string>
     <string name="money_tab_where_went_segment_note_format">%1$s · %2$s/mi</string>
-    <string name="offers_tab_est_vs_reality_mean_note">List rates are each offer\'s own estimate; the score table and the bars are averages of per-offer rates.</string>
+    <string name="offers_tab_est_vs_reality_mean_note">Table and bars: average $/hr per offer.</string>
     <string name="common_more_numbers">More numbers</string>
     <string name="common_fewer_numbers">Fewer numbers</string>
-    <string name="money_tab_pay_mix_estimated_format">%1$s estimated from offers</string>
+    <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest dashes are your %1$d newest, whatever period is picked; amounts are reported totals (your corrections included), cash shown separately.</string>
     <string name="time_tab_unattributed_note">No delivery attached: online time and miles after your last delivery, and dashes with no delivery.</string>
 </resources>
