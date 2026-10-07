@@ -307,7 +307,10 @@ platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` 
 CLASS rule — any text-input node (`UiNode.isTextInput`: the editable flag or an `EditText` class) is
 plain-masked whole, subtree included, on UNKNOWN screen + click envelopes; the already-masked skip is
 `MaskTokens.endsWithMask`, never substring presence (a recognized
-frame keeps its rule's deliberate decisions). A click envelope inherits the SCREEN rule's redact
+frame keeps its rule's deliberate decisions); #1116 adds `UnknownAddressBackstop` on the same UNKNOWN
+envelopes — rule/id/platform-independent, O(N) — which plain-masks a street → `City, ST ZIP` pair in one
+projected sibling list plus every quote-led note and 1–6-digit code in the block's scope (and a code/note
+directly above a city line), recognition untouched. A click envelope inherits the SCREEN rule's redact
 (`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary
 control. Intake prefixes (`SnapshotRedactor.NAME_PREFIXES`) are deliberately asymmetric with the runtime

@@ -313,6 +313,38 @@ is not a node predicate yet, so a rule cannot declare the flag half. An id-row n
 (`message_input` with a hint) still trips the id scan — the documented fail-closed id posture (#1160 ZZ1), an
 over-scrub, not a leak.
 
+**#1116 — the UNKNOWN address-block backstop (`UnknownAddressBackstop`, `:core:pipeline`):** DoorDash's
+Timeline order-detail sheet on 8.97.8 / 8.99.20 renders without `Copy address`, so it falls UNKNOWN, and its
+id-less street line, `City, ST ZIP` line, quoted note and bare door code carry no lead-in and no id: none of
+the text-marker, id or input scans can see them. PR #1265 widened `timeline_task_detail` to own the frame
+and was closed after three review rounds kept finding frames whose recognition the wider anchor moved
+(picker/workflow ownership, task-prefix hashes, id precedence); recognition ownership and privacy coverage
+must be independent. The backstop reads text shapes only (no rule, platform, id, `Close sheet` or task
+line), on UNKNOWN screen + click envelopes only (dispatch in `CaptureWriter.scrubCustomerPii`; release
+never reaches it, `NoOpCaptureBus.isEnabled` is false). It builds a temporary PROJECTION of the tree
+(branches with no non-blank `scrubbableStrings()` dropped, field-less single-child wrappers collapsed)
+and, within each projected sibling list, pairs a street line (`PiiShapes.isStreetLine`: `STREET` at offset
+zero or a whole `BARE_STREET`) with a following `City, ST ZIP` line (`PiiShapes.isCityStateZipLine`), with
+only quote-led notes (`isQuoteLeading`: opening `"`/`“`, no length floor, unlike `QUOTED_NOTE`) and 1–6
+digit codes (`isShortCode`) allowed between; street-then-city lines inside one field also pair. The pair's
+scope is its projected parent, extended once to the grandparent when the parent holds only the block; every
+address-shaped and quote/code node in scope is selected wherever it sits (the July three-branch layout). A
+quote/code directly above a city line is a weaker cluster: both are masked, the code is never read as a
+street. Selected nodes plain-mask every non-empty field to `[redacted]` (never hashed: a short code, ZIP or
+note is a bounded alphabet), applied in the same `CustomerTextMarkers.scrubUnknown` traversal ahead of the
+already-masked skips, by PREORDER index (never `UiNode.equals`). The contextual predicates are NOT
+`VALUE_SHAPES` members and never census filters: `000` is chrome outside an address block. Cost: O(N)
+linear passes (flatten + flag, reverse subtree pass, projection, per-list scan with the "only the block"
+count taken once per list, scopes marked as preorder intervals through one difference array);
+`Selection.steps` pins ≤ 6 visits per node in `UnknownAddressBackstopTest`. `CaptureBackstopCorpusTest`
+runs a separate recursive UNKNOWN simulation over the committed corpus (sessions + `UNKNOWN/negative/`
+included) with an audited per-node hit list (every hit is a real address block on a recognized fixture —
+production never runs the detector there) and injects a synthetic block into every tree for recall.
+Residuals (not claimed): unquoted free text outside a block, a lone street or city line, a city line ahead
+of its street, a one-line full address, a tapped node captured without its block, and the `Return <name>
+to <store>` task line (the runtime marker set rejects the bare `Return ` prefix, #1064). A merchant address
+or a numeric label inside a qualifying UNKNOWN block may be masked: an accepted privacy bias.
+
 **Two #910 additions close the SPLIT-NODE class**
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
 `user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —
@@ -331,7 +363,7 @@ fight the ruleset; scrubbing the dasher's own `user_name` greeting on an UNKNOWN
 accepted fail-toward-privacy cost). UNKNOWN frames and UNKNOWN clicks remain the documented
 debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
 backstop + the #806 scrub + the #910 id scan); the residual (a name-at-start body, an id-less
-address/gate-code line with no customer lead-in) persists on UNKNOWN frames until the surface is
+address/gate-code line with no customer lead-in outside an address block, #1116) persists on UNKNOWN frames until the surface is
 recognized (#806 direction 1). The on-disk `captures/` directory is excluded from every Android backup channel in BOTH storage domains (`external` and `file`, since `DiskCaptureBus` falls back to `filesDir`) — legacy full backup, cloud backup and device transfer — so a plaintext debug envelope cannot ride a backup or a device transfer (#1202, pinned by `CensusVariantBindingTest`). The UNKNOWN-notification diagnostic in `ObservationClassifier` is DEBUG only when the push carries text; a text-less push (the ~1 Hz ongoing-dash notification) logs at VERBOSE (#1001, principle 7). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass recognized (#806 direction 1). Family-wide bounded-alphabet hygiene (#1126): EVERY id-anchored `address_line_2` / `bottom_sheet_address_line_2` redact entry in `dropoff.json5` is `plainMask` (city/ST/ZIP is a bounded alphabet — the #1122 grade), and every `Building Name` label-sibling HASH entry is preceded by the digit-bearing plain entry; `DropoffSheetRedactionParityTest` scans the generated dropoff family for both. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
 feeds all collectors, so side effects (captures, dedup state) can never double-run (#361). The
 merged upstream is supervised — a crash logs + counts a restart and resubscribes with backoff

@@ -532,9 +532,25 @@ object CustomerTextMarkers {
      * One traversal for all three scans, so an UNKNOWN frame is never rebuilt twice. Call
      * only after one of the three scans returned non-null.
      */
-    fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, inputOwned = false)
+    fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, UnknownAddressBackstop.Selection.EMPTY)
 
-    private fun scrubUnknown(tree: UiNode, inputOwned: Boolean): UiNode {
+    /**
+     * [scrubUnknown] composed with the #1116 address-block backstop: every node in [addressBlock]
+     * (selected by [UnknownAddressBackstop.select] over THIS [tree], by preorder index) has every
+     * non-empty field plain-masked to [CompiledRedact.REDACTED] — ahead of the already-masked skips,
+     * so a raw note that merely contains or ends in a mask token is still masked. One traversal, one copy.
+     */
+    fun scrubUnknown(tree: UiNode, addressBlock: UnknownAddressBackstop.Selection): UiNode =
+        scrubUnknown(tree, inputOwned = false, addressBlock = addressBlock, cursor = IntArray(1))
+
+    private fun scrubUnknown(
+        tree: UiNode,
+        inputOwned: Boolean,
+        addressBlock: UnknownAddressBackstop.Selection,
+        cursor: IntArray,
+    ): UiNode {
+        // Preorder index of [tree] — the children are mapped in order below, matching the selection's walk.
+        val inAddressBlock = cursor[0]++ in addressBlock
         // #919 (Astra P2): a text input OWNS its subtree — a composite input's draft renders in a child
         // TextView, so every descendant of an input node is masked whole too.
         // The mask follows the HIT: an input whose subtree carries no user text (placeholder only) is left alone.
@@ -548,6 +564,8 @@ object CustomerTextMarkers {
                 when {
                     it == null -> null // #1147: a null field stays null (no phantom keys on the envelope).
                     it.isEmpty() -> it
+                    // #1116: an address-block node is masked whole, before any already-masked skip.
+                    inAddressBlock -> CompiledRedact.REDACTED
                     // Astra r2 P1: on an INPUT-owned node only an exact mask token is "already masked";
                     // elsewhere a rule's kept-prefix output ("For [redacted:ab12]") is.
                     owned && MaskTokens.isMask(it) -> it
@@ -556,7 +574,7 @@ object CustomerTextMarkers {
                     else -> it
                 }
             }
-            .copy(children = tree.children.map { scrubUnknown(it, owned) })
+            .copy(children = tree.children.map { scrubUnknown(it, owned, addressBlock, cursor) })
     }
 
     // --- Notification path (#632) --------------------------------------------

@@ -389,4 +389,67 @@ class CaptureScrubTest {
         assertEquals(1L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
     }
+
+    // #1116: the UNKNOWN-only address-block backstop — an id-less, prefix-less street → City, ST ZIP
+    // pair plus the block's quoted note and short code, which none of the three scans above can see.
+
+    private fun addressSheet() = UiNode(children = listOf(
+        UiNode(contentDescription = "Close sheet", isClickable = true),
+        UiNode(children = listOf(
+            UiNode(children = listOf(UiNode(text = "1234 Sample Ridge Dr"), UiNode(text = "San Antonio, TX 78200"))),
+            UiNode(children = listOf(UiNode(text = "Leave it at my door"), UiNode(text = "\"Leave it by the sample gnome\""))),
+            UiNode(children = listOf(UiNode(text = "000"))),
+        )),
+    ))
+
+    @Test
+    fun `UNKNOWN screen with an id-less address block is captured with the block masked and counted (#1116)`() {
+        writer.captureScreen(unknownObs(), screenEvent(addressSheet()))
+
+        val json = offeredEnvelope()
+        assertFalse("street scrubbed", json.contains("Sample Ridge"))
+        assertFalse("ZIP scrubbed", json.contains("78200"))
+        assertFalse("note scrubbed", json.contains("sample gnome"))
+        assertFalse("code scrubbed", Regex(""""text"\s*:\s*"000"""").containsMatchIn(json))
+        assertTrue("chrome survives", json.contains("Close sheet") && json.contains("Leave it at my door"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `the address-block backstop is UNKNOWN-only - a recognized frame keeps its rule's decisions (#1116)`() {
+        val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "pickup_navigation")
+        writer.captureScreen(recognized, screenEvent(addressSheet()))
+
+        assertTrue("recognized frame is not address-scrubbed", offeredEnvelope().contains("Sample Ridge"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN click subtree carrying an address block is masked (#1116)`() {
+        val node = UiNode(
+            isClickable = true,
+            children = listOf(UiNode(text = "Stop 1"), UiNode(text = "55 Other Lane"), UiNode(text = "Austin, TX 78701")),
+        )
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse("street scrubbed", json.contains("Other Lane"))
+        assertFalse("ZIP scrubbed", json.contains("78701"))
+        assertTrue("chrome survives", json.contains("Stop 1"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `a disabled capture bus never builds an envelope for an address block (#1116 release posture)`() {
+        val disabled: CaptureBus = mock { on { isEnabled } doReturn false }
+        CaptureWriter(disabled, stats, NoRedaction).captureScreen(unknownObs(), screenEvent(addressSheet()))
+
+        verify(disabled, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
 }

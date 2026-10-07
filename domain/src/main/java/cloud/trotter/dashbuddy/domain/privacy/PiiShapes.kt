@@ -262,6 +262,47 @@ object PiiShapes {
     /** A quoted free-text customer note, e.g. "Corner House, please leave at door." — customer-entered, mask whole. */
     val QUOTED_NOTE = Regex(""""[^"]{6,}"""")
 
+    // --- #1116: CONTEXTUAL address-block predicates -------------------------------------------
+    // Line-level helpers for the UNKNOWN-only address-block backstop (`UnknownAddressBackstop`,
+    // `:core:pipeline`). They are deliberately NOT [VALUE_SHAPES] members and must never become
+    // unconditional census filters: `"000"` or a lone digit is a customer code ONLY inside an address
+    // block, and chrome everywhere else. They add no pattern — the street/city tests reuse [STREET],
+    // [BARE_STREET] and [CITY_STATE_ZIP] byte-for-byte; the cheap first/last-character checks only
+    // skip the regex on values that cannot match.
+
+    /**
+     * A street line: [STREET] matching at offset zero of the trimmed value (the whole field is then the
+     * address, trailing unit included), or the whole trimmed value a [BARE_STREET]. Digit-led only.
+     */
+    fun isStreetLine(value: String): Boolean {
+        val t = value.trim()
+        if (t.isEmpty() || t[0] !in '0'..'9') return false
+        return STREET.matchAt(t, 0) != null || BARE_STREET.matches(t)
+    }
+
+    /** A whole-value `City, ST 12345` line ([CITY_STATE_ZIP], ZIP+4 included). */
+    fun isCityStateZipLine(value: String): Boolean {
+        val t = value.trim()
+        if (t.length < 9 || t.last() !in '0'..'9' || ',' !in t) return false
+        return CITY_STATE_ZIP.matches(t)
+    }
+
+    /**
+     * A quote-led value — a customer-entered note. Only the opening quote is required (`"` or `“`):
+     * no closing quote, no minimum length, so `"000"` and `"4417"` qualify where [QUOTED_NOTE] (six
+     * characters inside quotes) does not.
+     */
+    fun isQuoteLeading(value: String): Boolean {
+        val t = value.trim()
+        return t.startsWith('"') || t.startsWith('\u201C')
+    }
+
+    /** The whole trimmed value is one to six ASCII digits — a gate/door/locker code in an address block. */
+    fun isShortCode(value: String): Boolean {
+        val t = value.trim()
+        return t.length in 1..6 && t.all { it in '0'..'9' }
+    }
+
     /** Masked payout/debit card on cashout screens, e.g. "Visa ••••6222" or "Debit card ....1234". */
     val CARD = Regex(
         """(?i)\b(visa|mastercard|amex|american express|discover|debit card)\b""" +
