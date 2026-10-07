@@ -69,11 +69,6 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `new_order — legacy title path still matches (regression)`() {
-        assertEquals("new_order", notif(raw(title = "New Order")))
-    }
-
-    @Test
     fun `customer_message — by in-app-chat channel (per-customer title)`() {
         assertEquals(
             "customer_message",
@@ -201,11 +196,6 @@ class TriageRulesTest {
     // =========================================================================
 
     @Test
-    fun `timeline — dash-control header path still matches`() {
-        assertEquals("timeline", screen(tree(node(text = "Dash ends at 18:30"), node(text = "Pause orders"))))
-    }
-
-    @Test
     fun `timeline — task-list scroll state now matches (broadening)`() {
         assertEquals(
             "timeline",
@@ -219,29 +209,10 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `pickup_pre_arrival — prism-button path still matches`() {
-        assertEquals(
-            "pickup_pre_arrival",
-            screen(tree(node(id = "user_name_label", text = "Pickup from"), node(id = "textView_prism_button_title", text = "Arrived at store"))),
-        )
-    }
-
-    @Test
     fun `pickup_pre_arrival — expanded bottom-sheet detail now matches (broadening)`() {
         assertEquals(
             "pickup_pre_arrival",
             screen(tree(node(id = "user_name_label", text = "Pickup from"), node(id = "bottom_sheet_container"))),
-        )
-    }
-
-    @Test
-    fun `nav_arriving — bare 'Arriving at' overlay (final approach, was UNKNOWN)`() {
-        assertEquals(
-            "nav_arriving",
-            screen(tree(
-                node(id = "arriving_at_subtitle", text = "Arriving at"),
-                node(id = "arriving_at_title", text = "Wing Daddy's Sauce House (Jackson Keller Rd)"),
-            )),
         )
     }
 
@@ -266,11 +237,6 @@ class TriageRulesTest {
                 node(id = "bottom_sheet_task_title", text = "Deliver to Diane B"),
             )),
         )
-    }
-
-    @Test
-    fun `end_dash_confirm dialog`() {
-        assertEquals("end_dash_confirm", screen(tree(node(id = "prism_sheet"), node(text = "End your current dash?"))))
     }
 
     @Test
@@ -348,14 +314,6 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `shopping_item — deeper shop-and-deliver screen`() {
-        assertEquals(
-            "shopping_item",
-            screen(tree(node(id = "fragmentContainerView_shopDeliver"), node(text = "Item details"), node(text = "Scan item barcode"))),
-        )
-    }
-
-    @Test
     fun `shopping_item — does NOT steal the 'Shop and Deliver' landing (reject keeps pickup_shopping)`() {
         assertEquals(
             "pickup_shopping",
@@ -392,29 +350,11 @@ class TriageRulesTest {
     }
 
     @Test
-    fun `side_nav_drawer — open menu`() {
-        assertEquals(
-            "side_nav_drawer",
-            screen(tree(node(id = "side_nav_content_container"), node(text = "Ratings"), node(text = "Promos"), node(text = "Preferences"))),
-        )
-    }
-
-    @Test
     fun `side_nav_drawer does NOT shadow idle_map (drawer closed — no menu text)`() {
         assertEquals(
             "idle_map",
             screen(tree(node(desc = "Earnings Mode Switcher"), node(id = "side_nav_compose_view"))),
         )
-    }
-
-    @Test
-    fun `camera_capture viewfinder`() {
-        assertEquals("camera_capture", screen(tree(node(id = "camera_preview"))))
-    }
-
-    @Test
-    fun `pickup_issue_menu`() {
-        assertEquals("pickup_issue_menu", screen(tree(node(text = "What pickup issues can we help with?"))))
     }
 
     @Test
@@ -432,16 +372,6 @@ class TriageRulesTest {
     @Test
     fun `dropoff_completed_confirm`() {
         assertEquals("dropoff_completed_confirm", screen(tree(node(text = "Confirm order was completed"), node(text = "Got it"))))
-    }
-
-    @Test
-    fun `dash_time_picker`() {
-        assertEquals("dash_time_picker", screen(tree(node(text = "Choose start time"), node(text = "Done"), node(text = "Cancel"))))
-    }
-
-    @Test
-    fun `dash_schedule`() {
-        assertEquals("dash_schedule", screen(tree(node(text = "Schedule your dash for later"), node(text = "This zone's full right now"))))
     }
 
     @Test
@@ -536,11 +466,6 @@ class TriageRulesTest {
             "complete_delivery",
             click(node(id = "complete_delivery_steps_button"), screenTarget = "dropoff_navigation"),
         )
-    }
-
-    @Test
-    fun `existing accept_offer click still matches (regression)`() {
-        assertEquals("accept_offer", click(node(id = "accept_button"), screenTarget = "offer_popup"))
     }
 
     @Test

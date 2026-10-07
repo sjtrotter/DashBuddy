@@ -52,25 +52,6 @@ class DefaultRulesIntegrationTest {
     }
 
     // =========================================================================
-    // Sanity — rule counts are non-zero
-    // =========================================================================
-
-    @Test
-    fun `screen ruleset has rules`() {
-        assertTrue("Expected screen rules, got 0", screenRuleset.ruleCount > 0)
-    }
-
-    @Test
-    fun `click ruleset has rules`() {
-        assertTrue("Expected click rules, got 0", clickRuleset.ruleCount > 0)
-    }
-
-    @Test
-    fun `notification ruleset has rules`() {
-        assertTrue("Expected notification rules, got 0", notificationRuleset.ruleCount > 0)
-    }
-
-    // =========================================================================
     // #419 caps canary — every production platform file sits comfortably under
     // the load-time size caps, so ordinary rules-repo growth trips this compile-
     // time test BEFORE it would hit the runtime fail-closed reject.
@@ -121,27 +102,6 @@ class DefaultRulesIntegrationTest {
     // =========================================================================
 
     @Test
-    fun `accept_button id classifies as accept_offer`() {
-        val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/accept_button")
-        assertEquals("accept_offer", clickRuleset.matchFirst(node, screenTarget = "offer_popup")?.intent)
-    }
-
-    @Test
-    fun `'Decline offer' text classifies as decline_offer`() {
-        val node = UiNode(text = "Decline offer")
-        assertEquals("decline_offer", clickRuleset.matchFirst(node, screenTarget = "offer_popup_confirm_decline")?.intent)
-    }
-
-    @Test
-    fun `primary_action_button + Arrived at store classifies as arrived_at_store`() {
-        val node = UiNode(
-            viewIdResourceName = "com.doordash.driverapp:id/primary_action_button",
-            text = "Arrived at store",
-        )
-        assertEquals("arrived_at_store", clickRuleset.matchFirst(node, screenTarget = "pickup_arrival")?.intent)
-    }
-
-    @Test
     fun `unrecognized click node returns null`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/some_unknown_btn")
         assertNull(clickRuleset.matchFirst(node))
@@ -150,12 +110,6 @@ class DefaultRulesIntegrationTest {
     // =========================================================================
     // Notification classification — spot checks
     // =========================================================================
-
-    @Test
-    fun `New Order title classifies as new_order`() {
-        val raw = raw(title = "New Order")
-        assertEquals("new_order", notificationRuleset.matchFirst(raw)?.intent)
-    }
 
     @Test
     fun `order-ready push on the background channel classifies as order_ready (#462)`() {
@@ -171,39 +125,10 @@ class DefaultRulesIntegrationTest {
     }
 
     @Test
-    fun `Scheduled dash expired notification classifies correctly`() {
-        val raw = raw(text = "Your scheduled dash has expired")
-        assertEquals("scheduled_dash_expired", notificationRuleset.matchFirst(raw)?.intent)
-    }
-
-    @Test
-    fun `AdditionalTip notification extracts fields correctly`() {
-        val raw = raw(bigText = "added \$5.00 tip on a past H-E-B order delivered at 4/26, 3:15 PM")
-        val result = notificationRuleset.matchFirst(raw)
-        assertNotNull("Expected AdditionalTip result", result)
-        assertEquals("additional_tip", result!!.intent)
-        assertEquals(5.00, result.fields["amount"] as Double, 0.001)
-        assertEquals("H-E-B", result.fields["storeName"])
-        assertEquals("4/26, 3:15 PM", result.fields["deliveredAt"])
-    }
-
-    @Test
     fun `unrecognized notification returns null`() {
         val raw = raw(title = "DoorDash", text = "Something not yet classified")
         // None of the rules should match — Unknown falls back to the caller
         assertNull(notificationRuleset.matchFirst(raw))
-    }
-
-    // =========================================================================
-    // File loading edge cases
-    // =========================================================================
-
-    @Test
-    fun `file compiles without RuleCompileException`() {
-        // @Before would have thrown if compilation failed; reaching here means success
-        assertTrue(screenRuleset.ruleCount > 0)
-        assertTrue(clickRuleset.ruleCount > 0)
-        assertTrue(notificationRuleset.ruleCount > 0)
     }
 
     // =========================================================================

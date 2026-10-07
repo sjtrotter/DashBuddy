@@ -1,0 +1,22 @@
+{
+  "text": "Accept",
+  "desc": "Accept offer",
+  "state": "on",
+  "id": "com.example:id/accept",
+  "class": "android.widget.Button",
+  "isClickable": true,
+  "isEnabled": true,
+  "isChecked": 1,
+  "bounds": "[1,2][3,4]",
+  "children": [
+    {
+      "text": "child",
+      "bounds": {
+        "left": 1,
+        "top": 2,
+        "right": 3,
+        "bottom": 4
+      }
+    }
+  ]
+}
