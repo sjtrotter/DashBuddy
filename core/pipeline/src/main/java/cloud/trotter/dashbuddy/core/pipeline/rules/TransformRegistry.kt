@@ -68,27 +68,46 @@ object TransformRegistry {
         scopedClock.get() ?: TransformClock(System.currentTimeMillis(), ZoneId.systemDefault())
 
     /**
-     * Threshold for rolling a parsed wall-clock time forward to tomorrow.
-     * Past by more than this → assume the deadline is tomorrow (e.g. late-night
-     * offer for "6:00 AM" next morning). Past by less than this → treat as
-     * past (e.g. dasher arrived a few minutes late for the pickup-by deadline,
-     * which should render as "X min late" — not a near-24h countdown).
+     * Past by more than this → the time is tomorrow's (a late-night offer for "6:00 AM" next morning).
+     * Past by less → it is today's and simply missed ("X min late", never a near-24h countdown).
      */
     internal const val ROLLOVER_THRESHOLD_MS = 12L * 3600L * 1000L
 
     /**
-     * Apply the rollover rule to a today-anchored target timestamp.
-     * Pure function over millis — extracted so it can be unit-tested without
-     * depending on the wall clock. See [ROLLOVER_THRESHOLD_MS].
+     * Ahead by more than this → the time is YESTERDAY's, just missed before midnight (#1260: "11:59 PM"
+     * read at 00:01 is one minute ago, not tonight). Ahead by less is believed as a real upcoming time:
+     * a dash end ("Dash ends at 6:00 PM" read at 5:59 AM, 12 h out) must not move to yesterday.
+     */
+    internal const val ROLLBACK_THRESHOLD_MS = 18L * 3600L * 1000L
+
+    /**
+     * Which calendar day a today-anchored target belongs to: -1 yesterday, 0 today, +1 tomorrow.
+     * Pure over millis so it is testable without a clock; the caller applies the day on the LOCAL
+     * date in the observation's zone, so a daylight-saving change cannot shift the clock time.
+     */
+    internal fun rolloverDays(
+        targetMillis: Long,
+        nowMillis: Long,
+        forwardThresholdMs: Long = ROLLOVER_THRESHOLD_MS,
+        backThresholdMs: Long = ROLLBACK_THRESHOLD_MS,
+    ): Int {
+        val pastMillis = nowMillis - targetMillis
+        return when {
+            pastMillis > forwardThresholdMs -> 1
+            -pastMillis > backThresholdMs -> -1
+            else -> 0
+        }
+    }
+
+    /**
+     * [rolloverDays] expressed in plain 24 h days, kept for the pure-millis tests. Production resolves
+     * the day on the local calendar date instead (see `parseTimeTextToMillis`).
      */
     internal fun applyRollover(
         targetMillis: Long,
         nowMillis: Long,
         thresholdMs: Long = ROLLOVER_THRESHOLD_MS,
-    ): Long {
-        val pastMillis = nowMillis - targetMillis
-        return if (pastMillis > thresholdMs) targetMillis + 24L * 3600L * 1000L else targetMillis
-    }
+    ): Long = targetMillis + rolloverDays(targetMillis, nowMillis, forwardThresholdMs = thresholdMs) * 24L * 3600L * 1000L
 
     // ========================================================================
     //  Plain transforms: (String?) -> Any?
@@ -534,13 +553,12 @@ object TransformRegistry {
         val clock = currentClock()
         val today = Instant.ofEpochMilli(clock.nowMillis).atZone(clock.zoneId).toLocalDate()
         val targetMillis = today.atTime(localTime).atZone(clock.zoneId).toInstant().toEpochMilli()
-        // Roll forward only when the target is *significantly* in the past —
-        // interpret as "this time tomorrow" (e.g. late-night offer for next
-        // morning pickup). Past by less than the threshold stays as today's
-        // timestamp so a blown deadline renders as "X min late" instead of
-        // jumping ~24h ahead. See field log 2026-05-19 #2 for the bug shape
-        // ("1434:38" ghost countdown caused by 37-second-past re-parse).
-        return applyRollover(targetMillis, clock.nowMillis)
+        // Pick the calendar day (#1260, field log 2026-05-19 #2): far past → tomorrow, far ahead →
+        // yesterday, otherwise today. The day moves on the LOCAL date so a DST change keeps the
+        // parsed clock time.
+        val days = rolloverDays(targetMillis, clock.nowMillis)
+        if (days == 0) return targetMillis
+        return today.plusDays(days.toLong()).atTime(localTime).atZone(clock.zoneId).toInstant().toEpochMilli()
     }
 
     /**

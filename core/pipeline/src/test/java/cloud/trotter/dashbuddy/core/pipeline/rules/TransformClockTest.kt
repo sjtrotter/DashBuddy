@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -24,6 +25,48 @@ class TransformClockTest {
     private fun millisAt(hour: Int, minute: Int): Long =
         Instant.ofEpochMilli(anchor).atZone(zone).toLocalDate()
             .atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
+
+    @Test
+    fun `#1260 a deadline one minute before midnight read just after midnight is one minute ago`() {
+        val justAfterMidnight = LocalDate.of(2026, 10, 7).atTime(0, 0, 48).atZone(zone).toInstant().toEpochMilli()
+        val result = TransformRegistry.withClock(justAfterMidnight, zone) {
+            TransformRegistry.apply("parseDeadline", "Pick up by 11:59 PM")
+        } as Long
+        val expected = LocalDate.of(2026, 10, 6).atTime(23, 59).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `#1260 an early-morning deadline read late at night is still tomorrow`() {
+        val lateNight = LocalDate.of(2026, 10, 6).atTime(23, 30).atZone(zone).toInstant().toEpochMilli()
+        val result = TransformRegistry.withClock(lateNight, zone) {
+            TransformRegistry.apply("parseDeadline", "Pick up by 6:00 AM")
+        } as Long
+        val expected = LocalDate.of(2026, 10, 7).atTime(6, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, result)
+    }
+
+    private fun at(date: LocalDate, hour: Int, minute: Int, second: Int = 0): Long =
+        date.atTime(hour, minute, second).atZone(zone).toInstant().toEpochMilli()
+
+    private fun parseAt(now: Long, text: String): Long =
+        TransformRegistry.withClock(now, zone) { TransformRegistry.apply("parseDeadline", text) } as Long
+
+    @Test
+    fun `#1260 a dash end 12h ahead stays today`() {
+        val d = LocalDate.of(2026, 10, 6)
+        assertEquals(at(d, 18, 0), parseAt(at(d, 5, 59), "Dash ends at 6:00 PM"))
+    }
+
+    @Test
+    fun `#1260 spring-forward midnight keeps the parsed clock time`() {
+        assertEquals(at(LocalDate.of(2026, 3, 7), 23, 59), parseAt(at(LocalDate.of(2026, 3, 8), 0, 1), "Pick up by 11:59 PM"))
+    }
+
+    @Test
+    fun `#1260 fall-back midnight keeps the parsed clock time`() {
+        assertEquals(at(LocalDate.of(2026, 10, 31), 23, 59), parseAt(at(LocalDate.of(2026, 11, 1), 0, 1), "Pick up by 11:59 PM"))
+    }
 
     @Test
     fun `parseDeadline is deterministic under a fixed clock`() {

@@ -91,6 +91,19 @@ class TransformRegistryTest {
     }
 
     @Test
+    fun `#1260 rolloverDays — more than 18h ahead is yesterday`() {
+        val now = 1_000_000_000L
+        assertEquals(-1, TransformRegistry.rolloverDays(now + 18 * hour + 1, now))
+    }
+
+    @Test
+    fun `#1260 rolloverDays — 12 to 18h ahead stays today (a real upcoming time)`() {
+        val now = 1_000_000_000L
+        assertEquals(0, TransformRegistry.rolloverDays(now + 12 * hour + 60_000L, now))
+        assertEquals(0, TransformRegistry.rolloverDays(now + 18 * hour, now))
+    }
+
+    @Test
     fun `applyRollover far past rolls forward (late-night offer for next morning)`() {
         val now = 1_000_000_000L
         val target = now - 17 * hour  // 17h ago (analogous to 11pm-for-6am)
