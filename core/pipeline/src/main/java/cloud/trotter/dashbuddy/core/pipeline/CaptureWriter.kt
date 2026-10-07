@@ -225,7 +225,7 @@ class CaptureWriter @Inject constructor(
         return obs.copy(captureId = captureId)
     }
 
-    // The UNKNOWN-envelope customer scrub itself is [scrubUnknownTree] below (three scans since #919).
+    // The UNKNOWN-envelope customer scrub itself is [scrubUnknownTree] below (three scans since #919, plus the #1116 address-block backstop).
     /**
      * #1147 review Z1/Z3 — THE dasher-sensitive drop decision shared by the screen tree, the screen's
      * window title and every click: on a [marker] hit, count it, WARN (tag `Pipeline`, the marker's
@@ -245,7 +245,7 @@ class CaptureWriter @Inject constructor(
     /**
      * #1147 review Z3 — THE customer-PII text-marker backstop over an envelope-bound tree, shared by
      * the screen and click paths (one marker SSOT, cross-platform DATA — principle 8):
-     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan AND the #919 text-input scan);
+     *  - UNKNOWN → [scrubUnknownTree] (text marker AND the #910 node-id scan AND the #919 text-input scan AND the #1116 address block);
      *  - recognized, no marker → returned unchanged (byte-identical envelope);
      *  - recognized, marker hit (#624 defense-in-depth: a rule that ships raw customer text with
      *    no redact, or — since #1147 — a click label / hint / tooltip) → count, WARN (tag
@@ -306,7 +306,12 @@ class CaptureWriter @Inject constructor(
     ): UiNode {
         val idMarker = CustomerTextMarkers.firstUnredactedIdMarker(tree)
         val inputNode = CustomerTextMarkers.firstUnredactedInputNode(tree) // #919
-        if (textMarker == null && idMarker == null && inputNode == null) return tree
+        // #1116: the rule-independent address-block backstop (street → City, ST ZIP, plus the block's
+        // quoted notes and short codes), selected on THIS tree before the clean-frame early return.
+        val addressBlock = UnknownAddressBackstop.select(tree)
+        // #1116: the gated `Return <name> to <store>` task line (name masked, store kept).
+        val returnName = CustomerTextMarkers.hasUnredactedReturnName(tree)
+        if (textMarker == null && idMarker == null && inputNode == null && addressBlock.isEmpty() && !returnName) return tree
         stats.onUnknownCustomerScrub()
         // Principle 7: a text marker is named by its log-safe id (#862) — the marker
         // constants are themselves scanned by the shareable-log sink, so naming one
@@ -314,14 +319,16 @@ class CaptureWriter @Inject constructor(
         // constant: it is a view-id token ("user_name"), carries no PII and matches
         // no sensitive marker, so it logs verbatim and stays decodable.
         Timber.tag("Pipeline").w(
-            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s input=%s) — " +
+            "Capture backstop: UNKNOWN %s carried customer PII (textMarker=%s nodeId=%s input=%s addressBlock=%d returnName=%s) — " +
                 "scrubbing node from envelope",
             kind,
             textMarker?.let { MarkerLogId.of(it) } ?: "-",
             idMarker ?: "-",
             inputNode ?: "-",
+            addressBlock.count,
+            returnName,
         )
-        return CustomerTextMarkers.scrubUnknown(tree)
+        return CustomerTextMarkers.scrubUnknown(tree, addressBlock)
     }
 
     fun captureNotification(

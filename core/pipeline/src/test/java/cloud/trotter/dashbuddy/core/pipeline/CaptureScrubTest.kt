@@ -389,4 +389,176 @@ class CaptureScrubTest {
         assertEquals(1L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
     }
+
+    // #1116: the UNKNOWN-only address-block backstop — an id-less, prefix-less street → City, ST ZIP
+    // pair plus the block's quoted note and short code, which none of the three scans above can see.
+
+    private fun addressSheet() = UiNode(children = listOf(
+        UiNode(contentDescription = "Close sheet", isClickable = true),
+        UiNode(children = listOf(
+            UiNode(children = listOf(UiNode(text = "1234 Sample Ridge Dr"), UiNode(text = "San Antonio, TX 78200"))),
+            UiNode(children = listOf(UiNode(text = "Leave it at my door"), UiNode(text = "\"Leave it by the sample gnome\""))),
+            UiNode(children = listOf(UiNode(text = "000"))),
+        )),
+    ))
+
+    @Test
+    fun `UNKNOWN screen with an id-less address block is captured with the block masked and counted (#1116)`() {
+        writer.captureScreen(unknownObs(), screenEvent(addressSheet()))
+
+        val json = offeredEnvelope()
+        assertFalse("street scrubbed", json.contains("Sample Ridge"))
+        assertFalse("ZIP scrubbed", json.contains("78200"))
+        assertFalse("note scrubbed", json.contains("sample gnome"))
+        assertFalse("code scrubbed", Regex(""""text"\s*:\s*"000"""").containsMatchIn(json))
+        assertTrue("chrome survives", json.contains("Close sheet") && json.contains("Leave it at my door"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+        assertEquals(0L, stats.scrubbedUnknownCaptureCount)
+    }
+
+    @Test
+    fun `the address-block backstop is UNKNOWN-only - a recognized frame keeps its rule's decisions (#1116)`() {
+        val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "pickup_navigation")
+        writer.captureScreen(recognized, screenEvent(addressSheet()))
+
+        assertTrue("recognized frame is not address-scrubbed", offeredEnvelope().contains("Sample Ridge"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN click subtree carrying an address block is masked (#1116)`() {
+        val node = UiNode(
+            isClickable = true,
+            children = listOf(UiNode(text = "Stop 1"), UiNode(text = "55 Other Lane"), UiNode(text = "Austin, TX 78701")),
+        )
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse("street scrubbed", json.contains("Other Lane"))
+        assertFalse("ZIP scrubbed", json.contains("78701"))
+        assertTrue("chrome survives", json.contains("Stop 1"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `a disabled capture bus never builds an envelope for an address block (#1116 release posture)`() {
+        val disabled: CaptureBus = mock { on { isEnabled } doReturn false }
+        CaptureWriter(disabled, stats, NoRedaction).captureScreen(unknownObs(), screenEvent(addressSheet()))
+
+        verify(disabled, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    // #1116 follow-up: the gated `Return <name> to <store>` task line on UNKNOWN envelopes — the NAME is
+    // masked, the store is kept (#886), and the platform's `Return to dash` chrome never matches.
+
+    @Test
+    fun `UNKNOWN screen masks only the name of a return task line (#1116)`() {
+        val tree = UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store"), UiNode(text = "Close sheet")))
+        writer.captureScreen(unknownObs(), screenEvent(tree))
+
+        val json = offeredEnvelope()
+        assertFalse("name scrubbed", json.contains("Avery K"))
+        assertTrue("store kept, lead-in kept", json.contains("Return [redacted] to Sample Store"))
+        assertEquals(1L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN screen with Return to dash chrome is untouched (#1116)`() {
+        val tree = UiNode(children = listOf(UiNode(text = "Return to dash"), UiNode(text = "Return to dash to keep earning")))
+        writer.captureScreen(unknownObs(), screenEvent(tree))
+
+        val json = offeredEnvelope()
+        assertTrue(json.contains("\"Return to dash\""))
+        assertTrue(json.contains("Return to dash to keep earning"))
+        assertEquals(0L, stats.unknownCustomerScrubCount)
+    }
+
+    @Test
+    fun `UNKNOWN click on a return task row masks only the name (#1116)`() {
+        val node = UiNode(isClickable = true, contentDescription = "Return Jordan T to Sample Market")
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse(json.contains("Jordan T"))
+        assertTrue(json.contains("Return [redacted] to Sample Market"))
+    }
+
+    @Test
+    fun `the return-line gate is UNKNOWN-only (#1116)`() {
+        val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "timeline")
+        writer.captureScreen(recognized, screenEvent(UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store")))))
+        assertTrue("a recognized frame keeps its rule's decisions", offeredEnvelope().contains("Avery K"))
+    }
+
+    @Test
+    fun `return-line gate shapes (#1116)`() {
+        val masked = mapOf(
+            "Return Avery K to Sample Store" to "Return [redacted] to Sample Store",
+            "Return\tAvery K to Sample Store" to "Return\t[redacted] to Sample Store",
+            "return Avery Kim  to  Sample Store #12" to "return [redacted]  to  Sample Store #12",
+            "Return Avery K to [redacted:ab12]" to "Return [redacted] to [redacted:ab12]",
+            // Review r2 #1: the FIRST separator — a store name may itself contain " to ".
+            "Return Avery K to Farm to Table" to "Return [redacted] to Farm to Table",
+        )
+        for ((raw, out) in masked) assertEquals(out, CustomerTextMarkers.maskReturnName(raw))
+        for (kept in listOf(
+            "Return to dash", "Return to dash to keep earning", "Return [redacted] to Sample Store",
+            "Return [redacted:ab12] to Sample Store", "Returned items", "Return", "Return Avery K", "Return Avery K to ",
+            // PR #1277 review r1 #4: the separator is consumed whole before the chrome check.
+            "Return   to dash", "Return  to dash to keep earning", "Return\tto dash",
+            // Review r2 #1: an already-masked name slot stays byte-identical, store intact.
+            "Return [redacted:ab12] to Farm to Table",
+        )) {
+            assertEquals(kept, CustomerTextMarkers.maskReturnName(kept))
+        }
+    }
+
+    @Test
+    fun `a merged field with two return task lines masks both names (r1 #5)`() {
+        assertEquals(
+            "Return [redacted] to Sample Store\nReturn [redacted] to Sample Market",
+            CustomerTextMarkers.maskReturnName("Return Avery K to Sample Store\nReturn Jordan T to Sample Market"),
+        )
+        assertEquals(
+            "Pickup at Sample Store\nReturn [redacted] to Sample Market",
+            CustomerTextMarkers.maskReturnName("Pickup at Sample Store\nReturn Jordan T to Sample Market"),
+        )
+    }
+
+    @Test
+    fun `the return-line parse is linear on a maximum-length field (r1 #3)`() {
+        for (input in listOf(
+            "Return" + " ".repeat(4_090),
+            "Return " + "a to ".repeat(817),
+            "Return A" + " to".repeat(1_362),
+        )) {
+            val steps = LongArray(1)
+            ReturnTaskLine.mask(input, steps)
+            ReturnTaskLine.hasRawName(input, steps)
+            assertTrue("${steps[0]} steps for ${input.length} chars", steps[0] <= 8L * input.length)
+        }
+    }
+
+    @Test
+    fun `UNKNOWN click on a node carrying both address lines is masked (r1 #1)`() {
+        val node = UiNode(isClickable = true, text = "1234 Sample Ridge Dr\nSan Antonio, TX 78200-1234")
+        writer.captureClick(
+            unknownClickObs(),
+            PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
+            screenTarget = null,
+            screenRuleId = null,
+        )
+        val json = offeredEnvelope()
+        assertFalse(json.contains("Sample Ridge"))
+        assertFalse(json.contains("78200"))
+    }
 }

@@ -118,6 +118,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [active] **#1116 timeline order-detail sheet (privacy, debug build):** on a dash, open the Timeline and tap a delivery task row so its detail sheet opens (address and `Close sheet`). The sheet still lands in `UNKNOWN` (recognition is unchanged). Working = in that `UNKNOWN` capture the street line, the `City, ST ZIP` line, the quoted note and any short code read `[redacted]`, while `Close sheet` and the dropoff option (`Leave it at my door`) are readable. Broken = a raw street or ZIP in a capture that contains `Close sheet` (grep the pull's `UNKNOWN` captures for `Close sheet`, then for `, TX `). — Confirmed: 0/2
+
 - [active] **#1255 analytics:** simple tier readable at a glance; More sticks across restarts and between the hub and Playbook; mid-week change line not red. — Confirmed: 0/2
 - [active] **#1254 heads-up offer card: Decline is now on the RIGHT, Accept on the LEFT (24dp gap).**
   **On-dash:** when a DoorDash offer arrives with our heads-up floating over DoorDash's top-right Decline,

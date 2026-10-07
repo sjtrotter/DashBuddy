@@ -67,8 +67,13 @@ import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
  *   drinks and desserts…"`, so the same prefix also precedes app copy.
  * Both leaks are owned instead by the rule-declared `redact` — the primary control per the #806
  * doctrine — on `doordash.screen.timeline` and the new `doordash.screen.pickup_receipt_scan`.
- * The residual is the usual one: an UNKNOWN sibling of either surface (the still-unmodelled
- * return flow) is not covered by THIS scan until a rule recognizes it.
+ * The residual is the usual one: an UNKNOWN sibling of either surface is not covered by THIS scan
+ * until a rule recognizes it — except the return task line, which #1116 covers on UNKNOWN screen and
+ * click envelopes through the GATED [ReturnTaskLine] parse: it needs the conjugation's own
+ * `" to <store>"` tail, so `"Return to dash"` never matches, and it masks only the NAME between
+ * `"Return "` and `" to "` (the store stays raw, #886). It is deliberately NOT in [MARKERS] (whole-field,
+ * every path) and is asymmetric with the intake gate (`PiiShapes.GATED_NAME_PREFIXES`, which also
+ * requires the first-name + last-initial shape, #1064): the runtime UNKNOWN side fails toward privacy.
  *
  * ## The node-ID half ([ID_MARKERS], #910)
  *
@@ -368,6 +373,14 @@ object CustomerTextMarkers {
      */
     val ID_MARKERS: List<String> = ID_MARKER_TABLE.filter { it.runtimeScrub == RuntimeScrub.ALWAYS }.map { it.suffix }
 
+    /** #1116: [text] with every raw `Return <name> to <store>` name masked ([ReturnTaskLine]); else [text]. */
+    fun maskReturnName(text: String): String = ReturnTaskLine.mask(text)
+
+    /** True when any field of any node in [tree] carries a raw return-line name (structural scan, no copy). */
+    fun hasUnredactedReturnName(tree: UiNode): Boolean =
+        tree.scrubbableStrings().any { (_, value) -> value != null && ReturnTaskLine.hasRawName(value) } ||
+            tree.children.any { hasUnredactedReturnName(it) }
+
     /** Substring that classifies a node's text as already-redacted (VET V1). */
     private const val REDACTED_MARK = MaskTokens.REDACTED_PREFIX
 
@@ -530,11 +543,28 @@ object CustomerTextMarkers {
      * [CompiledRedact.REDACTED] that carries an un-redacted text marker ([unredactedMarker]),
      * a customer-PII view id ([unredactedIdMarker]), OR text input ([unredactedInputNode], #919).
      * One traversal for all three scans, so an UNKNOWN frame is never rebuilt twice. Call
-     * only after one of the three scans returned non-null.
+     * only after one of the three scans returned non-null. Since #1116 the same pass also masks the
+     * name of a gated return task line ([maskReturnName]) and the address block passed in.
      */
-    fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, inputOwned = false)
+    fun scrubUnknown(tree: UiNode): UiNode = scrubUnknown(tree, UnknownAddressBackstop.Selection.EMPTY)
 
-    private fun scrubUnknown(tree: UiNode, inputOwned: Boolean): UiNode {
+    /**
+     * [scrubUnknown] composed with the #1116 address-block backstop: every node in [addressBlock]
+     * (selected by [UnknownAddressBackstop.select] over THIS [tree], by preorder index) has every
+     * non-empty field plain-masked to [CompiledRedact.REDACTED] — ahead of the already-masked skips,
+     * so a raw note that merely contains or ends in a mask token is still masked. One traversal, one copy.
+     */
+    fun scrubUnknown(tree: UiNode, addressBlock: UnknownAddressBackstop.Selection): UiNode =
+        scrubUnknown(tree, inputOwned = false, addressBlock = addressBlock, cursor = IntArray(1))
+
+    private fun scrubUnknown(
+        tree: UiNode,
+        inputOwned: Boolean,
+        addressBlock: UnknownAddressBackstop.Selection,
+        cursor: IntArray,
+    ): UiNode {
+        // Preorder index of [tree] — the children are mapped in order below, matching the selection's walk.
+        val inAddressBlock = cursor[0]++ in addressBlock
         // #919 (Astra P2): a text input OWNS its subtree — a composite input's draft renders in a child
         // TextView, so every descendant of an input node is masked whole too.
         // The mask follows the HIT: an input whose subtree carries no user text (placeholder only) is left alone.
@@ -548,15 +578,19 @@ object CustomerTextMarkers {
                 when {
                     it == null -> null // #1147: a null field stays null (no phantom keys on the envelope).
                     it.isEmpty() -> it
+                    // #1116: an address-block node is masked whole, before any already-masked skip.
+                    inAddressBlock -> CompiledRedact.REDACTED
                     // Astra r2 P1: on an INPUT-owned node only an exact mask token is "already masked";
                     // elsewhere a rule's kept-prefix output ("For [redacted:ab12]") is.
                     owned && MaskTokens.isMask(it) -> it
-                    !owned && MaskTokens.endsWithMask(it) -> it
+                    // #1116: a value ending in a mask can still open with a raw return-line name.
+                    !owned && MaskTokens.endsWithMask(it) -> maskReturnName(it)
                     wholeNode || unredactedMarker(it) != null -> CompiledRedact.REDACTED
-                    else -> it
+                    // #1116: the gated return task line — only the NAME is masked, the store stays.
+                    else -> maskReturnName(it)
                 }
             }
-            .copy(children = tree.children.map { scrubUnknown(it, owned) })
+            .copy(children = tree.children.map { scrubUnknown(it, owned, addressBlock, cursor) })
     }
 
     // --- Notification path (#632) --------------------------------------------
