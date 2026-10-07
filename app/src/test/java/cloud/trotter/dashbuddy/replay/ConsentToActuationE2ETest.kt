@@ -5,10 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import cloud.trotter.dashbuddy.core.datastore.capability.GrantSnapshot
+import cloud.trotter.dashbuddy.core.datastore.capability.RuleCapabilityDataSource
 import cloud.trotter.dashbuddy.core.state.AppEffect
 import cloud.trotter.dashbuddy.domain.action.ActionTrigger
 import cloud.trotter.dashbuddy.domain.action.RuleAction
 import cloud.trotter.dashbuddy.domain.capability.ConsentReceipt
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptConsent
 import cloud.trotter.dashbuddy.domain.settings.EventReceiptPreferences
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
@@ -26,8 +29,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -36,6 +40,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -81,7 +86,7 @@ class ConsentToActuationE2ETest {
     }
 
     @Test
-    fun `expand_earnings automation clicks only while its capability is granted - undecided, denied, granted, revoked`() {
+    fun `expand_earnings automation clicks only if granted when its armed tap fires - undecided, denied, granted, revoked and re-granted while armed`() {
         val replay = harness()
         val prompt = consentPrompt(replay)
         val settings = settingsScreen(replay)
@@ -119,19 +124,37 @@ class ConsentToActuationE2ETest {
             listOf(click.bounds.left, click.bounds.top, click.bounds.right, click.bounds.bottom),
         )
 
-        // ── Revoked from Settings → Automation & Consent ─────────────────────────────────────────
-        settings.setGranted(key, false)
-        replay.settle()
-        assertTrue("revoked", key !in replay.grants.grantedKeys.value && key in replay.grants.deniedKeys.value)
-        assertEquals("revoked → zero clicks (the very next fire)", 0, receiptClicks(replay, at = RECEIPT_MS + 60_000L))
+        // ── Revoked from Settings WHILE a tap is armed: consent is checked at FIRE time ──────────
+        // The receipt is recognized (and its SETTLE_UI timer armed) under the grant; the revocation
+        // lands before that timer fires; no further screen is fed — the armed tap alone decides.
+        assertEquals(
+            "granted at recognition, revoked before the armed timer fired → zero clicks",
+            0,
+            receiptClicks(replay, at = RECEIPT_MS + 60_000L) {
+                settings.setGranted(key, false)
+                replay.settle()
+                assertTrue("revoked", key !in replay.grants.grantedKeys.value && key in replay.grants.deniedKeys.value)
+            },
+        )
+
+        // ── The mirror: denied at recognition, granted (from the prompt) before the timer fires ──
+        assertEquals(
+            "denied at recognition, granted before the armed timer fired → exactly one click",
+            1,
+            receiptClicks(replay, at = RECEIPT_MS + 80_000L) {
+                prompt.onDecision(key, allow = true)
+                replay.settle()
+                assertTrue("re-granted", key in replay.grants.grantedKeys.value)
+            },
+        )
 
         val automationTaps = replay.executor.trace.map { it.effect }.filterIsInstance<AppEffect.PerformRuleAction>()
             .filter { it.action == RuleAction.EXPAND_EARNINGS }
         assertEquals(
             "every case really reached the engine's gate as an AUTOMATION tap (the zeros are refusals, not silence)",
-            List(4) { ActionTrigger.AUTOMATION }, automationTaps.map { it.trigger },
+            List(5) { ActionTrigger.AUTOMATION }, automationTaps.map { it.trigger },
         )
-        assertEquals("one click across all four cases", 1, replay.accessibility.clicks.size)
+        assertEquals("two clicks across the five cases (granted, granted-while-armed)", 2, replay.accessibility.clicks.size)
     }
 
     @Test
@@ -148,9 +171,16 @@ class ConsentToActuationE2ETest {
         close(first)
 
         // Launch 2 — same persisted grants, a ruleset whose expandButton definition changed.
+        // Its start() ran the production consent-schema migration again: the store launch 1 stamped
+        // is current-schema, so the migration is a no-op and the grant is KEPT (the pre-#1167 case,
+        // where it is cleared, is pinned below).
         val second = harness(grantStore, ruleTransform = ::repointExpandBinding)
         val secondPrompt = consentPrompt(second)
-        assertTrue("the old grant survived the restart", oldKey in second.grants.grantedKeys.value)
+        assertFalse(
+            "the store is already at the current consent schema — a further migration is a no-op",
+            second.await { RuleCapabilityDataSource(grantStore).migrateConsentSchemaIfNeeded() },
+        )
+        assertTrue("the current-schema grant survived the restart and its migration", oldKey in second.grants.grantedKeys.value)
         val newRow = expandRow(secondPrompt)
         assertNotNull("the changed binding is UNDECIDED again — consent re-entered", newRow)
         assertNotEquals("the content-pinned key moved with the definition", oldKey, newRow!!.key)
@@ -162,6 +192,27 @@ class ConsentToActuationE2ETest {
             "re-consented → one click (the repointed binding still aims at the real row)",
             1, receiptClicks(second, at = RECEIPT_MS + 40_000L),
         )
+    }
+
+    @Test
+    fun `a pre-1167 grant is cleared by the startup migration before rules load - the tap stays undecided`() {
+        // A store written before the #1167 key shape: a grant on the CURRENT expand key, with no
+        // consent-schema version stamped (what every pre-#1167 install carries).
+        val currentKey = harness().let { probe ->
+            expandRow(consentPrompt(probe))!!.key.also { close(probe) }
+        }
+        val grantStore = ReplayEdges.MemoryPreferences()
+        val legacy = RuleCapabilityDataSource(grantStore)
+        kotlinx.coroutines.runBlocking {
+            legacy.update { g, d, r -> GrantSnapshot(g + currentKey, d, r) }
+        }
+        assertTrue("seeded", currentKey in kotlinx.coroutines.runBlocking { legacy.granted.first() })
+
+        val replay = harness(grantStore)
+        val prompt = consentPrompt(replay)
+        assertTrue("the startup migration cleared the pre-#1167 grant", currentKey !in replay.grants.grantedKeys.value)
+        assertEquals("…so the capability is undecided again", currentKey, expandRow(prompt)?.key)
+        assertEquals("…and the armed tap is refused", 0, receiptClicks(replay, at = RECEIPT_MS))
     }
 
     @Test
@@ -229,12 +280,24 @@ class ConsentToActuationE2ETest {
 
     /**
      * Show the collapsed receipt at [at], hold past the settle delay so the engine's own SETTLE_UI
-     * timer fires the deferred tap, and return how many clicks landed meanwhile.
+     * timer fires the deferred tap, and return how many clicks landed meanwhile. [beforeFire] runs
+     * while that timer is ARMED and not yet fired (asserted), with no further screen fed.
      */
-    private fun receiptClicks(replay: E2ESessionReplay, at: Long): Int {
+    private fun receiptClicks(replay: E2ESessionReplay, at: Long, beforeFire: (() -> Unit)? = null): Int {
         val before = replay.accessibility.clicks.size
         val armed = replay.executor.trace.count { (it.effect as? AppEffect.PerformRuleAction)?.action == RuleAction.EXPAND_EARNINGS }
         replay.screen(SessionReplay.loadScreenFrame(DoorDashFullDashJourney.COLLAPSED, at))
+        if (beforeFire != null) {
+            val settle = replay.executor.trace.last { (it.effect as? AppEffect.ScheduleTimeout)?.type == TimeoutType.SETTLE_UI }
+            assertEquals("the receipt armed its SETTLE_UI timer at $at", at, settle.atMs)
+            replay.advanceTo(at + (settle.effect as AppEffect.ScheduleTimeout).durationMs / 2)
+            assertEquals(
+                "the armed tap has not fired yet",
+                armed,
+                replay.executor.trace.count { (it.effect as? AppEffect.PerformRuleAction)?.action == RuleAction.EXPAND_EARNINGS },
+            )
+            beforeFire()
+        }
         replay.advanceTo(at + SETTLE_HOLD_MS)
         assertEquals(
             "the collapsed receipt armed exactly one expand tap at $at\n${replay.trace()}",

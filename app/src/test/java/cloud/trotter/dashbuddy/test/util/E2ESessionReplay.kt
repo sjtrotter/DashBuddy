@@ -242,10 +242,13 @@ class E2ESessionReplay(
     }
 
     /**
-     * Load the rules, bring the speech engine up and start the manager — the app-start sequence,
+     * Migrate the consent store, load the rules, bring the speech engine up and start the manager — the app-start sequence,
      * minus the parts that live outside this boundary. Returns once the manager is collecting.
      */
     fun start() {
+        // Production order (DashBuddyApplication): the one-shot consent-schema migration runs BEFORE
+        // the rules go live, so rules never load over an un-migrated (pre-#1167) grant store.
+        await { grants.migrateConsentSchemaIfNeeded() }
         await { interpreter.loadDefaults() }
         check(interpreter.isLoaded) { "the production rule loader loaded nothing" }
         tts.reportReady()

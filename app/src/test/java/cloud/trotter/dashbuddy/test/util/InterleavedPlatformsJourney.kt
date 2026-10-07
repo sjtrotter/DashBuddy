@@ -15,31 +15,32 @@ import cloud.trotter.dashbuddy.test.util.DoorDashFullDashJourney.substituted
  * sessions spliced in, re-timed onto the journey's clock; every committed file is read, never
  * modified:
  *
- * 1. `sessions/doordash_offer_replace_2026_01_28` — `01_offer_cvs.json` then, [REPLACE_GAP_MS] later
- *    (the capture's own 3 000 ms gap), `02_offer_peter_piper.json`: a DoorDash offer REPLACED by
- *    another before the journey's own offer. The CVS heads-up's Accept intent is kept while it is
- *    posted, and delivered at [STALE_TAP_MS] — after the replacement, with Peter Piper's card (and
- *    its live `accept_button`) in the foreground: the stale tap.
- * 2. [DoorDashFullDashJourney] frames 01–08 (the stacked Bill Miller BBQ + Mama Margies offer,
- *    accepted from its own heads-up, both pickups, Bill Miller's first dropoff surface).
- * 3. `sessions/uber_offer_churn_2026_07_21` — the three Sonic re-quote frames (A $6.44 → B $6.42 →
- *    C $6.44), keeping their captured 3 212 / 10 573 ms gaps, starting [UBER_OFFER_MS]: the dasher
- *    switches to Uber mid-delivery. Nobody acts on it.
- * 4. Back to DoorDash: frame 08 re-shown at [BACK_TO_DOORDASH_MS] (the Uber overlay vanished with
- *    no closing frame — on-device that is the common case). Uber's offer must then be resolved by
- *    UBER's own `OFFER_EXPIRY` timer while DoorDash is foreground.
- * 5. The rest of [DoorDashFullDashJourney] unchanged (09 → the receipt pair → the dash summary).
- *    The summary keeps the journey's scalar substitutions.
+ * 1. `sessions/doordash_offer_replace_2026_01_28` — `01_offer_cvs.json` at [CVS_MS] then, the
+ *    capture's own 3 000 ms later, `02_offer_peter_piper.json`: a DoorDash offer REPLACED by another.
+ *    The CVS heads-up's Accept intent is kept while it is posted and delivered at [STALE_TAP_MS] —
+ *    after the replacement, with Peter Piper's card (and its live `accept_button`) in the foreground
+ *    and Peter Piper's own heads-up up: the stale tap.
+ * 2. `sessions/uber_offer_churn_2026_07_21` — the three Sonic re-quote frames (A $6.44 → B $6.42 →
+ *    C $6.44), keeping their captured 3 212 / 10 573 ms gaps, starting [UBER_OFFER_MS]: an Uber offer
+ *    overlay arrives while Peter Piper's DoorDash offer is still presented. Both platforms now hold an
+ *    `OFFER_EXPIRY` timer AT ONCE (Uber's re-quotes even re-arm theirs meanwhile). Nobody acts on
+ *    either: Peter Piper's card countdown runs out with no further frame, and DoorDash's OWN timer
+ *    resolves it while Uber's keeps running.
+ * 3. [DoorDashFullDashJourney] from its offer on: the stacked Bill Miller BBQ + Mama Margies offer
+ *    (whose own OFFER_EXPIRY is armed, then CANCELLED by the accept — while Uber's is still pending),
+ *    accepted from its own heads-up; both pickups. Uber's offer then expires on UBER's own timer
+ *    between pickup frames 05 and 06, with DoorDash foreground and its job open.
+ * 4. The rest of [DoorDashFullDashJourney] unchanged (06 → the receipt pair → the dash summary, with
+ *    the journey's scalar substitutions).
  */
 object InterleavedPlatformsJourney {
 
     const val REPLACE = "snapshots/sessions/doordash_offer_replace_2026_01_28"
     const val UBER = "snapshots/sessions/uber_offer_churn_2026_07_21"
 
-    /** The DoorDash replacement pair, half a minute before the journey's own offer. */
-    const val CVS_MS = DoorDashFullDashJourney.OFFER_MS - 30_000L
-    const val REPLACE_GAP_MS = 3_000L
-    const val PETER_PIPER_MS = CVS_MS + REPLACE_GAP_MS
+    /** The DoorDash replacement pair, a minute before the journey's own offer. */
+    const val CVS_MS = DoorDashFullDashJourney.OFFER_MS - 60_000L
+    const val PETER_PIPER_MS = CVS_MS + 3_000L
 
     /** CVS's heads-up is up (the engine posts it 750 ms after the evaluation lands). */
     const val CVS_BANNER_MS = CVS_MS + 2_000L
@@ -47,17 +48,24 @@ object InterleavedPlatformsJourney {
     /** The stale CVS Accept lands once Peter Piper's own heads-up is up (2 s after the replacement). */
     const val STALE_TAP_MS = PETER_PIPER_MS + 2_000L
 
+    /** Uber's first Sonic frame: while Peter Piper is still presented (its countdown runs ~35 s). */
+    const val UBER_OFFER_MS = CVS_MS + 20_000L
+    const val UBER_LAST_GAP_MS = 13_785L
+
     /** The journey offer's own heads-up Accept ([DoorDashFullDashJourney.ACCEPT_TAP_MS]). */
     const val JOURNEY_ACCEPT_TAP_MS = DoorDashFullDashJourney.ACCEPT_TAP_MS
 
-    /** Uber's first Sonic frame: a minute after Bill Miller's first dropoff surface (frame 08). */
-    const val FRAME_08_MS = 1_783_284_476_286L
-    const val FRAME_09_MS = 1_783_285_101_270L
-    const val UBER_OFFER_MS = FRAME_08_MS + 60_000L
+    const val FRAME_05_MS = 1_783_283_894_971L
+    const val FRAME_06_MS = 1_783_283_997_334L
 
-    /** Back in DoorDash 20 s after Uber's last re-quote — Uber's offer is still pending there. */
-    const val UBER_LAST_GAP_MS = 13_785L
-    const val BACK_TO_DOORDASH_MS = UBER_OFFER_MS + UBER_LAST_GAP_MS + 20_000L
+    /** One platform's timer firing: the whole state and the shade just before (1 ms) and after (1 s). */
+    data class Fire(
+        val atMs: Long,
+        val before: AppState,
+        val after: AppState,
+        val notificationsBefore: Set<Int>,
+        val notificationsAfter: Set<Int>,
+    )
 
     /** Everything observed only DURING the run. */
     data class Checkpoints(
@@ -71,17 +79,13 @@ object InterleavedPlatformsJourney {
         /** Notification ids posted just before the stale tap, and the ids just after it. */
         val notificationsBeforeStaleTap: Set<Int>,
         val notificationsAfterStaleTap: Set<Int>,
-        /** The state after Uber's last re-quote, and as DoorDash comes back. */
+        /** The state after Uber's last re-quote (Peter Piper still presented on DoorDash). */
         val atUberOffer: AppState,
-        val atBackToDoorDash: AppState,
-        /** The shade as DoorDash comes back (Uber's offer still pending). */
-        val notificationsAtBackToDoorDash: Set<Int>,
-        /** The whole state 1 ms before Uber's OFFER_EXPIRY fires, and 1 s after (DoorDash foreground). */
-        val beforeUberExpiry: AppState,
-        val afterUberExpiry: AppState,
-        val notificationsAfterUberExpiry: Set<Int>,
-        val uberExpiryAtMs: Long,
-        /** The odometer's per-session miles just before Uber's session started (DoorDash's). */
+        /** DoorDash's own OFFER_EXPIRY (Peter Piper) firing while Uber's is pending. */
+        val peterPiperExpiry: Fire,
+        /** Uber's OFFER_EXPIRY firing with DoorDash foreground and its job open. */
+        val uberExpiry: Fire,
+        /** The odometer's per-session miles for DoorDash just before Uber's session started. */
         val doorDashMilesBeforeUber: Double,
     )
 
@@ -93,9 +97,23 @@ object InterleavedPlatformsJourney {
         fun frame(n: String) = stack.getValue(n)
         fun hashOf(o: Observation.Screen) = (o.parsed as ParsedFields.OfferFields).parsedOffer.offerHash
 
+        /** The deadline of the LAST `OFFER_EXPIRY` the engine was handed for [platform]'s [offerHash]. */
+        fun expiryOf(platform: Platform, offerHash: String): Long = replay.executor.trace.mapNotNull { e ->
+            (e.effect as? AppEffect.ScheduleTimeout)
+                ?.takeIf { it.platform == platform && (it.payload as? ObservationPayload.OfferExpiry)?.offerHash == offerHash }
+                ?.let { e.atMs + it.durationMs }
+        }.last()
+
+        fun serve(atMs: Long): Fire {
+            replay.advanceTo(atMs - 1)
+            val before = replay.manager.state.value
+            val notesBefore = replay.activeNotificationIds()
+            replay.advanceTo(atMs + 1_000L)
+            return Fire(atMs, before, replay.manager.state.value, notesBefore, replay.activeNotificationIds())
+        }
+
         // 1. DoorDash: CVS, replaced by Peter Piper; the CVS Accept is tapped late.
         val cvs = hashOf(replay.screen(replace[0], atMs = CVS_MS))
-        // The engine posts the heads-up after its screenshot settle (`OFFER_NOTIFICATION_DELAY_MS`).
         replay.advanceTo(CVS_BANNER_MS)
         val staleAccept = replay.offerActionIntent(OfferIntent.ACCEPT, cvs)
         val peterPiper = hashOf(replay.screen(replace[1], atMs = PETER_PIPER_MS))
@@ -106,7 +124,20 @@ object InterleavedPlatformsJourney {
         val clicksAfter = replay.accessibility.clicks.size
         val notesAfter = replay.activeNotificationIds()
 
-        // 2. The journey's offer, accepted from its own heads-up; pickups; Bill Miller's dropoff.
+        // 2. Uber's offer overlay, with Peter Piper still presented: two OFFER_EXPIRY timers at once.
+        replay.advanceTo(UBER_OFFER_MS)
+        val ddSession = checkNotNull(replay.manager.state.value.regions.platforms[Platform.DoorDash]?.session).sessionId
+        val ddMilesBeforeUber = replay.odometer.getCurrentSessionMiles(ddSession)
+        val shift = UBER_OFFER_MS - uber[0].capturedAtMs
+        val uberHashes = uber.map { hashOf(replay.screen(it, atMs = it.capturedAtMs + shift)) }
+        val atUber = replay.manager.state.value
+        val ppExpiry = expiryOf(Platform.DoorDash, peterPiper)
+        check(ppExpiry > UBER_OFFER_MS + UBER_LAST_GAP_MS && ppExpiry < DoorDashFullDashJourney.OFFER_MS) {
+            "Peter Piper's expiry ($ppExpiry) must fall after Uber's last re-quote and before the journey offer"
+        }
+        val peterPiperFire = serve(ppExpiry)
+
+        // 3. The journey's offer, accepted from its own heads-up (its expiry cancelled); the pickups.
         val journeyOffer = hashOf(replay.screen(frame("01")))
         replay.advanceTo(JOURNEY_ACCEPT_TAP_MS)
         replay.deliverOfferAction(
@@ -117,37 +148,15 @@ object InterleavedPlatformsJourney {
             "the journey Accept did not physically click — not feeding the click capture\n${replay.trace()}"
         }
         replay.click(SessionReplay.loadClickFrame("${DoorDashFullDashJourney.STACK}/02_accept_offer_click.json"))
-        for (n in listOf("03", "04", "05", "06", "07", "08")) replay.screen(frame(n))
-
-        // 3. Uber, mid-delivery: the Sonic re-quotes at their captured spacing.
-        val shift = UBER_OFFER_MS - uber[0].capturedAtMs
-        replay.advanceTo(UBER_OFFER_MS)
-        val ddSession = checkNotNull(replay.manager.state.value.regions.platforms[Platform.DoorDash]?.session).sessionId
-        val ddMilesBeforeUber = replay.odometer.getCurrentSessionMiles(ddSession)
-        val uberHashes = uber.map { hashOf(replay.screen(it, atMs = it.capturedAtMs + shift)) }
-        val atUber = replay.manager.state.value
-
-        // 4. Back to DoorDash with Uber's offer still pending; Uber's own timer resolves it.
-        replay.screen(frame("08"), atMs = BACK_TO_DOORDASH_MS)
-        val atBack = replay.manager.state.value
-        val notesAtBack = replay.activeNotificationIds()
-        // The engine's own arm (the last re-arm keeps the first presentation's deadline, #830).
-        val expiryAt = replay.executor.trace.mapNotNull { e ->
-            (e.effect as? AppEffect.ScheduleTimeout)
-                ?.takeIf { it.platform == Platform.Uber && it.payload is ObservationPayload.OfferExpiry }
-                ?.let { e.atMs + it.durationMs }
-        }.max()
-        check(expiryAt > BACK_TO_DOORDASH_MS && expiryAt < FRAME_09_MS) {
-            "Uber's offer expiry ($expiryAt) must fall while DoorDash is foreground, before frame 09"
+        for (n in listOf("03", "04", "05")) replay.screen(frame(n))
+        val uberExpiry = expiryOf(Platform.Uber, uberHashes.last())
+        check(uberExpiry > FRAME_05_MS && uberExpiry < FRAME_06_MS) {
+            "Uber's offer expiry ($uberExpiry) must fall while DoorDash is foreground, between frames 05 and 06"
         }
-        replay.advanceTo(expiryAt - 1)
-        val beforeExpiry = replay.manager.state.value
-        replay.advanceTo(expiryAt + 1_000L)
-        val afterExpiry = replay.manager.state.value
-        val notesAfterExpiry = replay.activeNotificationIds()
+        val uberFire = serve(uberExpiry)
 
-        // 5. The rest of the DoorDash journey, unchanged.
-        for (n in listOf("09", "10", "12")) replay.screen(frame(n))
+        // 4. The rest of the DoorDash journey, unchanged.
+        for (n in listOf("06", "07", "08", "09", "10", "12")) replay.screen(frame(n))
         replay.screen(frame("03"), atMs = DoorDashFullDashJourney.BILL_RETIRE_ARM_MS)
         replay.advanceTo(DoorDashFullDashJourney.BILL_RETIRED_MS)
         for (n in listOf("13", "11")) replay.screen(frame(n))
@@ -163,9 +172,7 @@ object InterleavedPlatformsJourney {
             cvsHash = cvs, peterPiperHash = peterPiper, journeyOfferHash = journeyOffer, uberHashes = uberHashes,
             clicksBeforeStaleTap = clicksBefore, clicksAfterStaleTap = clicksAfter,
             notificationsBeforeStaleTap = notesBefore, notificationsAfterStaleTap = notesAfter,
-            atUberOffer = atUber, atBackToDoorDash = atBack, notificationsAtBackToDoorDash = notesAtBack,
-            beforeUberExpiry = beforeExpiry, afterUberExpiry = afterExpiry,
-            notificationsAfterUberExpiry = notesAfterExpiry, uberExpiryAtMs = expiryAt,
+            atUberOffer = atUber, peterPiperExpiry = peterPiperFire, uberExpiry = uberFire,
             doorDashMilesBeforeUber = ddMilesBeforeUber,
         )
     }

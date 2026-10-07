@@ -29,8 +29,9 @@ import timber.log.Timber
 
 /**
  * #1271 scenario 3 — **two platforms live at once, end to end** ([E2ESessionReplay]): a DoorDash
- * dash with a replaced offer, a stale heads-up Accept, and an Uber offer that arrives (and is left
- * to expire) mid-delivery while the DoorDash job is open. The journey is composed explicitly in
+ * dash with a replaced offer, a stale heads-up Accept, and an Uber offer that arrives while a DoorDash
+ * offer is still presented (both platforms holding an `OFFER_EXPIRY` at once) and is left to expire
+ * mid-pickup while the DoorDash job is open. The journey is composed explicitly in
  * [InterleavedPlatformsJourney] from three committed sessions plus the DoorDash full-dash journey's
  * receipt/summary splices: `sessions/doordash_offer_replace_2026_01_28`,
  * `sessions/two_pickup_stack_2026_07_05`, `sessions/uber_offer_churn_2026_07_21`, the 2026-08-23
@@ -86,11 +87,8 @@ class InterleavedPlatformsE2ETest {
             assertEquals("both sessions live at Uber's offer", 2, cp.atUberOffer.regions.crossPlatform.activeSessionCount)
             val ddAtUber = cp.atUberOffer.regions.platforms[Platform.DoorDash]
             assertEquals("Uber's offer did not disturb DoorDash's session", ddSession, ddAtUber?.session?.sessionId)
-            assertNotNull("…nor its open job", ddAtUber?.activeJob)
-            assertEquals(
-                "DoorDash coming back resumed the same session and job",
-                ddAtUber?.activeJob?.jobId, cp.atBackToDoorDash.regions.platforms[Platform.DoorDash]?.activeJob?.jobId,
-            )
+            assertEquals("…nor DoorDash's presented offer", cp.peterPiperHash, ddAtUber?.presentedOffer()?.offerHash)
+            assertNotNull("DoorDash's job was open when Uber's offer expired", cp.uberExpiry.before.regions.platforms[Platform.DoorDash]?.activeJob)
             val ends = effects.filterIsInstance<AppEffect.EndSession>()
             assertEquals("only DoorDash's dash ended", listOf(ddSession), ends.map { it.sessionId })
             val final = replay.manager.state.value.regions
@@ -98,36 +96,61 @@ class InterleavedPlatformsE2ETest {
             assertEquals("Uber is still online", uberSession, final.platforms[Platform.Uber]?.session?.sessionId)
             assertEquals(Mode.Online, final.platforms[Platform.Uber]?.mode)
 
-            // ── Timers: each platform's own, keyed by platform; Uber's expiry touches only Uber ──
-            val uberArms = effects.filterIsInstance<AppEffect.ScheduleTimeout>().filter { it.platform == Platform.Uber }
-            assertTrue("Uber armed only its offer expiry", uberArms.isNotEmpty() && uberArms.all { it.type == TimeoutType.OFFER_EXPIRY })
+            // ── Timers: the SAME type on both platforms at once; each fires for its own offer ──────
+            val pp = cp.peterPiperExpiry
+            val ub = cp.uberExpiry
+            assertNotNull("both offers were pending as DoorDash's timer came due", pp.before.regions.platforms[Platform.Uber]?.presentedOffer())
+            assertEquals(cp.peterPiperHash, pp.before.regions.platforms[Platform.DoorDash]?.presentedOffer()?.offerHash)
+            assertNull("DoorDash's OWN timer resolved Peter Piper at its deadline", pp.after.regions.platforms[Platform.DoorDash]?.presentedOffer())
+            assertEquals(
+                "…and Uber's pending offer — armed AFTER DoorDash's, re-armed twice by its re-quotes — was left exactly as it was",
+                pp.before.regions.platforms[Platform.Uber], pp.after.regions.platforms[Platform.Uber],
+            )
+            val armsBetween = replay.executor.trace.filter { it.atMs in UBER_OFFER_MS until pp.atMs }
+                .mapNotNull { it.effect as? AppEffect.ScheduleTimeout }.filter { it.type == TimeoutType.OFFER_EXPIRY }
+            assertEquals(
+                "Uber armed OFFER_EXPIRY three times while DoorDash's was pending (a type-keyed timer would have replaced it)",
+                List(3) { Platform.Uber }, armsBetween.map { it.platform },
+            )
+            val ddCancel = replay.executor.trace.single {
+                (it.effect as? AppEffect.CancelTimeout)?.let { c -> c.type == TimeoutType.OFFER_EXPIRY && c.platform == Platform.DoorDash } == true &&
+                    it.atMs in (pp.atMs + 1) until ub.atMs
+            }
             assertTrue(
-                "…for its own offer hashes",
-                uberArms.all { (it.payload as ObservationPayload.OfferExpiry).offerHash in cp.uberHashes },
+                "DoorDash cancelled its journey offer's expiry on the accept, while Uber's was pending",
+                ddCancel.atMs >= InterleavedPlatformsJourney.JOURNEY_ACCEPT_TAP_MS,
             )
             assertEquals(
-                "Uber's expiry is its FIRST presentation + the 120 s default (churn re-arms never push it)",
-                UBER_OFFER_MS + 120_000L, cp.uberExpiryAtMs,
+                "Uber's expiry still fired at its FIRST presentation + the 120 s default (neither DoorDash's cancel nor its re-arms moved it)",
+                UBER_OFFER_MS + 120_000L, ub.atMs,
             )
-            assertNotNull("Uber's offer was still pending as DoorDash came back", cp.beforeUberExpiry.regions.platforms[Platform.Uber]?.presentedOffer())
-            assertNull("Uber's own timer resolved it", cp.afterUberExpiry.regions.platforms[Platform.Uber]?.presentedOffer())
+            assertNotNull("Uber's offer was pending just before", ub.before.regions.platforms[Platform.Uber]?.presentedOffer())
+            assertNull("Uber's own timer resolved it", ub.after.regions.platforms[Platform.Uber]?.presentedOffer())
             assertEquals(
                 "Uber's expiry, firing with DoorDash foreground, left DoorDash's region exactly as it was",
-                cp.beforeUberExpiry.regions.platforms[Platform.DoorDash], cp.afterUberExpiry.regions.platforms[Platform.DoorDash],
+                ub.before.regions.platforms[Platform.DoorDash], ub.after.regions.platforms[Platform.DoorDash],
             )
-            assertEquals("…and the screen-truth region too", cp.beforeUberExpiry.regions.flow, cp.afterUberExpiry.regions.flow)
-            val uberCancels = effects.filterIsInstance<AppEffect.CancelTimeout>().filter { it.platform == Platform.Uber }
-            assertEquals("Uber cancelled only its own offer timer", listOf(TimeoutType.OFFER_EXPIRY), uberCancels.map { it.type })
+            assertEquals("…and the screen-truth region too", ub.before.regions.flow, ub.after.regions.flow)
+            val uberArms = effects.filterIsInstance<AppEffect.ScheduleTimeout>().filter { it.platform == Platform.Uber }
             assertTrue(
-                "every DoorDash grace/settle timer was armed on DoorDash's own key",
+                "Uber armed only its offer expiry, for its own hashes",
+                uberArms.all { it.type == TimeoutType.OFFER_EXPIRY && (it.payload as ObservationPayload.OfferExpiry).offerHash in cp.uberHashes },
+            )
+            val uberCancels = effects.filterIsInstance<AppEffect.CancelTimeout>().filter { it.platform == Platform.Uber }
+            assertEquals("Uber cancelled only its own offer timer, once", listOf(TimeoutType.OFFER_EXPIRY), uberCancels.map { it.type })
+            assertTrue(
+                "every grace/settle timer was armed on DoorDash's own key",
                 effects.filterIsInstance<AppEffect.ScheduleTimeout>()
                     .filter { it.type != TimeoutType.OFFER_EXPIRY }.all { it.platform == Platform.DoorDash },
             )
 
             // ── Notifications: each banner is its own offer's; speech once per presentation ──────
             val uberBanner = BubbleManager.offerNotificationId(cp.uberHashes.last())
-            assertTrue("Uber's heads-up survived the switch back to DoorDash", uberBanner in cp.notificationsAtBackToDoorDash)
-            assertFalse("…until Uber's own expiry dismissed it", uberBanner in cp.notificationsAfterUberExpiry)
+            assertTrue("Peter Piper's heads-up was up until its expiry", ppBanner in pp.notificationsBefore)
+            assertFalse("…which dismissed it", ppBanner in pp.notificationsAfter)
+            assertTrue("…and not Uber's", uberBanner in pp.notificationsBefore && uberBanner in pp.notificationsAfter)
+            assertTrue("Uber's heads-up survived DoorDash's accept and pickups", uberBanner in ub.notificationsBefore)
+            assertFalse("…until Uber's own expiry dismissed it", uberBanner in ub.notificationsAfter)
             val posts = replay.bubble.calls("postOfferNotification")
             assertEquals(
                 "posts per platform: CVS, Peter Piper, the journey offer; Uber's three live re-quotes",
@@ -158,20 +181,20 @@ class InterleavedPlatformsE2ETest {
             // ── Read model: no cross-platform contamination ─────────────────────────────────────
             val sessions = rows(replay, "session_records").associateBy { it.getValue("sessionId") }
             assertEquals("one session row per platform", setOf(ddSession, uberSession), sessions.keys)
-            val dd = sessions.getValue(ddSession)
-            val ub = sessions.getValue(uberSession)
-            assertEquals("doordash", dd["platform"])
-            assertEquals("uber", ub["platform"])
+            val ddRow = sessions.getValue(ddSession)
+            val uberRow = sessions.getValue(uberSession)
+            assertEquals("doordash", ddRow["platform"])
+            assertEquals("uber", uberRow["platform"])
             assertEquals(
-                "DoorDash: three offers (CVS + Peter Piper replaced, the stack accepted), two deliveries, one job, the summary's total",
+                "DoorDash: three offers (CVS replaced, Peter Piper expired, the stack accepted), two deliveries, one job, the summary's total",
                 listOf("3", "1", "2", "2", "1", "summary_screen", "16.7"),
-                listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endSource", "reportedEarnings").map { dd[it] },
+                listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endSource", "reportedEarnings").map { ddRow[it] },
             )
-            assertNotNull("DoorDash's session ended", dd["endedAt"])
+            assertNotNull("DoorDash's session ended", ddRow["endedAt"])
             assertEquals(
                 "Uber: its one offer (expired), nothing delivered, still open, no reported total",
                 listOf("1", "0", "1", "0", "0", null, null),
-                listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endedAt", "reportedEarnings").map { ub[it] },
+                listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endedAt", "reportedEarnings").map { uberRow[it] },
             )
 
             val deliveries = rows(replay, "delivery_records")
@@ -193,7 +216,12 @@ class InterleavedPlatformsE2ETest {
             }
             val uberOffer = offers.single { it["platform"] == "uber" }
             assertEquals(cp.uberHashes[0], uberOffer["offerHash"])
-            assertEquals("Uber's offer timed out on its own timer", "OFFER_TIMEOUT", uberOffer["outcome"])
+            assertEquals("Uber's offer timed out", "OFFER_TIMEOUT", uberOffer["outcome"])
+            assertEquals("…decided at its own expiry", ub.atMs.toString(), uberOffer["decidedAt"])
+            assertEquals(
+                "Peter Piper was decided at ITS expiry — not replaced later by the journey offer",
+                pp.atMs.toString(), offers.single { it["offerHash"] == cp.peterPiperHash }["decidedAt"],
+            )
             assertEquals(
                 "DoorDash's three outcomes — the stale tap accepted nothing",
                 mapOf(cp.cvsHash to "OFFER_TIMEOUT", cp.peterPiperHash to "OFFER_TIMEOUT", cp.journeyOfferHash to "OFFER_ACCEPTED"),
