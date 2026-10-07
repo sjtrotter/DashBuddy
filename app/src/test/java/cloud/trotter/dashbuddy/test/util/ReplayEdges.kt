@@ -84,6 +84,19 @@ object ReplayEdges {
     }
 
     /**
+     * What a process death leaves behind (#1271 scenario 4): the Room database FILE and the
+     * preference stores. A memory store that outlives the harness is an exact model of a DataStore
+     * file here — DataStore commits each edit atomically before `updateData` returns, so a store
+     * holds exactly the edits that completed, which is what a relaunched process reads back.
+     */
+    class DurableStores(val dbFile: java.io.File) {
+        val app = MemoryPreferences()
+        val strategy = MemoryPreferences()
+        val odometer = MemoryPreferences()
+        val grants = MemoryPreferences()
+    }
+
+    /**
      * GPS. While the odometer collects (it collects only between Start/Resume and Stop/Pause, exactly
      * as the fused provider is only active while collected), a fix is emitted every [intervalMs] of
      * virtual time along a straight line at [speedMps] — synthetic, timestamped, well inside every

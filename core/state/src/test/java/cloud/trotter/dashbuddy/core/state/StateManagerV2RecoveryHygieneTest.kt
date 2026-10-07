@@ -23,7 +23,6 @@ import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -31,8 +30,6 @@ import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 
 /**
  * Crash recovery DROPS a restored dash-running-total park (#1029 review round 4), **at the live
@@ -72,6 +69,8 @@ class StateManagerV2RecoveryHygieneTest {
     private class FlakySnapshotDao(
         seed: AppStateSnapshotEntity,
         private val failures: Int,
+        /** Called on every insert attempt, before it succeeds or fails. */
+        private val onAttempt: suspend (attempt: Int) -> Unit = {},
     ) : AppStateSnapshotDao {
         private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
         var attempts = 0
@@ -83,6 +82,7 @@ class StateManagerV2RecoveryHygieneTest {
 
         override suspend fun insert(entity: AppStateSnapshotEntity) {
             attempts++
+            onAttempt(attempts)
             if (attempts <= failures) throw IllegalStateException("snapshot table unavailable")
             rows[entity.correlationVersion] = entity
         }
@@ -202,11 +202,7 @@ class StateManagerV2RecoveryHygieneTest {
         journalDao: ObservationDao,
         snapshotDao: AppStateSnapshotDao,
         dispatcher: CoroutineDispatcher,
-    ): StateManagerV2 {
-        val engine: EffectExecutor = mock()
-        whenever(engine.events).thenReturn(MutableSharedFlow(extraBufferCapacity = 16))
-        return recoveryManager(journalDao, snapshotDao, engine, dispatcher)
-    }
+    ): StateManagerV2 = recoveryManager(journalDao, snapshotDao, InlineEffectExecutor(dispatcher), dispatcher)
 
     @Test
     fun `a park whose commit timer is IN the tail commits exactly as it did live`() = runTest {
@@ -479,7 +475,12 @@ class StateManagerV2RecoveryHygieneTest {
         // every live observation retries it.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val journalDao = FakeObservationDao(emptyList())
-        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2)
+        // The live retry's insert is held open, so the journal writer gets every chance to run
+        // while it is in flight — it must have nothing to write yet.
+        val retryHeld = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2) { attempt ->
+            if (attempt == 3) retryHeld.await()
+        }
 
         val first = newManagerOn(journalDao, snapshotDao, dispatcher)
         first.initialize()
@@ -496,11 +497,19 @@ class StateManagerV2RecoveryHygieneTest {
         // writes no ordinary snapshot of its own. The retry is the only write here.
         first.dispatch(liveIdle(20_000L))
         runCurrent()
-
-        assertEquals("the live observation retried the checkpoint", 3, snapshotDao.attempts)
+        assertEquals("the live observation is retrying the checkpoint", 3, snapshotDao.attempts)
         assertEquals(
-            "and it landed at THIS observation's version, not the stale recovery one",
-            6L,
+            "…and has NOT journalled itself while the retry is in flight (#1271 scenario 4): a live " +
+                "row on disk over the pre-hygiene snapshot would replay the stale park at a crash",
+            0, journalDao.since(0L).size,
+        )
+        retryHeld.complete(Unit)
+        runCurrent()
+        assertEquals("once the retry landed, the observation is journalled", 1, journalDao.since(0L).size)
+        assertEquals(
+            "and it landed at the RECOVERED version — REPLACING the pre-hygiene row (#1271 scenario 4: " +
+                "the drained recovered state, never the live step's, whose effects may not have run)",
+            5L,
             snapshotDao.latest()!!.correlationVersion,
         )
         val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)

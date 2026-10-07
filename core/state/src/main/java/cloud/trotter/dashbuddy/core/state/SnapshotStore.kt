@@ -5,9 +5,6 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import timber.log.Timber
 import java.time.Clock
@@ -36,14 +33,18 @@ class SnapshotStore @Inject constructor(
     /** A successfully decoded snapshot. */
     data class Restored(val state: AppState, val correlationVersion: Long)
 
-    fun maybeSnapshot(scope: CoroutineScope, dispatcher: CoroutineDispatcher, prev: AppState, next: AppState) {
-        val shouldSnapshot =
-            next.correlationVersion % SNAPSHOT_INTERVAL == 0L ||
-                isMajorTransition(prev, next)
+    /** Whether the step [prev] → [next] is snapshotted: every [SNAPSHOT_INTERVAL]th, and every major transition. */
+    fun shouldSnapshot(prev: AppState, next: AppState): Boolean =
+        next.correlationVersion % SNAPSHOT_INTERVAL == 0L || isMajorTransition(prev, next)
 
-        if (!shouldSnapshot) return
-
-        scope.launch(dispatcher) { write(next) }
+    /**
+     * Write [state] as an ordinary (cadence / major-transition) snapshot; a failure is logged and
+     * otherwise ignored — another snapshot is at most [SNAPSHOT_INTERVAL] observations away.
+     * `StateManagerV2` calls it only through `EffectExecutor.afterProcessed`, so the snapshot never
+     * lands ahead of the effects of the steps it covers (#1271 scenario 4).
+     */
+    suspend fun snapshot(state: AppState) {
+        write(state)
     }
 
     /**
@@ -58,20 +59,20 @@ class SnapshotStore @Inject constructor(
      * the restored version overwrites exactly the row that carried the park, leaving the journal
      * tail after it untouched.
      *
-     * Suspends rather than launching (unlike [maybeSnapshot]) so the recovery path can order the
-     * write ahead of the first live observation. Shares [write] with [maybeSnapshot] — ONE
+     * Suspends so the recovery path can order the write ahead of the first live observation.
+     * Shares [write] with [snapshot] — ONE
      * serializer, ONE DAO path (principle 5).
      *
      * @return true iff the row is durable (#1052 round 3). [write] swallows every failure, which
      *   is correct for the cadence — another snapshot is five observations away — and wrong for
      *   the checkpoint, whose whole job is durability: a swallowed insert failure silently reopens
      *   the double-recovery hole. `StateManagerV2.restoreState` retries once on false and then
-     *   reports it at ERROR; [maybeSnapshot] ignores the outcome as before.
+     *   reports it at ERROR; [snapshot] ignores the outcome as before.
      */
     suspend fun checkpoint(state: AppState): Boolean = write(state)
 
     /**
-     * The snapshot writer both [maybeSnapshot] and [checkpoint] go through. Never throws; returns
+     * The snapshot writer both [snapshot] and [checkpoint] go through. Never throws; returns
      * whether the snapshot ROW landed.
      *
      * The two DAO calls take separate `try`s deliberately: the insert IS the durability, while
