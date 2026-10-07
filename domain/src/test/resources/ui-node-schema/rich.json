@@ -1,0 +1,47 @@
+{
+  "text": "Accept",
+  "desc": "Accept offer",
+  "state": "on",
+  "id": "com.example:id/accept",
+  "class": "android.widget.Button",
+  "isClickable": true,
+  "isEnabled": true,
+  "isChecked": 1,
+  "bounds": {
+    "left": 1,
+    "top": 2,
+    "right": 3,
+    "bottom": 4
+  },
+  "children": [
+    {
+      "text": "child",
+      "bounds": {
+        "left": 1,
+        "top": 2,
+        "right": 3,
+        "bottom": 4
+      },
+      "pane": "Child pane",
+      "focusable": true
+    }
+  ],
+  "pane": "Offer",
+  "role": "Button",
+  "hint": "hint",
+  "tooltip": "tip",
+  "error": "err",
+  "clickLabel": "Accept this offer",
+  "uid": "uid-1",
+  "visible": false,
+  "focusable": true,
+  "srFocusable": true,
+  "checkable": true,
+  "selected": true,
+  "heading": true,
+  "live": 2,
+  "collRows": 5,
+  "collCols": 1,
+  "itemRow": 3,
+  "itemCol": 0
+}

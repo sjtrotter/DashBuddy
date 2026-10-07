@@ -16,8 +16,8 @@ import org.junit.Test
  * #1147 — the TalkBack-study node fields are ADDITIVE on the wire: every one round-trips, a node
  * that leaves them at their defaults serializes exactly as before (so the committed corpus stays
  * byte-identical), they take part in node equality, and they move NO frame-identity hash.
- * The corpus-wide half of the additive claim (every committed fixture, not one synthetic node)
- * lives in `:app`'s `CorpusNodeFieldsAdditiveTest` (review X4).
+ * Fixed old/rich wire vectors cover file decoding, both bounds formats, and nested nodes without
+ * coupling this schema contract to the size of the screen-classification corpus.
  */
 class UiNodeNewFieldsRoundTripTest {
 
@@ -54,6 +54,35 @@ class UiNodeNewFieldsRoundTripTest {
         itemRow = 3,
         itemCol = 0,
     )
+
+    private fun vector(name: String): String = requireNotNull(
+        javaClass.getResource("/ui-node-schema/$name.json"),
+    ).readText()
+
+    @Test
+    fun `old schema file decodes nested nodes without gaining new fields`() {
+        val decoded = UiNodeSchema.deserialize(vector("legacy"))
+        assertEquals(legacyNode, decoded)
+        assertEquals(legacyNode.children, decoded.children)
+        // The file mixes legacy string bounds and object bounds; encoding normalizes both.
+        // The defaults/key-set test below pins that this expected tree has no new wire keys.
+        assertEquals(UiNodeSchema.serialize(legacyNode), UiNodeSchema.serialize(decoded))
+    }
+
+    @Test
+    fun `rich schema file preserves new fields on root and child`() {
+        val wire = vector("rich")
+        val expected = richNode.copy(children = listOf(
+            legacyNode.children.single().copy(paneTitle = "Child pane", isFocusable = true),
+        ))
+        val decoded = UiNodeSchema.deserialize(wire)
+        assertEquals(expected, decoded)
+        assertEquals(expected.children, decoded.children)
+        assertEquals(
+            Json.parseToJsonElement(wire),
+            Json.parseToJsonElement(UiNodeSchema.serialize(decoded)),
+        )
+    }
 
     @Test
     fun `every new field survives the DTO round trip`() {

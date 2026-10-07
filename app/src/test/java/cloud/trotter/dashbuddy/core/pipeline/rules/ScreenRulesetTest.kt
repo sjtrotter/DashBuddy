@@ -1,15 +1,14 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.EffectVerb
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit tests for [Ruleset.matchFirst] (screen rules).
+ * Shared matching contract for [Ruleset.matchFirst], including click and notification inputs.
  *
  * Rules and branches are constructed directly from [CompiledRule] / [CompiledBranch]
  * data classes — no JSON parsing involved.
@@ -53,6 +52,21 @@ class ScreenRulesetTest {
             listOf(rule("r1", 10, branch("OFFER_POPUP") { it.text == "Offer" }))
         )
         assertNull(ruleset.matchIntent(node(text = "Something else")))
+
+        // Preserve the click and notification negative inputs in the shared contract.
+        val clicks = Ruleset(listOf(rule("accept", 10, branch("accept_offer") {
+            it.viewIdResourceName?.endsWith("accept_button") == true
+        })))
+        assertNull(clicks.matchFirst(node(viewId = "decline_button")))
+        assertNull(clicks.matchFirst(node(viewId = "some_unknown_button", text = "Got it")))
+        val notifications = Ruleset(listOf(CompiledRule<RawNotificationData>(
+            id = "r1", priority = 10, overrideable = true,
+            branches = listOf(CompiledBranch(
+                intent = "new_order",
+                predicate = { it.title?.contains("New Order") == true },
+            )),
+        )))
+        assertNull(notifications.matchFirst(notification()))
     }
 
     @Test
@@ -190,7 +204,13 @@ class ScreenRulesetTest {
     @Test
     fun `empty ruleset returns null`() {
         assertNull(Ruleset<UiNode>(emptyList()).matchIntent(node()))
+        assertNull(Ruleset<RawNotificationData>(emptyList()).matchFirst(notification(title = null)))
     }
+
+    private fun notification(title: String? = "DoorDash") = RawNotificationData(
+        title = title, text = null, bigText = null, tickerText = null,
+        packageName = "com.doordash.driverapp", postTime = 0L, isClearable = false,
+    )
 
     // =========================================================================
     // Template interpolation in effects
