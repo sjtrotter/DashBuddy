@@ -273,7 +273,7 @@
     <string name="time_tab_typical_hour_all_timed_format">All %1$s stops timed</string>
     <string name="time_tab_typical_hour_no_stops_timed">No arrivals recorded; at-stops time is unmeasured and included in Driving &amp; other.</string>
     <string name="time_tab_typical_hour_no_stops">No stops recorded.</string>
-    <string name="time_tab_typical_hour_leak_format">%2$s waiting · ≈ %1$s potential earnings</string>
+    <string name="time_tab_typical_hour_leak_format">%2$s waiting · ≈ %1$s at your net working rate</string>
     <string name="time_tab_typical_hour_leak_unpriced">Waiting not priced: no working rate</string>
     <string name="time_tab_gaps_title">Gaps between deliveries</string>
     <string name="time_tab_gaps_none">No gaps: needs a completed drop-off and a later accept in the same dash.</string>
