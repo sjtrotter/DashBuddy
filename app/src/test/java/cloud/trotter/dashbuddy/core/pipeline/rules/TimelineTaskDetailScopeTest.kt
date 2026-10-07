@@ -114,29 +114,106 @@ class TimelineTaskDetailScopeTest {
         assertEquals("doordash.screen.dropoff_workflow_sheet", winner(workflow))
     }
 
-    @Test
-    fun `an id-bearing variant stays UNKNOWN for the ID backstop, and the rule's redact covers the ids anyway (P1)`() {
-        for (suffix in listOf("customer_name", "address_subpremise_line", "dasher_instruction_content_collapsed")) {
-            val tree = frame(
-                text("Deliver to Avery K"),
-                text("Jordan T 4417", suffix),
-                addressBlock(),
-                text("Leave it at my door"),
-            )
-            assertNotEquals("$suffix variant must not be claimed by the task-detail sheet", TASK_DETAIL, winner(tree))
-            if (winner(tree) == null) {
-                assertFalse(
-                    "$suffix: the UNKNOWN-path backstop masks the id-borne value",
-                    serialize(CustomerTextMarkers.scrubUnknown(tree)).contains("Jordan T"),
-                )
-            }
-            assertFalse(
-                "$suffix: the rule's redact covers the id-borne value too",
-                serialize(taskDetail.redact.apply(tree)).contains("Jordan T"),
-            )
+    /**
+     * What would be PERSISTED for [tree]: the winning rule's redact, or the UNKNOWN-path backstops when
+     * nothing wins — so a test asserts on the envelope whichever path the frame takes.
+     */
+    private fun persisted(tree: UiNode): String {
+        val winnerId = winner(tree)
+        val masked = if (winnerId != null) {
+            ruleset.ruleById(winnerId)!!.redact.apply(tree)
+        } else {
+            CustomerTextMarkers.scrubUnknown(CustomerTextMarkers.scrub(tree))
         }
-        val plain = taskDetail.redact.apply(frame(text("4B", "address_subpremise_line")))
-        assertTrue("a subpremise value plain-masks", serialize(plain).contains("\"[redacted]\""))
+        return serialize(masked)
+    }
+
+    private fun assertSheetSecretsMasked(what: String, out: String) {
+        assertFalse("$what: name must not persist", out.contains("Avery K"))
+        assertFalse("$what: street must not persist", out.contains("Sample Ridge"))
+        assertFalse("$what: ZIP must not persist", out.contains("78200"))
+        assertFalse("$what: note must not persist", out.contains("sample porch"))
+        assertFalse("$what: code must not persist", Regex(""""text"\s*:\s*"000"""").containsMatchIn(out))
+    }
+
+    private fun sheetBody(vararg extra: UiNode) = arrayOf(
+        text("Deliver to Avery K"),
+        addressBlock(),
+        text("Leave it at my door"),
+        text("\"Leave it on the sample porch\""),
+        text("000"),
+        *extra,
+    )
+
+    @Test
+    fun `incidental chrome or a stray id never sends the sheet back to UNKNOWN (r2 P1)`() {
+        val variants = mapOf(
+            "pick-up-by line" to frame(*sheetBody(text("Pick up by 12:28 PM"))),
+            "stray id" to frame(*sheetBody(UiNode(viewIdResourceName = id("some_new_container")))),
+            "id on the option row" to frame(*sheetBody(text("Order includes", "unrelated_label"))),
+        )
+        for ((what, tree) in variants) {
+            assertEquals("$what: still this sheet", TASK_DETAIL, winner(tree))
+            assertSheetSecretsMasked(what, persisted(tree))
+        }
+    }
+
+    @Test
+    fun `an id-bearing variant is claimed and every id-borne and id-less secret is masked (r1 P1, r2 P1)`() {
+        for (suffix in listOf(
+            "customer_name",
+            "address_subpremise_line",
+            "dasher_instruction_content_collapsed",
+            "description_text_view",
+        )) {
+            val tree = frame(*sheetBody(text("Jordan T 4417", suffix)))
+            assertEquals("$suffix variant is claimed", TASK_DETAIL, winner(tree))
+            val out = persisted(tree)
+            assertFalse("$suffix: id-borne value must not persist", out.contains("Jordan T"))
+            assertSheetSecretsMasked(suffix, out)
+        }
+    }
+
+    @Test
+    fun `a 4-character subpremise value plain-masks exactly (r2 P5)`() {
+        val masked = taskDetail.redact.apply(frame(text("4417", "address_subpremise_line")))
+        val node = masked.findNode { it.viewIdResourceName == id("address_subpremise_line") }!!
+        assertEquals("[redacted]", node.text)
+    }
+
+    @Test
+    fun `content-id masks outrank the task-prefix hash, here and in the timeline belt (r2 P4)`() {
+        val timeline = ruleset.ruleById("doordash.screen.timeline")!!
+        for (rule in listOf(taskDetail, timeline)) {
+            for (suffix in listOf("dasher_instruction_content_collapsed", "description_text_view", "tvLastMessage")) {
+                val masked = rule.redact.apply(frame(text("Return 4417", suffix)))
+                val node = masked.findNode { it.viewIdResourceName == id(suffix) }!!
+                assertEquals("${rule.id} / $suffix: plain, never hashed", "[redacted]", node.text)
+            }
+        }
+    }
+
+    @Test
+    fun `recognition and redaction share one prefix vocabulary (r2 P3)`() {
+        val tabbed = frame(text("Return\tAvery K to Sample Store"), addressBlock(), text("Leave it at my door"))
+        assertNotEquals("a tab-separated Return line is not this rule's task line", TASK_DETAIL, winner(tabbed))
+    }
+
+    @Test
+    fun `the timeline wins a combined frame and masks the sheet's id-borne values (r2 P2)`() {
+        val tree = frame(
+            text("Current dash"),
+            text("Current task"),
+            *sheetBody(
+                text("Jordan T", "customer_name"),
+                text("Gate 4417", "dasher_instruction_content_collapsed"),
+            ),
+        )
+        assertEquals("doordash.screen.timeline", winner(tree))
+        val out = persisted(tree)
+        assertFalse("customer_name must not persist", out.contains("Jordan T"))
+        assertFalse("instruction body must not persist", out.contains("Gate 4417"))
+        assertSheetSecretsMasked("combined frame", out)
     }
 
     @Test

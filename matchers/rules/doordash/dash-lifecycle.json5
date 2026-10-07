@@ -8,6 +8,71 @@
       "priority": 10,
       "redact": [
         {
+          "comment": "Combined-frame belt (#1116 review r2 P2): the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry, same mask choice, same position (ahead of the task-prefix entry, r2 P4) as that rule's ID_MARKER_TABLE entry; inert when no node carries the id.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "customer_name"
+              },
+              {
+                "hasIdSuffix": "order_cx_name"
+              },
+              {
+                "hasIdSuffix": "user_name"
+              },
+              {
+                "hasIdSuffix": "tvTitle"
+              }
+            ]
+          },
+          "normalize": "customerName"
+        },
+        {
+          "comment": "Combined-frame belt (#1116 review r2 P2): the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry, same mask choice, same position (ahead of the task-prefix entry, r2 P4) as that rule's ID_MARKER_TABLE entry; inert when no node carries the id.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "address_line_1"
+              },
+              {
+                "hasIdSuffix": "arriving_at_title"
+              }
+            ]
+          }
+        },
+        {
+          "comment": "Combined-frame belt (#1116 review r2 P2): the order-detail sheet (timeline_task_detail) can inflate over the timeline, which wins on priority — same entry, same mask choice, same position (ahead of the task-prefix entry, r2 P4) as that rule's ID_MARKER_TABLE entry; inert when no node carries the id.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "address_line_2"
+              },
+              {
+                "hasIdSuffix": "address_subpremise_line"
+              },
+              {
+                "hasIdSuffix": "bottom_sheet_subpremise_line"
+              },
+              {
+                "hasIdSuffix": "dasher_instruction_content_collapsed"
+              },
+              {
+                "hasIdSuffix": "dasher_instruction_content_expanded"
+              },
+              {
+                "hasIdSuffix": "description_text_view"
+              },
+              {
+                "hasIdSuffix": "tvLastMessage"
+              },
+              {
+                "hasIdSuffix": "message_input"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "any": [
               {
@@ -291,29 +356,7 @@
       "priority": 164,
       "redact": [
         {
-          "comment": "The task line. Byte-identical prefix enumeration to `doordash.screen.timeline`'s own name entry (this sheet renders the SAME task vocabulary the row it opened from does, including #994's fourth 'Return <name> to <store>' conjugation), and `normalize: customerName` keeps the mask hex equal to the customer's persisted `customerNameHash` — one customer, one 4hex, on the timeline row and in its detail sheet alike (#623/#733). Ordered FIRST: 'Deliver to Avery K' also satisfies the id-less first-last-initial name shape, and this entry is the one that keeps the lead-in so a replayed envelope still reads as a task line. Note the device already scrubs this node to a plain '[redacted]' on the UNKNOWN path via the `CustomerTextMarkers` prefix backstop; that backstop keeps running on the recognized path too, so this entry is what upgrades the mask to the per-customer distinctness form rather than what first covers it.",
-          "find": {
-            "any": [
-              {
-                "hasTextStartsWith": "Pickup for "
-              },
-              {
-                "hasTextStartsWith": "Deliver to "
-              },
-              {
-                "hasTextStartsWith": "Return "
-              }
-            ]
-          },
-          "keepPrefix": [
-            "Pickup for ",
-            "Deliver to ",
-            "Return "
-          ],
-          "normalize": "customerName"
-        },
-        {
-          "comment": "#1116 review (P1): the ID-borne PII this sheet could carry on an id-bearing variant, so a frame this rule wins is never WEAKER than the UNKNOWN path's `CustomerTextMarkers.ID_MARKERS` backstop it switches off. Names (`ID_MARKER_TABLE` NAME/PERSON_OR_MERCHANT/EXACT-name rows): hash with `normalize: customerName`, the same posture as `pickup_arrival`'s `customer_name` entry, so the hex equals the persisted `customerNameHash`. No fielded render of this sheet carries any of these ids today (both fielded renders are id-less below `android:id/content`); this is the coverage contract, not a fielded mask.",
+          "comment": "#1116 review (r1 P1; r2 P4 — ordered AHEAD of the task-prefix entry, so an id-borne value that happens to start with a task verb, e.g. an instruction reading 'Return 4417', takes its own id's mask and a bounded value is never hashed): the ID-borne PII this sheet could carry on an id-bearing variant, so a frame this rule wins is never WEAKER than the UNKNOWN path's `CustomerTextMarkers.ID_MARKERS` backstop it switches off. Names (`ID_MARKER_TABLE` NAME/PERSON_OR_MERCHANT/EXACT-name rows): hash with `normalize: customerName`, the same posture as `pickup_arrival`'s `customer_name` entry, so the hex equals the persisted `customerNameHash`. No fielded render of this sheet carries any of these ids today (both fielded renders are id-less below `android:id/content`); this is the coverage contract, not a fielded mask.",
           "find": {
             "any": [
               {
@@ -333,7 +376,7 @@
           "normalize": "customerName"
         },
         {
-          "comment": "#1116 review (P1): `ID_MARKER_TABLE` ADDRESS rows carrying a street line — hash (un-normalized), same posture as the shape-anchored street entry below.",
+          "comment": "#1116 review (r1 P1; r2 P4 — ordered AHEAD of the task-prefix entry, so an id-borne value that happens to start with a task verb, e.g. an instruction reading 'Return 4417', takes its own id's mask and a bounded value is never hashed): `ID_MARKER_TABLE` ADDRESS rows carrying a street line — hash (un-normalized), same posture as the shape-anchored street entry below.",
           "find": {
             "any": [
               {
@@ -346,7 +389,7 @@
           }
         },
         {
-          "comment": "#1116 review (P1): `ID_MARKER_TABLE` rows whose value is a BOUNDED alphabet or customer-authored text — the city/ST/ZIP line, the subpremise (unit) lines, the instruction bodies, a chat preview, the compose box — plainMask, the #889/#920/#986 posture (the structural subpremise scan requires `plainMask` here).",
+          "comment": "#1116 review (r1 P1; r2 P4 — ordered AHEAD of the task-prefix entry, so an id-borne value that happens to start with a task verb, e.g. an instruction reading 'Return 4417', takes its own id's mask and a bounded value is never hashed): `ID_MARKER_TABLE` rows whose value is a BOUNDED alphabet or customer-authored text — the city/ST/ZIP line, the subpremise (unit) lines, the instruction bodies, a chat preview, the compose box — plainMask, the #889/#920/#986 posture (the structural subpremise scan requires `plainMask` here).",
           "find": {
             "any": [
               {
@@ -376,6 +419,28 @@
             ]
           },
           "plainMask": true
+        },
+        {
+          "comment": "The task line. Byte-identical prefix enumeration to `doordash.screen.timeline`'s own name entry (this sheet renders the SAME task vocabulary the row it opened from does, including #994's fourth 'Return <name> to <store>' conjugation), and `normalize: customerName` keeps the mask hex equal to the customer's persisted `customerNameHash` — one customer, one 4hex, on the timeline row and in its detail sheet alike (#623/#733). Ordered FIRST: 'Deliver to Avery K' also satisfies the id-less first-last-initial name shape, and this entry is the one that keeps the lead-in so a replayed envelope still reads as a task line. Note the device already scrubs this node to a plain '[redacted]' on the UNKNOWN path via the `CustomerTextMarkers` prefix backstop; that backstop keeps running on the recognized path too, so this entry is what upgrades the mask to the per-customer distinctness form rather than what first covers it.",
+          "find": {
+            "any": [
+              {
+                "hasTextStartsWith": "Pickup for "
+              },
+              {
+                "hasTextStartsWith": "Deliver to "
+              },
+              {
+                "hasTextStartsWith": "Return "
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Pickup for ",
+            "Deliver to ",
+            "Return "
+          ],
+          "normalize": "customerName"
         },
         {
           "comment": "Address line 1, digit-leading form — the fielded shape (e.g. '4120 Sample Hollow Dr, Apt 12' / '8900 Sample Forest' — invented equivalents of the two fielded renders). Same predicate as the `dropoff_pre_arrival` / `dropoff_handoff` family (Principle 5: this surface's address block is the same id-less two-line block those rules carry, so it gets the same entry set rather than a new dialect). Hash-mask, un-normalized: the token is a street line, not a customer NAME, and the name canonicalizer would collapse it to first-token + second-initial and destroy the mask's distinctness. **This deliberately also masks a MERCHANT address** on the pickup-task render of the same sheet (e.g. '10500 Sample Loop, San Antonio' under the store row — invented equivalent): line 1 sits in the identical slot for both task phases and nothing in the tree separates them, so — unlike `pickup_navigation`, which is unambiguously a merchant surface and is left raw by design (#886) — the only sound choice is to fail toward privacy. The store NAME is untouched, which is what triage and analytics actually read.",
@@ -451,18 +516,33 @@
           }
         },
         {
-          "comment": "Branch 1 — #1116, the sheet's SECOND render (id-less Compose, 8.97.8 / 8.99.20) that never paints `Copy address`. Claimed ONLY when it is this sheet: (a) `Close sheet`; (b) an id-less task line — `Deliver to ` / `Pickup for ` / `Return` + whitespace. The Return arm is `^Return\\s`, NOT the `Return <x> to <y>` shape, because the rule's own redact masks the whole remainder ('Return [redacted:8bac]') and a saved capture must still recognize on replay (review P2); (c) a DROPOFF-OPTION chrome row this sheet renders, the field-attested vocabulary on this sheet across the 2026 pulls ('Leave it at my door', 'Hand it to customer'). Rejects (review P1): any node carrying a view id other than the root `android:id/content` — both fielded renders are fully id-less below it, and every neighbouring sheet that also shows `Close sheet` + a task line is id-bearing (`pickup_order_picker`'s `header`/`instructions`, `pickup_going_to_store_sheet`, `dropoff_workflow_sheet`'s host fragment, `dropoff_multi_order_confirm`'s prism buttons) — so an id-bearing variant stays UNKNOWN, where the `ID_MARKERS` backstop runs; plus the neighbours' own header chrome, as a belt. A pickup-task render of this second frame (no dropoff option) stays UNKNOWN by design: its address line is the MERCHANT's.",
+          "comment": "Branch 1 — #1116, the sheet's SECOND render (id-less Compose, 8.97.8 / 8.99.20) that never paints `Copy address`. Claimed ONLY when it is this sheet: (a) `Close sheet`; (b) an id-less task line — `Deliver to ` / `Pickup for ` / `Return` + whitespace. The three prefixes are the SAME literals the redact's task-line entry finds and keeps (`Return ` included, review r2 P3 — a `^Return\\\\s` arm recognized a tab-separated line the redact could not mask), and each survives that entry's whole-remainder mask ('Return [redacted:8bac]'), so a saved capture replays as the same intent (r1 P2); (c) a DROPOFF-OPTION chrome row this sheet renders, the field-attested vocabulary on this sheet across the 2026 pulls ('Leave it at my door', 'Hand it to customer'). Rejects (review r1 P1, narrowed by r2 P1): ONLY the markers of a COMPETING sheet — `pickup_order_picker`'s `header` reading 'Select an Order', `dropoff_multi_order_confirm`'s confirm text, the going-to-store sheet's `going_to_store_map`/`lblOrderIncludes` ids, the dropoff workflow sheet's host fragment and the pre-arrival card's `drop_off_recycler_view`. Never incidental chrome or an arbitrary id: r1's blanket 'any id but android:id/content' reject sent an otherwise-recognized sheet that gained one stray id (or a 'Pick up by' line) back to UNKNOWN, where its id-less street, ZIP, note and code ship raw — the original leak. An id-bearing variant is instead CLAIMED, and the `ID_MARKER_TABLE` entries at the top of the redact cover its ids. Every competing rule also sits AHEAD at priority. A pickup-task render of this second frame (no dropoff option) stays UNKNOWN by design: its address line is the MERCHANT's.",
           "reject": [
             {
               "exists": {
                 "all": [
                   {
-                    "hasNoId": false
+                    "hasIdSuffix": "header"
                   },
                   {
-                    "not": {
-                      "hasIdExact": "android:id/content"
-                    }
+                    "hasText": "Select an Order"
+                  }
+                ]
+              }
+            },
+            {
+              "exists": {
+                "hasText": "Confirm you have the correct order before drop-off."
+              }
+            },
+            {
+              "exists": {
+                "any": [
+                  {
+                    "hasIdSuffix": "going_to_store_map"
+                  },
+                  {
+                    "hasIdSuffix": "lblOrderIncludes"
                   }
                 ]
               }
@@ -471,16 +551,10 @@
               "exists": {
                 "any": [
                   {
-                    "hasText": "Select an Order"
+                    "hasIdSuffix": "drop_off_workflow_host_fragment"
                   },
                   {
-                    "hasText": "Confirm you have the correct order before drop-off."
-                  },
-                  {
-                    "hasTextStartsWith": "Order includes"
-                  },
-                  {
-                    "hasTextStartsWith": "Pick up by"
+                    "hasIdSuffix": "drop_off_recycler_view"
                   }
                 ]
               }
@@ -508,7 +582,7 @@
                           "hasTextStartsWith": "Pickup for "
                         },
                         {
-                          "hasTextMatchesRegex": "^Return\\s"
+                          "hasTextStartsWith": "Return "
                         }
                       ]
                     }

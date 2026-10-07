@@ -78,11 +78,13 @@ slot over-masks toward privacy (#985's timeline order-detail sheet,
 `doordash.screen.timeline_task_detail`, is anchored on its own chrome — `Close sheet`
 contentDescription AND `Copy address` text; #1116 adds a second branch for the sheet's Compose render
 on 8.97.8/8.99.20, which never paints `Copy address` and leaked its id-less street, city/ST/ZIP, note and
-bare code to the debug capture: `Close sheet` + an id-less task line (`^Return\s`, so a masked capture
-replays) + a dropoff-option row, rejecting any id but `android:id/content` and the neighbouring sheets'
-header chrome, at priority 164 BEHIND every sheet that can share those nodes; its redact carries the
-`ID_MARKER_TABLE` ids too, and the venue selector is ordered after every plainMask entry (here and in
-the `timeline` belt). It masks the merchant render too; store NAMES stay raw); a receipt-scan camera is NOT in the blocked document-image family — recognize-and-redact
+bare code to the debug capture: `Close sheet` + an id-less task line (the SAME `Deliver to ` /
+`Pickup for ` / `Return ` literals the redact keeps, so a masked capture replays) + a dropoff-option row,
+rejecting ONLY a competing sheet's own markers (never incidental chrome or a stray id, which would send
+the sheet back to UNKNOWN), at priority 164 BEHIND every sheet that can share those nodes; its redact
+leads with the `ID_MARKER_TABLE` ids (ahead of the task-prefix hash, so a bounded id-borne value is
+never hashed), the venue selector is ordered after every plainMask entry, and the `timeline`
+combined-frame belt mirrors both. It masks the merchant render too; store NAMES stay raw); a receipt-scan camera is NOT in the blocked document-image family — recognize-and-redact
 like the #463 ID-CHECK screens (dev ruling, #995); the **combined-frame class** means a redact only
 protects the frames its OWN rule wins, so a banner that can inflate over another rule's frame
 (`arriving_at_title`) is declared by EVERY rule in `dropoff.json5` plus `navigation_generic`, pinned
