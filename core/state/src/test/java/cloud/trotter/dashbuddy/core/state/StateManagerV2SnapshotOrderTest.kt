@@ -160,31 +160,4 @@ class StateManagerV2SnapshotOrderTest {
         assertEquals("…and the restored state is installed", 3L, second.state.value.correlationVersion)
         second.close()
     }
-
-    @Test
-    fun `a crash before the first snapshot lands still replays the complete journal`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val journal = FakeObservationDao()
-        val log = mutableListOf<String>()
-        val snapshots = LoggingSnapshotDao(log)
-
-        // The session start is journalled, but its snapshot waits behind effects that never run.
-        val first = recoveryManager(journal, snapshots, GatedEngine(dispatcher, log), dispatcher)
-        first.initialize()
-        runCurrent()
-        first.dispatch(liveIdle(10_000L))
-        runCurrent()
-        first.close()
-        assertEquals("no snapshot reached disk", null, snapshots.inner.latest())
-
-        val second = recoveryManager(journal, snapshots, InlineEffectExecutor(dispatcher), dispatcher)
-        second.initialize()
-        runCurrent()
-        assertEquals("the journalled session start was replayed from the empty state", 1L, second.state.value.correlationVersion)
-        assertTrue(
-            "…so the dash is live again",
-            second.state.value.regions.platforms.values.any { it.session != null },
-        )
-        second.close()
-    }
 }

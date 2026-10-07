@@ -69,6 +69,8 @@ class StateManagerV2RecoveryHygieneTest {
     private class FlakySnapshotDao(
         seed: AppStateSnapshotEntity,
         private val failures: Int,
+        /** Called on every insert attempt, before it succeeds or fails. */
+        private val onAttempt: suspend (attempt: Int) -> Unit = {},
     ) : AppStateSnapshotDao {
         private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
         var attempts = 0
@@ -80,6 +82,7 @@ class StateManagerV2RecoveryHygieneTest {
 
         override suspend fun insert(entity: AppStateSnapshotEntity) {
             attempts++
+            onAttempt(attempts)
             if (attempts <= failures) throw IllegalStateException("snapshot table unavailable")
             rows[entity.correlationVersion] = entity
         }
@@ -472,7 +475,10 @@ class StateManagerV2RecoveryHygieneTest {
         // every live observation retries it.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val journalDao = FakeObservationDao(emptyList())
-        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2)
+        var journalledAtRetry = -1
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2) { attempt ->
+            if (attempt == 3) journalledAtRetry = journalDao.since(0L).size
+        }
 
         val first = newManagerOn(journalDao, snapshotDao, dispatcher)
         first.initialize()
@@ -491,6 +497,11 @@ class StateManagerV2RecoveryHygieneTest {
         runCurrent()
 
         assertEquals("the live observation retried the checkpoint", 3, snapshotDao.attempts)
+        assertEquals(
+            "…BEFORE that observation was journalled (#1271 scenario 4): a live row on disk over the " +
+                "pre-hygiene snapshot would replay the stale park at a crash",
+            0, journalledAtRetry,
+        )
         assertEquals(
             "and it landed at the RECOVERED version — REPLACING the pre-hygiene row (#1271 scenario 4: " +
                 "the drained recovered state, never the live step's, whose effects may not have run)",

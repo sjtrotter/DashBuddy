@@ -161,12 +161,14 @@ the replay re-issues the keyed effects it covers and `effects_fired` dedupes the
 first, the queued write dies with it — which is the point. Two consequences, from the review: (a) the
 #1052 round-4 live RETRY no longer writes the live observation's state — that would either race its
 effects or, queued behind them, leave the pre-hygiene row standing longer — it re-writes the CLEANED
-recovered state at its OWN version, synchronously (its effects were drained before it was built;
-REPLACE-by-version overwrites exactly the stale row; the live journal replays on top); (b) with NO
-snapshot, a journal that begins at version 1 is the complete history of an empty `AppState`, so restore
-replays it from there (`completeJournalBase`) — a fresh install's first snapshot now waits behind its
-step's effects, and a journal was otherwise only replayed from a snapshot. A journal that starts later
-(behind an undecodable or pruned snapshot) keeps the start-fresh behaviour; nothing is written at startup.
+recovered state at its OWN version, synchronously and BEFORE the live observation is journalled (its
+effects were drained before it was built; REPLACE-by-version overwrites exactly the stale row; a live row
+that landed first would replay over the stale base); (b) `restoreState` rethrows `CancellationException`
+rather than treating a shutdown as a failed recovery and starting fresh. Not closed here (#1289): a
+fresh install whose FIRST snapshot has not landed yet has nothing to replay its journal from — the
+same exposure as before, at most a step's effects long; inferring an empty base from a journal that
+starts at version 1 was tried and rejected in review (an unreadable snapshot can leave two histories
+in one journal).
 Pinned by `StateManagerV2SnapshotOrderTest`. Still open: a `LogEvent` whose insert FAILS (DB error) is
 logged and passed, so a later snapshot can cover it — the barrier orders, it does not acknowledge
 durability (#1289).

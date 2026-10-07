@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
@@ -164,13 +165,12 @@ class StateManagerV2 @Inject constructor(
         // currentState, so the old `!=` guard here was always true; removed.
         _state.value = transition.newState
 
-        // Persist observation to the append-only log (ordered single writer, #352)
-        journal.append(obs, transition.newState)
-
         // #1052 round 4: a recovery checkpoint that never landed is retried on every live
         // observation until it does — the recovered state at its own version, synchronously (see
-        // [pendingRecoveryCheckpoint]). Cheap by construction: null on every normal recovery and
-        // whenever nothing was recovered at all.
+        // [pendingRecoveryCheckpoint]), and BEFORE this observation is journalled: a live row that
+        // reached disk while the pre-hygiene snapshot still stood would replay over it (the stale
+        // park committed by a frame past its deadline). Cheap by construction: null on every
+        // normal recovery and whenever nothing was recovered at all.
         pendingRecoveryCheckpoint?.let { recovered ->
             val landed = snapshots.checkpoint(recovered)
             if (landed) pendingRecoveryCheckpoint = null
@@ -180,6 +180,10 @@ class StateManagerV2 @Inject constructor(
                 if (landed) "landed" else "still pending",
             )
         }
+
+        // Persist observation to the append-only log (ordered single writer, #352)
+        journal.append(obs, transition.newState)
+
 
         // Low-cadence journal pruning (#364): the observation log grew
         // unbounded — pruneOlderThan had zero callers. Retention comfortably
@@ -232,7 +236,7 @@ class StateManagerV2 @Inject constructor(
 
     private suspend fun restoreState() {
         try {
-            val restored = snapshots.restoreLatest() ?: completeJournalBase()
+            val restored = snapshots.restoreLatest()
             if (restored == null) {
                 Timber.tag("StateMachine").i("No usable snapshot — starting fresh")
                 _state.value = AppState()
@@ -296,27 +300,14 @@ class StateManagerV2 @Inject constructor(
 
             finishRestore(finalState)
             Timber.tag("StateMachine").i("Recovery complete — state at cv=%d", finalState.correlationVersion)
+        } catch (e: CancellationException) {
+            // The manager (or the engine queue it awaits) is shutting down: that is not a failed
+            // recovery, and installing a fresh state would journal a new history over the old one.
+            throw e
         } catch (e: Exception) {
             Timber.tag("StateMachine").e(e, "State recovery failed — starting fresh")
             _state.value = AppState()
         }
-    }
-
-    /**
-     * #1271 scenario 4: with NO snapshot, a journal that begins at version 1 is the complete
-     * history of an empty [AppState] at version 0 — so that empty state is its replay base.
-     *
-     * The case is a crash before the FIRST snapshot landed: snapshots now wait behind their step's
-     * effects, so on a fresh install the session start can be journalled with no snapshot yet, and a
-     * journal is otherwise only ever replayed from a snapshot. A journal that does not start at 1
-     * (rows behind an undecodable or pruned snapshot) is not a complete history and keeps the old
-     * start-fresh behaviour. Nothing is written here; the restore's own checkpoint makes it durable.
-     */
-    private suspend fun completeJournalBase(): SnapshotStore.Restored? {
-        val first = journal.tailAfter(0L).firstOrNull() ?: return null
-        if (first.correlationVersion != 1L) return null
-        Timber.tag("StateMachine").i("No snapshot — replaying the complete journal from an empty state")
-        return SnapshotStore.Restored(AppState(), 0L)
     }
 
     /**
