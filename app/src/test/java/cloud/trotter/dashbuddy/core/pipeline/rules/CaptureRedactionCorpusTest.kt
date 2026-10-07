@@ -2986,7 +2986,11 @@ class CaptureRedactionCorpusTest {
         assertFalse("timeline_task_detail must declare a redact block", rule!!.redact.isEmpty())
 
         val snapshots = TestResourceLoader.loadSnapshots("snapshots/timeline_task_detail")
-        assertEquals("both fielded renders must be committed", 2, snapshots.size)
+        assertEquals(
+            "all four fielded renders must be committed (#985's two + #1116's two Close-sheet-only)",
+            4,
+            snapshots.size,
+        )
 
         for ((filename, node, _) in snapshots) {
             // The rule must actually WIN the frame — otherwise the redact assertions below are
@@ -3009,9 +3013,37 @@ class CaptureRedactionCorpusTest {
             assertFalse("$filename: unit number must not persist", masked.contains("Apt 331"))
             assertFalse("$filename: ZIP must not persist", masked.contains("78299"))
             // Chrome — the require anchors MUST survive or replay recognition breaks.
-            assertTrue("$filename: 'Copy address' anchor kept", masked.contains("Copy address"))
+            if (serialize(node).contains("Copy address")) {
+                assertTrue("$filename: 'Copy address' anchor kept", masked.contains("Copy address"))
+            }
             assertTrue("$filename: 'Close sheet' anchor kept", masked.contains("Close sheet"))
         }
+
+        // #1116 — the sheet's SECOND render (no 'Copy address'), fielded on 8.97.8 / 8.99.20. Before
+        // #1116 it fell UNKNOWN and only the task line was scrubbed; the street line, the
+        // city/ST/ZIP line, the quoted note and a bare 3-digit code reached the capture raw.
+        val closeOnly = snapshots.filter { it.first.contains("944039") || it.first.contains("15b164") }
+        assertEquals("both #1116 renders must be committed", 2, closeOnly.size)
+        for ((filename, node, _) in closeOnly) {
+            assertFalse("$filename: fixture must be the render WITHOUT 'Copy address'", serialize(node).contains("Copy address"))
+            val masked = serialize(rule.redact.apply(node))
+            assertFalse("$filename: street line must not persist", masked.contains("Sample Ridge"))
+            assertFalse("$filename: city/ST/ZIP must not persist", masked.contains("78200"))
+            assertTrue("$filename: the dropoff option is chrome", masked.contains("Leave it at my door"))
+            assertTrue(
+                "$filename: the task lead-in survives with a distinctness hex",
+                maskAfter("Deliver to ").containsMatchIn(masked),
+            )
+        }
+        val noteRender = serialize(rule.redact.apply(closeOnly.first { it.first.contains("944039") }.second))
+        assertFalse("#1116: the customer's quoted note must not persist", noteRender.contains("sample house"))
+        val bareCode = Regex(""""text"\s*:\s*"000"""")
+        val codeTree = closeOnly.first { it.first.contains("15b164") }.second
+        assertTrue("#1116: the fixture carries the bare code (teeth)", bareCode.containsMatchIn(serialize(codeTree)))
+        assertFalse(
+            "#1116: the bare 3-digit code must not persist",
+            bareCode.containsMatchIn(serialize(rule.redact.apply(codeTree))),
+        )
 
         val dropoff = snapshots.first { it.first.contains("f7dd84") }.second
         val dropoffMasked = serialize(rule.redact.apply(dropoff))

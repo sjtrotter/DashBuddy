@@ -286,7 +286,7 @@
       }
     },
     {
-      "comment": "#985 (P1 Pledge, the standing top item) — the **Timeline order-detail bottom sheet**, opened by tapping a task row on `doordash.screen.timeline`. It is the documented #806 residual, fielded WITH a gate-access note: `<street>, Apt <n>` · `<City>, <ST> <zip>` · the dropoff option · a customer free-text note naming the building and asking the dasher to call to open the gate · a bare entry code, all reaching disk verbatim on the UNKNOWN path (2026-07-30 19:40:07, and the same shape across the 07-08 / 07-21 / 07-23 / 07-28 pulls — 58 envelopes carrying 'Copy address' in total, every one of them UNKNOWN). **Why every existing layer missed it:** the sibling task line WAS scrubbed (the #806 `CustomerTextMarkers` prefix scan fired on 'Deliver to '), but the address block is id-LESS **and** marker-LESS, so neither the prefix scan nor #910's `ID_MARKERS` can structurally reach it. Per the #806 doctrine the primary control for that class is a recognizing rule + `redact`, which is this. WHY THIS FILE: the sheet is the timeline's own drill-down and is TASK-PHASE AGNOSTIC — a dropoff row renders the customer's address, a pickup row renders the merchant's — so it has no dropoff-phase owner; `dropoff.json5` additionally holds a structural invariant (`DropoffBannerRedactParityTest`: every rule there declares the `arriving_at_title` belt) that this sheet, which never renders a nav banner, would have to satisfy with an inert entry. ANCHORS ARE CHROME, NEVER THE CUSTOMER: 'Copy address' (text) AND 'Close sheet' (contentDescription), required together. 'Copy address' appears on ZERO other surfaces across the committed corpus and all 2026 pulls, and 'Close sheet' is DoorDash's generic sheet dismiss — the pair is what keeps this off the other bottom sheets that share it (the 'Excluded orders' explainer, the on-time adjustment sheet, the dash-readiness sheet, the far-away completion sheet). Under-match is deliberate and safe: a half-inflated render that has not painted 'Copy address' yet stays UNKNOWN (still covered by the UNKNOWN-path scrubs). RECOGNIZE-ONLY: no `state.flow`, no `parse`. The sheet is a retrospective detail view, not a lifecycle edge — the task lifecycle is owned by the pickup/dropoff surfaces — so giving it a flow would be a state-machine change riding on a privacy fix. Per #995's correction, recognize-only is NOT state-INERT: these frames now reach the state machine at all and move `FrameGate.lastIdentity`. What no `state` block buys is NEUTRALITY (no flow, no modeHint, no events, no mode asserted from absence), which `FlowlessRecognitionNeutralityTest` asserts end-to-end over the committed fixtures rather than leaving to this comment. Priority 142 is the first free value across all doordash rules and is behaviorally inert (no other rule matches these trees today — they classified UNKNOWN).",
+      "comment": "#985 (P1 Pledge, the standing top item) — the **Timeline order-detail bottom sheet**, opened by tapping a task row on `doordash.screen.timeline`. It is the documented #806 residual, fielded WITH a gate-access note: `<street>, Apt <n>` · `<City>, <ST> <zip>` · the dropoff option · a customer free-text note naming the building and asking the dasher to call to open the gate · a bare entry code, all reaching disk verbatim on the UNKNOWN path (2026-07-30 19:40:07, and the same shape across the 07-08 / 07-21 / 07-23 / 07-28 pulls — 58 envelopes carrying 'Copy address' in total, every one of them UNKNOWN). **Why every existing layer missed it:** the sibling task line WAS scrubbed (the #806 `CustomerTextMarkers` prefix scan fired on 'Deliver to '), but the address block is id-LESS **and** marker-LESS, so neither the prefix scan nor #910's `ID_MARKERS` can structurally reach it. Per the #806 doctrine the primary control for that class is a recognizing rule + `redact`, which is this. WHY THIS FILE: the sheet is the timeline's own drill-down and is TASK-PHASE AGNOSTIC — a dropoff row renders the customer's address, a pickup row renders the merchant's — so it has no dropoff-phase owner; `dropoff.json5` additionally holds a structural invariant (`DropoffBannerRedactParityTest`: every rule there declares the `arriving_at_title` belt) that this sheet, which never renders a nav banner, would have to satisfy with an inert entry. ANCHORS ARE CHROME, NEVER THE CUSTOMER: 'Close sheet' (contentDescription) AND either 'Copy address' (text) or an id-less task line (#1116). 'Copy address' appears on ZERO other surfaces across the committed corpus and all 2026 pulls, and 'Close sheet' is DoorDash's generic sheet dismiss — the pair is what keeps this off the other bottom sheets that share it (the 'Excluded orders' explainer, the on-time adjustment sheet, the dash-readiness sheet, the far-away completion sheet). (The original claim that a render without 'Copy address' was a safe under-match was WRONG — the UNKNOWN-path scrubs do not reach the id-less address block; see #1116 below.) RECOGNIZE-ONLY: no `state.flow`, no `parse`. The sheet is a retrospective detail view, not a lifecycle edge — the task lifecycle is owned by the pickup/dropoff surfaces — so giving it a flow would be a state-machine change riding on a privacy fix. Per #995's correction, recognize-only is NOT state-INERT: these frames now reach the state machine at all and move `FrameGate.lastIdentity`. What no `state` block buys is NEUTRALITY (no flow, no modeHint, no events, no mode asserted from absence), which `FlowlessRecognitionNeutralityTest` asserts end-to-end over the committed fixtures rather than leaving to this comment. Priority 142 is the first free value across all doordash rules and is behaviorally inert (no other rule matches these trees today — they classified UNKNOWN). **#1116 —** the sheet has a SECOND render (id-less Compose, fielded on 8.97.8 and 8.99.20, three sightings 09-18/09-23/09-26) that paints 'Close sheet' and the task line but NOT 'Copy address'. Under the #985 both-required anchor it fell UNKNOWN, and the UNKNOWN backstops caught only the name (via the 'Deliver to ' lead-in) — the street line, the city/ST/ZIP line, the quoted note and a bare 3-digit code reached the debug capture raw. So the second leg is now 'Copy address' OR an id-less TASK LINE ('Deliver to ' / 'Pickup for ' / 'Return <x> to <y>' — DoorDash's own task vocabulary, the same lead-ins the redact entry below enumerates, never the customer text after them). 'Close sheet' stays required. Over-match check (2026-10-06): across the committed corpus and ~620 'Close sheet' frames in the 2026 pulls, a 'Close sheet' frame carrying a task line occurs ONLY on this sheet; the timeline itself (priority 10) still wins a combined sheet-over-timeline frame. **#1116:** the redact block is unchanged — it already covered every node the leaking render carries.",
       "id": "doordash.screen.timeline_task_detail",
       "priority": 142,
       "redact": [
@@ -371,13 +371,39 @@
         "all": [
           {
             "exists": {
-              "hasText": "Copy address"
+              "hasDesc": "Close sheet"
             }
           },
           {
-            "exists": {
-              "hasDesc": "Close sheet"
-            }
+            "any": [
+              {
+                "exists": {
+                  "hasText": "Copy address"
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasNoId": true
+                    },
+                    {
+                      "any": [
+                        {
+                          "hasTextStartsWith": "Deliver to "
+                        },
+                        {
+                          "hasTextStartsWith": "Pickup for "
+                        },
+                        {
+                          "hasTextMatchesRegex": "^Return \\S.* to \\S"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       }

@@ -7631,6 +7631,18 @@
         "shape": null,
         "fields": {}
     },
+    "timeline_task_detail/2026-09-23_15-49-33-774__doordash__accessibility.window__UNKNOWN__944039.json": {
+        "ruleId": "doordash.screen.timeline_task_detail",
+        "intent": "timeline_task_detail",
+        "shape": null,
+        "fields": {}
+    },
+    "timeline_task_detail/2026-09-26_13-13-34-464__doordash__accessibility.window__UNKNOWN__15b164.json": {
+        "ruleId": "doordash.screen.timeline_task_detail",
+        "intent": "timeline_task_detail",
+        "shape": null,
+        "fields": {}
+    },
     "trip_radar_board/2026-07-23_19-29-54-101__uber__accessibility.window__UNKNOWN__023e6c.json": {
         "ruleId": "uber.screen.trip_radar_board",
         "intent": "trip_radar_board",

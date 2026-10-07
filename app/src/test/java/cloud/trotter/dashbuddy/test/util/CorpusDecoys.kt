@@ -58,6 +58,9 @@ object CorpusDecoys {
         //      to a plain `[redacted]` (the #806 prefix backstop fires on "Deliver to "), which
         //      would have proved nothing about the new rule's redact, so the fixture carries a
         //      hand-written pseudonym in the raw shape DoorDash renders.
+        // #1116 timeline_task_detail/2026-09-23_15-49-33-774__…__944039.json and
+        //      2026-09-26_13-13-34-464__…__15b164.json — the sheet's Close-sheet-only second render;
+        //      same reason, same pseudonym (the device capture again shipped a plain `[redacted]`).
         "Deliver to Avery K" to
             "hand-written pseudonym on the Timeline order-detail sheet's dropoff task line",
         // #985 timeline_task_detail/2026-07-28_20-13-06-104__…__c9b8d9.json — the PICKUP-task

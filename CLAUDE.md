@@ -278,8 +278,8 @@ PR #1066 — read a pull's build from the logs, never infer it).
   inflate over another rule's frame (`arriving_at_title`) is declared by EVERY rule in `dropoff.json5`
   plus `navigation_generic` (parity test). The Google-Nav maneuver cluster is masked on dropoff-phase nav
   rules + `navigation_generic`; `pickup_navigation`'s MERCHANT address stays raw by design (#886), while a phase-ambiguous slot
-  over-masks toward privacy — `timeline_task_detail` (#985) anchors on `Copy address` text AND
-  `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
+  over-masks toward privacy — `timeline_task_detail` (#985) anchors on `Close sheet` contentDescription AND
+  `Copy address` text OR an id-less task line (#1116 — the second render lacks `Copy address`), and masks the merchant render too (store names raw).
 - The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
   with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
   the hex stays equal (#992/#1031; #1123 — `dropoff_pre_arrival` OUT-RANKS the id-less workflow sheet
