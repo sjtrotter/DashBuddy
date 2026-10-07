@@ -511,4 +511,12 @@ class TriageRulesTest {
     /** A screen tree: a content root wrapping the given nodes. */
     private fun tree(vararg kids: UiNode): UiNode =
         node(id = "content", children = kids.toList()).also { it.restoreParents() }
+
+    @Test
+    fun `pickup_pre_arrival — prism-button path still matches`() {
+        assertEquals(
+            "pickup_pre_arrival",
+            screen(tree(node(id = "user_name_label", text = "Pickup from"), node(id = "textView_prism_button_title", text = "Arrived at store"))),
+        )
+    }
 }
