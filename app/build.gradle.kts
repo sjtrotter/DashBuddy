@@ -247,6 +247,7 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.reorderable)
     testImplementation(libs.androidx.work.testing)
+    testImplementation(libs.okhttp)
     testImplementation(libs.robolectric)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))

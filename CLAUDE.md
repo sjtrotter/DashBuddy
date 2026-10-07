@@ -1051,7 +1051,9 @@ moves only by `advanceTo` (never `advanceUntilIdle`). `DoorDashFullDashE2ETest` 
 (`DoorDashFullDashJourney` documents its splices, and exposes them as timed `steps()`); `InfoLogPiiGateE2ETest` is the INFO+ PII gate, which
 REQUIRES handler-written INFO+ lines; `CrashRestartE2ETest` is scenario 4 — a disk-backed DB +
 surviving stores (`ReplayEdges.DurableStores`), `crash()` mid-grace / mid-commit, a relaunched harness,
-and the same durable outcome as the uninterrupted run.
+and the same durable outcome as the uninterrupted run. `PrivacyExportE2ETest` / `PrivacyExportReplay`
+is scenario 6: real sensor → capture → census spool → worker → signed request bytes, plus the shareable
+log, with fakes only at the Android/Keystore/HTTP edges.
 
 ## Key Technologies
 
