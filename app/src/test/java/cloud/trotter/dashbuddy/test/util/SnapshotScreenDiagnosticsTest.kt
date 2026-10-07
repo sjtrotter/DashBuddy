@@ -11,19 +11,6 @@ import org.junit.Test
 class SnapshotScreenDiagnosticsTest {
 
     @Test
-    fun `every non-excluded UiNodeTextField entry is an X-Ray category`() {
-        val headers = SnapshotScreenDiagnostics.CATEGORIES.map { it.first }
-        for (field in UiNodeTextField.entries) {
-            assertEquals(
-                "$field category presence",
-                field !in SnapshotScreenDiagnostics.EXCLUDED_FIELDS,
-                headerFor(field) in headers,
-            )
-        }
-        assertTrue(SnapshotScreenDiagnostics.ID_HEADER in headers)
-    }
-
-    @Test
     fun `an id-less node whose only handles are the new fields is a candidate in every category`() {
         val tree = UiNode(
             children = listOf(

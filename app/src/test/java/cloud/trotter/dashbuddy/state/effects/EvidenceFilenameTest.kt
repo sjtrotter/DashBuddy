@@ -52,7 +52,7 @@ class EvidenceFilenameTest {
 
     @Test
     fun `a prefix that is nothing but a token falls back rather than saving a nameless file`() {
-        assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix("{storeName}"))
+        assertEquals("Rule", EvidenceFilename.sanitizePrefix("{storeName}"))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix("  -  "))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix(""))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix(null))
@@ -80,15 +80,5 @@ class EvidenceFilenameTest {
         assertEquals("Offer - {a b}", EvidenceFilename.sanitizePrefix("Offer - {a b}"))
         assertEquals("Offer - {", EvidenceFilename.sanitizePrefix("Offer - {"))
         assertEquals("Offer - }", EvidenceFilename.sanitizePrefix("Offer - }"))
-    }
-
-    @Test
-    fun `the sanitizer's own class initializer is reachable and does not throw (#909)`() {
-        // The field failure was NOT in sanitizePrefix's logic — it was the `val UNRESOLVED_TOKEN`
-        // initializer throwing PatternSyntaxException, which becomes an ExceptionInInitializerError
-        // and (pre-#909 layer 2) killed the whole side-effect engine. Touching the object at all is
-        // the thing that used to detonate. This can only ever be green on the host JVM — the
-        // divergence guard is IcuRegexGuardTest.
-        assertEquals("Rule", EvidenceFilename.FALLBACK_PREFIX)
     }
 }

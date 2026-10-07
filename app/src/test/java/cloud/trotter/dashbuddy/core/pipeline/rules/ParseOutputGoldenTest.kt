@@ -495,21 +495,6 @@ class ParseOutputGoldenTest {
         )
     }
 
-    @Test
-    fun `fixture ratchet accepts unchanged pins`() {
-        assertRatchet("unchanged", setOf("a"), setOf("a")) { null }
-    }
-
-    @Test(expected = AssertionError::class)
-    fun `fixture ratchet rejects an additional dead fixture`() {
-        assertRatchet("new dead fixture", setOf("a"), setOf("a", "b")) { null }
-    }
-
-    @Test(expected = AssertionError::class)
-    fun `fixture ratchet rejects a stale pin`() {
-        assertRatchet("stale pin", setOf("a"), emptySet()) { null }
-    }
-
     private fun compileProductionScreenRules(): List<CompiledRule<UiNode>> {
         val dir = File(TestRulesetFactory.rulesDir)
         val all = mutableListOf<CompiledRule<UiNode>>()

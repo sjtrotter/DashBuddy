@@ -218,7 +218,7 @@ class EffectMapTest {
     // =========================================================================
 
     @Test
-    fun `offer presented emits Evaluate, Speak, and OFFER_RECEIVED log`() {
+    fun `offer presented emits Evaluate and OFFER_RECEIVED with no SpeakOffer before evaluation`() {
         val prev = offerState(flow = Flow.Idle)
         val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer, activePlatform = Platform.DoorDash)
 

@@ -106,6 +106,10 @@ class InfoLogPiiGateReplayTest {
         assertTrue("[$session] harvested no store strings from the parse — deny-list would be vacuous", denyList.isNotEmpty())
 
         val infoPlus = recording.records.filter { it.priority >= Log.INFO }
+        // #1267: this replay drives recognition + the StateMachine only, and that path writes no INFO+
+        // lines (they come from SideEffectEngine and its handlers), so today the gate checks an empty set.
+        // It stays as a tripwire for INFO logging added to the reducer path; the meaningful version runs
+        // the real effect engine and REQUIRES INFO+ records — tracked in #1271 (E2E harness).
 
         // (a) No INFO+ line carries a raw store/address value the parse itself produced.
         for (record in infoPlus) {

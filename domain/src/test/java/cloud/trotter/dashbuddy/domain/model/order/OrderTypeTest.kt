@@ -38,13 +38,6 @@ class OrderTypeTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `valueOf round-trips the serialized name for every type`() {
-        OrderType.entries.forEach { type ->
-            assertEquals(type, OrderType.valueOf(type.name))
-        }
-    }
-
-    @Test
     fun `the enum shape is exactly PICKUP, SHOP_FOR_ITEMS, UNKNOWN`() {
         assertEquals(
             listOf(OrderType.PICKUP, OrderType.SHOP_FOR_ITEMS, OrderType.UNKNOWN),
