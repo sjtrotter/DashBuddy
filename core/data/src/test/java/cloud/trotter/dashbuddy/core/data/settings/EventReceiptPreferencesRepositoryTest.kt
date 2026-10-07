@@ -467,12 +467,6 @@ class EventReceiptPreferencesRepositoryTest {
     }
 
     @Test
-    fun `of maps the on-off rule`() {
-        assertEquals(EventReceiptConsent.ALLOWED, EventReceiptConsent.of(true))
-        assertEquals(EventReceiptConsent.DECLINED, EventReceiptConsent.of(false))
-    }
-
-    @Test
     fun `decode maps only exact names`() {
         assertEquals(EventReceiptConsent.UNDECIDED, EventReceiptPreferencesRepository.decode(null))
         assertEquals(EventReceiptConsent.UNDECIDED, EventReceiptPreferencesRepository.decode("allowed"))

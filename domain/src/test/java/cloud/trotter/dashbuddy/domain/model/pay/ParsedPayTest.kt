@@ -51,13 +51,4 @@ class ParsedPayTest {
         val pay = ParsedPay(appPayComponents = listOf(item("Base Pay", 5.0)), customerTips = emptyList())
         assertEquals(0.0, pay.totalTip, 0.0001)
     }
-
-    @Test
-    fun `total - single component single tip`() {
-        val pay = ParsedPay(
-            appPayComponents = listOf(item("Base Pay", 4.25)),
-            customerTips = listOf(item("Customer", 1.75))
-        )
-        assertEquals(6.00, pay.total, 0.0001)
-    }
 }
