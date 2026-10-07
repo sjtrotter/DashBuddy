@@ -1057,6 +1057,9 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         val before = analyticsDao.deliveryRecord(seq)!!
         assertEquals("OFFER_PAY", before.payBasis)
+        // #1273: the persisted values the removed receipt-less projector test pinned through Room.
+        assertEquals(12.95, before.realizedPay!!, 1e-9)
+        assertEquals("net = pay − 5mi × 0.25", 12.95 - 5.0 * 0.25, before.netProfit!!, 1e-9)
 
         // A store-name-only edit must NOT flip the basis (which would drop the estimate disclosure).
         insert(
