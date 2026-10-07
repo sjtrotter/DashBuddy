@@ -165,7 +165,9 @@ class PrivacyExportReplay(
                     status = 401
                     """{"error":"revoked"}"""
                 } else {
-                    val count = Json.parseToJsonElement(body.utf8()).jsonObject.getValue("items").jsonArray.size
+                    val count = privacyExportDecode("request$path") {
+                        Json.parseToJsonElement(body.utf8()).jsonObject.getValue("items").jsonArray.size
+                    }
                     """{"status":"accepted","accepted":$count,"duplicate":0,"rejected":{},"budget":{"skeletonsRemainingToday":999,"bytesRemainingToday":9000000,"batchesRemainingToday":99,"resetInSeconds":3600}}"""
                 }
                 else -> { unexpectedRoutes += path; throw IOException("unexpected census route") }
@@ -274,7 +276,9 @@ class PrivacyExportReplay(
         val marker: ByteString?, val queued: List<Stored>)
     data class Stored(val name: String, val bytes: ByteString) {
         override fun toString(): String = "Stored($name, [bytes omitted])"
-        val wrapper: JsonObject get() = Json.parseToJsonElement(bytes.utf8()).jsonObject
+        val wrapper: JsonObject get() = privacyExportDecode("stored/$name") {
+            Json.parseToJsonElement(bytes.utf8()).jsonObject
+        }
         // Mirror the spool's byte-preserving wrapper delimiters, not a JSON reserialization.
         val itemJson: String get() = bytes.utf8().substringAfter("\"skeleton\":").substringBeforeLast(",\"captureId\":")
     }
@@ -321,4 +325,11 @@ class PrivacyExportReplay(
         }
         return object : ContextWrapper(app) { override fun getAssets(): AssetManager = assets }
     }
+}
+
+/** Captured content must never escape through parser messages or exception causes. */
+internal fun <T> privacyExportDecode(surface: String, decode: () -> T): T = try {
+    decode()
+} catch (_: Exception) {
+    throw AssertionError("$surface: unparseable")
 }

@@ -24,6 +24,7 @@ import java.io.File
 object PrivacyExportInputs {
     const val PACKAGE = "com.doordash.driverapp"
     const val BENIGN = "FAKEBENIGNCANARY"
+    const val AFTER = "FAKEAFTERCANARY"
     const val NAME = "FAKECUSTOMERCANARY"
     const val ADDRESS_ONE = "FAKEADDRESSONECANARY"
     const val ADDRESS_TWO = "FAKEADDRESSTWOCANARY"
@@ -109,8 +110,8 @@ object PrivacyExportInputs {
     }
 
     /** A new structural leaf ensures a post-withdrawal frame cannot disappear into admission dedup. */
-    fun distinctUnknown(): UiNode = append(screen(Screen.UNKNOWN), listOf(leaf("FAKEAFTERCANARY", "privacy_after")))
-        .restoreParents().also { assertEquals(1, nodes(it).count { n -> n.text == "FAKEAFTERCANARY" }) }
+    fun distinctUnknown(): UiNode = append(screen(Screen.UNKNOWN), listOf(leaf(AFTER, "privacy_after")))
+        .restoreParents().also { assertEquals(1, nodes(it).count { n -> n.text == AFTER }) }
 
     /** Mirror all fields carried by these fixtures, including the privacy-only state/input fields. */
     @Suppress("DEPRECATION") // SDK 35 uses boolean checked and the click-action bitmask.
@@ -147,7 +148,9 @@ object PrivacyExportInputs {
     @Suppress("DEPRECATION") // Same framework StatusBarNotification constructor as the pipeline tests.
     fun notification(context: Context, kind: Push, now: Long): StatusBarNotification {
         val name = when (kind) { Push.BENIGN -> "chrome"; Push.CUSTOMER -> "customer-lead-in"; Push.BANKING -> "action-only-sensitive" }
-        val p = Json.parseToJsonElement(file("notification_census/fixtures/$name.json").readText()).jsonObject.getValue("payload").jsonObject
+        val p = privacyExportDecode("notification fixture/$name") {
+            Json.parseToJsonElement(file("notification_census/fixtures/$name.json").readText()).jsonObject.getValue("payload").jsonObject
+        }
         fun field(key: String) = p[key]?.jsonPrimitive?.contentOrNull
         val title = when (kind) {
             Push.BENIGN -> field("title").also { assertEquals("Continue", it) }

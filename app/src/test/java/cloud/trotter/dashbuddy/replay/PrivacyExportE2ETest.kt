@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.test.util.PrivacyExportReplay
 import cloud.trotter.dashbuddy.test.util.PrivacyExportReplay.Stored
 import cloud.trotter.dashbuddy.test.util.ReplayApplication
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
+import cloud.trotter.dashbuddy.test.util.privacyExportDecode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -89,7 +90,7 @@ class PrivacyExportE2ETest {
             uploads(h, skeletons, envelopes, credential)
             assertEquals(setOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID),
                 h.requests.filter { it.path == "/v1/skeletons" }.flatMap { request ->
-                    json(request.body.toByteArray()).getValue("items").jsonArray.map { it.jsonObject.string("schemaId") }
+                    json("request${request.path}", request.body.toByteArray()).getValue("items").jsonArray.map { it.jsonObject.string("schemaId") }
                 }.toSet())
             assertTrue(h.records(h.skeletonRoot).isEmpty())
             assertTrue(h.records(h.envelopeRoot).isEmpty())
@@ -105,7 +106,13 @@ class PrivacyExportE2ETest {
             assertTrue(File(h.localRoot, "app.log").readBytes().toString(Charsets.UTF_8).contains(Inputs.DEBUG))
             assertEquals(scrubbed + 1, h.log.autoScrubbedLineCount)
             assertTrue(h.shareable().toString(Charsets.UTF_8).contains("[scrubbed:"))
-            safe("shareable probe", h.shareable(), Inputs.forbidden + listOf(Inputs.LOG, Inputs.DEBUG, credential.secret), isJson = false)
+            val deny = Inputs.forbidden + listOf(Inputs.LOG, Inputs.DEBUG, credential.secret)
+            safe("shareable probe", h.shareable(), deny, isJson = false)
+            // Keep the leading F JSON-escaped on the wire to prove prefixed log detection.
+            val escapedLog = "payload={\"x\":\"\\u0046AKEUNKNOWNNAMECANARY\"}"
+            assertThrows(AssertionError::class.java) {
+                safe("escaped log detector", escapedLog.toByteArray(Charsets.UTF_8), deny, isJson = false)
+            }
         }
     }
 
@@ -129,7 +136,12 @@ class PrivacyExportE2ETest {
             h.preferences.setCensusUploadEnabled(false); h.settle()
             val requests = h.requests.size
             val factories = h.factoryCalls
+            val capturesBefore = h.captures().toSet()
             h.screen(Inputs.Screen.UNKNOWN, Inputs.distinctUnknown())
+            val newCaptures = h.captures().toSet() - capturesBefore
+            assertEquals("post-consent frame adds one local capture", 1, newCaptures.size)
+            assertTrue("post-consent frame was sensed and admitted",
+                Inputs.AFTER in strings(json("post-consent capture", newCaptures.single().readBytes())))
             h.worker()
             assertEquals(requests, h.requests.size)
             assertEquals(factories, h.factoryCalls)
@@ -166,18 +178,26 @@ class PrivacyExportE2ETest {
             assertTrue(h.records(h.envelopeRoot).isEmpty())
             assertNull(h.credentials.current())
             assertNull(h.credentials.pending())
+            val retainedSkeletons = h.records(h.skeletonRoot)
             val requests = h.requests.size
             val factories = h.factoryCalls
+            val capturesBefore = h.captures().toSet()
             h.screen(Inputs.Screen.UNKNOWN, Inputs.distinctUnknown())
+            val newCaptures = h.captures().toSet() - capturesBefore
+            assertEquals("post-consent frame adds one local capture", 1, newCaptures.size)
+            assertTrue("post-consent frame was sensed and admitted",
+                Inputs.AFTER in strings(json("post-consent capture", newCaptures.single().readBytes())))
             h.worker()
             assertEquals("revoking request already happened; no subsequent requests", requests, h.requests.size)
             assertEquals(factories, h.factoryCalls)
+            assertEquals(retainedSkeletons, h.records(h.skeletonRoot))
+            assertTrue(h.records(h.envelopeRoot).isEmpty())
             // Revocation does not promise skeleton deletion; every retained byte must remain safe.
             safeSurfaces(h, credential.secret)
         }
     }
 
-    @Test fun `no op component boundaries preserve sensing and independently disable persistence`() = runTest(timeout = 20.seconds) {
+    @Test fun `no op bindings keep sensing and leave files, spools and requests empty`() = runTest(timeout = 20.seconds) {
         // Component behavior in debug tests, not execution of the release Hilt graph/BuildConfig.
         replay(captures = false).use { h ->
             h.start(); enroll(h)
@@ -193,6 +213,8 @@ class PrivacyExportE2ETest {
             uploads(h, queued, emptyList(), credential)
             safeSurfaces(h, credential.secret)
         }
+        // Combined disabled preferences, capture and no-op sinks; these switches are not isolated.
+        // Recognized screens return from SkeletonPublisher before consulting the census sink.
         replay(captures = false, census = false, debug = false).use { h ->
             h.start()
             h.preferences.setCensusUploadEnabled(true)
@@ -238,13 +260,15 @@ class PrivacyExportE2ETest {
         val fields = customer.parsed as ParsedFields.TaskFields
         assertEquals(sha("fakecustomercanary q"), fields.customerNameHash)
         assertEquals(sha("${Inputs.ADDRESS_ONE}, ${Inputs.ADDRESS_TWO}"), fields.customerAddressHash)
-        val captures = h.captures().map { json(it.readBytes()) }
+        val captures = h.captures().map { json("capture/${it.name}", it.readBytes()) }
         screens.forEach { screen ->
             val capture = captures.single { it.string("captureId") == screen.captureId }
             assertEquals(screen.target, capture.string("classificationName"))
             assertEquals(screen.ruleId, capture.string("ruleId"))
         }
-        val root = TestResourceLoader.nodeFromElement(captures.single { it.string("captureId") == customer.captureId }.getValue("payload"))
+        val root = privacyExportDecode("recognized capture payload") {
+            TestResourceLoader.nodeFromElement(captures.single { it.string("captureId") == customer.captureId }.getValue("payload"))
+        }
         fun text(id: String) = Inputs.nodes(root).single { it.viewIdResourceName?.endsWith(id) == true }.text
         assertEquals("[redacted:${sha("fakecustomercanary q").take(4)}]", text("user_name"))
         assertEquals("[redacted:${sha(Inputs.ADDRESS_ONE).take(4)}]", text("address_line_1"))
@@ -252,19 +276,21 @@ class PrivacyExportE2ETest {
     }
 
     private fun captureControls(h: PrivacyExportReplay) {
-        val captures = h.captures().map { json(it.readBytes()) }
+        val captures = h.captures().map { json("capture/${it.name}", it.readBytes()) }
         assertEquals(captures.size, captures.map { UUID.fromString(it.string("captureId")) }.toSet().size)
         assertEquals(4, captures.count { it.string("classificationName") == "UNKNOWN" })
         assertTrue("benign raw text proves capture wasn't disabled", captures.any { Inputs.BENIGN in strings(it) })
         assertTrue("sensitive surfaces produce no capture", captures.none { it.string("classificationName").startsWith("sensitive") })
         val unknown = captures.filter { it.string("classificationName") == "UNKNOWN" && it.string("schemaId") == "uinode.v1" }
-        val customer = unknown.single { envelopeNodes(it).any { n -> n.viewIdResourceName?.endsWith("order_cx_name") == true } }
-        assertTrue("customer UNKNOWN has masks", envelopeNodes(customer).takeLast(4).all { it.text?.contains("[redacted") == true })
+        val customer = unknown.single { envelopeNodes("unknown capture payload", it).any { n -> n.viewIdResourceName?.endsWith("order_cx_name") == true } }
+        assertTrue("customer UNKNOWN has masks", envelopeNodes("customer capture payload", customer).takeLast(4).all { it.text?.contains("[redacted") == true })
     }
 
     /** Deserialize the actual wrapper's item with the contract; the four appended slots lose all hashes. */
     private fun skeletonControls(records: List<Stored>) {
-        val items = records.map { CensusSkeletonSchema.deserialize(it.itemJson) }
+        val items = records.map { record ->
+            privacyExportDecode("skeleton/${record.name}") { CensusSkeletonSchema.deserialize(record.itemJson) }
+        }
         assertTrue("benign vocabulary hash is present", items.flatMap(CensusSkeletonSchema::slots).any { it.h != null })
         val customer = items.filterIsInstance<UiSkeletonDto>().single { it.root.children.takeLast(4).any { n -> n.id?.endsWith("order_cx_name") == true } }
         val leaves = customer.root.children.takeLast(4)
@@ -279,11 +305,13 @@ class PrivacyExportE2ETest {
         records.forEach { safe("skeleton/${it.name}", it.bytes.toByteArray(), Inputs.forbidden + listOf(Inputs.BENIGN, "Current dash", "Continue")) }
     }
 
-    private fun envelopeNodes(envelope: JsonObject) = Inputs.nodes(TestResourceLoader.nodeFromElement(envelope.getValue("payload")))
+    private fun envelopeNodes(surface: String, envelope: JsonObject) = privacyExportDecode(surface) {
+        Inputs.nodes(TestResourceLoader.nodeFromElement(envelope.getValue("payload")))
+    }
     private fun envelopeControls(h: PrivacyExportReplay, skeletons: List<Stored>, envelopes: List<Stored>) {
-        val captures = h.captures().map { json(it.readBytes()) }.associateBy { it.string("captureId") }
+        val captures = h.captures().map { json("capture/${it.name}", it.readBytes()) }.associateBy { it.string("captureId") }
         envelopes.forEach { stored ->
-            val item = json(stored.itemJson.toByteArray(Charsets.UTF_8))
+            val item = json("envelope/${stored.name}", stored.itemJson.toByteArray(Charsets.UTF_8))
             assertEquals("uinode.v1", item.string("schemaId"))
             assertEquals("UNKNOWN", item.string("classificationName"))
             val id = item.string("captureId")
@@ -297,13 +325,13 @@ class PrivacyExportE2ETest {
             assertTrue(original.getValue("metadata").jsonObject.keys.containsAll(listOf("deviceFingerprint", "rulesetSignature")))
             assertFalse(item.getValue("metadata").jsonObject.keys.any { it in setOf("deviceFingerprint", "rulesetSignature") })
             assertTrue("projected envelope retains the scrubbed payload", original.getValue("payload") == item.getValue("payload"))
-            if (envelopeNodes(item).any { it.viewIdResourceName?.endsWith("order_cx_name") == true }) {
-                assertTrue("customer envelope masks all four appended fields", envelopeNodes(item).takeLast(4).all { it.text?.contains("[redacted") == true })
-                assertEquals("[redacted]", envelopeNodes(item).last().text)
+            if (envelopeNodes("envelope/${stored.name}/payload", item).any { it.viewIdResourceName?.endsWith("order_cx_name") == true }) {
+                assertTrue("customer envelope masks all four appended fields", envelopeNodes("envelope/${stored.name}/payload", item).takeLast(4).all { it.text?.contains("[redacted") == true })
+                assertEquals("[redacted]", envelopeNodes("envelope/${stored.name}/payload", item).last().text)
             }
         }
         assertTrue("customer envelope carries masks", envelopes.any { "[redacted" in it.itemJson })
-        if (envelopes.size == 2) assertTrue("benign envelope positive control", envelopes.any { Inputs.BENIGN in strings(json(it.itemJson.toByteArray())) })
+        if (envelopes.size == 2) assertTrue("benign envelope positive control", envelopes.any { Inputs.BENIGN in strings(json("envelope/${it.name}", it.itemJson.toByteArray(Charsets.UTF_8))) })
     }
 
     /** Verify exact pre-upload item bytes and the in-flight marker while those files still existed. */
@@ -311,8 +339,8 @@ class PrivacyExportE2ETest {
         for ((path, expected) in listOf("/v1/skeletons" to skeletons, "/v1/envelopes" to envelopes)) {
             val sent = mutableListOf<String>()
             h.requests.filter { it.path == path }.forEach { request ->
-                val body = json(request.body.toByteArray())
-                val marker = json(requireNotNull(request.marker).toByteArray())
+                val body = json("request${request.path}", request.body.toByteArray())
+                val marker = json("request$path/inflight", requireNotNull(request.marker).toByteArray())
                 val ids = marker.getValue("ids").jsonArray.map { it.jsonPrimitive.content }
                 assertTrue("nonempty in-flight batch", ids.isNotEmpty())
                 val items = ids.map { id -> expected.single { it.name == id } }
@@ -324,7 +352,7 @@ class PrivacyExportE2ETest {
                 assertEquals("POST", request.method)
                 assertTrue("credential bearer header", Bearer.format(credential.installId, credential.secret) == request.headers[CensusHeaders.AUTHORIZATION])
                 val timestamp = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
-                assertTrue(RequestSigner.timestampInWindow(timestamp, System.currentTimeMillis() / 1000))
+                // Freshness-window behavior is covered by RequestSigner's own deterministic tests.
                 assertTrue("signature over captured bytes and actual path", RequestSigner.verify(credential.secret,
                     RequestSigner.canonical(request.method, request.path, timestamp, request.body.toByteArray()), requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
                 sent += ids
@@ -333,14 +361,15 @@ class PrivacyExportE2ETest {
         }
     }
 
-    /** Every privacy surface is scanned both raw and as decoded JSON strings; failures name no bodies. */
+    /** Captured export surfaces are scanned for the finite deny list; failures name no bodies. */
     private fun safeSurfaces(h: PrivacyExportReplay, secret: String? = null) {
         val deny = Inputs.forbidden + listOfNotNull(secret)
         h.captures().forEach {
             val bytes = it.readBytes()
             safe("capture/${it.name}", bytes, deny)
-            UUID.fromString(json(bytes).string("captureId"))
-            assertTrue("capture classification", json(bytes).string("classificationName") in setOf("UNKNOWN", "waiting_for_offer", "dropoff_pre_arrival"))
+            val capture = json("capture/${it.name}", bytes)
+            UUID.fromString(capture.string("captureId"))
+            assertTrue("capture classification", capture.string("classificationName") in setOf("UNKNOWN", "waiting_for_offer", "dropoff_pre_arrival"))
         }
         listOf(h.skeletonRoot, h.envelopeRoot).forEach { root ->
             root.walkTopDown().filter { it.isFile }.forEach {
@@ -358,15 +387,24 @@ class PrivacyExportE2ETest {
     }
     private fun safe(surface: String, bytes: ByteArray, deny: List<String>, isJson: Boolean = true) {
         val raw = bytes.toString(Charsets.UTF_8)
+        // Decode escapes across the whole text, including JSON split across log lines.
+        val unescaped = Regex("""\\(?:u([0-9a-fA-F]{4})|([\\"/]))""").replace(raw) { match ->
+            val hex = match.groupValues[1]
+            if (hex.isNotEmpty()) hex.toInt(16).toChar().toString() else match.groupValues[2]
+        }
         val decoded = if (isJson) {
-            try { strings(Json.parseToJsonElement(raw)) } catch (_: Exception) { throw AssertionError("$surface invalid JSON") }
-        } else raw.lineSequence().mapNotNull { line ->
-            // A log message may itself contain JSON after StateAwareTree's prefix.
-            runCatching { Json.parseToJsonElement(line.substringAfter(": ", line)) }.getOrNull()
-        }.flatMap { strings(it).asSequence() }.toList()
+            strings(privacyExportDecode(surface) { Json.parseToJsonElement(raw) })
+        } else raw.lineSequence().flatMap { line ->
+            // Logs may contain a complete JSON value or a prefixed object/array.
+            val candidates = listOf(line, line.substringAfter(": ", line)) +
+                line.indices.filter { line[it] == '{' || line[it] == '[' }.map { line.substring(it) }
+            candidates.mapNotNull { candidate ->
+                runCatching { privacyExportDecode(surface) { Json.parseToJsonElement(candidate) } }.getOrNull()
+            }.flatMap(::strings).asSequence()
+        }.toList()
         deny.forEachIndexed { index, token ->
             val id = token.takeIf { it in Inputs.forbidden + listOf(Inputs.BENIGN, Inputs.LOG, Inputs.DEBUG) } ?: "protected-token-$index"
-            assertFalse("$surface leaked $id", raw.contains(token) || decoded.any { token in it })
+            assertFalse("$surface leaked $id", raw.contains(token) || unescaped.contains(token) || decoded.any { token in it })
         }
     }
     private fun strings(value: JsonElement): List<String> = when (value) {
@@ -374,7 +412,9 @@ class PrivacyExportE2ETest {
         is JsonArray -> value.flatMap(::strings)
         is JsonPrimitive -> if (value.isString) listOf(value.content) else emptyList()
     }
-    private fun json(bytes: ByteArray) = Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
+    private fun json(surface: String, bytes: ByteArray) = privacyExportDecode(surface) {
+        Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
+    }
     private fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
     private fun sha(text: String) = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
         .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
