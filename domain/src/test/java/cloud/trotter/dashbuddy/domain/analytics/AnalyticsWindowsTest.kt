@@ -71,7 +71,8 @@ class AnalyticsWindowsTest {
             Case("lifetime forward", AnalyticsWindows.LIFETIME, 3, null, null, null),
             Case("zero identity", current(WEEK), 0, "2026-07-13", "2026-07-19", 7L),
         ).forEach { (name, window, steps, start, end, days) ->
-            val stepped = AnalyticsWindows.step(window, steps)
+            val stepped = runCatching { AnalyticsWindows.step(window, steps) }
+                .getOrElse { throw AssertionError("$name: step threw", it) }
             assertEquals("$name start", start?.let(::date), stepped.startDate)
             assertEquals("$name end", end?.let(::date), stepped.endDateInclusive)
             assertEquals("$name length", days, stepped.lengthDays)
