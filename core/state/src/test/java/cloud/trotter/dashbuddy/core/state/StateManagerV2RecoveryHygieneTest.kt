@@ -475,9 +475,11 @@ class StateManagerV2RecoveryHygieneTest {
         // every live observation retries it.
         val dispatcher = StandardTestDispatcher(testScheduler)
         val journalDao = FakeObservationDao(emptyList())
-        var journalledAtRetry = -1
+        // The live retry's insert is held open, so the journal writer gets every chance to run
+        // while it is in flight — it must have nothing to write yet.
+        val retryHeld = kotlinx.coroutines.CompletableDeferred<Unit>()
         val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2) { attempt ->
-            if (attempt == 3) journalledAtRetry = journalDao.since(0L).size
+            if (attempt == 3) retryHeld.await()
         }
 
         val first = newManagerOn(journalDao, snapshotDao, dispatcher)
@@ -495,13 +497,15 @@ class StateManagerV2RecoveryHygieneTest {
         // writes no ordinary snapshot of its own. The retry is the only write here.
         first.dispatch(liveIdle(20_000L))
         runCurrent()
-
-        assertEquals("the live observation retried the checkpoint", 3, snapshotDao.attempts)
+        assertEquals("the live observation is retrying the checkpoint", 3, snapshotDao.attempts)
         assertEquals(
-            "…BEFORE that observation was journalled (#1271 scenario 4): a live row on disk over the " +
-                "pre-hygiene snapshot would replay the stale park at a crash",
-            0, journalledAtRetry,
+            "…and has NOT journalled itself while the retry is in flight (#1271 scenario 4): a live " +
+                "row on disk over the pre-hygiene snapshot would replay the stale park at a crash",
+            0, journalDao.since(0L).size,
         )
+        retryHeld.complete(Unit)
+        runCurrent()
+        assertEquals("once the retry landed, the observation is journalled", 1, journalDao.since(0L).size)
         assertEquals(
             "and it landed at the RECOVERED version — REPLACING the pre-hygiene row (#1271 scenario 4: " +
                 "the drained recovered state, never the live step's, whose effects may not have run)",
