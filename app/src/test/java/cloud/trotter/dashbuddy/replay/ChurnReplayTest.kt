@@ -179,10 +179,12 @@ class ChurnReplayTest {
         }
 
         // The LAST re-arm (on the variant-3 frame) must carry variant 3's hash — not the original.
-        val lastArm = steps
-            .first { it.frame?.capturedAtMs == frames[2].capturedAtMs }
-            .effects.filterIsInstance<AppEffect.ScheduleTimeout>()
-            .last { it.payload is ObservationPayload.OfferExpiry }
+        val variant3Step = steps.firstOrNull { it.frame?.capturedAtMs == frames[2].capturedAtMs }
+        assertNotNull("the variant-3 frame must produce a replay step", variant3Step)
+        val expiryArms = variant3Step!!.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+            .filter { it.payload is ObservationPayload.OfferExpiry }
+        assertTrue("the variant-3 frame must re-arm an OfferExpiry timer", expiryArms.isNotEmpty())
+        val lastArm = expiryArms.last()
         assertEquals(
             "the re-armed timer targets the current variant's hash so the offer can still time out",
             hash(2),
