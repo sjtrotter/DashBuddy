@@ -506,6 +506,8 @@ class CaptureScrubTest {
             "Return\tAvery K to Sample Store" to "Return\t[redacted] to Sample Store",
             "return Avery Kim  to  Sample Store #12" to "return [redacted]  to  Sample Store #12",
             "Return Avery K to [redacted:ab12]" to "Return [redacted] to [redacted:ab12]",
+            // Review r2 #1: the FIRST separator — a store name may itself contain " to ".
+            "Return Avery K to Farm to Table" to "Return [redacted] to Farm to Table",
         )
         for ((raw, out) in masked) assertEquals(out, CustomerTextMarkers.maskReturnName(raw))
         for (kept in listOf(
@@ -513,6 +515,8 @@ class CaptureScrubTest {
             "Return [redacted:ab12] to Sample Store", "Returned items", "Return", "Return Avery K", "Return Avery K to ",
             // PR #1277 review r1 #4: the separator is consumed whole before the chrome check.
             "Return   to dash", "Return  to dash to keep earning", "Return\tto dash",
+            // Review r2 #1: an already-masked name slot stays byte-identical, store intact.
+            "Return [redacted:ab12] to Farm to Table",
         )) {
             assertEquals(kept, CustomerTextMarkers.maskReturnName(kept))
         }

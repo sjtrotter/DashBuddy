@@ -347,7 +347,8 @@ the whole block stays raw), a unit line or an UNQUOTED note inside a qualifying 
 quote-led and short-code nodes are selected), and a field-bearing wrapper (a city wrapper with its own
 `Address` description is not a city line, so no pair forms). Review r1 also fixed: a pair carried by the
 projected root itself (one node with `street\ncity`, or such a tapped node) is selected, and the scope never
-widens past a parent that carries its own non-block text (a `Stop 1` header). A merchant address
+widens past a parent that carries its own non-block text (a `Stop 1` header) or a branching sibling
+container (review r2: `box("Delivery details", "Hand it to me")` beside the pair). A merchant address
 or a numeric label inside a qualifying UNKNOWN block may be masked: an accepted privacy bias.
 The same PR closes the UNKNOWN half of the #994 return task line: the bare `Return ` prefix stays out of
 `MARKERS` (it is DoorDash's `Return to dash` chrome, #1064), and a GATED runtime lead-in
@@ -355,8 +356,9 @@ The same PR closes the UNKNOWN half of the #994 return task line: the bare `Retu
 UNKNOWN screen + click envelopes; the store stays raw (#886). It is a hand-written single pass per `\n` line
 (PR #1277 review r1: the first regex form went cubic on `"Return"` + 4,090 spaces and its backtracking
 whitespace let `Return   to dash` through): skip leading whitespace, the literal `Return`, one whole
-whitespace run, then reject a name slot opening with the word `to`; the separator is the LAST
-whitespace-`to`-whitespace followed by non-blank text, and the name must be non-blank and not already a mask.
+whitespace run, then reject a name slot opening with the word `to`; the separator is the FIRST
+whitespace-`to`-whitespace followed by non-blank text (review r2: store names contain ` to `, "Farm to
+Table"; customer names do not), and the name must be non-blank and not already a mask.
 Every line of a merged field is parsed, so two task lines mask both names. Steps are counted, ≤ 4 per
 character (`CaptureScrubTest`). The runtime gate is deliberately wider than the intake gate
 (`PiiShapes.GATED_NAME_PREFIXES`, which also requires the first-name + last-initial shape; `customerLeadIn`

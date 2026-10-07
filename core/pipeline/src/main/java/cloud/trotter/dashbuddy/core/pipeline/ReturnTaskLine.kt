@@ -13,9 +13,10 @@ import cloud.trotter.dashbuddy.domain.privacy.MaskTokens
  *     whitespace run, which is consumed WHOLE;
  *  2. chrome exclusion AFTER that run (review r1 #4): a name slot that opens with the word `to` is the
  *     platform's own `Return to dash` button (any spacing, any tail), never a customer;
- *  3. the separator is the LAST whitespace-`to`-whitespace that is followed by non-blank text; the name is
- *     everything between the lead-in and that separator, trailing whitespace dropped, and must be
- *     non-blank and not already a mask token.
+ *  3. the separator is the FIRST whitespace-`to`-whitespace that is followed by non-blank text (review r2:
+ *     store names contain ` to ` — "Farm to Table" — customer names do not); the name is everything
+ *     between the lead-in and that separator, trailing whitespace dropped, and must be non-blank; a name
+ *     slot that already IS a mask token leaves the line byte-identical.
  * Every `\n`-separated line of a field is parsed on its own (review r1 #5: a merged field carrying two
  * task lines masks both names). Work is O(length): each character is read a constant number of times,
  * counted through the optional `steps` cell so a test pins the bound without a stopwatch.
@@ -78,6 +79,7 @@ object ReturnTaskLine {
                 text.regionMatches(k + 1, "to", 0, 2, ignoreCase = true) && lastNonBlank > k + 3
             ) {
                 separator = k
+                break
             }
             k++
         }

@@ -348,4 +348,15 @@ class UnknownAddressBackstopTest {
         assertEquals("the header is kept", "Stop 1", out.children[0].text)
         assertEquals("unrelated container untouched", serialize(unrelated), serialize(out.children[1]))
     }
+
+    @Test
+    fun `a branching sibling container blocks scope widening (r2 #2)`() {
+        val unrelated = box(text("Earnings"), text("12"), text("\"Top Dasher\" status"))
+        val tree = box(box(text(street), text(city), box(text("Delivery details"), text("Hand it to me"))), unrelated)
+        val out = scrub(tree)
+        assertEquals("[redacted]", out.children[0].children[0].text)
+        assertEquals("[redacted]", out.children[0].children[1].text)
+        assertEquals("unrelated container untouched", serialize(unrelated), serialize(out.children[1]))
+        assertKept(tree, out, "Delivery details", "Hand it to me")
+    }
 }

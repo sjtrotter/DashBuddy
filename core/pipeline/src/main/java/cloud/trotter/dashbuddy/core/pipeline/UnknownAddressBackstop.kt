@@ -186,13 +186,20 @@ object UnknownAddressBackstop {
             return i
         }
 
+        /**
+         * A sibling that is not part of an address block: its own non-quote/code text, or (review r2 #2) a
+         * projected container — a branching subtree such as `box("Delivery details", "Hand it to me")` — which
+         * means the block does not fill its parent, so the scope must not widen.
+         */
+        private fun isOther(k: Int) = otherText[k] || fieldChild[k]
+
         private fun isIntervening(k: Int) = quoteOrCode[k] && !otherText[k] && !fieldChild[k]
 
         private fun scanSiblings(p: Int, kids: List<Int>) {
             // Siblings that are neither quote nor code: a pair's parent "holds nothing but the block"
             // when the pair accounts for all of them — counted once per list, never per pair.
             var others = 0
-            for (k in kids) if (otherText[k]) others++
+            for (k in kids) if (isOther(k)) others++
             var streetCandidate = -1
             for (j in kids.indices) {
                 steps++
@@ -221,8 +228,8 @@ object UnknownAddressBackstop {
         private fun addScope(p: Int, others: Int, a: Int, b: Int) {
             explicit[a] = true
             explicit[b] = true
-            var pairOthers = if (otherText[a]) 1 else 0
-            if (b != a && otherText[b]) pairOthers++
+            var pairOthers = if (isOther(a)) 1 else 0
+            if (b != a && isOther(b)) pairOthers++
             // Review r1 #2: the parent's OWN text counts too — a "Stop 1" header on the container means the
             // block does not fill it, so the scope never widens past it.
             val onlyBlock = others == pairOthers && !otherText[p]
