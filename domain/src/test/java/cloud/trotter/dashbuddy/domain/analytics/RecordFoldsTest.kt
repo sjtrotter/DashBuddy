@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.analytics
 
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.acceptedOffer
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.evaluation as eval
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
@@ -67,41 +69,9 @@ class RecordFoldsTest {
             odometer = odo,
         )
 
-    private fun eval(
-        net: Double,
-        dist: Double,
-        opCpm: Double,
-        fuelPerMile: Double = 0.0,
-        nonFuelPerMile: Double = opCpm - fuelPerMile,
-    ) = OfferEvaluation(
-        action = OfferAction.ACCEPT,
-        score = 80.0,
-        qualityLevel = OfferQuality.GOOD,
-        payAmount = net + dist * opCpm,
-        // Route-total estimates — the fold divides by distanceMiles to recover the per-mile split.
-        fuelCostEstimate = fuelPerMile * dist,
-        nonFuelCostEstimate = nonFuelPerMile * dist,
-        operatingCostPerMile = opCpm,
-        netPayAmount = net,
-        distanceMiles = dist,
-        dollarsPerMile = if (dist > 0) net / dist else 0.0,
-        dollarsPerHour = 20.0,
-        estimatedTimeMinutes = 15.0,
-        itemCount = 1.0,
-        merchantName = "StoreX",
-    )
-
     private fun offerAccepted(sid: String, at: Long, hash: String, evaluation: OfferEvaluation?) = ev(
         AppEventType.OFFER_ACCEPTED, sid, at,
-        OfferPayload(
-            offerHash = hash,
-            parsedOffer = ParsedOffer(offerHash = hash, payAmount = 12.0, distanceMiles = 3.0, itemCount = 1),
-            evaluation = evaluation,
-            outcome = AppEventType.OFFER_ACCEPTED,
-            presentedAt = at - 30_000,
-            decidedAt = at,
-            returnFlow = Flow.Idle,
-        ),
+        acceptedOffer(at, evaluation, hash, presentedAt = at - 30_000),
     )
 
     private fun parsedPay(base: Double, tip: Double, tipStore: String = "StoreX") = ParsedPay(
