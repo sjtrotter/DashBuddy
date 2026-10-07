@@ -102,20 +102,18 @@ class EffectVerbTest {
 
     @Test
     fun `remaining verbs require NONE tier`() {
-        val noneVerbs = EffectVerb.entries.filter {
-            it.tier == PermissionTier.NONE
+        val noneVerbs = listOf(
+            EffectVerb.BUBBLE, EffectVerb.LOG, EffectVerb.EVALUATE_OFFER,
+            EffectVerb.SESSION_START, EffectVerb.SESSION_END,
+            EffectVerb.SCHEDULE_TIMEOUT, EffectVerb.CANCEL_TIMEOUT,
+        )
+        for (verb in noneVerbs) {
+            assertEquals("$verb should have NONE tier", PermissionTier.NONE, verb.tier)
         }
+        // Exactly these verbs carry NONE — a verb gaining or losing the tier fails here.
         assertEquals(
-            setOf(
-                EffectVerb.BUBBLE,
-                EffectVerb.LOG,
-                EffectVerb.EVALUATE_OFFER,
-                EffectVerb.SESSION_START,
-                EffectVerb.SESSION_END,
-                EffectVerb.SCHEDULE_TIMEOUT,
-                EffectVerb.CANCEL_TIMEOUT,
-            ),
             noneVerbs.toSet(),
+            EffectVerb.entries.filter { it.tier == PermissionTier.NONE }.toSet(),
         )
     }
 

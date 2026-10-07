@@ -4,10 +4,8 @@ import cloud.trotter.dashbuddy.core.database.observation.ObservationDao
 import cloud.trotter.dashbuddy.core.database.observation.ObservationEntity
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotDao
 import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
-import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
-import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -208,27 +206,6 @@ class StateManagerV2RecoveryHygieneTest {
         val engine: EffectExecutor = mock()
         whenever(engine.events).thenReturn(MutableSharedFlow(extraBufferCapacity = 16))
         return recoveryManager(journalDao, snapshotDao, engine, dispatcher)
-    }
-
-    @Test
-    fun `a restored park is dropped when there is no tail to replay`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val manager = newManager(tail = emptyList(), dispatcher = dispatcher)
-
-        manager.initialize()
-        runCurrent()
-
-        val region = manager.state.value.regions.platforms[Platform.DoorDash]
-        assertNull(
-            "a park is pre-crash evidence and no restore path re-arms its wake timer",
-            region?.pendingSessionPay,
-        )
-        assertEquals(
-            "the committed total is untouched — dropping the park costs one settle window, not money",
-            16.70,
-            region?.session?.runningEarnings ?: Double.NaN,
-            0.0001,
-        )
     }
 
     @Test

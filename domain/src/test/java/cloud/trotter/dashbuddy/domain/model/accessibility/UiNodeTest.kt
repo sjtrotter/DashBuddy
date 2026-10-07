@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.domain.model.accessibility
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -48,25 +49,62 @@ class UiNodeTest {
     // equals / hashCode
     // -------------------------------------------------------------------------
 
+    private fun equalityNode() = UiNode(
+        text = "Accept",
+        contentDescription = "Accept button",
+        stateDescription = "expanded",
+        viewIdResourceName = "com.doordash:id/accept_btn",
+        className = "android.widget.Button",
+        isClickable = true,
+        isEnabled = true,
+        isChecked = 0,
+        boundsInScreen = BoundingBox(10, 10, 100, 100),
+    )
+
     @Test
     fun `equals - same field values are equal regardless of parent or children`() {
-        val a = node(text = "Hello", viewIdResourceName = "com.app:id/view")
-        val b = node(text = "Hello", viewIdResourceName = "com.app:id/view")
+        val a = equalityNode()
+        val b = equalityNode()
         assertEquals(a, b)
     }
 
     @Test
-    fun `equals - different text are not equal`() {
-        val a = node(text = "Hello")
-        val b = node(text = "World")
-        assertFalse(a == b)
+    fun `equals - different text properties are not equal`() {
+        val base = equalityNode()
+        assertNotEquals(base, base.copy(text = "Decline"))
+        assertNotEquals(base, base.copy(contentDescription = "Other"))
+        assertNotEquals(base, base.copy(stateDescription = "collapsed"))
     }
 
     @Test
-    fun `equals - different viewIdResourceName are not equal`() {
-        val a = node(viewIdResourceName = "com.app:id/foo")
-        val b = node(viewIdResourceName = "com.app:id/bar")
-        assertFalse(a == b)
+    fun `equals - different structure properties are not equal`() {
+        val base = equalityNode()
+        assertNotEquals(base, base.copy(viewIdResourceName = "id/other"))
+        assertNotEquals(base, base.copy(className = "android.widget.TextView"))
+    }
+
+    @Test
+    fun `equals - different flag properties are not equal`() {
+        val base = equalityNode()
+        assertNotEquals(base, base.copy(isClickable = false))
+        assertNotEquals(base, base.copy(isEnabled = false))
+        assertNotEquals(base, base.copy(isChecked = 1))
+    }
+
+    @Test
+    fun `equals - different bounds are not equal`() {
+        val base = equalityNode()
+        assertNotEquals(base, base.copy(boundsInScreen = BoundingBox(0, 0, 0, 0)))
+    }
+
+    @Test
+    fun `equals - circular parent references do not recurse`() {
+        val child1 = equalityNode().copy(viewIdResourceName = "child")
+        val parent1 = equalityNode().copy(viewIdResourceName = "parent", children = listOf(child1)).restoreParents()
+        val child2 = equalityNode().copy(viewIdResourceName = "child")
+        val parent2 = equalityNode().copy(viewIdResourceName = "parent", children = listOf(child2)).restoreParents()
+
+        assertEquals(parent1, parent2)
     }
 
     @Test
@@ -80,8 +118,16 @@ class UiNodeTest {
 
     @Test
     fun `hashCode - equal nodes have equal hashCode`() {
+        val a = equalityNode()
+        val b = equalityNode()
+        assertEquals(a.hashCode(), b.hashCode())
+    }
+
+    @Test
+    fun `hashCode - sparse nodes with null description, state and class hash equally`() {
         val a = node(text = "Hello", viewIdResourceName = "com.app:id/view")
         val b = node(text = "Hello", viewIdResourceName = "com.app:id/view")
+        assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())
     }
 
