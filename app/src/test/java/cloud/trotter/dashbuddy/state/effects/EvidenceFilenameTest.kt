@@ -52,7 +52,7 @@ class EvidenceFilenameTest {
 
     @Test
     fun `a prefix that is nothing but a token falls back rather than saving a nameless file`() {
-        assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix("{storeName}"))
+        assertEquals("Rule", EvidenceFilename.sanitizePrefix("{storeName}"))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix("  -  "))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix(""))
         assertEquals(EvidenceFilename.FALLBACK_PREFIX, EvidenceFilename.sanitizePrefix(null))
