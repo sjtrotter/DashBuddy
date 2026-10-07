@@ -465,7 +465,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "SrA McLaurin Going Away, Response: Not responded, 11:00 – 12:00, Willie's Icehouse, 8739 TX-151, [email]",
+                                                  "desc": "Event C, Response: Not responded, 11:00 – 12:00, Sample Venue, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[50,437][623,555]",
@@ -489,7 +489,7 @@
                                                           "enabled": true,
                                                           "children": [
                                                             {
-                                                              "text": "‎‪SrA McLaurin Going Away‬‎",
+                                                              "text": "‎‪Event C‬‎",
                                                               "id": "title",
                                                               "class": "TextView",
                                                               "bounds": "[95,443][578,496]",
@@ -503,7 +503,7 @@
                                                           ]
                                                         },
                                                         {
-                                                          "text": "‎‪11:00 at Willie's Icehouse, 8739 TX-151‬‎",
+                                                          "text": "‎‪11:00 at Sample Venue‬‎",
                                                           "id": "when",
                                                           "class": "TextView",
                                                           "bounds": "[77,496][596,549]",
@@ -559,7 +559,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "PT follow-up, 11:30 – 12:30, Wilford Hall Ambulatory Surgical Center, [address], Lackland Air Force Base, TX 78236, USA, [email], Peacock",
+                                                  "desc": "Event A, 11:30 – 12:30, Sample Place, [address], Sampleton, TX 00000, USA, [email], [redacted]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[50,634][623,752]",
@@ -583,7 +583,7 @@
                                                           "enabled": true,
                                                           "children": [
                                                             {
-                                                              "text": "‎‪PT follow-up‬‎",
+                                                              "text": "‎‪Event A‬‎",
                                                               "id": "title",
                                                               "class": "TextView",
                                                               "bounds": "[95,640][578,693]",
@@ -597,7 +597,7 @@
                                                           ]
                                                         },
                                                         {
-                                                          "text": "‎‪11:30 at Wilford Hall Ambulatory Surgical Center, [address], Lackland Air Force Base, TX 78236, USA‬‎",
+                                                          "text": "‎‪11:30 at Sample Place, [address], Sampleton, TX 00000, USA‬‎",
                                                           "id": "when",
                                                           "class": "TextView",
                                                           "bounds": "[77,693][596,746]",
@@ -616,7 +616,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "PRE-CIMB @ Group Staff Mtg, Response: Not responded, 13:00 – 14:00, 67 Wing Bldg [redacted] side downstairs, [email]",
+                                                  "desc": "Event B, Response: Not responded, 13:00 – 14:00, Sample Building, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[50,752][623,870]",
@@ -640,7 +640,7 @@
                                                           "enabled": true,
                                                           "children": [
                                                             {
-                                                              "text": "‎‪PRE-CIMB @ Group Staff Mtg‬‎",
+                                                              "text": "‎‪Event B‬‎",
                                                               "id": "title",
                                                               "class": "TextView",
                                                               "bounds": "[95,758][578,811]",
@@ -654,7 +654,7 @@
                                                           ]
                                                         },
                                                         {
-                                                          "text": "‎‪13:00 at 67 Wing Bldg [redacted] side downstairs‬‎",
+                                                          "text": "‎‪13:00 at Sample Building‬‎",
                                                           "id": "when",
                                                           "class": "TextView",
                                                           "bounds": "[77,811][596,864]",
@@ -697,7 +697,7 @@
                                               "enabled": true,
                                               "children": [
                                                 {
-                                                  "desc": "Task: Check Bills, 06:00, [email]",
+                                                  "desc": "Task: Task A, 06:00, [email]",
                                                   "id": "widget_row",
                                                   "class": "FrameLayout",
                                                   "bounds": "[50,949][623,1018]",
@@ -734,7 +734,7 @@
                                                               ]
                                                             },
                                                             {
-                                                              "text": "‎‪Check Bills‬‎",
+                                                              "text": "‎‪Task A‬‎",
                                                               "id": "title",
                                                               "class": "TextView",
                                                               "bounds": "[144,955][578,1008]",

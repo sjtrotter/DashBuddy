@@ -471,7 +471,7 @@
                                                                                                 "bounds": "[78,480][618,591]",
                                                                                                 "children": [
                                                                                                     {
-                                                                                                        "desc": "Task: Check Bills, 06:00, [email]",
+                                                                                                        "desc": "Task: Task A, 06:00, [email]",
                                                                                                         "id": "com.google.android.calendar:id/widget_row",
                                                                                                         "class": "android.widget.FrameLayout",
                                                                                                         "isEnabled": true,
@@ -508,7 +508,7 @@
                                                                                                                                 ]
                                                                                                                             },
                                                                                                                             {
-                                                                                                                                "text": "‎‪Check Bills‬‎",
+                                                                                                                                "text": "‎‪Task A‬‎",
                                                                                                                                 "id": "com.google.android.calendar:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -707,8 +707,8 @@
                                                                         "bounds": "[656,497][813,748]"
                                                                     },
                                                                     {
-                                                                        "text": "Grindr",
-                                                                        "desc": "Grindr",
+                                                                        "text": "App",
+                                                                        "desc": "App",
                                                                         "class": "android.widget.TextView",
                                                                         "isClickable": true,
                                                                         "isEnabled": true,

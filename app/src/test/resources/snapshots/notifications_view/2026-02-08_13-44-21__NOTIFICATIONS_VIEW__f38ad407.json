@@ -121,7 +121,7 @@
                                                                                                                         "bounds": "[420,261][660,501]"
                                                                                                                     },
                                                                                                                     {
-                                                                                                                        "text": "The Casual Criminalist�",
+                                                                                                                        "text": "Podcast A�",
                                                                                                                         "class": "android.widget.TextView",
                                                                                                                         "isClickable": true,
                                                                                                                         "isEnabled": true,
@@ -334,7 +334,7 @@
                                                                                                         "bounds": "[0,1228][1080,1420]",
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "desc": "5 of the Most Depraved Killers in US History. February 6. 4 hours 15 minutes left. In progress.",
+                                                                                                                "desc": "Episode 2. February 6. 4 hours 15 minutes left. In progress.",
                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/episodeRow",
                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                 "isClickable": true,
@@ -363,7 +363,7 @@
                                                                                                                         "bounds": "[36,1293][946,1347]",
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "5 of the Most Depraved Killers in US History",
+                                                                                                                                "text": "Episode 2",
                                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -585,7 +585,7 @@
                                                                                                         "bounds": "[0,1420][1080,1612]",
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "desc": "Unsolved: The Setagaya Family Murders. January 28. 1 hour 43 minutes left. In progress.",
+                                                                                                                "desc": "Episode 5. January 28. 1 hour 43 minutes left. In progress.",
                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/episodeRow",
                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                 "isClickable": true,
@@ -614,7 +614,7 @@
                                                                                                                         "bounds": "[36,1485][946,1539]",
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "Unsolved: The Setagaya Family Murders",
+                                                                                                                                "text": "Episode 5",
                                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -836,7 +836,7 @@
                                                                                                         "bounds": "[0,1612][1080,1851]",
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "desc": "Jealousy, Drugs, and Murder: The Jean Harris Story. January 21. 1 hour 37 minutes left. In progress.",
+                                                                                                                "desc": "Episode 4. January 21. 1 hour 37 minutes left. In progress.",
                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/episodeRow",
                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                 "isClickable": true,
@@ -865,7 +865,7 @@
                                                                                                                         "bounds": "[36,1677][946,1778]",
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "Jealousy, Drugs, and Murder: The Jean Harris Story",
+                                                                                                                                "text": "Episode 4",
                                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -1087,7 +1087,7 @@
                                                                                                         "bounds": "[0,1851][1080,2043]",
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "desc": "5 of America's Worst Miscarriages of Justice. January 10. 1 hour 39 minutes left. In progress.",
+                                                                                                                "desc": "Episode 1. January 10. 1 hour 39 minutes left. In progress.",
                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/episodeRow",
                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                 "isClickable": true,
@@ -1116,7 +1116,7 @@
                                                                                                                         "bounds": "[36,1916][946,1970]",
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "5 of America's Worst Miscarriages of Justice",
+                                                                                                                                "text": "Episode 1",
                                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -1338,7 +1338,7 @@
                                                                                                         "bounds": "[0,2043][1080,2222]",
                                                                                                         "children": [
                                                                                                             {
-                                                                                                                "desc": "Flashback to The Real-Life Harley Quinn. January 8. 1 hour 44 minutes.",
+                                                                                                                "desc": "Episode 3. January 8. 1 hour 44 minutes.",
                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/episodeRow",
                                                                                                                 "class": "android.view.ViewGroup",
                                                                                                                 "isClickable": true,
@@ -1367,7 +1367,7 @@
                                                                                                                         "bounds": "[36,2108][946,2162]",
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "Flashback to The Real-Life Harley Quinn",
+                                                                                                                                "text": "Episode 3",
                                                                                                                                 "id": "au.com.shiftyjelly.pocketcasts:id/title",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -1621,7 +1621,7 @@
                                                                                                         ]
                                                                                                     },
                                                                                                     {
-                                                                                                        "text": "The Casual Criminalist",
+                                                                                                        "text": "Podcast A",
                                                                                                         "class": "android.widget.TextView",
                                                                                                         "isEnabled": true,
                                                                                                         "bounds": "[160,169][654,228]"
@@ -1839,13 +1839,13 @@
                                                                                                                                                         "bounds": "[36,2719][1044,3728]"
                                                                                                                                                     },
                                                                                                                                                     {
-                                                                                                                                                        "text": "Microsoft Finally Admits AI Sucks - WAN Show February 6, 2026",
+                                                                                                                                                        "text": "Episode 6",
                                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                                         "isEnabled": true,
                                                                                                                                                         "bounds": "[36,3908][1044,3995]"
                                                                                                                                                     },
                                                                                                                                                     {
-                                                                                                                                                        "text": "The WAN Show",
+                                                                                                                                                        "text": "Podcast B",
                                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                                         "isClickable": true,
                                                                                                                                                         "isEnabled": true,
