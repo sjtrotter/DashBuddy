@@ -46,6 +46,28 @@ class TransformClockTest {
         assertEquals(expected, result)
     }
 
+    private fun at(date: LocalDate, hour: Int, minute: Int, second: Int = 0): Long =
+        date.atTime(hour, minute, second).atZone(zone).toInstant().toEpochMilli()
+
+    private fun parseAt(now: Long, text: String): Long =
+        TransformRegistry.withClock(now, zone) { TransformRegistry.apply("parseDeadline", text) } as Long
+
+    @Test
+    fun `#1260 a dash end 12h ahead stays today`() {
+        val d = LocalDate.of(2026, 10, 6)
+        assertEquals(at(d, 18, 0), parseAt(at(d, 5, 59), "Dash ends at 6:00 PM"))
+    }
+
+    @Test
+    fun `#1260 spring-forward midnight keeps the parsed clock time`() {
+        assertEquals(at(LocalDate.of(2026, 3, 7), 23, 59), parseAt(at(LocalDate.of(2026, 3, 8), 0, 1), "Pick up by 11:59 PM"))
+    }
+
+    @Test
+    fun `#1260 fall-back midnight keeps the parsed clock time`() {
+        assertEquals(at(LocalDate.of(2026, 10, 31), 23, 59), parseAt(at(LocalDate.of(2026, 11, 1), 0, 1), "Pick up by 11:59 PM"))
+    }
+
     @Test
     fun `parseDeadline is deterministic under a fixed clock`() {
         val a = TransformRegistry.withClock(anchor, zone) {
