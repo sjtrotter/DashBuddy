@@ -18,32 +18,15 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 /**
- * [SessionReplay] regression for the #830 "Uber offer identity churn": Uber presents ONE physical
- * offer, but its card live-re-quotes (pay/miles/minutes tick every few seconds), so each re-render
- * changes the parsed content → a new [cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer.offerHash]
- * → `OfferLifecycle` treated every re-render as a REPLACEMENT: the old pending resolved
- * `OFFER_TIMEOUT("Replaced by new offer")`, the new pending re-evaluated and **re-spoke**, and the
- * click latches were discarded. The same Sonic offer was read aloud 3× and its analytics inflated.
- *
- * The three real Sonic frames (2026-07-21 dash, `~/dashbuddy/logs/2026/07/22`, seq 603/604/606):
- * `01` @ 18:39:23 `$6.44 / 26 min / 8.5 mi`, `02` @ 18:39:26 `$6.42 / 25 min / 8.4 mi`,
- * `03` @ 18:39:36 `$6.44 / 26 min / 8.5 mi` — all `Sonic (2314 Thousand Oaks)`, one order. So the
- * ECONOMICS oscillate (offerHash A→B→A) while the STABLE subset (store + order count + type) is
- * byte-identical → one `presentationKey` across all three.
- *
- * The fix: a churned re-render whose `presentationKey` matches the offer already on screen is
- * ENRICHED-as-variant (keep presentedAt + latches, update the numbers, re-eval) instead of replaced.
- * No `OFFER_TIMEOUT`, one `SpeakOffer` per physical presentation, latches survive, and the expiry
- * deadline stays anchored on the FIRST frame's `presentedAt`.
+ * #830: the three real Sonic frames re-quote economics A→B→A while retaining one presentationKey.
+ * The full trace must retain the first presentation epoch and accept latch, refresh notifications
+ * and expiry hashes, and speak only once. A distinct DoorDash offer must still replace its predecessor.
+ * Fixtures: uber_offer_churn_2026_07_21 (seq 603/604/606), doordash_offer_replace_2026_01_28.
  */
 class ChurnReplayTest {
 
     private val session = "snapshots/sessions/uber_offer_churn_2026_07_21"
     private val ddSession = "snapshots/sessions/doordash_offer_replace_2026_01_28"
-
-    // ---------------------------------------------------------------------------------------------
-    // Injection helpers
-    // ---------------------------------------------------------------------------------------------
 
     /** A minimal but valid landed evaluation for [offerHash], routed to [platform] via a loopback. */
     private fun evalLoopback(offerHash: String, platform: Platform, atMs: Long): SessionReplay.RawInput {
@@ -91,43 +74,17 @@ class ChurnReplayTest {
         atMs = atMs,
     )
 
-    /**
-     * Build the full churn injection stream: the three real Sonic frames plus a synthetic accept
-     * click on variant 1 and a synthetic eval loopback after each frame (so `SpeakOffer` can fire —
-     * the replay harness has no eval executor). Returns the ordered [SessionReplay.ReplayStep]s.
-     */
-    private fun churnSteps(): List<SessionReplay.ReplayStep> {
-        val frames = SessionReplay.loadSession(session).sortedBy { it.capturedAtMs }
-        assertEquals("three Sonic frames", 3, frames.size)
-        // Real production hashes (A == C by economics; B differs).
-        val obs = SessionReplay.replayRecognition(frames)
-        fun hash(i: Int) = (obs[i].parsed as ParsedFields.OfferFields).parsedOffer.offerHash
-        val f = frames
-        val inputs = listOf(
-            SessionReplay.ScreenInput(f[0]),
-            uberAcceptClick(f[0].capturedAtMs + 1),
-            evalLoopback(hash(0), Platform.Uber, f[0].capturedAtMs + 2),
-            SessionReplay.ScreenInput(f[1]),
-            evalLoopback(hash(1), Platform.Uber, f[1].capturedAtMs + 1),
-            SessionReplay.ScreenInput(f[2]),
-            evalLoopback(hash(2), Platform.Uber, f[2].capturedAtMs + 1),
-        )
-        return SessionReplay.reduceMixed(inputs)
-    }
-
     private fun counts(steps: List<SessionReplay.ReplayStep>): Map<AppEventType, Int> =
         steps.flatMap { it.events }.groupingBy { it.type }.eachCount()
 
     private fun effects(steps: List<SessionReplay.ReplayStep>): List<AppEffect> =
         steps.flatMap { it.effects }
 
-    // ---------------------------------------------------------------------------------------------
-    // The three sanity checks the whole fix rests on
-    // ---------------------------------------------------------------------------------------------
-
     @Test
-    fun `the three Sonic frames share a presentationKey but churn the offerHash (#830 premise)`() {
-        val obs = SessionReplay.replayRecognition(session)
+    fun `Uber churn preserves one presentation, accept latch and deadline while refreshing variant effects`() {
+        val frames = SessionReplay.loadSession(session).sortedBy { it.capturedAtMs }
+        assertEquals("three Sonic frames", 3, frames.size)
+        val obs = SessionReplay.replayRecognition(frames)
         val offers = obs.map { (it.parsed as ParsedFields.OfferFields).parsedOffer }
         assertEquals("all three recognize as offers", 3, offers.size)
         // presentationKey identical across all three variants.
@@ -140,11 +97,20 @@ class ChurnReplayTest {
         // offerHash churns: A (6.44) → B (6.42) → A (6.44).
         assertEquals("first and third variant re-quote to the SAME economics", offers[0].offerHash, offers[2].offerHash)
         org.junit.Assert.assertNotEquals("the middle variant re-quoted differently", offers[0].offerHash, offers[1].offerHash)
-    }
 
-    @Test
-    fun `one physical presentation - one OFFER_RECEIVED, zero OFFER_TIMEOUT (#830)`() {
-        val steps = churnSteps()
+        // Accept variant 1; each evaluation loopback can emit speech and notification effects.
+        fun hash(i: Int) = offers[i].offerHash
+        val inputs = listOf(
+            SessionReplay.ScreenInput(frames[0]),
+            uberAcceptClick(frames[0].capturedAtMs + 1),
+            evalLoopback(hash(0), Platform.Uber, frames[0].capturedAtMs + 2),
+            SessionReplay.ScreenInput(frames[1]),
+            evalLoopback(hash(1), Platform.Uber, frames[1].capturedAtMs + 1),
+            SessionReplay.ScreenInput(frames[2]),
+            evalLoopback(hash(2), Platform.Uber, frames[2].capturedAtMs + 1),
+        )
+        val steps = SessionReplay.reduceMixed(inputs)
+
         val c = counts(steps)
         assertEquals("exactly one OFFER_RECEIVED for the one physical offer", 1, c[AppEventType.OFFER_RECEIVED] ?: 0)
         assertEquals(
@@ -152,18 +118,10 @@ class ChurnReplayTest {
             0,
             c[AppEventType.OFFER_TIMEOUT] ?: 0,
         )
-    }
 
-    @Test
-    fun `the offer is spoken exactly ONCE across the whole churn (#830 speak-once)`() {
-        val steps = churnSteps()
         val speaks = effects(steps).count { it is AppEffect.SpeakOffer }
         assertEquals("SpeakOffer fires once per physical presentation, not once per re-quote", 1, speaks)
-    }
 
-    @Test
-    fun `the heads-up notification live-updates on every eval landing, stale variant banners cleaned up (#830)`() {
-        val steps = churnSteps()
         val posts = effects(steps).count { it is AppEffect.PostOfferNotification }
         // Three eval loopbacks land (one per variant) → three live heads-up updates, one read aloud.
         assertEquals("PostOfferNotification fires on every eval landing (live re-quote)", 3, posts)
@@ -176,12 +134,6 @@ class ChurnReplayTest {
             0,
             counts(steps)[AppEventType.OFFER_TIMEOUT] ?: 0,
         )
-    }
-
-    @Test
-    fun `an accept latch on variant 1 survives the churn to variant 2 and 3 (#830 latch survival)`() {
-        val frames = SessionReplay.loadSession(session).sortedBy { it.capturedAtMs }
-        val steps = churnSteps()
 
         // After variant 2's frame arrives, the presented offer must still carry the accept latch.
         val afterVariant2 = steps.first { it.frame?.capturedAtMs == frames[1].capturedAtMs }
@@ -202,21 +154,13 @@ class ChurnReplayTest {
             frames[0].capturedAtMs + 1,
             presentedFinal!!.acceptClickAt,
         )
-    }
-
-    @Test
-    fun `the expiry deadline stays anchored on the first frame's presentedAt (#830 - churn cannot extend TTL)`() {
-        val frames = SessionReplay.loadSession(session).sortedBy { it.capturedAtMs }
-        val steps = churnSteps()
 
         // presentedAt never moves off the FIRST frame across every enrich.
-        val presentedFinal = steps.last().stateAfter.regions.platforms[Platform.Uber]
-            ?.pendingOffers?.firstOrNull { it.acceptedAt == null }
         assertNotNull(presentedFinal)
         assertEquals(
             "presentedAt is pinned to the physical presentation epoch (frame 1)",
             frames[0].capturedAtMs,
-            presentedFinal!!.presentedAt,
+            presentedFinal.presentedAt,
         )
 
         // Every OFFER_EXPIRY re-arm resolves to the SAME absolute deadline: presentedAt + default TTL.
@@ -233,30 +177,20 @@ class ChurnReplayTest {
                     )
                 }
         }
-    }
-
-    @Test
-    fun `every OFFER_EXPIRY re-arm carries the CURRENT variant's hash (#830 - stale-hash timer can't strand)`() {
-        val frames = SessionReplay.loadSession(session).sortedBy { it.capturedAtMs }
-        val obs = SessionReplay.replayRecognition(frames)
-        fun hash(i: Int) = (obs[i].parsed as ParsedFields.OfferFields).parsedOffer.offerHash
-        val steps = churnSteps()
 
         // The LAST re-arm (on the variant-3 frame) must carry variant 3's hash — not the original.
-        val lastArm = steps
-            .first { it.frame?.capturedAtMs == frames[2].capturedAtMs }
-            .effects.filterIsInstance<AppEffect.ScheduleTimeout>()
-            .last { it.payload is ObservationPayload.OfferExpiry }
+        val variant3Step = steps.firstOrNull { it.frame?.capturedAtMs == frames[2].capturedAtMs }
+        assertNotNull("the variant-3 frame must produce a replay step", variant3Step)
+        val expiryArms = variant3Step!!.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+            .filter { it.payload is ObservationPayload.OfferExpiry }
+        assertTrue("the variant-3 frame must re-arm an OfferExpiry timer", expiryArms.isNotEmpty())
+        val lastArm = expiryArms.last()
         assertEquals(
             "the re-armed timer targets the current variant's hash so the offer can still time out",
             hash(2),
             (lastArm.payload as ObservationPayload.OfferExpiry).offerHash,
         )
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // DoorDash regression — a GENUINELY different presentation still REPLACES (must not regress)
-    // ---------------------------------------------------------------------------------------------
 
     @Test
     fun `a distinct-store DoorDash offer still replaces the prior one - OFFER_TIMEOUT + re-speak (#830 no regression)`() {

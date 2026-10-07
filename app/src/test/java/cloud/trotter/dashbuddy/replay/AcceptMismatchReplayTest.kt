@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
-import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import cloud.trotter.dashbuddy.test.util.SessionReplay
 import org.junit.Assert.assertEquals
@@ -17,33 +16,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #810 B1 — end-to-end Level-B replay of the **seq-114 invisible-unassign** shape, driving TWO
- * accepted offers folded into ONE job (only the second delivered) through the REAL
- * [cloud.trotter.dashbuddy.core.state.StateMachine] + [cloud.trotter.dashbuddy.core.state.EffectMap],
- * and asserting exactly ONE `JOB_ACCEPT_MISMATCH` fires at the job close — while the delivered drop
- * still folds normally.
- *
- * **Why a reconstruction (the #700 precedent).** The fielded seq-114 unassign committed through a
- * support-chat path that rendered NO confirmation screen or click (Finding 1 in the #810 design), so
- * there is no capturable dasher-side commit frame — a faithful full-device replay is impossible by
- * construction. This test therefore reuses the real, already-PII-swept
- * `single_delivery_2026_06_16` fixture as the DELIVERED order (order B) and adds explicitly-labelled
- * SYNTHETIC injections for the invisibly-abandoned first order (order A) and for the one arrival frame
- * the delivered order's own capture suppressed:
- *  - order A's offer + accept (a mid-pickup add-on that folds into the job via the REAL
- *    `consumeAcceptIntoJob`/`appendAddOn`, giving the job two `acceptedOffers` and a second dropoff
- *    placeholder that is NEVER activated — the seq-114 corpse `121`). A is never unassigned (the
- *    invisible-unassign class emits no `TASK_UNASSIGNED`);
- *  - order B's dropoff ARRIVAL, carrying frame 06's OWN real parsed fields re-stamped as arrived — the
- *    single_delivery capture completed B via a grace retire with no `DELIVERY_ARRIVED` frame on disk
- *    (the arrival fell to UNKNOWN / was deduped, the same suppression #700 documents), so `arrivedAt`
- *    needs this stand-in to make B a fully-delivered, accounted drop.
- *
- * The assertion is a hand-authored correct-behaviour invariant, never `replay == db`: given the machine
- * is driven this way, the job closes with 2 accepts > 1 accounted drop → exactly one tripwire fires,
- * carrying the true counts, and order B's `DELIVERY_COMPLETED` still lands. No new device fixture is
- * committed (the only fixture bytes are the pre-existing swept single_delivery ones), so this test adds
- * no raw customer PII — the injected orders carry only a synthetic hash / frame 06's already-hashed one.
+ * #810 B1: reconstruct the seq-114 invisible-unassign shape through the real state/effect pipeline:
+ * two accepted offers share a job, only B delivers, and one JOB_ACCEPT_MISMATCH fires at close.
+ * The support-chat unassign rendered no capturable confirmation. Reuse the PII-swept
+ * single_delivery_2026_06_16 fixture for B and inject labelled synthetic observations for A's
+ * mid-pickup offer/accept and B's suppressed arrival. A's dropoff placeholder never activates;
+ * B's arrival uses frame 06's own parsed fields. No explicit TASK_UNASSIGNED is injected.
+ * Hand-authored invariants check mismatch counts/payload, close-step timing, and valid completion;
+ * the captured db encodes the defect and is not an equality oracle.
  */
 class AcceptMismatchReplayTest {
 
@@ -94,7 +74,7 @@ class AcceptMismatchReplayTest {
     }
 
     @Test
-    fun `exactly one JOB_ACCEPT_MISMATCH fires at close - 2 accepts, 1 delivered, 1 leftover TBD`() {
+    fun `job close reports the invisible unassign mismatch while the delivered order completes`() {
         val steps = run()
         val mismatches = steps.flatMap { it.events }.filter { it.type == AppEventType.JOB_ACCEPT_MISMATCH }
         assertEquals("exactly one tripwire fires at the job close", 1, mismatches.size)
@@ -106,18 +86,10 @@ class AcceptMismatchReplayTest {
         assertEquals("the abandoned order left one never-activated TBD placeholder", 1, p.leftoverTbdPlaceholders)
         assertEquals("nothing was explicitly unassigned (the INVISIBLE class)", 0, p.unassignedCount)
         assertEquals("the delivered drop's customer hash is carried", 1, p.deliveredCustomerHashes.size)
-    }
 
-    @Test
-    fun `the delivered drop still folds - order B completes exactly once`() {
-        val steps = run()
         val completed = steps.flatMap { it.events }.count { it.type == AppEventType.DELIVERY_COMPLETED }
         assertEquals("order B still delivers normally — the tripwire never disturbs it", 1, completed)
-    }
 
-    @Test
-    fun `the tripwire fires on the job-close step, not mid-flow`() {
-        val steps = run()
         // No mismatch is emitted while the job is still live (activeJob non-null with the same id).
         steps.forEach { s ->
             val fired = s.events.any { it.type == AppEventType.JOB_ACCEPT_MISMATCH }
