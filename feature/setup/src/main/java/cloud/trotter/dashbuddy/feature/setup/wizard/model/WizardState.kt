@@ -12,6 +12,9 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 data class WizardState(
     // Economy Variables
     val vehicleClass: VehicleClass = VehicleClass.SEDAN,
+    val vehicleLookupAllowed: Boolean = false,
+    // UI-only: showing the MPG control must not alter the vehicle identity.
+    val manualMpgEntry: Boolean = false,
     val vehicleYear: String = "",
     val vehicleMake: String = "",
     val vehicleModel: String = "",

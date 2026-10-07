@@ -12,7 +12,7 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_vehicle">Vehículo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_vehicle">La configuración consulta los MPG del vehículo para estimar costos mediante fueleconomy.gov de EPA. Obtiene la lista de vehículos al abrirse y envía el año, la marca, el modelo y el identificador del vehículo a medida que eliges; no envía una cuenta ni un identificador de instalación. La búsqueda de MPG en Google envía el año, la marca y el modelo introducidos a Google en tu navegador.</string>
+    <string name="wizard_desc_vehicle">La consulta a EPA se realiza solo después de pulsar \"Consultar mi vehículo\". Esta elección se guarda. Envía el año, la marca, el modelo y el identificador del vehículo seleccionados a fueleconomy.gov para obtener MPG; no envía una cuenta ni un identificador de instalación. La búsqueda de MPG en Google envía el año, la marca y el modelo introducidos a Google en tu navegador.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_gas">Precio de gasolina</string>
     <!-- copy-audit: retranslated es -->
@@ -36,4 +36,7 @@
     <string name="wizard_title_distance">Distancia máxima</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_distance">Máximo de millas que conducirías por una oferta.</string>
+    <string name="wizard_vehicle_lookup_prompt">Consulta los MPG de tu auto en EPA (fueleconomy.gov). Envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
+    <string name="wizard_vehicle_lookup_allow">Consultar mi vehículo</string>
+    <string name="wizard_vehicle_manual_entry">Introducir MPG manualmente</string>
 </resources>

@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,8 @@ import android.net.Uri
 fun VehicleCard(
     step: WizardStep,
     vehicleClass: VehicleClass,
+    vehicleLookupAllowed: Boolean,
+    manualMpgEntry: Boolean,
     year: String,
     make: String,
     model: String,
@@ -56,6 +59,8 @@ fun VehicleCard(
     availableModels: List<String>,
     availableTrims: List<String>,
     onTypeSelected: (VehicleClass) -> Unit,
+    onAllowVehicleLookup: () -> Unit,
+    onManualMpgEntry: () -> Unit,
     onYearSelected: (String) -> Unit,
     onMakeSelected: (String) -> Unit,
     onModelSelected: (String) -> Unit,
@@ -66,6 +71,8 @@ fun VehicleCard(
 
     // Trigger the manual override UI if any of these match
     val isCustom = make == VEHICLE_NOT_LISTED || model == VEHICLE_NOT_LISTED || trim == VEHICLE_NOT_LISTED
+    val showMpgEntry = vehicleClass != VehicleClass.E_BIKE && (manualMpgEntry || isCustom)
+    val hasVehicleIdentity = listOf(year, make, model).all { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
 
     Column(
         modifier = Modifier
@@ -95,60 +102,84 @@ fun VehicleCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnimatedVisibility(
-            visible = vehicleClass == VehicleClass.SEDAN,
+            visible = vehicleClass != VehicleClass.E_BIKE,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
             Column {
-                VehicleDropdown(
-                    label = stringResource(R.string.wizard_vehicle_card_year_label),
-                    value = year,
-                    options = availableYears,
-                    onValueChanged = onYearSelected
-                )
+                if (hasVehicleIdentity) {
+                    Text(
+                        text = listOf(year, make, model, trim)
+                            .filter { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
+                            .joinToString(" "),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (!vehicleLookupAllowed) {
+                    Text(
+                        text = stringResource(R.string.wizard_vehicle_lookup_prompt),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedButton(onClick = onAllowVehicleLookup) {
+                        Text(stringResource(R.string.wizard_vehicle_lookup_allow))
+                    }
+                } else {
+                    VehicleDropdown(
+                        label = stringResource(R.string.wizard_vehicle_card_year_label),
+                        value = year,
+                        options = availableYears,
+                        onValueChanged = onYearSelected
+                    )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                VehicleDropdown(
-                    label = stringResource(R.string.wizard_vehicle_card_make_label),
-                    value = make,
-                    options = availableMakes,
-                    onValueChanged = onMakeSelected,
-                    enabled = year.isNotBlank() && availableMakes.isNotEmpty()
-                )
+                    VehicleDropdown(
+                        label = stringResource(R.string.wizard_vehicle_card_make_label),
+                        value = make,
+                        options = availableMakes,
+                        onValueChanged = onMakeSelected,
+                        enabled = year.isNotBlank() && availableMakes.isNotEmpty()
+                    )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Hide Model dropdown if they clicked Not Listed for Make
-                AnimatedVisibility(visible = make.isNotBlank() && make != VEHICLE_NOT_LISTED) {
-                    Column {
-                        VehicleDropdown(
-                            label = stringResource(R.string.wizard_vehicle_card_model_label),
-                            value = model,
-                            options = availableModels,
-                            onValueChanged = onModelSelected,
-                            enabled = availableModels.isNotEmpty()
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Hide Trim dropdown if they clicked Not Listed for Model
-                        AnimatedVisibility(visible = model.isNotBlank() && model != VEHICLE_NOT_LISTED) {
+                    // Hide Model dropdown if they clicked Not Listed for Make
+                    AnimatedVisibility(visible = make.isNotBlank() && make != VEHICLE_NOT_LISTED) {
+                        Column {
                             VehicleDropdown(
-                                label = stringResource(R.string.wizard_vehicle_card_trim_label),
-                                value = trim,
-                                options = availableTrims,
-                                onValueChanged = onTrimSelected,
-                                enabled = availableTrims.isNotEmpty()
+                                label = stringResource(R.string.wizard_vehicle_card_model_label),
+                                value = model,
+                                options = availableModels,
+                                onValueChanged = onModelSelected,
+                                enabled = availableModels.isNotEmpty()
                             )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Hide Trim dropdown if they clicked Not Listed for Model
+                            AnimatedVisibility(visible = model.isNotBlank() && model != VEHICLE_NOT_LISTED) {
+                                VehicleDropdown(
+                                    label = stringResource(R.string.wizard_vehicle_card_trim_label),
+                                    value = trim,
+                                    options = availableTrims,
+                                    onValueChanged = onTrimSelected,
+                                    enabled = availableTrims.isNotEmpty()
+                                )
+                            }
                         }
+                    }
+                }
+                if (!showMpgEntry) {
+                    TextButton(onClick = onManualMpgEntry) {
+                        Text(stringResource(R.string.wizard_vehicle_manual_entry))
                     }
                 }
             }
         }
 
         // --- THE ESCAPE HATCH UI ---
-        AnimatedVisibility(visible = vehicleClass == VehicleClass.SEDAN && isCustom) {
+        AnimatedVisibility(visible = showMpgEntry) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

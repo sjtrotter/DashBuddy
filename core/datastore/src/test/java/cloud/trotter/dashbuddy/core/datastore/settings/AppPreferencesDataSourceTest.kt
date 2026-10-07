@@ -52,6 +52,16 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
+    fun `vehicle lookup defaults false and round trips`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "vehicle-lookup.preferences_pb")
+        assertEquals(false, source.vehicleLookupAllowed.first())
+        source.setVehicleLookupAllowed(true)
+        assertEquals(true, source.vehicleLookupAllowed.first())
+        source.setVehicleLookupAllowed(false)
+        assertEquals(false, source.vehicleLookupAllowed.first())
+    }
+
+    @Test
     fun `gas price auto refresh defaults to false`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "gas-default.preferences_pb")
         assertEquals(false, source.isGasPriceAuto.first())
