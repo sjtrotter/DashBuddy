@@ -94,6 +94,43 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
+      - name: Print 20 slowest test classes
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          timings = []
+          for path in sorted(Path('.').glob('**/build/test-results/**/*.xml')):
+              try:
+                  root = ET.parse(path).getroot()
+                  for suite in root.iter('testsuite'):
+                      timings.append((float(suite.get('time', '0')), suite.get('name', '?'), str(path)))
+              except (ET.ParseError, ValueError) as error:
+                  print(f'Could not read {path}: {error}')
+          lines = ['20 slowest test classes (JUnit seconds; not task wall time):']
+          lines += [f'{seconds:9.3f}s  {name}  [{path}]'
+                    for seconds, name, path in sorted(timings, reverse=True)[:20]]
+          if not timings:
+              lines.append('No JUnit results found (tests may not have run).')
+          report = '\n'.join(lines) + '\n'
+          print(report, end='')
+          Path('test-timings.txt').write_text(report)
+          PY
+
+      - name: Upload JUnit results and timings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results-${{ github.event.pull_request.number || inputs.pr }}
+          path: |
+            **/build/test-results/**/*.xml
+            test-timings.txt
+          retention-days: 7
+
       - name: Report status to PR head (dispatch runs only)
         # #902 — a workflow_dispatch run is not attached to the PR, so its result would never
         # satisfy the required `build-and-test` check. Post a commit status with that exact

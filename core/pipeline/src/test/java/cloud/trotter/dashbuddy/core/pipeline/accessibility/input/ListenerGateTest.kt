@@ -4,14 +4,12 @@ import android.view.accessibility.AccessibilityEvent
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
 /**
  * #1148 D2 — topology events pass the listener regardless of their package (scope is enforced on
  * the FETCHED roots downstream); every other handled type keeps the enabled-package gate.
+ * Only inlined Android event constants and plain sets are used; no Android runtime is needed.
  */
-@RunWith(RobolectricTestRunner::class)
 class ListenerGateTest {
 
     private val enabled = setOf("com.doordash.driverapp")
