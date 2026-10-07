@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleDetails
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import kotlinx.coroutines.CompletableDeferred
@@ -88,11 +89,123 @@ class WizardViewModelTest {
     }
 
     @Test
+    fun `saved vehicle without opt-in shows MPG and finish preserves identity and MPG`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf("2020"))
+        whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf("Toyota"))
+        whenever(appPreferencesRepository.vehicleModel).thenReturn(flowOf("Corolla"))
+        whenever(appPreferencesRepository.vehicleTrim).thenReturn(flowOf("Automatic"))
+        whenever(appPreferencesRepository.estimatedMpg).thenReturn(flowOf(32f))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(true, viewModel.state.value.manualMpgEntry)
+        assertEquals("2020", viewModel.state.value.vehicleYear)
+        assertEquals("Toyota", viewModel.state.value.vehicleMake)
+        assertEquals("Corolla", viewModel.state.value.vehicleModel)
+        assertEquals("Automatic", viewModel.state.value.vehicleTrim)
+        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+
+        viewModel.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+
+        verify(appPreferencesRepository).updateEconomySettings(
+            "2020", "Toyota", "Corolla", "Automatic", 32f, false, 3.50f,
+        )
+        verify(appStateRepository).setFirstRunComplete()
+        verifyNoInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `manual MPG entry leaves saved identity untouched and never contacts EPA`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf("2020"))
+        whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf("Toyota"))
+        whenever(appPreferencesRepository.vehicleModel).thenReturn(flowOf("Corolla"))
+        whenever(appPreferencesRepository.vehicleTrim).thenReturn(flowOf("Automatic"))
+        whenever(appPreferencesRepository.estimatedMpg).thenReturn(flowOf(32f))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        val originalState = viewModel.state.value
+
+        viewModel.onManualMpgEntry()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(originalState.copy(manualMpgEntry = true), viewModel.state.value)
+        verifyNoInteractions(vehicleRepository)
+        verify(appPreferencesRepository, org.mockito.kotlin.never()).setVehicleLookupAllowed(any())
+    }
+
+    @Test
+    fun `allowed lookup with no years still allows manual MPG entry`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(true))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(emptyList<String>(), viewModel.availableYears.value)
+        assertEquals(false, viewModel.state.value.manualMpgEntry)
+        val originalState = viewModel.state.value
+
+        viewModel.onManualMpgEntry()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(originalState.copy(manualMpgEntry = true), viewModel.state.value)
+        viewModel.updateEstimatedMpg(32f)
+        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        verify(vehicleRepository).getYears()
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `saved lookup opt-in with E-bike never contacts EPA at startup`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(true))
+        whenever(appPreferencesRepository.userEconomy)
+            .thenReturn(flowOf(UserEconomy(vehicleClass = VehicleClass.E_BIKE)))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(VehicleClass.E_BIKE, viewModel.state.value.vehicleClass)
+        assertEquals(emptyList<String>(), viewModel.availableYears.value)
+        verifyNoInteractions(vehicleRepository)
+
+        viewModel.updateVehicleClass(VehicleClass.SEDAN)
+        testScheduler.advanceUntilIdle()
+
+        verify(vehicleRepository).getYears()
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
     fun `saved lookup opt-in fetches years only after settings are applied`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
         whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(true))
         whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf("2020"))
+        whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf("Toyota"))
+        whenever(appPreferencesRepository.vehicleModel).thenReturn(flowOf("Corolla"))
+        whenever(appPreferencesRepository.vehicleTrim).thenReturn(flowOf("Automatic"))
+        whenever(appPreferencesRepository.estimatedMpg).thenReturn(flowOf(32f))
         whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
         val economy = CompletableDeferred<UserEconomy>()
         whenever(appPreferencesRepository.userEconomy).thenReturn(flow { emit(economy.await()) })
@@ -109,6 +222,8 @@ class WizardViewModelTest {
 
         assertEquals("2020", viewModel.state.value.vehicleYear)
         assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(true, viewModel.state.value.manualMpgEntry)
+        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
         assertEquals(listOf("2020"), viewModel.availableYears.value)
         verify(vehicleRepository).getYears()
         verifyNoMoreInteractions(vehicleRepository)
@@ -160,12 +275,13 @@ class WizardViewModelTest {
         viewModel.onMakeSelected("Toyota")
         viewModel.onModelSelected("Corolla")
         viewModel.onTrimSelected("Automatic")
-        viewModel.onMakeSelected(VEHICLE_NOT_LISTED)
+        viewModel.onManualMpgEntry()
         viewModel.updateEstimatedMpg(32f)
         testScheduler.advanceUntilIdle()
 
         assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(VEHICLE_NOT_LISTED, viewModel.state.value.vehicleMake)
+        assertEquals("", viewModel.state.value.vehicleMake)
+        assertEquals(true, viewModel.state.value.manualMpgEntry)
         assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
         verifyNoInteractions(vehicleRepository)
         verify(appPreferencesRepository, org.mockito.kotlin.never()).setVehicleLookupAllowed(any())

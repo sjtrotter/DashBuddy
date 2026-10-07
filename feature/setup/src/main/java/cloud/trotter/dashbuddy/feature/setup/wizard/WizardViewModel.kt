@@ -102,6 +102,8 @@ class WizardViewModel @Inject constructor(
                     vehicleMake = currentMake,
                     vehicleModel = currentModel,
                     vehicleTrim = currentTrim,
+                    manualMpgEntry = currentYear.isNotBlank() &&
+                        currentMake.isNotBlank() && currentModel.isNotBlank(),
                     estimatedMpg = currentMpg,
                     fuelType = currentFuelType,
                     isGasPriceAuto = currentGasAuto,
@@ -158,8 +160,16 @@ class WizardViewModel @Inject constructor(
     }
 
     private fun fetchVehicleYears() {
-        if (!_state.value.vehicleLookupAllowed) return
-        viewModelScope.launch { _availableYears.value = vehicleRepository.getYears() }
+        viewModelScope.launch {
+            if (!_state.value.vehicleLookupAllowed || _state.value.vehicleClass == VehicleClass.E_BIKE) {
+                return@launch
+            }
+            _availableYears.value = vehicleRepository.getYears()
+        }
+    }
+
+    fun onManualMpgEntry() {
+        _state.update { it.copy(manualMpgEntry = true) }
     }
 
     /**
@@ -168,6 +178,7 @@ class WizardViewModel @Inject constructor(
      * values are preserved.
      */
     fun updateVehicleClass(type: VehicleClass) {
+        val previousType = _state.value.vehicleClass
         _state.update { s ->
             val unset = EconomyField.entries.toSet() - s.userSetEconomyFields
             s.copy(
@@ -186,6 +197,9 @@ class WizardViewModel @Inject constructor(
                 totalLifetimeMi = if (EconomyField.TOTAL_LIFETIME_MI in unset) type.totalLifetimeMi else s.totalLifetimeMi,
                 userSetEconomyFields = s.userSetEconomyFields + EconomyField.VEHICLE_CLASS,
             )
+        }
+        if (previousType == VehicleClass.E_BIKE && type != VehicleClass.E_BIKE) {
+            fetchVehicleYears()
         }
     }
 

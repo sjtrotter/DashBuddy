@@ -42,7 +42,7 @@
     <string name="wizard_vehicle_card_mpg_format" translatable="false">%1$s MPG</string>
     <string name="wizard_vehicle_card_mpg_slider_hint">Set your car\'s combined MPG.</string>
     <string name="wizard_vehicle_card_ebike_note">Gas expenses are excluded; wear and fixed costs still apply.</string>
-    <string name="wizard_vehicle_lookup_prompt">Look up your car\'s MPG from the EPA (fueleconomy.gov). Sends only the year, make and model you pick.</string>
+    <string name="wizard_vehicle_lookup_prompt">Look up your car\'s MPG from the EPA (fueleconomy.gov). Sends the year, make, model and EPA vehicle ID you pick.</string>
     <string name="wizard_vehicle_lookup_allow">Look up my vehicle</string>
     <string name="wizard_vehicle_manual_entry">Enter MPG myself</string>
 </resources>

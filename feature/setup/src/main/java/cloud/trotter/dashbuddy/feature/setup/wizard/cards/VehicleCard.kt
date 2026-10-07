@@ -48,6 +48,7 @@ fun VehicleCard(
     step: WizardStep,
     vehicleClass: VehicleClass,
     vehicleLookupAllowed: Boolean,
+    manualMpgEntry: Boolean,
     year: String,
     make: String,
     model: String,
@@ -59,6 +60,7 @@ fun VehicleCard(
     availableTrims: List<String>,
     onTypeSelected: (VehicleClass) -> Unit,
     onAllowVehicleLookup: () -> Unit,
+    onManualMpgEntry: () -> Unit,
     onYearSelected: (String) -> Unit,
     onMakeSelected: (String) -> Unit,
     onModelSelected: (String) -> Unit,
@@ -69,6 +71,8 @@ fun VehicleCard(
 
     // Trigger the manual override UI if any of these match
     val isCustom = make == VEHICLE_NOT_LISTED || model == VEHICLE_NOT_LISTED || trim == VEHICLE_NOT_LISTED
+    val showMpgEntry = vehicleClass != VehicleClass.E_BIKE && (manualMpgEntry || isCustom)
+    val hasVehicleIdentity = listOf(year, make, model).all { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
 
     Column(
         modifier = Modifier
@@ -98,11 +102,20 @@ fun VehicleCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnimatedVisibility(
-            visible = vehicleClass == VehicleClass.SEDAN,
+            visible = vehicleClass != VehicleClass.E_BIKE,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
             Column {
+                if (hasVehicleIdentity) {
+                    Text(
+                        text = listOf(year, make, model, trim)
+                            .filter { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
+                            .joinToString(" "),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 if (!vehicleLookupAllowed) {
                     Text(
                         text = stringResource(R.string.wizard_vehicle_lookup_prompt),
@@ -110,9 +123,6 @@ fun VehicleCard(
                     )
                     OutlinedButton(onClick = onAllowVehicleLookup) {
                         Text(stringResource(R.string.wizard_vehicle_lookup_allow))
-                    }
-                    TextButton(onClick = { onMakeSelected(VEHICLE_NOT_LISTED) }) {
-                        Text(stringResource(R.string.wizard_vehicle_manual_entry))
                     }
                 } else {
                     VehicleDropdown(
@@ -160,11 +170,16 @@ fun VehicleCard(
                         }
                     }
                 }
+                if (!showMpgEntry) {
+                    TextButton(onClick = onManualMpgEntry) {
+                        Text(stringResource(R.string.wizard_vehicle_manual_entry))
+                    }
+                }
             }
         }
 
         // --- THE ESCAPE HATCH UI ---
-        AnimatedVisibility(visible = vehicleClass == VehicleClass.SEDAN && isCustom) {
+        AnimatedVisibility(visible = showMpgEntry) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

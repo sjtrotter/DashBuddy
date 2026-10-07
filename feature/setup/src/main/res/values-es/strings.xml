@@ -36,7 +36,7 @@
     <string name="wizard_title_distance">Distancia máxima</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_distance">Máximo de millas que conducirías por una oferta.</string>
-    <string name="wizard_vehicle_lookup_prompt">Consulta los MPG de tu auto en EPA (fueleconomy.gov). Envía solo el año, la marca y el modelo que elijas.</string>
+    <string name="wizard_vehicle_lookup_prompt">Consulta los MPG de tu auto en EPA (fueleconomy.gov). Envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
     <string name="wizard_vehicle_lookup_allow">Consultar mi vehículo</string>
     <string name="wizard_vehicle_manual_entry">Introducir MPG manualmente</string>
 </resources>
