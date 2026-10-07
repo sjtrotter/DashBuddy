@@ -862,7 +862,7 @@ User-facing copy follows `docs/design/copy-style.md` (label not sentence beside 
    `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
    (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
    `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 22 files as of the #883 capture boundary) is the visible debt list —
+   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 19 files as of #1271) is the visible debt list —
    tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
    list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
    tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
@@ -1035,6 +1035,16 @@ Level-B assertions are hand-authored correct-behaviour invariants, **never `repl
 accept-click → pickup → dropoff → complete, exactly one dropoff, #498/#503/#518) are the worked
 examples, both green. Remaining frontier (on-device review tool, verdict export, eval-loopback net
 economics, GoPuff multi-drop repro) is tracked under epic #505.
+
+**End-to-end (#1271):** `E2ESessionReplay` (`test/util/`, Robolectric under `ReplayApplication`) goes
+past `StateMachine.step`: the production classifier → `StateManagerV2` → the real `SideEffectEngine`
+and handlers → in-memory Room → `AnalyticsProjector`, on ONE `TestCoroutineScheduler` whose virtual
+clock every production seam reads (defaulted `java.time.Clock` params, system UTC bound in
+`DomainModule`). Only external edges are fake (`ReplayEdges`: clock, memory DataStores, GPS, TTS engine,
+accessibility tree, notification UI); no evaluation, event row or timeout is ever injected, and time
+moves only by `advanceTo` (never `advanceUntilIdle`). `DoorDashFullDashE2ETest` is scenario 1
+(`DoorDashFullDashJourney` documents its splices); `InfoLogPiiGateE2ETest` is the INFO+ PII gate, which
+REQUIRES handler-written INFO+ lines.
 
 ## Key Technologies
 

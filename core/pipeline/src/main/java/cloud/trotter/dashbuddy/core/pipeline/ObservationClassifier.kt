@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParsedFieldsFactory
 import cloud.trotter.dashbuddy.core.pipeline.rules.TransformRegistry
 import timber.log.Timber
+import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +39,13 @@ class ObservationClassifier @Inject constructor(
     private val interpreter: JsonRuleInterpreter,
     private val metadataProvider: ReplayMetadataProvider,
     private val appVersions: PlatformAppVersions,
+    /**
+     * The instant a screen/click is classified at (#1271). Production binds the system clock, which is
+     * exactly what `System.currentTimeMillis()` read here before; the end-to-end harness binds a virtual
+     * one so the observation timestamp AND every time transform (parseDeadline/parseTime) see the
+     * replayed instant. Only the millis are read — the transform zone stays the device default.
+     */
+    private val clock: Clock = Clock.systemUTC(),
 ) {
 
     /**
@@ -128,7 +136,7 @@ class ObservationClassifier @Inject constructor(
 
         val eventNow = when (event) {
             is PipelineEvent.Notification -> event.raw.postTime
-            else -> System.currentTimeMillis()
+            else -> clock.millis()
         }
         return TransformRegistry.withClock(eventNow) { block(platformWire, eventNow) }
     }

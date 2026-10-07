@@ -37,6 +37,8 @@ class RuleCapabilityRepository @Inject constructor(
     private val dataSource: RuleCapabilityDataSource,
     @ApplicationScope scope: CoroutineScope,
     @param:Named("appVersionName") private val appVersion: String,
+    /** #1271 seam: the wall clock (production = the system clock, what `System.currentTimeMillis()` read). */
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) : RuleCapabilityGrants {
 
     /**
@@ -118,7 +120,7 @@ class RuleCapabilityRepository @Inject constructor(
                 newGranted,
                 newDenied,
                 receipts + (key to ConsentReceipt(
-                    System.currentTimeMillis(), appVersion, PrivacyDisclosure.REVISION, granted,
+                    clock.millis(), appVersion, PrivacyDisclosure.REVISION, granted,
                 )),
             )
         }

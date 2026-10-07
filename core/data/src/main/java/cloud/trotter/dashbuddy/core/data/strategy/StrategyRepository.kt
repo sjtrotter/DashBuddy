@@ -18,6 +18,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +42,15 @@ class StrategyRepository @Inject constructor(
     private val timeConstantRepository: TimeConstantRepository,
 ) {
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
+
+    /**
+     * Cancel this repository's eager collectors (#1271). The process-lifetime singleton never calls
+     * it; a test that builds one per case does, so the time-constant materializer and the eagerly
+     * shared configs stop with the case.
+     */
+    fun close() {
+        scope.cancel()
+    }
 
     init {
         scope.launch {
@@ -203,7 +213,7 @@ class StrategyRepository @Inject constructor(
         dataSource.recordItemsPerUnitRatio(platform, units, items)
 
     suspend fun clearPreferences() {
-        Timber.w("Clearing Strategy Preferences")
+        Timber.tag("Strategy").w("Clearing Strategy Preferences")
         dataSource.clear()
     }
 }

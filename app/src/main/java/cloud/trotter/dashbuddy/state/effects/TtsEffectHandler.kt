@@ -48,6 +48,8 @@ class TtsEffectHandler @Inject constructor(
     @param:ApplicationScope private val appScope: CoroutineScope,
     private val engineFactory: TtsEngineFactory,
     private val healthNotifier: TtsHealthNotifier,
+    /** #1271 seam: the wall clock (production = the system clock, what `System.currentTimeMillis()` read). */
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
 ) {
     private var tts: TextToSpeech? = null
 
@@ -352,7 +354,7 @@ class TtsEffectHandler @Inject constructor(
      */
     private fun onSpeechFailed() {
         val decision = try {
-            recoveryPolicy.onSpeechFailure(System.currentTimeMillis())
+            recoveryPolicy.onSpeechFailure(clock.millis())
         } catch (t: Throwable) {
             Timber.tag("Tts").e(t, "recovery policy threw — leaving the engine alone")
             return
