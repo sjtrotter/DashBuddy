@@ -23,6 +23,6 @@ data class ConsentReceipt(
  * the text it referred to — pinning the link per revision is #1237.
  */
 object PrivacyDisclosure {
-    const val REVISION: Int = 2
+    const val REVISION: Int = 3
     const val URL: String = "https://github.com/sjtrotter/DashBuddy/blob/master/PRIVACY.md"
 }

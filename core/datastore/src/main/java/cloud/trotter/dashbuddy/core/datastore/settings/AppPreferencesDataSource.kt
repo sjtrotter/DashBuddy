@@ -106,7 +106,7 @@ class AppPreferencesDataSource @Inject constructor(
     val vehicleModel: Flow<String?> = ds.data.map { it[Keys.VEHICLE_MODEL] }
     val vehicleTrim: Flow<String?> = ds.data.map { it[Keys.VEHICLE_TRIM] }
     val estimatedMpg: Flow<Float?> = ds.data.map { it[Keys.ESTIMATED_MPG] }
-    val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: true }
+    val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
     val analyticsShowMore: Flow<Boolean> = ds.data.map { it[Keys.ANALYTICS_SHOW_MORE] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }

@@ -194,17 +194,17 @@ class CsvTest {
         assertEquals(0.725, IrsMileage.effectiveRate(2024), 0.0) // pre-table → latest (disclaimed below)
     }
 
-    @Test fun irsFallbackNote_isDirectionAware_andNullForPublishedYears() {
+    @Test fun irsFallbackNote_isNeutralForMissingYears_andNullForShippedYears() {
         assertNull(IrsMileage.fallbackNote(2025))
         assertNull(IrsMileage.fallbackNote(2026))
-        // Future year: genuinely not yet published.
+        // Future year: absent from the shipped table.
         assertEquals(
-            "2027 rate not yet published — estimated at the 2026 rate",
+            "2027 rate unavailable in DashBuddy; estimate uses 2026 rate.",
             IrsMileage.fallbackNote(2027),
         )
-        // Past year: its rate IS published (just not shipped) — the copy must not claim otherwise.
+        // Past year: absent from the shipped table; publication status is not inferred.
         assertEquals(
-            "no 2024 rate in the app's rate table — estimated at the 2026 rate",
+            "2024 rate unavailable in DashBuddy; estimate uses 2026 rate.",
             IrsMileage.fallbackNote(2024),
         )
     }

@@ -52,6 +52,12 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
+    fun `gas price auto refresh defaults to false`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-default.preferences_pb")
+        assertEquals(false, source.isGasPriceAuto.first())
+    }
+
+    @Test
     fun `glanceMode defaults to false`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val source = newSource(dispatcher, "prefs1.preferences_pb")

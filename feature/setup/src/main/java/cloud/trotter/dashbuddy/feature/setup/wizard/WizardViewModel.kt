@@ -60,10 +60,9 @@ class WizardViewModel @Inject constructor(
     val availableTrimNames = _availableTrimNames.asStateFlow()
 
     init {
-        Timber.v("Initializing WizardViewModel")
+        Timber.tag("WizardViewModel").v("Initializing WizardViewModel")
         loadExistingSettings()
         fetchVehicleYears()
-        attemptAutoGasPriceFetch()
     }
 
     private fun loadExistingSettings() {
@@ -77,7 +76,7 @@ class WizardViewModel @Inject constructor(
             val currentFuelType =
                 appPreferencesRepository.fuelType.first() // Already non-null in Repo
             val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
-            val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: 0.0f
+            val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: WizardState().gasPrice
 
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
@@ -143,6 +142,8 @@ class WizardViewModel @Inject constructor(
                     userSetEconomyFields = storedEconomy.userSetFields,
                 )
             }
+            // Wait for saved preferences before any startup gas/location request.
+            attemptAutoGasPriceFetch()
         }
     }
 
@@ -419,7 +420,7 @@ class WizardViewModel @Inject constructor(
                     async { fuel to gasPriceRepository.fetchGasPriceOnly(fuel).getOrNull() }
                 }.awaitAll()
             }.mapNotNull { (fuel, price) -> price?.let { fuel to it } }.toMap()
-            Timber.i("Fetched gas prices: %s", pricesMap)
+            Timber.tag("WizardViewModel").i("Fetched gas prices: %s", pricesMap)
 
             _state.update { currentState ->
                 currentState.copy(

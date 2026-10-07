@@ -147,7 +147,7 @@ class DataExportViewModel @Inject constructor(
 
     /** Header comment + shareable body. Header-only file when the log is empty (CSV parity). */
     internal fun buildLogFile(body: String, scrubbedLines: Int): String = buildString {
-        append("# DashBuddy bug report — INFO+ milestones only (no raw store/customer text).\n")
+        append("# DashBuddy bug report: INFO+ milestones; known sensitive text filtered.\n")
         append("# $scrubbedLines line(s) were auto-scrubbed by the fail-closed sink gate.\n")
         append("# Generated ")
         append(java.time.Instant.ofEpochMilli(System.currentTimeMillis()))

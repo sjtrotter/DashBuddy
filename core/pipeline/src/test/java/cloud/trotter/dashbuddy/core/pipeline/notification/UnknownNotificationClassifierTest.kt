@@ -96,7 +96,7 @@ class UnknownNotificationClassifierTest {
         assertEquals("unknown", fields.intent)
         assertEquals("Peak Pay", fields.rawText)
         assertEquals(payload.toFullString(), fields.rawText)
-        assertEquals(listOf(LogEntry(Log.DEBUG, "Classifier", "UNKNOWN notification — Peak Pay")), logs)
+        assertEquals(listOf(LogEntry(Log.DEBUG, "Classifier", "UNKNOWN notification")), logs)
     }
 
     @Test

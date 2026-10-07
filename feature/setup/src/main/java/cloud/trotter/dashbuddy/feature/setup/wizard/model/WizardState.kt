@@ -20,7 +20,7 @@ data class WizardState(
 
     // Gas Variables
     val fuelType: FuelType = FuelType.REGULAR,
-    val isGasPriceAuto: Boolean = true,
+    val isGasPriceAuto: Boolean = false,
     val gasPrice: Float = 3.50f,
     val isFetchingGasPrice: Boolean = false,
     val fetchedGasPrices: Map<FuelType, Float> = emptyMap(),

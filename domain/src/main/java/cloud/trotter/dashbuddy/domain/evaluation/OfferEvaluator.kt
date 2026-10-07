@@ -336,29 +336,29 @@ class OfferEvaluator() {
     }
 
     /**
-     * Caveats for rule targets so high that they would auto-decline nearly everything.
+     * Caveats for rule targets above preset warning thresholds.
      *
      * P8 (#936): the copy names no platform and quotes no per-platform pay norms — this is the
      * platform-agnostic core, and "most DoorDash offers pay $0.80–$1.50/mi" was both a platform
      * literal in `:domain` and a market-specific claim we don't measure. The thresholds stay; the
-     * wording says only that the target is above what offers typically pay.
+     * wording describes the preset threshold and keeps recommendations distinct from taps.
      */
     private fun buildCaveatWarnings(rules: List<ScoringRule.MetricRule>): List<String> =
         rules.mapNotNull { rule ->
             val target = rule.targetValue.toDouble()
             val consequence =
-                "Setting this high will result in most offers being auto-declined."
+                "A Decline recommendation does not tap the delivery app."
             when (rule.metricType) {
                 MetricType.DOLLAR_PER_MILE -> if (target > REALISTIC_MAX_DPM)
-                    "Your per-mile target of ${Formats.money(target)} is above what most offers pay. $consequence"
+                    "Net/mi target ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
                 else null
 
                 MetricType.ACTIVE_HOURLY -> if (target > REALISTIC_MAX_HOURLY)
-                    "Your hourly target of ${Formats.money(target)} is above typical active earnings. $consequence"
+                    "Net/hr target ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
                 else null
 
                 MetricType.PAYOUT -> if (target > REALISTIC_MAX_PAYOUT)
-                    "Your minimum payout of ${Formats.money(target)} is above what most single orders pay. $consequence"
+                    "Minimum net pay ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
                 else null
 
                 else -> null

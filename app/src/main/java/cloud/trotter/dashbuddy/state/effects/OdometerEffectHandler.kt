@@ -89,7 +89,7 @@ class OdometerEffectHandler @Inject constructor(
 
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(context, channelId)
-            .setContentTitle("Odometer Active")
+            .setContentTitle("Odometer on")
             .setContentText("")
             .setSmallIcon(R.drawable.ic_location) // Make sure this drawable exists!
             .setOngoing(true) // Makes it "sticky" so user knows it's running
@@ -100,7 +100,7 @@ class OdometerEffectHandler @Inject constructor(
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             channelId,
-            "Odometer Active",
+            "Odometer",
             NotificationManager.IMPORTANCE_LOW
         )
         notificationManager.createNotificationChannel(channel)

@@ -134,11 +134,6 @@ private fun DollarGoalDialog(initial: Double?, onDismiss: () -> Unit, onConfirm:
         title = { Text(stringResource(R.string.weekly_plan_goal_dialog_title)) },
         text = {
             Column {
-                Text(
-                    text = stringResource(R.string.weekly_plan_goal_dialog_body),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it.filter { ch -> ch.isDigit() || ch == '.' } },

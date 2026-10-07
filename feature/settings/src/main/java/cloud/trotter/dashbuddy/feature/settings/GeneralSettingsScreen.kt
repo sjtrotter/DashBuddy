@@ -91,12 +91,6 @@ fun GeneralSettingsScreen(
                 stringResource(R.string.general_settings_tts_language_label),
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text(
-                stringResource(R.string.general_settings_tts_language_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
             // Pair each option with its resolved label so selection maps back to the tag without
             // re-matching localized text through a Context.
             val labeledOptions = TtsLangOption.entries.map { it to stringResource(it.labelRes) }

@@ -30,7 +30,7 @@ class DataExportViewModelTest {
             body = "2026-01-01 00:00:00.000 [Idle] INFO/Milestone: offer received\n",
             scrubbedLines = 3,
         )
-        assertTrue(out.contains("INFO+ milestones only"))
+        assertTrue(out.contains("INFO+ milestones; known sensitive text filtered"))
         assertTrue("header must state the scrub count", out.contains("3 line(s) were auto-scrubbed"))
         assertTrue(out.contains("offer received"))
     }
@@ -38,7 +38,7 @@ class DataExportViewModelTest {
     @Test
     fun `buildLogFile emits a header-only file when the log is empty`() {
         val out = viewModel().buildLogFile(body = "", scrubbedLines = 0)
-        assertTrue(out.contains("INFO+ milestones only"))
+        assertTrue(out.contains("INFO+ milestones; known sensitive text filtered"))
         assertTrue(out.contains("0 line(s) were auto-scrubbed"))
         // No log body — header lines only, all commented.
         val nonCommentLines = out.lines().filter { it.isNotBlank() && !it.startsWith("#") }

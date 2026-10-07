@@ -7,13 +7,16 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -23,7 +26,6 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.verifyNoMoreInteractions
 import org.mockito.kotlin.whenever
-import org.mockito.kotlin.wheneverBlocking
 
 /**
  * #347 — the wizard must only persist what it actually collects:
@@ -105,6 +107,28 @@ class WizardViewModelTest {
     }
 
     @Test
+    fun `finish saves default gas price when no price is saved and auto is off`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.isGasPriceAuto)
+        assertEquals(3.50f, viewModel.state.value.gasPrice, 0.0f)
+        viewModel.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+
+        verify(appPreferencesRepository).updateEconomySettings(
+            "", "", "", "", 0.0f, false, 3.50f,
+        )
+        verify(appStateRepository).setFirstRunComplete()
+        verifyNoInteractions(gasPriceRepository)
+    }
+
+    @Test
     fun `skip never reads or fetches anything new`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
@@ -119,6 +143,84 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verifyNoInteractions(vehicleRepository)
+        verifyNoMoreInteractions(gasPriceRepository)
+    }
+    @Test
+    fun `no startup gas fetch before all settings finish loading`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(true))
+        val economy = CompletableDeferred<UserEconomy>()
+        whenever(appPreferencesRepository.userEconomy).thenReturn(flow { emit(economy.await()) })
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.isGasPriceAuto)
+        verifyNoInteractions(gasPriceRepository)
+
+        economy.complete(UserEconomy())
+        testScheduler.advanceUntilIdle()
+        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
+        verifyNoMoreInteractions(gasPriceRepository)
+    }
+
+    @Test
+    fun `saved false prevents startup gas fetch after delayed settings load`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val auto = CompletableDeferred<Boolean>()
+        whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flow { emit(auto.await()) })
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        verifyNoInteractions(gasPriceRepository)
+        auto.complete(false)
+        testScheduler.advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.isGasPriceAuto)
+        verifyNoInteractions(gasPriceRepository)
+    }
+
+    @Test
+    fun `saved true fetches once per fuel type after delayed settings load`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val auto = CompletableDeferred<Boolean>()
+        whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flow { emit(auto.await()) })
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        verifyNoInteractions(gasPriceRepository)
+        auto.complete(true)
+        testScheduler.advanceUntilIdle()
+        assertEquals(true, viewModel.state.value.isGasPriceAuto)
+        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
+        verifyNoMoreInteractions(gasPriceRepository)
+    }
+
+    @Test
+    fun `turning auto pricing on invokes the existing fuel type fetch loop`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val auto = CompletableDeferred<Boolean>()
+        whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flow { emit(auto.await()) })
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        auto.complete(false)
+        testScheduler.advanceUntilIdle()
+        verifyNoInteractions(gasPriceRepository)
+        viewModel.toggleAutoGasPrice(true)
+        testScheduler.advanceUntilIdle()
+        assertEquals(true, viewModel.state.value.isGasPriceAuto)
+        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
         verifyNoMoreInteractions(gasPriceRepository)
     }
 }

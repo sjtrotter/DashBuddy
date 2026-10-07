@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.feature.settings
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -7,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,14 +46,17 @@ fun EvidenceSettingsScreen(
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding)) {
+        Column(Modifier.padding(padding).verticalScroll(rememberScrollState())) {
 
-            // Re-using the SwitchRow component you already have in StrategySettingsScreen.kt
-            // You might want to move SwitchRow to a shared 'Components.kt' file.
+            Text(
+                text = stringResource(R.string.evidence_settings_master_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(16.dp),
+            )
 
             SwitchRow(
                 label = stringResource(R.string.evidence_settings_master_label),
-                subtitle = stringResource(R.string.evidence_settings_master_subtitle),
+                subtitle = "",
                 checked = config.masterEnabled,
                 onCheckedChange = { viewModel.setEvidenceMaster(it) }
             )

@@ -108,7 +108,7 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
  *
  * ```
  * OFFER · no verdict
- * Pay $12.50 · distance didn't parse · H-E-B
+ * Pay $12.50 · distance not read · H-E-B
  * ```
  *
  * Note: bold + size are reliable across devices; foreground color in a MessagingStyle notification
@@ -141,7 +141,7 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
                     merchantName
             } else {
                 // Gross pay is real (parsed); every other figure would be invented.
-                "Pay ${Formats.money(payAmount)} · distance didn't parse · $merchantName"
+                "Pay ${Formats.money(payAmount)} · distance not read · $merchantName"
             },
         )
     }
@@ -150,12 +150,12 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
 
 /** UI label for a typed [OfferQuality] (#366) — display copy stays out of :domain. */
 fun OfferQuality.displayLabel(): String = when (this) {
-    OfferQuality.AWESOME -> "AWESOME OFFER"
-    OfferQuality.GREAT -> "GREAT OFFER"
-    OfferQuality.GOOD -> "GOOD OFFER"
-    OfferQuality.DECENT -> "DECENT OFFER"
-    OfferQuality.BAD -> "BAD OFFER"
-    OfferQuality.PROTECTED -> "Protected!"
+    OfferQuality.AWESOME -> "TOP"
+    OfferQuality.GREAT -> "GREAT"
+    OfferQuality.GOOD -> "GOOD"
+    OfferQuality.DECENT -> "FAIR"
+    OfferQuality.BAD -> "POOR"
+    OfferQuality.PROTECTED -> "Protected"
     OfferQuality.BLOCKED -> "Blocked"
     OfferQuality.SHOP_DECLINED -> "Shopping off"
     OfferQuality.UNKNOWN -> "No verdict"

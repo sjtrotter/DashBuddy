@@ -32,7 +32,7 @@
       whose denominator is only findable inside a collapsed footer is not stated.
     -->
     <string name="dashboard_today_stat_net_per_hour">Net/hr online</string>
-    <string name="dashboard_today_stat_drops">Drops</string>
+    <string name="dashboard_today_stat_drops">Deliveries</string>
     <string name="dashboard_today_stat_miles">Miles</string>
     <string name="dashboard_today_stat_online">Online</string>
     <!--
@@ -45,7 +45,7 @@
     <!-- The plan half of the Today card. Each state names the weekday it is quoting — do not drop it. -->
     <string name="dashboard_plan_best_tonight_format">Tonight %1$s · %2$s avg %3$s/hr</string>
     <string name="dashboard_plan_best_today_format">Today %1$s · %2$s avg %3$s/hr</string>
-    <string name="dashboard_plan_no_window_format">No clear stretch left — your %1$s pick up earlier.</string>
+    <string name="dashboard_plan_no_window_format">No stretch left today; your %1$s peak earlier.</string>
     <string name="dashboard_plan_thin_data_format">Only %2$s readable hours on your %1$s so far.</string>
     <!--
       Recurring-weekday plural ("Monday" → "Mondays"). Its own string so a translation can replace
