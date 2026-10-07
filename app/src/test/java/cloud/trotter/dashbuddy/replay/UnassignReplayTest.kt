@@ -17,22 +17,13 @@ import org.junit.Test
 import java.io.File
 
 /**
- * #736 — end-to-end replay of the real 07-07 **unassign-via-help** session (H-E-B shop order,
- * db session `…656-19`, seq 71). The dasher shopped, then unassigned the order through the help
- * flow; on master the retire grace stamped `completedAt` on the abandoned pickup and the #596
- * close-out sweep converted that into a **fabricated `PICKUP_CONFIRMED`** (seq 71) — plus a garbage
- * #556 shop-rate sample. The db `app_events` for this session ENCODES that bug, so these are
- * hand-authored correct-behaviour invariants, never `replay == db`.
- *
- * The capture window opens mid-flow (the offer/accept predate it), so the job forms via the
- * bare-fallback job-start path on the first pickup frame — a pickup-only job with an arrived,
- * SHOPPING H-E-B pickup. That is exactly the shape the fabrication needs (arrived pickup + job
- * close → close-out sweep), so it is faithful to the defect.
- *
- * Fixture: `snapshots/sessions/unassign_help_2026_07_07/` — real device envelopes. The recognized
- * pickup/resolution frames were edge-redacted on capture; the survey frame's raw
- * `For <customer> • <store>` line was manually redacted to `For Sample C. • H-E-B` (the store is
- * merchant data, kept). Verified PII-safe below.
+ * #736: the real H-E-B unassign-via-help session previously fabricated PICKUP_CONFIRMED and a
+ * shop-rate sample at close (captured db seq 71 encodes the bug). Correct behavior abandons the
+ * pickup, emits TASK_UNASSIGNED at confirmation, and closes without delivery or shop-rate effects.
+ * The capture starts mid-flow: the first arrived SHOPPING frame forms a bare-fallback pickup-only
+ * job. A late GRACE_COMMIT also checks that the trailing idle frame cannot fabricate completion.
+ * Fixture: unassign_help_2026_07_07; the survey's customer line is manually redacted to Sample C.
+ * The independent PII test below checks all fixture envelopes.
  */
 class UnassignReplayTest {
 
@@ -49,11 +40,10 @@ class UnassignReplayTest {
         return SessionReplay.reduceMixed(screens + click + timer)
     }
 
-    // ---- Level A: recognition ----------------------------------------------
-
     @Test
-    fun `the unassign frames recognize to the new rule ids, none UNKNOWN`() {
-        val obs = SessionReplay.replayRecognition(session)
+    fun `recognized unassignment abandons the pickup and closes immediately without completion or shop rate`() {
+        val steps = run()
+        val obs = steps.filter { it.frame != null }.map { it.observation as Observation.Screen }
         val byRule = obs.filter { it.ruleId != null }.groupingBy { it.ruleId }.eachCount()
         assertTrue(
             "the survey frame recognizes as pickup_unassign_survey",
@@ -71,20 +61,10 @@ class UnassignReplayTest {
         // only UNKNOWNs, and the two new rules + the broadened resolution cover them all.
         val unknown = obs.count { it.ruleId == null }
         assertEquals("no screen frame in the session falls to UNKNOWN", 0, unknown)
-    }
 
-    // ---- Level B: state machine invariants ---------------------------------
-
-    @Test
-    fun `invariant 1 - zero PICKUP_CONFIRMED across the whole session`() {
-        val steps = run()
         val confirms = steps.flatMap { it.events }.count { it.type == AppEventType.PICKUP_CONFIRMED }
         assertEquals("the seq-71 fabrication is gone — no pickup is ever confirmed", 0, confirms)
-    }
 
-    @Test
-    fun `invariant 2 - exactly one TASK_UNASSIGNED for the H-E-B task, at the confirmation frame`() {
-        val steps = run()
         val unassigned = steps.flatMap { it.events }.filter { it.type == AppEventType.TASK_UNASSIGNED }
         assertEquals("exactly one TASK_UNASSIGNED", 1, unassigned.size)
         val payload = unassigned.single().payload as TaskUnassignedPayload
@@ -95,28 +75,16 @@ class UnassignReplayTest {
         val confirmFrameTs = SessionReplay.loadSession(session)
             .first { it.file.contains("unassign_confirm") || it.file.contains("unassign_combined") }.capturedAtMs
         assertEquals("stamped at the confirmation frame", confirmFrameTs, unassigned.single().occurredAt)
-    }
 
-    @Test
-    fun `invariant 3 - no DELIVERY_COMPLETED or DELIVERY_CONFIRMED for the abandoned job`() {
-        val steps = run()
         val types = steps.flatMap { it.events }.map { it.type }
         assertFalse("no delivery is completed", types.contains(AppEventType.DELIVERY_COMPLETED))
         assertFalse("no delivery is confirmed", types.contains(AppEventType.DELIVERY_CONFIRMED))
-    }
 
-    @Test
-    fun `invariant 4 - no RecordShopRate effect (the polluted shop sample never folds)`() {
-        val steps = run()
         assertFalse(
             "the abandoned shop never feeds the #556 learned rate",
             steps.flatMap { it.effects }.any { it is AppEffect.RecordShopRate },
         )
-    }
 
-    @Test
-    fun `invariant 5 - the job is closed immediately after the confirmation frame`() {
-        val steps = run()
         val confirmStep = steps.last {
             (it.observation as? Observation.FlowObservation)?.ruleId == "doordash.screen.pickup_unassigned_confirmation"
         }

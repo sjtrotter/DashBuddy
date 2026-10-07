@@ -15,30 +15,14 @@ import org.junit.Test
 import java.io.File
 
 /**
- * End-to-end Level-B replay of the real 07-08 **single-customer, two-store** job (Willie's Grill &
- * Icehouse + Sonic Drive-In, one customer, ONE dropoff), driving offer → accept → both pickups →
- * dropoff → completion through the REAL [cloud.trotter.dashbuddy.core.state.StateMachine].
- *
- * This is the #733 ground truth. Empirically (the join arms were instrumented at the review tier):
- * on the FIELDED frames the dropoff's `customerNameHash` — read off the dropoff **nav bottom-sheet**
- * — actually DOES join BOTH pickups' hashes (all three surfaces render the same short "Willie S"-class
- * form once normalized), so the store resolves through the **customer-hash multi-match arm** (#733
- * part 2), NOT a structural single-drop shortcut (the former structural arm was proven inert on this
- * shape and wrong-store-capable on undercount shapes, so it was DELETED). Because this drop is the
- * SOLE activated dropoff carrying that hash and the matched pickups span two stores, the arm applies
- * the deterministic multi-store default: the earliest-confirmed lineage pickup — Willie's Grill &
- * Icehouse (confirmed 19:24, before Sonic 19:37).
- *
- * The fielded session's `DELIVERY_COMPLETED` (seq 122) folded `storeName == null` → the "Unknown
- * store" $19.50 row + the ×23 `D6 join miss` WARN storm (the un-normalized hashes couldn't join). This
- * end-to-end replay pins the corrected behaviour on the real frames: both pickups confirm, one active
- * dropoff, and the delivery lands on Willie's — never NULL. The isolated mechanism proofs (exact
- * single-match join, constrained multi-store default, collision fall-through, WARN edge-gate,
- * normalization + mask invariant + compile lint) live in `DropoffStoreLabelTest` (`:core:state`) and
- * `CustomerNameNormalizationTest` (`:core:pipeline`).
- *
- * Fixture: `snapshots/sessions/multi_pickup_single_customer_2026_07_08/` — real device envelopes,
- * edge-redacted (customer appears only as `[redacted:…]` markers). Verified PII-safe below.
+ * #733: real 07-08 Willie's + Sonic pickups serve one customer through one active dropoff.
+ * Normalized customer hashes join both pickups; the constrained multi-store default chooses the
+ * earliest-confirmed pickup (Willie's). The captured completion had a null store; these assertions
+ * pin corrected attribution, distinct pickup identities, and closure after the trailing grace.
+ * The offer mints two dropoff placeholders but only one activates. This is a #749 non-regression
+ * check; JobCloseOutTest owns the discriminating chained-offer and receipt-skip close regressions.
+ * DropoffStoreLabelTest and CustomerNameNormalizationTest own isolated join/normalization checks.
+ * Fixture: multi_pickup_single_customer_2026_07_08, edge-redacted and independently PII-checked below.
  */
 class MultiPickupSingleCustomerReplayTest {
 
@@ -55,7 +39,7 @@ class MultiPickupSingleCustomerReplayTest {
     private fun dd(step: SessionReplay.ReplayStep) = step.stateAfter.regions.platforms[Platform.DoorDash]
 
     @Test
-    fun `the single customer is served by ONE active dropoff, never re-minted`() {
+    fun `two pickups serve one customer with one attributed drop and a closed job`() {
         val steps = run()
         // The offer pre-creates one dropoff placeholder per STORE (two here), but a single-customer
         // job only ever ACTIVATES one drop — and never re-mints it. That single active drop is what
@@ -64,40 +48,17 @@ class MultiPickupSingleCustomerReplayTest {
         val activeDropIds = steps.mapNotNull { dd(it)?.activeTask }
             .filter { it.phase == TaskPhase.DROPOFF }.map { it.taskId }.toSet()
         assertEquals("exactly one active dropoff task (never re-minted)", 1, activeDropIds.size)
-    }
 
-    @Test
-    fun `the job closes after the trailing grace timer (#749 non-regression guard)`() {
-        // The 07-08 shape mints 2 dropoff placeholders (one per store) but only ONE activates — the
-        // leftover TBD defeats isJobPhysicallyComplete for the job's lifetime (the desync #749 fixes).
-        //
-        // NB: this assertion is GREEN on master too (verified), NOT the discriminating RED evidence the
-        // #749 spec §6 anticipated. This fixture ends in a nav/PostTask exit with no CHAINED offer, so
-        // on master the job already closes via the UNCONDITIONAL PostTask-exit close (which only
-        // excludes Flow.OfferPresented) — that path masks the T1/T2 desync here. Reproducing the actual
-        // failure ROUTE needs a trailing independent offer (Route A) or a receipt-skip-into-idle (Route
-        // B); the discriminating RED-on-master proofs are the machine-level unit cases 9 (T2) and 10
-        // (T1) in :core:state JobCloseOutTest. This stays as a cheap non-regression guard: the fix must
-        // not stop the same-customer job from closing.
-        val steps = run()
+        // The trailing grace must still close this single-customer job.
         assertNull("the same-customer job still closes after the trailing grace commit", dd(steps.last())?.activeJob)
-    }
 
-    @Test
-    fun `both pickups are confirmed with distinct taskIds`() {
-        val steps = run()
         val confirmed = steps.flatMap { it.events }
             .filter { it.type == AppEventType.PICKUP_CONFIRMED }
             .mapNotNull { (it.payload as? PickupPayload)?.taskId }
             .toSet()
         assertEquals("both Willie's and Sonic pickups confirmed, distinct taskIds", 2, confirmed.size)
-    }
 
-    @Test
-    fun `the single dropoff resolves structurally to the earliest-confirmed store (not NULL)`() {
-        val steps = run()
-        // The store the active DROPOFF task carries at the LAST step it is active — the value that
-        // folds into the delivery record. On master this is null; the structural rule makes it real.
+        // The final active drop carries the customer-hash join result into the delivery record.
         val finalDropStore = steps.mapNotNull { dd(it)?.activeTask }
             .lastOrNull { it.phase == TaskPhase.DROPOFF }?.storeName
         assertEquals(
@@ -106,11 +67,7 @@ class MultiPickupSingleCustomerReplayTest {
                 "earliest-confirmed lineage store — the constrained multi-store default",
             expectedStore, finalDropStore,
         )
-    }
 
-    @Test
-    fun `the delivery completes attributed to a real store`() {
-        val steps = run()
         // DELIVERY_COMPLETED fires on PostTask exit (the trailing nav frame) and carries the drop's
         // resolved store. If the completion event isn't reached, fall back to the confirmed-drop task.
         val completedStore = steps.flatMap { it.events }
