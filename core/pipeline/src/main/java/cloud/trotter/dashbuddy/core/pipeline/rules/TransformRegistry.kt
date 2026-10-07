@@ -68,11 +68,12 @@ object TransformRegistry {
         scopedClock.get() ?: TransformClock(System.currentTimeMillis(), ZoneId.systemDefault())
 
     /**
-     * Threshold for rolling a parsed wall-clock time forward to tomorrow.
-     * Past by more than this → assume the deadline is tomorrow (e.g. late-night
-     * offer for "6:00 AM" next morning). Past by less than this → treat as
-     * past (e.g. dasher arrived a few minutes late for the pickup-by deadline,
-     * which should render as "X min late" — not a near-24h countdown).
+     * Threshold for moving a parsed wall-clock time to the adjacent day. The parsed time is anchored
+     * to today, then the NEAREST occurrence within this window is taken:
+     * - past by more than this → tomorrow (a late-night offer for "6:00 AM" next morning);
+     * - ahead by more than this → yesterday (#1260: "11:59 PM" read at 00:01 is one minute ago, not
+     *   tonight — anchoring to today alone made a late dasher's deadline nearly a day away);
+     * - otherwise unchanged (a few minutes late renders "X min late", not a near-24h countdown).
      */
     internal const val ROLLOVER_THRESHOLD_MS = 12L * 3600L * 1000L
 
@@ -86,8 +87,13 @@ object TransformRegistry {
         nowMillis: Long,
         thresholdMs: Long = ROLLOVER_THRESHOLD_MS,
     ): Long {
+        val dayMillis = 24L * 3600L * 1000L
         val pastMillis = nowMillis - targetMillis
-        return if (pastMillis > thresholdMs) targetMillis + 24L * 3600L * 1000L else targetMillis
+        return when {
+            pastMillis > thresholdMs -> targetMillis + dayMillis
+            -pastMillis > thresholdMs -> targetMillis - dayMillis
+            else -> targetMillis
+        }
     }
 
     // ========================================================================

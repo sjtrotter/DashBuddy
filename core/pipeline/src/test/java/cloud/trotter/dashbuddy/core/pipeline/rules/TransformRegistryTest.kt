@@ -91,6 +91,20 @@ class TransformRegistryTest {
     }
 
     @Test
+    fun `#1260 applyRollover far future rolls back a day`() {
+        val now = 1_000_000_000L
+        val target = now + threshold + 1
+        assertEquals(target - day, TransformRegistry.applyRollover(target, now))
+    }
+
+    @Test
+    fun `#1260 applyRollover at exactly the future threshold keeps target as-is`() {
+        val now = 1_000_000_000L
+        val target = now + threshold
+        assertEquals(target, TransformRegistry.applyRollover(target, now))
+    }
+
+    @Test
     fun `applyRollover far past rolls forward (late-night offer for next morning)`() {
         val now = 1_000_000_000L
         val target = now - 17 * hour  // 17h ago (analogous to 11pm-for-6am)

@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -24,6 +25,26 @@ class TransformClockTest {
     private fun millisAt(hour: Int, minute: Int): Long =
         Instant.ofEpochMilli(anchor).atZone(zone).toLocalDate()
             .atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
+
+    @Test
+    fun `#1260 a deadline one minute before midnight read just after midnight is one minute ago`() {
+        val justAfterMidnight = LocalDate.of(2026, 10, 7).atTime(0, 0, 48).atZone(zone).toInstant().toEpochMilli()
+        val result = TransformRegistry.withClock(justAfterMidnight, zone) {
+            TransformRegistry.apply("parseDeadline", "Pick up by 11:59 PM")
+        } as Long
+        val expected = LocalDate.of(2026, 10, 6).atTime(23, 59).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `#1260 an early-morning deadline read late at night is still tomorrow`() {
+        val lateNight = LocalDate.of(2026, 10, 6).atTime(23, 30).atZone(zone).toInstant().toEpochMilli()
+        val result = TransformRegistry.withClock(lateNight, zone) {
+            TransformRegistry.apply("parseDeadline", "Pick up by 6:00 AM")
+        } as Long
+        val expected = LocalDate.of(2026, 10, 7).atTime(6, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals(expected, result)
+    }
 
     @Test
     fun `parseDeadline is deterministic under a fixed clock`() {
