@@ -63,6 +63,26 @@ subprojects {
         // worker, so forward it explicitly. Opt-in only: absent the flag, nothing
         // changes. See `PropSeeds` in :core:pipeline's test source set.
         providers.systemProperty("dashbuddy.propExplore").orNull
-            ?.let { systemProperty("dashbuddy.propExplore", it) }
+            ?.let { explore ->
+                systemProperty("dashbuddy.propExplore", explore)
+                // Match PropSeeds' opt-in semantics. Include every checkAll owner, not
+                // just *PropertyTest; keep this list in sync when adding properties.
+                if (explore.isNotEmpty() && explore.lowercase() !in listOf("false", "0")) {
+                    filter {
+                        listOf(
+                            "SensitiveMarkerEvasionTest",
+                            "AccessibilityNodeMapperPropertyTest",
+                            "NotificationMapperTotalityTest",
+                            "EachAmplificationBoundedTest",
+                            "RegexBudgetPropertyTest",
+                            "RuleCompileRecursionPropertyTest",
+                            "TransformFuzzFailClosedTest",
+                            "SkeletonCorpusTest",
+                            "ClassifyGateCaptureFuzzTest",
+                            "SnapshotSecurityScannerParityTest",
+                        ).forEach { includeTestsMatching("*.$it") }
+                    }
+                }
+            }
     }
 }

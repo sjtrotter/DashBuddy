@@ -73,7 +73,8 @@ trusted installs; server #1157).
 # Run a single recognition test (e.g. just the golden-corpus positive guard)
 ./gradlew :app:testDebugUnitTest --tests "*GoldenSnapshotRegressionTest"
 
-# Re-run the #590 security property/fuzz suite UNSEEDED at 10x samples (#878).
+# Re-run ONLY property/fuzz classes UNSEEDED at 10x samples (#878, #1275).
+# The flag also filters to all checkAll-owning classes (including their fixed regressions).
 # Every property pins a seed by default so PR CI is deterministic; this flag is the
 # exploration path — run it off the PR path (nightly/manual), and when it finds
 # something, paste the reported seed into that property's pinned SEED const.
