@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.Clock
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -88,8 +89,11 @@ class StateManagerV2 @Inject constructor(
      * checkpoint can land too; retrying it on the live path is therefore not hope, it is following
      * the write that just worked. Cleared on the first successful write, and simply left standing
      * on a failure — one DEBUG line per attempt at most, never an ERROR per frame.
+     *
+     * Atomic because the retry runs on the effect worker (#1271 scenario 4: behind the step's own
+     * effects, like every snapshot write) while this loop reads it.
      */
-    private var recoveryCheckpointPending = false
+    private val recoveryCheckpointPending = AtomicBoolean(false)
 
     fun initialize() {
         Timber.tag("StateMachine").i("Initializing V2 State Machine (multi-region)...")
@@ -160,25 +164,6 @@ class StateManagerV2 @Inject constructor(
         // Persist observation to the append-only log (ordered single writer, #352)
         journal.append(obs, transition.newState)
 
-        // #1052 round 4: a recovery checkpoint that never landed is retried here, on the first
-        // live observation after it and every one after that until it does. Ordered AFTER the
-        // journal append so the checkpoint can only ever be at or ahead of the log it is the base
-        // for, and written at THIS observation's state so the retry keeps closing the gap rather
-        // than re-offering a stale one. Cheap by construction: the flag is false on every normal
-        // recovery and always false when nothing was recovered at all.
-        if (recoveryCheckpointPending) {
-            val landed = snapshots.checkpoint(transition.newState)
-            if (landed) recoveryCheckpointPending = false
-            Timber.tag("StateMachine").d(
-                "Recovery checkpoint retry at cv=%d: %s",
-                transition.newState.correlationVersion,
-                if (landed) "landed" else "still pending",
-            )
-        }
-
-        // Periodic + major-transition snapshots
-        snapshots.maybeSnapshot(scope, ioDispatcher, currentState, transition.newState)
-
         // Low-cadence journal pruning (#364): the observation log grew
         // unbounded — pruneOlderThan had zero callers. Retention comfortably
         // exceeds snapshot retention, so replay-since-snapshot stays intact.
@@ -191,6 +176,32 @@ class StateManagerV2 @Inject constructor(
         // Emit effects — the engine serializes execution in this order (#351).
         transition.effects.forEach { effect ->
             engine.process(effect, correlationVersion = transition.newState.correlationVersion)
+        }
+
+        // Every snapshot write queues BEHIND the effects just emitted (#1271 scenario 4): recovery
+        // replays only the journal after the latest snapshot, so a snapshot of this step that
+        // landed before this step's `LogEvent`s ran would make them unreachable to a process death
+        // in between. `EffectExecutor.afterProcessed` states the rule.
+        val newState = transition.newState
+        // #1052 round 4: a recovery checkpoint that never landed is retried on the first live
+        // observation after it and every one after that until it does, written at THIS
+        // observation's state so the retry keeps closing the gap rather than re-offering a stale
+        // one. Cheap by construction: the flag is false on every normal recovery and always false
+        // when nothing was recovered at all.
+        if (recoveryCheckpointPending.get()) {
+            engine.afterProcessed {
+                val landed = snapshots.checkpoint(newState)
+                if (landed) recoveryCheckpointPending.set(false)
+                Timber.tag("StateMachine").d(
+                    "Recovery checkpoint retry at cv=%d: %s",
+                    newState.correlationVersion,
+                    if (landed) "landed" else "still pending",
+                )
+            }
+        }
+        // Periodic + major-transition snapshots.
+        if (snapshots.shouldSnapshot(currentState, newState)) {
+            engine.afterProcessed { snapshots.snapshot(newState) }
         }
     }
 
@@ -324,6 +335,11 @@ class StateManagerV2 @Inject constructor(
      * while `recovering == true`, so the replay never armed one to cancel.
      */
     private suspend fun finishRestore(restored: AppState) {
+        // #1271 scenario 4: the checkpoint makes the replayed tail unreachable to the next restart,
+        // so the effects that tail replay re-issued (a `LogEvent` the crash cut off before it ran)
+        // must have EXECUTED first. Awaited before the clock read, so draining them does not come
+        // out of the re-based grace's served window.
+        engine.awaitProcessed()
         val cleaned = restored.recoveryHygiene(clock.millis())
         checkpointRecovery(cleaned)
         rearmRecoveredTimers(cleaned)
@@ -396,7 +412,7 @@ class StateManagerV2 @Inject constructor(
     private suspend fun checkpointRecovery(state: AppState) {
         if (snapshots.checkpoint(state)) return
         if (snapshots.checkpoint(state)) return
-        recoveryCheckpointPending = true
+        recoveryCheckpointPending.set(true)
         Timber.tag("StateMachine").e(
             "Recovery checkpoint failed twice — the cleaned state is NOT durable; retrying on " +
                 "every live observation until it lands",

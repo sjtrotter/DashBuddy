@@ -243,7 +243,7 @@ class ConsentToActuationE2ETest {
         grantStore: ReplayEdges.MemoryPreferences = ReplayEdges.MemoryPreferences(),
         ruleTransform: (String, String) -> String = { _, json -> json },
     ): E2ESessionReplay {
-        val replay = E2ESessionReplay(app, EPOCH_MS, grantStore, ruleTransform)
+        val replay = E2ESessionReplay(app, EPOCH_MS, grantStore = grantStore, ruleTransform = ruleTransform)
         closers += replay
         replay.start()
         return replay

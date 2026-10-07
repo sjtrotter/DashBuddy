@@ -148,6 +148,17 @@ loss), **and a failed checkpoint stays PENDING, retried on every live observatio
 attempt) — an ERROR alone left the pre-hygiene snapshot standing as the next replay base, and since
 the journal and the snapshot share one database, a journal append that persists is direct evidence
 the checkpoint can land too.
+**A snapshot never gets AHEAD of the effects of the steps it covers** (#1271 scenario 4). Recovery
+restores the latest snapshot and replays only the journal after it, so a snapshot of step N written
+while N's `LogEvent`s still waited in the engine's queue made them unreachable: a process death in
+between lost them for good (the end-to-end receipt — `CrashRestartE2ETest` — lost a retire's
+`DELIVERY_CONFIRMED`; a session end's `DASH_STOP` had the same exposure, and a backlogged queue widened
+the window to seconds). Every snapshot write — cadence, major transition, the checkpoint retry — is now
+queued BEHIND the step's effects through `EffectExecutor.afterProcessed` (the engine runs it on its
+serialized worker, in queue order), and `finishRestore` first `awaitProcessed()`s the effects the tail
+replay re-issued before the hygiene's clock read and the checkpoint. A snapshot that LAGS is harmless:
+the replay re-issues the keyed effects it covers and `effects_fired` dedupes them. If the process dies
+first, the queued write dies with it — which is the point. Pinned by `StateManagerV2SnapshotOrderTest`.
 **Recovery: what is dropped, what is re-based, what is re-armed** (#1054) — the rule being *evidence
 is dropped, a decision in flight is re-armed*. `AppState.recoveryHygiene(nowMs)` (the widened
 `droppingSessionPayParks`, taking the ONE wall-clock read of the recovery path) **drops** the settle

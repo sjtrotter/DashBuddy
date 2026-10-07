@@ -18,6 +18,13 @@ Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `Tts
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
 
+**Barriers on the serialized queue (#1271 scenario 4).** Besides effects, the one drain worker runs
+`EffectExecutor.afterProcessed` actions in queue order — after every effect enqueued before them, before
+anything enqueued after. `StateManagerV2` writes every state snapshot through one, and recovery
+`awaitProcessed()`s before its checkpoint, so a snapshot never lands ahead of the `LogEvent`s of the
+steps it covers (§3). A barrier failure is isolated and logged like an effect failure; a barrier
+queued when the process dies simply never runs.
+
 **Bubble observability (#916).** The stable `Bubble` tag records INFO session start/end (registry
 platform wire + app-minted session id), bubble post requested/returned (notification id + whether
 bubble metadata was attached), and activity create/start/stop/destroy (`isFinishing`). Failed posts

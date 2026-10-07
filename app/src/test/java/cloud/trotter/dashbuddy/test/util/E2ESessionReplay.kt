@@ -108,16 +108,26 @@ import java.time.Clock
  *
  * Run under Robolectric with `@Config(application = ReplayApplication::class)`; build one harness
  * per test and [close] it (cancels every scope, closes the DB).
+ *
+ * **Restart (#1271 scenario 4).** Hand a harness [ReplayEdges.DurableStores] and its database is a
+ * FILE and its preference stores outlive it; [crash] then kills it the way the OS kills the
+ * process — nothing in flight finishes — and a second harness built over the same stores is the
+ * relaunched app: it restores from the snapshot + journal that actually reached disk.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class E2ESessionReplay(
     private val app: ReplayApplication,
     fixtureEpochMs: Long,
     /**
-     * The persisted consent store. Defaults to a fresh one; a test that models an app restart (a
-     * ruleset update between two launches) hands the SAME store to the second harness.
+     * What survives a process death: the database file and the preference stores. Null (the default)
+     * is a fresh in-memory database and fresh stores — one launch, nothing to restart into.
      */
-    grantStore: DataStore<Preferences> = ReplayEdges.MemoryPreferences(),
+    durable: ReplayEdges.DurableStores? = null,
+    /**
+     * The persisted consent store. Defaults to [durable]'s, else a fresh one; a test that models an
+     * app restart (a ruleset update between two launches) hands the SAME store to the second harness.
+     */
+    grantStore: DataStore<Preferences> = durable?.grants ?: ReplayEdges.MemoryPreferences(),
     /**
      * Applied to each generated rule file's JSON (file name, contents) before the production loader
      * reads it — the stand-in for a ruleset UPDATE (#1271 scenario 5's repointed binding). Identity by
@@ -145,7 +155,10 @@ class E2ESessionReplay(
     }
 
     // ── Persistence (real Room, real DAOs) ─────────────────────────────────────────────────────
-    val db: DashBuddyDatabase = Room.inMemoryDatabaseBuilder(app, DashBuddyDatabase::class.java)
+    val db: DashBuddyDatabase = (
+        if (durable == null) Room.inMemoryDatabaseBuilder(app, DashBuddyDatabase::class.java)
+        else Room.databaseBuilder(app, DashBuddyDatabase::class.java, durable.dbFile.absolutePath)
+        )
         .allowMainThreadQueries()
         .setQueryCoroutineContext(dispatcher)
         .build()
@@ -153,9 +166,9 @@ class E2ESessionReplay(
     val projector: AnalyticsProjector
 
     // ── Preferences (real data sources + repositories over memory stores) ──────────────────────
-    val appPreferences = AppPreferencesRepository(AppPreferencesDataSource(ReplayEdges.MemoryPreferences()))
+    val appPreferences = AppPreferencesRepository(AppPreferencesDataSource(durable?.app ?: ReplayEdges.MemoryPreferences()))
     val strategy = StrategyRepository(
-        StrategyDataSource(ReplayEdges.MemoryPreferences()), appPreferences, dispatcher,
+        StrategyDataSource(durable?.strategy ?: ReplayEdges.MemoryPreferences()), appPreferences, dispatcher,
         TimeConstantRepository(db.timeConstantDao()),
     )
     val grants = RuleCapabilityRepository(
@@ -164,7 +177,9 @@ class E2ESessionReplay(
 
     // ── External edges ─────────────────────────────────────────────────────────────────────────
     val location = ReplayEdges.FakeLocation(clock)
-    val odometer = OdometerRepository(OdometerLocalDataSource(ReplayEdges.MemoryPreferences()), location, dispatcher, clock)
+    val odometer = OdometerRepository(
+        OdometerLocalDataSource(durable?.odometer ?: ReplayEdges.MemoryPreferences()), location, dispatcher, clock,
+    )
     val notifications: NotificationManager = app.getSystemService(NotificationManager::class.java)
     val tts = ReplayEdges.FakeTts()
     val accessibility = ReplayEdges.FakeAccessibility()
@@ -392,6 +407,33 @@ class E2ESessionReplay(
     }
 
     /**
+     * Kill this "process" (#1271 scenario 4): exactly [close] — every scope is cancelled where it
+     * stands, so an effect still queued in the engine, a journal row still queued for its writer or
+     * a timer still waiting never runs, while what already committed stays on disk. Nothing flushes
+     * on the way down (the odometer repository persists per fix, never on stop). Named separately so
+     * a test says which it means.
+     */
+    fun crash() = close()
+
+    /** Rows in [table] (a read on the real database). */
+    fun rowCount(table: String): Long =
+        db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); it.getLong(0) }
+
+    /** Every read-model table, complete, as ordered rows of column → value. */
+    fun readModel(): Map<String, List<Map<String, String?>>> =
+        READ_MODEL_TABLES.associateWith { table -> rows("SELECT * FROM $table ORDER BY 1") }
+
+    /** The rows [sql] returns, each as column → value (a read on the real database). */
+    fun rows(sql: String): List<Map<String, String?>> =
+        db.openHelper.readableDatabase.query(sql).use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add((0 until c.columnCount).associate { c.getColumnName(it) to (if (c.isNull(it)) null else c.getString(it)) })
+                }
+            }
+        }
+
+    /**
      * Cancel every scope, then run the scheduler at the current instant so the cancellations
      * actually COMPLETE (a `StandardTestDispatcher` resumes cancelled continuations only when run:
      * GPS `onCompletion`, collector loops, DAO calls in flight). Only then is Room closed. Fails if a
@@ -423,20 +465,42 @@ class E2ESessionReplay(
      * edges (TTS, clicks, notifications, GPS) and from Room, never from this list.
      */
     class RecordingExecutor(private val inner: EffectExecutor, private val clock: Clock) : EffectExecutor {
-        data class Entry(val atMs: Long, val effect: AppEffect, val recovering: Boolean, val correlationVersion: Long)
+        data class Entry(
+            val atMs: Long,
+            val effect: AppEffect,
+            val recovering: Boolean,
+            val correlationVersion: Long,
+            /** Handed over while [severed]: recorded, never executed. */
+            val dropped: Boolean = false,
+        )
 
         val trace = mutableListOf<Entry>()
         override val events: SharedFlow<StateEvent> get() = inner.events
 
+        /**
+         * While true, effects (and [afterProcessed] barriers) are recorded but NOT forwarded — the process died after the manager
+         * stepped and journalled an observation and before the engine's queue ran its effects
+         * (#1271 scenario 4). Only meaningful right before a [crash].
+         */
+        var severed = false
+
         override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
-            trace += Entry(clock.millis(), effect, recovering, correlationVersion)
-            inner.process(effect, recovering, correlationVersion)
+            trace += Entry(clock.millis(), effect, recovering, correlationVersion, dropped = severed)
+            if (!severed) inner.process(effect, recovering, correlationVersion)
+        }
+
+        /** Forwarded — unless [severed]: a barrier queued behind lost effects is lost with them. */
+        override fun afterProcessed(action: suspend () -> Unit) {
+            if (!severed) inner.afterProcessed(action)
         }
     }
 
     companion object {
         /** Where every committed DoorDash/Uber fixture was captured (San Antonio, TX). */
         const val FIXTURE_ZONE = "America/Chicago"
+
+        /** The read-model tables [readModel] returns (the projection of `app_events`). */
+        val READ_MODEL_TABLES = listOf("delivery_records", "session_records", "offer_records", "pickup_records", "stores")
 
         /** Handler tags — an INFO+ line under one of these was written by the effect layer itself. */
         val HANDLER_TAGS = setOf("Effects", "Tts", "Odometer", "ShopRate", "Chat")

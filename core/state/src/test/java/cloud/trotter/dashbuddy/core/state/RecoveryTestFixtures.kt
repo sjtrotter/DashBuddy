@@ -8,7 +8,10 @@ import cloud.trotter.dashbuddy.core.pipeline.PipelineV2
 import cloud.trotter.dashbuddy.domain.model.state.StateEvent
 import cloud.trotter.dashbuddy.domain.state.AppState
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -109,4 +112,24 @@ internal fun recoveryManager(
         defaultDispatcher = dispatcher,
         ioDispatcher = dispatcher,
     )
+}
+
+/**
+ * An engine whose effects "execute" the moment they are processed (they are only recorded), so
+ * an `afterProcessed` barrier has nothing to wait for and runs next on [dispatcher] — the snapshot
+ * writes `StateManagerV2` routes through it then really land (#1271 scenario 4). A bare mock would
+ * swallow them.
+ */
+internal class InlineEffectExecutor(dispatcher: CoroutineDispatcher) : EffectExecutor {
+    private val scope = CoroutineScope(dispatcher)
+    val processed = mutableListOf<AppEffect>()
+    override val events: SharedFlow<StateEvent> = MutableSharedFlow(extraBufferCapacity = 16)
+
+    override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
+        processed += effect
+    }
+
+    override fun afterProcessed(action: suspend () -> Unit) {
+        scope.launch { action() }
+    }
 }

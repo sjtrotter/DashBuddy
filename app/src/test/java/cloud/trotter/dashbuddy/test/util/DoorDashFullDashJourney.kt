@@ -85,37 +85,66 @@ object DoorDashFullDashJourney {
     )
 
     /**
-     * Drive the whole journey through [replay] (already [E2ESessionReplay.start]ed). [milestone] is
-     * called after Bill Miller's drop is retired and again after the receipt has settled, so a test
-     * can fold the log incrementally (the projector resuming from partly populated tables).
+     * One timed step of the journey. [atMs] is the instant the step starts at (the step advances
+     * virtual time there first), so a caller can cut the journey between two steps — #1271 scenario
+     * 4 crashes the process at an instant inside a grace and resumes on a restarted harness.
+     *
+     * A [hold] only waits, so it is skipped when a restart already carried the clock past it; a
+     * frame step is strict (time never runs backwards).
      */
-    fun run(replay: E2ESessionReplay, milestone: (String) -> Unit = {}): Checkpoints {
+    class Step(val atMs: Long, val label: String, val hold: Boolean = false, val act: (E2ESessionReplay) -> Unit)
+
+    /**
+     * The journey as [Step]s, in time order. [milestone] is called after Bill Miller's drop is
+     * retired and again after the receipt has settled, so a test can fold the log incrementally (the
+     * projector resuming from partly populated tables). [onTap] receives the active notification ids
+     * just before and just after the Accept tap.
+     */
+    fun steps(
+        milestone: (String) -> Unit = {},
+        onTap: (before: Set<Int>, after: Set<Int>) -> Unit = { _, _ -> },
+    ): List<Step> {
         val frames = SessionReplay.loadSession(STACK).associateBy { it.file.substringBefore('_') }
         fun frame(n: String) = frames.getValue(n)
+        fun screen(n: String, atMs: Long = frame(n).capturedAtMs) =
+            Step(atMs, "frame $n") { it.screen(frame(n), atMs = atMs) }
+        fun hold(atMs: Long, label: String, then: () -> Unit = {}) =
+            Step(atMs, label, hold = true) { r -> if (atMs > r.nowMs) r.advanceTo(atMs); then() }
 
-        replay.screen(frame("01"))
-        replay.advanceTo(ACCEPT_TAP_MS)
-        val beforeTap = replay.activeNotificationIds()
-        replay.tapOfferNotification(OfferIntent.ACCEPT, ACCEPT_TAP_MS)
-        val afterTap = replay.activeNotificationIds()
-        check(replay.accessibility.clicks.isNotEmpty()) {
-            "the Accept tap did not physically click — not feeding the click capture\n${replay.trace()}"
-        }
-        replay.click(SessionReplay.loadClickFrame("$STACK/02_accept_offer_click.json"))
-        for (n in listOf("03", "04", "05", "06", "07", "08", "09", "10", "12")) replay.screen(frame(n))
-        replay.screen(frame("03"), atMs = BILL_RETIRE_ARM_MS)
-        replay.advanceTo(BILL_RETIRED_MS)
-        milestone("bill retired")
-        for (n in listOf("13", "11")) replay.screen(frame(n))
-        replay.screen(frame("12"), atMs = MAMA_ARRIVAL_MS)
-        replay.screen(SessionReplay.loadScreenFrame(COLLAPSED, RECEIPT_COLLAPSED_MS))
-        replay.screen(SessionReplay.loadScreenFrame(EXPANDED, RECEIPT_EXPANDED_MS))
-        replay.advanceTo(RECEIPT_HELD_MS)
-        milestone("receipt settled")
         val summary = SessionReplay.loadScreenFrame(SUMMARY, SUMMARY_MS)
-        replay.screen(summary, node = summary.node.substituted(SUMMARY_SUBSTITUTIONS))
-        replay.advanceTo(END_MS)
-        return Checkpoints(beforeTap, afterTap)
+        return buildList {
+            add(screen("01"))
+            add(
+                Step(ACCEPT_TAP_MS, "accept tap") { r ->
+                    r.advanceTo(ACCEPT_TAP_MS)
+                    val before = r.activeNotificationIds()
+                    r.tapOfferNotification(OfferIntent.ACCEPT, ACCEPT_TAP_MS)
+                    onTap(before, r.activeNotificationIds())
+                    check(r.accessibility.clicks.isNotEmpty()) {
+                        "the Accept tap did not physically click — not feeding the click capture\n${r.trace()}"
+                    }
+                },
+            )
+            val click = SessionReplay.loadClickFrame("$STACK/02_accept_offer_click.json")
+            add(Step(click.atMs, "accept click") { it.click(click) })
+            for (n in listOf("03", "04", "05", "06", "07", "08", "09", "10", "12")) add(screen(n))
+            add(screen("03", atMs = BILL_RETIRE_ARM_MS))
+            add(hold(BILL_RETIRED_MS, "bill retired") { milestone("bill retired") })
+            for (n in listOf("13", "11")) add(screen(n))
+            add(screen("12", atMs = MAMA_ARRIVAL_MS))
+            add(Step(RECEIPT_COLLAPSED_MS, "receipt collapsed") { it.screen(SessionReplay.loadScreenFrame(COLLAPSED, RECEIPT_COLLAPSED_MS)) })
+            add(Step(RECEIPT_EXPANDED_MS, "receipt expanded") { it.screen(SessionReplay.loadScreenFrame(EXPANDED, RECEIPT_EXPANDED_MS)) })
+            add(hold(RECEIPT_HELD_MS, "receipt settled") { milestone("receipt settled") })
+            add(Step(SUMMARY_MS, "dash summary") { it.screen(summary, node = summary.node.substituted(SUMMARY_SUBSTITUTIONS)) })
+            add(hold(END_MS, "dash ended"))
+        }
+    }
+
+    /** Drive the whole journey through [replay] (already [E2ESessionReplay.start]ed) — see [steps]. */
+    fun run(replay: E2ESessionReplay, milestone: (String) -> Unit = {}): Checkpoints {
+        var checkpoints: Checkpoints? = null
+        steps(milestone) { before, after -> checkpoints = Checkpoints(before, after) }.forEach { it.act(replay) }
+        return checkpoints!!
     }
 
     /** [this] tree with each node text EQUAL to a key replaced by its value (parents re-linked). */

@@ -86,6 +86,16 @@ class StateManagerV2RecoveryRearmTest {
             processed += Processed(effect, recovering, correlationVersion)
         }
 
+        /** Snapshot barriers are recorded, never run — these cases read the recovery checkpoint only. */
+        val barriers = mutableListOf<suspend () -> Unit>()
+
+        override fun afterProcessed(action: suspend () -> Unit) {
+            barriers += action
+        }
+
+        /** Nothing is ever pending here: an effect "executes" as it is recorded. */
+        override suspend fun awaitProcessed() = Unit
+
         fun schedules(type: TimeoutType) = processed
             .filter { (it.effect as? AppEffect.ScheduleTimeout)?.type == type }
 

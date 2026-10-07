@@ -23,7 +23,6 @@ import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -31,8 +30,6 @@ import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 
 /**
  * Crash recovery DROPS a restored dash-running-total park (#1029 review round 4), **at the live
@@ -202,11 +199,7 @@ class StateManagerV2RecoveryHygieneTest {
         journalDao: ObservationDao,
         snapshotDao: AppStateSnapshotDao,
         dispatcher: CoroutineDispatcher,
-    ): StateManagerV2 {
-        val engine: EffectExecutor = mock()
-        whenever(engine.events).thenReturn(MutableSharedFlow(extraBufferCapacity = 16))
-        return recoveryManager(journalDao, snapshotDao, engine, dispatcher)
-    }
+    ): StateManagerV2 = recoveryManager(journalDao, snapshotDao, InlineEffectExecutor(dispatcher), dispatcher)
 
     @Test
     fun `a park whose commit timer is IN the tail commits exactly as it did live`() = runTest {

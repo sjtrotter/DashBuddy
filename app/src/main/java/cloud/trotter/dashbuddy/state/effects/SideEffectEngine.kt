@@ -183,13 +183,19 @@ class SideEffectEngine @Inject constructor(
     private val engineScope =
         CoroutineScope(defaultDispatcher + SupervisorJob() + effectExceptionHandler)
 
+    /** One item of the serialized queue: an effect, or a [Barrier] action (#1271 scenario 4). */
+    private sealed interface Queued
+
     private data class QueuedEffect(
         val effect: AppEffect,
         val recovering: Boolean,
         val correlationVersion: Long,
-    )
+    ) : Queued
 
-    private val queue = Channel<QueuedEffect>(Channel.UNLIMITED)
+    /** [afterProcessed]'s action: runs in queue order, after every effect enqueued before it. */
+    private class Barrier(val action: suspend () -> Unit) : Queued
+
+    private val queue = Channel<Queued>(Channel.UNLIMITED)
 
     init {
         // Startup prune (#364): effects_fired gained a row per logged event and
@@ -258,14 +264,17 @@ class SideEffectEngine @Inject constructor(
     private suspend fun drainQueue() {
         for (item in queue) {
             try {
-                execute(item.effect, item.recovering, item.correlationVersion)
+                when (item) {
+                    is QueuedEffect -> execute(item.effect, item.recovering, item.correlationVersion)
+                    is Barrier -> item.action()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (t: Throwable) {
                 Timber.tag("Effects").e(
                     t,
                     "Effect failed — isolated, the engine is still draining: %s",
-                    item.effect::class.simpleName,
+                    if (item is QueuedEffect) item.effect::class.simpleName else "barrier",
                 )
             }
         }
@@ -283,6 +292,10 @@ class SideEffectEngine @Inject constructor(
 
     override fun process(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
         queue.trySend(QueuedEffect(effect, recovering, correlationVersion))
+    }
+
+    override fun afterProcessed(action: suspend () -> Unit) {
+        queue.trySend(Barrier(action))
     }
 
     private suspend fun execute(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {

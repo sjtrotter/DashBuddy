@@ -64,7 +64,7 @@ class DoorDashFullDashE2ETest {
                 "each mid-journey fold left work for the next (a real incremental resume): $foldedAt",
                 0 < foldedAt.getValue("bill retired") &&
                     foldedAt.getValue("bill retired") < foldedAt.getValue("receipt settled") &&
-                    foldedAt.getValue("receipt settled") < rowCount(replay, "app_events"),
+                    foldedAt.getValue("receipt settled") < replay.rowCount("app_events"),
             )
 
             // ── Recognition: every journey input reached the state machine ───────────────────────
@@ -178,27 +178,27 @@ class DoorDashFullDashE2ETest {
             assertNull("…and its ongoing notification is gone", replay.notifications.activeNotifications.firstOrNull { it.id == ODOMETER_NOTIFICATION_ID })
 
             // ── Durable idempotency: redelivering keyed effects runs nothing twice ───────────────
-            val eventCount = rowCount(replay, "app_events")
-            val keyCount = rowCount(replay, "effects_fired")
+            val eventCount = replay.rowCount("app_events")
+            val keyCount = replay.rowCount("effects_fired")
             val startSessions = replay.bubble.calls("startSession").size
             val logEvent = replay.executor.trace.first { it.effect is AppEffect.LogEvent }
             val startSession = replay.executor.trace.single { it.effect is AppEffect.StartSession }
             replay.executor.process(logEvent.effect, correlationVersion = logEvent.correlationVersion)
             replay.executor.process(startSession.effect, correlationVersion = startSession.correlationVersion)
             replay.settle()
-            assertEquals("a redelivered LogEvent writes no second row", eventCount, rowCount(replay, "app_events"))
-            assertEquals("…and no second idempotency key", keyCount, rowCount(replay, "effects_fired"))
+            assertEquals("a redelivered LogEvent writes no second row", eventCount, replay.rowCount("app_events"))
+            assertEquals("…and no second idempotency key", keyCount, replay.rowCount("effects_fired"))
             assertEquals("a redelivered StartSession does not re-run the session start", startSessions, replay.bubble.calls("startSession").size)
 
             // ── Frozen economics + rebuild faithfulness ──────────────────────────────────────────
-            val incremental = readModel(replay)
+            val incremental = replay.readModel()
             replay.await {
                 replay.appPreferences.updateEconomySettings("2015", "Test", "Car", "", 12f, false, 9.99f)
             }
             val liveCpm = replay.await { replay.appPreferences.userEconomy.first() }.operatingCostPerMile
             assertNotEquals("the economy edit really moved the live cost per mile", offer.estOperatingCostPerMile!!, liveCpm, 1e-6)
             replay.drain()
-            assertEquals("an economy edit rewrites no frozen row", incremental, readModel(replay))
+            assertEquals("an economy edit rewrites no frozen row", incremental, replay.readModel())
             replay.await {
                 val wm = replay.db.analyticsDao().getWatermark()!!
                 replay.db.analyticsDao().setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = wm.watermarkSequenceId, projectorVersion = 0))
@@ -210,7 +210,7 @@ class DoorDashFullDashE2ETest {
             )
             assertEquals(
                 "a projector-version refold of the whole log rebuilds the read model identically",
-                incremental, readModel(replay),
+                incremental, replay.readModel(),
             )
 
             // ── Privacy: the shareable stream the run actually wrote ─────────────────────────────
@@ -220,21 +220,6 @@ class DoorDashFullDashE2ETest {
             if (tree in Timber.forest()) Timber.uproot(tree)
         }
     }
-
-    private fun rowCount(replay: E2ESessionReplay, table: String): Long =
-        replay.db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { it.moveToFirst(); it.getLong(0) }
-
-    /** Every read-model table, complete, as ordered rows of column → value. */
-    private fun readModel(replay: E2ESessionReplay): Map<String, List<Map<String, String?>>> =
-        listOf("delivery_records", "session_records", "offer_records", "pickup_records", "stores").associateWith { table ->
-            replay.db.openHelper.readableDatabase.query("SELECT * FROM $table ORDER BY 1").use { c ->
-                buildList {
-                    while (c.moveToNext()) {
-                        add((0 until c.columnCount).associate { c.getColumnName(it) to (if (c.isNull(it)) null else c.getString(it)) })
-                    }
-                }
-            }
-        }
 
     private companion object {
         /** `OdometerEffectHandler`'s ongoing notification id. */
