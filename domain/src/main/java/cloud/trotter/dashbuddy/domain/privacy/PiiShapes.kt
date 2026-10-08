@@ -44,7 +44,7 @@ object PiiShapes {
     /**
      * Text starting with one of these keeps the anchor prefix; the rest (a name/store) is masked
      * **unconditionally** — every one of them is a lead-in whose tail is customer data on every
-     * surface that renders it.
+     * surface that renders it. Longest match wins (#1021), preserving the full rule anchor.
      *
      * This is the COMMIT-path twin of the rules' `keepPrefix` enumerations, NOT of
      * `CustomerTextMarkers.MARKERS` — the runtime backstop must stay free of chrome-ambiguous
@@ -61,7 +61,7 @@ object PiiShapes {
      * Use [customerLeadIn], never this list directly: it is only half the enumeration.
      */
     val NAME_PREFIXES = listOf(
-        "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
+        "Pickup for ", "Pickup from ", "Deliver to ", "Deliver to door of ", "Delivery for ", "Order for ",
         "Message from ", "Heading to ", "Pick up at ",
     )
 
@@ -70,20 +70,32 @@ object PiiShapes {
      * The ONE owner of "does this value open with a customer lead-in whose tail is raw PII?" —
      * returns the prefix to keep, or null. Shared by `SnapshotRedactor.scrub` and the committed-corpus PII guard
      * (`CaptureRedactionCorpusTest` FIX 4) so the scrubber and the gate that polices its output
-     * can never disagree about what a lead-in is (#1064).
+     * can never disagree about what a lead-in is (#1064). Longest match wins (#1021) among the
+     * unconditional prefixes; the gated ones (tail predicate must pass) are consulted only when no
+     * unconditional prefix matched, so a gate can never weaken an unconditional mask. A nonempty tail
+     * is required.
      */
     fun customerLeadIn(text: String): String? {
+        var longest: String? = null
         for (p in NAME_PREFIXES) {
-            if (text.startsWith(p, ignoreCase = true) && text.length > p.length) return p
-        }
-        for ((p, tailIsCustomer) in GATED_NAME_PREFIXES) {
-            if (text.startsWith(p, ignoreCase = true) && text.length > p.length &&
-                tailIsCustomer(text.substring(p.length))
+            if (p.length > (longest?.length ?: 0) && text.length > p.length &&
+                text.startsWith(p, ignoreCase = true)
             ) {
-                return p
+                longest = p
             }
         }
-        return null
+        // An unconditional match is never weakened by a longer GATED one (review of #1021): gated
+        // prefixes are consulted only when no unconditional prefix matched.
+        if (longest != null) return longest
+        for ((p, tailIsCustomer) in GATED_NAME_PREFIXES) {
+            if (p.length > (longest?.length ?: 0) && text.length > p.length &&
+                text.startsWith(p, ignoreCase = true) &&
+                tailIsCustomer(text.substring(p.length))
+            ) {
+                longest = p
+            }
+        }
+        return longest
     }
 
     val PHONE = Regex("""\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b""")

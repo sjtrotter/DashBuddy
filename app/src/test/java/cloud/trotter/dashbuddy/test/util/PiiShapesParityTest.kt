@@ -83,6 +83,8 @@ class PiiShapesParityTest {
             "Pickup for ",
             "Pickup from ",
             "Deliver to ",
+            // #1021: deliberately extend the pin so intake preserves the full dropoff reminder anchor.
+            "Deliver to door of ",
             "Delivery for ",
             "Order for ",
             "Message from ",

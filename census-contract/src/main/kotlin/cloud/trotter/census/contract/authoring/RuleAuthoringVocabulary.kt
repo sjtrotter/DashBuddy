@@ -198,7 +198,7 @@ object RuleAuthoringVocabulary {
     )
     /** Authoring-side DATA mirror of domain.privacy.PiiShapes; app guards pin these bytes. */
     val ANCHOR_LEAD_INS: List<String> = listOf(
-        "Pickup for ", "Pickup from ", "Deliver to ", "Delivery for ", "Order for ",
+        "Pickup for ", "Pickup from ", "Deliver to ", "Deliver to door of ", "Delivery for ", "Order for ",
         "Message from ", "Heading to ", "Pick up at ",
     )
     /** Prefix text only from PiiShapes.GATED_NAME_PREFIXES; authoring conservatively refuses all tails. */

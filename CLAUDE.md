@@ -318,7 +318,8 @@ name slot opening with the word `to`, so `Return to dash` never matches) that ma
 (`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary
 control. Intake prefixes (`SnapshotRedactor.NAME_PREFIXES`) are deliberately asymmetric with the runtime
 markers, with a floor (#1064): a chrome-ambiguous intake prefix carries a tail predicate
-(`GATED_NAME_PREFIXES`), `SnapshotRedactor.customerLeadIn` is the one owner, hand-written fixture
+(`GATED_NAME_PREFIXES`); `PiiShapes.customerLeadIn` is the one owner, where longest match wins (#1021),
+preserving `Deliver to door of ` over `Deliver to `. Hand-written fixture
 pseudonyms are exempted by the byte-exact `CorpusDecoys` list, and a raw-pseudonym assertion is pinned
 to files BY VALUE, never folder-wide. Field-enumeration SSOTs keep a new model field from missing a
 scrub site: `RawNotificationData.textFields()` (#666 — the 5 flat text fields; `actionLabels` is
