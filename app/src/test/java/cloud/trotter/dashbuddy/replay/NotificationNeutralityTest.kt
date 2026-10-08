@@ -69,17 +69,34 @@ class NotificationNeutralityTest {
         effectMap = EffectMap(),
     )
 
-    private val informationalRules: List<JsonObject> by lazy {
+    private val allNotificationRules: List<JsonObject> by lazy {
         File(TestRulesetFactory.rulesDir).listFiles().orEmpty()
             .filter { it.extension == "json" }.sortedBy { it.name }
             .flatMap { file ->
                 Json.parseToJsonElement(file.readText()).jsonObject["notifications"]
                     ?.jsonArray.orEmpty().map { it.jsonObject }
             }
-            .filter { rule ->
-                val intent = rule["intent"]?.jsonPrimitive?.content ?: rule.id.substringAfterLast('.')
-                "state" !in rule && intent !in StateMachineContract.EFFECT_INTENTS
-            }
+    }
+
+    private fun JsonObject.movesLifecycle(): Boolean {
+        val intent = this["intent"]?.jsonPrimitive?.content ?: id.substringAfterLast('.')
+        return "state" in this || intent in StateMachineContract.EFFECT_INTENTS
+    }
+
+    private val informationalRules: List<JsonObject> by lazy { allNotificationRules.filterNot { it.movesLifecycle() } }
+
+    /**
+     * The ratchet (review of #1224): a rule that gains a `state` block or an effect intent leaves the
+     * neutrality sweep below, so the set of lifecycle-bearing notification rules is pinned here. A
+     * change fails this test until someone reviews what that rule now does to mode / pause safety.
+     */
+    @Test
+    fun `the lifecycle-bearing notification rules are exactly the reviewed set`() {
+        assertEquals(
+            "a notification rule gained or lost a state block / effect intent — review it, then update this set",
+            setOf("doordash.notification.additional_tip"),
+            allNotificationRules.filter { it.movesLifecycle() }.map { it.id }.toSet(),
+        )
     }
 
     private val fixtureNotifications: List<RawNotificationData> by lazy {
