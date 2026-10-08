@@ -63,6 +63,7 @@ class PipelineStats @Inject constructor(
     private val suppressedDuplicate = AtomicLong()
     private val droppedUnknown = AtomicLong()
     private val mappingFailures = AtomicLong()
+    private val mapperLinkageRefusals = AtomicLong()
     private val restarts = AtomicLong()
     private val forwarded = AtomicLong()
     private val droppedAwaitingRules = AtomicLong()
@@ -176,6 +177,7 @@ class PipelineStats @Inject constructor(
     val suppressedDuplicateCount: Long get() = suppressedDuplicate.get()
     val droppedUnknownCount: Long get() = droppedUnknown.get()
     val mappingFailureCount: Long get() = mappingFailures.get()
+    val mapperLinkageRefusalCount: Long get() = mapperLinkageRefusals.get()
     val restartCount: Long get() = restarts.get()
     val forwardedCount: Long get() = forwarded.get()
     val droppedAwaitingRulesCount: Long get() = droppedAwaitingRules.get()
@@ -212,6 +214,11 @@ class PipelineStats @Inject constructor(
     /** A raw event whose node mapping threw — the event was dropped, not the pipeline. */
     fun onMappingFailure() {
         mappingFailures.incrementAndGet()
+    }
+
+    /** A frame refused at the accessibility mapper seam due to a LinkageError (#1164). */
+    fun onMapperLinkageRefusal() {
+        mapperLinkageRefusals.incrementAndGet()
     }
 
     /** A frame dropped because no ruleset is loaded yet — the sensitive gate
@@ -514,6 +521,7 @@ class PipelineStats @Inject constructor(
             " restarts=${restarts.get()}" +
             " overlaySnapshots=${overlaySnapshots.get()}" +
             " overlayScans=${overlayScans.get()}" +
+            mapperLinkageRefusalsSuffix() +
             platformAppVersionsSuffix() +
             parseShortfallSuffix() +
             bindShortfallSuffix() +
@@ -523,6 +531,9 @@ class PipelineStats @Inject constructor(
             topologySkipSuffix() +
             overlayRejectedSuffix() +
             censusSuffix()
+
+    private fun mapperLinkageRefusalsSuffix(): String =
+        mapperLinkageRefusals.get().let { if (it == 0L) "" else " mapperLinkageRefusals=$it" }
 
     /** Census counts only (#1146); absent when untouched, preserving the existing summary bytes. */
     private fun censusSuffix(): String {

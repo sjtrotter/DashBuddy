@@ -14,13 +14,15 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import timber.log.Timber
 import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AccessibilitySource @Inject constructor(
-    /** Counts the #1152 overlay-candidate decisions (`overlayRejected{…}`). */
+    /** Counts overlay-candidate decisions (#1152) and mapper linkage refusals (#1164). */
     private val stats: PipelineStats,
 ) {
 
@@ -266,11 +268,7 @@ class AccessibilitySource @Inject constructor(
      * binder call per frame and removing the read-to-read swap window.
      */
     fun getCurrentRootSnapshot(root: AccessibilityNodeInfo): RootSnapshot? {
-        val tree = try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        } ?: return null
+        val tree = mapOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
@@ -426,16 +424,29 @@ class AccessibilitySource @Inject constructor(
         root: AccessibilityNodeInfo,
         totalWindowCount: Int,
     ): RootSnapshot? {
-        val tree = try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        } ?: return null
+        val tree = mapOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
             windowContext = contextOf(window, totalWindowCount),
         )
+    }
+
+    private fun mapOrNull(root: AccessibilityNodeInfo): UiNode? = try {
+        root.toUiNode()
+    } catch (_: Exception) {
+        null
+    } catch (error: LinkageError) {
+        // #1164: a LinkageError is deterministic, so retrying per frame can never succeed.
+        // Drop the frame; other Errors (e.g. VirtualMachineError) must still propagate.
+        stats.onMapperLinkageRefusal()
+        if (mapperLinkageWarned.compareAndSet(false, true)) {
+            Timber.tag("Pipeline").w(
+                "Accessibility mapper refused a frame (%s: %s); frames are dropped and counted (#1164)",
+                error.javaClass.simpleName, error.message,
+            )
+        }
+        null
     }
 
     // --- 3. Multi-Window Support ---
@@ -450,6 +461,9 @@ class AccessibilitySource @Inject constructor(
     }
 
     companion object {
+        /** #1164: one WARN per process, including across source/service recreation. */
+        private val mapperLinkageWarned = AtomicBoolean()
+
         /**
          * #1152 D2: an overlay candidate covers at least this fraction of the display. The Uber offer
          * overlay is ~85–92 %; the puck ~0.8 %, the status bar ~5 %, heads-up notifications and
