@@ -498,6 +498,10 @@ crash in between; a lagging snapshot is safe (keyed replay dedupes). `initialize
 payload-less `SESSION_PAUSED_SAFETY` fire is honoured when no armed net exists or it lands at/after
 the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
 
+**Notification neutrality (#1224).** `NotificationNeutralityTest` enumerates stateless, non-effect-intent
+push rules through the real classifier + state machine; lifecycle and pause/resume timers stay unchanged.
+The #1090 push→screen replay pins the screen as the sole pause/deadline writer.
+
 **Graces.** Destructive commits use the unified `pendingDestructive` + `GRACE_COMMIT` (#431: dash summary,
 delivery receipt, task retire); `pendingModeResume`/`MODE_RESUME_COMMIT` debounces a screen-implied
 Paused→Online resume (#605). The receipt window is SHAPE-keyed (#1033): a COLLAPSED receipt
