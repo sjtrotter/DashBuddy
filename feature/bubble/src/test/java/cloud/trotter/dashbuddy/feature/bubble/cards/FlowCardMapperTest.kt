@@ -54,6 +54,36 @@ class FlowCardMapperTest {
         assertNull(pickup.estMinutes)
     }
 
+    @Test
+    fun `increment accepted during pickup clears earlier total economics from the closed card`() {
+        val original = offerPayload("original", AppEventType.OFFER_ACCEPTED, 1_000, 1_500)
+        val parsed = parsedOffer("addon", 10.5, 1.5).copy(
+            quoteBasis = OfferQuoteBasis.INCREMENTAL, timeToCompleteMinutes = 1L,
+        )
+        val increment = offerPayload("addon", AppEventType.OFFER_ACCEPTED, 2_000, 2_500).copy(
+            parsedOffer = parsed, evaluation = OfferEvaluator().evaluate(parsed, EvaluationConfig()),
+        )
+        val started = listOf(
+            event(AppEventType.OFFER_ACCEPTED, original, 1_500),
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T1", "J1", "Wendy's", 1_500), 1_500),
+        )
+        val confirmed = event(
+            AppEventType.PICKUP_CONFIRMED,
+            pickupPayload("T1", "J1", "Wendy's", 1_500, confirmed = 3_000), 3_000,
+        )
+        val withoutIncrement = FlowCardMapper.fold(started + confirmed)
+            .filterIsInstance<FlowCardSnapshot.Pickup>().single()
+        assertEquals(6.5, withoutIncrement.netPay!!, 0.0)
+        assertEquals(18.0, withoutIncrement.estMinutes!!, 0.0)
+        val historical = FlowCardMapper.fold(
+            started + event(AppEventType.OFFER_ACCEPTED, increment, 2_500) + confirmed,
+        ).filterIsInstance<FlowCardSnapshot.Pickup>().single()
+        assertEquals("T1", historical.taskId)
+        assertEquals(3_000L, historical.phaseEndedAt)
+        assertNull(historical.netPay)
+        assertNull(historical.estMinutes)
+    }
+
     private fun event(type: AppEventType, payload: AppEventPayload?, occurredAt: Long) = AppEvent(
         type = type,
         occurredAt = occurredAt,

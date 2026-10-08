@@ -35,6 +35,15 @@ class DoorDashAddonOfferTest {
     }
 
     @Test
+    fun `delta card with total signatures in its body never becomes a total offer`() {
+        val tree = AddonCardTree.card(extraBodyTexts = listOf("$20.00", "2 stops (5 mi) • 20 min"))
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree) ?: return
+        assertEquals("offer", match.shape)
+        val parsed = (ParsedFieldsFactory.create(match.shape, match.fields) as ParsedFields.OfferFields).parsedOffer
+        assertEquals(OfferQuoteBasis.INCREMENTAL, parsed.quoteBasis)
+    }
+
+    @Test
     fun `partial cards and mismatched signs never parse offers`() {
         val negatives = listOf(
             AddonCardTree.card(accept = false),
@@ -82,10 +91,12 @@ internal object AddonCardTree {
         merchant: String = "H-E-B",
         payOutside: Boolean = false,
         routeOutside: Boolean = false,
+        extraBodyTexts: List<String> = emptyList(),
     ): UiNode {
         val body = UiNode(className = "android.widget.ScrollView", children = buildList {
             if (!payOutside) add(text(pay))
             if (!routeOutside) add(holder(route))
+            extraBodyTexts.forEach { add(text(it)) }
             add(view(view(), text("Shop & deliver")))
             add(view())
             if (merchants) {

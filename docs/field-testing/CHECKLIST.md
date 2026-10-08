@@ -340,14 +340,15 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
   Triage source: first-line blame 2026-09-30 (`c7510dcb5`, original README L315).
 
 - [active] **🆕 NEW — Compose ADD-ON recognition and honest marginal figures (#1121).**
-  **On-dash:** an add-on shows and speaks once: add-on, extra pay/distance/time, no verdict, no net or
-  rate. A countdown redraw must not repeat speech. Decline through the sheet and timeout must return
+  **On-dash:** an add-on shows and speaks once: add-on, extra pay/distance/time, no rate-based verdict,
+  no net or rate; shopping opt-out, protect-stats, and merchant BLOCK preferences still apply in that
+  order. A countdown redraw must not repeat speech. Decline through the sheet and timeout must return
   to the original job without an accepted add-on. **Desk:** confirm `offer_popup`, INCREMENTAL basis,
   two shop rows (95 + 32 items), one display store, null estimate columns and fuel/non-fuel split;
   explicit accept keeps gross/distance but no one-minute job ETA or partial blended rate.
   Partial paired-delta cards must stay UNKNOWN over drawer chrome. Busy-area boosts and peak-pay
   chips are not add-on sightings. Real capture intake and goldens are coordinator gates.
-  - Issue: #1121. Confirmed: 0/2 (implementation awaits coordinator build and field validation)
+  - Issue: #1121. Confirmed: 0/2 (awaiting field validation)
     - desk 09-26: UNEXERCISED — no `+$` / `+N stop` text anywhere in the pull (8.98.5 or 8.99.20).
     - desk 09-27: UNEXERCISED — 0 `+$` / `+N stop` text anywhere in the pull.
     - desk 09-29: UNEXERCISED — 0 `+N stop` text; the `+$1`/`+$2` hits are the "Very busy" boost badge and idle-map

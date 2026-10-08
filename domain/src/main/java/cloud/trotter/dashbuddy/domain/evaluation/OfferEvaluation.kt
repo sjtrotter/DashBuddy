@@ -66,7 +66,7 @@ data class OfferEvaluation(
     /**
      * True for a TOTAL quote evaluated against a positive parsed distance. Costs, net, rates,
      * time and score may then be consumed as measurements. INCREMENTAL quotes keep real raw
-     * distance but have no derived metrics or verdict; consumers show marginal figures instead.
+     * distance but have no derived metrics; preference verdicts still apply.
      *
      * False when the offer's distance never parsed (#936). Those fields are then `0.0`
      * PLACEHOLDERS meaning *unknown*, not measurements: [netPayAmount] is gross (no cost was

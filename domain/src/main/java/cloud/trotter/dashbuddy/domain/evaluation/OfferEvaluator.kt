@@ -10,10 +10,29 @@ class OfferEvaluator() {
 
         val economy = config.userEconomy
         val grossPay = offer.payAmount ?: 0.0
-        // #1121: marginal-route context is absent. Bypass every automatic verdict, including opt-outs.
+        val activeRules = config.rules.filter { it.isEnabled }
+        val offerStoreNames = offer.orders.map { it.storeName.lowercase().trim() }.toSet()
+        val activeMerchantRules = activeRules.filterIsInstance<ScoringRule.MerchantRule>()
+        // #1121: these distance-independent policies retain the #936 precedence for every basis.
+        val preferenceVerdict = when {
+            !config.allowShopping && offer.isShop -> OfferQuality.SHOP_DECLINED
+            config.protectStatsMode -> OfferQuality.PROTECTED
+            activeMerchantRules.any { rule ->
+                rule.action == MerchantAction.BLOCK &&
+                    rule.storeName.lowercase().trim() in offerStoreNames
+            } -> OfferQuality.BLOCKED
+            else -> null
+        }
+        // Marginal-route context is absent: preserve a preference verdict, but derive no metrics.
         if (offer.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
             return OfferEvaluation(
-                action = OfferAction.NOTHING, score = 0.0, qualityLevel = OfferQuality.UNKNOWN,
+                action = when (preferenceVerdict) {
+                    OfferQuality.SHOP_DECLINED, OfferQuality.BLOCKED -> OfferAction.DECLINE
+                    OfferQuality.PROTECTED -> OfferAction.ACCEPT
+                    else -> OfferAction.NOTHING
+                },
+                score = if (preferenceVerdict == OfferQuality.PROTECTED) 100.0 else 0.0,
+                qualityLevel = preferenceVerdict ?: OfferQuality.UNKNOWN,
                 payAmount = grossPay, distanceMiles = offer.distanceMiles ?: 0.0,
                 fuelCostEstimate = 0.0, netPayAmount = grossPay,
                 dollarsPerMile = 0.0, dollarsPerHour = 0.0, estimatedTimeMinutes = 0.0,
@@ -94,7 +113,7 @@ class OfferEvaluator() {
         // off, Red Card orders are auto-declined") is literally true in every mode. Only the DECLINE
         // *verdict* is set here; the actual auto-decline is the app-owned automation gate consuming
         // this action downstream (rules never actuate, #425). A non-shop offer is unaffected.
-        if (!config.allowShopping && isShop) {
+        if (preferenceVerdict == OfferQuality.SHOP_DECLINED) {
             return OfferEvaluation(
                 action = OfferAction.DECLINE,
                 score = 0.0,
@@ -119,7 +138,7 @@ class OfferEvaluator() {
             )
         }
 
-        if (config.protectStatsMode) {
+        if (preferenceVerdict == OfferQuality.PROTECTED) {
             return OfferEvaluation(
                 action = OfferAction.ACCEPT,
                 score = 100.0,
@@ -148,7 +167,6 @@ class OfferEvaluator() {
         // No rules enabled is NOT a parse error (#366): parsing succeeded, so
         // return the REAL economics with an explicit no-verdict quality —
         // the old branch zeroed everything and claimed "Error Parsing Offer".
-        val activeRules = config.rules.filter { it.isEnabled }
         if (activeRules.isEmpty()) {
             return OfferEvaluation(
                 action = OfferAction.NOTHING,
@@ -175,15 +193,8 @@ class OfferEvaluator() {
         }
 
         // --- 3a. Process Merchant Rules ---
-        val offerStoreNames = offer.orders.map { it.storeName.lowercase().trim() }.toSet()
-        val activeMerchantRules = activeRules.filterIsInstance<ScoringRule.MerchantRule>()
-
         // BLOCK: hard decline before any scoring
-        val isBlocked = activeMerchantRules.any { rule ->
-            rule.action == MerchantAction.BLOCK &&
-                    rule.storeName.lowercase().trim() in offerStoreNames
-        }
-        if (isBlocked) {
+        if (preferenceVerdict == OfferQuality.BLOCKED) {
             return OfferEvaluation(
                 action = OfferAction.DECLINE,
                 score = 0.0,

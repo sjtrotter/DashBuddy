@@ -507,6 +507,17 @@
               }
             ]
           },
+          // #1121: mixed total/delta signatures must never classify an add-on as TOTAL.
+          "reject": [
+            {
+              "exists": {
+                "any": [
+                  { "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                  { "hasTextMatchesRegex": "^\\+\\d+ stops? \\(" }
+                ]
+              }
+            }
+          ],
           "parse": {
             "as": "offer",
             "fields": {

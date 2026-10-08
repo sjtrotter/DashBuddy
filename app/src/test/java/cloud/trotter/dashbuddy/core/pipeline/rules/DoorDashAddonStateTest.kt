@@ -50,14 +50,23 @@ class DoorDashAddonStateTest {
         flow = Flow.TaskPickupNavigation, modeHint = Mode.Online,
         parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION, storeName = "H-E-B"),
     )
-    private fun eval(t: Long, offer: ParsedOffer) = Observation.Loopback(
-        timestamp = t, effect = Observation.Loopback.EFFECT_OFFER_EVALUATED, targetPlatform = Platform.DoorDash,
-        payload = ObservationPayload.EvaluationResult("NOTHING", offer.offerHash, evaluator.evaluate(offer, config)),
-    )
+    private fun evaluationRequest(effects: List<AppEffect>): AppEffect.EvaluateOffer {
+        val requests = effects.filterIsInstance<AppEffect.EvaluateOffer>()
+        assertEquals(1, requests.size)
+        return requests.single()
+    }
+    private fun eval(t: Long, request: AppEffect.EvaluateOffer): Observation.Loopback {
+        val evaluation = evaluator.evaluate(request.parsedOffer, config)
+        return Observation.Loopback(
+            timestamp = t, effect = Observation.Loopback.EFFECT_OFFER_EVALUATED, targetPlatform = request.platform,
+            payload = ObservationPayload.EvaluationResult(evaluation.action.name, request.offerHash, evaluation),
+        )
+    }
     private fun liveJob(offer: ParsedOffer): AppState {
         val original = offer.copy(offerHash = "original", quoteBasis = OfferQuoteBasis.TOTAL, timeToCompleteMinutes = 30L)
-        var state = machine.step(initial(), screen(1_000L, original)).newState
-        state = machine.step(state, eval(2_000L, original)).newState
+        val presented = machine.step(initial(), screen(1_000L, original))
+        val request = evaluationRequest(presented.effects)
+        val state = machine.step(presented.newState, eval(2_000L, request)).newState
         return machine.step(state, pickup(3_000L)).newState
     }
 
@@ -75,7 +84,11 @@ class DoorDashAddonStateTest {
             }
             step(screen(10_000L, offer))
             assertEquals(55_000L, state.regions.platforms.getValue(Platform.DoorDash).pendingOffers.single().countdownExpiresAt)
-            step(eval(10_100L, offer))
+            val request = evaluationRequest(effects)
+            assertEquals(offer, request.parsedOffer)
+            assertEquals(offer.offerHash, request.offerHash)
+            assertEquals(Platform.DoorDash, request.platform)
+            step(eval(10_100L, request))
             val rerender = AddonCardTree.parse(AddonCardTree.card(countdown = "0:44"))
             step(screen(12_000L, rerender))
             assertEquals(56_000L, state.regions.platforms.getValue(Platform.DoorDash).pendingOffers.single().countdownExpiresAt)
@@ -87,13 +100,20 @@ class DoorDashAddonStateTest {
             step(pickup(14_000L))
             val events = effects.filterIsInstance<AppEffect.LogEvent>().map { it.event.type }
             assertEquals(1, events.count { it == AppEventType.OFFER_RECEIVED })
-            assertEquals(1, effects.filterIsInstance<AppEffect.SpeakOffer>().size)
+            assertEquals(1, effects.filterIsInstance<AppEffect.EvaluateOffer>().size)
+            val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
+            assertEquals(1, spoken.size)
+            assertEquals(OfferQuoteBasis.INCREMENTAL, spoken.single().evaluation.quoteBasis)
+            assertFalse(spoken.single().evaluation.hasDistanceMetrics)
             assertFalse(events.contains(AppEventType.OFFER_ACCEPTED))
             assertEquals(1, events.count { it == if (sheet) AppEventType.OFFER_DECLINED else AppEventType.OFFER_TIMEOUT })
             val region = state.regions.platforms.getValue(Platform.DoorDash)
             assertTrue(region.pendingOffers.isEmpty())
             assertEquals(original.acceptedOffers, region.activeJob!!.acceptedOffers)
-            effects.filterIsInstance<AppEffect.PostOfferNotification>().forEach {
+            val notifications = effects.filterIsInstance<AppEffect.PostOfferNotification>()
+            assertEquals(2, notifications.size)
+            assertEquals(listOf(false, true), notifications.map { it.refreshOnly })
+            notifications.forEach {
                 assertAddonCard(it.offer)
                 assertFalse(it.evaluation.hasDistanceMetrics)
             }
@@ -106,8 +126,10 @@ class DoorDashAddonStateTest {
         for (withEvaluation in listOf(true, false)) {
             var state = liveJob(offer)
             val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
-            state = machine.step(state, screen(10_000L, offer)).newState
-            if (withEvaluation) state = machine.step(state, eval(10_100L, offer)).newState
+            val presented = machine.step(state, screen(10_000L, offer))
+            state = presented.newState
+            val request = evaluationRequest(presented.effects)
+            if (withEvaluation) state = machine.step(state, eval(10_100L, request)).newState
             val click = Observation.Click(
                 timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
                 flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
