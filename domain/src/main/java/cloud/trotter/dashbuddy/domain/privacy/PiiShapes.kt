@@ -70,8 +70,10 @@ object PiiShapes {
      * The ONE owner of "does this value open with a customer lead-in whose tail is raw PII?" —
      * returns the prefix to keep, or null. Shared by `SnapshotRedactor.scrub` and the committed-corpus PII guard
      * (`CaptureRedactionCorpusTest` FIX 4) so the scrubber and the gate that polices its output
-     * can never disagree about what a lead-in is (#1064). Longest match wins (#1021) across
-     * unconditional prefixes and gated prefixes whose tail predicate passes; a nonempty tail is required.
+     * can never disagree about what a lead-in is (#1064). Longest match wins (#1021) among the
+     * unconditional prefixes; the gated ones (tail predicate must pass) are consulted only when no
+     * unconditional prefix matched, so a gate can never weaken an unconditional mask. A nonempty tail
+     * is required.
      */
     fun customerLeadIn(text: String): String? {
         var longest: String? = null
@@ -82,6 +84,9 @@ object PiiShapes {
                 longest = p
             }
         }
+        // An unconditional match is never weakened by a longer GATED one (review of #1021): gated
+        // prefixes are consulted only when no unconditional prefix matched.
+        if (longest != null) return longest
         for ((p, tailIsCustomer) in GATED_NAME_PREFIXES) {
             if (p.length > (longest?.length ?: 0) && text.length > p.length &&
                 text.startsWith(p, ignoreCase = true) &&
