@@ -54,6 +54,8 @@ data class WalkedNode(
     val displayDesc: String? = desc?.trim()?.takeIf { it.isNotEmpty() },
     val displayPrecedingSiblingText: String? = precedingSiblingText?.trim()?.takeIf { it.isNotEmpty() },
     val displayPrecedingSiblingDesc: String? = precedingSiblingDesc?.trim()?.takeIf { it.isNotEmpty() },
+    val idPadded: Boolean = false,
+    val classPadded: Boolean = false,
 )
 
 /** Bounded result; list delegation keeps paths convenient for authoring forms. */
@@ -92,8 +94,10 @@ object EnvelopeWalk {
             val node = level.children[index] as? JsonObject ?: continue
             if (!wellTyped(node)) continue
             val path = level.parentPath?.plus(index) ?: emptyList()
-            val className = node.string("class")
-            val viewId = node.string("id")
+            val rawClassName = node.rawString("class")
+            val rawViewId = node.rawString("id")
+            val className = rawClassName?.trim()?.takeIf { it.isNotEmpty() }
+            val viewId = rawViewId?.trim()?.takeIf { it.isNotEmpty() }
             val clickable = node.flag("isClickable") ?: false
             val hasClickAction = node.flag("clickAction") ?: false
             val takesClick = clickable || hasClickAction
@@ -127,6 +131,8 @@ object EnvelopeWalk {
                     (level.children[index - 1] as? JsonObject)?.takeIf { wellTyped(it) }?.rawString("desc")
                 } else null,
                 takesClickAncestor = level.takesClickAncestor,
+                idPadded = rawViewId != rawViewId?.trim(),
+                classPadded = rawClassName != rawClassName?.trim(),
             )
             val children = node["children"] as? JsonArray
             if (!children.isNullOrEmpty()) {
@@ -137,6 +143,10 @@ object EnvelopeWalk {
         return WalkResult(result.toList(), truncated || stack.any { it.index < it.children.size })
     }
 
+    /**
+     * Trimmed slots suppress blanks. IDs/classes also retain padding flags so RuleDraft refuses
+     * padded selections: the compiler matches raw strings. Trimmed peers remain conservative.
+     */
     private fun JsonObject.string(key: String): String? =
         rawString(key)?.trim()?.takeIf { it.isNotEmpty() }
 

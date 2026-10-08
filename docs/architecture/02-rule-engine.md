@@ -357,6 +357,17 @@ emits `siblingOf` with offset 1; unsafe or ambiguous labels refuse. Hash fields 
 redact predicate, while text labels use `hasPrecedingSiblingText`. Redaction intentionally uses the
 broad id (or class plus label) predicate to mask every matching peer; ambiguity is safe for redaction.
 
+`RuleAuthoringSemanticParityTest` (app, #1207) executes `RuleCompiler.compileNodePred` against
+synthetic case, whitespace, prefix/suffix/substring, null, and resource-boundary variants for all
+six emitted predicates. Private peer helpers are exercised through public draft acceptance and
+exact ambiguity refusals, with competing nodes under separate parents. `hasText` has no peer
+counter: its raw emitted anchor and compiler equality are pinned directly, as are desc anchors.
+Currency/distance shapes include carriage-return and final-newline cases. Compiled `find` parsing
+is checked against `EnvelopeWalk` pre-order, including root-before-child and deep-before-sibling.
+Two existing discrepancies are pinned separately: `EnvelopeWalk` trims IDs/classes, so a peer with
+a trailing space collides in the draft but fails the compiler's raw suffix comparison. This test-only
+gate documents that conservative competitor exception; selected nodes with padded IDs/classes are refused outright.
+
 `CensusDraftRoundTripTest` compiles all three drafts alone, recognises their sources, asserts parsed
 values/binds, checks every DoorDash negative frame, and compares draft-only and production redaction
 with the exact `CompiledRedact.apply` step used by `CaptureWriter`. Before constructing the coverage
