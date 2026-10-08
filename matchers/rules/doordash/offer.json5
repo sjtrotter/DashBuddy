@@ -741,17 +741,16 @@
       "id": "doordash.screen.offer_accepting",
       "priority": 127,
       // Any surviving accept affordance means the card is still actionable — that is a
-      // LIVE offer (offer_popup's territory), not a teardown. These four rejects are what
+      // LIVE offer (offer_popup's territory), not a teardown. These three rejects are what
       // make the two shapes structurally disjoint, independent of priority order.
+      // #1222: this rule-level reject never ran until rule-level rejects were hoisted into every
+      // branch. Its fourth entry, `accept_decline_footer_container`, was dropped then: that
+      // container SURVIVES into the accepting spinner this rule exists to recognize (the committed
+      // 2026-07-30 `offer_accepting` fixture carries it), so it is not a live-offer affordance.
       "reject": [
         {
           "exists": {
             "hasIdSuffix": "accept_button"
-          }
-        },
-        {
-          "exists": {
-            "hasIdSuffix": "accept_decline_footer_container"
           }
         },
         {

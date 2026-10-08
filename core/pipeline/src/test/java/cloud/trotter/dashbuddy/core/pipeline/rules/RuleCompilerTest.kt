@@ -1453,6 +1453,57 @@ class RuleCompilerTest {
     }
 
     // =========================================================================
+    // reject inheritance (#1222)
+    // =========================================================================
+
+    @Test
+    fun `a rule-level reject applies to every branch alongside its own rejects (#1222)`() {
+        val rule = """
+            [{
+              "id": "test.screen.branched_reject",
+              "priority": 9001,
+              "reject": [ { "exists": { "hasText": "blocked" } } ],
+              "branches": [
+                {
+                  "intent": "first",
+                  "require": { "exists": { "hasText": "first" } },
+                  "reject": [ { "exists": { "hasText": "first blocked" } } ]
+                },
+                {
+                  "intent": "second",
+                  "require": { "exists": { "hasText": "second" } }
+                }
+              ]
+            }]
+        """.trimIndent()
+        val ruleset = Ruleset(RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN))
+
+        for (intent in listOf("first", "second")) {
+            assertNull(ruleset.matchFirst(tree(node(text = intent), node(text = "blocked"))))
+            assertEquals(intent, ruleset.matchFirst(tree(node(text = intent)))?.intent)
+        }
+        assertNull(ruleset.matchFirst(tree(node(text = "first"), node(text = "first blocked"))))
+        assertEquals("second", ruleset.matchFirst(tree(node(text = "second"), node(text = "first blocked")))?.intent)
+        assertNull(ruleset.matchFirst(tree(node(text = "unrelated"))))
+    }
+
+    @Test
+    fun `an unbranched rule still applies its reject (#1222)`() {
+        val rule = """
+            [{
+              "id": "test.screen.unbranched_reject",
+              "priority": 9001,
+              "reject": [ { "exists": { "hasText": "blocked" } } ],
+              "require": { "exists": { "hasText": "match" } }
+            }]
+        """.trimIndent()
+        val ruleset = Ruleset(RuleCompiler.compileRules<UiNode>(parseJson(rule).jsonArray, RuleContext.SCREEN))
+
+        assertNull(ruleset.matchFirst(tree(node(text = "match"), node(text = "blocked"))))
+        assertEquals("unbranched_reject", ruleset.matchFirst(tree(node(text = "match")))?.intent)
+    }
+
+    // =========================================================================
     // redact block placement (#624 VET V3)
     // =========================================================================
 

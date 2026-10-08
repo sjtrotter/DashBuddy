@@ -78,7 +78,7 @@
         },
         "reject": {
           "type": "array",
-          "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch.",
+          "description": "Phase 2: Fail-fast negative checks. Any match skips this rule/branch. On a branched rule, these checks apply to every branch and are prepended to each branch's own rejects.",
           "items": { "$ref": "#/$defs/treePredicate" }
         },
         "require": {
@@ -234,7 +234,7 @@
         "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
-          "description": "Fail-fast negative checks. Any match skips this rule/branch.",
+          "description": "Fail-fast negative checks. Any match skips this rule/branch. On a branched rule, these checks apply to every branch and are prepended to each branch's own rejects.",
           "items": { "$ref": "#/$defs/nodePredicate" }
         },
         "require": {
@@ -289,7 +289,7 @@
         "state": { "$ref": "#/$defs/stateBlock" },
         "reject": {
           "type": "array",
-          "description": "Fail-fast negative checks. Any match skips this rule/branch.",
+          "description": "Fail-fast negative checks. Any match skips this rule/branch. On a branched rule, these checks apply to every branch and are prepended to each branch's own rejects.",
           "items": { "$ref": "#/$defs/notificationPredicate" }
         },
         "require": {

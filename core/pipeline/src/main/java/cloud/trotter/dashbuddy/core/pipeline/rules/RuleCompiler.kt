@@ -379,6 +379,8 @@ object RuleCompiler {
         }
 
         val branches: List<CompiledBranch<TInput>> = if ("branches" in obj) {
+            // #1222: rule-level rejects apply to every branch, before its own rejects.
+            val ruleRejectChecks = compileRejects<TInput>(obj["reject"], context)
             obj["branches"]!!.jsonArray.map { branchElement ->
                 val branchObj = branchElement.jsonObject
                 // #624 (VET V3): `redact` is a WHOLE-RULE directive — compileBranch
@@ -398,7 +400,7 @@ object RuleCompiler {
                 validateKnownKeys(branchObj, knownBranchKeys(context), scope = "branch", ruleId = id)
                 compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj,
-                    ruleOfferSurface = ruleState.offerSurface)
+                    ruleOfferSurface = ruleState.offerSurface, ruleRejectChecks = ruleRejectChecks)
             }
         } else {
             listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id, ruleOfferSurface = ruleState.offerSurface))
@@ -695,6 +697,13 @@ object RuleCompiler {
         }
     }
 
+    private fun <TInput> compileRejects(
+        json: JsonElement?,
+        context: RuleContext,
+    ): List<(TInput) -> Boolean> = json?.jsonArray?.map { entry ->
+        compilePredicate<TInput>(entry, context)
+    } ?: emptyList()
+
     @Suppress("UNCHECKED_CAST")
     private fun <TInput> compileBranch(
         obj: JsonObject,
@@ -706,6 +715,7 @@ object RuleCompiler {
         ruleParseAs: String? = null,
         ruleBindObj: JsonObject? = null,
         ruleOfferSurface: OfferSurface? = null,
+        ruleRejectChecks: List<(TInput) -> Boolean> = emptyList(),
     ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
             ?: throw RuleCompileException("Branch has no rule id to derive target from")
@@ -725,10 +735,7 @@ object RuleCompiler {
         val bindings = effectiveBindObj?.let { compileBindBlock(it) } ?: emptyList()
 
         // --- Phase 2: Reject ---
-        val rejectJson = obj["reject"]
-        val rejectChecks: List<(TInput) -> Boolean> = rejectJson?.jsonArray?.map { rejectEntry ->
-            compilePredicate(rejectEntry, context)
-        } ?: emptyList()
+        val rejectChecks = ruleRejectChecks + compileRejects<TInput>(obj["reject"], context)
 
         // --- Phase 3: Require ---
         val requireJson = obj["require"]
