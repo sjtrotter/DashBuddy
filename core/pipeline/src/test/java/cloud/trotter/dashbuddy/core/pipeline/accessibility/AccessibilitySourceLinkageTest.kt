@@ -24,9 +24,12 @@ class AccessibilitySourceLinkageTest : WindowResolverTestBase() {
     fun `both snapshot seams drop linkage failures and WARN once across source instances`() {
         val root = node(ddPkg, "tree text must never be logged")
         // toUiNode's first framework property read, before any tree conversion.
-        whenever(root.packageName).thenThrow(NoSuchMethodError("missing framework method"))
+        // The message carries a canary: a linkage message is not PII-safe by construction, so the
+        // WARN must name the error class only.
+        whenever(root.packageName).thenThrow(NoSuchMethodError("FAKEMESSAGECANARY missing framework method"))
         val w = window(3, 1, root)
         val h = harness(root, listOf(w))
+        AccessibilitySource.resetMapperLinkageWarnForTest()
         assertEquals(0L, h.stats.mapperLinkageRefusalCount)
         assertFalse(h.stats.summary().contains("mapperLinkageRefusals"))
 
@@ -45,12 +48,25 @@ class AccessibilitySourceLinkageTest : WindowResolverTestBase() {
             assertEquals(2L, h.stats.mapperLinkageRefusalCount)
             assertTrue(h.stats.summary().contains(" mapperLinkageRefusals=2"))
             assertEquals(
-                listOf(LogEntry(Log.WARN, "Pipeline", "Accessibility mapper refused a frame (NoSuchMethodError: missing framework method); frames are dropped and counted (#1164)", null)),
+                listOf(LogEntry(Log.WARN, "Pipeline", "Accessibility mapper refused a frame (NoSuchMethodError); frames are dropped and counted (#1164)", null)),
                 entries,
             )
+            assertTrue("no message text reaches the log", entries.none { "FAKEMESSAGECANARY" in it.message })
         } finally {
             Timber.uproot(recorder)
+            AccessibilitySource.resetMapperLinkageWarnForTest()
         }
+    }
+
+    @Test
+    fun `a missing class is an API mismatch too`() {
+        val root = node(ddPkg, "Offer")
+        whenever(root.packageName).thenThrow(NoClassDefFoundError("android/view/accessibility/Missing"))
+        val w = window(3, 1, root)
+        val h = harness(root, listOf(w))
+        assertNull(h.source.getCurrentRootSnapshot())
+        assertEquals(1L, h.stats.mapperLinkageRefusalCount)
+        AccessibilitySource.resetMapperLinkageWarnForTest()
     }
 
     @Test
@@ -67,7 +83,12 @@ class AccessibilitySourceLinkageTest : WindowResolverTestBase() {
 
     @Test
     fun `other Errors still propagate through both snapshot seams`() {
-        for (error in listOf(OutOfMemoryError("heap exhausted"), AssertionError("broken invariant"))) {
+        // A VerifyError / ExceptionInInitializerError is a LinkageError too, but an app DEFECT, not an
+        // API mismatch: it must reach the supervisor's ERROR, never become a silently dropped frame.
+        for (error in listOf(
+            OutOfMemoryError("heap exhausted"), AssertionError("broken invariant"),
+            VerifyError("bad bytecode"), ExceptionInInitializerError("bad initializer"),
+        )) {
             val root = node(ddPkg, "Offer")
             whenever(root.packageName).thenThrow(error)
             val w = window(3, 1, root)

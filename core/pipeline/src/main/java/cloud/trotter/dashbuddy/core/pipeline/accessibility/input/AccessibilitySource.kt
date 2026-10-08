@@ -268,7 +268,7 @@ class AccessibilitySource @Inject constructor(
      * binder call per frame and removing the read-to-read swap window.
      */
     fun getCurrentRootSnapshot(root: AccessibilityNodeInfo): RootSnapshot? {
-        val tree = mapOrNull(root) ?: return null
+        val tree = mapNodeOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
@@ -424,7 +424,7 @@ class AccessibilitySource @Inject constructor(
         root: AccessibilityNodeInfo,
         totalWindowCount: Int,
     ): RootSnapshot? {
-        val tree = mapOrNull(root) ?: return null
+        val tree = mapNodeOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
@@ -432,21 +432,38 @@ class AccessibilitySource @Inject constructor(
         )
     }
 
-    private fun mapOrNull(root: AccessibilityNodeInfo): UiNode? = try {
-        root.toUiNode()
+    /**
+     * #1164 — the ONE accessibility mapping seam (both snapshot paths and the click path): a node
+     * that fails to map costs that frame, never the sensing flow.
+     *
+     * Beside `Exception`, only the API-MISMATCH linkage errors are caught: a missing method, field or
+     * class (`IncompatibleClassChangeError` covers `NoSuchMethodError`/`NoSuchFieldError`/
+     * `AbstractMethodError`; plus `NoClassDefFoundError`) — what an unguarded newer-SDK call throws on
+     * an older device (#1161). They are deterministic, so retrying per frame can never succeed, and
+     * letting them escape restart-loops the supervised flow with no frame ever admitted (#909). Every
+     * other `Error` — a `VerifyError`, an `ExceptionInInitializerError`, a `VirtualMachineError` — is
+     * an app defect or a dying VM and still propagates to the supervisor's ERROR. The WARN names the
+     * error CLASS only: a message is not PII-safe by construction (principle 7).
+     */
+    fun mapNodeOrNull(node: AccessibilityNodeInfo): UiNode? = try {
+        node.toUiNode()
     } catch (_: Exception) {
         null
-    } catch (error: LinkageError) {
-        // #1164: a LinkageError is deterministic, so retrying per frame can never succeed.
-        // Drop the frame; other Errors (e.g. VirtualMachineError) must still propagate.
+    } catch (error: IncompatibleClassChangeError) {
+        onApiMismatch(error)
+    } catch (error: NoClassDefFoundError) {
+        onApiMismatch(error)
+    }
+
+    private fun onApiMismatch(error: LinkageError): UiNode? {
         stats.onMapperLinkageRefusal()
         if (mapperLinkageWarned.compareAndSet(false, true)) {
             Timber.tag("Pipeline").w(
-                "Accessibility mapper refused a frame (%s: %s); frames are dropped and counted (#1164)",
-                error.javaClass.simpleName, error.message,
+                "Accessibility mapper refused a frame (%s); frames are dropped and counted (#1164)",
+                error.javaClass.simpleName,
             )
         }
-        null
+        return null
     }
 
     // --- 3. Multi-Window Support ---
@@ -463,6 +480,9 @@ class AccessibilitySource @Inject constructor(
     companion object {
         /** #1164: one WARN per process, including across source/service recreation. */
         private val mapperLinkageWarned = AtomicBoolean()
+
+        /** Re-arm the once-per-process WARN — tests only (the gate is process-wide by design). */
+        internal fun resetMapperLinkageWarnForTest() = mapperLinkageWarned.set(false)
 
         /**
          * #1152 D2: an overlay candidate covers at least this fraction of the display. The Uber offer
