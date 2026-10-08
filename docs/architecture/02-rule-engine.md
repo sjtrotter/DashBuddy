@@ -355,7 +355,7 @@ Currency/distance shapes include carriage-return and final-newline cases. Compil
 is checked against `EnvelopeWalk` pre-order, including root-before-child and deep-before-sibling.
 Two existing discrepancies are pinned separately: `EnvelopeWalk` trims IDs/classes, so a peer with
 a trailing space collides in the draft but fails the compiler's raw suffix comparison. This test-only
-gate documents that normalization exception without changing production behavior.
+gate documents that conservative competitor exception; selected nodes with padded IDs/classes are refused outright.
 
 `CensusDraftRoundTripTest` compiles all three drafts alone, recognises their sources, asserts parsed
 values/binds, checks every DoorDash negative frame, and compares draft-only and production redaction

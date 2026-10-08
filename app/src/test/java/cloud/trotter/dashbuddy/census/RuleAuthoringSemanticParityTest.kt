@@ -128,7 +128,8 @@ class RuleAuthoringSemanticParityTest {
     @Test
     fun `wire normalization is an explicit exception for trailing id and class whitespace`() {
         // EnvelopeWalk trims IDs/classes before private peer checks; the compiler sees raw strings.
-        // Keep this existing discrepancy visible instead of normalizing the compiler's test input.
+        // A padded competitor conservatively refuses as ambiguous; a padded selection is refused
+        // outright, as pinned below. Keep the compiler's test input raw.
         for (case in listOf(
             Case("hasIdSuffix", ":id/value", "pkg:id/value ", false),
             Case("hasClassNameEndsWith", "TextView", "TextView ", false),
@@ -137,6 +138,26 @@ class RuleAuthoringSemanticParityTest {
             assertEquals("raw compiler $case", false, RuleCompiler.compileNodePred(case.atom)(probe.candidate))
             val result = generate(probe.tree, base.copy(fields = listOf(probe.field)))
             assertEquals("normalized draft $case", DraftResult.Refused(listOf(probe.error)), result)
+        }
+    }
+
+    @Test
+    fun `selected nodes with padded ids or classes are refused outright`() {
+        val selected = PathRef(listOf(0))
+        for ((slot, node) in listOf(
+            "id" to UiNode(text = "selected", viewIdResourceName = "pkg:id/value ", className = "TextView"),
+            "class" to UiNode(text = "selected", viewIdResourceName = "pkg:id/value", className = "TextView "),
+        )) {
+            val tree = UiNode(className = "Layout", viewIdResourceName = "pkg:id/root", children = listOf(node))
+                .restoreParents()
+            for (selection in listOf(
+                base.copy(anchors = base.anchors + selected),
+                base.copy(fields = listOf(FieldAssignment(selected, "zoneName"))),
+                base.copy(redacts = listOf(selected)),
+            )) {
+                assertEquals("padded $slot: $selection",
+                    DraftResult.Refused(listOf("whitespace-padded $slot at [0]")), generate(tree, selection))
+            }
         }
     }
 

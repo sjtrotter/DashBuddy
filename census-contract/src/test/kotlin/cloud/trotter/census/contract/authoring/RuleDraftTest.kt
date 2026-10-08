@@ -74,6 +74,38 @@ class RuleDraftTest {
     private fun DraftResult.Ok.fields(): JsonObject = rule().getValue("parse").jsonObject.getValue("fields").jsonObject
 
     @Test
+    fun `padded selections refuse for every role while an independent anchor remains valid`() {
+        for ((slot, value) in listOf("id" to "pkg:id/value", "class" to "TextView")) {
+            for (padded in listOf(" $value", "$value ", "\t$value\n")) {
+                val selected = JsonObject(node(id = "value", text = "selected", clickable = true) +
+                    (slot to JsonPrimitive(padded)))
+                val payload = node(children = listOf(selected))
+                for (selection in listOf(
+                    base.copy(anchors = listOf(root, child)),
+                    base.copy(fields = listOf(FieldAssignment(child, "zoneName"))),
+                    base.copy(redacts = listOf(child)),
+                    base.copy(binds = listOf(BindAssignment(child, "expandButton"))),
+                )) {
+                    assertEquals(listOf("whitespace-padded $slot at [0]"), errors(selection, payload))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `sibling description field selection also refuses padded identity slots`() {
+        val selected = PathRef(listOf(1))
+        for ((slot, value) in listOf("id" to " ", "class" to "TextView ")) {
+            val payload = node(children = listOf(
+                node(id = null, desc = "Zone label"),
+                JsonObject(node(id = null, text = "selected") + (slot to JsonPrimitive(value))),
+            ))
+            assertEquals(listOf("whitespace-padded $slot at [1]"),
+                errors(base.copy(fields = listOf(FieldAssignment(selected, "zoneName"))), payload))
+        }
+    }
+
+    @Test
     fun `validation collects all independent selection errors`() {
         val result = errors(base.copy(
             screenClass = "bad", shape = "bad", intent = "Bad!", priority = 999,

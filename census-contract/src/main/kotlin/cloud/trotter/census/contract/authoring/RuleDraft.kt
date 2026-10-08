@@ -268,6 +268,13 @@ object RuleDraft {
         }
 
         private fun validateSelections() {
+            val refs = selections.anchors + selections.fields.map { it.node } +
+                selections.binds.map { it.node } + selections.redacts
+            for (ref in refs.distinct()) {
+                val node = byPath[ref.path] ?: continue
+                if (node.idPadded) errors += "whitespace-padded id at ${ref.path}"
+                if (node.classPadded) errors += "whitespace-padded class at ${ref.path}"
+            }
             if (selections.screenClass !in Vocabulary.SCREEN_CLASSES) errors += "unknown screenClass"
             if (selections.shape !in Vocabulary.SHAPES) errors += "unknown shape"
             if (selections.screenClass in Vocabulary.SCREEN_CLASSES &&
