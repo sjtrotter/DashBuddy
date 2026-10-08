@@ -374,6 +374,8 @@ recognise the source frame → stay UNKNOWN on the negative corpus → compile m
 - **Partitions:** `matchFirst` evaluates the non-overrideable partition first, then the overrideable
   one, each priority-ordered (#419). `sensitive.known` is priority 0 + `overrideable: false`;
   `sensitive.catchall` is priority 999 + overrideable.
+- **Additional-tip pushes (#1002):** DoorDash accepts timestamped and short forms; both parse
+  amount/store, with nullable `deliveredAt` absent in the short form.
 - **Click screen gate:** `screenIs` names the screen target(s) a click branch may match on — a string
   OR (since #1104) a non-empty ARRAY, compiled to `Set<String>?`; empty/non-string forms are loud
   compile rejects. The array exists because a tap can be classified BEFORE its own screen is admitted.

@@ -28,6 +28,14 @@ value flows straight into recognition tests with no publish step. The corpus↔r
 is deferred to N5/#638. The canonical files are compiled by `RuleCompiler` and matched by
 `ObservationClassifier`.
 
+DoorDash's `additional_tip` notification rule (#1002) accepts both the timestamped
+`added $<amount> tip on a past <store> order delivered at <M/D, h:mm AM>` form and the short
+`added $<amount> tip on a past <store> order.` form through `require.any`. Both extract the same
+`amount` and `storeName`; `deliveredAt` remains nullable and is null for the short form. Store
+names are parsed data, never recognition keys. The rule has no effect `dedupeKey`; notification
+content hashing includes the full text, and `NotificationFields.dedupeHash` includes amount and
+store. A missing timestamp therefore does not collapse tips with different amounts or stores.
+
 `presentationIdentity` is a load-validated literal (`StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES`); `assignmentId` is an optional offer field hashed at the factory (#1069).
 Which WINDOW a frame is read from is the sensor layer's decision (§1), never a rule's: platform
 offer overlays (a11y `TYPE_SYSTEM`, `Platform.offerOverlay`) are candidates by size + package

@@ -7,7 +7,14 @@
       "priority": 10,
       "intent": "additional_tip",
       "require": {
-        "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
+        "any": [
+          {
+            "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
+          },
+          {
+            "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order\\.(?:\\s|$)"
+          }
+        ]
       },
       "parse": {
         "as": "notification",
@@ -20,7 +27,7 @@
           },
           "storeName": {
             "from": "fullString",
-            "find": "past (.+?) order delivered",
+            "find": "past (.+?) order(?: delivered at|\\.|$)",
             "group": 1,
             "transform": "trim"
           },
