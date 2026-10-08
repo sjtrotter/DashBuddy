@@ -14,10 +14,12 @@
           {
             // #1002: the SHORT form ("A customer added $2.00 tip on a past Target order.") is
             // gated on DoorDash's own push title. A customer CHAT could quote the same words, and
-            // this rule outranks the chat rule (whose redact would then never run); a chat's title
-            // is the customer's name, never "Tip Update".
+            // this rule outranks the chat rule (whose redact would then never run). A chat's title is
+            // the customer's name, so it is gated on the title AND excluded from the chat channel.
             "all": [
               { "titleEquals": "Tip Update" },
+              // …and never on the in-app chat channel (a customer can be NAMED "Tip Update").
+              { "not": { "channelIdEquals": "dasher-notification-channel-inapp-chat" } },
               { "textMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order\\.(?:\\s|$)" }
             ]
           }

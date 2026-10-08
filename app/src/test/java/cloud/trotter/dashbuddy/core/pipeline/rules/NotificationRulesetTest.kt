@@ -14,6 +14,8 @@ import org.junit.Test
  */
 class NotificationRulesetTest {
 
+    private val CHAT_CHANNEL = "dasher-notification-channel-inapp-chat"
+
     private fun raw(title: String? = null, text: String? = null, bigText: String? = null) =
         RawNotificationData(
             title = title, text = text, bigText = bigText, tickerText = null,
@@ -53,10 +55,14 @@ class NotificationRulesetTest {
     fun `a customer chat quoting the short tip wording is never claimed as a tip (#1002 review)`() {
         // The short form is gated on DoorDash's own "Tip Update" title: a chat's title is the
         // customer's name, and the tip rule outranks the chat rule (whose redact would never run).
-        val result = TestRulesetFactory.notificationRuleset.matchFirst(
-            raw(title = "Jane D", text = "I added \$2.00 tip on a past Target order. Leave it at the door")
-        )
-        assertNotEquals("doordash.notification.additional_tip", result?.ruleId)
+        for (title in listOf("Jane D", "Tip Update")) { // a customer can be NAMED "Tip Update"
+            val result = requireNotNull(TestRulesetFactory.notificationRuleset.matchFirst(
+                raw(title = title, text = "I added \$2.00 tip on a past Target order. Leave it at the door")
+                    .copy(channelId = CHAT_CHANNEL)
+            )) { title }
+            assertNotEquals(title, "doordash.notification.additional_tip", result.ruleId)
+            assertEquals("the chat rule — and its redact — claims it", "customer_message", result.intent)
+        }
     }
 
     @Test
