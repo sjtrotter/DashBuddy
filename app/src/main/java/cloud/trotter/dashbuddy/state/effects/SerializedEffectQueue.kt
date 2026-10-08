@@ -193,8 +193,10 @@ internal class SerializedEffectQueue(
      */
     private suspend fun drainQueue() {
         for (item in channel) {
-            inFlight.set(if (item is Item.Effect) item.effect::class.simpleName else "barrier")
             try {
+                // Inside the try (review of #913): anything thrown here must still reach the
+                // `finally` that balances `pending`, or a phantom count keeps the watchdog alive.
+                inFlight.set(if (item is Item.Effect) item.effect::class.simpleName else "barrier")
                 when (item) {
                     is Item.Effect -> execute(item.effect, item.recovering, item.correlationVersion)
                     is Item.Barrier -> item.action()
