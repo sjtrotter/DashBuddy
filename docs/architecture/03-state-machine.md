@@ -213,7 +213,18 @@ RESUME. **The paused-dash PUSH is deliberately NOT a mode writer (#1090, decisio
 buffer, and the push carries no countdown, so letting it declare Paused would arm a net that ends the
 session almost immediately; a stale or re-posted push could also re-pause a resumed dash. The screen
 stays the authority; the push is corroborating evidence for desk analysis. Promoting it to a lifecycle
-input needs a countdown source and two field sightings showing it never arrives late. **A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
+input needs a countdown source and two field sightings showing it never arrives late.
+`NotificationNeutralityTest` (#1224, outside `AllMatchersSuite`) enumerates generated notification
+rules with no `state` and no intent in `StateMachineContract.EFFECT_INTENTS` (25-rule floor, zero
+allowed skips). It prefers notification corpus fixtures, otherwise synthesizes minimal `require`
+witnesses, and verifies the intended rule through the production classifier. From online idle,
+paused with a live `pauseSafety: PendingWake`, and pending-resume/task-retire states, the real
+`StateMachine` must preserve mode, session, pause deadline/wake identity, both pendings, and active
+task/job, with no pause-safety or mode-resume timer arm/cancel. Deadlines are deliberately live:
+overdue graces may legitimately expire on any observation. The mixed replay sends the #1090 push
+at t, then a real `dash_paused` screen at t+8 s: exactly one `DASH_PAUSED`, a safety deadline and
+timer arm derived only from the screen's countdown, and zero `MODE_RESUME_COMMIT` arms/cancels.
+**A replayed REGION timer is never executed** (round 5): `SideEffectEngine` skips a
 `TimeoutType.REGION_TIMERS` arm or cancel while `recovering == true`, because such an arm is
 scheduled against a replayed frame's timestamp and so fires at the 1 ms floor mid-recovery — logging
 a `Timer Expired` WARN into the shareable log for a pending the hygiene may be about to drop (P7),
