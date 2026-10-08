@@ -300,6 +300,183 @@ class StoreResolutionProjectorTest {
         assertNull(refold.storeKey)
     }
 
+    // ── #906: a driver rename sweeps only the prior key, after detaching the delivery ──
+
+    /** Seed the last-reference shape directly: normal anchored resolution also keys a pickup row. */
+    private suspend fun seedDeliveryWithOnlyStoreReference(): Long {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, totalPay = 8.0),
+        )
+        projector().catchUp()
+        dao.upsertStore(
+            StoreEntity(
+                storeKey = targetKey, platform = "doordash", normalizedChain = "target",
+                chainDisplay = "Target", runningKey = "02426", offerNameForm = null,
+                pickupNameForm = "Target", payoutNameForm = null, address = null,
+            ),
+        )
+        dao.upsertDelivery(dao.deliveryRecord(d)!!.copy(storeKey = targetKey))
+        assertEquals(1, dao.storeKeyReferenceCount(targetKey))
+        return d
+    }
+
+    @Test
+    fun `#906 — renaming the last referencing delivery deletes only its prior store`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        val unrelated = dao.store(targetKey)!!.copy(storeKey = "doordash|target|999", runningKey = "999")
+        dao.upsertStore(unrelated) // An unrelated zero-reference entity must NOT be swept (#904).
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+
+        projector().catchUp()
+
+        assertNull("last reference detached, prior entity gone", dao.store(targetKey))
+        assertEquals("no global unreferenced-row sweep", listOf(unrelated), dao.allStores())
+        val row = dao.deliveryRecord(d)!!
+        assertEquals("Target Cafe", row.storeName)
+        assertNull(row.storeKey)
+        assertEquals(1, row.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — a second delivery referencing the prior key keeps the store even when pinned`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        val other = dao.deliveryRecord(d)!!.copy(
+            eventSequenceId = 88_888, jobId = "JOTHER", taskId = "dOTHER", storeKeyPinned = 1,
+        )
+        dao.upsertDelivery(other)
+        val storeBefore = dao.store(targetKey)!!
+        assertEquals(2, dao.storeKeyReferenceCount(targetKey))
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+
+        projector().catchUp()
+
+        assertEquals(storeBefore, dao.store(targetKey))
+        assertEquals(1, dao.storeKeyReferenceCount(targetKey))
+        assertEquals(other, dao.deliveryRecord(other.eventSequenceId))
+        assertNull(dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(1, dao.deliveryRecord(d)!!.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — a pay-only delivery adjustment leaves all stores and the key untouched`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        dao.upsertStore(dao.store(targetKey)!!.copy(storeKey = "doordash|target|999", runningKey = "999"))
+        val storesBefore = dao.allStores()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newPay = 12.0),
+        )
+
+        projector().catchUp()
+
+        assertEquals(storesBefore, dao.allStores())
+        val row = dao.deliveryRecord(d)!!
+        assertEquals(12.0, row.realizedPay!!, 0.001)
+        assertEquals(targetKey, row.storeKey)
+        assertEquals(0, row.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — incremental rename and version-reset refold yield identical raw stores`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        projector().catchUp() // Prior key exists when the incremental rename applies.
+        assertEquals(targetKey, dao.deliveryRecord(d)!!.storeKey)
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+        val incrementalStores = dao.allStores()
+        val incrementalDelivery = dao.deliveryRecord(d)!!
+        assertEquals(listOf(targetKey), incrementalStores.map { it.storeKey }) // Pickup keeps it alive.
+        assertNull(incrementalDelivery.storeKey)
+        assertEquals(1, incrementalDelivery.storeKeyPinned)
+
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
+        projector().catchUp() // From zero: the rename pins the row BEFORE the first resolution.
+
+        assertEquals("raw stores byte-identical", incrementalStores, dao.allStores())
+        assertEquals(incrementalDelivery, dao.deliveryRecord(d))
+    }
+
+    @Test
+    fun `#906 — event-derived last reference is deleted identically on refold and a later visit recreates it`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val pu = insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dC1", "CVS - Pharmacy", 1200, dropRealizedPay = 4.5),
+        )
+        projector().catchUp()
+        assertNotNull(dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(cvsAddressKey, dao.pickupRecordsForJob("J1").single().storeKey)
+
+        // The new anchor wins the dropoff match; the no-downgrade guard keeps its address key.
+        // The original pickup upgrades to the receipt key, leaving only the delivery on the old key.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1225, pickup("J1", "pC2", "CVS - Pharmacy", 1225))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        projector().catchUp()
+        assertEquals(cvsReceiptKey, dao.pickupRecordsForJob("J1").single { it.eventSequenceId == pu }.storeKey)
+        assertEquals("doordash|cvs|", dao.pickupRecordsForJob("J1").single { it.taskId == "pC2" }.storeKey)
+        assertNotNull(dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals("only the delivery references the old key", 1, dao.storeKeyReferenceCount(cvsAddressKey))
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1300,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "CVS Cafe"),
+        )
+        projector().catchUp()
+        assertNull("renaming the last reference deletes the old store", dao.store(cvsAddressKey))
+        assertEquals(0, dao.storeKeyReferenceCount(cvsAddressKey))
+        val incrementalStores = dao.allStores()
+        val incrementalDelivery = dao.deliveryRecord(d)!!
+        assertEquals(listOf("doordash|cvs|", cvsReceiptKey), incrementalStores.map { it.storeKey })
+        assertEquals("CVS Cafe", incrementalDelivery.storeName)
+        assertNull(incrementalDelivery.storeKey)
+        assertEquals(1, incrementalDelivery.storeKeyPinned)
+
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
+        projector().catchUp()
+        assertEquals("full stores table identical on refold", incrementalStores, dao.allStores())
+        assertEquals("full delivery row identical on refold", incrementalDelivery, dao.deliveryRecord(d))
+        assertNull(dao.store(cvsAddressKey))
+
+        // A new job at the same address can create the deleted identity again.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1400, pickup("J2", "pC3", "CVS", 1400, cvsAddress))
+        val laterDelivery = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1500,
+            delivery("J2", "dC3", "CVS", 1500, dropRealizedPay = 5.0),
+        )
+        projector().catchUp()
+        val recreated = dao.store(cvsAddressKey)
+        assertNotNull("later resolution creates a fresh identity row", recreated)
+        assertEquals(cvsAddress, recreated!!.address)
+        assertEquals(cvsAddressKey, dao.pickupRecordsForJob("J2").single().storeKey)
+        assertEquals(cvsAddressKey, dao.deliveryRecord(laterDelivery)!!.storeKey)
+        assertEquals(2, dao.storeKeyReferenceCount(cvsAddressKey))
+        assertEquals(incrementalStores.size + 1, dao.allStores().size)
+        assertEquals(incrementalDelivery, dao.deliveryRecord(d))
+    }
+
     // ── F8: a PROJECTOR_VERSION bump wipes stores + pickup_records ──
 
     @Test

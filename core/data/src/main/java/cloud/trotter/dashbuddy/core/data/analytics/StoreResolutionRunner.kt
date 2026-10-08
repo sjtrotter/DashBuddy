@@ -178,15 +178,31 @@ internal class StoreResolutionRunner(private val dao: AnalyticsDao) {
      */
     private suspend fun sweepSuperseded(candidates: Set<String>) {
         for (old in candidates) {
-            val refs = dao.storeKeyReferenceCount(old)
-            if (refs > 0) {
-                Timber.tag(TAG).d("store-key supersession: keeping %s — %d row(s) still reference it", old, refs)
-                Timber.tag(TAG).w("superseded store entity kept: %d row(s) the re-key did not reach still reference it", refs)
-                continue
+            // A superseded key a re-key did not fully reach is a defended invariant firing (WARN);
+            // a driver rename's prior key staying referenced is ordinary (#906 logs nothing louder).
+            if (!deleteStoreIfUnreferenced(old)) {
+                Timber.tag(TAG).w("superseded store entity kept: row(s) the re-key did not reach still reference it")
             }
-            Timber.tag(TAG).d("store-key supersession: deleting unreferenced %s", old)
-            dao.deleteStore(old)
         }
+    }
+
+    /**
+     * Shared #887/#906 guard: delete ONE prior key only at zero pickup / delivery / offer references.
+     * Fails toward KEEPING: even a pinned row that still references the key keeps the entity alive;
+     * orphaning a referencing row and blanking its report card is worse than a phantom.
+     * Call after the row updates, INSIDE the projector's existing batch transaction (no nested one).
+     * Never scan unrelated unreferenced stores: that would break refold determinism (#904).
+     * Returns whether the row was deleted; the caller decides whether a kept row is worth a WARN.
+     */
+    suspend fun deleteStoreIfUnreferenced(storeKey: String): Boolean {
+        val refs = dao.storeKeyReferenceCount(storeKey)
+        if (refs != 0) {
+            Timber.tag(TAG).d("store-key sweep: keeping %s — %d row(s) still reference it", storeKey, refs)
+            return false
+        }
+        Timber.tag(TAG).d("store-key sweep: deleting unreferenced %s", storeKey)
+        dao.deleteStore(storeKey)
+        return true
     }
 
     /**
