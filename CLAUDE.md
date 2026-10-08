@@ -605,8 +605,9 @@ emits no reference at all), `OfferActionReceiver`.
   filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).
 - **The engine must never die silently (#909):** `AppEffect.LogEvent` is the ONLY writer of `app_events`.
   The per-item catch is `Throwable` (only `CancellationException` rethrown); the drain loop is supervised
-  with capped backoff; and the ICU/JVM regex divergence (an `ExceptionInInitializerError` destroyed 91.7 %
-  of an evening's data) is caught by source scan — `IcuRegexGuardTest` fails on a bare `}` in any
+  with capped backoff; a wedged worker WARNs after ~60 s (#913). The ICU/JVM regex divergence (an
+  `ExceptionInInitializerError` destroyed 91.7 % of an evening's data) is caught by source scan —
+  `IcuRegexGuardTest` fails on a bare `}` in any
   main-source `Regex(…)` literal. **Write `\}`, never `}`.** Rule-authored patterns don't run on that
   engine at all (§2, RE2J).
 - **The offer voice (#991):** `TtsEffectHandler` builds its engine from a `TtsEngineFactory` seam; every

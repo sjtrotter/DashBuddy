@@ -11,6 +11,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The [SideEffectEngine]'s serialized execution queue (#351), split out of the engine (#1271
@@ -23,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
  * [execute] is the engine's per-effect executor; the worker runs on [scope].
  */
 internal class SerializedEffectQueue(
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     private val execute: suspend (effect: AppEffect, recovering: Boolean, correlationVersion: Long) -> Unit,
 ) {
     private sealed interface Item {
@@ -32,6 +36,10 @@ internal class SerializedEffectQueue(
     }
 
     private val channel = Channel<Item>(Channel.UNLIMITED)
+    private val pending = AtomicInteger()
+    private val drained = AtomicLong()
+    private val inFlight = AtomicReference<String?>(null)
+    private val watchdogRunning = AtomicBoolean()
 
     /** [awaitProcessed] callers still waiting — released by [close] so none hangs on a dead queue. */
     private val waiters = ConcurrentHashMap.newKeySet<CompletableDeferred<Unit>>()
@@ -41,12 +49,12 @@ internal class SerializedEffectQueue(
     }
 
     fun enqueue(effect: AppEffect, recovering: Boolean, correlationVersion: Long) {
-        channel.trySend(Item.Effect(effect, recovering, correlationVersion))
+        tryEnqueue(Item.Effect(effect, recovering, correlationVersion))
     }
 
     /** Run [action] after every item enqueued before it. On a closed queue it never runs. */
     fun afterProcessed(action: suspend () -> Unit) {
-        channel.trySend(Item.Barrier(action))
+        tryEnqueue(Item.Barrier(action))
     }
 
     /**
@@ -57,7 +65,7 @@ internal class SerializedEffectQueue(
         val done = CompletableDeferred<Unit>()
         waiters += done
         try {
-            if (channel.trySend(Item.Barrier { done.complete(Unit) }).isFailure) {
+            if (!tryEnqueue(Item.Barrier { done.complete(Unit) })) {
                 throw CancellationException("effect queue closed")
             }
             done.await()
@@ -70,6 +78,63 @@ internal class SerializedEffectQueue(
     fun close() {
         channel.close()
         waiters.forEach { it.cancel(CancellationException("effect queue closed")) }
+    }
+
+    private fun tryEnqueue(item: Item): Boolean {
+        // Account before publishing: the worker may finish the item before trySend returns.
+        pending.incrementAndGet()
+        val accepted = channel.trySend(item).isSuccess
+        if (accepted) {
+            startWatchdog()
+        } else {
+            pending.decrementAndGet()
+        }
+        return accepted
+    }
+
+    private fun startWatchdog() {
+        if (pending.get() == 0 || !scope.isActive || !watchdogRunning.compareAndSet(false, true)) return
+        val baseline = drained.get()
+        scope.launch { watchProgress(baseline) }.invokeOnCompletion {
+            watchdogRunning.set(false)
+            // An enqueue racing the idle exit must not leave pending work unmonitored.
+            if (pending.get() > 0 && scope.isActive) startWatchdog()
+        }
+    }
+
+    /** Detection only (#913): a suspended effect is never timed out or cancelled. */
+    private suspend fun watchProgress(baseline: Long) {
+        var lastDrained = baseline
+        var stalledTicks = 0L
+        var warned = false
+        while (pending.get() > 0 || warned) {
+            delay(STALL_TICK_MS)
+            val nowPending = pending.get()
+            val nowDrained = drained.get()
+            if (nowDrained != lastDrained) {
+                if (warned) {
+                    Timber.tag("Effects").i(
+                        "Effect worker resumed after ~%ds (%d drained)",
+                        stalledTicks * STALL_TICK_MS / 1_000,
+                        nowDrained - lastDrained,
+                    )
+                }
+                stalledTicks = 0
+                warned = false
+            } else if (nowPending > 0) {
+                stalledTicks++
+                if (!warned && stalledTicks >= STALL_TICKS_TO_WARN) {
+                    Timber.tag("Effects").w(
+                        "Effect worker stalled ~%ds: %d pending, in flight: %s",
+                        stalledTicks * STALL_TICK_MS / 1_000,
+                        nowPending,
+                        inFlight.get(),
+                    )
+                    warned = true
+                }
+            }
+            lastDrained = nowDrained
+        }
     }
 
     /**
@@ -129,6 +194,9 @@ internal class SerializedEffectQueue(
     private suspend fun drainQueue() {
         for (item in channel) {
             try {
+                // Inside the try (review of #913): anything thrown here must still reach the
+                // `finally` that balances `pending`, or a phantom count keeps the watchdog alive.
+                inFlight.set(if (item is Item.Effect) item.effect::class.simpleName else "barrier")
                 when (item) {
                     is Item.Effect -> execute(item.effect, item.recovering, item.correlationVersion)
                     is Item.Barrier -> item.action()
@@ -141,11 +209,18 @@ internal class SerializedEffectQueue(
                     "Effect failed — isolated, the engine is still draining: %s",
                     if (item is Item.Effect) item.effect::class.simpleName else "barrier",
                 )
+            } finally {
+                inFlight.set(null)
+                drained.incrementAndGet()
+                pending.decrementAndGet()
             }
         }
     }
 
     private companion object {
+        const val STALL_TICK_MS = 30_000L
+        const val STALL_TICKS_TO_WARN = 2
+
         /** Linear backoff step before the drain worker is restarted (#909). */
         const val WORKER_RESTART_BACKOFF_MS = 250L
 
