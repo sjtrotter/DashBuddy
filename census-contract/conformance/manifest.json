@@ -1,13 +1,13 @@
 {
     "formatVersion": 1,
-    "totalRecords": 907,
+    "totalRecords": 908,
     "builtBySchema": {
         "notification.skeleton.v1": 12,
-        "uinode.skeleton.v1": 893
+        "uinode.skeleton.v1": 894
     },
     "refusedByReason": {
         "INVALID_CHANNEL": 1,
         "SENSITIVE_NOTIFICATION": 1
     },
-    "sha256": "efd8d8746e6bdb907cf7d291a86044c2db4e6d97cf10b31f406948670e3b61bd"
+    "sha256": "bbf9e577ac5be8513921cc449b8917b82ff8a946cdb582f55945defc076f55b6"
 }

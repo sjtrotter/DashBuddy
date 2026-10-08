@@ -549,8 +549,8 @@ object RecordFolds {
         // construction fuelPerMile + nonFuelPerMile ≈ operatingCostPerMile (both totals are that same
         // per-mile rate × distance), the invariant the waterfall relies on (#659).
         val evalDist = eval?.distanceMiles
-        val fuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.fuelCostEstimate / evalDist else null
-        val nonFuelPerMile = if (eval != null && evalDist != null && evalDist > 0.0) eval.nonFuelCostEstimate / evalDist else null
+        val fuelPerMile = if (eval != null && eval.hasDistanceMetrics && evalDist != null) eval.fuelCostEstimate / evalDist else null
+        val nonFuelPerMile = if (eval != null && eval.hasDistanceMetrics && evalDist != null) eval.nonFuelCostEstimate / evalDist else null
         // #936: an offer whose distance never parsed gets NO verdict — its evaluation carries 0.0
         // PLACEHOLDERS in every rate field and a placeholder score, because nothing was scored. The
         // frozen estimate columns are nullable precisely so the Decisions-tab aggregates

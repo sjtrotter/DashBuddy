@@ -388,11 +388,12 @@ recognise the source frame → stay UNKNOWN on the negative corpus → compile m
   `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
   fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary
   `{field}` template.
-- **8.97.8 Compose offer card (#1114):** `offer_popup` is a two-branch rule — branch 0 the legacy View
+- **8.97.8 Compose offer card (#1114):** `offer_popup` has three branches — branch 0 the legacy View
   card verbatim, branch 1 the id-less Compose card anchored on its own chrome (route-summary shape,
   currency figure, disclaimer, merchant-holder + address sibling); `side_nav_drawer` rejects that
   signature; `parseTotalMinutes` feeds `timeToCompleteMinutes` (an estimate, never a deadline). Compose
   taps produced no click envelopes in the field — accept is inferred from the pickup-phase exit.
+- **Compose add-on (#1121):** branch 2 pairs delta pay/route inside `offerBody`; `quoteBasis: incremental` means no verdict, no derived economics, no click-less accept.
 - **#1147 node predicates:** `hasPaneTitle*`, `hasRoleDescription`, `hasClickActionLabel*`,
   `hasHintText*` and the flags `isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`
   read the TalkBack-study fields (none in `allText`, no regex forms); no shipped rule uses them yet.
@@ -537,6 +538,8 @@ via the `OFFER_EXPIRY` timer); every accept arm and every
 observed tap outranks the sheet; a click-less accept is inferred only over a NON-task `returnFlow` (a
 click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface`;
 inferred outcomes are named in the event description.
+
+**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend.
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
 mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,

@@ -72,7 +72,7 @@ top-right whose subtree is its label alone. Every legacy anchor (`accept_button`
 `accept_decline_footer_container`, `display_name`, `work_unit_type`, `display_name_secondary`,
 `text_field`, `Deliver by`) is gone, so 36 offer frames across two dashing days fell to UNKNOWN or were
 claimed by `side_nav_drawer` (the side-nav Compose tree coexists with the card in one hierarchy) and
-`app_events` recorded no offer at all. `doordash.screen.offer_popup` is now a TWO-BRANCH rule: branch 0
+`app_events` recorded no offer at all. `doordash.screen.offer_popup` has three branches (#1121): branch 0
 is the legacy body moved verbatim (byte-identical accept binding, so its capability key and consent are
 unchanged); branch 1 anchors on the card's own chrome only — ComposeView + exact `Decline` + exact
 `Accept` + the route-summary SHAPE + a standalone currency figure + the disclaimer prefix + at least one
@@ -112,6 +112,18 @@ variant (it pauses the store — a side effect quick-decline consent never cover
 on #1114: badges resolve at OFFER level, a card whose every merchant address lacks a ZIP fails the recognition anchor, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
 accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
 `OFFER_TIMEOUT`.
+**Compose add-on (#1121, 8.98.5).** Branch 2 requires paired `+$N.NN` and
+`+N stop(s) (N mi|ft) • +N min` lines, Compose Accept/Decline chrome, the disclaimer,
+a destination, and branch 1's merchant/address guard. Its mandatory ScrollView binding contains
+both delta lines and the disclaimer; all economics and the merchant walk are body-scoped.
+The delta-route holder is excluded from merchants. Repeated stores remain separate shop orders
+(95 + 32 items = 127 in the programmatic test); only display stores deduplicate. Countdown reads
+from the Accept footer. Missing/blank merchants and incomplete cards never mint offers; the drawer
+rejects the paired delta signature even before Accept/disclaimer/merchant inflation completes.
+`quoteBasis: incremental` is a load-validated declaration, mirrored in census authoring. The factory
+prefixes only incremental hash inputs, leaving TOTAL bytes unchanged and Compose presentation keys
+null. The structural test is programmatic; real-capture intake and golden regeneration remain separate.
+
 **Node predicates over the #1147 fields** (the TalkBack-study node semantics; see
 `01-sensor-pipelines.md` "Node model fields"): `hasPaneTitle`/`hasPaneTitleContaining`,
 `hasRoleDescription`, `hasClickActionLabel`/`hasClickActionLabelContaining`,

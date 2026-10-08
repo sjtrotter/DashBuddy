@@ -13,6 +13,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.feature.bubble.formatters.toNotificationSummary
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,6 +49,57 @@ import org.robolectric.RuntimeEnvironment
 @RunWith(RobolectricTestRunner::class)
 class TtsEffectHandlerRecoveryTest {
 
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "en")
+    fun `add-on speech and notification summary state what the add-on adds without a verdict`() {
+        val tts = handler()
+        reportReady()
+        val evaluation = OfferEvaluator().evaluate(ParsedOffer(
+            offerHash = "addon", quoteBasis = OfferQuoteBasis.INCREMENTAL,
+            payAmount = 10.5, distanceMiles = 1.5, timeToCompleteMinutes = 1L,
+            displayStoreName = "H-E-B",
+        ), EvaluationConfig())
+        tts.speakOffer(evaluation)
+        val spoken = argumentCaptor<CharSequence>()
+        verify(engines.first()).speak(spoken.capture(), any(), anyOrNull(), any())
+        val speech = spoken.lastValue.toString()
+        assertTrue(speech.contains("Add-on at H-E-B"))
+        assertTrue(speech.contains("10.50 dollars more"))
+        assertTrue(speech.contains("1.5 more miles"))
+        assertTrue(speech.contains("No verdict"))
+        assertTrue(speech.contains("1 more minute."))
+        assertFalse(speech.contains("distance not read"))
+        assertFalse(speech.contains(" net"))
+        val summary = evaluation.toNotificationSummary().toString()
+        assertTrue(summary.contains("Add-on"))
+        assertTrue(summary.contains("+$10.50"))
+        assertTrue(summary.contains("+1.5 mi"))
+        assertTrue(summary.contains("+1 min"))
+        assertTrue(summary.contains("no verdict"))
+        assertFalse(summary.contains("Net"))
+        assertFalse(summary.contains("Score"))
+    }
+
+    @Test
+    fun `add-on speech uses the existing Spanish locale table`() {
+        val tts = handler(languageTag = "es")
+        reportReady()
+        val evaluation = OfferEvaluator().evaluate(ParsedOffer(
+            offerHash = "addon", quoteBasis = OfferQuoteBasis.INCREMENTAL,
+            payAmount = 10.5, distanceMiles = 1.5, timeToCompleteMinutes = 1L,
+            displayStoreName = "H-E-B",
+        ), EvaluationConfig())
+        tts.speakOffer(evaluation)
+        val spoken = argumentCaptor<CharSequence>()
+        verify(engines.first()).speak(spoken.capture(), any(), anyOrNull(), any())
+        val speech = spoken.lastValue.toString()
+        assertTrue(speech.contains("Pedido adicional en H-E-B"))
+        assertTrue(speech.contains("millas más"))
+        assertTrue(speech.contains("Sin veredicto"))
+        assertTrue(speech.contains("1 minuto más."))
+        assertFalse(speech.contains("no se leyó la distancia"))
+    }
+
     private lateinit var engines: MutableList<TextToSpeech>
     private lateinit var listeners: MutableList<TextToSpeech.OnInitListener>
     private lateinit var notificationManager: NotificationManager
@@ -60,9 +118,9 @@ class TtsEffectHandlerRecoveryTest {
         engine
     }
 
-    private fun handler(): TtsEffectHandler {
+    private fun handler(languageTag: String? = null): TtsEffectHandler {
         val prefs = mock<AppPreferencesRepository>()
-        whenever(prefs.ttsLanguageTag).thenReturn(flowOf(null))
+        whenever(prefs.ttsLanguageTag).thenReturn(flowOf(languageTag))
         return TtsEffectHandler(
             context = RuntimeEnvironment.getApplication(),
             appPreferencesRepository = prefs,

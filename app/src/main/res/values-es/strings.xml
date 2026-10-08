@@ -119,4 +119,9 @@
         <item quantity="one">Aprendido de %d entrega</item>
         <item quantity="other">Aprendido de %d entregas</item>
     </plurals>
+    <string name="tts_offer_addon_template">Pedido adicional en %1$s. %2$s dólares más, %3$s millas más. Sin veredicto.</string>
+    <plurals name="tts_offer_addon_minutes">
+        <item quantity="one">%1$d minuto más.</item>
+        <item quantity="other">%1$d minutos más.</item>
+    </plurals>
 </resources>

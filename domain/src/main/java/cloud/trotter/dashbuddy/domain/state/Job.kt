@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.state
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.evaluation.ArrivalCorrection
 import cloud.trotter.dashbuddy.domain.evaluation.ArrivalEstimate
 import kotlinx.serialization.Serializable
@@ -57,6 +58,7 @@ data class AcceptedOfferEconomics(
     val pricedShopItemsPerMinute: Double? = null,
     /** The pickup base this offer was priced with at accept time. */
     val pricedBasePickupMinutes: Double? = null,
+    val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
 )
 
 /**
@@ -108,14 +110,16 @@ data class Job(
     /**
      * Net pay for the live task-card "Running at $/hr" co-hero (#460) — null when
      * no accepted offer has carried economics yet, so the card shows "—" rather
-     * than a misleading $0.
+     * than a misleading $0. An unscored increment makes the whole blend unavailable.
      */
     val blendedNetPay: Double?
-        get() = acceptedOffers.mapNotNull { it.netPay }.takeIf { it.isNotEmpty() }?.sum()
+        get() = acceptedOffers.takeIf { offers -> offers.all { it.quoteBasis == OfferQuoteBasis.TOTAL } }
+            ?.mapNotNull { it.netPay }?.takeIf { it.isNotEmpty() }?.sum()
 
     /** Estimated minutes denominator for the blended $/hr — null until known, must be > 0. */
     val blendedEstMinutes: Double?
-        get() = acceptedOffers.mapNotNull { it.estMinutes }.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
+        get() = acceptedOffers.takeIf { offers -> offers.all { it.quoteBasis == OfferQuoteBasis.TOTAL } }
+            ?.mapNotNull { it.estMinutes }?.takeIf { it.isNotEmpty() }?.sum()?.takeIf { it > 0.0 }
 
     /**
      * #823: a second pickup that activates later (a stack whose second store was not in the hints) ends

@@ -500,6 +500,19 @@ resolution, `FlowCardSnapshot.Offer.storeNames`, the fold's eval-less fallback),
 real order stores, else the card headline, else the order list — so DoorDash (no top-level
 `storeName` parse) is byte-identical. Review-round additions: a parsed assignment token also enters `offerHash` (two assignments with identical economics must not share a hash, or the same-hash arm merges them before the key is consulted); a present token whose digest fails yields NO key (never the store fallback); a REPLACE now logs the replacing offer's own `OFFER_RECEIVED` (`AppEffect.LogEvent` is the only `app_events` writer — a rule `log` effect is a debug line); `presentationIdentity` is one entry in `StateMachineContract.PARSE_DECLARATION_LITERALS`, validated by `RuleCompiler` in the `{literal}` or bare-string form and offered as an enum constant by the census draft tool (`RuleAuthoringVocabulary.PRESENTATION_IDENTITIES`, pinned equal). One-time effect: an offer restored from a pre-#1069 snapshot keeps its store key, so its next re-render logs one spurious "Replaced by new offer".
 
+**Incremental offer quotes (#1121).** `OfferQuoteBasis` defaults to serialized TOTAL. INCREMENTAL
+returns a non-null NOTHING/UNKNOWN evaluation with placeholder score zero, bypassing every automatic
+verdict. `hasDistanceMetrics` requires TOTAL and positive distance: raw incremental pay, distance,
+items and platform delta minutes remain visible, but costs, net, rates, score and full-time estimates
+are unavailable. Bubble, compact/expanded notification and TTS say add-on and no verdict; delta
+minutes are extra time, never a completion ETA. `RecordFolds` applies the same gate to estimate
+columns and fuel/non-fuel splits. Explicit acceptance keeps gross and distance, leaves net/handling/
+full-time null even without an evaluation, and carries the basis into `AcceptedOfferEconomics`.
+A job containing an increment has no complete blended net/rate/time. Incremental quotes never infer
+click-less acceptance, including when return-flow context is absent; original-task return after a
+sheet or timeout preserves #1104/#1118. Marginal scoring, route recomputation and click-less add-on
+minting remain out of scope.
+
 **Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
 tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,
 next)` therefore reads, after the click latches: (a) an accepted SURVIVOR for the same hash in the

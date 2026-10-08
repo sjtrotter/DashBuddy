@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.domain.model.cards
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
@@ -73,6 +74,8 @@ sealed class FlowCardSnapshot {
         /** Initial offer countdown in seconds — the denominator for the live expiry progress bar. */
         val countdownSeconds: Int? = null,
         val outcome: AppEventType? = null,
+        val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
+        val incrementalMinutes: Long? = null,
     ) : FlowCardSnapshot() {
         override val id: String get() = "offer:$offerHash"
 
@@ -120,6 +123,8 @@ sealed class FlowCardSnapshot {
                     phaseEndedAt = phaseEndedAt,
                     offerHash = offerHash,
                     payAmount = parsedOffer.payAmount,
+                    quoteBasis = parsedOffer.quoteBasis,
+                    incrementalMinutes = parsedOffer.timeToCompleteMinutes.takeIf { parsedOffer.quoteBasis == OfferQuoteBasis.INCREMENTAL },
                     distanceMiles = parsedOffer.distanceMiles,
                     itemCount = parsedOffer.itemCount,
                     // #882: the display-store SSOT, not the raw per-order names — on an Uber

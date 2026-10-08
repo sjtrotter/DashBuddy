@@ -812,4 +812,14 @@
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest dashes are your %1$d newest, whatever period is picked; amounts are reported totals (your corrections included), cash shown separately.</string>
     <string name="time_tab_unattributed_note">No delivery attached: online time and miles after your last delivery, and dashes with no delivery.</string>
+    <string name="bubble_offer_addon_title">Add-on · no verdict</string>
+    <string name="bubble_offer_addon_reason">Only what the add-on adds</string>
+    <string name="bubble_offer_addon_pay">+%1$s pay</string>
+    <string name="bubble_offer_addon_distance">+%1$s mi</string>
+    <string name="bubble_offer_addon_minutes">+%1$d min</string>
+    <string name="tts_offer_addon_template">Add-on at %1$s. %2$s dollars more, %3$s more miles. No verdict.</string>
+    <plurals name="tts_offer_addon_minutes">
+        <item quantity="one">%1$d more minute.</item>
+        <item quantity="other">%1$d more minutes.</item>
+    </plurals>
 </resources>

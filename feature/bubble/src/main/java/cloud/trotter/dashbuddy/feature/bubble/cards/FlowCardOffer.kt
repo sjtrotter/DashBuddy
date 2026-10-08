@@ -49,6 +49,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatCountdown
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
@@ -71,7 +72,9 @@ internal fun offerSummary(snap: FlowCardSnapshot.Offer): String {
     val pay = snap.payAmount?.let { " · ${Formats.money(it)}" } ?: ""
     // Outcome is rendered as a trailing chip in the header — see
     // CardHeader — so we omit it from the summary text.
-    return "$store$pay"
+    return if (snap.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+        stringResource(R.string.flow_card_addon_summary, store, snap.payAmount?.let { Formats.money(it) } ?: "")
+    } else "$store$pay"
 }
 
 /**
@@ -105,7 +108,15 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
         }
 
         // Score ring + net $/hr hero.
-        Row(
+        if (snap.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+            Text(stringResource(R.string.flow_card_addon_reason), color = c.text2)
+            snap.payAmount?.let {
+                Text(stringResource(R.string.flow_card_addon_pay, Formats.money(it)), style = AppTheme.num.heroNum, color = c.text)
+            }
+            val distance = snap.distanceMiles?.let { stringResource(R.string.flow_card_addon_distance, Formats.decimal(it)) }
+            val minutes = snap.incrementalMinutes?.let { stringResource(R.string.flow_card_addon_minutes, it) }
+            Text(listOfNotNull(distance, minutes).joinToString(" · "), style = AppTheme.num.smNum, color = c.text2)
+        } else Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -160,7 +171,7 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
         // #864: the tinted banner is LIVE advice; a resolved card shows its outcome in the header
         // (`OutcomeChip`) and keeps the evaluation as a one-line caption below, so "what was advised"
         // stays readable beside "what happened" without being mistaken for it.
-        if (isActive && snap.outcome == null) {
+        if (snap.quoteBasis == OfferQuoteBasis.TOTAL && isActive && snap.outcome == null) {
             snap.evaluationAction?.let { name ->
                 val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
                 val vColor = offerVerdictColor(action, c)
@@ -189,7 +200,7 @@ internal fun OfferBody(snap: FlowCardSnapshot.Offer, isActive: Boolean) {
                     }
                 }
             }
-        } else {
+        } else if (snap.quoteBasis == OfferQuoteBasis.TOTAL) {
             snap.evaluationAction?.let { name ->
                 val action = runCatching { OfferAction.valueOf(name) }.getOrNull()
                 val caption = listOfNotNull(offerVerdictLabel(action), snap.qualityLevel?.displayLabel())

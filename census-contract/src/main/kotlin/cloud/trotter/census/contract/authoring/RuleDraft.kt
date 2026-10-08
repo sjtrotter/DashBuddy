@@ -479,6 +479,7 @@ object RuleDraft {
         "subFlow" -> Vocabulary.TASK_SUB_FLOWS
         "sessionType" -> Vocabulary.SESSION_TYPES
         "presentationIdentity" -> Vocabulary.PRESENTATION_IDENTITIES // #1069
+        "quoteBasis" -> Vocabulary.QUOTE_BASES
         else -> null
     }
 

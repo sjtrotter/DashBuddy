@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import org.junit.Assert.assertNull
+
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -12,6 +15,44 @@ import org.junit.Before
 import org.junit.Test
 
 class OfferEvaluatorTest {
+
+    @Test
+    fun `incremental figures preserve preference verdicts without derived metrics`() {
+        val parsed = offer(pay = 10.5, dist = 1.5, itemCount = 127, orderType = OrderType.SHOP_FOR_ITEMS)
+            .copy(quoteBasis = OfferQuoteBasis.INCREMENTAL, timeToCompleteMinutes = 1L)
+        val cases = listOf(
+            Triple(defaultConfig, OfferAction.NOTHING, OfferQuality.UNKNOWN),
+            Triple(config(blockRule("Test Store")), OfferAction.DECLINE, OfferQuality.BLOCKED),
+            Triple(defaultConfig.copy(allowShopping = false), OfferAction.DECLINE, OfferQuality.SHOP_DECLINED),
+            Triple(config(blockRule("Test Store")).copy(protectStatsMode = true), OfferAction.ACCEPT, OfferQuality.PROTECTED),
+            Triple(
+                config(blockRule("Test Store")).copy(allowShopping = false, protectStatsMode = true),
+                OfferAction.DECLINE, OfferQuality.SHOP_DECLINED,
+            ),
+        )
+        for ((cfg, action, quality) in cases) {
+            val result = evaluator.evaluate(parsed, cfg)
+            assertEquals(action, result.action)
+            assertEquals(quality, result.qualityLevel)
+            assertEquals(if (action == OfferAction.ACCEPT) 100.0 else 0.0, result.score, 0.0)
+            assertEquals(OfferQuoteBasis.INCREMENTAL, result.quoteBasis)
+            assertEquals(0.0, result.fuelCostEstimate, 0.0)
+            assertEquals(0.0, result.nonFuelCostEstimate, 0.0)
+            assertEquals(0.0, result.totalOperatingCost, 0.0)
+            assertEquals(10.5, result.netPayAmount, 0.0)
+            assertEquals(0.0, result.dollarsPerMile, 0.0)
+            assertEquals(0.0, result.dollarsPerHour, 0.0)
+            assertEquals(0.0, result.estimatedTimeMinutes, 0.0)
+            assertFalse(result.hasDistanceMetrics)
+            assertEquals(10.5, result.payAmount, 0.0)
+            assertEquals(1.5, result.distanceMiles, 0.0)
+            assertEquals(127.0, result.itemCount, 0.0)
+            assertEquals(1L, result.incrementalMinutes)
+            assertNull(result.handlingMinutes)
+            assertNull(result.pricedShopItemsPerMinute)
+            assertNull(result.pricedBasePickupMinutes)
+        }
+    }
 
     private lateinit var evaluator: OfferEvaluator
 

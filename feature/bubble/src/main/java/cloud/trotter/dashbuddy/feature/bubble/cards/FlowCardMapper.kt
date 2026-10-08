@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.cards
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -108,7 +109,14 @@ object FlowCardMapper {
                         val scored = payload.evaluation?.takeIf { it.hasDistanceMetrics }
                         acceptedNetPay = scored?.netPayAmount
                         acceptedEstMin = payload.evaluation?.estimatedTimeMinutes
+                            .takeIf { payload.parsedOffer.quoteBasis == OfferQuoteBasis.TOTAL }
                         acceptedDistanceMiles = scored?.distanceMiles ?: payload.parsedOffer.distanceMiles
+                        if (payload.parsedOffer.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+                            // #1121: tasks opened before the add-on still hold the earlier total.
+                            // Clear it now so every close path preserves the incomplete rate.
+                            openPickup = openPickup?.copy(netPay = acceptedNetPay, estMinutes = acceptedEstMin)
+                            openDelivery = openDelivery?.copy(netPay = acceptedNetPay, estMinutes = acceptedEstMin)
+                        }
                     }
                     // Re-open Awaiting if the dasher returned to the
                     // waiting-for-offer state (declined / timeout). Accept
