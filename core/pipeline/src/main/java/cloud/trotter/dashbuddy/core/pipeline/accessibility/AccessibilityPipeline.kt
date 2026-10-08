@@ -84,7 +84,8 @@ class AccessibilityPipeline @Inject constructor(
             val ref = event.source ?: return@mapNotNull null
             try {
                 val sourceNode = ref.resolve() ?: return@mapNotNull null
-                val node = sourceNode.toUiNode() ?: return@mapNotNull null
+                // #1164: the one mapping seam — an API-mismatch LinkageError costs this click, not the flow.
+                val node = source.mapNodeOrNull(sourceNode) ?: return@mapNotNull null
                 PipelineEvent.Click(
                     timestamp = System.currentTimeMillis(),
                     node = node,

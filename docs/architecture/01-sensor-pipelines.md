@@ -240,6 +240,8 @@ entry, and `pickup_navigation` gets its first redact block (`address_subpremise_
 `bottom_sheet_subpremise_line` twin; its fixtures render no customer node, so nothing else is declared). Note (fable review of PR #1247): a parse-less recognized screen has a constant `Observation.identity()`, so `FrameGate` suppresses consecutive board re-renders — the live pipeline stores about one board envelope per visit; the before/after counts above describe the stored 07-25 captures re-classified, not device behaviour. Precision (Astra review of PR #1249): the board frame itself cannot mint an offer (no `state`), but like every recognized frame it moves `FrameGate.lastIdentity`, so an offer card re-rendered byte-identically AFTER a board frame is admitted as a new presentation instead of being identity-suppressed — the general dedup rule (§1), not an #858 regression: an expired card is not redrawn by Uber, and an identical NEW offer should be admitted.
 
 
+**Mapper linkage backstop (#1164, #909 family):** both `AccessibilitySource` snapshot paths share `mapOrNull`, which drops a frame on `LinkageError`, counts every refusal (`mapperLinkageRefusals`, summary only when non-zero), and WARNs once per process under `Pipeline` with only the error class simple name and message; other `Error`s still propagate.
+
 **Node model fields (#1147, the 2026-09-21 TalkBack study win 3).** The mapper now also reads what
 TalkBack reads, all optional with the DOMINANT value as the default so `UiNodeSchema`'s
 `encodeDefaults = false` omits them on a typical node (every committed fixture re-serializes

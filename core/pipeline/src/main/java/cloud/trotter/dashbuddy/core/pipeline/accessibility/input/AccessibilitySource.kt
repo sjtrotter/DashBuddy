@@ -14,13 +14,15 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import timber.log.Timber
 import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AccessibilitySource @Inject constructor(
-    /** Counts the #1152 overlay-candidate decisions (`overlayRejected{…}`). */
+    /** Counts overlay-candidate decisions (#1152) and mapper linkage refusals (#1164). */
     private val stats: PipelineStats,
 ) {
 
@@ -266,11 +268,7 @@ class AccessibilitySource @Inject constructor(
      * binder call per frame and removing the read-to-read swap window.
      */
     fun getCurrentRootSnapshot(root: AccessibilityNodeInfo): RootSnapshot? {
-        val tree = try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        } ?: return null
+        val tree = mapNodeOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
@@ -426,16 +424,46 @@ class AccessibilitySource @Inject constructor(
         root: AccessibilityNodeInfo,
         totalWindowCount: Int,
     ): RootSnapshot? {
-        val tree = try {
-            root.toUiNode()
-        } catch (_: Exception) {
-            null
-        } ?: return null
+        val tree = mapNodeOrNull(root) ?: return null
         return RootSnapshot(
             tree = tree,
             packageName = root.packageName?.toString(),
             windowContext = contextOf(window, totalWindowCount),
         )
+    }
+
+    /**
+     * #1164 — the ONE accessibility mapping seam (both snapshot paths and the click path): a node
+     * that fails to map costs that frame, never the sensing flow.
+     *
+     * Beside `Exception`, only the API-MISMATCH linkage errors are caught: a missing method, field or
+     * class (`IncompatibleClassChangeError` covers `NoSuchMethodError`/`NoSuchFieldError`/
+     * `AbstractMethodError`; plus `NoClassDefFoundError`) — what an unguarded newer-SDK call throws on
+     * an older device (#1161). They are deterministic, so retrying per frame can never succeed, and
+     * letting them escape restart-loops the supervised flow with no frame ever admitted (#909). Every
+     * other `Error` — a `VerifyError`, an `ExceptionInInitializerError`, a `VirtualMachineError` — is
+     * an app defect or a dying VM and still propagates to the supervisor's ERROR. The WARN names the
+     * error CLASS only: a message is not PII-safe by construction (principle 7).
+     */
+    fun mapNodeOrNull(node: AccessibilityNodeInfo): UiNode? = try {
+        node.toUiNode()
+    } catch (_: Exception) {
+        null
+    } catch (error: IncompatibleClassChangeError) {
+        onApiMismatch(error)
+    } catch (error: NoClassDefFoundError) {
+        onApiMismatch(error)
+    }
+
+    private fun onApiMismatch(error: LinkageError): UiNode? {
+        stats.onMapperLinkageRefusal()
+        if (mapperLinkageWarned.compareAndSet(false, true)) {
+            Timber.tag("Pipeline").w(
+                "Accessibility mapper refused a frame (%s); frames are dropped and counted (#1164)",
+                error.javaClass.simpleName,
+            )
+        }
+        return null
     }
 
     // --- 3. Multi-Window Support ---
@@ -450,6 +478,12 @@ class AccessibilitySource @Inject constructor(
     }
 
     companion object {
+        /** #1164: one WARN per process, including across source/service recreation. */
+        private val mapperLinkageWarned = AtomicBoolean()
+
+        /** Re-arm the once-per-process WARN — tests only (the gate is process-wide by design). */
+        internal fun resetMapperLinkageWarnForTest() = mapperLinkageWarned.set(false)
+
         /**
          * #1152 D2: an overlay candidate covers at least this fraction of the display. The Uber offer
          * overlay is ~85–92 %; the puck ~0.8 %, the status bar ~5 %, heads-up notifications and
