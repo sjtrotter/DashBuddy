@@ -381,7 +381,8 @@ recognise the source frame → stay UNKNOWN on the negative corpus → compile m
   compile rejects. The array exists because a tap can be classified BEFORE its own screen is admitted.
 - **Blocks:** `require` predicates, `bind`, `parse` (typed via `ParsedFieldsFactory`), `redact`
   (#598 — a screen rule using the `sha256` transform MUST declare a non-empty `redact`; branch-level
-  `redact` is rejected). Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED
+  `redact` is rejected). Rule-level `reject` checks are prepended to every branch's own rejects (#1222).
+  Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED
   reserved tokens the classifier resolves post-factory (`DedupeTokens`, the lint's SSOT):
   `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
   fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary

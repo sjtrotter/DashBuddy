@@ -137,7 +137,10 @@ Rules also carry `require` predicates, `bind` blocks, `parse`
 blocks that produce typed fields via `ParsedFieldsFactory`, and an optional `redact` block
 (#598) — node predicates whose matched text is masked in the capture envelope (a screen rule
 that hashes PII via the `sha256` transform MUST declare a non-empty `redact`, enforced at compile;
-the mask keeps a `keepPrefix` marker so recognition on replay is unchanged). An effect's `dedupeKey`
+the mask keeps a `keepPrefix` marker so recognition on replay is unchanged).
+A branch-level `redact` is rejected at compile time (#624); it belongs at the rule level.
+A rule-level `reject` is compiled once and hoisted into every branch, prepended to its own rejects (#1222).
+An effect's `dedupeKey`
 interpolates `{field}` against the branch's RAW parse plus two DERIVED reserved tokens resolved
 post-factory by the classifier (`DedupeTokens`, the lint's SSOT): `{parsedHash}` = the parse's
 CONTENT identity (#427) and `{presentationHash}` = its PRESENTATION identity (#859,
