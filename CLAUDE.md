@@ -671,7 +671,8 @@ every `reportedEarnings` arm (a blanket `NULLIF` was rejected).
 `storeKey = platform|normalizedChain|runningKey`; resolve-from-rows inside the batch transaction;
 receipt key > address (`@`-prefixed street number) key > chain-only, monotonic upgrades only; a driver
 correction pins (`storeKeyPinned`); superseded zero-reference identity rows are swept STRICTLY LAST
-(fails toward keeping); a pickup-less job still stamps the exact offer link (`linkOfferToJobIfUnlinked`).
+(fails toward keeping), and a driver rename sweeps its own prior key (#906);
+a pickup-less job still stamps the exact offer link (`linkOfferToJobIfUnlinked`).
 Per-store reads group on the resolved key.
 
 **Corrections are append-only events**, folded non-destructively and rebuild-faithfully:

@@ -138,6 +138,7 @@ re-key didn't reach would orphan a *referencing* row, strictly worse than a phan
 merchant-free WARN (P7; keys stay at DEBUG). The sweep also **converges incremental ≡ refold on the
 raw `stores` table**: a from-zero refold that sees the receipt evidence in the same batch never mints
 the intermediate row, while an incremental fold split across a page boundary mints then deletes it.
+A driver rename sweeps its prior key at zero references (#906).
 **#1000 (pickup-less offer link, `PROJECTOR_VERSION` 9→10):** `StoreResolutionRunner.resolveJob`'s
 `pickups.isEmpty()` short-circuit used to discard the job's **exact** offer↔job link along with the
 missing store anchor — a blown-through pickup (PICKUP_ARRIVED with no PICKUP_CONFIRMED, the

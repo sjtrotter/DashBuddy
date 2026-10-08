@@ -437,6 +437,7 @@ class AnalyticsProjector @Inject constructor(
         // this event, so a from-zero refold re-derives it (F8 wipe clears it, the replayed event resets
         // it) — rebuild-deterministic. A store-name-less edit leaves storeKey/pin untouched.
         val storeChanged = adj.newStoreName != null
+        val priorStoreKey = row.storeKey
         analyticsDao.upsertDelivery(
             // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
             row.copy(
@@ -463,6 +464,10 @@ class AnalyticsProjector @Inject constructor(
                 },
             ),
         )
+        // #906: the rename detached this row; sweep only its prior key in the batch transaction.
+        if (storeChanged && priorStoreKey != null) {
+            storeResolutionRunner.deleteStoreIfUnreferenced(priorStoreKey) // still referenced → kept, silently
+        }
         return false
     }
 
