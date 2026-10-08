@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -262,6 +263,8 @@ private fun countdownExpiresAt(obs: Observation, offerFields: ParsedFields.Offer
  */
 private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
     if (destination?.isTaskFlow() != true) return false
+    // #1121: even missing return-flow context cannot prove a click-less add-on accept.
+    if (offer.offerFields.parsedOffer.quoteBasis == OfferQuoteBasis.INCREMENTAL) return false
     // #1104 (Astra r1 F2): the non-task-returnFlow guard now covers PHASED destinations too. A
     // mid-job ADD-ON offer's returnFlow IS a task flow (pickup navigation for job A); when the dasher
     // declines it — through the confirm sheet, with no click event on 8.97.8 — the very next frame

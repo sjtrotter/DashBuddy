@@ -204,6 +204,7 @@ import org.junit.runners.Suite
     GoPuffRecognitionTest::class,
     PickupWaitArrivalRecognitionTest::class,
     UberOfferKindAndStackStoreTest::class,
+    cloud.trotter.dashbuddy.core.pipeline.rules.DoorDashAddonOfferTest::class,
     DashSummaryReanchorTest::class,
     DeliverySummaryReanchorTest::class,
     SessionPayOwnershipTest::class,

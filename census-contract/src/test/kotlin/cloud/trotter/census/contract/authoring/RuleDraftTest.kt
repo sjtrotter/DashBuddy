@@ -180,6 +180,10 @@ class RuleDraftTest {
         val offerShape = base.copy(screenClass = "offer:presented", shape = "offer", offerSurface = "card")
         assertTrue(errors(offerShape.copy(constants = listOf(Constant("presentationIdentity", JsonPrimitive("store"))))).none { "presentationIdentity" in it })
         assertTrue("invalid constant type for presentationIdentity" in errors(offerShape.copy(constants = listOf(Constant("presentationIdentity", JsonPrimitive("bogus"))))))
+        for (basis in listOf("total", "incremental")) {
+            assertTrue(errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive(basis))))).none { "quoteBasis" in it })
+        }
+        assertTrue("invalid constant type for quoteBasis" in errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive("addon"))))))
         assertEquals(listOf("hash field customerNameHash requires a node assignment"), errors(base.copy(
             screenClass = "task:dropoff:navigation", shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
         )))

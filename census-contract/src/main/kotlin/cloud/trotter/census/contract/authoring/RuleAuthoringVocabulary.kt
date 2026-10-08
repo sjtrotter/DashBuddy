@@ -35,6 +35,8 @@ data class FieldSpec(
 object RuleAuthoringVocabulary {
     /** #1069: the `presentationIdentity` literal values (mirrors `StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES`). */
     val PRESENTATION_IDENTITIES: List<String> = listOf("store", "economics")
+    /** #1121: mirrors `StateMachineContract.SUPPORTED_QUOTE_BASES`. */
+    val QUOTE_BASES: List<String> = listOf("total", "incremental")
 
     val FLOWS: List<String> = listOf(
         "idle", "offer:presented", "task:pickup:navigation", "task:pickup:arrived",
@@ -133,6 +135,7 @@ object RuleAuthoringVocabulary {
             // identity) and the rule-declared fallback literal (`store` | `economics`, load-validated).
             FieldSpec("assignmentId", FieldType.STRING),
             FieldSpec("presentationIdentity", FieldType.STRING),
+            FieldSpec("quoteBasis", FieldType.STRING),
             FieldSpec("storeName", FieldType.STRING),
         ),
     )

@@ -22,6 +22,24 @@ import org.junit.Test
  */
 class RuleCompilerTest {
 
+    @Test
+    fun `quoteBasis declaration is load validated in inherited and branch-local parses`() {
+        for (spec in listOf("\"total\"", "\"incremental\"", "\"addon\"",
+            """{"find":{"hasText":"incremental"},"read":"text"}""")) {
+            val parse = """"parse":{"as":"offer","fields":{
+                "payAmount":{"literal":10.5},"distance":{"literal":1.5},
+                "timeToCompleteMinutes":{"literal":1},"quoteBasis":$spec
+            }}"""
+            for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
+                val rules = RuleCompiler.compileRules<UiNode>(
+                    parseJson("""[{"id":"test.screen.offer","priority":10,$body}]""").jsonArray,
+                    RuleContext.SCREEN,
+                )
+                assertEquals(if (spec == "\"total\"" || spec == "\"incremental\"") 1 else 0, rules.size)
+            }
+        }
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================

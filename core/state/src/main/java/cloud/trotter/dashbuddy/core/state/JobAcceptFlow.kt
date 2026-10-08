@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -72,28 +73,33 @@ internal data class AcceptInputs(
 
 internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
     val parsedOffer = pending?.offerFields?.parsedOffer
+    val basis = parsedOffer?.quoteBasis ?: pending?.evaluation?.quoteBasis ?: OfferQuoteBasis.TOTAL
     val eval = pending?.evaluation
+    val totalEval = eval?.takeIf { basis == OfferQuoteBasis.TOTAL }
     // #936: an evaluation of a distance-less offer carries 0.0 PLACEHOLDERS in its rate-bearing
     // fields (it scored nothing), so those are read only from an evaluation that actually had a
     // distance — otherwise the parse wins, and a null distance is preferable to a 0.0 that would
     // masquerade as a measurement in the accepted job's economics. `payAmount` (real gross) and
-    // `estMinutes` (the handling floor) are not rates and read from the evaluation either way.
-    val scoredEval = eval?.takeIf { it.hasDistanceMetrics }
+    // `estMinutes` (the handling floor) are not rates. Incremental quotes have no handling floor.
+    val scoredEval = totalEval?.takeIf { it.hasDistanceMetrics }
     val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
     return AcceptInputs(
         offerHash = pending?.offerHash,
         economics = AcceptedOfferEconomics(
             offerHash = pending?.offerHash,
+            quoteBasis = basis,
             payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
             netPay = scoredEval?.netPayAmount,
-            estMinutes = eval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble(),
+            estMinutes = if (basis == OfferQuoteBasis.TOTAL) {
+                totalEval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble()
+            } else null,
             distanceMiles = scoredEval?.distanceMiles ?: parsedOffer?.distanceMiles,
-            handlingMinutes = eval?.handlingMinutes,
-            nonShopLegs = eval?.nonShopLegs ?: 0,
+            handlingMinutes = totalEval?.handlingMinutes,
+            nonShopLegs = totalEval?.nonShopLegs ?: 0,
             isShop = parsedOffer?.isShop == true,
             quotedItemCount = eval?.itemCount?.toInt(),
-            pricedShopItemsPerMinute = eval?.pricedShopItemsPerMinute,
-            pricedBasePickupMinutes = eval?.pricedBasePickupMinutes,
+            pricedShopItemsPerMinute = totalEval?.pricedShopItemsPerMinute,
+            pricedBasePickupMinutes = totalEval?.pricedBasePickupMinutes,
             // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.

@@ -116,6 +116,9 @@ data class ParsedOffer(
 
     /** Store the full extracted text array (joined or as JSON) for this offer screen for later review or parsing. */
     val rawExtractedTexts: String? = null,
+
+    /** Incremental quotes retain raw figures but cannot use whole-offer scoring. */
+    val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
 ) {
     /** #823: the ONE 'is a shopping offer' predicate — the evaluator's handling model and the accept mint read it. */
     val isShop: Boolean get() = orders.any { it.orderType.isShoppingOrder }

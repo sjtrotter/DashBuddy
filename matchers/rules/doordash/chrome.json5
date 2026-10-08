@@ -157,6 +157,30 @@
               }
             }
           ]
+        },
+        {
+          "all": [
+            {
+              "exists": {
+                "hasClassName": "androidx.compose.ui.platform.ComposeView"
+              }
+            },
+            {
+              "exists": {
+                "hasText": "Decline"
+              }
+            },
+            {
+              "exists": {
+                "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+              }
+            },
+            {
+              "exists": {
+                "hasTextMatchesRegex": "^\\+\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • \\+\\d+ min$"
+              }
+            }
+          ]
         }
       ],
       "require": {

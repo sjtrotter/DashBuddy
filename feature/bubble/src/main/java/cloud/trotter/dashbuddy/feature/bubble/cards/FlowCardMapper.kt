@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.cards
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -108,6 +109,7 @@ object FlowCardMapper {
                         val scored = payload.evaluation?.takeIf { it.hasDistanceMetrics }
                         acceptedNetPay = scored?.netPayAmount
                         acceptedEstMin = payload.evaluation?.estimatedTimeMinutes
+                            .takeIf { payload.parsedOffer.quoteBasis == OfferQuoteBasis.TOTAL }
                         acceptedDistanceMiles = scored?.distanceMiles ?: payload.parsedOffer.distanceMiles
                     }
                     // Re-open Awaiting if the dasher returned to the

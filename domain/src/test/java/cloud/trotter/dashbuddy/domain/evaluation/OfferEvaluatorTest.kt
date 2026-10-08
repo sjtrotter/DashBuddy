@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import org.junit.Assert.assertNull
+
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -12,6 +15,25 @@ import org.junit.Before
 import org.junit.Test
 
 class OfferEvaluatorTest {
+
+    @Test
+    fun `incremental figures bypass scoring and automatic verdicts`() {
+        val parsed = offer(pay = 10.5, dist = 1.5, itemCount = 127, orderType = OrderType.SHOP_FOR_ITEMS)
+            .copy(quoteBasis = OfferQuoteBasis.INCREMENTAL, timeToCompleteMinutes = 1L)
+        for (cfg in listOf(defaultConfig, config(blockRule("Test Store")), defaultConfig.copy(protectStatsMode = true), defaultConfig.copy(allowShopping = false))) {
+            val result = evaluator.evaluate(parsed, cfg)
+            assertEquals(OfferAction.NOTHING, result.action)
+            assertEquals(OfferQuality.UNKNOWN, result.qualityLevel)
+            assertEquals(0.0, result.score, 0.0)
+            assertFalse(result.hasDistanceMetrics)
+            assertEquals(10.5, result.payAmount, 0.0)
+            assertEquals(1.5, result.distanceMiles, 0.0)
+            assertEquals(127.0, result.itemCount, 0.0)
+            assertEquals(1L, result.incrementalMinutes)
+            assertNull(result.handlingMinutes)
+            assertNull(result.pricedShopItemsPerMinute)
+        }
+    }
 
     private lateinit var evaluator: OfferEvaluator
 

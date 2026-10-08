@@ -70,7 +70,8 @@ class RuleAuthoringVocabularyGuardTest {
         assertEquals(SessionType.entries.map { it.name }, Vocabulary.SESSION_TYPES)
         // #1069: the draft tool's identity enum mirrors the contract's declaration table.
         assertEquals(StateMachineContract.SUPPORTED_PRESENTATION_IDENTITIES.toList(), Vocabulary.PRESENTATION_IDENTITIES)
-        assertEquals(setOf("presentationIdentity"), StateMachineContract.PARSE_DECLARATION_LITERALS.keys)
+        assertEquals(StateMachineContract.SUPPORTED_QUOTE_BASES.toList(), Vocabulary.QUOTE_BASES)
+        assertEquals(setOf("presentationIdentity", "quoteBasis"), StateMachineContract.PARSE_DECLARATION_LITERALS.keys)
         assertEquals(Mode.entries.map { it.wire }, Vocabulary.MODES)
         assertEquals(OfferSurface.entries.map { it.wire }, Vocabulary.OFFER_SURFACES)
         assertEquals(TaskPhase.entries.map { it.name }, Vocabulary.TASK_PHASES)

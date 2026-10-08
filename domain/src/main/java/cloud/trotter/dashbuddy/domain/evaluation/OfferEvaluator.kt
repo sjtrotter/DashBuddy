@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 
 class OfferEvaluator() {
@@ -9,6 +10,19 @@ class OfferEvaluator() {
 
         val economy = config.userEconomy
         val grossPay = offer.payAmount ?: 0.0
+        // #1121: marginal-route context is absent. Bypass every automatic verdict, including opt-outs.
+        if (offer.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+            return OfferEvaluation(
+                action = OfferAction.NOTHING, score = 0.0, qualityLevel = OfferQuality.UNKNOWN,
+                payAmount = grossPay, distanceMiles = offer.distanceMiles ?: 0.0,
+                fuelCostEstimate = 0.0, netPayAmount = grossPay,
+                dollarsPerMile = 0.0, dollarsPerHour = 0.0, estimatedTimeMinutes = 0.0,
+                operatingCostPerMile = economy.operatingCostPerMile,
+                itemCount = offer.itemCount.toDouble(), merchantName = offer.displayStoreText,
+                quoteBasis = offer.quoteBasis, incrementalMinutes = offer.timeToCompleteMinutes,
+                isUsingDefaults = economy.isUsingDefaults,
+            )
+        }
         // #936: distance is the denominator of every cost and rate metric below, so the old
         // `?: 1.0` fallback fabricated a favorable one-mile trip for an offer whose distance
         // never parsed — near-zero operating cost, near-zero drive time, an inflated $/hr — i.e.

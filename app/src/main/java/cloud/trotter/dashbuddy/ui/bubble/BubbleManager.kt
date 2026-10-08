@@ -34,6 +34,7 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import android.os.SystemClock
 import android.view.View
@@ -487,25 +488,33 @@ class BubbleManager @Inject constructor(
         val rv = RemoteViews(context.packageName, layoutRes)
         val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
         val verdictArgb = offerVerdictArgb(action)
+        val incremental = offer.quoteBasis == OfferQuoteBasis.INCREMENTAL
+        val addonFigures = if (incremental) buildList {
+            offer.payAmount?.let { add(context.getString(R.string.bubble_offer_addon_pay, money(it))) }
+            offer.distanceMiles?.let { add(context.getString(R.string.bubble_offer_addon_distance, Formats.decimal(it))) }
+            offer.incrementalMinutes?.let { add(context.getString(R.string.bubble_offer_addon_minutes, it)) }
+        }.joinToString(" · ") else ""
 
         // Verdict banner is expanded-only by design; the collapsed heads-up conveys the verdict
         // through the gauge ring color (the compact layout has no verdict view).
         if (expanded) {
             rv.setTextViewText(
                 R.id.notif_offer_verdict,
-                offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
+                if (incremental) context.getString(R.string.bubble_offer_addon_reason)
+                else offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
                     ?: offerVerdictLabel(action),
             )
             rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
         }
         rv.setTextViewText(
             R.id.notif_offer_rate,
-            context.getString(R.string.bubble_offer_card_rate_per_hr, money0(offer.dollarsPerHour)),
+            if (incremental) context.getString(R.string.bubble_offer_addon_title)
+            else context.getString(R.string.bubble_offer_card_rate_per_hr, money0(offer.dollarsPerHour)),
         )
         if (!expanded) {
             rv.setTextViewText(
                 R.id.notif_offer_sub,
-                context.getString(
+                if (incremental) addonFigures else context.getString(
                     R.string.bubble_offer_card_sub_compact,
                     money(offer.netPayAmount), money(offer.dollarsPerMile), miles(offer.distanceMiles),
                 ),
@@ -553,7 +562,7 @@ class BubbleManager @Inject constructor(
         if (expanded) {
             rv.setTextViewText(
                 R.id.notif_offer_metrics,
-                context.getString(
+                if (incremental) addonFigures else context.getString(
                     R.string.bubble_offer_card_metrics_expanded,
                     money(offer.netPayAmount), money(offer.payAmount),
                     miles(offer.distanceMiles), money(offer.dollarsPerMile),

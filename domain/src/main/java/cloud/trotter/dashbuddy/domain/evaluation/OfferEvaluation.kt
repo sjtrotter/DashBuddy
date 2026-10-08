@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -58,10 +59,14 @@ data class OfferEvaluation(
     val pricedShopItemsPerMinute: Double? = null,
     /** See [pricedShopItemsPerMinute] for the accept-time pricing contract. */
     val pricedBasePickupMinutes: Double? = null,
+    val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
+    /** Raw platform delta, never a completion estimate. */
+    val incrementalMinutes: Long? = null,
 ) {
     /**
-     * True when this evaluation was computed against a real, positive parsed distance — i.e.
-     * [distanceMiles], [dollarsPerMile], [dollarsPerHour] and the cost fields are real numbers.
+     * True for a TOTAL quote evaluated against a positive parsed distance. Costs, net, rates,
+     * time and score may then be consumed as measurements. INCREMENTAL quotes keep real raw
+     * distance but have no derived metrics or verdict; consumers show marginal figures instead.
      *
      * False when the offer's distance never parsed (#936). Those fields are then `0.0`
      * PLACEHOLDERS meaning *unknown*, not measurements: [netPayAmount] is gross (no cost was
@@ -70,5 +75,5 @@ data class OfferEvaluation(
      * "unknown" affordance instead — printing the zeros would quote a rate we never computed.
      * ([operatingCostPerMile] is exempt: it is the economy profile's own rate, not distance-derived.)
      */
-    val hasDistanceMetrics: Boolean get() = distanceMiles > 0.0
+    val hasDistanceMetrics: Boolean get() = quoteBasis == OfferQuoteBasis.TOTAL && distanceMiles > 0.0
 }

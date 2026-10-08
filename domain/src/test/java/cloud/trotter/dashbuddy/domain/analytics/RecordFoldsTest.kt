@@ -4,6 +4,8 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.acceptedO
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsEventFixtures.evaluation as eval
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -26,6 +28,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartSource
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
@@ -46,6 +49,31 @@ import org.junit.Test
  * the fold's record values and the session accumulator directly.
  */
 class RecordFoldsTest {
+
+    @Test
+    fun `incremental evaluation persists raw figures without estimate or split placeholders`() {
+        val parsed = ParsedOffer(offerHash = "h1", quoteBasis = OfferQuoteBasis.INCREMENTAL,
+            payAmount = 10.5, distanceMiles = 1.5, itemCount = 127, timeToCompleteMinutes = 1L)
+        val evaluation = OfferEvaluator().evaluate(parsed, EvaluationConfig())
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("addon", 1_000, odo = 100.0),
+            ev(AppEventType.OFFER_ACCEPTED, "addon", 2_000,
+                acceptedOffer(2_000, evaluation).copy(parsedOffer = parsed)),
+        ))
+        val row = outcomes[1].offer!!
+        assertEquals(10.5, row.payAmount!!, 0.0)
+        assertEquals(1.5, row.distanceMiles!!, 0.0)
+        assertEquals(127, row.itemCount)
+        assertNull(row.estFuelPerMile)
+        assertNull(row.estNonFuelPerMile)
+        assertNull(row.score)
+        assertNull(row.estNetPay)
+        assertNull(row.estDollarsPerHour)
+        assertNull(row.estDollarsPerMile)
+        assertNull(row.estTimeMinutes)
+        assertEquals(OfferAction.NOTHING.name, row.action)
+        assertEquals(OfferQuality.UNKNOWN.name, row.quality)
+    }
 
     private var seq = 0L
     private val cpm = 0.30

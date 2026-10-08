@@ -339,12 +339,15 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
   - Issue: #1165. Confirmed: 1/2 (desk 2026-10-05: all 7 dash-controls frames recognized `timeline`, all while Online)
   Triage source: first-line blame 2026-09-30 (`c7510dcb5`, original README L315).
 
-- [active] **🆕 WATCH — the mid-job ADD-ON offer card is not recognized on 8.98.5+ (#1121).** Its money is a delta
-  (`+$10.50`) and its route line is a delta (`+1 stop (1.5 mi) • +1 min`), so `offer_popup` misses it and it
-  lands in `side_nav_drawer`: no `OFFER_RECEIVED`, no verdict, no bubble, no voice. **On-dash:** if an add-on
-  offer appears mid-job, note whether the app said anything at all. **Desk:** any `+$` / `+N stop` text in an
-  `offer_popup`, `side_nav_drawer` or UNKNOWN capture is a sighting — record its folder.
-  - Issue: #1121. Confirmed: 0/2 (a watch item — it retires when the rule ships and is validated)
+- [active] **🆕 NEW — Compose ADD-ON recognition and honest marginal figures (#1121).**
+  **On-dash:** an add-on shows and speaks once: add-on, extra pay/distance/time, no verdict, no net or
+  rate. A countdown redraw must not repeat speech. Decline through the sheet and timeout must return
+  to the original job without an accepted add-on. **Desk:** confirm `offer_popup`, INCREMENTAL basis,
+  two shop rows (95 + 32 items), one display store, null estimate columns and fuel/non-fuel split;
+  explicit accept keeps gross/distance but no one-minute job ETA or partial blended rate.
+  Partial paired-delta cards must stay UNKNOWN over drawer chrome. Busy-area boosts and peak-pay
+  chips are not add-on sightings. Real capture intake and goldens are coordinator gates.
+  - Issue: #1121. Confirmed: 0/2 (implementation awaits coordinator build and field validation)
     - desk 09-26: UNEXERCISED — no `+$` / `+N stop` text anywhere in the pull (8.98.5 or 8.99.20).
     - desk 09-27: UNEXERCISED — 0 `+$` / `+N stop` text anywhere in the pull.
     - desk 09-29: UNEXERCISED — 0 `+N stop` text; the `+$1`/`+$2` hits are the "Very busy" boost badge and idle-map

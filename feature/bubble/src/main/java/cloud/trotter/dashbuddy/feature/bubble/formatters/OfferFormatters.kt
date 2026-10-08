@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.formatters
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableStringBuilder
@@ -116,7 +117,8 @@ fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {
  * it. `toString()` yields the plain text used for chat storage.
  */
 fun OfferEvaluation.toNotificationSummary(): CharSequence {
-    val verdict = offerVerdictLabel(action)
+    val incremental = quoteBasis == OfferQuoteBasis.INCREMENTAL
+    val verdict = if (incremental) "Add-on" else offerVerdictLabel(action)
     val verdictColor = offerVerdictArgb(action)
     val scored = hasDistanceMetrics
 
@@ -133,7 +135,12 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
 
         append("\n")
         append(
-            if (scored) {
+            if (incremental) {
+                // #1121: only what the add-on adds — never a net, rate or completion time.
+                "+${Formats.money(payAmount)} pay · +${Formats.decimal(distanceMiles)} mi" +
+                    (incrementalMinutes?.let { " · +$it min" } ?: "") +
+                    " · $merchantName"
+            } else if (scored) {
                 "Net ${Formats.money(netPayAmount)} · " +
                     "${Formats.decimal(distanceMiles)} mi · " +
                     "${Formats.money(dollarsPerMile)}/mi · " +

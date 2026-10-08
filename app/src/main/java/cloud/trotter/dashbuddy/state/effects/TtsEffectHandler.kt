@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.state.effects
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import android.content.Context
 import android.content.res.Configuration
 import android.media.AudioAttributes
@@ -426,6 +427,16 @@ class TtsEffectHandler @Inject constructor(
         // so the scored template would speak "zero dollars an hour net … zero miles, score zero"
         // — a fabricated verdict read aloud to a driving dasher. Speak the parsed pay and say
         // there's no verdict instead.
+        if (eval.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+            return localized.getString(
+                R.string.tts_offer_addon_template,
+                eval.merchantName.trim(),
+                Formats.decimal(eval.payAmount, 2),
+                Formats.decimal(eval.distanceMiles),
+            ) + (eval.incrementalMinutes?.let {
+                " " + localized.resources.getQuantityString(R.plurals.tts_offer_addon_minutes, it.toInt(), it.toInt())
+            } ?: "")
+        }
         if (!eval.hasDistanceMetrics) {
             return localized.getString(
                 R.string.tts_offer_no_verdict_template,

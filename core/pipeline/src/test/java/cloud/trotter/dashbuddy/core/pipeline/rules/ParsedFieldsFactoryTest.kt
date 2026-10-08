@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -21,6 +24,24 @@ import java.security.MessageDigest
  * (a logged gap between the ruleset and the enum) without crashing.
  */
 class ParsedFieldsFactoryTest {
+
+    @Test
+    fun `incremental hash is distinct while total retains its exact historical bytes`() {
+        val fields = mapOf("payAmount" to 10.5, "distance" to 1.5, "timeToCompleteMinutes" to 1L,
+            "orders" to listOf(mapOf("storeName" to "H-E-B")))
+        fun parse(extra: Map<String, Any?> = emptyMap()) =
+            (ParsedFieldsFactory.create("offer", fields + extra) as ParsedFields.OfferFields).parsedOffer
+        val total = parse()
+        val expected = MessageDigest.getInstance("SHA-256").digest("10.5|1.5|1|H-E-B".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(expected, total.offerHash)
+        assertEquals(total.offerHash, parse(mapOf("quoteBasis" to "total")).offerHash)
+        val incremental = parse(mapOf("quoteBasis" to "incremental"))
+        assertEquals(OfferQuoteBasis.INCREMENTAL, incremental.quoteBasis)
+        assertNotEquals(total.offerHash, incremental.offerHash)
+        assertEquals(OfferQuoteBasis.TOTAL, Json.decodeFromString<ParsedOffer>("""{"offerHash":"old"}""").quoteBasis)
+        assertEquals(incremental, Json.decodeFromString<ParsedOffer>(Json.encodeToString(incremental)))
+    }
 
     private fun offerWithOrderType(orderType: String?): OrderType {
         val order = buildMap<String, Any?> {

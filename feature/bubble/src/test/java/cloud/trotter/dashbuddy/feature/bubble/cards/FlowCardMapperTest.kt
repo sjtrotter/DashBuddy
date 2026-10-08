@@ -12,7 +12,10 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
@@ -27,6 +30,29 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
 class FlowCardMapperTest {
+
+    @Test
+    fun `accepted increment cannot provide time or net to historical task cards`() {
+        val parsed = parsedOffer("addon", 10.5, 1.5).copy(
+            quoteBasis = OfferQuoteBasis.INCREMENTAL, timeToCompleteMinutes = 1L,
+        )
+        val payload = offerPayload("addon", AppEventType.OFFER_ACCEPTED, 2_000, 2_500).copy(
+            parsedOffer = parsed, evaluation = OfferEvaluator().evaluate(parsed, EvaluationConfig()),
+        )
+        val cards = FlowCardMapper.fold(listOf(
+            event(AppEventType.OFFER_ACCEPTED, payload, 2_500),
+            event(AppEventType.PICKUP_NAV_STARTED, pickupPayload("T1", "J1", "Wendy's", 2_500), 2_500),
+            event(AppEventType.PICKUP_CONFIRMED, pickupPayload("T1", "J1", "Wendy's", 2_500, confirmed = 3_000), 3_000),
+        ))
+        val offer = cards.filterIsInstance<FlowCardSnapshot.Offer>().single()
+        assertEquals(OfferQuoteBasis.INCREMENTAL, offer.quoteBasis)
+        assertEquals(1L, offer.incrementalMinutes)
+        assertNull(offer.evaluationScore)
+        assertNull(offer.netPayAmount)
+        val pickup = cards.filterIsInstance<FlowCardSnapshot.Pickup>().single()
+        assertNull(pickup.netPay)
+        assertNull(pickup.estMinutes)
+    }
 
     private fun event(type: AppEventType, payload: AppEventPayload?, occurredAt: Long) = AppEvent(
         type = type,

@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferKind
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.CountUnit
@@ -340,11 +341,15 @@ object ParsedFieldsFactory {
         // same-hash arm merges them before the presentation key is ever consulted. Absent token → the
         // pre-#1069 input byte for byte (Uber's churn fixtures keep their hashes).
         val assignmentId = f.str("assignmentId")?.trim()?.takeIf { it.isNotEmpty() }
+        val quoteBasis = if (f.str("quoteBasis") == StateMachineContract.QUOTE_BASIS_INCREMENTAL) {
+            OfferQuoteBasis.INCREMENTAL
+        } else OfferQuoteBasis.TOTAL
         val baseHashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
         // Astra r2: the token LEADS the input. A tokenless input always starts with the pay amount (a number
         // or "null"), so no store name can forge the `assignment=` segment — a suffix could be forged by a
         // store name that happens to contain it. Tokenless bytes are unchanged.
-        val hashInput = if (assignmentId != null) "assignment=$assignmentId|$baseHashInput" else baseHashInput
+        val identityHashInput = if (assignmentId != null) "assignment=$assignmentId|$baseHashInput" else baseHashInput
+        val hashInput = if (quoteBasis == OfferQuoteBasis.INCREMENTAL) "incremental|$identityHashInput" else identityHashInput
         // Fail-closed hash (#362): on digest failure fall back to a
         // non-reversible identity — NEVER the plaintext input.
         val offerHash = f.str("offerHash")
@@ -389,6 +394,7 @@ object ParsedFieldsFactory {
             activity = f.str("activity"),
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
+                quoteBasis = quoteBasis,
                 presentationKey = presentationKey,
                 assignmentIdHash = assignmentIdHash,
                 // #461: the offer's item count is the SHOP item count — sum only the shop orders'
