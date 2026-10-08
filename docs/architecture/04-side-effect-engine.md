@@ -135,6 +135,13 @@ fails the build on a bare, unescaped `}` in any main-source `Regex(…)`/`.toReg
 `\}`, never `}` (reference shape: `Ruleset.TEMPLATE_PATTERN` = `\{(\w+)\}`). Rule-authored
 patterns are a separate path that #1053 closed differently: they do not run on that engine at all
 (§2 — RE2J, not `java.util.regex`).
+
+A wedged worker is detected, not cancelled (#913): `SerializedEffectQueue` watches only while work is
+pending, sampling completed effects and barriers every 30 s. Two ticks without progress emit one
+`Effects` WARN per stall with only the pending count and in-flight class name (or `barrier`); progress
+after a warning emits one INFO with the approximate stall duration and drained count. The watchdog
+exits when the queue empties and restarts for new work; it never time-bounds the in-flight item.
+
 **The offer voice is the family's fifth member (#991).** `TtsEffectHandler` built its `TextToSpeech`
 once in `init` and latched `isReady` true forever, so a dropped engine binder lost every utterance
 across three dashes with nothing but a WARN. The engine now comes from a `TtsEngineFactory` seam and
