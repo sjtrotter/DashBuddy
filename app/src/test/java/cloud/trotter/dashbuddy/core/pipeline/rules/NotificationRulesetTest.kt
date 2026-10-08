@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -46,6 +47,30 @@ class NotificationRulesetTest {
         assertEquals(5.00, requireNotNull(fields.amount), 0.001)
         assertEquals("H-E-B", fields.storeName)
         assertEquals("4/26, 3:15 PM", fields.deliveredAt)
+    }
+
+    @Test
+    fun `a customer chat quoting the short tip wording is never claimed as a tip (#1002 review)`() {
+        // The short form is gated on DoorDash's own "Tip Update" title: a chat's title is the
+        // customer's name, and the tip rule outranks the chat rule (whose redact would never run).
+        val result = TestRulesetFactory.notificationRuleset.matchFirst(
+            raw(title = "Jane D", text = "I added \$2.00 tip on a past Target order. Leave it at the door")
+        )
+        assertNotEquals("doordash.notification.additional_tip", result?.ruleId)
+    }
+
+    @Test
+    fun `a store name containing 'Order' followed by a period parses whole in both forms`() {
+        for (text in listOf(
+            "A customer added \$3.00 tip on a past First Order.Cafe order.",
+            "A customer added \$3.00 tip on a past First Order.Cafe order delivered at 4/26, 3:15 PM",
+        )) {
+            val result = requireNotNull(
+                TestRulesetFactory.notificationRuleset.matchFirst(raw(title = "Tip Update", text = text)),
+            ) { text }
+            val fields = ParsedFieldsFactory.create(result.shape, result.fields) as ParsedFields.NotificationFields
+            assertEquals(text, "First Order.Cafe", fields.storeName)
+        }
     }
 
     @Test

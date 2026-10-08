@@ -12,7 +12,14 @@
             "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order delivered at (\\d{1,2}/\\d{1,2}, \\d{1,2}:\\d{2} [AP]M)"
           },
           {
-            "anyFieldMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order\\.(?:\\s|$)"
+            // #1002: the SHORT form ("A customer added $2.00 tip on a past Target order.") is
+            // gated on DoorDash's own push title. A customer CHAT could quote the same words, and
+            // this rule outranks the chat rule (whose redact would then never run); a chat's title
+            // is the customer's name, never "Tip Update".
+            "all": [
+              { "titleEquals": "Tip Update" },
+              { "textMatchesRegex": "added \\$(\\d+\\.\\d{2}) tip on a past (.+?) order\\.(?:\\s|$)" }
+            ]
           }
         ]
       },
@@ -27,7 +34,7 @@
           },
           "storeName": {
             "from": "fullString",
-            "find": "past (.+?) order(?: delivered at|\\.|$)",
+            "find": "past (.+?) order(?: delivered at|\\.(?:\\s|$)|$)",
             "group": 1,
             "transform": "trim"
           },
