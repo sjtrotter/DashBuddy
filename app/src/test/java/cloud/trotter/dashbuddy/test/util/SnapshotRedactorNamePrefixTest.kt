@@ -1,5 +1,10 @@
 package cloud.trotter.dashbuddy.test.util
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -31,6 +36,59 @@ class SnapshotRedactorNamePrefixTest {
     }
 
     // --- the chrome must survive -------------------------------------------
+
+    @Test
+    fun `longest customer lead-in keeps the Deliver to door of anchor (#1021)`() {
+        assertEquals("Deliver to door of ", SnapshotRedactor.customerLeadIn("Deliver to door of Jane D"))
+        assertEquals("Deliver to ", SnapshotRedactor.customerLeadIn("Deliver to Jane D"))
+        assertEquals("Deliver to door of ", SnapshotRedactor.customerLeadIn("DELIVER TO DOOR OF Jane D"))
+        assertEquals("Deliver to door of " + SnapshotRedactor.MASK, scrubText("Deliver to door of Jane D"))
+        assertEquals("DELIVER TO DOOR OF " + SnapshotRedactor.MASK, scrubText("DELIVER TO DOOR OF Jane D"))
+    }
+
+    @Test
+    fun `intake lead-ins never shadow rule keepPrefix chrome (#1021)`() {
+        val files = File(TestRulesetFactory.rulesDir).walkTopDown()
+            .filter { it.isFile && it.extension == "json" }.sortedBy { it.path }.toList()
+        assertTrue("generated rule assets must exist", files.isNotEmpty())
+        val leadIns = SnapshotRedactor.NAME_PREFIXES + SnapshotRedactor.GATED_NAME_PREFIXES.keys
+        var checked = 0
+        for (file in files) {
+            val prefixes = mutableListOf<String>()
+            collectKeepPrefixes(Json.parseToJsonElement(file.readText()), prefixes)
+            for (prefix in prefixes.distinct()) {
+                if (leadIns.none { prefix.startsWith(it, ignoreCase = true) }) continue
+                val matched = SnapshotRedactor.customerLeadIn(prefix + "Jane D")
+                assertTrue(
+                    "${file.name}: intake lead-in '$matched' must preserve keepPrefix '$prefix'",
+                    matched != null && matched.startsWith(prefix),
+                )
+                checked++
+            }
+        }
+        assertTrue("rule keepPrefixes must exercise intake lead-ins", checked > 0)
+    }
+
+    /** Every keepPrefix string, across all rule sections (scalar or array). */
+    private fun collectKeepPrefixes(element: JsonElement, out: MutableList<String>) {
+        when (element) {
+            is JsonObject -> element.forEach { (key, value) ->
+                if (key == "keepPrefix") {
+                    when (value) {
+                        is JsonPrimitive -> if (value.isString) out += value.content
+                        is JsonArray -> value.forEach { entry ->
+                            if (entry is JsonPrimitive && entry.isString) out += entry.content
+                        }
+                        else -> {}
+                    }
+                } else {
+                    collectKeepPrefixes(value, out)
+                }
+            }
+            is JsonArray -> element.forEach { collectKeepPrefixes(it, out) }
+            else -> {}
+        }
+    }
 
     @Test
     fun `Return to dash chrome is untouched`() {
@@ -127,9 +185,15 @@ class SnapshotRedactorNamePrefixTest {
     }
 
     @Test
-    fun `a bare prefix with no tail is not a lead-in`() {
+    fun `a bare prefix with no tail cannot select itself`() {
         for (prefix in SnapshotRedactor.NAME_PREFIXES + SnapshotRedactor.GATED_NAME_PREFIXES.keys) {
-            assertNull("'$prefix' alone carries no customer", SnapshotRedactor.customerLeadIn(prefix))
+            // Overlapping prefixes can still match a shorter lead-in (#1021).
+            val shorter = SnapshotRedactor.NAME_PREFIXES.any { it.length < prefix.length && prefix.startsWith(it) }
+            if (shorter) {
+                assertFalse("'$prefix' has no tail", prefix == SnapshotRedactor.customerLeadIn(prefix))
+            } else {
+                assertNull("'$prefix' alone carries no customer", SnapshotRedactor.customerLeadIn(prefix))
+            }
         }
     }
 }

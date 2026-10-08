@@ -141,8 +141,9 @@ fixtures re-classified and were set aside), so a chrome-ambiguous intake prefix 
 predicate over its tail (`SnapshotRedactor.GATED_NAME_PREFIXES`; `"Return "`'s tests the segment
 ahead of the conjugation's own `" to "` against `FIRST_LAST_INITIAL_PATTERN`, the same byte-SSOT
 the rule side shares) and `SnapshotRedactor.customerLeadIn` is the ONE owner of "is this a customer
-lead-in with a raw tail", shared by the scrubber and the committed-corpus guard. That guard
-checks name shape + `ID_MARKERS` ids + lead-in prefixes, with hand-written fixture pseudonyms
+lead-in with a raw tail", shared by the scrubber and the committed-corpus guard.
+Longest match wins (#1021) across unconditional and passing gated prefixes: `Deliver to door of ` keeps its full anchor, with a structural guard against shadowing any rule's `keepPrefix`.
+The committed-corpus guard checks name shape + `ID_MARKERS` ids + lead-in prefixes, with hand-written fixture pseudonyms
 exempted by the byte-exact `CorpusDecoys` enumeration rather than by loosening the guard; a
 per-folder assertion that a fixture carries a raw pseudonym is pinned to the hand-authored files
 BY VALUE, never applied folder-wide, or the folder becomes CLOSED to device captures (which arrive
