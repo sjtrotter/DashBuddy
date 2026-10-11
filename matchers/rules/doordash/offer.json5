@@ -508,6 +508,7 @@
             ]
           },
           // #1121: mixed total/delta signatures must never classify an add-on as TOTAL.
+          // Twin of side_nav_drawer's give-up (chrome.json5) — byte-pinned by DrawerOfferSignaturePinTest.
           "reject": [
             {
               "exists": {

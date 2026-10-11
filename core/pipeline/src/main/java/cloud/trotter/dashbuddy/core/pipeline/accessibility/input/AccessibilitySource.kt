@@ -435,7 +435,8 @@ class AccessibilitySource @Inject constructor(
     /**
      * #1164 — the ONE accessibility mapping seam (both snapshot paths and the click path): a node
      * that fails to map costs that frame, never the sensing flow.
-     * An ordinary `Exception` is counted under `mappingFailures` and logged at DEBUG only.
+     * An ordinary `Exception` is counted under `mappingFailures` and logged at DEBUG with the
+     * exception class only — a per-frame stack trace would flood the firehose.
      *
      * Beside `Exception`, only the API-MISMATCH linkage errors are caught: a missing method, field or
      * class (`IncompatibleClassChangeError` covers `NoSuchMethodError`/`NoSuchFieldError`/
@@ -450,7 +451,7 @@ class AccessibilitySource @Inject constructor(
         node.toUiNode()
     } catch (e: Exception) {
         stats.onMappingFailure()
-        Timber.tag("Pipeline").d(e, "Accessibility mapping failed — frame dropped and counted")
+        Timber.tag("Pipeline").d("Accessibility mapping failed (%s) — frame dropped and counted", e.javaClass.simpleName)
         null
     } catch (error: IncompatibleClassChangeError) {
         onApiMismatch(error)
