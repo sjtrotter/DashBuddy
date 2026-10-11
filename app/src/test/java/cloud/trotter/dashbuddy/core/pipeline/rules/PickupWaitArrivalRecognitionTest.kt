@@ -24,21 +24,14 @@ class PickupWaitArrivalRecognitionTest {
     private val fixtures: List<File> = loaded.keys.sorted().map { File(it) }
     init { require(loaded.isNotEmpty()) { "Cannot find pickup_wait_survey fixtures" } }
 
-    /** Decoded node text, not the serialized file bytes. */
-    private fun UiNode.allTexts(): List<String> = buildList {
-        fun walk(n: UiNode) { n.text?.let(::add); n.contentDescription?.let(::add); n.children.forEach(::walk) }
-        walk(this@allTexts)
-    }
-    private fun UiNode.hasIdSuffix(suffix: String): Boolean =
-        viewIdResourceName?.endsWith(suffix) == true || children.any { it.hasIdSuffix(suffix) }
-
     /**
      * Partition by the at-store card, which is post-arrival-only in the corpus (#1306), or
      * "Merchant notified of your arrival", the 8.99.20 arrival text (#1141).
      */
     private val arrivalFixtures = fixtures.filter { f ->
         val t = loaded.getValue(f.name)
-        t.hasIdSuffix("at_store_contact_view") || t.allTexts().any { it.contains("Merchant notified of your arrival") }
+        t.findDescendantById("at_store_contact_view") != null ||
+            t.allText.any { it.contains("Merchant notified of your arrival") }
     }
     private val surveyOnlyFixtures = fixtures - arrivalFixtures.toSet()
 
@@ -83,12 +76,15 @@ class PickupWaitArrivalRecognitionTest {
     fun `the survey-only render without the at-store card stays flowless (#1306)`() {
         val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
         fun strip(n: UiNode): UiNode = n.copy(children = n.children.filterNot { it.viewIdResourceName?.endsWith("at_store_contact_view") == true }.map(::strip))
-        assertTrue("fixture must have an at-store card", arrival.hasIdSuffix("at_store_contact_view"))
+        assertTrue("fixture must have an at-store card", arrival.findDescendantById("at_store_contact_view") != null)
         val noCard = strip(arrival).restoreParents()
-        assertTrue("at-store card subtree must be removed", !noCard.hasIdSuffix("at_store_contact_view"))
-        // Without the card the 8.101.8 'delay protection' render anchors nothing (UNKNOWN is fine) — what
-        // matters is that NO branch declares the arrival.
-        assertNull("no at-store card, no arrival", rules.matchFirst(noCard)?.flow)
+        assertTrue("at-store card subtree must be removed", noCard.findDescendantById("at_store_contact_view") == null)
+        val r0 = rules.matchFirst(noCard)
+        assertNull(
+            "the 8.101.8 'delay protection' render without its card anchors no rule today (UNKNOWN); " +
+                "a future flowless claim would also be fine — update this pin deliberately",
+            r0,
+        )
 
         // The 8.9x 'What's causing your wait' at-store render is an arrival WITH the card and the plain
         // flowless survey WITHOUT it — the same frame, partitioned by the card alone.
