@@ -481,7 +481,7 @@
     {
       "id": "doordash.screen.pickup_wait_survey",
       "priority": 88,
-      "comment": "#1141: recognize-only EXCEPT its first branch — the arrival-chrome render (curbside card id + `Merchant notified of your arrival`) declares `task:pickup:arrived` and parses the pickup task shape; every other branch stays flowless. #992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
+      "comment": "#1141: recognize-only EXCEPT its first TWO branches — the 8.99.20 arrival render (#1141, branch 0) and the 8.101.8 at-store render (#1306, branch 1) — both declare `task:pickup:arrived` and parse the pickup task shape; every other branch stays flowless. #992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
       "redact": [
         {
           "find": {
@@ -634,7 +634,7 @@
           }
         },
         {
-          "comment": "#1306 — the 8.101.8 restaurant at-store render (fielded 2026-10-09 12:13 → 10-10 08:20, 6 frames; DoorDash updated 8.100.12 → 8.101.8 on 10-08/09). Same surface as branch 0 — the post-arrival card whose own chrome states the arrival — but the curbside card and 'Merchant notified of your arrival' are gone; the card's own chrome is now the 'Merchant delay protection' / 'Stay in the restaurant' survey under `pickup_survey_view`. Anchors are view-id FIRST (the `at_store_contact_view` + `mx_contact_view` + `pickup_survey_view` hosts) and the text conjunct is ANY of two id-less survey lines a customer note could not plausibly quote together with those three hosts; the `not curbside` conjunct keeps every 8.99.20 frame on branch 0 so an install on the old version is byte-unchanged. Parse/bind/state/rejects are branch 0's verbatim (the store from the REQUIRED `mx_contact_view` bind, no customer identity — #548); the rule-level redact (`customer_name`, `normalize: customerName`) already covers this render's bare `customer_name` node. Without this branch `PICKUP_ARRIVED` waited for the order-ready screen and restaurant dwell folded to 0.01 min (MR TERIYAKI 10-09 17:53, McDonald's 10-10 08:19).",
+          "comment": "#1306 — the 8.101.8 restaurant at-store render (fielded 2026-10-09 12:13 → 10-10 08:20, 6 frames; DoorDash updated 8.100.12 → 8.101.8 on 10-08/09). Same surface as branch 0 — the post-arrival card whose own chrome states the arrival — but the curbside card and 'Merchant notified of your arrival' are gone; the card's own chrome is now the 'Merchant delay protection' / 'Stay in the restaurant' survey under `pickup_survey_view`. Anchors are view-id FIRST (the `at_store_contact_view` + `mx_contact_view` + `pickup_survey_view` hosts) and the text conjunct is ANY of two id-less survey lines a customer note could not plausibly quote together with those three hosts; the `not curbside` conjunct keeps every 8.99.20 frame on branch 0 so an install on the old version is byte-unchanged. Parse/bind/state/rejects are branch 0's verbatim (the store from the REQUIRED `mx_contact_view` bind, no customer identity — #548); the rule-level redact (`customer_name`, `normalize: customerName`) already covers this render's bare `customer_name` node. Without this branch `PICKUP_ARRIVED` waited for the order-ready screen and restaurant dwell folded to 0.01 min (MR TERIYAKI 10-09 17:53, McDonald's 10-10 08:19). The survey lines are matched INSIDE `pickup_survey_view` only (Astra review r1 of PR #1307): a merchant instruction quoting 'Stay in the restaurant' on a flowless render must not become an arrival.",
           "reject": [
             {
               "all": [
@@ -741,17 +741,19 @@
               },
               {
                 "exists": {
-                  "hasIdSuffix": "pickup_survey_view"
-                }
-              },
-              {
-                "exists": {
-                  "any": [
+                  "all": [
                     {
-                      "hasText": "Stay in the restaurant"
+                      "hasIdSuffix": "pickup_survey_view"
                     },
                     {
-                      "hasText": "Merchant delay protection"
+                      "any": [
+                        {
+                          "hasAnyText": "Stay in the restaurant"
+                        },
+                        {
+                          "hasAnyText": "Merchant delay protection"
+                        }
+                      ]
                     }
                   ]
                 }

@@ -61,6 +61,26 @@ class PickupWaitArrivalRecognitionTest {
         }
     }
 
+    @Test
+    fun `a merchant instruction quoting the 8.101.8 survey line does not become an arrival (#1306 r1)`() {
+        val survey = load("pickup_wait_survey/2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json")
+        val quoted = withMerchantInstruction(survey, "Stay in the restaurant")
+        val r = rules.matchFirst(quoted)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertNull("survey chrome quoted outside pickup_survey_view must not assert arrival", r?.flow)
+    }
+
+    @Test
+    fun `the 8.101.8 arrival requires survey text inside the pickup host (#1306 r1)`() {
+        val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
+        val r = rules.matchFirst(arrival)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertEquals(Flow.TaskPickupArrived, r?.flow)
+
+        val blankSurvey = withoutSurveyText(arrival)
+        assertNull("the survey host ids alone must not assert arrival", rules.matchFirst(blankSurvey)?.flow)
+    }
+
     // Astra review r1 of PR #1220 — the anchor is the curbside card's view id, so quoted chrome in a
     // customer note or a chat line cannot steal a frame into a false arrival, and a combined
     // unassigned-confirmation render keeps its abandonment flow.
@@ -146,6 +166,38 @@ class PickupWaitArrivalRecognitionTest {
         ).restoreParents()
         val r = rules.matchFirst(idOnly)
         assertTrue("no pickup_survey_view host ⇒ not the arrival branch", r?.flow != Flow.TaskPickupArrived)
+    }
+
+    private fun withMerchantInstruction(tree: UiNode, text: String): UiNode {
+        var replaced = false
+        fun copy(n: UiNode, insideSurvey: Boolean): UiNode {
+            val inSurvey = insideSurvey || n.viewIdResourceName?.endsWith("pickup_survey_view") == true
+            val replace = !replaced && !inSurvey &&
+                n.viewIdResourceName?.endsWith("instructions_line_2_expanded") == true
+            if (replace) replaced = true
+            return n.copy(
+                text = if (replace) text else n.text,
+                children = n.children.map { copy(it, inSurvey) },
+            )
+        }
+        val result = copy(tree, false).restoreParents()
+        check(replaced) { "Fixture must have a merchant instruction outside pickup_survey_view" }
+        return result
+    }
+
+    private fun withoutSurveyText(tree: UiNode): UiNode {
+        var foundSurvey = false
+        fun copy(n: UiNode, insideSurvey: Boolean): UiNode {
+            val inSurvey = insideSurvey || n.viewIdResourceName?.endsWith("pickup_survey_view") == true
+            if (inSurvey) foundSurvey = true
+            return n.copy(
+                text = if (inSurvey) "" else n.text,
+                children = n.children.map { copy(it, inSurvey) },
+            )
+        }
+        val result = copy(tree, false).restoreParents()
+        check(foundSurvey) { "Fixture must have a pickup_survey_view subtree" }
+        return result
     }
 
     private fun withNote(tree: UiNode, note: String): UiNode =
