@@ -83,6 +83,12 @@ data class ParsedOffer(
     /** The time in minutes to complete this offer. */
     val timeToCompleteMinutes: Long? = null,
 
+    /**
+     * #1304: the route's stop count as the card states it (`+N stops` on an INCREMENTAL card = pickups +
+     * dropoffs ADDED; null when the card did not render it or the rule did not parse it). Not an `offerHash` input.
+     */
+    val stopCount: Int? = null,
+
     /** Offer-level badges found in the offer. */
     val badges: Set<OfferBadge> = emptySet(),
 

@@ -69,6 +69,8 @@ internal data class AcceptInputs(
     val storeHints: List<String>,
     /** One dropoff placeholder per order; fallback 1 when the offer wasn't parsed. */
     val dropoffCount: Int,
+    /** #1304: the INCREMENTAL card's `+N stops` — pickups + dropoffs added; null when unparsed. */
+    val stopCount: Int? = null,
 )
 
 internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
@@ -97,13 +99,14 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             handlingMinutes = totalEval?.handlingMinutes,
             nonShopLegs = totalEval?.nonShopLegs ?: 0,
             isShop = parsedOffer?.isShop == true,
-            quotedItemCount = eval?.itemCount?.toInt(),
+            // #1304: an incremental card lists the owned order too, so its counts are not the new order's.
+            quotedItemCount = totalEval?.itemCount?.toInt(),
             pricedShopItemsPerMinute = totalEval?.pricedShopItemsPerMinute,
             pricedBasePickupMinutes = totalEval?.pricedBasePickupMinutes,
             // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
             // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
             // learn the items:units ratio. Null for an items-denominated / non-shop offer.
-            offerUnitCount = parsedOffer?.takeIf { it.itemCountIsUnits }?.itemCount,
+            offerUnitCount = parsedOffer?.takeIf { basis == OfferQuoteBasis.TOTAL && it.itemCountIsUnits }?.itemCount,
             // #997: keep this accept's OWN quoted stores. `Job.offerStoreHint` flattens every
             // accept's hints together, so a multi-accept job could not say which store belonged to
             // which quote — and the store is the authoritative offer↔drop correspondence at close
@@ -114,6 +117,7 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
         ),
         storeHints = storeHints,
         dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
+        stopCount = parsedOffer?.stopCount,
     )
 }
 
@@ -198,6 +202,7 @@ internal fun PlatformRegionStepper.mintFreshJobFromAccept(
  * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1),
  * plus (#526 D2) pickup placeholders only for stores the job does NOT already own (a same-store
  * add-on folds into the existing pickup, #499), at offsets D..D+P-1. No job mint this step.
+ * For an INCREMENTAL add-on, D = stopCount − new pickup hints, floored at 0; unparsed → 1 (#1304).
  * Deduped by offerHash so a re-entered OfferPresented for the same offer can't double-count.
  */
 internal fun PlatformRegionStepper.appendAddOn(
@@ -209,9 +214,6 @@ internal fun PlatformRegionStepper.appendAddOn(
     val alreadyCounted = inputs.offerHash != null &&
         existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
     if (alreadyCounted) return region
-    val addOnDropoffs = preCreatedDropoffs(
-        region, obs, existing.jobId, inputs.dropoffCount, startOffset = 0, offerHash = inputs.offerHash,
-    )
     // #526 FIX3c: dedup incoming add-on stores against BOTH the existing pickups' offer hints
     // AND their resolved store names — a bare-fallback job (hint null, storeName "H-E-B") would
     // otherwise get a duplicate H-E-B placeholder from a same-store add-on.
@@ -222,7 +224,18 @@ internal fun PlatformRegionStepper.appendAddOn(
         .toSet()
     val addOnPickupHints = distinctStoreHints(inputs.storeHints)
         .filter { it.lowercase(Locale.ROOT) !in existingPickupHints }
-    val addOnPickups = preCreatedPickups(region, obs, existing.jobId, addOnPickupHints, startOffset = inputs.dropoffCount.toLong())
+    // #1304: an INCREMENTAL card lists the OWNED order beside the new one, so `orders.size` over-mints.
+    // The delta route states `+N stops` = pickups added + dropoffs added; the pickups added are exactly
+    // `addOnPickupHints` (stores the job does not own yet), so the rest are dropoffs. Unparsed → ONE drop,
+    // never `orders.size`: screens activate placeholders blind, so under-minting self-heals and over-minting
+    // does not (a never-activated placeholder keeps the job from ever proving complete).
+    val addOnDropoffCount = if (inputs.economics.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+        inputs.stopCount?.let { (it - addOnPickupHints.size).coerceAtLeast(0) } ?: 1
+    } else inputs.dropoffCount
+    val addOnDropoffs = preCreatedDropoffs(
+        region, obs, existing.jobId, addOnDropoffCount, startOffset = 0, offerHash = inputs.offerHash,
+    )
+    val addOnPickups = preCreatedPickups(region, obs, existing.jobId, addOnPickupHints, startOffset = addOnDropoffCount.toLong())
     return region.copy(
         activeJob = existing.copy(
             acceptedOffers = existing.acceptedOffers + inputs.economics,
@@ -232,7 +245,7 @@ internal fun PlatformRegionStepper.appendAddOn(
             offerStoreHint = existing.offerStoreHint + inputs.storeHints,
             tasks = existing.tasks + addOnDropoffs + addOnPickups,
         ),
-        mintCounter = region.mintCounter + inputs.dropoffCount + addOnPickups.size,
+        mintCounter = region.mintCounter + addOnDropoffCount + addOnPickups.size,
     )
 }
 

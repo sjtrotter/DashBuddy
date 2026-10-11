@@ -539,7 +539,7 @@ observed tap outranks the sheet; a click-less accept is inferred only over a NON
 click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface`;
 inferred outcomes are named in the event description.
 
-**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend.
+**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend; an explicit add-on accept mints `stopCount − new pickups` dropoffs, never one per listed row (#1304).
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
 mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,

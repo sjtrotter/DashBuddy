@@ -128,6 +128,7 @@ object RuleAuthoringVocabulary {
             FieldSpec("distance", FieldType.DOUBLE, defaultTransform = listOf("parseDistance")),
             FieldSpec("deliveryTimeText", FieldType.STRING),
             FieldSpec("timeToCompleteMinutes", FieldType.LONG, defaultTransform = listOf("parseTotalMinutes")),
+            FieldSpec("stopCount", FieldType.INT),
             FieldSpec("deliveryTime", FieldType.LONG, defaultTransform = listOf("parseDeadline")),
             FieldSpec("initialCountdownSeconds", FieldType.INT, defaultTransform = listOf("parseClockSeconds")),
             FieldSpec("offerKind", FieldType.STRING),

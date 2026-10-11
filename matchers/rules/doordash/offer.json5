@@ -899,6 +899,21 @@
                 "read": "text",
                 "transform": "parseTotalMinutes"
               },
+              "stopCount": {
+                "comment": "#1304: the delta route's stop count = pickups added + dropoffs added. The card lists the OWNED order beside the new one, so this — not orders.size — is what the add-on mint derives its dropoff count from (JobAcceptFlow.appendAddOn). Optional: a null leaves the mint at one dropoff.",
+                "from": "offerBody",
+                "find": {
+                  "hasTextMatchesRegex": "^\\+\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • \\+\\d+ min$"
+                },
+                "read": "text",
+                "transform": {
+                  "regex": {
+                    "pattern": "^\\+(\\d+) stops?\\b",
+                    "group": 1,
+                    "then": "toInt"
+                  }
+                }
+              },
               "initialCountdownSeconds": {
                 "from": "acceptButton",
                 "find": {
