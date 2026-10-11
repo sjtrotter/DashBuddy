@@ -6063,14 +6063,44 @@
     "pickup_wait_survey/2026-08-07_19-46-17-026__doordash__accessibility.window__pickup_wait_survey__7e4609.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "19:50",
+                "time": 1780257000000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Bowls n go downtown",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "19:50",
+                "time": 1780257000000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Bowls n go downtown",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-07_20-00-31-049__doordash__accessibility.window__pickup_wait_survey__0bf7d7.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6096,8 +6126,23 @@
     "pickup_wait_survey/2026-08-08_12-45-40-504__doordash__accessibility.window__pickup_wait_survey__608677.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "12:48",
+                "time": 1780318080000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Zaxbys",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-18_18-45-08-947__doordash__accessibility.window__pickup_wait_survey__1c1273.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6171,8 +6216,23 @@
     "pickup_wait_survey/2026-08-28_15-41-29-654__doordash__accessibility.window__pickup_wait_survey__38622a.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",
-        "shape": null,
-        "fields": {}
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "15:40",
+                "time": 1780328400000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "McDonald's",
+            "subFlow": "ARRIVED"
+        }
     },
     "pickup_wait_survey/2026-08-28_16-50-28-187__doordash__accessibility.window__pickup_wait_survey__7f49f8.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
@@ -6234,6 +6294,48 @@
             "redCardTotal": null,
             "storeAddress": null,
             "storeName": "Pluckers Wing Bar",
+            "subFlow": "ARRIVED"
+        }
+    },
+    "pickup_wait_survey/2026-10-09_12-13-33-040__doordash__accessibility.window__pickup_wait_survey__1f6716.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "12:14",
+                "time": 1780316040000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Panera Bread",
+            "subFlow": "ARRIVED"
+        }
+    },
+    "pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "08:22",
+                "time": 1780302120000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "McDonald's",
             "subFlow": "ARRIVED"
         }
     },

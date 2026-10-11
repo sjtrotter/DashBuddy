@@ -188,6 +188,7 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
   wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the
   "Stay in your car / Merchant notified of your arrival" screen.
   - Confirmed: 0/2
+  - desk 10-11: REFUTED on 8.101.8 (0.01-min dwells, the card had none of the anchors) → #1306 anchors branch 1 on the at-store CARD (not a survey line); re-arm: on a post-#1306 build, restaurant dwell > 0 and `PICKUP_ARRIVED` lands on the first at-store frame (whichever survey copy it shows).
   Triage source: first-line blame 2026-10-05 (`5894e98e5`, original README L104).
 
 - [active] **Resolved offer cards no longer wear a verdict banner (#864):** after an offer times out or is declined, expand

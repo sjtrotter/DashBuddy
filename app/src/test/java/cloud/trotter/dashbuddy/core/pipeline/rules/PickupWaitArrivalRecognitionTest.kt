@@ -24,13 +24,14 @@ class PickupWaitArrivalRecognitionTest {
     private val fixtures: List<File> = loaded.keys.sorted().map { File(it) }
     init { require(loaded.isNotEmpty()) { "Cannot find pickup_wait_survey fixtures" } }
 
-    /** Partition by DECODED node text (what the rule matches on), not the serialized file bytes. */
-    private fun UiNode.allTexts(): List<String> = buildList {
-        fun walk(n: UiNode) { n.text?.let(::add); n.contentDescription?.let(::add); n.children.forEach(::walk) }
-        walk(this@allTexts)
-    }
+    /**
+     * Partition by the at-store card, which is post-arrival-only in the corpus (#1306), or
+     * "Merchant notified of your arrival", the 8.99.20 arrival text (#1141).
+     */
     private val arrivalFixtures = fixtures.filter { f ->
-        loaded.getValue(f.name).allTexts().any { it.contains("Merchant notified of your arrival") }
+        val t = loaded.getValue(f.name)
+        t.findDescendantById("at_store_contact_view") != null ||
+            t.allText.any { it.contains("Merchant notified of your arrival") }
     }
     private val surveyOnlyFixtures = fixtures - arrivalFixtures.toSet()
 
@@ -42,6 +43,17 @@ class PickupWaitArrivalRecognitionTest {
                 it.name == "2026-09-27_11-50-25-492__doordash__accessibility.window__pickup_wait_survey__70a359.json"
             },
         )
+        assertTrue(
+            "the fielded 8.101.8 frames (#1306) must be in the arrival set",
+            arrivalFixtures.any { it.name.startsWith("2026-10-10_08-19-31-073") } &&
+                arrivalFixtures.any { it.name.startsWith("2026-10-09_12-13-33-040") },
+        )
+        assertTrue(
+            "the 8.9x causing-your-wait at-store frame (#1306) must be in the arrival set",
+            arrivalFixtures.any {
+                it.name == "2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json"
+            },
+        )
         arrivalFixtures.forEach { fixture ->
             val r = rules.matchFirst(loaded.getValue(fixture.name))
             assertEquals(fixture.name, "doordash.screen.pickup_wait_survey", r?.ruleId)
@@ -49,6 +61,39 @@ class PickupWaitArrivalRecognitionTest {
             assertEquals(fixture.name, Flow.TaskPickupArrived, r?.flow)
             assertEquals(fixture.name, "PICKUP", r?.fields?.get("phase"))
         }
+    }
+
+    @Test
+    fun `the at-store card with an EMPTY survey slot is still an arrival (#1306)`() {
+        val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
+        val blankSurvey = withoutSurveyText(arrival)
+        val r = rules.matchFirst(blankSurvey)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertEquals(Flow.TaskPickupArrived, r?.flow)
+    }
+
+    @Test
+    fun `the survey-only render without the at-store card stays flowless (#1306)`() {
+        val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
+        fun strip(n: UiNode): UiNode = n.copy(children = n.children.filterNot { it.viewIdResourceName?.endsWith("at_store_contact_view") == true }.map(::strip))
+        assertTrue("fixture must have an at-store card", arrival.findDescendantById("at_store_contact_view") != null)
+        val noCard = strip(arrival).restoreParents()
+        assertTrue("at-store card subtree must be removed", noCard.findDescendantById("at_store_contact_view") == null)
+        val r0 = rules.matchFirst(noCard)
+        assertNull(
+            "the 8.101.8 'delay protection' render without its card anchors no rule today (UNKNOWN); " +
+                "a future flowless claim would also be fine — update this pin deliberately",
+            r0,
+        )
+
+        // The 8.9x 'What's causing your wait' at-store render is an arrival WITH the card and the plain
+        // flowless survey WITHOUT it — the same frame, partitioned by the card alone.
+        val causing = load("pickup_wait_survey/2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json")
+        assertEquals(Flow.TaskPickupArrived, rules.matchFirst(causing)?.flow)
+        val causingNoCard = strip(causing).restoreParents()
+        val r = rules.matchFirst(causingNoCard)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertNull("survey-only renders must not assert arrival", r?.flow)
     }
 
     // Astra review r1 of PR #1220 — the anchor is the curbside card's view id, so quoted chrome in a
@@ -138,6 +183,21 @@ class PickupWaitArrivalRecognitionTest {
         assertTrue("no pickup_survey_view host ⇒ not the arrival branch", r?.flow != Flow.TaskPickupArrived)
     }
 
+    private fun withoutSurveyText(tree: UiNode): UiNode {
+        var foundSurvey = false
+        fun copy(n: UiNode, insideSurvey: Boolean): UiNode {
+            val inSurvey = insideSurvey || n.viewIdResourceName?.endsWith("pickup_survey_view") == true
+            if (inSurvey) foundSurvey = true
+            return n.copy(
+                text = if (inSurvey) "" else n.text,
+                children = n.children.map { copy(it, inSurvey) },
+            )
+        }
+        val result = copy(tree, false).restoreParents()
+        check(foundSurvey) { "Fixture must have a pickup_survey_view subtree" }
+        return result
+    }
+
     private fun withNote(tree: UiNode, note: String): UiNode =
         tree.copy(children = tree.children + UiNode(className = "android.widget.TextView", text = note)).restoreParents()
 
@@ -151,11 +211,12 @@ class PickupWaitArrivalRecognitionTest {
     @Test
     fun `every wait survey without arrival chrome stays flowless (#1141)`() {
         assertTrue(
-            "the GoPuff and June 12 survey-only frames must remain in the flowless set",
+            "the GoPuff, June 12, and August 18 18:46 survey-only frames must remain in the flowless set",
             surveyOnlyFixtures.map { it.name }.containsAll(
                 listOf(
                     "gopuff_wait_survey.json",
                     "2026-06-12__doordash__pickup_wait_survey__d90d0f.json",
+                    "2026-08-18_18-46-41-653__doordash__accessibility.window__pickup_wait_survey__24d30f.json",
                 ),
             ),
         )
