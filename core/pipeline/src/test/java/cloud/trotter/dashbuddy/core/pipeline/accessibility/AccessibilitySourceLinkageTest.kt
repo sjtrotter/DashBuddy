@@ -76,7 +76,11 @@ class AccessibilitySourceLinkageTest : WindowResolverTestBase() {
             assertNull(h.source.getCurrentRootSnapshot())
             assertEquals(1L, h.stats.mappingFailureCount)
             assertEquals(0L, h.stats.mapperLinkageRefusalCount)
-            assertTrue("ordinary mapping exceptions never WARN", entries.none { it.priority >= Log.WARN })
+            assertTrue(
+                "the refusal is a DEBUG line under Pipeline",
+                entries.any { it.priority == Log.DEBUG && it.tag == "Pipeline" && it.message.startsWith("Accessibility mapping failed") },
+            )
+            assertTrue("ordinary mapping exceptions never reach INFO+ (the exported tier)", entries.none { it.priority >= Log.INFO })
         } finally {
             Timber.uproot(recorder)
         }

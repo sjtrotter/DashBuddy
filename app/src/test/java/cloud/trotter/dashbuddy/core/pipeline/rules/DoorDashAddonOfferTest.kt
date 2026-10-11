@@ -61,7 +61,9 @@ class DoorDashAddonOfferTest {
         negatives.forEachIndexed { i, tree ->
             val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
             assertNotEquals("negative $i must not parse an offer", "offer", match?.shape)
-            if (i !in 4..5) assertNull("partial delta $i stays UNKNOWN over drawer chrome", match)
+            // Cases 4..5 carry ONE delta signature: offer_popup branch 1 rejects them, branch 2 needs the
+            // pair, and the drawer give-up is ANY-of (review follow-up to #1121) — so they fall to UNKNOWN too.
+            assertNull("partial delta $i stays UNKNOWN over drawer chrome", match)
         }
     }
 
