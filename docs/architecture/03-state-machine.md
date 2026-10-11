@@ -508,8 +508,10 @@ are unavailable. Bubble, compact/expanded notification and TTS say add-on and no
 minutes are extra time, never a completion ETA. `RecordFolds` applies the same gate to estimate
 columns and fuel/non-fuel splits. Explicit acceptance keeps gross and distance, leaves net/handling/
 full-time null even without an evaluation, and carries the basis into `AcceptedOfferEconomics`.
-An INCREMENTAL accept in `appendAddOn` mints `stopCount − |new pickup hints|` dropoffs (floored at 0;
-unparsed → 1), never `orders.size`, because the card lists the owned order too (#1304, fielded 2026-10-09 ×3).
+An INCREMENTAL accept in `appendAddOn` mints `stopCount − |new pickup hints|` dropoffs (floored at 1
+(an add-on is at least one new order; the zero floor stranded the new order when tracking began mid-job),
+null (3+-digit route, or a pre-#1304 journal row) or out of 1..8 → 1), never `orders.size`, because the card lists the owned order too
+(#1304, fielded 2026-10-09 ×3).
 `quotedItemCount`/`offerUnitCount` are null for an INCREMENTAL accept.
 A job containing an increment has no complete blended net/rate/time. Incremental quotes never infer
 click-less acceptance, including when return-flow context is absent; original-task return after a

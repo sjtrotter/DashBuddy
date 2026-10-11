@@ -94,6 +94,7 @@ internal object AddonCardTree {
         disclaimer: Boolean = true,
         merchants: Boolean = true,
         merchant: String = "H-E-B",
+        secondMerchant: String? = null,
         payOutside: Boolean = false,
         routeOutside: Boolean = false,
         extraBodyTexts: List<String> = emptyList(),
@@ -106,7 +107,7 @@ internal object AddonCardTree {
             add(view())
             if (merchants) {
                 add(shop(merchant, "Shop for 95 items (143 units, ~33 min)"))
-                add(shop(merchant, "Shop for 32 items (33 units)"))
+                add(shop(secondMerchant ?: merchant, "Shop for 32 items (33 units)"))
             }
             repeat(2) { add(view(view(), holder("Customer dropoff"))) }
             add(view())

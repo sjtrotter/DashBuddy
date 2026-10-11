@@ -900,7 +900,7 @@
                 "transform": "parseTotalMinutes"
               },
               "stopCount": {
-                "comment": "#1304: the delta route's stop count = pickups added + dropoffs added. The card lists the OWNED order beside the new one, so this — not orders.size — is what the add-on mint derives its dropoff count from (JobAcceptFlow.appendAddOn). Optional: a null leaves the mint at one dropoff.",
+                "comment": "#1304: the delta route's stop count = pickups added + dropoffs added. The card lists the OWNED order beside the new one, so this — not orders.size — is what the add-on mint derives its dropoff count from (JobAcceptFlow.appendAddOn). Optional: a null leaves the mint at one dropoff. Bounded at two digits here and at `MAX_ADDON_STOPS` in the mint (review P2 of PR #1305): untrusted text never sizes an allocation.",
                 "from": "offerBody",
                 "find": {
                   "hasTextMatchesRegex": "^\\+\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • \\+\\d+ min$"
@@ -908,7 +908,7 @@
                 "read": "text",
                 "transform": {
                   "regex": {
-                    "pattern": "^\\+(\\d+) stops?\\b",
+                    "pattern": "^\\+(\\d{1,2}) stops?\\b",
                     "group": 1,
                     "then": "toInt"
                   }
