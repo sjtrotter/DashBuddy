@@ -255,6 +255,7 @@ class CaptureRedactionCorpusTest {
     fun `dropoff_reminder redact masks the address after the marker (#624)`() {
         // The live leak #624 fixes: "Deliver to door of <address>" had no hash and
         // no redact, so the #598 sha256 gate never fired and the raw address shipped.
+        // Since the follow-up to #1296's review the slot plain-masks.
         val rule = TestRulesetFactory.screenRuleset.ruleById("doordash.screen.dropoff_reminder")!!
         assertTrue("dropoff_reminder must now carry a redact block", !rule.redact.isEmpty())
 
@@ -264,8 +265,8 @@ class CaptureRedactionCorpusTest {
         assertFalse("street address must not persist", masked.contains("123 Real Street"))
         assertFalse("apt must not persist", masked.contains("4B"))
         assertTrue(
-            "marker kept, address masked",
-            maskAfter("Deliver to door of ").containsMatchIn(masked),
+            "marker kept, address plain-masked",
+            Regex(Regex.escape("Deliver to door of ") + PLAIN_MASK.pattern).containsMatchIn(masked),
         )
     }
 

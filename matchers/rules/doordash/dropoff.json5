@@ -21,12 +21,14 @@
           }
         },
         {
+          "comment": "#795 class: the fielded tail is a unit/address fragment (`Deliver to door of Apt 0000` in the committed fixture), a bounded ~10^4 alphabet whose 4-hex distinctness suffix is brute-recoverable. Nothing correlates on this slot's hex, so plain `[redacted]` over-masks toward privacy at no cost. The #986 structural scan does not see this entry because it anchors on `Apt/Suite` labels.",
           "find": {
             "hasTextStartsWith": "Deliver to door of"
           },
           "keepPrefix": [
             "Deliver to door of "
-          ]
+          ],
+          "plainMask": true
         },
         {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",

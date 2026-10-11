@@ -43,7 +43,8 @@ key — and the rule-INDEPENDENT
 **short-token floor** (#889), which degrades any sub-4-char token's suffix to plain `[redacted]`
 (the floor bounds LENGTH where `plainMask` bounds alphabet). `normalize: customerName` entries are
 EXEMPT from the floor: their hex must stay equal to the first 4 hex of the `customerNameHash` the
-parse already persists (#623/#733). The subpremise family (`Apt <n>` fused or `Apt/Suite: <n>`
+parse already persists (#623/#733). `dropoff_reminder`'s `Deliver to door of` slot plain-masks.
+The subpremise family (`Apt <n>` fused or `Apt/Suite: <n>`
 label-split) is ratcheted by a **structural scan** over both platforms' generated assets — any
 redact entry whose own predicate/keepPrefix strings name `Apt` or a `subpremise_line` id
 (`address_subpremise_line`/`bottom_sheet_subpremise_line`) must declare `plainMask` (#986/#934) — but a scan can only ratchet entries that EXIST, so the VALUE
@@ -241,7 +242,7 @@ entry, and `pickup_navigation` gets its first redact block (`address_subpremise_
 `bottom_sheet_subpremise_line` twin; its fixtures render no customer node, so nothing else is declared). Note (fable review of PR #1247): a parse-less recognized screen has a constant `Observation.identity()`, so `FrameGate` suppresses consecutive board re-renders — the live pipeline stores about one board envelope per visit; the before/after counts above describe the stored 07-25 captures re-classified, not device behaviour. Precision (Astra review of PR #1249): the board frame itself cannot mint an offer (no `state`), but like every recognized frame it moves `FrameGate.lastIdentity`, so an offer card re-rendered byte-identically AFTER a board frame is admitted as a new presentation instead of being identity-suppressed — the general dedup rule (§1), not an #858 regression: an expired card is not redrawn by Uber, and an identical NEW offer should be admitted.
 
 
-**Mapper linkage backstop (#1164, #909 family):** both `AccessibilitySource` snapshot paths share `mapOrNull`, which drops a frame on `LinkageError`, counts every refusal (`mapperLinkageRefusals`, summary only when non-zero), and WARNs once per process under `Pipeline` with only the error class simple name and message; other `Error`s still propagate.
+**Mapper linkage backstop (#1164, #909 family):** both `AccessibilitySource` snapshot paths AND the click path share ONE seam, `mapNodeOrNull`. It drops a frame on an API-MISMATCH `LinkageError` only (`IncompatibleClassChangeError` — `NoSuchMethodError`/`NoSuchFieldError`/`AbstractMethodError` — and `NoClassDefFoundError`), counts every refusal (`mapperLinkageRefusals`, summary only when non-zero), and WARNs once per process under `Pipeline` with the error CLASS simple name only (a message is not PII-safe by construction); every other `Error` (`VerifyError`, `ExceptionInInitializerError`, `VirtualMachineError`) still propagates to the supervisor. An ordinary mapping `Exception` at the same seam is counted under `mappingFailures` and logged at DEBUG only (class name only; this WIDENED the counter to the window paths, which never counted before #1293 — the click path's count was restored) (review follow-up, PR #1303: #1293 had routed the click path through the seam and silently dropped the counter it used to get from the click path's own catch).
 
 **Node model fields (#1147, the 2026-09-21 TalkBack study win 3).** The mapper now also reads what
 TalkBack reads, all optional with the DOMINANT value as the default so `UiNodeSchema`'s
