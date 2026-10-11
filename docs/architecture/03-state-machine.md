@@ -570,7 +570,7 @@ by store onto the right placeholder on a stacked job; a parse-less arrival would
 and mint a store-less pickup with ≥ 2 open placeholders. The survey-only renders stay flowless (the
 #501 GoPuff posture). `TaskLifecycle` stamps only the FIRST arrival, so repeat renders are inert; the
 fielded 16-minute wait that folded to 0.0 dwell was exactly this missing anchor.
-#1306 adds `pickup_wait_survey` branch 1 for the 8.101.8 render (`at_store_contact_view` + `mx_contact_view` + `pickup_survey_view` + 'Merchant delay protection' / 'Stay in the restaurant', no curbside card), same flow and parse; branch 0 is unchanged for the old version.
+#1306 adds `pickup_wait_survey` branch 1, a STRUCTURAL anchor — the at-store card itself (`at_store_contact_view` + `mx_contact_view` + `pickup_survey_view`), independent of which survey copy ('Merchant delay protection', 'What's causing your wait?', or none) the slot shows, because 8.101.8 dropped branch 0's curbside/'Merchant notified' chrome and the card appears only post-arrival in the whole corpus; the 8.9x 'causing your wait' at-store renders become arrivals too (they were), while the survey-only pre-arrival renders (no at-store card) stay flowless. The rule's two rejects are hoisted to rule level (#1222).
 
 **Placeholders and store lineage.** An accepted offer pre-creates **symmetric placeholders**: one
 dropoff per order AND one PICKUP per distinct store, each dropoff stamped with the minting accept's

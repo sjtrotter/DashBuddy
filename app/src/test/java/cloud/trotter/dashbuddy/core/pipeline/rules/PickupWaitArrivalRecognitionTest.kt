@@ -24,18 +24,21 @@ class PickupWaitArrivalRecognitionTest {
     private val fixtures: List<File> = loaded.keys.sorted().map { File(it) }
     init { require(loaded.isNotEmpty()) { "Cannot find pickup_wait_survey fixtures" } }
 
-    /** Partition by DECODED node text (what the rule matches on), not the serialized file bytes. */
+    /** Decoded node text, not the serialized file bytes. */
     private fun UiNode.allTexts(): List<String> = buildList {
         fun walk(n: UiNode) { n.text?.let(::add); n.contentDescription?.let(::add); n.children.forEach(::walk) }
         walk(this@allTexts)
     }
+    private fun UiNode.hasIdSuffix(suffix: String): Boolean =
+        viewIdResourceName?.endsWith(suffix) == true || children.any { it.hasIdSuffix(suffix) }
+
     /**
-     * Arrival chrome, both generations: 8.99.20's "Merchant notified of your arrival" (branch 0, #1141) and
-     * 8.101.8's "Merchant delay protection" / "Stay in the restaurant" survey (branch 1, #1306).
+     * Partition by the at-store card, which is post-arrival-only in the corpus (#1306), or
+     * "Merchant notified of your arrival", the 8.99.20 arrival text (#1141).
      */
-    private val arrivalChromeTexts = listOf("Merchant notified of your arrival", "Merchant delay protection", "Stay in the restaurant")
     private val arrivalFixtures = fixtures.filter { f ->
-        loaded.getValue(f.name).allTexts().any { t -> arrivalChromeTexts.any { t.contains(it) } }
+        val t = loaded.getValue(f.name)
+        t.hasIdSuffix("at_store_contact_view") || t.allTexts().any { it.contains("Merchant notified of your arrival") }
     }
     private val surveyOnlyFixtures = fixtures - arrivalFixtures.toSet()
 
@@ -52,6 +55,12 @@ class PickupWaitArrivalRecognitionTest {
             arrivalFixtures.any { it.name.startsWith("2026-10-10_08-19-31-073") } &&
                 arrivalFixtures.any { it.name.startsWith("2026-10-09_12-13-33-040") },
         )
+        assertTrue(
+            "the 8.9x causing-your-wait at-store frame (#1306) must be in the arrival set",
+            arrivalFixtures.any {
+                it.name == "2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json"
+            },
+        )
         arrivalFixtures.forEach { fixture ->
             val r = rules.matchFirst(loaded.getValue(fixture.name))
             assertEquals(fixture.name, "doordash.screen.pickup_wait_survey", r?.ruleId)
@@ -62,23 +71,33 @@ class PickupWaitArrivalRecognitionTest {
     }
 
     @Test
-    fun `a merchant instruction quoting the 8.101.8 survey line does not become an arrival (#1306 r1)`() {
-        val survey = load("pickup_wait_survey/2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json")
-        val quoted = withMerchantInstruction(survey, "Stay in the restaurant")
-        val r = rules.matchFirst(quoted)
+    fun `the at-store card with an EMPTY survey slot is still an arrival (#1306)`() {
+        val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
+        val blankSurvey = withoutSurveyText(arrival)
+        val r = rules.matchFirst(blankSurvey)
         assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
-        assertNull("survey chrome quoted outside pickup_survey_view must not assert arrival", r?.flow)
+        assertEquals(Flow.TaskPickupArrived, r?.flow)
     }
 
     @Test
-    fun `the 8.101.8 arrival requires survey text inside the pickup host (#1306 r1)`() {
+    fun `the survey-only render without the at-store card stays flowless (#1306)`() {
         val arrival = load("pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json")
-        val r = rules.matchFirst(arrival)
-        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
-        assertEquals(Flow.TaskPickupArrived, r?.flow)
+        fun strip(n: UiNode): UiNode = n.copy(children = n.children.filterNot { it.viewIdResourceName?.endsWith("at_store_contact_view") == true }.map(::strip))
+        assertTrue("fixture must have an at-store card", arrival.hasIdSuffix("at_store_contact_view"))
+        val noCard = strip(arrival).restoreParents()
+        assertTrue("at-store card subtree must be removed", !noCard.hasIdSuffix("at_store_contact_view"))
+        // Without the card the 8.101.8 'delay protection' render anchors nothing (UNKNOWN is fine) — what
+        // matters is that NO branch declares the arrival.
+        assertNull("no at-store card, no arrival", rules.matchFirst(noCard)?.flow)
 
-        val blankSurvey = withoutSurveyText(arrival)
-        assertNull("the survey host ids alone must not assert arrival", rules.matchFirst(blankSurvey)?.flow)
+        // The 8.9x 'What's causing your wait' at-store render is an arrival WITH the card and the plain
+        // flowless survey WITHOUT it — the same frame, partitioned by the card alone.
+        val causing = load("pickup_wait_survey/2026-08-07_19-47-10-105__doordash__accessibility.window__pickup_wait_survey__b59b98.json")
+        assertEquals(Flow.TaskPickupArrived, rules.matchFirst(causing)?.flow)
+        val causingNoCard = strip(causing).restoreParents()
+        val r = rules.matchFirst(causingNoCard)
+        assertEquals("doordash.screen.pickup_wait_survey", r?.ruleId)
+        assertNull("survey-only renders must not assert arrival", r?.flow)
     }
 
     // Astra review r1 of PR #1220 — the anchor is the curbside card's view id, so quoted chrome in a
@@ -168,23 +187,6 @@ class PickupWaitArrivalRecognitionTest {
         assertTrue("no pickup_survey_view host ⇒ not the arrival branch", r?.flow != Flow.TaskPickupArrived)
     }
 
-    private fun withMerchantInstruction(tree: UiNode, text: String): UiNode {
-        var replaced = false
-        fun copy(n: UiNode, insideSurvey: Boolean): UiNode {
-            val inSurvey = insideSurvey || n.viewIdResourceName?.endsWith("pickup_survey_view") == true
-            val replace = !replaced && !inSurvey &&
-                n.viewIdResourceName?.endsWith("instructions_line_2_expanded") == true
-            if (replace) replaced = true
-            return n.copy(
-                text = if (replace) text else n.text,
-                children = n.children.map { copy(it, inSurvey) },
-            )
-        }
-        val result = copy(tree, false).restoreParents()
-        check(replaced) { "Fixture must have a merchant instruction outside pickup_survey_view" }
-        return result
-    }
-
     private fun withoutSurveyText(tree: UiNode): UiNode {
         var foundSurvey = false
         fun copy(n: UiNode, insideSurvey: Boolean): UiNode {
@@ -213,11 +215,12 @@ class PickupWaitArrivalRecognitionTest {
     @Test
     fun `every wait survey without arrival chrome stays flowless (#1141)`() {
         assertTrue(
-            "the GoPuff and June 12 survey-only frames must remain in the flowless set",
+            "the GoPuff, June 12, and August 18 18:46 survey-only frames must remain in the flowless set",
             surveyOnlyFixtures.map { it.name }.containsAll(
                 listOf(
                     "gopuff_wait_survey.json",
                     "2026-06-12__doordash__pickup_wait_survey__d90d0f.json",
+                    "2026-08-18_18-46-41-653__doordash__accessibility.window__pickup_wait_survey__24d30f.json",
                 ),
             ),
         )
