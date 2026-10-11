@@ -92,9 +92,9 @@ class AccessibilityPipeline @Inject constructor(
                     packageName = event.packageName,
                 )
             } catch (e: Exception) {
-                // A malformed node tree must cost one click, not the whole
-                // sensing upstream (#430) — this was the only unwrapped
-                // mapping call in the chain.
+                // A failed ref.resolve() must cost one click, not the whole sensing upstream (#430).
+                // This catch now covers only ref.resolve(); mapping failures are counted inside
+                // mapNodeOrNull.
                 stats.onMappingFailure()
                 Timber.w(e, "Click mapping failed — dropping click event")
                 null

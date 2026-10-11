@@ -120,6 +120,7 @@ The delta-route holder is excluded from merchants. Repeated stores remain separa
 (95 + 32 items = 127 in the programmatic test); only display stores deduplicate. Countdown reads
 from the Accept footer. Missing/blank merchants and incomplete cards never mint offers; the drawer
 rejects the paired delta signature even before Accept/disclaimer/merchant inflation completes.
+`side_nav_drawer`'s give-up is ANY-of the two delta signatures, mirroring branch 1's reject.
 `quoteBasis: incremental` is a load-validated declaration, mirrored in census authoring. The factory
 prefixes only incremental hash inputs, leaving TOTAL bytes unchanged and Compose presentation keys
 null. The structural test is programmatic; real-capture intake and golden regeneration remain separate.

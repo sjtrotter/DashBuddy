@@ -59,6 +59,30 @@ class AccessibilitySourceLinkageTest : WindowResolverTestBase() {
     }
 
     @Test
+    fun `an ordinary mapping exception is counted under mappingFailures and never WARNs`() {
+        val root = node(ddPkg, "Offer")
+        whenever(root.packageName).thenThrow(IllegalStateException("FAKEMESSAGECANARY binder died"))
+        val w = window(3, 1, root)
+        val h = harness(root, listOf(w))
+
+        val entries = mutableListOf<LogEntry>()
+        val recorder = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                entries += LogEntry(priority, tag, message, t)
+            }
+        }
+        Timber.plant(recorder)
+        try {
+            assertNull(h.source.getCurrentRootSnapshot())
+            assertEquals(1L, h.stats.mappingFailureCount)
+            assertEquals(0L, h.stats.mapperLinkageRefusalCount)
+            assertTrue("ordinary mapping exceptions never WARN", entries.none { it.priority >= Log.WARN })
+        } finally {
+            Timber.uproot(recorder)
+        }
+    }
+
+    @Test
     fun `a missing class is an API mismatch too`() {
         val root = node(ddPkg, "Offer")
         whenever(root.packageName).thenThrow(NoClassDefFoundError("android/view/accessibility/Missing"))

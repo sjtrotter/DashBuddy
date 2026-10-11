@@ -133,6 +133,8 @@
       // shape + a standalone currency figure (NOT `Accept`, so a partially inflated card also stops
       // qualifying as a drawer and stays UNKNOWN rather than being misfiled). This only removes the
       // drawer candidate; offer_popup (priority 20) decides whether the frame is an offer.
+      // The delta half is ANY-of, mirroring offer_popup branch 1's reject, so a half-signature
+      // card falls to UNKNOWN for triage instead of being claimed as chrome.
       "reject": [
         {
           "all": [
@@ -172,12 +174,10 @@
             },
             {
               "exists": {
-                "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
-              }
-            },
-            {
-              "exists": {
-                "hasTextMatchesRegex": "^\\+\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • \\+\\d+ min$"
+                "any": [
+                  { "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                  { "hasTextMatchesRegex": "^\\+\\d+ stops? \\(" }
+                ]
               }
             }
           ]
