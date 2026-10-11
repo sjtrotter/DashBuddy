@@ -6237,6 +6237,48 @@
             "subFlow": "ARRIVED"
         }
     },
+    "pickup_wait_survey/2026-10-09_12-13-33-040__doordash__accessibility.window__pickup_wait_survey__1f6716.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "12:14",
+                "time": 1780316040000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "Panera Bread",
+            "subFlow": "ARRIVED"
+        }
+    },
+    "pickup_wait_survey/2026-10-10_08-19-31-073__doordash__accessibility.window__pickup_wait_survey__d0a14b.json": {
+        "ruleId": "doordash.screen.pickup_wait_survey",
+        "intent": "pickup_wait_survey",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": true,
+            "customerAddressHash": null,
+            "customerNameHash": null,
+            "deadline": {
+                "text": "08:22",
+                "time": 1780302120000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "PICKUP",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": "McDonald's",
+            "subFlow": "ARRIVED"
+        }
+    },
     "pickup_wait_survey/gopuff_wait_survey.json": {
         "ruleId": "doordash.screen.pickup_wait_survey",
         "intent": "pickup_wait_survey",

@@ -570,6 +570,7 @@ by store onto the right placeholder on a stacked job; a parse-less arrival would
 and mint a store-less pickup with ≥ 2 open placeholders. The survey-only renders stay flowless (the
 #501 GoPuff posture). `TaskLifecycle` stamps only the FIRST arrival, so repeat renders are inert; the
 fielded 16-minute wait that folded to 0.0 dwell was exactly this missing anchor.
+#1306 adds `pickup_wait_survey` branch 1 for the 8.101.8 render (`at_store_contact_view` + `mx_contact_view` + `pickup_survey_view` + 'Merchant delay protection' / 'Stay in the restaurant', no curbside card), same flow and parse; branch 0 is unchanged for the old version.
 
 **Placeholders and store lineage.** An accepted offer pre-creates **symmetric placeholders**: one
 dropoff per order AND one PICKUP per distinct store, each dropoff stamped with the minting accept's

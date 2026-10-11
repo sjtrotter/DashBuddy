@@ -29,8 +29,13 @@ class PickupWaitArrivalRecognitionTest {
         fun walk(n: UiNode) { n.text?.let(::add); n.contentDescription?.let(::add); n.children.forEach(::walk) }
         walk(this@allTexts)
     }
+    /**
+     * Arrival chrome, both generations: 8.99.20's "Merchant notified of your arrival" (branch 0, #1141) and
+     * 8.101.8's "Merchant delay protection" / "Stay in the restaurant" survey (branch 1, #1306).
+     */
+    private val arrivalChromeTexts = listOf("Merchant notified of your arrival", "Merchant delay protection", "Stay in the restaurant")
     private val arrivalFixtures = fixtures.filter { f ->
-        loaded.getValue(f.name).allTexts().any { it.contains("Merchant notified of your arrival") }
+        loaded.getValue(f.name).allTexts().any { t -> arrivalChromeTexts.any { t.contains(it) } }
     }
     private val surveyOnlyFixtures = fixtures - arrivalFixtures.toSet()
 
@@ -41,6 +46,11 @@ class PickupWaitArrivalRecognitionTest {
             arrivalFixtures.any {
                 it.name == "2026-09-27_11-50-25-492__doordash__accessibility.window__pickup_wait_survey__70a359.json"
             },
+        )
+        assertTrue(
+            "the fielded 8.101.8 frames (#1306) must be in the arrival set",
+            arrivalFixtures.any { it.name.startsWith("2026-10-10_08-19-31-073") } &&
+                arrivalFixtures.any { it.name.startsWith("2026-10-09_12-13-33-040") },
         )
         arrivalFixtures.forEach { fixture ->
             val r = rules.matchFirst(loaded.getValue(fixture.name))
