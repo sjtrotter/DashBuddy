@@ -353,6 +353,11 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
     - desk 09-27: UNEXERCISED — 0 `+$` / `+N stop` text anywhere in the pull.
     - desk 09-29: UNEXERCISED — 0 `+N stop` text; the `+$1`/`+$2` hits are the "Very busy" boost badge and idle-map
       peak-pay chips, not add-on deltas.
+    - desk 10-11 (pull of 10-06→10-10, build `88dee351`, PRE-#1302 so NOT a confirmation): 4 real add-on cards on
+      10-09 (`+$8.75 / +2 stops`, `+$8.20 / +2 stops`, `+$12.70 / +2 stops`); 3 were CLAIMED by `side_nav_drawer`,
+      1 fell to UNKNOWN. Every card lists the already-owned order beside the new one (whole route) — so on a
+      post-#1302 build watch that an explicit add-on Accept adds ONE dropoff, not one per listed row (open
+      follow-up). The drawer give-up is ANY-of the delta signatures since the 10-11 follow-ups PR.
   Triage source: first-line blame 2026-09-26 (`e087c3e4a`, original README L357).
 
 - [active] **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull

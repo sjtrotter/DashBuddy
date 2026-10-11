@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -37,7 +38,9 @@ class DoorDashAddonOfferTest {
     @Test
     fun `delta card with total signatures in its body never becomes a total offer`() {
         val tree = AddonCardTree.card(extraBodyTexts = listOf("$20.00", "2 stops (5 mi) • 20 min"))
-        val match = TestRulesetFactory.screenRuleset.matchFirst(tree) ?: return
+        val match = TestRulesetFactory.screenRuleset.matchFirst(tree).also {
+            assertNotNull("the mixed card must still be recognized as the add-on", it)
+        }!!
         assertEquals("offer", match.shape)
         val parsed = (ParsedFieldsFactory.create(match.shape, match.fields) as ParsedFields.OfferFields).parsedOffer
         assertEquals(OfferQuoteBasis.INCREMENTAL, parsed.quoteBasis)
@@ -58,7 +61,9 @@ class DoorDashAddonOfferTest {
         negatives.forEachIndexed { i, tree ->
             val match = TestRulesetFactory.screenRuleset.matchFirst(tree)
             assertNotEquals("negative $i must not parse an offer", "offer", match?.shape)
-            if (i !in 4..5) assertNull("partial delta $i stays UNKNOWN over drawer chrome", match)
+            // Cases 4..5 carry ONE delta signature: offer_popup branch 1 rejects them, branch 2 needs the
+            // pair, and the drawer give-up is ANY-of (review follow-up to #1121) — so they fall to UNKNOWN too.
+            assertNull("partial delta $i stays UNKNOWN over drawer chrome", match)
         }
     }
 

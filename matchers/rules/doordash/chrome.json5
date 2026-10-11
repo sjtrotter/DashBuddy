@@ -126,13 +126,13 @@
     {
       "id": "doordash.screen.side_nav_drawer",
       "priority": 200,
-      // #1114: the 8.97.8 Compose offer card renders INSIDE the same hierarchy as the side-nav
-      // Compose tree (side_nav_content_container + the ratings/promos/preferences labels are
-      // present on every frame), so 23 live offers in the 09-18/19 pull were claimed as drawer
-      // chrome. Reject the card's own signature — ComposeView + exact `Decline` + the route-summary
-      // shape + a standalone currency figure (NOT `Accept`, so a partially inflated card also stops
-      // qualifying as a drawer and stays UNKNOWN rather than being misfiled). This only removes the
-      // drawer candidate; offer_popup (priority 20) decides whether the frame is an offer.
+      // #1114: the drawer coexists with the Compose offer card in one hierarchy.
+      // Give up on ComposeView + `Decline` + ANY of the four card signatures (two total, two delta),
+      // so a partially inflated or mid-animation card falls to UNKNOWN for triage instead of chrome.
+      // `Decline` stays required so a drawer over a money-bearing Compose home screen is still the drawer.
+      // The #1063 first frame (Decline not yet rendered) is a known bounded tripper.
+      // This only removes the drawer candidate; offer_popup (priority 20) decides whether the frame
+      // is an offer, and DrawerOfferSignaturePinTest pins the pattern strings against offer_popup's.
       "reject": [
         {
           "all": [
@@ -148,36 +148,12 @@
             },
             {
               "exists": {
-                "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • "
-              }
-            },
-            {
-              "exists": {
-                "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
-              }
-            }
-          ]
-        },
-        {
-          "all": [
-            {
-              "exists": {
-                "hasClassName": "androidx.compose.ui.platform.ComposeView"
-              }
-            },
-            {
-              "exists": {
-                "hasText": "Decline"
-              }
-            },
-            {
-              "exists": {
-                "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
-              }
-            },
-            {
-              "exists": {
-                "hasTextMatchesRegex": "^\\+\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • \\+\\d+ min$"
+                "any": [
+                  { "hasTextMatchesRegex": "^\\d+ stops? \\(\\d+(?:\\.\\d+)? (?:mi|ft)\\) • " },
+                  { "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                  { "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                  { "hasTextMatchesRegex": "^\\+\\d+ stops? \\(" }
+                ]
               }
             }
           ]

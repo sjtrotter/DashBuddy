@@ -49,6 +49,7 @@ class CustomerTextMarkersTest {
         assertNull(CustomerTextMarkers.unredactedMarker("Deliver to [redacted:ab12]"))
         assertNull(CustomerTextMarkers.unredactedMarker("Deliver to [redacted]"))
         // The rule's OWN dropoff_reminder output must not re-trip the backstop.
+        assertNull(CustomerTextMarkers.unredactedMarker("Deliver to door of [redacted]"))
         assertNull(CustomerTextMarkers.unredactedMarker("Deliver to door of [redacted:ab12]"))
     }
 

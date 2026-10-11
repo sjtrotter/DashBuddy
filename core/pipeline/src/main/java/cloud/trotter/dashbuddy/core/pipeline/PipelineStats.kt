@@ -211,7 +211,13 @@ class PipelineStats @Inject constructor(
         droppedUnknown.incrementAndGet()
     }
 
-    /** A raw event whose node mapping threw — the event was dropped, not the pipeline. */
+    /**
+     * A frame or click whose node mapping threw an ordinary `Exception` at
+     * `AccessibilitySource.mapNodeOrNull` (both window paths and the click path, since PR #1303 —
+     * before it only the click path counted, so a post-#1303 `mappingFailures=` is not comparable
+     * to an earlier pull's), or a click whose `ref.resolve()` threw. The event was dropped, not
+     * the pipeline. API-mismatch linkage refusals are counted separately (`onMapperLinkageRefusal`).
+     */
     fun onMappingFailure() {
         mappingFailures.incrementAndGet()
     }
