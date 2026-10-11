@@ -139,6 +139,8 @@ class DoorDashAddonStateTest {
             state = machine.step(state, pickup(13_000L)).newState
             val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
             assertEquals(before.jobId, job.jobId)
+            assertEquals(before.tasks.count { it.phase == TaskPhase.DROPOFF } + 1, job.tasks.count { it.phase == TaskPhase.DROPOFF })
+            assertEquals(before.tasks.count { it.phase == TaskPhase.PICKUP }, job.tasks.count { it.phase == TaskPhase.PICKUP })
             assertEquals(2, job.acceptedOffers.size)
             val accepted = job.acceptedOffers.last()
             assertEquals(OfferQuoteBasis.INCREMENTAL, accepted.quoteBasis)
@@ -147,6 +149,8 @@ class DoorDashAddonStateTest {
             assertNull(accepted.netPay)
             assertNull(accepted.estMinutes)
             assertNull(accepted.handlingMinutes)
+            assertNull(accepted.quotedItemCount)
+            assertNull(accepted.offerUnitCount)
             assertNull(accepted.pricedShopItemsPerMinute)
             assertNull(accepted.pricedBasePickupMinutes)
             assertNull(job.blendedNetPay)
@@ -154,6 +158,120 @@ class DoorDashAddonStateTest {
             assertNull(job.liveEstMinutes)
             assertEquals(before.totalPayAmount + 10.5, job.totalPayAmount, 0.0)
         }
+    }
+
+    @Test
+    fun `incremental accept never carries the units count`() {
+        val offer = AddonCardTree.parse().copy(itemCountIsUnits = true)
+        var state = liveJob(offer)
+        val presented = machine.step(state, screen(10_000L, offer))
+        state = machine.step(presented.newState, eval(10_100L, evaluationRequest(presented.effects))).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        state = machine.step(state, pickup(12_000L)).newState
+        state = machine.step(state, pickup(13_000L)).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(2, job.acceptedOffers.size)
+        assertNull(job.acceptedOffers.last().offerUnitCount)
+        assertNull(job.acceptedOffers.last().quotedItemCount)
+    }
+
+    @Test
+    fun `explicit accept of a different-store add-on mints one pickup and one dropoff`() {
+        var state = liveJob(AddonCardTree.parse())
+        val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        // the card lists the OWNED store too (fielded 2026-10-09); the dedup must see H-E-B as owned,
+        // so new pickups = [Petsmart] and drops = 2 − 1 = 1
+        val offer = AddonCardTree.parse(AddonCardTree.card(
+            route = "+2 stops (2.9 mi) • +12 min", merchant = "H-E-B", secondMerchant = "Petsmart",
+        ))
+        val presented = machine.step(state, screen(10_000L, offer))
+        state = machine.step(presented.newState, eval(10_100L, evaluationRequest(presented.effects))).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        state = machine.step(state, pickup(12_000L)).newState
+        state = machine.step(state, pickup(13_000L)).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(before.jobId, job.jobId)
+        assertEquals(2, job.acceptedOffers.size)
+        assertEquals(before.tasks.count { it.phase == TaskPhase.DROPOFF } + 1, job.tasks.count { it.phase == TaskPhase.DROPOFF })
+        assertEquals(before.tasks.count { it.phase == TaskPhase.PICKUP } + 1, job.tasks.count { it.phase == TaskPhase.PICKUP })
+        assertNull(job.acceptedOffers.last().quotedItemCount)
+    }
+
+    @Test
+    fun `whole-route card over a job with no pickup tasks still mints the new order's dropoff`() {
+        var state = liveJob(AddonCardTree.parse())
+        val region = state.regions.platforms.getValue(Platform.DoorDash)
+        val activeJob = region.activeJob!!
+        state = state.copy(regions = state.regions.copy(platforms = state.regions.platforms + (
+            Platform.DoorDash to region.copy(activeJob = activeJob.copy(
+                tasks = activeJob.tasks.filter { it.phase == TaskPhase.DROPOFF },
+            ))
+        )))
+        val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        val offer = AddonCardTree.parse(AddonCardTree.card(
+            route = "+2 stops (2.9 mi) • +12 min", merchant = "H-E-B", secondMerchant = "Petsmart",
+        ))
+        val presented = machine.step(state, screen(10_000L, offer))
+        state = machine.step(presented.newState, eval(10_100L, evaluationRequest(presented.effects))).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        state = machine.step(state, pickup(12_000L)).newState
+        state = machine.step(state, pickup(13_000L)).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(before.jobId, job.jobId)
+        assertEquals(2, job.acceptedOffers.size)
+        assertEquals(before.tasks.count { it.phase == TaskPhase.DROPOFF } + 1, job.tasks.count { it.phase == TaskPhase.DROPOFF })
+        // Pickup over-mint on a pickup-less job is pre-existing #526 D2 behaviour, out of scope.
+    }
+
+    @Test
+    fun `an implausible stop count mints one dropoff`() {
+        for (stopCount in listOf(99, 0)) {
+            var state = liveJob(AddonCardTree.parse())
+            val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+            val offer = AddonCardTree.parse(AddonCardTree.card(route = "+2 stops (2.9 mi) • +12 min")).copy(stopCount = stopCount)
+            val presented = machine.step(state, screen(10_000L, offer))
+            state = machine.step(presented.newState, eval(10_100L, evaluationRequest(presented.effects))).newState
+            state = machine.step(state, Observation.Click(
+                timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+                flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+            )).newState
+            state = machine.step(state, pickup(12_000L)).newState
+            state = machine.step(state, pickup(13_000L)).newState
+            val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+            assertEquals(before.jobId, job.jobId)
+            assertEquals(2, job.acceptedOffers.size)
+            assertEquals(before.tasks.count { it.phase == TaskPhase.DROPOFF } + 1, job.tasks.count { it.phase == TaskPhase.DROPOFF })
+            assertEquals(before.tasks.count { it.phase == TaskPhase.PICKUP }, job.tasks.count { it.phase == TaskPhase.PICKUP })
+        }
+    }
+
+    @Test
+    fun `unparsed stop count mints one dropoff`() {
+        var state = liveJob(AddonCardTree.parse())
+        val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        val offer = AddonCardTree.parse(AddonCardTree.card(route = "+2 stops (2.9 mi) • +12 min")).copy(stopCount = null)
+        val presented = machine.step(state, screen(10_000L, offer))
+        state = machine.step(presented.newState, eval(10_100L, evaluationRequest(presented.effects))).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = Mode.Online, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        state = machine.step(state, pickup(12_000L)).newState
+        state = machine.step(state, pickup(13_000L)).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(before.jobId, job.jobId)
+        assertEquals(2, job.acceptedOffers.size)
+        assertEquals(before.tasks.count { it.phase == TaskPhase.DROPOFF } + 1, job.tasks.count { it.phase == TaskPhase.DROPOFF })
+        assertEquals(before.tasks.count { it.phase == TaskPhase.PICKUP }, job.tasks.count { it.phase == TaskPhase.PICKUP })
     }
 
     @Test

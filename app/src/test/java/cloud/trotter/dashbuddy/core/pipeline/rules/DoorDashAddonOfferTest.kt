@@ -21,6 +21,7 @@ class DoorDashAddonOfferTest {
         assertEquals(10.50, offer.payAmount!!, 0.0)
         assertEquals(1.5, offer.distanceMiles!!, 0.0)
         assertEquals(1L, offer.timeToCompleteMinutes)
+        assertEquals(1, offer.stopCount)
         assertEquals(45, offer.initialCountdownSeconds)
         assertNull(offer.dueByTimeText)
         assertNull(offer.dueByTimeMillis)
@@ -33,6 +34,10 @@ class DoorDashAddonOfferTest {
         assertEquals(127, offer.itemCount)
         assertEquals(listOf("H-E-B"), offer.displayStores)
         assertEquals(offer.offerHash, AddonCardTree.parse(AddonCardTree.card(countdown = "0:44")).offerHash)
+        assertEquals(2, AddonCardTree.parse(AddonCardTree.card(route = "+2 stops (2.9 mi) • +12 min")).stopCount)
+        // #1304: the existing +1-stop hash stays fixed; changing only stops cannot change identity.
+        assertEquals("5e74163852a85812acf5d8d3ea78655d38157c6a3952de79d5b0be4b08a2db4e", offer.offerHash)
+        assertEquals(offer.offerHash, AddonCardTree.parse(AddonCardTree.card(route = "+2 stops (1.5 mi) • +1 min")).offerHash)
     }
 
     @Test
@@ -94,6 +99,7 @@ internal object AddonCardTree {
         disclaimer: Boolean = true,
         merchants: Boolean = true,
         merchant: String = "H-E-B",
+        secondMerchant: String? = null,
         payOutside: Boolean = false,
         routeOutside: Boolean = false,
         extraBodyTexts: List<String> = emptyList(),
@@ -106,7 +112,7 @@ internal object AddonCardTree {
             add(view())
             if (merchants) {
                 add(shop(merchant, "Shop for 95 items (143 units, ~33 min)"))
-                add(shop(merchant, "Shop for 32 items (33 units)"))
+                add(shop(secondMerchant ?: merchant, "Shop for 32 items (33 units)"))
             }
             repeat(2) { add(view(view(), holder("Customer dropoff"))) }
             add(view())
