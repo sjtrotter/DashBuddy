@@ -67,6 +67,8 @@ sealed interface Observation : cloud.trotter.dashbuddy.domain.model.state.StateE
          * (the card, or a non-offer surface). Recognition-layer DATA the offer lifecycle reads.
          */
         val offerSurface: cloud.trotter.dashbuddy.domain.state.OfferSurface? = null,
+        /** Rule-declared no-orders evidence; bare Idle does not establish abandonment (#1312). */
+        val idleSurface: cloud.trotter.dashbuddy.domain.state.IdleSurface? = null,
         /**
          * Rules that matched this frame while their declared parse yielded nothing (#1036) —
          * the winning rule, plus any branch that matched-then-`Skip`ped on the way to it.

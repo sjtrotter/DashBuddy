@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.state.ClosedJobReceipt
 import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
@@ -1399,9 +1400,10 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
-        // #1312: only the NEXT flow-bearing frame proves whole-job abandonment. A sibling
-        // task or an offer overlay keeps absorption; recognize-only frames leave R0 unchanged.
+        // #1312: only a rule-declared online no-orders surface on the NEXT flow-bearing frame
+        // proves whole-job abandonment. Bare Idle can be navigation; recognize-only frames leave R0 unchanged.
         if (prevFlowVal == Flow.TaskUnassigned && nextFlowVal == Flow.Idle &&
+            (obs as? Observation.Screen)?.idleSurface == IdleSurface.NO_ORDERS && obs.modeHint == Mode.Online &&
             current.activeTask == null && current.activeJob != null
         ) {
             return abandonActiveJob(current, obs.timestamp)

@@ -2,12 +2,14 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -59,6 +61,7 @@ class UnassignIdleClosesJobTest {
     private fun frame(at: Long, flow: Flow?, parsed: ParsedFields = ParsedFields.None) = Observation.Screen(
         timestamp = at, captureId = null, ruleId = "${platform.wire}.screen.synthetic",
         metadata = ReplayMetadata.EMPTY, flow = flow, modeHint = Mode.Online, parsed = parsed,
+        idleSurface = if (flow == Flow.Idle) IdleSurface.NO_ORDERS else null,
     )
 
     private fun unassign(state: AppState = initial()) =
@@ -109,6 +112,8 @@ class UnassignIdleClosesJobTest {
             val repeated = machine.step(first.newState, frame(300L, Flow.TaskUnassigned))
             val closed = machine.step(repeated.newState, frame(5_300L, Flow.Idle))
             assertAbandoned(closed.newState, 5_300L)
+            assertEquals("one bubble for the three-task abandon batch", listOf("Unassigned: 3 orders"),
+                closed.effects.filterIsInstance<AppEffect.UpdateBubble>().map { it.text })
             // The normal close tripwire runs: explicit unassignments are accounted, and this
             // in-session single accept is also below its existing two-accept floor (#810/#1095).
             assertTrue(closed.effects.filterIsInstance<AppEffect.LogEvent>()
@@ -124,6 +129,98 @@ class UnassignIdleClosesJobTest {
             assertTrue(fresh.jobId != "job")
             assertEquals(listOf("second"), fresh.acceptedOffers.map { it.offerHash })
             assertTrue(fresh.tasks.none { task -> tasks.any { it.taskId == task.taskId } })
+        }
+    }
+
+    @Test
+    fun `unassign then an unmarked idle nav frame keeps the job`() {
+        val first = unassign()
+        val nav = machine.step(first.newState, frame(5_300L, Flow.Idle).copy(idleSurface = null))
+        assertEquals("job", region(nav.newState).activeJob?.jobId)
+        assertEquals(region(first.newState).recentTasks, region(nav.newState).recentTasks)
+        assertTrue(unassignedEffects(nav.effects).isEmpty())
+    }
+
+    @Test
+    fun `unassign then a marked offline idle frame keeps the job`() {
+        val first = unassign()
+        val offline = machine.step(first.newState, frame(5_300L, Flow.Idle).copy(modeHint = Mode.Offline))
+        assertEquals("job", region(offline.newState).activeJob?.jobId)
+        assertTrue(unassignedEffects(offline.effects).isEmpty())
+    }
+
+    @Test
+    fun `a drop displaced en route is abandoned with its stamp intact and never delivered`() {
+        val drop = tasks.single { it.taskId == "drop-a" }.copy(customerNameHash = "customer-a")
+        val base = initial()
+        val starting = base.copy(regions = base.regions.copy(
+            flow = base.regions.flow.copy(flow = Flow.TaskDropoffNavigation),
+            platforms = mapOf(platform to region(base).copy(
+                activeTask = drop,
+                activeJob = region(base).activeJob!!.copy(tasks = tasks.map {
+                    if (it.taskId == drop.taskId) drop else it
+                }),
+            )),
+        ))
+        val navigate = machine.step(starting, frame(160L, Flow.TaskDropoffNavigation,
+            ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
+                customerNameHash = "customer-a")))
+        val switched = machine.step(navigate.newState, frame(180L, Flow.TaskPickupNavigation,
+            ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION,
+                storeName = "Store B", customerNameHash = "customer-b")))
+        val displaced = region(switched.newState).recentTasks.single { it.taskId == drop.taskId }
+        assertTrue("pickup switch stamped the drop", displaced.completedAt != null)
+        assertNull(displaced.arrivedAt)
+        assertNull(displaced.completionStepsAt)
+        assertEquals(sibling.taskId, region(switched.newState).activeTask?.taskId)
+        val unassigned = machine.step(switched.newState, frame(200L, Flow.TaskUnassigned))
+        val closed = machine.step(unassigned.newState, frame(5_300L, Flow.Idle))
+        assertNull(region(closed.newState).activeJob)
+        val abandoned = region(closed.newState).recentTasks.single { it.taskId == drop.taskId }
+        assertEquals(5_300L, abandoned.unassignedAt)
+        assertEquals(displaced.completedAt, abandoned.completedAt)
+        val effects = navigate.effects + switched.effects + unassigned.effects + closed.effects
+        assertEquals(1, unassignedEffects(effects).count {
+            (it.event.payload as TaskUnassignedPayload).taskId == drop.taskId
+        })
+        assertFalse(effects.filterIsInstance<AppEffect.LogEvent>().any {
+            it.event.type == AppEventType.DELIVERY_COMPLETED &&
+                (it.event.payload as? DeliveryPayload)?.taskId == drop.taskId
+        })
+    }
+
+    @Test
+    fun `abandon evicts nothing and still completes an older delivered receiptless drop`() {
+        // Both arrival and a complete-steps tap are delivery evidence (#1315).
+        for (arrived in listOf(true, false)) {
+            val first = unassign()
+            val before = region(first.newState)
+            val job = requireNotNull(before.activeJob)
+            val delivered = Task("delivered", "job", TaskPhase.DROPOFF,
+                customerNameHash = "delivered-customer", startedAt = 100L,
+                arrivedAt = if (arrived) 120L else null,
+                completionStepsAt = if (arrived) null else 130L, completedAt = 140L)
+            val recent = listOf(delivered) + (1..18).map {
+                Task("older-$it", "other-job", TaskPhase.PICKUP, startedAt = 1L, completedAt = 2L)
+            } + before.recentTasks
+            assertEquals(20, recent.size)
+            val crowded = first.newState.copy(regions = first.newState.regions.copy(
+                platforms = mapOf(platform to before.copy(
+                    recentTasks = recent,
+                    activeJob = job.copy(tasks = job.tasks + delivered),
+                )),
+            ))
+            val closed = machine.step(crowded, frame(5_300L, Flow.Idle))
+            val after = region(closed.newState)
+            assertNull(after.activeJob)
+            assertEquals(23, after.recentTasks.size)
+            assertTrue("no prior task is evicted on abandon", after.recentTasks.containsAll(recent))
+            assertEquals(delivered, after.recentTasks.single { it.taskId == delivered.taskId })
+            assertEquals(1, closed.effects.filterIsInstance<AppEffect.LogEvent>().count {
+                it.event.type == AppEventType.DELIVERY_COMPLETED &&
+                    (it.event.payload as? DeliveryPayload)?.taskId == delivered.taskId
+            })
+            assertEquals(3, unassignedEffects(closed.effects).size)
         }
     }
 

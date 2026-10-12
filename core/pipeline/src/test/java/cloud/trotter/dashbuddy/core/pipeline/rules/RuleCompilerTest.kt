@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import kotlinx.serialization.json.Json
@@ -12,13 +13,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Unit tests for [RuleCompiler] predicate compilation.
  *
  * Each test compiles a predicate from a JSON snippet and verifies it returns the
- * expected boolean for specific inputs. No JSON file on disk is loaded — inputs are
- * constructed inline.
+ * expected boolean for specific inputs. Most inputs are constructed inline; production surface markers are pinned against generated assets.
  */
 class RuleCompilerTest {
 
@@ -38,6 +39,69 @@ class RuleCompilerTest {
                 assertEquals(if (spec == "\"total\"" || spec == "\"incremental\"") 1 else 0, rules.size)
             }
         }
+    }
+
+    @Test
+    fun `idleSurface compiles on rules and branches and reaches match results`() {
+        val state = """"state":{"flow":"idle","idleSurface":"no_orders"}"""
+        for (body in listOf(
+            state,
+            "$state,\"branches\":[{}]",
+            "\"branches\":[{$state}]",
+            """"state":{"flow":"idle"},"branches":[{"state":{"idleSurface":"no_orders"}}]""",
+            """"state":{"flow":"post:task"},"branches":[{$state}]""",
+        )) {
+            val rules = RuleCompiler.compileRules<UiNode>(
+                parseJson("""[{"id":"test.screen.idle","priority":10,$body}]""").jsonArray,
+                RuleContext.SCREEN,
+            )
+            assertEquals(IdleSurface.NO_ORDERS, rules.single().branches.single().idleSurface)
+            assertEquals(IdleSurface.NO_ORDERS, Ruleset(rules).matchFirst(node())?.idleSurface)
+        }
+        assertNull(RuleCompiler.parseStateBlock(json("flow" to "idle"), "r").idleSurface)
+    }
+
+    @Test
+    fun `unknown idleSurface or a non idle resolved flow rejects the whole file`() {
+        val invalidStates = listOf(
+            """{"flow":"idle","idleSurface":"empty"}""",
+            """{"idleSurface":"no_orders"}""",
+            """{"flow":"post:task","idleSurface":"no_orders"}""",
+        )
+        val bodies = invalidStates.flatMap { state ->
+            listOf("\"state\":$state", "\"branches\":[{\"state\":$state}]")
+        } + """"state":{"flow":"idle","idleSurface":"no_orders"},"branches":[{"state":{"flow":"post:task"}}]"""
+        for (body in bodies) {
+            val failure = try {
+                RuleCompiler.compileRules<UiNode>(parseJson("""[
+                    {"id":"test.screen.valid","priority":1},
+                    {"id":"test.screen.invalid","priority":10,$body}
+                ]""").jsonArray, RuleContext.SCREEN)
+                null
+            } catch (e: RuleCompileException) {
+                e
+            }
+            assertTrue("$body must reject the file loudly", failure?.message?.contains("idleSurface") == true)
+            assertFalse("surface failures cannot be isolated", failure?.isolable ?: true)
+        }
+    }
+
+    @Test
+    fun `generated DoorDash only marks waiting for offer as no orders`() {
+        var root = File(".").absoluteFile.normalize()
+        while (!File(root, "settings.gradle.kts").isFile) {
+            root = root.parentFile ?: error("Could not locate repo root")
+        }
+        val asset = File(root, "core/pipeline/build/generated/assets/importMatchersRules/rules/doordash.json")
+        val screens = Json.parseToJsonElement(asset.readText()).jsonObject.getValue("screens").jsonArray
+        val rules = RuleCompiler.compileRules<UiNode>(screens, RuleContext.SCREEN, "doordash")
+        assertTrue(rules.single { it.id == "doordash.screen.waiting_for_offer" }.branches
+            .all { it.idleSurface == IdleSurface.NO_ORDERS })
+        assertTrue(rules.single { it.id == "doordash.screen.navigation_generic" }.branches
+            .all { it.idleSurface == null })
+        assertEquals(setOf("doordash.screen.waiting_for_offer"), rules.filter { rule ->
+            rule.branches.any { it.idleSurface != null }
+        }.map { it.id }.toSet())
     }
 
     // =========================================================================

@@ -712,6 +712,7 @@
       ],
       "state": {
         "flow": "idle",
+        "idleSurface": "no_orders",
         "modeHint": "online"
       },
       "reject": [

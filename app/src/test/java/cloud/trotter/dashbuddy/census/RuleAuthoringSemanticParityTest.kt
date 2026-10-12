@@ -94,6 +94,15 @@ class RuleAuthoringSemanticParityTest {
         }
 
     @Test
+    fun `idle surface draft compiles to the same rule declared evidence`() {
+        val tree = UiNode(className = "TextView", viewIdResourceName = "example:id/empty_state")
+        val rule = okRule(generate(tree, base.copy(idleSurface = "no_orders")))
+        val compiled = RuleCompiler.compileRules<UiNode>(JsonArray(listOf(rule)), RuleContext.SCREEN).single()
+        assertEquals(cloud.trotter.dashbuddy.domain.state.IdleSurface.NO_ORDERS,
+            compiled.branches.single().idleSurface)
+    }
+
+    @Test
     fun `compiler matches agree with draft peer decisions`() {
         assertEquals(Vocabulary.EMITTED_NODE_PREDICATES.toSet(), (peerCases.map { it.kind } + "hasText").toSet())
         for (case in peerCases) {

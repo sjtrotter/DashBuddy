@@ -5,8 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
-import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Task
@@ -82,6 +82,8 @@ class TwoOrderUnassignReplayTest {
             assertEquals("$file flow — recognition is not the #1312 defect", Flow.TaskUnassigned, obs.flow)
         }
         assertEquals("the Idle splice recognizes as Idle", Flow.Idle, byFile.getValue(idle).flow)
+        assertEquals("frame 36 is the rule-declared no-orders surface",
+            IdleSurface.NO_ORDERS, byFile.getValue(idle).idleSurface)
         assertEquals("the H-E-B splice is a pickup task frame",
             Flow.TaskPickupNavigation, byFile.getValue(hebPickup).flow)
     }

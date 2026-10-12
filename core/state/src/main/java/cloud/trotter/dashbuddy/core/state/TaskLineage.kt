@@ -225,23 +225,21 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
 }
 
 /**
- * #1312: Idle immediately after unassignment proves no order survives. Resolve every open
+ * #1312: A rule-declared no-orders surface after unassignment proves no order survives. Resolve every open
  * pickup/dropoff into recentTasks (the effect emitter's source), never into a completion.
  * Fresh lineage wins over the job mirror, including the task already abandoned by #736.
+ * This step may overflow the recent-task cap: evict nothing until the close sweep has read older
+ * delivered drops awaiting receipt-less completion. The next ordinary step applies the cap.
  */
 internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
     val job = region.activeJob ?: return region
     val tasks = (region.recentTasks.filter { it.jobId == job.jobId } + job.tasks)
         .distinctBy { it.taskId }
-    // "Open" per phase: a dropoff is open until it is DELIVERED (`completedAt`); a pickup is open until
-    // it is CONFIRMED (`confirmedAt`, the pickup→dropoff sweep edge, #1315) — a pickup displaced by a
-    // sibling pickup carries `completedAt` but no confirmation and no `PICKUP_CONFIRMED` event, so under
-    // a whole-job abandon it was never picked up and is marked unassigned too (the fielded 10-09 shape:
-    // the "Panera Bread" slot displaced by the "Panera - Corporate" relabel). `completedAt` is left
-    // intact (the #736 retro-mark precedent: a task may carry both marks).
+    // A dropoff stays open until delivery is evidenced; a pickup until confirmed. Displacement
+    // stamps alone prove neither. Keep any completedAt stamp intact when marking unassigned.
     val newlyUnassigned = tasks.filter { task ->
         task.unassignedAt == null && when (task.phase) {
-            TaskPhase.DROPOFF -> task.completedAt == null
+            TaskPhase.DROPOFF -> !task.isDeliveredEvidenced()
             TaskPhase.PICKUP -> task.confirmedAt == null
         }
     }.map { it.copy(unassignedAt = at) }
@@ -251,9 +249,7 @@ internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: 
     val abandoned = reconcileJobTasks(region.copy(
         // Remove the stale placeholders before reconciliation's sticky-mirror preservation.
         activeJob = job.copy(tasks = job.tasks.filterNot { it.taskId in unassignedIds }),
-        recentTasks = (region.recentTasks.filterNot { it.taskId in newlyUnassignedIds } + newlyUnassigned)
-            // Keep the whole batch visible to diffTask even if it exceeds the recent window.
-            .takeLast(maxOf(PlatformRegionStepper.MAX_RECENT_TASKS, newlyUnassigned.size)),
+        recentTasks = region.recentTasks.filterNot { it.taskId in newlyUnassignedIds } + newlyUnassigned,
     ))
     Timber.tag("StateMachine").w(
         "#1312 unassign → idle: job %s abandoned, %d open task(s) marked unassigned",

@@ -322,6 +322,11 @@
       "properties": {
         "flow": { "$ref": "#/$defs/flowEnum" },
         "modeHint": { "$ref": "#/$defs/modeEnum" },
+        "idleSurface": {
+          "type": "string",
+          "enum": ["no_orders"],
+          "description": "Rule-declared idle surface structurally proving no order is held (#1312). Requires resolved flow: idle. Vocabulary: StateMachineContract.IDLE_SURFACES."
+        },
         "offerSurface": {
           "type": "string",
           "enum": ["card", "decline_confirm"],

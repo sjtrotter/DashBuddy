@@ -678,16 +678,26 @@ NEW jobId the resume lookup can't reach (documented residual).
 **#1312 — whole-job abandonment.** In the 10-09 session both orders ran on one task; the
 second unassign confirmation was recognized but swallowed by the retro-mark gate, Idle appeared
 5 seconds later, and the next accept was absorbed into the abandoned job. Confirmation wording
-is not scope evidence; the next flow-bearing frame is. `TaskUnassigned → Idle`, with no active
-task and an active job, marks every still-OPEN task with `unassignedAt = obs.timestamp`, never
-`completedAt` — open per phase: a dropoff until it is delivered (`completedAt`), a pickup until it is
-CONFIRMED (`confirmedAt`, the pickup→dropoff sweep edge, #1315). A pickup displaced by a sibling pickup
-carries `completedAt` but no confirmation and emitted no `PICKUP_CONFIRMED`, so under a whole-job abandon
-it is marked unassigned too (the fielded "Panera Bread" slot displaced by the "Panera - Corporate"
-relabel); its `completedAt` is left intact, the #736 retro-mark precedent for a task carrying both marks.
-The tasks move into `recentTasks`, the non-unassigned job mirror is reconciled, and
+is not scope evidence. The next flow-bearing frame must be the Finding-offers screen, rule-declared
+`state.idleSurface: no_orders` (`IdleSurface.NO_ORDERS`), with `flow: idle` and `modeHint: online`.
+Bare `Flow.Idle` is insufficient: `navigation_generic` is also idle, and a full-screen navigation
+frame between confirmation and a surviving order must keep the job. Offline idle screens cannot
+trigger this close either. With no active task and an active job, the marked online screen after
+`TaskUnassigned` marks every still-OPEN task with `unassignedAt = obs.timestamp`.
+Open per phase: a dropoff until `isDeliveredEvidenced()` (`completedAt != null`, `unassignedAt == null`,
+and arrival or `completionStepsAt` evidence), a pickup until CONFIRMED (`confirmedAt`, #1315).
+A drop displaced en route by a pickup switch has a `completedAt` stamp but no delivery evidence;
+it is abandoned too. A displaced pickup likewise stays open without confirmation (the fielded
+"Panera Bread" slot displaced by the "Panera - Corporate" relabel). Existing `completedAt` stamps
+are left intact, the #736 retro-mark precedent; the delivery sweep's `unassignedAt == null` filter
+prevents those stamps from minting completions.
+The tasks move into `recentTasks` with NO eviction on this step, even if the batch overflows the cap:
+the close sweep must still see older delivered drops awaiting receipt-less completion. The next
+ordinary capped task update trims the overflow. The non-unassigned job mirror is reconciled and
 `completeActiveJob` closes the job with its existing receipt bookkeeping. Each newly marked task
-emits one per-taskId `TASK_UNASSIGNED`; no pickup confirmation, pay, or delivery row is fabricated.
+emits one per-taskId `TASK_UNASSIGNED`, but the batch emits only one bubble (`Unassigned: N orders`
+for multiple tasks, the existing store message for one). No pickup confirmation, pay, or delivery
+row is fabricated for abandoned tasks; evidenced older deliveries remain eligible for their close sweep.
 The normal `diffJobClose` tripwire still runs. Its existing accounting counts explicit unassignments
 as resolved orders and keeps the two-accept floor for this in-session close, so the one-accept
 fixture emits no `JOB_ACCEPT_MISMATCH`; abandonment is not an "accepted 1 / accounted 0" mismatch

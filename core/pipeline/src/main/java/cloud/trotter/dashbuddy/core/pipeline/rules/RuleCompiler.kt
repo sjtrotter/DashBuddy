@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.notification.NotifTextField
 import cloud.trotter.dashbuddy.domain.model.notification.RawNotificationData
 import cloud.trotter.dashbuddy.domain.pipeline.StateMachineContract
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import kotlinx.serialization.json.JsonArray
@@ -400,10 +401,12 @@ object RuleCompiler {
                 validateKnownKeys(branchObj, knownBranchKeys(context), scope = "branch", ruleId = id)
                 compileBranch(branchObj, context, ruleState.flow, ruleState.modeHint, ruleId = id,
                     ruleParseBlock = ruleParseObj, ruleParseAs = ruleParseAs, ruleBindObj = ruleBindObj,
-                    ruleOfferSurface = ruleState.offerSurface, ruleRejectChecks = ruleRejectChecks)
+                    ruleOfferSurface = ruleState.offerSurface, ruleIdleSurface = ruleState.idleSurface,
+                    ruleRejectChecks = ruleRejectChecks)
             }
         } else {
-            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id, ruleOfferSurface = ruleState.offerSurface))
+            listOf(compileBranch(obj, context, ruleState.flow, ruleState.modeHint, ruleId = id,
+                ruleOfferSurface = ruleState.offerSurface, ruleIdleSurface = ruleState.idleSurface))
         }
 
         // #419: bound the total effect count across all branches (own effects +
@@ -715,6 +718,7 @@ object RuleCompiler {
         ruleParseAs: String? = null,
         ruleBindObj: JsonObject? = null,
         ruleOfferSurface: OfferSurface? = null,
+        ruleIdleSurface: IdleSurface? = null,
         ruleRejectChecks: List<(TInput) -> Boolean> = emptyList(),
     ): CompiledBranch<TInput> {
         val targetName = ruleId?.let { deriveTargetFromId(it) }
@@ -722,8 +726,11 @@ object RuleCompiler {
 
         // Branch-level state overrides rule-level defaults
         val branchState = parseStateBlock(
-            obj["state"] as? JsonObject, "$targetName-branch",
+            obj["state"] as? JsonObject, "$targetName-branch", inheritedFlow = ruleFlow,
         )
+
+        val idleSurface = branchState.idleSurface ?: ruleIdleSurface
+        validateIdleSurface(idleSurface, branchState.flow ?: ruleFlow, "$targetName-branch")
 
         // Intent (explicit or derived)
         val intent = obj["intent"]?.jsonPrimitive?.content ?: targetName
@@ -846,6 +853,7 @@ object RuleCompiler {
             flow = branchState.flow ?: ruleFlow,
             modeHint = branchState.modeHint ?: ruleModeHint,
             offerSurface = branchState.offerSurface ?: ruleOfferSurface,
+            idleSurface = idleSurface,
             screenIs = screenIs,
             transitionOverrides = transitionOverrides,
         )
@@ -1010,9 +1018,16 @@ object RuleCompiler {
         val flow: Flow? = null,
         val modeHint: Mode? = null,
         val offerSurface: OfferSurface? = null,
+        val idleSurface: IdleSurface? = null,
     )
 
-    fun parseStateBlock(stateObj: JsonObject?, ruleId: String): ParsedStateBlock {
+    private fun validateIdleSurface(surface: IdleSurface?, flow: Flow?, ruleId: String) {
+        if (surface != null && flow != Flow.Idle) {
+            throw RuleCompileException("Rule '$ruleId': idleSurface requires flow: idle")
+        }
+    }
+
+    fun parseStateBlock(stateObj: JsonObject?, ruleId: String, inheritedFlow: Flow? = null): ParsedStateBlock {
         if (stateObj == null) return ParsedStateBlock()
 
         val flowStr = stateObj["flow"]?.jsonPrimitive?.content
@@ -1034,7 +1049,12 @@ object RuleCompiler {
                 ?: throw RuleCompileException("Rule '$ruleId': unknown offerSurface value '$it'")
         }
 
-        return ParsedStateBlock(flow, modeHint, offerSurface)
+        val idleSurface = stateObj["idleSurface"]?.jsonPrimitive?.content?.let {
+            IdleSurface.fromWire(it)
+                ?: throw RuleCompileException("Rule '$ruleId': unknown idleSurface value '$it'")
+        }
+        validateIdleSurface(idleSurface, flow ?: inheritedFlow, ruleId)
+        return ParsedStateBlock(flow, modeHint, offerSurface, idleSurface)
     }
 
     // ==========================================================================

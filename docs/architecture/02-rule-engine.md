@@ -8,6 +8,14 @@
 
 # JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
+`state.offerSurface` and `state.idleSurface` carry rule-declared surface evidence through compilation,
+branch overrides, match results, classification, and the observation journal. `idleSurface: no_orders`
+is a load-validated vocabulary (`StateMachineContract.IDLE_SURFACES`) and requires resolved `flow: idle`;
+unknown values and incompatible flows reject the whole file. Only DoorDash's `waiting_for_offer`
+Finding-offers screen declares it. Navigation and offline idle screens do not prove that no order
+survives. The abandon edge also requires `modeHint: online` (#1312). Both editor schemas share the
+main schema's `stateBlock` definition via references, and census drafts use the same vocabulary.
+
 Recognition is **data, not code**. The rule SOURCE is per-platform **JSON5** under `matchers/rules/`
 (spec in ADR-0001, editor schema `docs/rules.schema.json`), owned by the included `matchers` Gradle
 build (#635/#192; ADR-0009) — see the `matchers/` bullet under Module Structure for the flat-file vs

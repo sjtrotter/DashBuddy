@@ -106,6 +106,16 @@ class RuleDraftTest {
     }
 
     @Test
+    fun `idle surface is emitted and validated against its flow`() {
+        val state = ok(base.copy(idleSurface = "no_orders")).rule().getValue("state").jsonObject
+        assertEquals(JsonPrimitive("no_orders"), state["idleSurface"])
+        assertEquals(listOf("unknown idleSurface"), errors(base.copy(idleSurface = "empty")))
+        assertEquals(listOf("idleSurface requires idle"), errors(base.copy(
+            screenClass = "offer:presented", shape = "none", idleSurface = "no_orders",
+        )))
+    }
+
+    @Test
     fun `validation collects all independent selection errors`() {
         val result = errors(base.copy(
             screenClass = "bad", shape = "bad", intent = "Bad!", priority = 999,

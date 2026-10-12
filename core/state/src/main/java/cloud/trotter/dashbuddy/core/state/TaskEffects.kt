@@ -91,7 +91,7 @@ internal fun EffectMap.diffTask(
         }
 
         // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
-        // idempotency) + one "Unassigned: <store>" bubble per newly abandoned task:
+        // idempotency) + one bubble per abandon batch:
         //  1) INLINE abandon — the task was `prev.activeTask` and now sits in `next.recentTasks`
         //     marked `unassignedAt` (the stepper's same-frame abandon).
         //  2) CROSS-FRAME retro-mark — the task already retired on a PRIOR frame (a help-flow retire
@@ -121,11 +121,15 @@ internal fun EffectMap.diffTask(
                     effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
                 ),
             )
+        }
+        if (abandonedTasks.isNotEmpty()) {
+            val singleTask = abandonedTasks.singleOrNull()
             add(
                 AppEffect.UpdateBubble(
-                    "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
+                    if (singleTask != null) "Unassigned: ${singleTask.storeName ?: UNKNOWN_STORE}"
+                    else "Unassigned: ${abandonedTasks.size} orders",
                     ChatPersona.Navigator,
-                    dedupeScope = abandonedTask.taskId,
+                    dedupeScope = singleTask?.taskId ?: abandonedTasks.joinToString(",") { it.taskId },
                     sessionId = predecessorSessionId,
                 ),
             )
