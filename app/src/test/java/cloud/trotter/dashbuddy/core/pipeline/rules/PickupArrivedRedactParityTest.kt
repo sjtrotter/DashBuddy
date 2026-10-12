@@ -74,13 +74,19 @@ class PickupArrivedRedactParityTest {
 
     /**
      * A NAME id present on a recognized frame must be HASHED by the claiming rule: exactly one entry anchored on
-     * that suffix, `normalize: customerName`, no `plainMask`. Reference-free on purpose — Test A pins the
+     * exactly that suffix and only `normalize: customerName`; a partial or gated mask is a violation.
+     * Reference-free on purpose — Test A pins the
      * arrived-pickup family to the reference bytes; this sweep only asks "is this id masked to a customer hex".
      */
     private fun hashesNameId(rule: JsonObject, suffix: String): Boolean {
         val entries = nameIdEntries(rule, suffix)
         return entries.size == 1 && entries.single().jsonObject.let {
-            it["normalize"]?.jsonPrimitive?.content == "customerName" && !it.containsKey("plainMask")
+            it.keys == setOf("find", "normalize") &&
+                it["normalize"]?.jsonPrimitive?.content == "customerName" &&
+                it["find"]?.jsonObject?.let { find ->
+                    find.keys == setOf("hasIdSuffix") &&
+                        find["hasIdSuffix"]?.jsonPrimitive?.content == suffix
+                } == true
         }
     }
 
@@ -170,7 +176,7 @@ class PickupArrivedRedactParityTest {
                             ?: run { violations += "$path: claimed by $ruleId, which no generated asset declares"; null }
                         rule?.let { r ->
                             present.filterNot { hashesNameId(r, it) }.forEach { suffix ->
-                                violations += "$path: $ruleId does not hash the NAME id '$suffix' (one normalize: customerName entry, no plainMask)"
+                                violations += "$path: $ruleId does not hash the NAME id '$suffix' (exactly find: {hasIdSuffix: $suffix}, normalize: customerName; no partial or gated mask)"
                             }
                         }
                     }

@@ -108,7 +108,7 @@ other slot masked. The sheet's id-less name entry is now copied VERBATIM into `d
 (the #992/#1031 sibling doctrine — same bytes, same 4 hex; `normalize: customerName`, `hasNoId`),
 ordered after the #1039 subpremise entries and pinned by the FIX 1c SSOT list plus a mask-parity
 proof (`DropoffSheetRedactionParityTest`, ALL-CAPS names included — the shape already matched them).
-#1314 adds the 8.101.8 gift render to `dropoff_pre_arrival` via a `group_gift_banner` + `drop_off_bottom_sheet_container` + `gift_recipient_name` id arm and a normalized-name redact entry: the sender (`user_name`) is the ordering customer and supplies the fallback customer hash; the recipient is masked, never parsed.
+#1314 adds the 8.101.8 gift render to `dropoff_pre_arrival` via a `group_gift_banner` + `drop_off_bottom_sheet_container` + `gift_recipient_name` id arm and a normalized-name redact entry: the sender (`user_name`) is the ordering customer and supplies the fallback customer hash; the recipient is masked, never parsed; every DoorDash screen rule that redacts `user_name` must carry the identical (ignoring comments), ungated `gift_recipient_name` redact entry.
 (b) The sheet renders in more shapes than the 08-30 pair the original `Continue` AND `Directions`
 anchor was cut from: a header-less render (no `Deliver to`, no `Continue`), its twin with the
 Call/Message row scrolled off, and an `Apt/Suite`-only partial — all fell UNKNOWN and shipped the

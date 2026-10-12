@@ -224,6 +224,8 @@ object CustomerTextMarkers {
         // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
         // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
         IdMarker("order_cx_name", IdentityKind.NAME, idProtect = true),
+        // #1314 — the gift order's recipient (8.101.8 `group_gift_banner`); a bare `First I` with no lead-in, invisible to the text markers.
+        IdMarker("gift_recipient_name", IdentityKind.NAME, idProtect = true),
         // #1160 reviews PP6, SS9, TT1: the chat list's header (`tvTitle` — the customer's name on a chat row,
         // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
         // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
@@ -244,7 +246,7 @@ object CustomerTextMarkers {
         // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
         // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
         // UNKNOWN scrub keeps its deliberate set; the census withholds their own field and seeds nothing
-        // (CONTENT). Kept after overlapping runtime rows so a first-match lookup never shadows them.
+        // (CONTENT). Kept LAST so a first-match lookup never shadows a runtime row above.
         // The embedded Google-Nav maneuver cluster (#886): a number-LESS destination street carries no
         // digits, so no address shape catches it — ids are the only handle.
         IdMarker("primaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
@@ -263,8 +265,6 @@ object CustomerTextMarkers {
         IdMarker("step_description", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("instructions_list", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("instruction_text", IdentityKind.CONTENT, RuntimeScrub.NEVER),
-        // #1314 — the gift order's recipient (8.101.8 `group_gift_banner`); a bare `First I` with no lead-in, invisible to the text markers.
-        IdMarker("gift_recipient_name", IdentityKind.NAME, idProtect = true),
     )
 
     /** Every table suffix — the commit-path intake list, DERIVED (review AL3; `SnapshotRedactor`). */

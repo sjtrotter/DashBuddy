@@ -252,6 +252,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },

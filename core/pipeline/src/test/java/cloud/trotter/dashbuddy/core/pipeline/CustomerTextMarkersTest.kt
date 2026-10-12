@@ -381,6 +381,8 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
+                // #1314 — the gift recipient has no customer lead-in.
+                "gift_recipient_name",
                 // #1160 review ZZ1 — deliberately ADDED: the chat header, ALWAYS (fail closed; a value-shape
                 // gate missed non-Latin and particle names).
                 "tvTitle",
@@ -388,8 +390,6 @@ class CustomerTextMarkersTest {
                 "tvLastMessage",
                 // #919 — deliberately ADDED: the chat compose box holds user-authored draft text.
                 "message_input",
-                // #1314 — the gift recipient has no customer lead-in.
-                "gift_recipient_name",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -406,10 +406,10 @@ class CustomerTextMarkersTest {
                 "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "gift_recipient_name" to CustomerTextMarkers.IdentityKind.NAME,
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
                 "message_input" to CustomerTextMarkers.IdentityKind.CONTENT,
-                "gift_recipient_name" to CustomerTextMarkers.IdentityKind.NAME,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
                 .associate { it.suffix to it.kind },
