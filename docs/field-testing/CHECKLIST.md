@@ -361,6 +361,12 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
       follow-up). The drawer give-up is ANY-of the delta signatures since the 10-11 follow-ups PR.
   Triage source: first-line blame 2026-09-26 (`e087c3e4a`, original README L357).
 
+- [active] **🆕 NEW — confirm-pickup sheet masks the customer (#1309).**
+  **What to watch:** after a pickup confirmed on 8.101.8, the recognized `pickup_picked_up` /
+  `pickup_verify` capture's `customer_name` reads `[redacted:xxxx]` and the hex equals the arrival
+  card's for the same customer. **How to tell (desk-verifiable):** pull → grep the capture.
+  - Issue: #1309. Confirmed: 0/2
+
 - [active] **🆕 NEW — add-on Accept mints one dropoff, not one per listed row (#1304).**
   **On-dash:** accept a mid-route add-on; the HUD/job should show exactly one new drop (plus a new store
   only when the add-on is a different store). **Desk:** the job's DROPOFF task count grows by exactly one

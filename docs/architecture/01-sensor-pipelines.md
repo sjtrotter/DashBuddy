@@ -64,7 +64,7 @@ adds the earnings-deposit push, whose `text`/`bigText`/`tickerText`/`title` all 
 account clause is the #599 Crimson marker text, so both go, while the arrival itself stays a
 recognized lifecycle signal. The `crimson_balance` BALANCE push remains a priority-0 sensitive
 BLOCK; this rule only ever sees the deposit shape).
-Hard-won enumeration rules baked into the ruleset (receipts in #885/#886/#992–#995/#985): a
+Hard-won enumeration rules baked into the ruleset (receipts in #885/#886/#992–#995/#985/#1309): a
 recognized rule that forgets to redact has NO backstop (`ID_MARKERS` is UNKNOWN-only by design),
 which is why #992's `pickup_wait_survey` and its recurrence #1031 (`pickup_issue_menu`, whose four
 `For <customer> • <store>` sub-flow siblings all carried one) are fixed by copying the sibling
@@ -182,7 +182,7 @@ fields (title/text/bigText/tickerText/subText) for
 `CompiledRedact.maskNode`, `CustomerTextMarkers`, `SensitiveTextMarkers.findMarker(tree)`, and the
 corpus `SnapshotSecurityScanner`/`SnapshotRedactor`. Recognition is deliberately untouched by #835:
 `UiNode.allText` (what rules match on) still excludes `stateDescription` — widening a scrub layer
-must never be able to move a classification.
+must never be able to move a classification. #1309 — `pickup_picked_up` (8.101.8's confirm-pickup sheet, recognized for the first time in the field on 2026-10-10) shipped the node raw the same way. The invariant is pinned for the DoorDash ruleset (the Uber ruleset renders no such ids; its arrived rules are not swept) — every DoorDash rule declaring `task:pickup:arrived` carries the reference entry for every `IdentityKind.NAME` id in `ID_MARKER_TABLE` (`customer_name`, `order_cx_name` today) (`PickupArrivedRedactParityTest`: static parity on the generated asset + a corpus sweep of every committed frame carrying a NAME id (incl. `UNKNOWN/negative`, which must stay unclaimed; `SENSITIVE/` excluded — those frames are dropped before any envelope exists) + the two fielded shapes masked to the card's hex + the bin-scan shape masked to the order-picker's hex). The fielded 10-10 capture was purged, so the fixture is synthetic until the next intake.
 
 **Document-image block + 8.99.20 customer-name surfaces (#1022 / #1127 / #1128 / #1139).** #1022 adds the fourth document-image surface on the same pattern: the **store-employee signature pad**
 of the return-order flow (`sensitive.store_signature` — the pad's four widget ids (`signature_clear_button` / `signature_drawing_view` /
