@@ -140,13 +140,14 @@ class StandaloneOfferClosesStaleJobTest {
                 completionStepsAt = if (arrivalWitness) null else 350L)
             // The active copy must beat both the stale recent copy and the job placeholder.
             val seeded = withRegion(before, old.copy(activeTask = active,
-                recentTasks = old.recentTasks + dropoff))
+                recentTasks = listOf(dropoff) + old.recentTasks))
             val result = machine.step(seeded, frame)
             val after = region(result.newState)
             assertFresh(after)
             val copies = (after.recentTasks + listOfNotNull(after.activeTask)).filter { it.taskId == active.taskId }
             assertEquals(1, copies.size)
             val completed = copies.single()
+            assertEquals(completed, after.recentTasks.last { it.jobId == active.jobId })
             assertEquals(frame.timestamp, completed.completedAt)
             assertEquals(frame.timestamp, completed.staleCloseCompletedAt)
             assertNull(completed.unassignedAt)
@@ -177,6 +178,32 @@ class StandaloneOfferClosesStaleJobTest {
         assertEquals(1, unassigned.size)
         assertEquals(active.taskId, (unassigned.single().event.payload as TaskUnassignedPayload).taskId)
         assertTrue(completedEffects(result.effects, active.taskId).isEmpty())
+    }
+
+    @Test
+    fun `standalone accept preserves an unassignment over an oldest displacement stamp at the cap`() {
+        val before = initial()
+        val old = region(before)
+        val displaced = dropoff.copy(taskId = "old-displaced", customerNameHash = "displaced-customer",
+            completedAt = 400L, arrivedAt = null, completionStepsAt = null)
+        val recent = listOf(displaced) + (1..18).map {
+            Task("older-$it", "other-job", TaskPhase.PICKUP, startedAt = 1L, completedAt = 2L)
+        } + pickup
+        assertEquals(20, recent.size)
+        val job = requireNotNull(old.activeJob)
+        // Keep the outstanding dropoff placeholder: closing it adds the record that forces the cap.
+        val crowded = old.copy(recentTasks = recent, activeJob = job.copy(tasks = job.tasks + displaced))
+        val result = machine.step(withRegion(before, crowded), frame)
+        val after = region(result.newState)
+        assertFresh(after)
+        assertEquals(PlatformRegionStepper.MAX_RECENT_TASKS, after.recentTasks.size)
+        assertTrue(completedEffects(result.effects, displaced.taskId).isEmpty())
+        assertEquals(1, unassignedEffects(result.effects).count {
+            (it.event.payload as TaskUnassignedPayload).taskId == displaced.taskId
+        })
+        assertEquals(frame.timestamp, after.recentTasks.single { it.taskId == displaced.taskId }.unassignedAt)
+        assertTrue(mintingDropoffTasks(crowded, after, job.jobId,
+            retirePending = false, emittedThisStep = emptySet()).isEmpty())
     }
 
     @Test
@@ -236,6 +263,33 @@ class StandaloneOfferClosesStaleJobTest {
         assertEquals(region(before).recentTasks, after.recentTasks)
         assertTrue((after.recentTasks + requireNotNull(after.activeJob).tasks).all { it.unassignedAt == null })
         assertTrue(unassignedEffects(result.effects).isEmpty())
+    }
+
+    @Test
+    fun `re-accepting an owned offer leaves an open job region unchanged`() {
+        for (scope in OfferScope.entries) {
+            val parsed = offer.copy(offerHash = "old-offer", offerScope = scope)
+            val before = region(initial(parsed)).copy(pendingOffers = emptyList())
+            val after = stepper.consumeAcceptIntoJob(before, frame,
+                stepper.acceptInputsFromPending(pending(parsed), acceptedAt = 900L))
+            assertEquals(before, after)
+        }
+    }
+
+    @Test
+    fun `re-accepting an owned offer over a physically complete job closes and mints fresh`() {
+        val parsed = offer.copy(offerHash = "old-offer")
+        val before = initial(parsed, delivered = true)
+        val result = machine.step(before, frame)
+        val after = region(result.newState)
+        val fresh = requireNotNull(after.activeJob)
+        assertNotEquals("old-job", fresh.jobId)
+        assertEquals(parsed.offerHash, fresh.parentOfferHash)
+        assertEquals(listOf(parsed.offerHash), fresh.acceptedOffers.map { it.offerHash })
+        assertEquals(region(before).recentTasks, after.recentTasks)
+        assertTrue(fresh.tasks.all { it.jobId == fresh.jobId })
+        assertTrue(unassignedEffects(result.effects).isEmpty())
+        assertEquals(1, completedEffects(result.effects, dropoff.taskId).size)
     }
 
     @Test

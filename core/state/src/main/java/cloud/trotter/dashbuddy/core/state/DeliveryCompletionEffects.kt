@@ -299,8 +299,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 emittedThisStep = emittedThisStep,
             ).describedBy(p.lastPostTaskCoverage),
         )
-        // #1119: activation may cap recentTasks on this close step; retain evicted pre-step drops.
-        for (task in (next.recentTasks + p.recentTasks).distinctBy { it.taskId }) {
+        // #1119 r3: a pre-step copy is evidence only if it was already delivery-evidenced before this step;
+        // a displacement stamp alone never resurrects an evicted mark.
+        for (task in (next.recentTasks + p.recentTasks.filter { it.isDeliveredEvidenced() }).distinctBy { it.taskId }) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
             // #736 belt: a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED. Once
@@ -695,9 +696,9 @@ internal fun mintingDropoffTasks(
     emittedThisStep: Set<String>,
 ): List<Task> {
     if (jobId == null) return emptyList()
-    // #1119 slice 1: a drop the same step evicted from `recentTasks` (abandon appends, activation
-    // caps) is still in the pre-step region; the mint set reads both, next-first.
-    return (next.recentTasks + listOfNotNull(next.activeTask) + p.recentTasks)
+    // #1119 r3: a pre-step copy is evidence only if it was already delivery-evidenced before this step;
+    // a displacement stamp alone never resurrects an evicted mark.
+    return (next.recentTasks + listOfNotNull(next.activeTask) + p.recentTasks.filter { it.isDeliveredEvidenced() })
         .filter { it.jobId == jobId }
         .distinctBy { it.taskId }
         .filter { it.isAccountableDropoff }

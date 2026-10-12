@@ -228,7 +228,7 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
  * #1312/#1119: close an abandoned or stale job at the evidence instant. Explicit unassignment
  * abandons open drops; a standalone accept completes arrived drops through a stepper-owned mark.
  * Active lineage wins over recent tasks, then the job mirror. Keep touched tasks uncapped until
- * same-step task processing; the close emitter also reads pre-step tasks if activation evicts one.
+ * same-step task processing; the close emitter can recover evicted, already-evidenced pre-step tasks.
  */
 internal fun PlatformRegionStepper.abandonActiveJob(
     region: PlatformRegion,
@@ -253,15 +253,14 @@ internal fun PlatformRegionStepper.abandonActiveJob(
             TaskPhase.PICKUP -> if (task.confirmedAt == null) task.copy(unassignedAt = at) else null
         }
     }
-    val touchedById = touched.associateBy { it.taskId }
+    val touchedIds = touched.mapTo(HashSet()) { it.taskId }
     val unassignedIds = (tasks + touched).filter { it.unassignedAt != null }.mapTo(HashSet()) { it.taskId }
-    val recentIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
     val abandoned = reconcileJobTasks(region.copy(
         // Remove the stale placeholders before reconciliation's sticky-mirror preservation.
         activeJob = job.copy(tasks = job.tasks.filterNot { it.taskId in unassignedIds }),
         activeTask = if (active != null) null else region.activeTask,
-        recentTasks = region.recentTasks.map { touchedById[it.taskId] ?: it } +
-            touched.filterNot { it.taskId in recentIds },
+        // touched copies go to the TAIL so a same-step cap eviction removes untouched history, never a fresh mark
+        recentTasks = region.recentTasks.filterNot { it.taskId in touchedIds } + touched,
     ))
     Timber.tag("StateMachine").w(
         "job %s abandoned (%s), %d open task(s) marked unassigned, %d arrived drop(s) completed",

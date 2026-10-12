@@ -498,6 +498,18 @@ class RuleDraftTest {
         assertEquals(2, two.rule().getValue("require").jsonObject.getValue("all").jsonArray.size)
     }
     @Test
+    fun `incremental offer draft declares the required add-on scope`() {
+        val result = ok(base.copy(screenClass = "offer:presented", shape = "offer", offerSurface = "card",
+            constants = listOf(Constant("quoteBasis", JsonPrimitive("incremental"))),
+            fields = listOf(FieldAssignment(root, "payAmount"), FieldAssignment(child, "distance"),
+                FieldAssignment(PathRef(listOf(1)), "timeToCompleteMinutes"))),
+            node(text = "$8.30", children = listOf(node(id = "distance", text = "3.0 mi"),
+                node(id = "minutes", text = "12"))))
+        assertEquals(JsonPrimitive("incremental"), result.fields()["quoteBasis"])
+        assertEquals(JsonPrimitive("add_on"), result.fields()["offerScope"])
+    }
+
+    @Test
     fun `resource boundaries and compiler suffix semantics define peers`() {
         val boundary = node(id = "container", children = listOf(node(id = "bottom_navigation_container")))
         // Round 3 refinement: :id/ makes this suffix collision impossible in the compiler too.

@@ -152,9 +152,6 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
 ): PlatformRegion {
     val existing = region.activeJob ?: return mintFreshJobFromAccept(region, obs, inputs)
 
-    // #1119 slice 1: a re-presented, re-accepted offer the job already owns is the same decision, never a close.
-    if (inputs.offerHash != null && existing.acceptedOffers.any { it.offerHash == inputs.offerHash }) return region
-
     // #596 T2: an accept while the active job is already physically complete is an INDEPENDENT
     // offer, not an add-on — do NOT fold it into a never-closed job (the 06-30 job-61 case: one
     // never-closed job swallowed three offers, $19 of $45.75 unattributed). #749 restored this guard
@@ -182,6 +179,9 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
             return mintFreshJobFromAccept(completeActiveJob(committed, obs.timestamp), obs, inputs)
         }
     }
+
+    // #1119 slice 1: re-accepting an owned offer is a no-op only while the job is still physically open.
+    if (inputs.offerHash != null && existing.acceptedOffers.any { it.offerHash == inputs.offerHash }) return region
 
     // #1119 slice 1: a parsed STANDALONE offer accepted over a live job means the live job is stale on our side
     // (the platform only stacks through an ADD_ON card). Close it through the #1312 whole-job abandon: open tasks
