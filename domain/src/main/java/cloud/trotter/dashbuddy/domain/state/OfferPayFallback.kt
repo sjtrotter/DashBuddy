@@ -42,7 +42,7 @@ enum class OfferPayAttribution {
  * Extracted out of `EffectMap` (which was already past the oversized bar) so the policy lives next
  * to its sibling [DropPayApportioner] in `:domain` and is unit-testable without the state machine.
  * `EffectMap` keeps a thin call: it computes the region-derived inputs it alone can see — the
- * receipt-evidence verdict (`suppressedByReceipt`, from the job-scoped pay-bearing `PostTaskFields`),
+ * per-drop receipt coverage (from the cached pay-bearing `PostTaskFields`),
  * the per-site final-shape gate, and (at the close only) whether the job is PROVEN complete — then
  * delegates the eligibility + split and owns the observability logging.
  *
@@ -165,14 +165,14 @@ object OfferPayFallback {
          * case, because a collapsed offer has no minting task to report it.
          */
         val unattributedOffers: Int = 0,
-        private val suppressed: Boolean,
+        private val receiptCoveredTaskIds: Set<String>,
     ) {
         /**
          * This drop's decision. A drop outside the eligible set is an eligible-but-unsplit MISS (the
-         * FIX-6 signal); a suppressed plan yields the flat no-estimate answer for every drop.
+         * FIX-6 signal); a receipt-covered drop yields the flat no-estimate answer.
          */
         fun resultFor(taskId: String): Result = when {
-            suppressed -> NONE
+            taskId in receiptCoveredTaskIds -> NONE
             else -> shares[taskId] ?: Result(
                 share = null, eligibleButUnsplit = true, denominator = denominator,
                 ownOfferPayPresent = null,
@@ -193,9 +193,8 @@ object OfferPayFallback {
      *   from the lifecycle record or a 2-order job with one unassigned drop would split the FULL
      *   quote over 1 (estimate over-count).
      * @param mintingTaskId the dropoff being completed at this mint.
-     * @param suppressedByReceipt the receipt-evidence verdict: the job showed a PAY-BEARING receipt
-     *   attributable to itself → NOT eligible (a real receipt is truth; an estimate would over-count
-     *   under the read-side MAX-floored reconciliation). Computed at the region edge.
+     * @param suppressedByReceipt whether a PAY-BEARING receipt covers THIS drop. A sibling's
+     *   receipt suppresses only the drops it covered. Computed at the region edge.
      * @param requireFinalShape when true, stamp ONLY if [mintingTaskId] is the LAST OPEN owed dropoff
      *   — i.e. every OTHER accountable dropoff of the job has already completed. This kills the
      *   estimate-then-late-receipt over-count, add-on drift, and cents-drift-across-mints: a mid-stack
@@ -211,7 +210,7 @@ object OfferPayFallback {
     ): Result {
         if (suppressedByReceipt) return NONE
 
-        if (requireFinalShape && !isFinalShape(job, mintingTaskId)) {
+        if (requireFinalShape && !isFinalShape(job, mintingTaskId, job.tasks.mapTo(mutableSetOf()) { it.taskId })) {
             return NONE // mid-stack exit — not the last open owed drop
         }
 
@@ -238,7 +237,9 @@ object OfferPayFallback {
      *   `job.tasks` (the every-step-refreshed lineage mirror), the pool the ladder reads each drop's
      *   resolved store and identity from — a task's copies are consulted across BOTH, so a stale copy
      *   can never make a real drop look store-less or identity-less.
-     * @param suppressedByReceipt as for [shareFor]; short-circuits before anything is measured.
+     * @param receiptCoveredTaskIds drops covered by a pay-bearing receipt: only these estimates
+     *   are suppressed. Keep them in the attribution denominator so their quotes are not
+     *   redistributed to uncovered siblings.
      * @param jobProvenComplete the #996 consolidation proof from `isJobPhysicallyComplete`. True ⇒
      *   nothing more can deliver, so a placeholder that can NEVER mint is a consolidation artifact
      *   (#749's whole finding) and leaves the denominator. False (an `endSession`/abandon bail, an
@@ -248,13 +249,9 @@ object OfferPayFallback {
     fun closeAttribution(
         job: Job,
         recentTasks: List<Task>,
-        suppressedByReceipt: Boolean,
+        receiptCoveredTaskIds: Set<String>,
         jobProvenComplete: Boolean,
     ): ClosePlan {
-        if (suppressedByReceipt) {
-            return ClosePlan(emptyMap(), denominator = null, degrades = emptyList(), suppressed = true)
-        }
-
         val copies = (job.tasks + recentTasks.filter { it.jobId == job.jobId }).groupBy { it.taskId }
         val quoted = owedDropoffs(job, recentTasks)
         val eligible = if (!jobProvenComplete) quoted else quoted.filterNot { canNeverMint(copies, it) }
@@ -324,7 +321,7 @@ object OfferPayFallback {
             0
         }
 
-        return ClosePlan(shares, denominator, degrades, unattributed, suppressed = false)
+        return ClosePlan(shares, denominator, degrades, unattributed, receiptCoveredTaskIds)
     }
 
     /**
@@ -380,8 +377,12 @@ object OfferPayFallback {
     /**
      * The **final-shape** predicate shared by #691 (the inline offer-pay estimate gate above) and #630
      * (the receipt-split gate at the PostTask-exit mint): is [mintingTaskId] the LAST OPEN
-     * **accountable** dropoff of [job] — has every OTHER accountable dropoff already completed
+     * **accountable** dropoff in [coveredTaskIds] of [job] — has every OTHER covered dropoff completed
      * (`completedAt != null`)?
+     *
+     * Callers supply the pay scope: all job slots for the pooled estimate / single-order-set
+     * receipt (including slots that may join its coverage on completion), only receipt-covered
+     * task ids for a multi-offer receipt. An unrelated offer cannot withhold this receipt.
      *
      * The sibling scan is filtered through [Task.isAccountableDropoff] — the SAME identity+unassign
      * filter the mint denominator (`DeliveryCompletionEffects.mintingDropoffTasks`) uses (Principle 5,
@@ -403,9 +404,9 @@ object OfferPayFallback {
      * Side effect on #691 (both reviewers agreed, correct direction): narrowing the sibling set lets
      * an OFFER_PAY estimate stamp in a dangling-placeholder shape that the old scan blocked.
      */
-    fun isFinalShape(job: Job, mintingTaskId: String): Boolean =
+    fun isFinalShape(job: Job, mintingTaskId: String, coveredTaskIds: Set<String>): Boolean =
         job.tasks
-            .filter { it.isAccountableDropoff }
+            .filter { it.taskId in coveredTaskIds && it.isAccountableDropoff }
             .distinctBy { it.taskId }
             .filter { it.taskId != mintingTaskId }
             .all { it.completedAt != null }

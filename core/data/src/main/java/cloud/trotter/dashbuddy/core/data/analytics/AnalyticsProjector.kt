@@ -584,13 +584,13 @@ class AnalyticsProjector @Inject constructor(
      *     session's reported-vs-delivered reconciliation. (The UI only offers orphan/assigned rows; this
      *     is the fail-closed backstop.)
      *  3. **Assign target is a real, ENDED session** (`endedAt != null`). Load-bearing for determinism,
-     *     not hygiene: restart hydration derives `deliveredJobIds`/`receiptedJobIds`/prevDrop anchors from
+     *     not hygiene: restart hydration derives `deliveredJobIds`/prevDrop anchors from
      *     `delivery_records` BY sessionId, so assigning into a LIVE session could make a later machine
      *     `DELIVERY_COMPLETED`'s fold differ between incremental (no orphan row in the in-memory context)
      *     and from-zero refold at a batch boundary (orphan row visible in the hydrated context). An ended
      *     session folds no future machine completion, so that divergence class is inert. The stronger,
-     *     rules-independent backstop is at the DAO: the three hydration reads
-     *     ([AnalyticsDao.deliveredJobIdsInSession]/[AnalyticsDao.receiptedJobIdsInSession]/
+     *     rules-independent backstop is at the DAO: the two hydration reads
+     *     ([AnalyticsDao.deliveredJobIdsInSession]/
      *     [AnalyticsDao.lastDeliveryInSession], plus the #159 [AnalyticsDao.jobIdsForSession] resolution
      *     enumerator) all filter `sessionAssigned = 0`, so a driver-assigned orphan is INVISIBLE to
      *     machine-fold hydration and #159 resolution regardless of the session's ended state — a later-batch
@@ -819,7 +819,6 @@ class AnalyticsProjector @Inject constructor(
         val lastDelivery = analyticsDao.lastDeliveryInSession(sessionId)
         return session.toContext(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
-            receiptedJobIds = analyticsDao.receiptedJobIdsInSession(sessionId).toSet(),
             prevDropOdometer = lastDelivery?.odometerAtCompletion,
             prevDropAt = lastDelivery?.completedAt,
             lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
@@ -906,7 +905,6 @@ class AnalyticsProjector @Inject constructor(
 
     private fun SessionRecordEntity.toContext(
         deliveredJobIds: Set<String> = emptySet(),
-        receiptedJobIds: Set<String> = emptySet(),
         prevDropOdometer: Double? = null,
         prevDropAt: Long? = null,
         lastEvaluatedCostPerMile: Double? = null,
@@ -931,7 +929,6 @@ class AnalyticsProjector @Inject constructor(
         offersTimeout = offersTimeout,
         deliveries = deliveries,
         deliveredJobIds = deliveredJobIds,
-        receiptedJobIds = receiptedJobIds,
         prevDropOdometer = prevDropOdometer,
         prevDropAt = prevDropAt,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
@@ -1038,9 +1035,13 @@ class AnalyticsProjector @Inject constructor(
          * (`reportedEarnings` is attribution metadata, never an input to `netProfit`/`frozenCostPerMile`),
          * and a summary-screen row folds byte-identically. Precedented side effect (as v2 onward): the
          * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v12 (#1133): pay-less rows carry −cost as net.
+         * v13 (#254): backfill single-order provenance and aligned odometer anchors for time learning.
+         * v14 (#1120): each delivery folds on its own pay basis. Uncovered receipt-less siblings
+         * previously denied an estimate by the job-wide receipt gate now fold OFFER_PAY instead of
+         * NONE. This changes persisted economics for existing history, so wipe + refold is required.
+         * As with prior bumps, CURRENT_FALLBACK rows are re-stamped against today's economy.
          */
-        // 12: #1133 — pay-less rows carry −cost as net
-        // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
-        private const val PROJECTOR_VERSION = 13
+        private const val PROJECTOR_VERSION = 14
     }
 }

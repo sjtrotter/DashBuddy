@@ -20,11 +20,14 @@ runs every launch off-main + supervised) folds `app_events` → `delivery_record
 **exactly-once** — records + a watermark advance in one `db.withTransaction`, record PKs are the
 source `sequenceId` (REPLACE-idempotent) — so the one-time backfill is just the first drain from
 watermark 0, and a `PROJECTOR_VERSION` bump wipes + refolds the whole log (rebuild ≡ backfill).
+Version 14 (#1120) refolds historical uncovered siblings from `NONE` to `OFFER_PAY`: removing the
+job-wide receipt gate changes persisted economics, even for already-recorded events.
 Realized inputs come from the log: pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528),
-else — when the WHOLE job was receipt-less (a shop order shows no per-delivery receipt; an
-out-of-zone "Dash Along the Way" start shows none at all, #999) — a `PayBasis.OFFER_PAY` ESTIMATE
-from `DeliveryPayload.offerPayShare`, the accepted offer's quote split across the job's owed drops
-at the mint site, consumed by the fold only if no sibling drop already folded a real receipt (#691).
+else a `PayBasis.OFFER_PAY` ESTIMATE from `DeliveryPayload.offerPayShare`, the accepted-offer
+quote attributed at the mint site (#691/#1120). A sibling's receipt suppresses estimates only for
+the drops that receipt covered; uncovered siblings retain OFFER_PAY, and each row folds on its own
+basis in either event order. At close, covered drops remain in the ladder's denominator but their
+estimates are withheld, so their quoted shares cannot inflate uncovered siblings.
 **A receipt with no itemization still prices its drops (#1029):** `apportion(parsedPay = null, …)`
 returns an EMPTY map even for a SINGLE drop, so DoorDash 8.93.7's id-less receipt left `parsedPay`
 null on every fielded receipt — every drop fell to an `OFFER_PAY` estimate, `payoutStoreForms` never
@@ -580,15 +583,21 @@ is not identity, and it let a stacked job's $20 receipt redistribute the closed 
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
 window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
-was read (#1073, rounds 13–14):** `ReceiptCoverage` (the receipt's SUBJECT + every accountable drop of
-its job with completion evidence at that frame and the same non-null `mintedByOfferHash`, #1120) is
-captured beside the cached receipt, and the mint's `apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
-with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the receipt total holds by
-construction. The stamp is a hint, not identity: a mismatched hint under-pools rather than crossing
-offer hashes, and a hash-less subject covers itself alone (fail-null); this fixes the 2026-09-20
-job …-674 ($20.50 overwrote an earlier $28.51 receipt) and 2026-10-11 job …-977 ($10.40 split over
-five drops of four offers) sightings. An uncovered sibling folds unpriced (fail-null, one WARN at the
-close) instead of taking an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
+was read (#1073, rounds 13–14):** `ReceiptCoverage` (#1120) covers the accountable subject plus
+all accountable, completion-evidenced drops only when the matching `activeJob.acceptedOffers.size`
+is at most one (zero includes unobserved accepts). Multi-offer jobs cover the subject only,
+irrespective of placeholder hashes (which
+can bind different offers to the same stamp). `recentTasks` retains no Job/acceptedOffers record,
+so post-close or unknown jobs also use subject-only coverage. A multi-offer stack can under-pool,
+leaving earlier drops on their mint-time basis; fail-null beats fail-wrong. The mint checks final shape within the receipt's order set:
+a multi-offer subject gets its own receipt even while another offer is open; zero/one-accept stacks
+retain the last-drop wait. Coverage is captured
+beside the cached receipt and intersects the mint's apportion denominator, receipt ATTACH, and
+re-price denominator. Cached re-pricing additionally intersects saved coverage with coverage
+recomputed for the cached subject, rejecting wide restored snapshots. These changes address the
+2026-09-20 job …-674 and 2026-10-11 job …-977 cross-offer receipt sightings. An uncovered sibling
+can still use OFFER_PAY; without an estimate it stays unpriced and rides the review flag
+instead of taking an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
 receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
 one was re-priced at the same $20. But **completion eligibility is NEVER coverage-gated** — a
 delivered, arrived drop always mints, and coverage gates only the attach and the share (round 14
@@ -612,9 +621,8 @@ never re-price its genuinely delivered siblings DOWN (fail-null, #745).
 A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
 #691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
 rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
-outside its own receipt. Stated
-cost: after a multi-drop job closes, a re-render of ONE drop's own receipt would be split across every
-covered drop (DoorDash fields one combined end receipt, so the shape is not known to occur). Effect keys are
+outside its own receipt. After the job is gone, a new receipt frame covers only its subject (#1120).
+Effect keys are
 `…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
 itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency
 dropped the third emission, freezing the row at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies

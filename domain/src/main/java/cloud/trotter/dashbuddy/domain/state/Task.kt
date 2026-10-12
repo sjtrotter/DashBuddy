@@ -101,8 +101,8 @@ data class Task(
      * so reconciliation could never see it, which is strictly worse than a pooled average. The
      * authoritative correspondence is therefore the drop's **store** ([storeName], reconciled by close
      * time) against each accept's own [AcceptedOfferEconomics.storeHints]; this stamp is consulted
-     * only as [OfferPayFallback]'s ladder rung 2 — the fallback for a drop that resolved NO store
-     * (the D6 join-miss class) — where no better evidence exists.
+     * only as [OfferPayFallback]'s ladder rung 2 — the fallback when no resolved store matches an
+     * accepted store (including the D6 join-miss class), where no better correspondence exists.
      *
      * **Slot identity, not accumulation.** Like `taskId`/`jobId`/`phase`/[expectedStoreHint], it
      * describes the SLOT, so [swapTaskAccumulation] deliberately does NOT move it: the #526 swap

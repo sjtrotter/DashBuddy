@@ -1,16 +1,21 @@
 package cloud.trotter.dashbuddy.core.state
 
-import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.analytics.RecordFolds
+import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPay
 import cloud.trotter.dashbuddy.domain.model.pay.ParsedPayItem
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.CrossPlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
 import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.JobReceiptAnchors
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -33,6 +38,9 @@ import org.junit.Test
  * null pay.
  */
 class EffectMapDropPayTest {
+    // One accepted offer, independent of placeholder hash hints (#1120).
+    private val singleOffer = listOf(AcceptedOfferEconomics(offerHash = "single-offer", acceptedAt = 50L))
+
 
     private val effectMap = EffectMap()
 
@@ -66,9 +74,6 @@ class EffectMapDropPayTest {
         customerNameHash = cust,
         startedAt = 300L,
         completedAt = completedAt,
-        // #1120: these pooled-stack fixtures describe ONE offer. Hash-less drops now cover only
-        // themselves; completed siblings pool only when their mint-time offer hints agree.
-        mintedByOfferHash = "single-offer",
     )
 
     private fun completedRows(prev: AppState, next: AppState, obs: Observation): List<DeliveryPayload> =
@@ -89,7 +94,65 @@ class EffectMapDropPayTest {
         copy(lastPostTaskCoverage = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId))
 
     @Test
-    fun `stacked close-out — per-drop shares sum to the receipt total`() {
+    fun `two offers mint their OWN receipt even while the other drop is open`() {
+        val a = dropoff("A", "Target", "ca", completedAt = 400L)
+        // Identity resolved but open: this used to withhold A's receipt at the whole-job gate.
+        val b = dropoff("B", "Maple", "cb", completedAt = null)
+        val offers = listOf(
+            AcceptedOfferEconomics(offerHash = "H1", payAmount = 10.0, acceptedAt = 50L),
+            AcceptedOfferEconomics(offerHash = "H2", payAmount = 15.0, acceptedAt = 60L),
+        )
+        val job = jobWithTasks(listOf(a, b)).copy(acceptedOffers = offers)
+        fun read(subject: Task, siblings: List<Task>, amount: Double, currentJob: Job): PlatformRegion = cacheReceipt(
+            PlatformRegion(
+                platform = Platform.DoorDash, mode = Mode.Online,
+                session = Session("s1", startedAt = 100L), activeJob = currentJob,
+                activeTask = subject, recentTasks = siblings,
+            ),
+            ParsedFields.PostTaskFields(totalPay = amount, parsedPay = ParsedPay(
+                appPayComponents = listOf(ParsedPayItem("Base Pay", amount)), customerTips = emptyList(),
+            )), subject.taskId,
+        )
+        fun mint(region: PlatformRegion) = completedRows(
+            appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to region)),
+            appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to region.copy())),
+            screenObs(Flow.Idle, timestamp = 3_000L),
+        ).single()
+        val first = read(a, emptyList(), 28.51, job)
+        assertEquals(setOf("A"), first.lastPostTaskCoverage!!.taskIds)
+        val aRow = mint(first)
+        assertEquals(28.51, aRow.dropRealizedPay!!, 0.0)
+        assertNotNull(aRow.parsedPay)
+
+        val completedB = b.copy(completedAt = 500L)
+        val later = read(completedB, listOf(a), 20.50, job.copy(tasks = listOf(a, completedB)))
+        assertEquals(setOf("B"), later.lastPostTaskCoverage!!.taskIds)
+        val bRow = mint(later)
+        assertEquals(20.50, bRow.dropRealizedPay!!, 0.0)
+        val repriced = PlatformRegionStepper().completeActiveJob(
+            later.copy(
+                activeTask = null, recentTasks = listOf(a, completedB),
+                jobReceiptAnchors = JobReceiptAnchors(jobId = "J", firstEnteredAt = 400L),
+            ), at = 4_000L,
+        )
+        assertEquals(mapOf("B" to 20.50), repriced.pendingReceiptReprice!!.shares)
+        val records = listOf(aRow, bRow).mapIndexed { index, payload ->
+            RecordFolds.foldEvent(
+                SequencedAppEvent(
+                    sequenceId = index.toLong() + 1,
+                    event = AppEvent(
+                        type = AppEventType.DELIVERY_COMPLETED, occurredAt = 3_000L + index,
+                        sessionId = "s1", payload = payload,
+                    ),
+                ), context = null, currentCostPerMile = null,
+            ).delivery!!
+        }
+        assertTrue(records.all { it.payBasis == "DROP_SHARE" })
+        assertEquals(4901L, records.sumOf { cents(it.realizedPay!!) })
+    }
+
+    @Test
+    fun `hash-less stacked close-out with zero observed accepts — shares sum to receipt`() {
         val receipt = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 8.0)),
             customerTips = listOf(
@@ -109,7 +172,7 @@ class EffectMapDropPayTest {
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 100L, runningEarnings = 60.0),
-            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
+            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = emptyList(), startedAt = 50L),
             recentTasks = listOf(dropA, dropB),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d-target",
@@ -146,7 +209,7 @@ class EffectMapDropPayTest {
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 100L, runningEarnings = 47.5),
-            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
+            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 50L),
             recentTasks = listOf(drop),
             lastPostTaskFields = postFields,
             lastAnnouncedPostTaskTaskId = "d1",
@@ -169,7 +232,7 @@ class EffectMapDropPayTest {
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 100L, runningEarnings = 20.0),
-            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
+            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 50L),
             recentTasks = listOf(drop),
             lastPostTaskFields = null,
         ).withReceiptCoverage()
@@ -191,7 +254,7 @@ class EffectMapDropPayTest {
     private fun jobWithTasks(tasks: List<Task>) = Job(
         jobId = "J",
         offerStoreHint = emptyList(),
-        parentOfferHash = null,
+        parentOfferHash = null, acceptedOffers = singleOffer,
         tasks = tasks,
         startedAt = 50L,
     )
@@ -217,33 +280,36 @@ class EffectMapDropPayTest {
         }
         timber.log.Timber.plant(tree)
         try {
-            val regionPrev = PlatformRegion(
-                platform = Platform.DoorDash,
-                mode = Mode.Online,
-                session = Session("s1", startedAt = 100L, runningEarnings = 30.0),
-                activeJob = jobWithTasks(listOf(dropA, dropB, dropC)),
-                activeTask = dropB,
-                recentTasks = listOf(dropA),
-                lastPostTaskFields = postFieldsAB,
-                lastAnnouncedPostTaskTaskId = "dB",
-            ).withReceiptCoverage()
-            val regionNext = regionPrev.copy()
+            for (offers in listOf(emptyList(), singleOffer)) {
+                logged.clear()
+                val regionPrev = PlatformRegion(
+                    platform = Platform.DoorDash,
+                    mode = Mode.Online,
+                    session = Session("s1", startedAt = 100L, runningEarnings = 30.0),
+                    activeJob = jobWithTasks(listOf(dropA, dropB, dropC)).copy(acceptedOffers = offers),
+                    activeTask = dropB,
+                    recentTasks = listOf(dropA),
+                    lastPostTaskFields = postFieldsAB,
+                    lastAnnouncedPostTaskTaskId = "dB",
+                ).withReceiptCoverage()
+                val regionNext = regionPrev.copy()
 
-            val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
-            val next = appState(FlowRegion(flow = Flow.TaskDropoffNavigation), mapOf(Platform.DoorDash to regionNext))
+                val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+                val next = appState(FlowRegion(flow = Flow.TaskDropoffNavigation), mapOf(Platform.DoorDash to regionNext))
 
-            val rows = completedRows(prev, next, screenObs(Flow.TaskDropoffNavigation, timestamp = 3000L))
-            assertEquals("only B completes on this exit", 1, rows.size)
-            val b = rows.single()
-            assertEquals("dB", b.taskId)
-            assertNull("no share of a partial receipt (R2)", b.dropRealizedPay)
-            assertNull("the partial receipt must NOT ride the payload (fold RECEIPT_TOTAL over-count)", b.parsedPay)
-            assertNull(b.totalPay)
-            assertNull("estimate independently withheld (requireFinalShape + pay-bearing receipt)", b.offerPayShare)
-            assertTrue(
-                "the non-final receipt exit emits ONE observability WARN (R4)",
-                logged.any { it.contains("#630 mid-stack non-final receipt exit") },
-            )
+                val rows = completedRows(prev, next, screenObs(Flow.TaskDropoffNavigation, timestamp = 3000L))
+                assertEquals("only B completes on this exit", 1, rows.size)
+                val b = rows.single()
+                assertEquals("dB", b.taskId)
+                assertNull("no share of a partial receipt (R2)", b.dropRealizedPay)
+                assertNull("the partial receipt must NOT ride the payload (fold RECEIPT_TOTAL over-count)", b.parsedPay)
+                assertNull(b.totalPay)
+                assertNull("estimate independently withheld (requireFinalShape + pay-bearing receipt)", b.offerPayShare)
+                assertTrue(
+                    "the non-final receipt exit emits ONE observability WARN (R4)",
+                    logged.any { it.contains("#630 mid-stack non-final receipt exit") },
+                )
+            }
         } finally {
             timber.log.Timber.uproot(tree)
         }
@@ -488,7 +554,7 @@ class EffectMapDropPayTest {
             platform = Platform.DoorDash,
             mode = Mode.Online,
             session = Session("s1", startedAt = 100L, runningEarnings = 47.5),
-            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 50L),
+            activeJob = Job("J", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 50L),
             recentTasks = listOf(drop),
             lastPostTaskFields = postFields,
             // #1073 round 13: the receipt this exit reads was announced for the drop it closes —

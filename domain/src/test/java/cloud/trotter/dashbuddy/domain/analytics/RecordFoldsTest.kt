@@ -868,11 +868,9 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `mixed-receipt guard — a receipt-first sibling denies OFFER_PAY to the later receipt-less drop`() {
+    fun `mixed receipt job folds an uncovered later drop on its own OFFER_PAY basis`() {
         val s = "OP3"
-        // Drop 1 of J1 folds a real receipt → the job is marked receipted. Drop 2 of J1 is
-        // receipt-less but carries an offer-pay share: the guard keeps it NONE (mixing a real
-        // receipt with an offer-total estimate would over-count under the MAX-floored reconciliation).
+        // Coverage at mint excludes T2 from T1's receipt, so its stamped estimate stands.
         val (outcomes, ctx) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 0.0),
@@ -881,17 +879,16 @@ class RecordFoldsTest {
             ),
         )
         val d2 = outcomes[2].delivery!!
-        assertEquals("sibling already receipted ⇒ no offer-pay estimate", PayBasis.NONE, d2.payBasis)
-        assertNull(d2.realizedPay)
+        assertEquals(PayBasis.OFFER_PAY, d2.payBasis)
+        assertEquals(6.48, d2.realizedPay!!, 1e-9)
+        assertEquals(PayBasis.DROP_SHARE, outcomes[1].delivery!!.payBasis)
         assertEquals(setOf("J1"), ctx!!.receiptedJobIds)
     }
 
     @Test
-    fun `mixed-receipt guard — offer-pay first, then a receipt sibling — the documented reverse order stands`() {
+    fun `mixed receipt job preserves each basis in estimate-first order`() {
         val s = "OP4"
-        // The reverse order: an offer-pay drop folds first (job not yet receipted → OFFER_PAY), then a
-        // receipt drop of the same job arrives. Per-task events are immutable — the offer-pay row is
-        // NOT retroactively unwound; the receipt drop uses its own receipt. Documented residual.
+        // Receipt and estimate siblings retain their own basis in either event order.
         val (outcomes, ctx) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 0.0),
@@ -1052,11 +1049,11 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `a SUSPECT full-receipt sibling marks the job receipted and denies OFFER_PAY (#691 FIX3)`() {
+    fun `a SUSPECT sibling does not erase an uncovered drop estimate`() {
         val s = "OP10"
         // T1: a normal delivered drop of J1 (adds J1 to deliveredJobIds, NONE pay). T2: an identity-less
         // phantom full receipt of J1 → SUSPECT_FULL_RECEIPT (money nulled) — but the receipt HAPPENED,
-        // so J1 is now receipt-bearing. T3: a receipt-less offer-share sibling of J1 must be DENIED.
+        // so J1 is now receipt-bearing. T3 retains its own stamped estimate.
         val (outcomes, ctx) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 0.0),
@@ -1067,14 +1064,14 @@ class RecordFoldsTest {
         )
         assertEquals(PayBasis.SUSPECT_FULL_RECEIPT, outcomes[2].delivery!!.payBasis)
         assertEquals("SUSPECT proves a receipt existed → job receipted", setOf("J1"), ctx!!.receiptedJobIds)
-        assertEquals("offer-share sibling denied by the SUSPECT-armed guard", PayBasis.NONE, outcomes[3].delivery!!.payBasis)
+        assertEquals(PayBasis.OFFER_PAY, outcomes[3].delivery!!.payBasis)
+        assertEquals(6.0, outcomes[3].delivery!!.realizedPay!!, 0.0)
     }
 
     @Test
     fun `offer-pay fails CLOSED with no session context — NONE, not an estimate (#691 FIX4)`() {
         // A session-less DELIVERY_COMPLETED carrying an offer-pay share resolves no context, so the
-        // mixed-receipt guard cannot be consulted → the estimate is withheld (degraded-context
-        // under-count direction, never over-count).
+        // existing degraded-context policy withholds the estimate.
         val out = RecordFolds.foldEvent(
             delivery(sid = null, at = 2_000, jobId = "J1", taskId = "T1", offerPayShare = 6.48, odo = 4.0),
             context = null,

@@ -390,10 +390,16 @@ that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`
 what lets `TaskEffects` emit the proper `TASK_UNASSIGNED` off it. The dash really did end; the order
 really was abandoned; no money is fabricated.
 
-**Receipt coverage (#1073, #1120)** scopes the mint and re-price to the subject plus its job's other
-accountable, completed drops sharing the same non-null `mintedByOfferHash`: the hash is a hint,
-not identity, so a mismatched hint under-pools rather than crossing offer hashes, and a hash-less
-subject covers itself alone (fail-null). This fixes the 2026-09-20 job …-674 ($20.50 overwrote the
+**Receipt coverage (#1073, #1120)** is hint-free: a job with zero or one observed accepted offers covers
+its accountable, completion-evidenced drops plus the subject; a multi-offer job covers the subject
+only. `acceptedOffers` lives only on `activeJob`; `recentTasks` retains job IDs, so a gone or unknown
+job also covers only the subject. A multi-offer stack may under-pool and keep an earlier drop's
+mint-time basis (fail-null beats fail-wrong). The mint checks final shape within the receipt's order set:
+a multi-offer subject gets its own receipt even while another offer is open; zero/one-accept stacks
+retain the last-drop wait. Cached re-price coverage is intersected with the rule
+recomputed for the cached subject before use, so restored wide coverage cannot cross-price.
+Receipt suppression is per covered drop at inline mint and close attribution; uncovered siblings
+remain eligible for OFFER_PAY and fold on their own basis. This fixes the 2026-09-20 job …-674 ($20.50 overwrote the
 earlier $28.51 receipt) and 2026-10-11 job …-977 ($10.40 split over five drops of four offers)
 sightings; completion eligibility remains independent of coverage.
 

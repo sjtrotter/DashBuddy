@@ -56,6 +56,18 @@ class OfferPayFallbackTest {
         tasks = tasks, startedAt = 50L,
     )
 
+    @Test
+    fun `final shape checks only covered accountable siblings`() {
+        val a = drop("a", null)
+        val b = drop("b", null)
+        val job = job(20.0, listOf(a, b))
+        assertTrue(OfferPayFallback.isFinalShape(job, "a", setOf("a")))
+        assertFalse(OfferPayFallback.isFinalShape(job, "a", setOf("a", "b")))
+        assertTrue(OfferPayFallback.isFinalShape(
+            job.copy(tasks = listOf(a, b.copy(completedAt = 400L))), "a", setOf("a", "b"),
+        ))
+    }
+
     // The INLINE (PostTask-exit) mint.
     private fun inlineShare(
         job: Job,
@@ -73,8 +85,8 @@ class OfferPayFallbackTest {
         job: Job,
         recentTasks: List<Task> = emptyList(),
         provenComplete: Boolean = false,
-        suppressed: Boolean = false,
-    ) = OfferPayFallback.closeAttribution(job, recentTasks, suppressed, provenComplete)
+        covered: Set<String> = emptySet(),
+    ) = OfferPayFallback.closeAttribution(job, recentTasks, covered, provenComplete)
 
     private fun closeShare(
         job: Job,
@@ -435,16 +447,39 @@ class OfferPayFallbackTest {
     }
 
     @Test
-    fun `a receipt-suppressed close measures nothing at all`() {
+    fun `a receipt-covered drop gets no estimate at close`() {
         val d1 = drop("d1", 400L, store = "Target")
         val j = job(12.95, listOf(d1), stores = listOf("Target"))
-        val plan = closePlan(j, listOf(d1), provenComplete = true, suppressed = true)
+        val plan = closePlan(j, listOf(d1), provenComplete = true, covered = setOf("d1"))
         val r = plan.resultFor("d1")
         assertNull(r.share)
         assertFalse(r.eligibleButUnsplit)
         assertNull(r.denominator)
-        assertNull(plan.denominator)
+        assertEquals(OfferPayFallback.Denominator(1, 1), plan.denominator)
         assertEquals(0, plan.unattributedOffers)
         assertTrue(plan.degrades.isEmpty())
+    }
+
+    @Test
+    fun `two offer close attributes uncovered A while B keeps its receipt`() {
+        val a = drop("A", 400L, store = "Target")
+        val b = drop("B", 410L, store = "H-E-B")
+        val j = multiOfferJob(listOf(Triple("hA", 12.0, listOf("Target")), Triple("hB", 20.0, listOf("H-E-B"))), listOf(a, b))
+        val plan = closePlan(j, covered = setOf("B"), provenComplete = true)
+        assertEquals(12.0, plan.resultFor("A").share!!, 0.0)
+        assertEquals(OfferPayAttribution.PER_OFFER_STORE, plan.resultFor("A").arm)
+        assertNull(plan.resultFor("B").share)
+        assertFalse(plan.resultFor("B").eligibleButUnsplit)
+    }
+
+    @Test
+    fun `coverage does not redistribute covered quotes in a pooled close`() {
+        val j = job(12.95, listOf(drop("A", 400L), drop("B", 410L)))
+        val plan = closePlan(j, covered = setOf("B"))
+        assertEquals(6.48, plan.resultFor("A").share!!, 0.0)
+        assertNull(plan.resultFor("B").share)
+        val allCovered = closePlan(j, covered = setOf("A", "B"))
+        assertNull(allCovered.resultFor("A").share)
+        assertNull(allCovered.resultFor("B").share)
     }
 }

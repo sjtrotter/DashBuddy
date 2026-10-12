@@ -92,6 +92,48 @@ class OfferPayFallbackEffectMapTest {
     private fun cents(v: Double): Long = Math.round(v * 100.0)
 
     @Test
+    fun `two offer job keeps uncovered A eligible at inline mint and close while B has receipt`() {
+        val a = dropoff("A", "Target", "ca", completedAt = null)
+        val b = dropoff("B", "H-E-B", "cb", completedAt = 410L)
+        val job = job(null, listOf(a, b)).copy(acceptedOffers = listOf(
+            AcceptedOfferEconomics(offerHash = "hA", payAmount = 12.0, storeHints = listOf("Target"), acceptedAt = 50L),
+            AcceptedOfferEconomics(offerHash = "hB", payAmount = 20.0, storeHints = listOf("H-E-B"), acceptedAt = 60L),
+        ))
+        val receipt = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 20.50)), customerTips = emptyList())
+        val read = cacheReceipt(
+            PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
+                session = Session("s1", startedAt = 100L), activeJob = job,
+                activeTask = b, recentTasks = emptyList()),
+            ParsedFields.PostTaskFields(totalPay = receipt.total, parsedPay = receipt), "B",
+        )
+        assertEquals(setOf("B"), read.lastPostTaskCoverage!!.taskIds)
+        val before = read.copy(activeTask = a, recentTasks = listOf(b))
+        val after = before.copy(activeTask = a.copy(completedAt = 3_000L))
+        val inline = completedRows(
+            appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to before)),
+            appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to after)),
+            screenObs(Flow.Idle, 3_000L),
+        ).single()
+        assertEquals("A", inline.taskId)
+        assertEquals(16.0, inline.offerPayShare!!, 0.0) // inline keeps the quoted pooled split
+        assertNull(inline.dropRealizedPay)
+        assertNull(inline.totalPay)
+
+        val closing = before.copy(activeTask = null, recentTasks = listOf(a.copy(completedAt = 3_000L), b))
+        val rows = completedRows(
+            appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to closing)),
+            appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to closing.copy(activeJob = null))),
+            screenObs(Flow.Idle, 4_000L),
+        )
+        val aClose = rows.single { it.taskId == "A" }
+        val bClose = rows.single { it.taskId == "B" }
+        assertEquals(12.0, aClose.offerPayShare!!, 0.0) // close runs the store attribution ladder
+        assertNull(aClose.totalPay)
+        assertEquals(20.50, bClose.dropRealizedPay!!, 0.0)
+        assertNull(bClose.offerPayShare)
+    }
+
+    @Test
     fun `receipt-less close-out stamps every drop an equal-split offer share`() {
         // A wholly receipt-less two-drop shop job (offer $12.95, no post-delivery receipt) closes.
         val dropA = dropoff("d1", "H-E-B", "cA", completedAt = 400L)

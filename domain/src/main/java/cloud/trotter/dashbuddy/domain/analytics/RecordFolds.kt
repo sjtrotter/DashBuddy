@@ -33,12 +33,9 @@ object PayBasis {
      */
     const val SUSPECT_FULL_RECEIPT = "SUSPECT_FULL_RECEIPT"
     /**
-     * An ESTIMATE basis (#691): the accepted offer's guaranteed total, split EQUALLY across the
-     * job's owed dropoffs, stamped at completion when the WHOLE job was receipt-less (a DoorDash
-     * shop order shows no per-delivery receipt — pay lives only on the offer + the running dash
-     * total). The platform's actual per-drop split is unknowable without a receipt, so the honest
-     * estimate is the offer total ÷ drops. Consumed only when no sibling drop of the same job folded
-     * with receipt-derived pay (the mixed-receipt guard); tip/base stay null (no itemization).
+     * An ESTIMATE basis (#691/#1120): accepted-offer economics attributed at completion to a
+     * drop uncovered by a receipt. A sibling receipt suppresses only the drops it covered;
+     * the fold consumes each row's own stamp. Tip/base stay null (no itemization).
      * Surfaced as "est. offer pay" in the UI and as `OFFER_PAY` in the CSV `pay_basis` column so the
      * estimate is never silent (the #689 precedent).
      */
@@ -60,14 +57,12 @@ object PayBasis {
     const val USER_CORRECTED = "USER_CORRECTED"
 
     /**
-     * The bases that PROVE a receipt existed for a job (#691 mixed-receipt guard). [DROP_SHARE] /
-     * [RECEIPT_TOTAL] carry receipt dollars directly; [SUSPECT_FULL_RECEIPT] is a receipt whose
-     * money was nulled as a double-count guard (#653) — the receipt still HAPPENED, so it must deny
-     * the offer-pay estimate to a receipt-less sibling of the same job. This is the ONE definition
-     * both sides of the guard derive from: the in-fold `receiptedJobIds` accumulation here and the
-     * `AnalyticsDao.receiptedJobIdsInSession` hydration IN-list (built from the same const vals).
+     * The bases that prove a receipt existed for a job. [DROP_SHARE] / [RECEIPT_TOTAL] carry
+     * dollars directly; [SUSPECT_FULL_RECEIPT] retains evidence even though its money was nulled.
+     * Shared by legacy `receiptedJobIds` accumulation and the DAO receipt-evidence query; this job-level evidence
+     * does not suppress uncovered siblings' estimates (#1120).
      * Deliberately EXCLUDES [USER_CORRECTED] (formerly a hydration wrinkle, #691 VET F1; CLOSED by
-     * the v11 receipt-evidence persistence, #703 — the DAO now hydrates on `COALESCE(originalPayBasis,
+     * the v11 receipt-evidence persistence, #703 — the DAO query uses `COALESCE(originalPayBasis,
      * payBasis)`, so a re-priced row keeps its FIRST-fold basis as receipt evidence) and the
      * estimate/none bases.
      */

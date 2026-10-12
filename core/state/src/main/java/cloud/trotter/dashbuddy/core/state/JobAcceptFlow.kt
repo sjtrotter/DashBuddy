@@ -38,11 +38,10 @@ private const val MAX_ADDON_STOPS = 8
  * ids are minted at [startOffset]..[startOffset]+count-1 off the region's mint counter, which the
  * caller advances past in the same copy().
  *
- * #997: each slot is stamped with [offerHash] — the accept that produced it — so the receipt-less
- * pay estimate can split each absorbed offer's OWN quote across its OWN drops instead of pooling a
- * multi-accept job into one job-wide average. This is the only point at which the mapping is free and
- * unambiguous (both mint paths call here per accept); nothing downstream can recover it. Null hash
- * (an offer that carried none) simply leaves the lineage absent → the pooled degrade arm.
+ * #997: each slot is stamped with [offerHash], the accept that created it. This is a provenance
+ * hint for OfferPayFallback's second ladder rung, after store correspondence. Dropoffs activate
+ * blind first-open, so an add-on's order can occupy an earlier offer's slot; the stamp is not an
+ * order identity. A null hash leaves the estimate to store correspondence or the pooled arm.
  */
 internal fun PlatformRegionStepper.preCreatedDropoffs(
     region: PlatformRegion,

@@ -50,6 +50,8 @@ import org.junit.Test
  */
 class ReceiptRepriceTest {
 
+    // Most fixtures record one accept; the hash-less regression below records none.
+    private val singleOffer = listOf(AcceptedOfferEconomics(offerHash = "single-offer", acceptedAt = 50L))
     private val stepper = PlatformRegionStepper()
     private val policy = TransitionPolicy()
     private val effectMap = EffectMap()
@@ -110,9 +112,6 @@ class ReceiptRepriceTest {
         customerNameHash = "cust-$id",
         startedAt = 3_000L,
         completedAt = completedAt,
-        // #1120: these pooled-stack fixtures describe ONE offer. Hash-less drops now cover only
-        // themselves; completed siblings pool only when their mint-time offer hints agree.
-        mintedByOfferHash = "single-offer",
     )
 
     private fun appState(region: PlatformRegion, flow: Flow) = AppState(
@@ -137,7 +136,7 @@ class ReceiptRepriceTest {
         activeJob = Job(
             "J1",
             offerStoreHint = emptyList(),
-            parentOfferHash = null,
+            parentOfferHash = null, acceptedOffers = singleOffer,
             startedAt = 200L,
             tasks = listOf(dropoff("t1", "Bill Millers", completedAt = null)),
         ),
@@ -152,6 +151,47 @@ class ReceiptRepriceTest {
         postTaskObs(parsed, at),
         policy,
     )
+
+    @Test
+    fun `hash-less fresh-minted stack with zero accepts pools twenty dollars only once`() {
+        val first = dropoff("t1", "Bill Millers", completedAt = 10_000L)
+        val second = dropoff("t2", "Maple Street", completedAt = null)
+        assertNull(first.mintedByOfferHash)
+        assertNull(second.mintedByOfferHash)
+        val job = Job(
+            "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+            acceptedOffers = emptyList(), tasks = listOf(first, second),
+        )
+        val live = PlatformRegion(
+            platform = Platform.DoorDash, mode = Mode.Online,
+            session = Session("S1", startedAt = 100L), activeJob = job,
+            recentTasks = listOf(first), activeTask = second,
+            jobReceiptAnchors = JobReceiptAnchors(jobId = "J1", firstEnteredAt = 10_000L),
+        )
+        val firstRead = cacheReceipt(live, expanded(stackedReceipt), "t1")
+        assertEquals(setOf("t1"), firstRead.lastPostTaskCoverage!!.taskIds)
+        val completed = second.copy(completedAt = 15_000L)
+        // The same whole-offer receipt is read after both deliveries have completion evidence.
+        val finalRead = cacheReceipt(firstRead.copy(
+            activeJob = job.copy(tasks = listOf(first, completed)), activeTask = null,
+            recentTasks = listOf(first, completed),
+        ), expanded(stackedReceipt), "t1")
+        assertEquals(setOf("t1", "t2"), finalRead.lastPostTaskCoverage!!.taskIds)
+        val closed = stepper.completeActiveJob(finalRead, at = 16_000L)
+        val effects = effectMap.diff(
+            appState(finalRead, Flow.Idle), appState(closed, Flow.Idle),
+            Observation.Screen(timestamp = 16_000L, captureId = "close", ruleId = "idle",
+                metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = null, parsed = ParsedFields.None),
+        ).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val rows = effects.filter { it.type == AppEventType.DELIVERY_COMPLETED }
+            .map { it.payload as DeliveryPayload }
+        assertEquals(setOf("t1", "t2"), rows.map { it.taskId }.toSet())
+        assertEquals(2000L, rows.sumOf { Math.round(it.dropRealizedPay!! * 100) })
+        val reprices = effects.filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
+            .map { it.payload as DeliveryReceiptRepricePayload }
+        assertEquals(rows.associate { it.taskId to it.dropRealizedPay },
+            reprices.associate { it.taskId to it.dropRealizedPay })
+    }
 
     @Test
     fun `a COLLAPSED receipt arms the longer receipt-expand grace`() {
@@ -262,14 +302,14 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `a single-offer stacked receipt re-prices every delivered sibling and shares sum to the total`() {
+    fun `a post-close receipt re-prices only its subject when accepted offers are gone`() {
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
             mark = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
         )
         val events = repriceEvents(region, parsed = expanded(stackedReceipt))
-        assertEquals("one event per delivered drop", 2, events.size)
-        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
+        assertEquals("job gone — subject only", 1, events.size)
+        assertEquals(setOf("t2"), events.map { it.taskId }.toSet())
         assertEquals(
             "Σ shares == the receipt total, to the cent",
             Math.round(stackedReceipt.total * 100.0),
@@ -300,7 +340,7 @@ class ReceiptRepriceTest {
     @Test
     fun `no re-price while the job is still OPEN — that is layer 1's path`() {
         val open = closedJobRegion().copy(
-            activeJob = Job("J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L),
+            activeJob = Job("J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L),
         )
         assertTrue(
             "the pending mint will carry the itemization itself",
@@ -357,7 +397,7 @@ class ReceiptRepriceTest {
      */
     @Test
     fun `R1 — a NEW job's receipt is never appended as a re-price of the closed job`() {
-        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 20_000L)
+        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 20_000L)
         // Job A closed off an un-itemized receipt; job B is now live but produced no task frames at
         // all, so the announce anchor still names A's drop.
         val region = closedJobRegion().copy(activeJob = jobB)
@@ -369,7 +409,7 @@ class ReceiptRepriceTest {
 
     @Test
     fun `R1 — minting a new job CLEARS the closed-job marker in the stepper`() {
-        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 20_000L)
+        val jobB = Job("J2", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 20_000L)
         val region = closedJobRegion().copy(activeJob = jobB)
         val next = Fold(region).step(postTaskObs(expanded(), 21_000L)).region
         assertNull(
@@ -784,10 +824,8 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 8 — a single-offer two-drop job's late receipt apportions across BOTH rows`() {
-        // One task's completion cannot describe a multi-drop job — which is why the marker stopped
-        // trying. The whole-job receipt re-prices every delivered drop, $10/$10, under distinct
-        // durable keys.
+    fun `round 8 — a late receipt with no job record targets only the last completed drop`() {
+        // #1120: after close no acceptedOffers record remains, so fail-null on sibling coverage.
         val stacked = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 4.00)),
             customerTips = listOf(
@@ -801,17 +839,17 @@ class ReceiptRepriceTest {
         val fold = Fold(region).step(postTaskObs(expanded(stacked), 21_000L))
 
         val payloads = fold.reprices().map { it.payload as DeliveryReceiptRepricePayload }
-        assertEquals("one event per delivered drop", 2, payloads.size)
-        assertEquals(setOf("t1", "t2"), payloads.map { it.taskId }.toSet())
-        payloads.forEach { assertEquals(10.00, it.dropRealizedPay, 0.0001) }
+        assertEquals("only the subject is covered", 1, payloads.size)
+        assertEquals(setOf("t2"), payloads.map { it.taskId }.toSet())
+        payloads.forEach { assertEquals(20.00, it.dropRealizedPay, 0.0001) }
         assertEquals(
             "Σ shares == the receipt total",
             Math.round(stacked.total * 100.0),
             payloads.sumOf { Math.round(it.dropRealizedPay * 100.0) },
         )
-        // The fake durable table: one key per drop, so both rows are written.
+        // Only the subject consumes a durable re-price key.
         val fired = mutableSetOf<String?>()
-        assertEquals(2, fold.effectKeys.count { fired.add(it) })
+        assertEquals(1, fold.effectKeys.count { fired.add(it) })
     }
 
     // ---- round 10: the terminal session end, and structural decision equality --------------
@@ -886,7 +924,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(drop1, drop2),
             ),
             activeTask = drop2, // undelivered, about to be force-completed
@@ -1006,7 +1044,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(t1, t2, t3),
             ),
             activeTask = t3,
@@ -1105,12 +1143,11 @@ class ReceiptRepriceTest {
     )
 
     @Test
-    fun `round 13 — a genuinely stacked receipt covers both drops and re-prices both`() {
-        // The doctrine's other direction: coverage must not narrow a real stacked receipt. Driven
-        // through a real frame, so `cacheReceipt` computes the set the way the field would.
+    fun `round 13 — a receipt frame after close covers only its subject`() {
+        // Driven through a real frame: once the Job is gone, its offer count cannot be proved.
         val events = repriceEvents(twoDropClosedJob(), parsed = expanded(stackedReceipt), at = 21_000L)
-        assertEquals("both drops were delivered before the frame", 2, events.size)
-        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
+        assertEquals("job gone — subject only", 1, events.size)
+        assertEquals(setOf("t2"), events.map { it.taskId }.toSet())
         assertEquals(
             "Σ shares == the receipt total, to the cent",
             Math.round(stackedReceipt.total * 100.0),
@@ -1130,10 +1167,10 @@ class ReceiptRepriceTest {
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 21_000L))
         assertEquals(
             "the frame refreshed the cache",
-            setOf("t1", "t2"),
+            setOf("t2"),
             fold.region.lastPostTaskCoverage!!.taskIds,
         )
-        assertEquals(2, fold.reprices().size)
+        assertEquals(1, fold.reprices().size)
     }
 
     @Test
@@ -1284,7 +1321,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(t1, t2),
             ),
             activeTask = t2,
@@ -1330,8 +1367,8 @@ class ReceiptRepriceTest {
             exitMinted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
         )
 
-        // …and once the retire commits and the COMBINED $30 receipt is finally read, both rows exist
-        // to receive it: $15/$15, Σ == the receipt.
+        // Once the retire commits, acceptedOffers is gone. A later combined receipt cannot prove
+        // sibling coverage (#1120): only T2 changes; T1 keeps its earlier $20 mint-time basis.
         val combined = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 14.00)),
             customerTips = listOf(
@@ -1345,10 +1382,10 @@ class ReceiptRepriceTest {
             .associate { it.taskId to it.dropRealizedPay }
         assertEquals(setOf("t1", "t2"), shares.keys)
         assertEquals(
-            "Σ re-priced == the combined receipt, over rows that both exist",
-            Math.round(combined.total * 100.0),
-            shares.values.sumOf { Math.round(it * 100.0) },
+            "the earlier drop keeps its original receipt basis",
+            20.0, shares.getValue("t1"), 0.0,
         )
+        assertEquals(combined.total, shares.getValue("t2"), 0.0)
     }
 
     @Test
@@ -1369,7 +1406,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(d1, d3),
             ),
             activeTask = d3, // en route, never arrived
@@ -1409,7 +1446,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(d1, d2, d3),
             ),
             activeTask = d3,
@@ -1439,7 +1476,7 @@ class ReceiptRepriceTest {
         mode = Mode.Online,
         session = Session("S1", startedAt = 100L),
         activeJob = Job(
-            "J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 12_000L,
+            "J2", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 12_000L,
             tasks = listOf(dropoff("b1", "Rio Grande", completedAt = null).copy(jobId = "J2")),
         ),
         activeTask = dropoff("b1", "Rio Grande", completedAt = null)
@@ -1488,7 +1525,7 @@ class ReceiptRepriceTest {
             mode = Mode.Online,
             session = Session("S1", startedAt = 100L),
             activeJob = Job(
-                "J1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L,
+                "J1", offerStoreHint = emptyList(), parentOfferHash = null, acceptedOffers = singleOffer, startedAt = 200L,
                 tasks = listOf(t1, t2),
             ),
             activeTask = t2,

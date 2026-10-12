@@ -62,18 +62,11 @@ internal object DeliveryFolds {
         // predicate gates stamp-suppression at the EffectMap edge (one definition, two sites).
         val payBearingReceipt = p.parsedPay != null || (p.totalPay ?: 0.0) > 0.0
 
-        // #691 mixed-receipt guard: an offer-pay ESTIMATE (an equal split of the offer total)
-        // assumes the WHOLE job is receipt-less. If a sibling drop of this job already folded a REAL
-        // receipt this session, mixing the two over-counts invisibly (the reported-total
-        // reconciliation floors at 0), so a receipt-less drop of such a job keeps NONE. Defense-in-
-        // depth behind the EffectMap job-scoped stamp condition (which is the primary control).
-        // FIX 4: a null session context fails CLOSED — with no `receiptedJobIds` to consult we cannot
-        // rule out a sibling receipt, so an OFFER_PAY estimate is withheld (matching the suspect
-        // check's degraded-context under-count direction — never over-count on missing context).
-        val jobAlreadyReceipted = ctx != null && p.jobId in ctx.receiptedJobIds
+        // #1120: coverage is enforced per drop at mint/re-price. A sibling's receipt does not
+        // erase an uncovered row's stamped estimate; each row folds on its own pay evidence.
+        // Keep the existing fail-closed behavior when session context is missing.
         val useOfferShare = ctx != null && !suspectFullReceipt &&
-            p.dropRealizedPay == null && !payBearingReceipt &&
-            p.offerPayShare != null && !jobAlreadyReceipted
+            p.dropRealizedPay == null && !payBearingReceipt && p.offerPayShare != null
 
         // Pay + basis. dropRealizedPay is a per-drop share (possibly of a multi-drop receipt); its
         // absence with a bare totalPay means the whole receipt landed on this one drop. With neither,
@@ -210,10 +203,8 @@ internal object DeliveryFolds {
             odometerAtArrival = p.odometerAtArrival,
         )
 
-        // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
-        // sibling of the same job is denied the offer-pay estimate (the mixed-receipt guard above).
-        // Includes SUSPECT_FULL_RECEIPT (#653): its money was nulled, but the receipt still HAPPENED,
-        // so it proves the job is not receipt-less. SSOT with the DAO hydration IN-list.
+        // Retain job-level receipt evidence for accumulation/hydration. It does not suppress
+        // an uncovered sibling's estimate (#1120); each row uses its own stamped basis.
         val jobReceipted = payBasis in PayBasis.RECEIPT_EVIDENCE
         val newCtx = ctx?.copy(
             deliveries = ctx.deliveries + 1,

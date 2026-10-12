@@ -114,7 +114,10 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 ## §2 Active
 
 - [active] 🆕 NEW — a later offer's receipt never re-prices an earlier offer's drop (#1120).
-  What to watch: on a multi-offer job, each drop's `payBasis`/pay equals its own receipt.
+  What to watch: no `DELIVERY_RECEIPT_REPRICE` touches a drop whose receipt it was not; on a
+  multi-offer job each drop's row carries its OWN receipt (`DROP_SHARE`) once that receipt is read,
+  and the OFFER_PAY estimate until then. Single-offer stacks, including zero observed accepts,
+  still pool delivered drops. An open drop from another offer must not withhold a read receipt.
   Confirmed: 0/2
 
 - [active] **🆕 NEW — a live drop-off sheet never shows as a receipt (#935).** Check that no

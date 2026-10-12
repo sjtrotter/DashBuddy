@@ -139,34 +139,26 @@ private val Task.isReceiptSubject: Boolean
 /**
  * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
  *
- * #1120: only accountable dropoffs of the subject's job: the subject itself, plus completed siblings
- * sharing its non-null [Task.mintedByOfferHash]. A hash-less subject covers itself alone (fail-null).
- * The stamp is a HINT, not an identity: a mismatched hint under-pools rather than crossing offer
- * hashes to price another offer's drops — the safe direction. A genuine single-offer stack still pools.
- * Field sightings: 2026-09-20 job …-674 split the second offer's $20.50 over both drops, overwriting
- * the first's $28.51; 2026-10-11 job …-977 split the last offer's $10.40 over five drops of four offers.
- * The subject is in its own receipt by definition, and its `completedAt` is not stamped
- * until its retire grace commits. Nothing UNQUALIFIED can enter: the subject comes from
- * [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a pickup.
- * It CAN be an un-arrived drop when one is active, which is the #1081 residual stated there: a false
- * `post:task` frame then covers a drop that has not been delivered.
- * The job is the live one, falling back to the subject's own `jobId` so a post-close re-render still
- * resolves (`completeActiveJob` has already nulled `activeJob` by then).
+ * #1120: a single order set (zero or one observed accepts) covers its accountable,
+ * completion-evidenced drops plus the accountable subject. MULTI-offer jobs cover only the subject:
+ * mintedByOfferHash is a hint that can bind different offers to the same placeholder stamp, so it cannot scope a receipt.
+ * A multi-offer stack may therefore under-pool; fail-null beats pricing another offer's drops.
+ * The subject need not have completed yet: its retire grace may still be running (#1081).
+ * Only activeJob retains acceptedOffers; recentTasks retains job IDs, not Job records. Once
+ * the subject's job is gone (no matching active job), coverage falls back to subject-only.
  *
  * Pure: region records only — no wall clock, no `Platform` literal.
  */
 internal fun receiptCoverageAt(region: PlatformRegion, subjectTaskId: String?): ReceiptCoverage {
     val tasks = region.recentTasks + listOfNotNull(region.activeTask)
     val subject = tasks.firstOrNull { it.taskId == subjectTaskId }
-    val subjectOfferHash = subject?.mintedByOfferHash
-    val jobId = region.activeJob?.jobId
-        ?: subject?.jobId
+        ?: return ReceiptCoverage(taskIds = emptySet())
+    val job = region.activeJob?.takeIf { it.jobId == subject.jobId }
+    val singleOffer = job != null && job.acceptedOffers.size <= 1
     val covered = tasks
         .filter {
-            it.jobId == jobId && it.isAccountableDropoff &&
-                (it.taskId == subjectTaskId ||
-                    (it.completedAt != null && subjectOfferHash != null &&
-                        it.mintedByOfferHash == subjectOfferHash))
+            it.jobId == subject.jobId && it.isAccountableDropoff &&
+                (it.taskId == subjectTaskId || (singleOffer && it.completedAt != null))
         }
         .map { it.taskId }
         .toSet()
@@ -250,7 +242,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     postTaskTaskId: String?,
     /**
      * What this receipt described when it was READ (#1073 round 13) — a fresh [receiptCoverageAt] on
-     * the frame path, [PlatformRegion.lastPostTaskCoverage] wherever the receipt is the cached one.
+     * the frame path; cached coverage intersected with recomputed coverage at [decideFromCachedReceipt].
      * The denominator is intersected with it; null describes nothing.
      */
     coverage: ReceiptCoverage?,
@@ -301,12 +293,8 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // 1's 8 s collapsed-receipt window is the path that lands that expansion in time; an expansion
     // later than that keeps the #691 `OFFER_PAY` estimate.
     //
-    // A second cost is stated rather than defended (#1073 round 14): on a CLOSED multi-drop job the
-    // subject is the last completed drop, so a post-close re-render of ONE drop's own receipt (a late
-    // tip adjustment) is apportioned across every covered drop. DoorDash fields one combined
-    // end-of-job receipt, so the shape is not known to occur; a tip-line-count heuristic was
-    // considered and rejected because a stacked order where only one customer tipped has fewer tip
-    // lines than drops and would be refused — fail-null on a legitimate correction.
+    // #1120: post-close frames cover only the subject because acceptedOffers is gone. Cached
+    // decisions may still pool when the pre-close source proves a single-offer job.
     val receiptSeenAt = mark.receiptSeenAt ?: return region
     val acceptResolvedAt = region.lastAcceptResolvedAt
     if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
@@ -411,7 +399,9 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
  * is the region the decision is made against (its `activeJob` already nulled and its
  * `lastClosedJobReceipt` stamped), returned unchanged when nothing is owed. Null coverage decides
  * nothing on its own — `describedBy` empties the denominator — so a pre-round-13 snapshot is
- * fail-null with no extra guard.
+ * fail-null with no extra guard. Cached coverage is intersected with [receiptCoverageAt]
+ * recomputed on [source] for the cached subject before use: restored pre-#1120 snapshots may
+ * carry wider coverage, which must never re-price another offer after restart.
  */
 internal fun PlatformRegionStepper.decideFromCachedReceipt(
     source: PlatformRegion,
@@ -424,7 +414,11 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
         region = closed,
         parsed = cached,
         postTaskTaskId = null,
-        coverage = source.lastPostTaskCoverage,
+        coverage = source.lastPostTaskCoverage?.let { cachedCoverage ->
+            ReceiptCoverage(
+                cachedCoverage.taskIds intersect receiptCoverageAt(source, source.lastAnnouncedPostTaskTaskId).taskIds,
+            )
+        },
         decidedAt = decidedAt,
         captureId = null,
         mintRanForJob = mintRanForJob,

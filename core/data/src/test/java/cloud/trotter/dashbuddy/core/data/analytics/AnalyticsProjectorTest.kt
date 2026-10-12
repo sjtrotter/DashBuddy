@@ -214,7 +214,7 @@ class AnalyticsProjectorTest {
             AppEventType.OFFER_ACCEPTED, sid, 2_000,
             acceptedOffer(2_000, eval(0.25)),
         )
-        // T1 (seq 3): a receipt-derived share → marks jobId J1 receipted.
+        // T1 (seq 3): a receipt-derived share covers this row only.
         insert(
             AppEventType.DELIVERY_COMPLETED, sid, 3_000,
             DeliveryPayload(
@@ -223,8 +223,8 @@ class AnalyticsProjectorTest {
             ),
             odometer = 104.0,
         )
-        // T2 (seq 4): a receipt-less sibling carrying an offer-pay estimate. The mixed-receipt guard
-        // must DENY it (job already receipted) → NONE — even though a batch boundary splits it from T1.
+        // T2 (seq 4): an uncovered receipt-less sibling keeps its quoted estimate, even when a batch
+        // boundary splits it from T1 (#1120).
         insert(
             AppEventType.DELIVERY_COMPLETED, sid, 3_500,
             DeliveryPayload(
@@ -236,25 +236,25 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `receiptedJobIds hydrates across a batch boundary — live order == from-zero refold (#691)`() = runBlocking {
+    fun `receipt-less sibling keeps OFFER_PAY across a batch boundary — live order == from-zero refold (#1120)`() = runBlocking {
         seedMixedReceiptJob()
 
         // Batch 1 stops after T1 (watermark → 3); T2 is left for a fresh projector to resume.
         projector().processBatch(limit = 3)
         assertEquals(3L, analyticsDao.getWatermark()!!.watermarkSequenceId)
 
-        // The resumed projector has empty in-memory state — it must SELECT the receipted jobId back
-        // out of delivery_records to keep the guard armed across the boundary.
+        // The resumed projector has empty in-memory state; each row still folds on its own basis.
         val resumed = projector()
         resumed.processBatch(limit = 100)
         assertNull(resumed.processBatch(limit = 100))
 
         val liveT2 = analyticsDao.deliveryRecord(4)!!
-        assertEquals("guard survives the boundary → the sibling gets no estimate", "NONE", liveT2.payBasis)
-        assertNull(liveT2.realizedPay)
+        assertEquals("DROP_SHARE", analyticsDao.deliveryRecord(3)!!.payBasis)
+        assertEquals("uncovered sibling keeps its estimate across the boundary", "OFFER_PAY", liveT2.payBasis)
+        assertEquals(6.48, liveT2.realizedPay!!, 1e-9)
 
         // From-zero refold (one drain, no boundary) must reproduce the SAME row — proof the live path
-        // is rebuild-faithful. A broken hydration would make liveT2 OFFER_PAY (6.48) here but NONE below.
+        // is rebuild-faithful under the per-row rule.
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 4, projectorVersion = 99))
         projector().catchUp()
         val refoldT2 = analyticsDao.deliveryRecord(4)!!
@@ -976,7 +976,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -1456,10 +1456,9 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `a re-priced receipted row still denies a receipt-less sibling folded after a restart (#703 hydration COALESCE)`() = runBlocking {
-        // T1 receipted (DROP_SHARE) then re-priced to USER_CORRECTED; the job's originalPayBasis stays
-        // DROP_SHARE, so the #691 mixed-receipt guard must still see the job as receipted when the
-        // receipt-less sibling T2 is folded by a FRESH projector (empty in-memory → DB hydration).
+    fun `a re-priced row keeps original DROP_SHARE while its receipt-less sibling gets OFFER_PAY after restart (#1120)`() = runBlocking {
+        // T1 receipted (DROP_SHARE) then re-priced to USER_CORRECTED; its originalPayBasis stays
+        // DROP_SHARE. The uncovered sibling T2 keeps its own estimate after a fresh projector resumes.
         insert(
             AppEventType.DASH_START, "S1", 1_000,
             SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
@@ -1486,8 +1485,7 @@ class AnalyticsProjectorTest {
         assertEquals("USER_CORRECTED", analyticsDao.deliveryRecord(t1)!!.payBasis)
         assertEquals("originalPayBasis keeps the first-fold receipt evidence", "DROP_SHARE", analyticsDao.deliveryRecord(t1)!!.originalPayBasis)
 
-        // T2 (receipt-less sibling) arrives LATER — a fresh projector must hydrate the receipted-jobId
-        // set from the DB via COALESCE(originalPayBasis, payBasis) and DENY the offer-pay estimate.
+        // T2 (receipt-less sibling) arrives LATER — T1's receipt does not cover this row.
         insert(
             AppEventType.DELIVERY_COMPLETED, "S1", 5_000,
             DeliveryPayload(
@@ -1499,8 +1497,9 @@ class AnalyticsProjectorTest {
         projector().catchUp()
 
         val t2Row = analyticsDao.deliveryRecord(analyticsDao.lastDeliveryInSession("S1")!!.eventSequenceId)!!
-        assertEquals("the re-priced sibling still proves the job receipted → estimate denied", "NONE", t2Row.payBasis)
-        assertNull(t2Row.realizedPay)
+        assertEquals("uncovered sibling keeps its own estimate", "OFFER_PAY", t2Row.payBasis)
+        assertEquals(6.48, t2Row.realizedPay!!, 1e-9)
+        assertEquals("DROP_SHARE", analyticsDao.deliveryRecord(t1)!!.originalPayBasis)
     }
 
     // ── #705 fix round: sequence-ordered apply (F1), F3 null-session cash, F5 SUSPECT block ──
@@ -2049,7 +2048,7 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
 }

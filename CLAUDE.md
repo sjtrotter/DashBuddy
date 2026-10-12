@@ -636,7 +636,8 @@ Full reference: [`docs/architecture/05-analytics-read-model.md`](docs/architectu
 (+ `stores`/`pickup_records`) are a rebuildable projection. `AnalyticsProjector` (`:core:data`, every
 launch, supervised) folds via the pure `RecordFolds`/`SessionFoldContext`/`CorrectionFolds` (`:domain`)
 **exactly-once** (records + watermark in one transaction, PK = source `sequenceId`); a `PROJECTOR_VERSION`
-bump wipes + refolds the whole log. **Ordering contract (#732):** `sequenceId` is the fold/order key;
+bump wipes + refolds the whole log. Version 14 (#1120) re-prices historical uncovered siblings
+from `NONE` to `OFFER_PAY` now that each row folds on its own basis. **Ordering contract (#732):** `sequenceId` is the fold/order key;
 `occurredAt` may lag it (`PICKUP_CONFIRMED`); "when did it really happen" reads the payload.
 
 **Economics are FROZEN per record, never recomputed** (dev decision): `netProfit`, `frozenCostPerMile` and
@@ -651,18 +652,19 @@ A pay-less row that drove miles carries `net = −cost` (#1133; `realizedPay` st
 **Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
 no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's
 scalars on the flat 8.93.7 layout (#1029; a COLLAPSED receipt stays `parsedPay == null`); else a
-`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691), consumed only if no sibling drop already
-folded a real receipt. Two mint sites, two policies: the INLINE (PostTask-exit) mint keeps the
+`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691); a sibling's receipt blocks the estimate
+only for the drops that receipt covered, and each row folds on its own basis (#1120). Two mint sites, two policies: the INLINE (PostTask-exit) mint keeps the
 conservative pooled split over the QUOTED owed orders (`OfferPayFallback.shareFor`); the whole
 attribution ladder runs ONCE at the terminal close (`OfferPayFallback.closeAttribution`, #996/#997):
 eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNASSIGNED never shrunk;
 an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
 store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
 matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
-structural. **A receipt speaks only for the drops it described when read (#1073)** — the subject plus its OFFER's
-other delivered drops (`mintedByOfferHash`, #1120); a hash-less subject covers itself alone: `ReceiptCoverage` is
-captured with the cached receipt and intersects the mint apportion, the attach and the re-price
-denominator (one owner); completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
+structural. **Receipt coverage (#1073/#1120) is hint-free:** a job with zero or one observed accepts covers its accountable,
+completion-evidenced drops plus the subject; a multi-offer or gone/unknown job covers the subject only
+(`acceptedOffers` is available only on `activeJob`), and cached re-price coverage is intersected with
+this rule recomputed now. `ReceiptCoverage` gates mint apportion, receipt attach, re-price and per-drop
+estimate suppression; completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
 else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
 
 **Late-expanded receipt re-price (#1033 layer 2):** `EffectMap.diffReceiptReprice` emits one

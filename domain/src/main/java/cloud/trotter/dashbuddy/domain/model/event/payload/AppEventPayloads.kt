@@ -145,8 +145,8 @@ data class DeliveryPayload(
     val dropRealizedPay: Double? = null,
     /**
      * This drop's share of the job's accepted-offer pay (#691) — an ESTIMATE, stamped
-     * ONLY when the closing job was WHOLLY receipt-less (no receipt dollars anywhere on it) AND this
-     * drop's own receipt inputs are absent, so a receipt-less shop delivery folds a real net row
+     * when this drop is not covered by a pay-bearing receipt and its own receipt inputs are absent,
+     * so a receipt-less delivery folds a real net row
      * instead of a $0-unattributed one. The platform's true per-drop split is unknowable without a
      * receipt, so the accepted quote is divided equally
      * ([cloud.trotter.dashbuddy.domain.state.DropPayApportioner.equalSplit], cents-exact
@@ -160,7 +160,7 @@ data class DeliveryPayload(
      * Null on any receipted mint, on a pay-less offer, and on all pre-#691 events
      * (nullable-with-default → old rows deserialize identically → the fold reproduces today's
      * `PayBasis.NONE` rows byte-for-byte, no `PROJECTOR_VERSION` bump). Consumed by the fold only as
-     * `PayBasis.OFFER_PAY` and only when no sibling drop of this job already folded a real receipt.
+     * `PayBasis.OFFER_PAY`; a sibling receipt blocks the estimate only for drops it covered (#1120).
      */
     val offerPayShare: Double? = null,
     /** Session running total at the moment of completion. */

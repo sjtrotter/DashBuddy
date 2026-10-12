@@ -1080,24 +1080,14 @@ interface AnalyticsDao {
     suspend fun deliveredJobIdsInSession(id: String): List<String>
 
     /**
-     * The distinct jobIds already recorded with **receipt evidence** (`DROP_SHARE` / `RECEIPT_TOTAL`
-     * / `SUSPECT_FULL_RECEIPT`) for a session — rehydrates the fold's #691 mixed-receipt guard set
-     * across a drain/batch boundary (mirrors [deliveredJobIdsInSession]), so a receipt-less sibling
-     * folded in a LATER batch is still denied the offer-pay estimate. `SUSPECT_FULL_RECEIPT` is
-     * included: its money was nulled (#653), but the receipt still proves the job is not receipt-less.
-     * The IN-list is compile-time-concatenated from [PayBasis]'s `const val`s (legal in an annotation)
-     * so it derives from the SAME SSOT as the in-fold guard ([PayBasis.RECEIPT_EVIDENCE]) — the two
-     * sides can never drift. Matched on `COALESCE(originalPayBasis, payBasis)` (#703): a row re-priced
-     * to `USER_CORRECTED` keeps its FIRST-fold basis as receipt evidence via the persisted
-     * `originalPayBasis`, closing the #691 VET F1 hydration wrinkle even for re-priced rows; the
-     * COALESCE covers legacy rows whose `originalPayBasis` is still null (pre-`PROJECTOR_VERSION` 4
-     * refold). Deliberately excludes `USER_CORRECTED` itself and the estimate/none bases.
+     * Distinct jobIds with receipt evidence (`DROP_SHARE` / `RECEIPT_TOTAL` / `SUSPECT_FULL_RECEIPT`).
+     * #1120: no longer used for projector hydration or estimate gating; retained for the DAO's
+     * receipt-evidence contract test. The IN-list uses [PayBasis] constants, matching
+     * [PayBasis.RECEIPT_EVIDENCE].
      *
-     * Filtered `sessionAssigned = 0` (#660 piece 2 posture: a driver-assigned orphan is INVISIBLE to
-     * machine-fold hydration). A categorized orphan's receipt evidence must not enter this session's
-     * #691 mixed-receipt guard set — it belonged to a different job/dash, and letting it deny a later
-     * sibling's offer-pay estimate would (like the distinct-job set above) split incremental fold from
-     * from-zero refold at a batch boundary.
+     * `COALESCE(originalPayBasis, payBasis)` preserves first-fold receipt evidence after a driver
+     * re-price (#703), with a fallback for legacy rows. Driver-assigned orphans are excluded by
+     * `sessionAssigned = 0` because their receipt evidence belongs to another job/dash (#660).
      */
     @Query(
         "SELECT DISTINCT jobId FROM delivery_records WHERE sessionId = :id AND sessionAssigned = 0 " +
