@@ -283,12 +283,13 @@ end-of-text (it does not match before a final newline — a tightening `Currency
 ASCII (the layer already assumes an English device), `\p{L}` and `(?i)` follow Unicode simple rules.
 
 **Collapsed receipt recognition (#935):** `delivery_summary_collapsed` requires both `This offer`
-(or the retained legacy `delivery complete` alternative) and `This dash so far` (or an existing
-`final_value` id for rollback renders). The coordinator's census of ~250 fielded receipts from
+and `This dash so far` (or an existing `final_value` id for rollback renders). The coordinator's
+census of ~250 fielded receipts from
 2026-07-03 through 2026-10-11, plus the corpus, found both texts on every genuine receipt, including
 the #1029 id-less money surfaces; legacy money ids disappeared after 2026-08-02 and no capture
-contained `delivery complete`. The four #910 live-sheet misclassifications on July 28 had `This
-offer` but no `This dash so far`. Rule-level rejects (#1222) for `drop_off_bottom_sheet_container`
+contained `delivery complete`, so #935 r2 removes that dead alternative. The four #910 live-sheet
+misclassifications on July 28 had `This offer` but no `This dash so far`.
+Top-level rejects for `drop_off_bottom_sheet_container`
 and `complete_delivery_steps_button` also exclude combined frames carrying receipt text and a live
 customer card. The seven existing rejects remain: `post:task` is a lifecycle flow, and a false
 receipt claim previously fabricated a $0 completion (#564).

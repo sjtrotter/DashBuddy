@@ -4,8 +4,8 @@
  "schemaId": "uinode.v1",
  "timestamp": 1785288950477,
  "platform": "doordash",
- "ruleId": "doordash.screen.delivery_summary_collapsed",
- "classificationName": "delivery_summary_collapsed",
+ "ruleId": "doordash.screen.dropoff_pre_arrival",
+ "classificationName": "dropoff_pre_arrival",
  "metadata": {
   "engineVersion": 1,
   "rulesetFormatVersion": 2,

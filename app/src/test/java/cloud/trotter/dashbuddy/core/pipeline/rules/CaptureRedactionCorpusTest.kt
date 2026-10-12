@@ -2279,14 +2279,15 @@ class CaptureRedactionCorpusTest {
     }
 
     /**
-     * #910 V1 — `delivery_summary_collapsed` shipped with NO redact block, and it is
-     * not only the pay-breakdown card: its require is a text-only
-     * `allTextContainsAny:['this offer','delivery complete']`, which a LIVE DROP-OFF
-     * sheet satisfies, so 4 of the 8 fielded 07-28 envelopes under this classification
+     * #910 V1 — `delivery_summary_collapsed` shipped with NO redact block, and it
+     * historically matched live drop-off sheets through its text-only require,
+     * so 4 of the 8 fielded 07-28 envelopes under this classification
      * carried the customer block whole — name, house-number street line, city/ST/ZIP,
      * the dasher instruction body, and the customer's per-item note. `CustomerTextMarkers`
      * cannot own any of it: the "Delivery for" lead-in is a SEPARATE `user_name_label`
      * sibling, so the value nodes are bare and a prefix scan is structurally blind.
+     * #935 tightened recognition; the redact set is retained for combined frames
+     * (a receipt rendered over a live card).
      *
      * Node shape is ground truth from that capture (the id set only); every VALUE below
      * is invented. Teeth: delete any entry from the rule's redact block and its

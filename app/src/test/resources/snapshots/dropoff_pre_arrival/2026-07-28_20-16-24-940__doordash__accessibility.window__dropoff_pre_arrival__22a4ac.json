@@ -4,8 +4,8 @@
  "schemaId": "uinode.v1",
  "timestamp": 1785287784923,
  "platform": "doordash",
- "ruleId": "doordash.screen.delivery_summary_collapsed",
- "classificationName": "delivery_summary_collapsed",
+ "ruleId": "doordash.screen.dropoff_pre_arrival",
+ "classificationName": "dropoff_pre_arrival",
  "metadata": {
   "engineVersion": 1,
   "rulesetFormatVersion": 2,
@@ -769,7 +769,7 @@
                           }
                          },
                          {
-                          "text": "Guarniciones: ensalada\ncongri\nyuca",
+                          "text": "[redacted]",
                           "id": "com.doordash.driverapp:id/order_item_instructions",
                           "class": "android.widget.TextView",
                           "isEnabled": true,

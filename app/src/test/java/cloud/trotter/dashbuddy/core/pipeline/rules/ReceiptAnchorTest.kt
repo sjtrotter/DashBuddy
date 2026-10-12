@@ -38,7 +38,7 @@ class ReceiptAnchorTest {
             children = listOf(
                 UiNode(viewIdResourceName = "user_name_label", text = "Deliver to"),
                 UiNode(text = "This offer $8.25"),
-                UiNode(text = "this dash"),
+                UiNode(text = "This dash so far $40.57"),
                 UiNode(viewIdResourceName = "complete_delivery_steps_button", text = "Complete delivery"),
             ),
         ).restoreParents()

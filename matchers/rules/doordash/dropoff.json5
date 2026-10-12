@@ -1126,6 +1126,12 @@
           "plainMask": true
         },
         {
+          "comment": "#935 r2: moved here with the live sheets; `order_item_name` stays raw — merchant item names.",
+          "find": {
+            "hasIdSuffix": "order_item_instructions"
+          }
+        },
+        {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
           "find": {
             "hasTextStartsWith": "Apt/Suite"
@@ -1572,6 +1578,12 @@
             "Heading to "
           ],
           "normalize": "customerName"
+        },
+        {
+          "comment": "#935 r2: moved here with the live sheets; `order_item_name` stays raw — merchant item names.",
+          "find": {
+            "hasIdSuffix": "order_item_instructions"
+          }
         },
         {
           "comment": "#1039 belt (the #993 combined-frame precedent): the FUSED subpremise line — `Apt/Suite <n>` or `Apt/Suite: <n>` in ONE id-less node, the render the committed `dropoff_pre_arrival` fixtures carry. Declared on EVERY rule in this file (plus `navigation_generic`) rather than only on the surfaces that fielded it, because a redact protects only the frames its OWN rule wins and the rules most likely to claim an address-block frame OUT-RANK the fielded pair (`delivery_summary_collapsed` 31, `dropoff_navigation` 61, `dropoff_photo` 62, `dropoff_geofence_warning` 84). Entry is `dropoff_photo`'s #986 entry verbatim — see it for the full reasoning: the token after the label strip is a bounded ~10^4 unit number, so a 4-hex distinctness suffix is brute-recoverable (`plainMask`), while the label itself is app vocabulary and is kept for replay context. ACCEPTED COLLATERAL: the split row's BARE `Apt/Suite` LABEL node is itself an exact prefix match here, and no keepPrefix can be kept from it, so it masks whole to plain `[redacted]` — two words of app chrome lost on a debug envelope, the same fail-toward-privacy trade `DropoffBannerRedactParityTest` already documents for the `Arriving at` label. It cannot break the label-sibling entry below: redact predicates are evaluated against the ORIGINAL tree, the mask lands on a copy. Inert on any frame without the line; the #1039 parity test in `CaptureRedactionCorpusTest` pins that every rule declares it, so a new dropoff surface cannot forget.",
@@ -2141,7 +2153,7 @@
           }
         },
         {
-          "comment": "#910 V1 — this rule shipped with NO redact block and it is the HIGHEST-severity site of the 07-29 pull: 4 of the 8 fielded `delivery_summary_collapsed` envelopes are not the pay-breakdown card at all but the DROP-OFF card (the require is a text-only `allTextContainsAny:['this offer','delivery complete']`, which a live drop-off sheet satisfies), so they carry the full customer block — `user_name`, `address_line_1` (house number + street), `address_line_2` (city/ST/ZIP), the dasher instruction body and the customer's per-item note — all raw on a RECOGNIZED envelope. `CustomerTextMarkers` cannot own any of it: DoorDash renders this block as SPLIT nodes (the 'Delivery for' lead-in is its own `user_name_label` sibling), so the name/address nodes are BARE and a text-prefix scan is structurally blind to them. The entries below are the `dropoff_pre_arrival` (priority 73) id set — the same ids, the same masks — so one customer redacts to one hex everywhere. Capture-only: this rule parses none of these nodes, so the parse goldens are byte-identical. Genuine summary frames (the committed corpus) carry none of these ids, so the block is inert there. Deliberately NOT redacted: `order_contents_header_title` (the merchant — driver-owned, not PII), `order_item_name` (catalog item), and every pay node.",
+          "comment": "#910 V1 — this rule shipped with NO redact block and it is the HIGHEST-severity site of the 07-29 pull: 4 of the 8 fielded `delivery_summary_collapsed` envelopes are not the pay-breakdown card at all but the DROP-OFF card (the old text-only require matched live sheets; #935 tightens recognition, retaining this redact set for combined frames with a receipt rendered over a live card), so they carry the full customer block — `user_name`, `address_line_1` (house number + street), `address_line_2` (city/ST/ZIP), the dasher instruction body and the customer's per-item note — all raw on a RECOGNIZED envelope. `CustomerTextMarkers` cannot own any of it: DoorDash renders this block as SPLIT nodes (the 'Delivery for' lead-in is its own `user_name_label` sibling), so the name/address nodes are BARE and a text-prefix scan is structurally blind to them. The entries below are the `dropoff_pre_arrival` (priority 73) id set — the same ids, the same masks — so one customer redacts to one hex everywhere. Capture-only: this rule parses none of these nodes, so the parse goldens are byte-identical. Genuine summary frames (the committed corpus) carry none of these ids, so the block is inert there. Deliberately NOT redacted: `order_contents_header_title` (the merchant — driver-owned, not PII), `order_item_name` (catalog item), and every pay node.",
           "find": {
             "hasIdSuffix": "user_name"
           },
@@ -2229,12 +2241,7 @@
       },
       "require": {
         "all": [
-          {
-            "any": [
-              { "allTextContains": "this offer" },
-              { "allTextContains": "delivery complete" }
-            ]
-          },
+          { "allTextContains": "this offer" },
           {
             "any": [
               { "allTextContains": "this dash so far" },
@@ -2272,7 +2279,7 @@
           "exists": { "hasIdSuffix": "complete_delivery_steps_button" }
         }
       ],
-      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on). #935: post:task is a lifecycle flow, so a false receipt claim can complete a live task; this is not merely a capture label. The coordinator's census of ~250 fielded collapsed receipts (2026-07-03 through 2026-10-11), plus the corpus, found BOTH 'This offer' AND 'This dash so far' on EVERY genuine receipt: the 2026-01-28 id-bearing renders, 8.93.7 id-less renders (#1029), and every 8.9x-8.101.8 render since. The legacy final_value/expandable_view/earnings_ticker ids vanished after 2026-08-02; 'delivery complete' appeared on NO capture (a dead alternative retained for compatibility). Require both text sections, with final_value as a legacy rollback alternative to the dash-total section. The four #910 misclassifications (2026-07-28 20:16-20:35) were LIVE drop-off sheets carrying 'This offer' but no 'This dash so far'. Reject drop_off_bottom_sheet_container and complete_delivery_steps_button independently at rule level (#1222), so a combined frame carrying receipt text still cannot claim the live customer card. Keep all seven existing rejects and the #564 scar tissue above.",
+      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on). #935: post:task is a lifecycle flow, so a false receipt claim can complete a live task; this is not merely a capture label. The coordinator's census of ~250 fielded collapsed receipts (2026-07-03 through 2026-10-11), plus the corpus, found BOTH 'This offer' AND 'This dash so far' on EVERY genuine receipt: the 2026-01-28 id-bearing renders, 8.93.7 id-less renders (#1029), and every 8.9x-8.101.8 render since. The legacy final_value/expandable_view/earnings_ticker ids vanished after 2026-08-02; 'delivery complete' appeared on NO capture, so #935 r2 removes that dead alternative. Require both text sections, with final_value as a legacy rollback alternative to the dash-total section. The four #910 misclassifications (2026-07-28 20:16-20:35) were LIVE drop-off sheets carrying 'This offer' but no 'This dash so far'. Apply an independent top-level reject for drop_off_bottom_sheet_container and complete_delivery_steps_button, so a combined frame carrying receipt text still cannot claim the live customer card. Keep all seven existing rejects and the #564 scar tissue above.",
       "parse": {
         "as": "post_task",
         "fields": {
