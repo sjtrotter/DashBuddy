@@ -18,49 +18,48 @@ data class PendingStoreLeg(
     val storeName: String?,
     val miles: Double,
     /**
-     * The odometer reading at which this to-store leg CLOSED (the `PICKUP_ARRIVED` odo; the LATEST on a
-     * re-arrival accumulation). The ordering marker a legacy-basis completion uses to retire the
-     * pending store legs — SESSION-WIDE, any job — whose closure is at/before it (#688 review Fix 1 +
-     * re-verify widening): the legacy span is a session-level partition delta (prevDrop→completion,
-     * regardless of job), so any leg closed inside it, including a cross-job add-on's, is already
-     * inside that span and a later drop must not re-claim it per-leg — that was the mixed-basis
-     * double-count. Nullable-with-default: an old persisted `legStateJson` blob (a mid-upgrade
-     * in-flight session) decodes this as null, and a null / unknown closure order is treated
-     * conservatively as "preceded" (retire → per-row under-attribution, never a double-count). Never
-     * an INFO+ log surface (P7).
+     * Latest arrival odometer for this leg. Preserves #688's conservative legacy-completion
+     * retirement: closed store legs at/before that completion are retired session-wide. Unknown
+     * closure order also retires. #1108 budgets independently cap the eventual mileage allocation.
      */
     val closedAtOdometer: Double? = null,
 )
 
 /**
- * The per-session per-leg mileage accumulator (#688 phase B) — folded from the lifecycle
- * `metadata.odometer` stamps and consumed at `DELIVERY_COMPLETED` into `milesToStore`/`milesToDropoff`.
- *
- * [prevLegOdometer] is the current leg anchor (the odometer reading a new leg is measured from),
- * advanced by the enumerated anchor-event set (DASH_START / PICKUP_ARRIVED / PICKUP_CONFIRMED /
- * DELIVERY_ARRIVED / DELIVERY_CONFIRMED / DELIVERY_COMPLETED). [pendingStoreLegs] queues closed
- * to-store legs awaiting their drop; [pendingDropoffLegs] maps a drop's own `taskId` to its
- * to-dropoff leg miles (unambiguous — the drop consumes its own key).
- *
- * **Persisted with the session row** (`session_records.legStateJson`, [LegStateCodec]) because these
- * pending legs describe drops that have NOT yet completed and so cannot be re-derived from record
- * rows the way `prevDropOdometer`/`deliveredJobIds` are — a batch-boundary rehydration must restore
- * them or incremental folding would diverge from a from-zero refold (the #703 determinism class).
- *
- * **Bounded ingestion (Principle 6):** both collections are capped at [MAX_PENDING] with deterministic
- * drop-oldest, so a pathological event stream (many arrivals, no completions) cannot grow the
- * persisted context unboundedly. In the fielded shape both drain on every completion, so the cap is
- * never approached.
+ * Positive-delta mileage B and already allocated mileage C, re-anchored on every reading (#1108).
+ * Initial inbound anchor = previous drop or dash start, independent of the current leg anchor.
+ * [anchored] records whether that inbound anchor existed; otherwise the first reading seeds B = 0.
+ */
+@Serializable
+data class JobMileageBudget(
+    val lastOdometer: Double,
+    val measured: Double = 0.0,
+    val allocated: Double = 0.0,
+    val anchored: Boolean = true,
+)
+
+/**
+ * Bounded session allocation state, persisted in `session_records.legStateJson`.
+ * Pending legs drop oldest at [MAX_PENDING]; budgets evict the oldest delivered job at
+ * [MAX_JOB_BUDGETS]. Live-only saturation refuses new jobs. Session allocation and completion time
+ * survive page boundaries.
  */
 @Serializable
 data class LegState(
     val prevLegOdometer: Double? = null,
     val pendingStoreLegs: List<PendingStoreLeg> = emptyList(),
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
+    val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),
+    val completionHighWater: Long? = null,
+    /** Positive deltas across session odometer events; resets re-anchor without subtracting miles. */
+    val sessionMeasured: Double = 0.0,
+    /** Sum of machine completion allocations, bounded by [sessionMeasured]. */
+    val sessionAllocated: Double = 0.0,
 ) {
     companion object {
         /** Bounded-ingestion cap on each pending collection (drop-oldest on overflow). */
         const val MAX_PENDING = 32
+        const val MAX_JOB_BUDGETS = 128
     }
 }
 
@@ -70,7 +69,7 @@ data class LegState(
  * `toContext` mapping routes through ONE definition.
  *
  * **Fail-closed decode:** a null/blank/malformed blob degrades to an EMPTY [LegState] — the session's
- * rows fall back to the legacy partition delta, never a crash and never wrong money. This is the
+ * allocation state is unavailable until another defensible anchor is observed. This is the
  * spec-level guard that makes a garbage `legStateJson` column safe.
  */
 object LegStateCodec {

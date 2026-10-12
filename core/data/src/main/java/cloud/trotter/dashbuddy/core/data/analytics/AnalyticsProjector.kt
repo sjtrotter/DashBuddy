@@ -821,7 +821,6 @@ class AnalyticsProjector @Inject constructor(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
             receiptedJobIds = analyticsDao.receiptedJobIdsInSession(sessionId).toSet(),
             prevDropOdometer = lastDelivery?.odometerAtCompletion,
-            prevDropAt = lastDelivery?.completedAt,
             lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
             lastEvaluatedFuelPerMile = analyticsDao.lastOfferFuelPerMileInSession(sessionId),
             lastEvaluatedNonFuelPerMile = analyticsDao.lastOfferNonFuelPerMileInSession(sessionId),
@@ -908,7 +907,6 @@ class AnalyticsProjector @Inject constructor(
         deliveredJobIds: Set<String> = emptySet(),
         receiptedJobIds: Set<String> = emptySet(),
         prevDropOdometer: Double? = null,
-        prevDropAt: Long? = null,
         lastEvaluatedCostPerMile: Double? = null,
         lastEvaluatedFuelPerMile: Double? = null,
         lastEvaluatedNonFuelPerMile: Double? = null,
@@ -933,7 +931,6 @@ class AnalyticsProjector @Inject constructor(
         deliveredJobIds = deliveredJobIds,
         receiptedJobIds = receiptedJobIds,
         prevDropOdometer = prevDropOdometer,
-        prevDropAt = prevDropAt,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
         lastEvaluatedFuelPerMile = lastEvaluatedFuelPerMile,
         lastEvaluatedNonFuelPerMile = lastEvaluatedNonFuelPerMile,
@@ -1041,6 +1038,7 @@ class AnalyticsProjector @Inject constructor(
          */
         // 12: #1133 — pay-less rows carry −cost as net
         // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
-        private const val PROJECTOR_VERSION = 13
+        // #1108: per-job mileage budgets and session completion high-water allocation.
+        private const val PROJECTOR_VERSION = 14
     }
 }

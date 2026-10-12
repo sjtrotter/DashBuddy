@@ -48,6 +48,8 @@ data class DeliveryTotalsRow(
     val fuelCost: Double?,
     /** Σ frozen non-fuel dollars = `SUM(frozenNonFuelPerMile × realizedMiles)`; same null-coverage rule (#659). */
     val nonFuelCost: Double?,
+    /** Pay excluded from SUM(netProfit); never an inferred mileage cost. */
+    val payWithoutNet: Double = 0.0,
 )
 
 /** Per-platform delivery totals (GROUP BY platform). */
@@ -63,6 +65,8 @@ data class PlatformDeliveryTotalsRow(
     val fuelCost: Double?,
     /** Σ frozen non-fuel dollars for the platform's period rows (#659). */
     val nonFuelCost: Double?,
+    /** Pay excluded from SUM(netProfit); never an inferred mileage cost. */
+    val payWithoutNet: Double = 0.0,
 )
 
 /**

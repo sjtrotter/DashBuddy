@@ -166,3 +166,39 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
     }
     return copy(legState = ls.copy(pendingDropoffLegs = merged))
 }
+
+/**
+ * The first odometer-bearing pickup/dropoff lifecycle event (including completion) captures the
+ * inbound anchor = previous drop or dash start (`prevDropOdometer ?: startOdometer`). Leg arrivals
+ * and confirmations do not change this seed. If another job has not completed yet, its miles can
+ * overlap this budget; the session cap bounds total allocations. Without an inbound anchor, the
+ * reading itself starts measurement and `anchored` is false.
+ * Each reading adds only a positive delta, then re-anchors even after a reset. At capacity
+ * (128 live budgets in ONE dash — far beyond any fielded dash) the oldest job with a completed
+ * drop makes room; if that job still had an unfinished sibling, the sibling later folds UNKNOWN
+ * (null miles) unless another job with a completed drop can be evicted to re-admit it — the same
+ * fail-null outcome the new job would have had without the eviction. Never an over-count.
+ */
+internal fun SessionFoldContext.measureJob(jobId: String, odo: Double?): SessionFoldContext {
+    if (odo == null || !odo.isFinite()) return this
+    var budgets = legState.jobMileageBudgets
+    val existing = budgets[jobId]
+    if (existing == null && budgets.size >= LegState.MAX_JOB_BUDGETS) {
+        val oldestDelivered = budgets.keys.firstOrNull { it in deliveredJobIds } ?: return this
+        budgets = budgets - oldestDelivered
+    }
+    val anchor = prevDropOdometer ?: startOdometer
+    val budget = existing ?: JobMileageBudget(anchor ?: odo, anchored = anchor != null)
+    val measured = budget.measured + (odo - budget.lastOdometer).coerceAtLeast(0.0)
+    return copy(legState = legState.copy(jobMileageBudgets = budgets +
+        (jobId to budget.copy(lastOdometer = odo, measured = measured))))
+}
+
+/** Measure before dispatch so every completion can spend only the session's remaining mileage. */
+internal fun SessionFoldContext.measureSession(odo: Double?): SessionFoldContext {
+    if (odo == null || !odo.isFinite()) return this
+    val anchor = lastOdometer ?: startOdometer ?: odo
+    return copy(lastOdometer = odo, legState = legState.copy(
+        sessionMeasured = legState.sessionMeasured + (odo - anchor).coerceAtLeast(0.0),
+    ))
+}

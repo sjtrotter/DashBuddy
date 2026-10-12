@@ -113,6 +113,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [active] 🆕 NEW — a 2-drop job's rows never exceed its odometer span and never show negative minutes (#1108)
+
 - [active] **🆕 NEW — a live drop-off sheet never shows as a receipt (#935).** Check that no
   `delivery_summary_collapsed` capture carries the customer card (`drop_off_bottom_sheet_container`
   or `complete_delivery_steps_button`). Every real receipt must still be recognized, and

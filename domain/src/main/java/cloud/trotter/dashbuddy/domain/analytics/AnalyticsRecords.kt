@@ -49,6 +49,7 @@ data class DeliveryRecord(
     val milesToStore: Double? = null,
     /** Machine-computed to-dropoff driving leg (#688 phase B); same provenance rules as [milesToStore]. */
     val milesToDropoff: Double? = null,
+    val milesBasis: MilesBasis = MilesBasis.UNKNOWN,
     /**
      * True when a driver DELIVERY_SESSION_ASSIGN (#660 piece 2) attributed this row to [sessionId] —
      * an orphan the driver categorized into its real dash. Drives the drill-down's "assigned by you"

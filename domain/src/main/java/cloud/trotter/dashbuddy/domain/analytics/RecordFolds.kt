@@ -2,6 +2,9 @@ package cloud.trotter.dashbuddy.domain.analytics
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
@@ -142,25 +145,14 @@ data class DeliveryFold(
      */
     val payoutStoreForms: List<String>? = null,
     /**
-     * Machine-computed to-store driving leg (#688 phase B) — the claimed [PendingStoreLeg]'s miles for
-     * this drop's job (exact NORMALIZED-chain store-form match, else FIFO within the job, else null).
-     * Stamped ONLY on a leg-sum row (`milesToDropoff != null`); a LEGACY row (missed arrival) stamps
-     * null and instead retires the SESSION's already-closed store legs — any job, since the legacy span
-     * is a session-level partition delta (#688 review Fix 1/Fix 4 + re-verify widening) — so a lone
-     * store leg never rides an otherwise-untouched legacy row. Provenance only: a driver `newMiles`
-     * correction rewrites [realizedMiles] but NEVER these leg columns, so `milesToStore + milesToDropoff`
-     * may then ≠ `realizedMiles` — that inequality is the visible edit trail. Null on a
-     * receipt-less/anchorless/legacy leg and all pre-phase-B history.
+     * Claimed measured store leg (normalized store match, else FIFO, once per leg). Legacy drops
+     * stamp null and retain the existing closed-store-leg retirement policy. Provenance survives
+     * budget capping and driver edits; a leg-sum mismatch alone does not identify a driver edit.
      */
     val milesToStore: Double? = null,
-    /**
-     * Machine-computed to-dropoff driving leg (#688 phase B) — this drop's own `taskId` entry in the
-     * pending dropoff legs (unambiguous). Null when no odometer-bearing `DELIVERY_ARRIVED` preceded the
-     * completion (missed arrival, phantom-class completion, all pre-phase-B history). When non-null,
-     * `realizedMiles == (milesToStore ?: 0) + milesToDropoff` (the leg-sum rule, §2); when null the row
-     * keeps the legacy partition delta.
-     */
+    /** Measured arrival leg for this task; allocation is capped by its job budget (#1108). */
     val milesToDropoff: Double? = null,
+    val milesBasis: MilesBasis = MilesBasis.UNKNOWN,
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
     val odometerAtArrival: Double? = null,
@@ -419,7 +411,53 @@ data class OfferOutcomeCorrectionFold(
  */
 object RecordFolds {
 
+    /**
+     * A correction describes a past row; its write-time odometer (if any) never measures
+     * the session or a job budget. Field corrections carry no odometer stamp today;
+     * their handlers retain their own liveness advances.
+     */
+    private val BOOKKEEPING_EVENTS = setOf(
+        AppEventType.DELIVERY_RECEIPT_REPRICE,
+        AppEventType.PAY_ADJUSTMENT,
+        AppEventType.DELIVERY_ADJUSTMENT,
+        AppEventType.MANUAL_DELIVERY,
+        AppEventType.DELIVERY_SESSION_ASSIGN,
+        AppEventType.OFFER_OUTCOME_CORRECTION,
+        AppEventType.SESSION_REPORT_CORRECTION,
+    )
+
     fun foldEvent(
+        event: SequencedAppEvent,
+        context: SessionFoldContext?,
+        currentCostPerMile: Double?,
+    ): FoldOutcome {
+        val e = event.event
+        if (e.type in BOOKKEEPING_EVENTS) {
+            return foldMeasuredEvent(event, context, currentCostPerMile)
+        }
+        val sid = e.sessionId
+        val odo = event.metadata?.odometer
+        val jobId = when (val payload = e.payload) {
+            is PickupPayload -> payload.jobId
+            is DeliveryPayload -> payload.jobId
+            is TaskUnassignedPayload -> payload.jobId
+            is JobAcceptMismatchPayload -> payload.jobId
+            else -> null
+        }
+        val jobContext = if (sid != null && jobId != null) {
+            resolveContext(context, sid, e.occurredAt).measureJob(jobId, odo)
+        } else context
+        val measuredContext = jobContext?.takeIf {
+            it.sessionId == (sid ?: when (val payload = e.payload) {
+                is SessionStartPayload -> payload.sessionId
+                is SessionStopPayload -> payload.sessionId
+                else -> null
+            })
+        }?.measureSession(odo) ?: jobContext
+        return foldMeasuredEvent(event, measuredContext, currentCostPerMile)
+    }
+
+    private fun foldMeasuredEvent(
         event: SequencedAppEvent,
         context: SessionFoldContext?,
         currentCostPerMile: Double?,
@@ -472,7 +510,7 @@ object RecordFolds {
             ?: return FoldOutcome(context = context, skip = "DASH_START: missing/malformed payload")
         val sid = e.sessionId ?: p.sessionId
         val platform = Platform.fromName(p.platform) ?: Platform.Unknown
-        val odo = event.metadata?.odometer
+        val odo = event.metadata?.odometer?.takeIf { it.isFinite() }
         // A RECOVERY (or any duplicate) re-start of a session that was ALREADY STARTED WITH A REAL
         // PLATFORM must NOT clobber the original startedAt/platform/startOdometer — keep the earlier
         // anchor, only fill a still-null odometer and advance liveness. Not a fresh session ⇒ no
@@ -489,6 +527,9 @@ object RecordFolds {
                     // Already a real start — keep its original startSource; only fill if somehow null.
                     startSource = context.startSource ?: p.source,
                     // #688: keep the running leg anchor; only fill it if the placeholder had none.
+                    // No session re-base here (#1108 r3): the session was ALREADY started, so every
+                    // mile measured since is in-dash mileage — a recovery re-start that first carries
+                    // an odometer must not erase it.
                     legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
                 ),
             )
@@ -508,7 +549,15 @@ object RecordFolds {
                     started = true,
                     startSource = p.source,
                     // #688: the placeholder's counters/liveness carry over; seed the leg anchor if unset.
-                    legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
+                    legState = context.legState.copy(
+                        prevLegOdometer = context.legState.prevLegOdometer ?: odo,
+                        // #1108: the placeholder measured a PRE-start reading; re-base the session
+                        // measurement at the start odometer (after measureSession ran), keeping only
+                        // what a pre-start completion already allocated.
+                        sessionMeasured = if (context.startOdometer == null && odo != null) {
+                            context.legState.sessionAllocated
+                        } else context.legState.sessionMeasured,
+                    ),
                 ),
                 freshSession = true,
             )

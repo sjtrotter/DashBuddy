@@ -26,13 +26,13 @@ import cloud.trotter.dashbuddy.domain.format.Formats
  *
  * **This carries over the retired true-net waterfall's coverage guard verbatim (#659).** The frozen
  * fuel/non-fuel split is only trustworthy for a window when both sums are present AND they reconcile
- * against the window's derived operating cost (`gross − net`) within tolerance: a window that mixes
+ * against the window's derived operating cost (`gross − net − payWithoutNet`) within tolerance. A window mixing
  * `OFFER_FROZEN` rows with pre-split fallback rows has the split covering only the frozen subset, so
  * the sums fall short of the real cost — that shortfall IS the coverage signal, no separate flag
  * needed. What changed is only the SHAPE the failure degrades into: the old surface dropped from a
  * 4-bar waterfall to a 3-bar one, this one drops from a 3-segment bar (kept / gas / wear) to a
  * 2-segment bar (kept / car costs). The arithmetic, the tolerance, and the "never fabricate a split"
- * rule are unchanged.
+ * rule are unchanged. Pay on null-net rows is excluded from derived cost (#1108).
  */
 object MoneyWentModel {
 
@@ -43,8 +43,8 @@ object MoneyWentModel {
     /**
      * The window's money, split the way §4.1 states it.
      *
-     * [carCosts] is the DERIVED cost `gross − net` — the same quantity the waterfall's 3-step fallback
-     * showed — which CAN go negative in the reported-under-delivered shape (#662-F1). The signed value
+     * [carCosts] is the DERIVED cost `gross − net − payWithoutNet`: missing net must not turn pay into
+     * car costs. It CAN go negative in the reported-under-delivered shape (#662-F1). The signed value
      * is kept honest here and the bar renders that segment at zero width rather than inverting.
      *
      * [gas]/[wear] are non-null **only** when the coverage guard passes; a null pair is the instruction
@@ -76,7 +76,8 @@ object MoneyWentModel {
     fun from(economics: PeriodEconomics): Split {
         val gross = economics.grossEarnings
         val net = economics.netProfit
-        val cost = gross - net
+        // SUM(net) skips null-net rows while gross retains their pay. That pay is not car costs.
+        val cost = gross - net - economics.payWithoutNet
         val fuel = economics.fuelCost
         val nonFuel = economics.nonFuelCost
         val covered = fuel != null && nonFuel != null &&

@@ -10,6 +10,13 @@ class LegStateCodecTest {
     fun `round-trips a populated leg state`() {
         val state = LegState(
             prevLegOdometer = 712.45,
+            completionHighWater = 1234567L,
+            sessionMeasured = 9.0,
+            sessionAllocated = 3.2,
+            jobMileageBudgets = mapOf(
+                "J1" to JobMileageBudget(712.45, 7.45, 3.2),
+                "J2" to JobMileageBudget(712.45, anchored = false),
+            ),
             pendingStoreLegs = listOf(
                 PendingStoreLeg("PA", "J1", "Bill Miller BBQ", 0.22),
                 PendingStoreLeg("PB", "J1", null, 0.16),

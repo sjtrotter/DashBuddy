@@ -47,6 +47,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.MilesBasis
 import cloud.trotter.dashbuddy.domain.analytics.PayBasis
 import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
@@ -320,9 +321,10 @@ private fun DeliveriesCard(
         if (deliveries.isEmpty()) {
             EmptyRow(stringResource(R.string.session_detail_no_deliveries_yet))
         } else {
+            val dropsPerJob = deliveries.groupingBy { it.jobId }.eachCount()
             deliveries.forEachIndexed { index, delivery ->
                 if (index > 0) Spacer(Modifier.height(14.dp))
-                DeliveryRow(delivery, onAdjust = { onAdjust(delivery) })
+                DeliveryRow(delivery, deliveredDrops = dropsPerJob.getValue(delivery.jobId), onAdjust = { onAdjust(delivery) })
             }
         }
         if (showAddButton) {
@@ -333,7 +335,7 @@ private fun DeliveriesCard(
 }
 
 @Composable
-private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
+private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust: () -> Unit) {
     val c = AppTheme.colors
     // The whole row is the tap target (the dev's tap-a-delivery entry) AND the pencil opens the same
     // edit dialog — both route to [onAdjust].
@@ -356,6 +358,23 @@ private fun DeliveryRow(delivery: DeliveryRecord, onAdjust: () -> Unit) {
             )
             travelLine(delivery)?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
+            }
+            val mileageDisclosure = when {
+                delivery.milesBasis == MilesBasis.BUDGET_CAPPED ||
+                    (delivery.realizedMinutes == 0.0 && deliveredDrops > 1) -> stringResource(
+                    R.string.session_detail_drop_allocation,
+                    delivery.milesToStore?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
+                    delivery.milesToDropoff?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
+                )
+                delivery.milesBasis == MilesBasis.LEGACY_SPAN -> stringResource(R.string.session_detail_miles_legacy_span)
+                else -> null
+            }
+            if (mileageDisclosure != null) {
+                Text(
+                    text = mileageDisclosure,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.text3,
+                )
             }
             // #660 piece 2 disclosure: a driver-categorized orphan (parity with the OFFER_PAY
             // "est. offer pay" disclosure family) — this row was assigned here by the driver, not captured.

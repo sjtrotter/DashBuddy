@@ -295,6 +295,7 @@ interface AnalyticsDao {
     @Query(
         """SELECT COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
+                  COALESCE(SUM(CASE WHEN netProfit IS NULL THEN realizedPay ELSE 0 END), 0) AS payWithoutNet,
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs,
                   SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,
@@ -343,6 +344,7 @@ interface AnalyticsDao {
         """SELECT platform,
                   COALESCE(SUM(realizedPay), 0) AS pay,
                   COALESCE(SUM(netProfit), 0) AS net,
+                  COALESCE(SUM(CASE WHEN netProfit IS NULL THEN realizedPay ELSE 0 END), 0) AS payWithoutNet,
                   COUNT(*) AS deliveries,
                   COUNT(DISTINCT jobId) AS jobs,
                   SUM(frozenFuelPerMile * realizedMiles) AS fuelCost,

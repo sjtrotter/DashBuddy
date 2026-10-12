@@ -12,13 +12,13 @@ import kotlin.math.roundToLong
  * **Everything here is MEASURED, not estimated.** [onlineMillis] is Σ session durations,
  * [deliveryMinutes] is Σ per-delivery **partition deltas** (the time gap since the previous drop, or
  * `DASH_START` for the first), and [miles] is the session odometer delta. [deliveryMiles] is Σ
- * per-delivery `realizedMiles`, which since #688 phase B is the per-**leg** sum (to-store + to-dropoff)
- * on a leg-measured row and the legacy partition delta otherwise — so the mileage a delivery claims is
- * bounded by its own driving legs, not the full inter-drop span. The remainder [unattributedMiles]
- * (deadhead) therefore grows on leg-measured rows by the arrival→completion dwell/drift AND by any
- * legs retired at a legacy-basis completion (the #688 review Fix 1 one-sided guard: Σ per-drop miles ≤
- * the session span, undershoot expected, never over). [deliveryMinutes] is unchanged (still the full
- * inter-drop time delta). Both remainders ([unattributedMillis] / [unattributedMiles]) stay honestly
+ * per-delivery `realizedMiles`: when `milesToDropoff` is known, the leg sum (to-store + to-dropoff)
+ * capped by the job's and the session's remaining budget; otherwise the job's remaining budget,
+ * also capped by the session's. Budgets accumulate positive odometer deltas (#1108). Untracked or
+ * unanchored rows with neither measured travel nor legs stay unknown. The remainder [unattributedMiles] includes
+ * arrival→completion dwell/drift, retired legs and unallocated travel. [deliveryMinutes] uses the
+ * session completion high-water mark, so a later-folded earlier sibling receives zero minutes.
+ * Both remainders ([unattributedMillis] / [unattributedMiles]) stay honestly
  * "not attributed to any delivery" — never a re-estimate.
  *
  * **Deadline coverage is explicit** (Principle 5/6 honesty): [deliveriesWithDeadline] is only the
@@ -44,7 +44,7 @@ data class TimeEconomics(
     val deliveryMinutes: Double?,
     /** Session odometer miles for the period (Σ per-session odometer delta). */
     val miles: Double,
-    /** Σ per-delivery realized miles (partition deltas); null when nothing measured. */
+    /** Σ per-delivery allocated miles, capped by job and session budgets; null when nothing measured. */
     val deliveryMiles: Double?,
     /** Deliveries that carried a captured deadline — the on-time denominator. */
     val deliveriesWithDeadline: Int,
