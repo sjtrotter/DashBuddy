@@ -142,25 +142,14 @@ data class DeliveryFold(
      */
     val payoutStoreForms: List<String>? = null,
     /**
-     * Machine-computed to-store driving leg (#688 phase B) — the claimed [PendingStoreLeg]'s miles for
-     * this drop's job (exact NORMALIZED-chain store-form match, else FIFO within the job, else null).
-     * Stamped ONLY on a leg-sum row (`milesToDropoff != null`); a LEGACY row (missed arrival) stamps
-     * null and instead retires the SESSION's already-closed store legs — any job, since the legacy span
-     * is a session-level partition delta (#688 review Fix 1/Fix 4 + re-verify widening) — so a lone
-     * store leg never rides an otherwise-untouched legacy row. Provenance only: a driver `newMiles`
-     * correction rewrites [realizedMiles] but NEVER these leg columns, so `milesToStore + milesToDropoff`
-     * may then ≠ `realizedMiles` — that inequality is the visible edit trail. Null on a
-     * receipt-less/anchorless/legacy leg and all pre-phase-B history.
+     * Claimed measured store leg (normalized store match, else FIFO, once per leg). Legacy drops
+     * stamp null and retain the existing closed-store-leg retirement policy. Provenance survives
+     * budget capping and driver edits; a leg-sum mismatch alone does not identify a driver edit.
      */
     val milesToStore: Double? = null,
-    /**
-     * Machine-computed to-dropoff driving leg (#688 phase B) — this drop's own `taskId` entry in the
-     * pending dropoff legs (unambiguous). Null when no odometer-bearing `DELIVERY_ARRIVED` preceded the
-     * completion (missed arrival, phantom-class completion, all pre-phase-B history). When non-null,
-     * `realizedMiles == (milesToStore ?: 0) + milesToDropoff` (the leg-sum rule, §2); when null the row
-     * keeps the legacy partition delta.
-     */
+    /** Measured arrival leg for this task; allocation is capped by its job budget (#1108). */
     val milesToDropoff: Double? = null,
+    val milesBasis: String = MilesBasis.UNKNOWN,
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
     val odometerAtArrival: Double? = null,

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.database
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -57,6 +58,21 @@ class SchemaVersionGuardTest {
                 "(exportSchema) → add the AutoMigration + its MigrationTestHelper case.",
             schemaFile.isFile,
         )
+    }
+
+    @Test
+    fun mileageAllocationBasisHasNonNullUnknownDefault() {
+        val schema = Json.parseToJsonElement(File(schemaDir, "19.json").readText())
+            .jsonObject.getValue("database").jsonObject
+        val delivery = schema.getValue("entities").jsonArray.single {
+            it.jsonObject.getValue("tableName").jsonPrimitive.content == "delivery_records"
+        }.jsonObject
+        val basis = delivery.getValue("fields").jsonArray.single {
+            it.jsonObject.getValue("columnName").jsonPrimitive.content == "milesBasis"
+        }.jsonObject
+        assertEquals("TEXT", basis.getValue("affinity").jsonPrimitive.content)
+        assertEquals("true", basis.getValue("notNull").jsonPrimitive.content)
+        assertEquals("'UNKNOWN'", basis.getValue("defaultValue").jsonPrimitive.content)
     }
 
     @Test

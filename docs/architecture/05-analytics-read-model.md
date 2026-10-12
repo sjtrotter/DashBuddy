@@ -497,14 +497,45 @@ drop's own taskId, re-arrivals accumulate; PICKUP_CONFIRMED/DELIVERY_CONFIRMED/D
 advance the anchor; null-odometer anchors don't advance, so miles roll forward; per-leg floor at 0)
 into `delivery_records.{milesToStore,milesToDropoff}`. A drop's `milesToStore` claims one store leg
 of its job (exact store-form match, else FIFO; claim-once — a shared-store sibling gets null, no
-fabricated split), and `realizedMiles` becomes the leg SUM only when `milesToDropoff != null`, so
-per-drop net redistributes within a stack while session/period/IRS/CSV mileage totals stay
-odometer-span-anchored. Pending legs describe not-yet-completed drops, so the accumulator persists
-as `session_records.legStateJson` (`LegState`/`LegStateCodec` in `:domain`, fail-closed decode →
-legacy delta, `MAX_PENDING` 32 bounded) — that persistence is what keeps incremental ≡ from-zero
-refold across the projector's 500-event page boundaries. A driver `newMiles` edit wins `realizedMiles`/net (log-order precedence);
-the machine leg columns are provenance and are never rewritten, so leg-sum ≠ realizedMiles IS the
-visible edit trail. CSV gains `miles_to_store`/`miles_to_dropoff`. Related: #653/#655/#703.
+fabricated split). Measured legs stay as provenance, including the existing legacy completion's
+retirement of already-closed store legs; they need not sum to the allocated miles.
+
+**Forward allocation (#1108, Room v18→v19, `PROJECTOR_VERSION` 13→14):** each tracked job has an
+immutable `originOdometer`, a non-decreasing measured span B, and cumulative allocation C in
+`LegState.jobMileageBudgets`. The first odometer-bearing PICKUP_ARRIVED / PICKUP_CONFIRMED /
+DELIVERY_ARRIVED / DELIVERY_CONFIRMED / DELIVERY_COMPLETED initializes the origin from the pre-event
+leg anchor (previous completion/session start fallback for completion-only history). This includes
+the inbound leg; absent any earlier anchor, the first reading starts measurement at zero. Each such
+job event updates B = max(B, odo − origin, 0). At completion R = max(0, B − C): an arrived drop
+receives min(measured leg sum, R), a legacy drop receives R, then C increases by that allocation.
+No earlier row changes. By induction, each job's Σ machine allocations ≤ B. The bounded map caps at
+32 jobs and NEVER evicts: new jobs after saturation remain UNKNOWN/null, never a restarted budget.
+Pending legs retain their separate drop-oldest cap. All this state survives `legStateJson` boundaries.
+`delivery_records.milesBasis` records LEG_SUM / LEGACY_SPAN / BUDGET_CAPPED / UNKNOWN (non-null,
+default UNKNOWN); no existing mileage-basis field existed. Net uses allocated miles and frozen cpm.
+
+In the job …-500 fixture, A's arrival precedes both completions. **B→A in sequence order:** legacy B
+receives 8.817050829 mi; A retains its 5.998 mi arrival leg but receives 0 mi (BUDGET_CAPPED).
+**A→B:** A claims the pending store leg, receives min(6.390 mi, R), and legacy B receives the
+remainder. Both orders conserve the same job span. The separate 9.507525650 mi job is unchanged;
+repaired session allocations total 18.324576479 mi ≤ the 18.700151870 mi session span.
+Session/period/IRS/CSV mileage totals remain odometer-span-anchored. Driver `newMiles` edits win
+realized miles/net on event replay; neither measured legs nor machine basis is rewritten.
+
+**Per-drop minutes (#1108):** `SessionFoldContext.completionHighWater` is the maximum machine
+completedAt folded so far, persisted in `legStateJson`. Allocate max(0, completedAt −
+max(startedAt, prior high-water)), then advance the high-water. These are disjoint allocations of
+session time, not each drop's duration; for in-session completions their sum cannot exceed the session
+span. B→A allocates 20.61/0 min; A→B allocates A's elapsed time followed by the remainder. A zero-minute
+sibling adds nothing to #983's while-working denominator. MANUAL rows do not advance this anchor.
+
+**Residuals:** B→A attribution is coarse: the first folded legacy sibling takes the measured job
+budget and elapsed session time. A future job-close rebalance event is the accurate attribution
+follow-up; this fold never rewrites frozen siblings. Odometer resets and driver miles edits are exempt
+from the session-span comparison; resets never decrease a tracked job's B or make allocations negative.
+Overlapping jobs still have separate budgets, so the per-job invariant alone is not a universal
+cross-job session bound. `WorkGaps` is unchanged: siblings can still produce overlapping gap deductions
+(#983 class). CSV retains its measured `miles_to_store`/`miles_to_dropoff` columns. Related: #653/#655/#703.
 **Orphan-offer resolution (#810 B2, Room v14→v15 additive `offer_records.outcomeResolved`,
 `PROJECTOR_VERSION` 7→8):** an accepted offer whose job produced no matching delivery (surfaced by
 the `JOB_ACCEPT_MISMATCH` tripwire) is resolved in two tiers, both write-only to the nullable

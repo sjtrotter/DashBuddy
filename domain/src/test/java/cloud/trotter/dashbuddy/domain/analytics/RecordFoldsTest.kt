@@ -75,6 +75,122 @@ class RecordFoldsTest {
         assertEquals(OfferQuality.UNKNOWN.name, row.quality)
     }
 
+    /** Fold every event across a serialization boundary, exactly as persisted page state is restored. */
+    private fun foldRestored(events: List<SequencedAppEvent>): Pair<List<FoldOutcome>, SessionFoldContext?> {
+        var ctx: SessionFoldContext? = null
+        val outcomes = events.map { event ->
+            val outcome = RecordFolds.foldEvent(event, ctx, cpm)
+            ctx = outcome.context?.let {
+                val restored = LegStateCodec.decode(LegStateCodec.encode(it.legState))
+                it.copy(legState = restored, completionHighWater = restored.completionHighWater)
+            }
+            ctx?.legState?.jobMileageBudgets?.values?.forEach {
+                assertTrue("induction: allocated <= measured", it.allocated <= it.measured + 1e-9)
+                assertTrue(it.allocated >= 0.0)
+            }
+            outcome.delivery?.realizedMinutes?.let { assertTrue(it >= 0.0) }
+            outcome
+        }
+        return outcomes to ctx
+    }
+
+    @Test
+    fun `1108 mixed basis arrival before legacy completion conserves both sequence orders`() {
+        for (legacyFirst in listOf(true, false)) {
+            val s = "2026-09-15"
+            val origin = 2963.070794114
+            val span = 8.817050829
+            val prefix = listOf(
+                dashStart(s, 0, origin),
+                pickupArrived(s, 100_000, "job-500", "pickup", "StoreX", origin + 0.392),
+                pickupConfirmed(s, 110_000, "job-500", "pickup", "StoreX", origin + 0.392),
+                deliveryArrived(s, 800_000, "job-500", "task-501", odo = origin + 6.390),
+            )
+            // Mint in sequence order; payload time of A is earlier even when A is minted second.
+            val completions = if (legacyFirst) listOf(
+                delivery(s, 1_236_600, "job-500", "task-503", totalPay = 10.0, odo = origin + span),
+                delivery(s, 809_331, "job-500", "task-501", totalPay = 10.0, odo = origin + span),
+            ) else listOf(
+                delivery(s, 809_331, "job-500", "task-501", totalPay = 10.0, odo = origin + 6.390),
+                delivery(s, 1_236_600, "job-500", "task-503", totalPay = 10.0, odo = origin + span),
+            )
+            val events = prefix + completions + listOf(
+                delivery(s, 2_000_000, "separate", "other", totalPay = 20.0,
+                    odo = origin + span + 9.507525650),
+                dashStop(s, 2_100_000, origin + 18.700151870, earnings = null),
+            )
+            val full = foldSession(events, currentCpm = cpm)
+            val restored = foldRestored(events)
+            assertEquals("incremental == full within this sequence order", full, restored)
+            val rows = full.first.mapNotNull { it.delivery }
+            val a = rows.single { it.taskId == "task-501" }
+            val b = rows.single { it.taskId == "task-503" }
+            assertEquals(5.998, a.milesToDropoff!!, 1e-9)
+            assertEquals(span, a.realizedMiles!! + b.realizedMiles!!, 1e-9)
+            assertEquals(20.61, a.realizedMinutes!! + b.realizedMinutes!!, 1e-9)
+            if (legacyFirst) {
+                assertEquals(span, b.realizedMiles, 1e-9)
+                assertEquals(0.0, a.realizedMiles, 0.0)
+                assertEquals(20.61, b.realizedMinutes, 1e-9)
+                assertEquals(0.0, a.realizedMinutes, 0.0)
+                assertEquals(MilesBasis.BUDGET_CAPPED, a.milesBasis)
+            } else {
+                assertEquals(0.392, a.milesToStore!!, 1e-9)
+                assertEquals(6.390, a.realizedMiles, 1e-9)
+                assertEquals(span - 6.390, b.realizedMiles, 1e-9)
+                assertEquals(MilesBasis.LEG_SUM, a.milesBasis)
+            }
+            assertEquals(MilesBasis.LEGACY_SPAN, b.milesBasis)
+            assertEquals(10.0 - a.realizedMiles * cpm, a.netProfit!!, 1e-9)
+            assertEquals(9.507525650, rows.last().realizedMiles!!, 1e-9)
+            assertEquals(18.324576479, rows.sumOf { it.realizedMiles!! }, 1e-9)
+            assertTrue(rows.sumOf { it.realizedMiles!! } <= 18.700151870)
+            val firstOnly = foldSession(prefix + completions.first(), currentCpm = cpm).first.last().delivery
+            assertEquals("second completion cannot rewrite first row", firstOnly, rows.first())
+        }
+    }
+
+    @Test
+    fun `1108 budgets keep measured high water across backwards odometers and resets`() {
+        val events = listOf(
+            dashStart("reset", 1_000, 100.0),
+            pickupArrived("reset", 2_000, "job", "p", "StoreX", 101.0),
+            ev(AppEventType.DELIVERY_CONFIRMED, "reset", 3_000,
+                DeliveryPayload(jobId = "job", taskId = "a", phaseStartedAt = 2_000), 108.0),
+            delivery("reset", 4_000, "job", "a", odo = 105.0),
+            delivery("reset", 500, "job", "b", odo = 90.0),
+            delivery("reset", 5_000, "job", "c", odo = 109.0),
+        )
+        val (outcomes, ctx) = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), outcomes to ctx)
+        assertEquals(listOf(8.0, 0.0, 1.0), outcomes.mapNotNull { it.delivery?.realizedMiles })
+        assertEquals(JobMileageBudget(100.0, 9.0, 9.0), ctx!!.legState.jobMileageBudgets["job"])
+        assertEquals(5_000L, ctx.completionHighWater)
+    }
+
+    @Test
+    fun `1108 saturated budgets never restart an old job and new jobs remain unknown`() {
+        val events = mutableListOf(dashStart("cap", 0, 100.0))
+        repeat(LegState.MAX_PENDING) { i ->
+            events += delivery("cap", (i + 1) * 1_000L, "j$i", "t$i", odo = 101.0 + i)
+        }
+        events += delivery("cap", 40_000, "overflow", "x", odo = 150.0)
+        events += pickupArrived("cap", 41_000, "overflow", "p", "StoreX", 151.0)
+        events += deliveryArrived("cap", 42_000, "overflow", "y", odo = 152.0)
+        events += delivery("cap", 43_000, "overflow", "y", odo = 153.0)
+        events += delivery("cap", 44_000, "j0", "again", odo = 101.0)
+        val full = foldSession(events, currentCpm = cpm)
+        assertEquals(full, foldRestored(events))
+        full.first.mapNotNull { it.delivery }.filter { it.jobId == "overflow" }.forEach {
+            assertNull(it.realizedMiles)
+            assertNull(it.netProfit)
+            assertEquals(MilesBasis.UNKNOWN, it.milesBasis)
+        }
+        assertEquals(0.0, full.first.last().delivery!!.realizedMiles!!, 0.0)
+        assertEquals(LegState.MAX_PENDING, full.second!!.legState.jobMileageBudgets.size)
+        assertEquals(1.0, full.second!!.legState.jobMileageBudgets.getValue("j0").allocated, 0.0)
+    }
+
     private var seq = 0L
     private val cpm = 0.30
 
@@ -1236,7 +1352,7 @@ class RecordFoldsTest {
         val controlMachine = control[1].delivery!!
 
         // With a manual delivery folded BEFORE the machine completion: it must not move
-        // prevDropOdometer/prevDropAt, so the machine row's realized miles/minutes are unchanged.
+        // prevDropOdometer/completionHighWater, so the machine row's realized miles/minutes are unchanged.
         val (withManual, _) = foldSession(
             listOf(
                 dashStart(s, 1_000, odo = 100.0),

@@ -14,11 +14,9 @@ import androidx.room.PrimaryKey
  * event's `sequenceId`, which is both its provenance and its idempotency key
  * (replay/refold with `@Insert(onConflict = REPLACE)` is a byte-identical no-op).
  *
- * Miles/minutes are stored as **partition deltas** — the odometer/time gap since
- * the previous `DELIVERY_COMPLETED` in the same session (or `DASH_START` for the
- * first drop) — so Σ per-drop deltas + the session tail equals the session
- * odometer delta with nothing double-counted. Task-scoped anchors
- * (`phaseStartedAt`/`arrivedAt`) are kept so task-scoped views stay derivable.
+ * Miles are forward allocations from a measured per-job budget. Minutes allocate disjoint session
+ * time using a completion high-water mark in sequence order; they are not each task's duration.
+ * Task-scoped anchors (`phaseStartedAt`/`arrivedAt`) remain available for task duration views.
  *
  * **Frozen economics** ([frozenCostPerMile]/[netProfit]/[costBasis]) freeze the
  * operating-cost basis this delivery was costed at (inherited in PR2 from the
@@ -76,9 +74,9 @@ data class DeliveryRecordEntity(
     val basePay: Double?,
     /** Raw metadata.odometer reading — the next drop's delta anchor. */
     val odometerAtCompletion: Double?,
-    /** Partition delta: odo(this) − odo(prev completion | DASH_START). */
+    /** Machine allocation from the remaining measured job budget; driver edits may override. */
     val realizedMiles: Double?,
-    /** Partition delta: (completedAt − prev anchor time) / 60_000. */
+    /** Nonnegative session-time allocation above the prior completion high-water mark, in minutes. */
     val realizedMinutes: Double?,
 
     // ── Frozen economics (immutable historical fact — never re-costed on economy edit) ──
@@ -159,25 +157,15 @@ data class DeliveryRecordEntity(
 
     // ── Per-leg mileage (#688 phase B, v13) ─────────────────────────────────
     /**
-     * Machine-computed to-store driving leg (#688 phase B) — this drop's claimed store leg (exact
-     * NORMALIZED-chain store-form match within the job, else FIFO). Stamped ONLY on a leg-sum row
-     * ([milesToDropoff] non-null); a LEGACY row (missed arrival) stamps null and instead retires the
-     * SESSION's already-closed store legs — any job, since the legacy span is a session-level partition
-     * delta (#688 review Fix 1/Fix 4 + re-verify widening) — so a lone store leg never rides an
-     * otherwise-untouched legacy row — keeping `milesToStore + milesToDropoff != realizedMiles`
-     * meaningful strictly as the driver-edit trail. Provenance ONLY: a driver `newMiles`
-     * DELIVERY_ADJUSTMENT rewrites [realizedMiles] but NEVER this column, so `milesToStore +
-     * milesToDropoff` may then disagree with `realizedMiles` — that inequality is the visible edit
-     * trail (DEV-DECISION 1). Null on an anchorless/unclaimed/legacy leg and all pre-v13 history.
+     * Claimed measured store leg (normalized store match, else FIFO, once per leg). Legacy drops
+     * stamp null and retain the existing closed-store-leg retirement policy. Provenance survives
+     * budget capping and driver edits; a leg-sum mismatch alone does not identify a driver edit.
      */
     val milesToStore: Double? = null,
-    /**
-     * Machine-computed to-dropoff driving leg (#688 phase B), keyed by this drop's own `taskId`. When
-     * non-null, `realizedMiles == (milesToStore ?: 0) + milesToDropoff` (the leg-sum rule); when null
-     * the row keeps the legacy partition delta. Null when no odometer-bearing `DELIVERY_ARRIVED`
-     * preceded the completion (missed arrival, phantom-class completion, all pre-v13 history).
-     */
+    /** Measured arrival leg for this task; allocation is capped by its job budget (#1108). */
     val milesToDropoff: Double? = null,
+    /** Machine allocation: LEG_SUM / LEGACY_SPAN / BUDGET_CAPPED / UNKNOWN; retained on driver edits. */
+    @ColumnInfo(defaultValue = "'UNKNOWN'") val milesBasis: String = "UNKNOWN",
 
     // ── Session-attribution marker (#660 piece 2, v14) ──────────────────────
     /**

@@ -706,8 +706,9 @@ anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACC
 closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlier rows). The outcome,
 funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
 instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
-`milesToStore`/`milesToDropoff` with claim-once store legs; `realizedMiles` becomes the leg SUM only when
-`milesToDropoff != null` while session/period/IRS/CSV totals stay odometer-span-anchored; a driver
+`milesToStore`/`milesToDropoff` with claim-once store legs; #1108 allocates `realizedMiles` from a per-job
+budget (measured high-water span minus prior allocations): min(leg sum, remaining) for arrived drops,
+remaining for legacy drops, null for untracked jobs. Session/period/IRS/CSV totals stay span-anchored; a driver
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 

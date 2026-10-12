@@ -976,7 +976,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -1700,6 +1700,48 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `1108 every-event restart preserves budget and high water and version refold preserves driver miles`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1_000,
+            SessionStartPayload("S1", Platform.DoorDash.name, 1_000, SessionStartSource.INTERACTION, "x"),
+            odometer = 100.0)
+        insert(AppEventType.PICKUP_ARRIVED, "S1", 2_000,
+            PickupPayload(jobId = "J1", taskId = "P1", storeName = "StoreX", phaseStartedAt = 1_000),
+            odometer = 100.4)
+        insert(AppEventType.DELIVERY_ARRIVED, "S1", 3_000,
+            DeliveryPayload(jobId = "J1", taskId = "A", phaseStartedAt = 2_000), odometer = 106.4)
+        val b = insert(AppEventType.DELIVERY_COMPLETED, "S1", 5_000,
+            DeliveryPayload(jobId = "J1", taskId = "B", phaseStartedAt = 2_000,
+                completedAt = 5_000, totalPay = 10.0), odometer = 108.8)
+        val a = insert(AppEventType.DELIVERY_COMPLETED, "S1", 6_000,
+            DeliveryPayload(jobId = "J1", taskId = "A", phaseStartedAt = 2_000,
+                completedAt = 4_000, totalPay = 10.0), odometer = 108.8)
+        while (projector().processBatch(limit = 1) != null) { /* hydrate after every event */ }
+        val first = analyticsDao.deliveryRecord(b)!!
+        val second = analyticsDao.deliveryRecord(a)!!
+        val session = analyticsDao.sessionRecord("S1")!!
+        assertEquals(8.8, first.realizedMiles!!, 1e-9)
+        assertEquals(0.0, second.realizedMiles!!, 0.0)
+        assertEquals(0.0, second.realizedMinutes!!, 0.0)
+        assertEquals("BUDGET_CAPPED", second.milesBasis)
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = a, projectorVersion = 13))
+        projector().catchUp()
+        assertEquals(first, analyticsDao.deliveryRecord(b))
+        assertEquals(second, analyticsDao.deliveryRecord(a))
+        assertEquals(session, analyticsDao.sessionRecord("S1"))
+        insert(AppEventType.DELIVERY_ADJUSTMENT, "S1", 7_000,
+            DeliveryAdjustmentPayload(targetEventSequenceId = a, sessionId = "S1", newMiles = 7.0))
+        projector().catchUp()
+        val corrected = analyticsDao.deliveryRecord(a)!!
+        assertEquals(7.0, corrected.realizedMiles!!, 0.0)
+        assertNotNull(corrected.driverAdjustedAt)
+        assertEquals("BUDGET_CAPPED", corrected.milesBasis)
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = a, projectorVersion = 13))
+        projector().catchUp()
+        assertEquals(corrected, analyticsDao.deliveryRecord(a))
+        assertEquals(first, analyticsDao.deliveryRecord(b))
+    }
+
+    @Test
     fun `criterion 5 - leg state round-trips across a batch boundary — incremental == single-drain (#688)`() = runBlocking {
         val seq = seedLegSession()
 
@@ -2049,7 +2091,7 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        assertEquals(13, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
 }

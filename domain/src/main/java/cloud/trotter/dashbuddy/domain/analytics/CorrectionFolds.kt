@@ -92,7 +92,7 @@ internal object CorrectionFolds {
             costBasis = costBasis,
         )
 
-        // Advance the delivery counters + liveness, but DO NOT touch prevDropOdometer/prevDropAt and
+        // Advance the delivery counters + liveness, but DO NOT touch prevDropOdometer/completionHighWater and
         // do not pass the event's odometer into them: a manual delivery carries no odometer reading and
         // must not perturb the surrounding machine rows' partition (miles/time) deltas on a refold —
         // that would make the rebuild non-faithful. This non-perturbation is load-bearing.

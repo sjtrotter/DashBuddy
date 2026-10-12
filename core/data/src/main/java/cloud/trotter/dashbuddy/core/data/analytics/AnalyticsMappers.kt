@@ -38,6 +38,7 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     cashTip = cashTip,
     milesToStore = milesToStore,
     milesToDropoff = milesToDropoff,
+    milesBasis = milesBasis,
     sessionAssigned = sessionAssigned == 1,
     receiptRepriced = receiptRepricedAt != null,
 )

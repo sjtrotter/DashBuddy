@@ -24,18 +24,22 @@ package cloud.trotter.dashbuddy.domain.analytics
  * [wholeShift] is the easy one: [TimeEconomics.onlineMillis], Σ session durations — the doc's §5
  * "Layer 0" number, which contains **zero estimates**.
  *
+ * Per-drop minutes are an ALLOCATION of session time (#1108), not each drop's own duration:
+ * disjoint intervals above the completion high-water mark, Σ ≤ the session span (for completions
+ * within that session). A later-folded earlier sibling contributes 0 minutes to the denominator.
  * [whileWorking] is `Σ per-delivery partition deltas − Σ §7.8 gaps`. The partition delta already spans
  * accept-to-completion work, but it *also* swallows the dry wait that preceded the job (the delta runs
  * from the previous drop), which is exactly the term the doc excludes from active time — so the gap
  * fold is what finally makes an active denominator measurable rather than approximate. That is why
  * §7.8 is listed in the brief as feeding §6.
  *
- * **Known, one-sided residuals** (stated, per §9; each pushes [whileWorking] DOWN, never up):
+ * **Known residuals** (stated, per §9):
  *  - the wait before a dash's *first* offer has no preceding completion, so §7.8 cannot see it and it
  *    stays inside the working denominator;
  *  - a gap whose following job never completed is subtracted from a denominator that never contained
  *    it — the subtraction is floored at 0 and the residual is at most that one gap.
- * So [whileWorking] is conservative by construction: the real active rate is at least this.
+ *  - sibling completions can still cause overlapping gap deductions in [WorkGaps] (#983 class);
+ *    #1108 changes the partition allocation only, leaving that gap policy unchanged.
  *
  * ## What the numerator is
  *
@@ -105,7 +109,7 @@ data class NetPerHourPair(
             val deliveryMillis = time.deliveryMillis
             return NetPerHourPair(
                 netProfit = netProfit,
-                // Floored at 0: over-subtraction is possible only via the documented one-sided
+                // Floored at 0: over-subtraction is possible via the documented
                 // residual above, and a negative denominator must never become a rate.
                 workingMillis = ((deliveryMillis ?: 0L) - gaps.totalMillis).coerceAtLeast(0L),
                 onlineMillis = time.onlineMillis,

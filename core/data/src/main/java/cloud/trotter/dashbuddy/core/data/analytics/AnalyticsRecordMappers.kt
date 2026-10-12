@@ -46,6 +46,7 @@ internal fun DeliveryFold.toEntity() = DeliveryRecordEntity(
     // rewrites these — see applyDeliveryAdjustment).
     milesToStore = milesToStore,
     milesToDropoff = milesToDropoff,
+    milesBasis = milesBasis,
     // #1033: null at fold time — later corrections stamp these in the projector transaction,
     // in event-sequence order.
     receiptRepricedAt = null,
