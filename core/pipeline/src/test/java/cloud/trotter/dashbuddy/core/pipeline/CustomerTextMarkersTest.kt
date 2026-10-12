@@ -381,6 +381,8 @@ class CustomerTextMarkersTest {
                 // #1160 review NN2 — deliberately ADDED: the GoPuff per-order customer name, promoted
                 // from the intake list so the runtime UNKNOWN scrub covers it too.
                 "order_cx_name",
+                // #1314 — the gift recipient has no customer lead-in.
+                "gift_recipient_name",
                 // #1160 review ZZ1 — deliberately ADDED: the chat header, ALWAYS (fail closed; a value-shape
                 // gate missed non-Latin and particle names).
                 "tvTitle",
@@ -404,6 +406,7 @@ class CustomerTextMarkersTest {
                 "dasher_instruction_content_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "description_text_view" to CustomerTextMarkers.IdentityKind.CONTENT,
                 "order_cx_name" to CustomerTextMarkers.IdentityKind.NAME,
+                "gift_recipient_name" to CustomerTextMarkers.IdentityKind.NAME,
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
                 "message_input" to CustomerTextMarkers.IdentityKind.CONTENT,
@@ -417,6 +420,13 @@ class CustomerTextMarkersTest {
     fun `the UNKNOWN-envelope scrub covers the NN2-promoted order_cx_name (review OO3)`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Morgan")
         assertEquals("order_cx_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `the UNKNOWN-envelope scrub covers the gift recipient (#1314)`() {
+        val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/gift_recipient_name", text = "Devin R")
+        assertEquals("gift_recipient_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
     }
 
@@ -454,7 +464,7 @@ class CustomerTextMarkersTest {
     @Test
     fun `idProtect is pinned - only rows whose value a test tag can embed (review AB4)`() {
         assertEquals(
-            setOf("customer_name", "user_name", "order_cx_name", "tvTitle"),
+            setOf("customer_name", "user_name", "order_cx_name", "tvTitle", "gift_recipient_name"),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.idProtect }.map { it.suffix }.toSet(),
         )
     }

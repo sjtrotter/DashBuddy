@@ -304,7 +304,7 @@ VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelope
 table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its
 ALWAYS runtime-scrub projection (#1160 adds `order_cx_name`, `tvTitle`, `tvLastMessage` — `tvTitle`
 fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line — on EVERY
-platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches), #919 adds `message_input` and a
+platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches; #1314 adds `gift_recipient_name`), #919 adds `message_input` and a
 CLASS rule — any text-input node (`UiNode.isTextInput`: the editable flag or an `EditText` class) is
 plain-masked whole, subtree included, on UNKNOWN screen + click envelopes; the already-masked skip is
 `MaskTokens.endsWithMask`, never substring presence (a recognized

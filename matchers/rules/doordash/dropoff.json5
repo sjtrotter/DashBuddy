@@ -1040,6 +1040,56 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#1127: the 'Contact <FirstName L>' step title — the step card names the customer the dasher must try to reach. Id-scoped to `step_title` (the same row family renders the 'Take photo' / 'Add description' chrome, untouched by the prefix) with the chrome spellings ('Contact support', the 8.98.5 'Contact Customer', store/merchant variants) excluded by regex — the fable review of PR #1216 showed an exact `hasText` exclusion would hash 'Contact Customer' into a constant masquerading as a customer identity. keepPrefix keeps 'Contact ' for replay context; the remainder masks to ONE token, and normalize customerName keys the hex on the canonical first-token + second-token-initial form so it equals the first 4 hex of the `customerNameHash` the dropoff parses persist (#623/#733).",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "step_title"
+              },
+              {
+                "hasTextStartsWith": "Contact "
+              },
+              {
+                "not": {
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
+                }
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Contact "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "comment": "#1127: the 8.98.5 render's own step-title id (`contact_cx_step_title`, 'Contact Customer' on the fielded 09-23 frame — no name) — masked by the same name-shaped rule in case a later build personalises it like 8.99.20 did; the chrome exclusions above keep 'Contact Customer' raw.",
+          "find": {
+            "all": [
+              {
+                "hasIdSuffix": "contact_cx_step_title"
+              },
+              {
+                "hasTextStartsWith": "Contact "
+              },
+              {
+                "not": {
+                  "hasTextMatchesRegex": "(?i)^Contact (support|customer|the customer|store|the store|merchant|the merchant)\\s*$"
+                }
+              }
+            ]
+          },
+          "keepPrefix": [
+            "Contact "
+          ],
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -1201,7 +1251,7 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
-      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed. (4) #1058, fielded 08-28 (4 envelopes): the ALCOHOL arrival card renders `alcohol_dropoff_instructions_title` INSTEAD of any customer lead-in — no `Deliver to` / `Heading to` / `Delivery for` node exists on it — so all three arms above missed and the sheet fell UNKNOWN, shipping its `address_subpremise_line` and its `dasher_instruction_content_collapsed` (a customer note carrying a door code) verbatim on the UNKNOWN capture path. The fourth arm is purely ID-anchored (#938: view ids do not localize): the drop-off bottom sheet container + the alcohol scan icon + the Directions button, three ids that co-occur only on this card (two committed fixtures carry all three, both already `dropoff_pre_arrival`). Recognition alone closes the leak — this rule's `redact` already declares both leaked ids — and the parse's name/address fields are nullable coalesces that simply resolve null on this render, so nothing is fabricated.",
+      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed. (4) #1058, fielded 08-28 (4 envelopes): the ALCOHOL arrival card renders `alcohol_dropoff_instructions_title` INSTEAD of any customer lead-in — no `Deliver to` / `Heading to` / `Delivery for` node exists on it — so all three arms above missed and the sheet fell UNKNOWN, shipping its `address_subpremise_line` and its `dasher_instruction_content_collapsed` (a customer note carrying a door code) verbatim on the UNKNOWN capture path. The fourth arm is purely ID-anchored (#938: view ids do not localize): the drop-off bottom sheet container + the alcohol scan icon + the Directions button, three ids that co-occur only on this card (two committed fixtures carry all three, both already `dropoff_pre_arrival`). Recognition alone closes the leak — this rule's `redact` already declares both leaked ids — and the parse's name/address fields are nullable coalesces that simply resolve null on this render, so nothing is fabricated. #1314: the 8.101.8 gift sheet labels `user_name_label` as 'Gift sender' and is anchored by `group_gift_banner` + `drop_off_bottom_sheet_container` + `gift_recipient_name` (locale-immune ids, #938); the sender in `user_name` IS the ordering customer, so the third name coalesce preserves the pickup `customer_name` lineage (#526/#733), while the recipient is masked with normalized-name hex and never parsed (fail-null beats a wrong join). Four captures fell UNKNOWN on 2026-10-11 and leaked the recipient, also losing DELIVERY_ARRIVED and holding the job open for 2.5 h (#1315). The gift arm also requires `user_name_label` to read 'Gift sender', an English-literal DoorDash chrome anchor (#938) rendered only on the gift sheet, so blank retained gift ids cannot claim a normal order. Because priority 73 wins a combined gift-sheet/customer-unavailable frame, this rule carries both of `dropoff_customer_unavailable`'s id-anchored Contact entries verbatim to protect the overlay's customer name (#993/#1079: a redact protects only frames its OWN rule wins).",
       "require": {
         "any": [
           {
@@ -1281,6 +1331,37 @@
                 }
               }
             ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "group_gift_banner"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "drop_off_bottom_sheet_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "gift_recipient_name"
+                }
+              },
+              {
+                "exists": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "user_name_label"
+                    },
+                    {
+                      "hasText": "Gift sender"
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -1320,6 +1401,24 @@
                   "hasTextContaining": "Delivery for"
                 },
                 "navigate": "sibling(1)",
+                "read": "text",
+                "transform": [
+                  "trim",
+                  "normalizeCustomerName",
+                  "sha256"
+                ]
+              },
+              {
+                "find": {
+                  "all": [
+                    {
+                      "hasIdSuffix": "user_name"
+                    },
+                    {
+                      "hasPrecedingSiblingText": "Gift sender"
+                    }
+                  ]
+                },
                 "read": "text",
                 "transform": [
                   "trim",
@@ -2047,6 +2146,13 @@
           "normalize": "customerName"
         },
         {
+          "comment": "#1314: gift recipient — the sheet's id set",
+          "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
           "find": {
             "hasIdSuffix": "address_line_1"
           }
@@ -2640,6 +2746,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -3139,6 +3251,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           },
           "comment": "#1122 belt (review finding): a RECOGNIZED frame loses the `ID_MARKERS` backstop and keeps only its rule's deliberate decisions — and with the anchor now any stable row under the host fragment, an id-BEARING render of this block (the `drop_off_recycler_view` reject is the one guard) could reach this rule. `dropoff_pre_arrival`'s id-anchored entry, copied as declared (normalize/plainMask preserved); inert on the fielded id-less renders. Original rationale: "
@@ -3604,6 +3722,12 @@
         {
           "find": {
             "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "gift_recipient_name"
           },
           "normalize": "customerName"
         },

@@ -252,6 +252,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -1135,6 +1141,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -1273,6 +1285,12 @@
         {
           "find": {
             "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "gift_recipient_name"
           },
           "normalize": "customerName"
         },

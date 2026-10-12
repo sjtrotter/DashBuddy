@@ -2505,6 +2505,45 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-10-11_11-55-36-426__doordash__accessibility.window__dropoff_pre_arrival__cf81b2.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
+            "deadline": null,
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-10-11_12-06-20-814__doordash__accessibility.window__dropoff_pre_arrival__08fcbf.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
+            "deadline": {
+                "text": "12:11",
+                "time": 1780315860000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/20260128_180652_578_DROPOFF_DETAILS_PRE_ARRIVAL.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",

@@ -224,6 +224,8 @@ object CustomerTextMarkers {
         // it and the census could hash its frame duplicates. Promoted so the two SSOTs agree on "what is
         // a customer-name id"; the runtime scrub widens by this one suffix (fail toward privacy).
         IdMarker("order_cx_name", IdentityKind.NAME, idProtect = true),
+        // #1314 — the gift order's recipient (8.101.8 `group_gift_banner`); a bare `First I` with no lead-in, invisible to the text markers.
+        IdMarker("gift_recipient_name", IdentityKind.NAME, idProtect = true),
         // #1160 reviews PP6, SS9, TT1: the chat list's header (`tvTitle` — the customer's name on a chat row,
         // but a generic id other surfaces use for a sheet title such as "Pick up order") and last-message
         // preview (`tvLastMessage` — ALWAYS the customer's own text, never chrome). EXACT for the census:
@@ -274,7 +276,7 @@ object CustomerTextMarkers {
      * (census-only). There is no value-dependent mode (ZZ1): the runtime path fails closed on the id alone.
      * [idProtect] (#1160 review AB4): the census adds the row's WHOLE value as an id-only run — true only
      * where the value can plausibly be a name a test tag embeds (`customer_name`, `order_cx_name`,
-     * `user_name`, `tvTitle`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
+     * `user_name`, `tvTitle`, `gift_recipient_name`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
      * address or content row never protects an id by its whole value.
      */
     data class IdMarker(

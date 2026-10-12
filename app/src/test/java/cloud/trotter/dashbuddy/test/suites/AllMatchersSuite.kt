@@ -19,9 +19,11 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.ClickRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DefaultRulesIntegrationTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ChatComposeRedactionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffBannerRedactParityTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffGiftSheetRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffSheetRedactionParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.PickupWaitArrivalRecognitionTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.PickupArrivedRedactParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ScreenRulesetTest
@@ -195,6 +197,8 @@ import org.junit.runners.Suite
     CaptureRedactionCorpusTest::class,
     CaptureBackstopCorpusTest::class,
     DropoffBannerRedactParityTest::class,
+    DropoffGiftSheetRecognitionTest::class,
+    PickupArrivedRedactParityTest::class,
     ChatComposeRedactionTest::class,
     DropoffSheetRedactionParityTest::class,
     SensitiveMarkerAssetCoverageTest::class,

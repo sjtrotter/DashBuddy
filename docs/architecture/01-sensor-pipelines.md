@@ -108,6 +108,7 @@ other slot masked. The sheet's id-less name entry is now copied VERBATIM into `d
 (the #992/#1031 sibling doctrine — same bytes, same 4 hex; `normalize: customerName`, `hasNoId`),
 ordered after the #1039 subpremise entries and pinned by the FIX 1c SSOT list plus a mask-parity
 proof (`DropoffSheetRedactionParityTest`, ALL-CAPS names included — the shape already matched them).
+#1314 adds the 8.101.8 gift render to `dropoff_pre_arrival` via a `group_gift_banner` + `drop_off_bottom_sheet_container` + `gift_recipient_name` id arm and a normalized-name redact entry: the sender (`user_name`) is the ordering customer and supplies the fallback customer hash; the recipient is masked, never parsed; every DoorDash screen rule that redacts `user_name` must carry the identical (ignoring comments), ungated `gift_recipient_name` redact entry.
 (b) The sheet renders in more shapes than the 08-30 pair the original `Continue` AND `Directions`
 anchor was cut from: a header-less render (no `Deliver to`, no `Continue`), its twin with the
 Call/Message row scrolled off, and an `Apt/Suite`-only partial — all fell UNKNOWN and shipped the
@@ -848,7 +849,7 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
   "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
   EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER — and `ID_MARKERS` is its ALWAYS
-  projection: #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
+  projection: #1314 adds `gift_recipient_name` (NAME, idProtect): the 8.101.8 gift order's recipient — found by the 10-11 pull; the gift arm also carries `dropoff_customer_unavailable`'s Contact entries because 73 wins a combined frame (#993 doctrine); #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
   all ALWAYS on the id alone (review round 11: no value-shape gate — "李明", "de la Cruz" read as chrome to
   any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
   11); the recognized `doordash.screen.chat` / `chat_conversation` rules
