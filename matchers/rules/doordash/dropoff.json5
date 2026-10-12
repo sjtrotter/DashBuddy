@@ -3862,8 +3862,9 @@
     },
     {
       "id": "doordash.click.complete_delivery_nav",
+      "comment": "#1315: the 8.101.8 arrival sheet carries the control; the gate names both screens.",
       "priority": 62,
-      "screenIs": "dropoff_navigation",
+      "screenIs": ["dropoff_navigation", "dropoff_pre_arrival"],
       "intent": "complete_delivery",
       "require": {
         "any": [

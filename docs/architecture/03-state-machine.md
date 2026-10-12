@@ -297,7 +297,7 @@ when that retire's PROVENANCE (`armedFromFlow`, #596) says the task it retires a
 
 **The #615 arrival gate is an ADDITIONAL condition** (round 4). Provenance says the dasher LEFT the
 task; it does not say the order was delivered. The retire's own T1 close already demands arrival
-(`isJobPhysicallyComplete` counts only a dropoff with `arrivedAt != null`) and absorption was walking
+(the original `isJobPhysicallyComplete` gate required `arrivedAt != null`) and absorption was walking
 straight past it — an Idle-armed retire on a drop the dasher was still NAVIGATING to was honored at
 the summary, minting a `DELIVERY_COMPLETED` with a null arrival and a #691 offer-pay estimate riding
 it. So the region's `activeTask` must also be an ARRIVED, un-unassigned DROPOFF. Note the difference
@@ -592,9 +592,23 @@ TBD placeholder outstanding forever, defeating `isJobPhysicallyComplete` so the 
 fired and the next offer folded into the finished job (the job-61 class); #749 added a **per-customer
 coverage arm** (`JobCompleteness.kt`, evaluated only when the strict arm fails) that proves
 completion from the pickup side — when pickups map 1:1 to orders at distinct stores their hash set
-IS the job's customer set, so "every customer hash has a finished, arrived drop" ⟺ complete,
+IS the job's customer set, so "every customer hash has a finished drop with delivery evidence" ⟺ complete,
 placeholder count irrelevant. The D6 join-miss WARN is edge-gated once per taskId
 (`PlatformRegion.lastJoinMissWarnTaskId`).
+
+**Same-store add-ons (#1315).** Dedup incoming store hints against OPEN pickups only
+(`completedAt == null && unassignedAt == null`). A CONFIRMED pickup never absorbs a same-store
+add-on: that order is already in the car, so a revisit gets its own pickup placeholder. The #1304
+incremental dropoff count still subtracts the number of new pickup hints.
+
+**JobCompleteness delivery evidence (#615/#1315).** A completed, un-unassigned drop needs either
+`arrivedAt` or the dasher's explicit complete-delivery-steps tap (`Task.completionStepsAt`). The
+2026-10-11 gift sheet missed arrival; the geofenced tap witnesses delivery so that completed job
+can close instead of swallowing later accepts. A grace stamp alone remains insufficient. The tap
+is set once from the click observation timestamp and mirrored through `reconcileJobTasks`; it
+never substitutes for arrival in dwell/mileage. Retire absorption (`absorbableRetire` / `endSession`)
+remains ARRIVED-only and fail-null (#615/#1101). The nullable default is additive to kotlinx JSON
+snapshots; no migration.
 
 **Unassign-via-help** (`Flow.TaskUnassigned` = wire `task:unassigned`, #736) is an **inline
 (ungraced) abandon** of the active task: `abandonActiveTask` marks `Task.unassignedAt` and leaves

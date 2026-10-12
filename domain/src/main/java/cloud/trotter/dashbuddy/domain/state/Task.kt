@@ -31,6 +31,12 @@ data class Task(
     val itemsShopped: Int? = null,
     val redCardTotal: Double? = null,
     val arrivedAt: Long? = null,
+    /**
+     * #1315 — the instant the dasher tapped the platform's complete-delivery control on this
+     * DROPOFF. Set once; a second delivery witness beside [arrivedAt], never a substitute for
+     * [arrivedAt] in dwell/mileage folds. Default-null keeps old kotlinx snapshots compatible.
+     */
+    val completionStepsAt: Long? = null,
     val odometerAtEntry: Double? = null,
     val odometerAtArrival: Double? = null,
     val startedAt: Long,

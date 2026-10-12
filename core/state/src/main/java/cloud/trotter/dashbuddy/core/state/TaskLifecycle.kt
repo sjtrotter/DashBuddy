@@ -127,18 +127,30 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             // earlier stacked drop routes to it instead of minting a duplicate. Pickup re-matches
             // by store, but only when the platform did NOT signal a genuinely-new stacked pickup
             // (two distinct orders at the same store must stay distinct — the same-store add-on
-            // "fold in, don't re-mint" of #499 is the !isStackedPickupTransition case).
+            // "fold in, don't re-mint" of #499 is for OPEN pickups in the !isStackedPickupTransition case).
+            // #1315: a confirmed pickup cannot resume while this job owns an open placeholder
+            // whose store hint matches this frame; resolve the new pickup below instead. An
+            // unconfirmed recent pickup still resumes (A→B→A mid-shop keeps its identity).
             val resumable = when {
                 taskPhase == TaskPhase.DROPOFF && taskFields?.customerNameHash != null ->
                     region.recentTasks.lastOrNull {
                         it.jobId == jobId && it.phase == TaskPhase.DROPOFF &&
                             it.customerNameHash == taskFields.customerNameHash
                     }
-                taskPhase == TaskPhase.PICKUP && !isStackedPickupTransition ->
+                taskPhase == TaskPhase.PICKUP && !isStackedPickupTransition -> {
+                    val openPickupForStore = pickupMatchingStoreHint(
+                        region.activeJob?.tasks.orEmpty().filter {
+                            it.phase == TaskPhase.PICKUP && it.storeName == null &&
+                                it.completedAt == null && it.unassignedAt == null
+                        },
+                        taskFields?.storeName,
+                    )
                     region.recentTasks.lastOrNull {
                         it.jobId == jobId && it.phase == TaskPhase.PICKUP &&
-                            it.storeName != null && it.storeName == taskFields?.storeName
+                            it.storeName != null && it.storeName == taskFields?.storeName &&
+                            (openPickupForStore == null || it.completedAt == null)
                     }
+                }
                 else -> null
             }
 
@@ -179,7 +191,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             //      reconcileDropoffStore uses), so a noisy/null store doesn't blind-bind in
             //      offset order,
             //   3. next open placeholder in offset order.
-            // "Open" = storeName not yet resolved, not completed, not the current/displaced task.
+            // "Open" = storeName not yet resolved, not completed/unassigned, not the current/displaced task.
             // A wrong bind can be repaired later without re-minting via the swap guard (D4a below).
             val expectedPickup = if (taskPhase == TaskPhase.PICKUP) {
                 val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
@@ -187,22 +199,15 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                     p.phase == TaskPhase.PICKUP &&
                         p.storeName == null &&
                         p.completedAt == null &&
+                        p.unassignedAt == null &&
                         p.taskId != currentTask?.taskId &&
                         p.taskId !in displacedIds
                 }
-                val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() }
-                val hintMatch = screenStore?.let { s ->
-                    openPickups.firstOrNull { it.expectedStoreHint?.equals(s, ignoreCase = true) == true }
-                }
-                val bestMatch = if (hintMatch == null && screenStore != null) {
-                    val best = StoreNameMatch.bestMatch(openPickups.mapNotNull { it.expectedStoreHint }, screenStore)
-                    best?.let { b -> openPickups.firstOrNull { it.expectedStoreHint == b } }
-                } else null
                 // #526 FIX3b: tier 3 (next-open) binds ONLY when there is exactly ONE open
                 // placeholder. With ≥2 open and no parsed/matched store, a blind first-open bind
                 // guesses the wrong order — fall through to a fresh mint (master behavior); a
                 // later frame carrying a real store can hint-match the right placeholder.
-                hintMatch ?: bestMatch ?: openPickups.singleOrNull()
+                pickupMatchingStoreHint(openPickups, taskFields?.storeName) ?: openPickups.singleOrNull()
             } else null
 
             if (expectedPickup != null) {
@@ -489,4 +494,14 @@ internal fun requestArrivalEstimate(region: PlatformRegion, obs: Observation): P
         arrivalEstimateRequestedAt = obs.timestamp,
         arrivalEstimateObservedItems = observed,
     ))
+}
+
+/** Shared store-hint tiers for pickup resume eligibility and placeholder resolution (#1315). */
+private fun pickupMatchingStoreHint(pickups: List<Task>, storeName: String?): Task? {
+    val screenStore = storeName?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    pickups.firstOrNull { it.expectedStoreHint?.equals(screenStore, ignoreCase = true) == true }
+        ?.let { return it }
+    val best = StoreNameMatch.bestMatch(pickups.mapNotNull { it.expectedStoreHint }, screenStore)
+        ?: return null
+    return pickups.firstOrNull { it.expectedStoreHint == best }
 }

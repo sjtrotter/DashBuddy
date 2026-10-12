@@ -211,8 +211,9 @@ internal fun PlatformRegionStepper.mintFreshJobFromAccept(
 
 /**
  * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1),
- * plus (#526 D2) pickup placeholders only for stores the job does NOT already own (a same-store
- * add-on folds into the existing pickup, #499), at offsets D..D+P-1. No job mint this step.
+ * plus (#526 D2) pickup placeholders only for stores without an OPEN pickup (a same-store
+ * add-on folds into an open pickup, #499; never a confirmed one, #1315), at offsets D..D+P-1.
+ * No job mint this step.
  * For an INCREMENTAL add-on, D = stopCount − new pickup hints, floored at 1;
  * counts outside 1..MAX_ADDON_STOPS or unparsed → 1 (#1304).
  * Deduped by offerHash so a re-entered OfferPresented for the same offer can't double-count.
@@ -226,11 +227,12 @@ internal fun PlatformRegionStepper.appendAddOn(
     val alreadyCounted = inputs.offerHash != null &&
         existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
     if (alreadyCounted) return region
-    // #526 FIX3c: dedup incoming add-on stores against BOTH the existing pickups' offer hints
+    // #526 FIX3c: dedup incoming add-on stores against BOTH the OPEN pickups' offer hints
     // AND their resolved store names — a bare-fallback job (hint null, storeName "H-E-B") would
     // otherwise get a duplicate H-E-B placeholder from a same-store add-on.
+    // A confirmed pickup never absorbs a same-store add-on: it needs a new trip (#1315).
     val existingPickupHints = existing.tasks
-        .filter { it.phase == TaskPhase.PICKUP }
+        .filter { it.phase == TaskPhase.PICKUP && it.completedAt == null && it.unassignedAt == null }
         .flatMap { listOfNotNull(it.expectedStoreHint, it.storeName) }
         .map { it.lowercase(Locale.ROOT) }
         .toSet()

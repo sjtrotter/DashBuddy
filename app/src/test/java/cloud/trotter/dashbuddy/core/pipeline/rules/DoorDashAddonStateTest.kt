@@ -283,6 +283,57 @@ class DoorDashAddonStateTest {
         assertTrue(transition.newState.regions.platforms.getValue(Platform.DoorDash).activeJob?.acceptedOffers.isNullOrEmpty())
     }
 
+    @Test
+    fun `confirmed same-store pickup cannot absorb a total-basis add-on`() {
+        assertSameStoreTotalAccept(confirmed = true)
+    }
+
+    @Test
+    fun `open same-store pickup still folds in a total-basis add-on`() {
+        assertSameStoreTotalAccept(confirmed = false)
+    }
+
+    private fun assertSameStoreTotalAccept(confirmed: Boolean) {
+        val offer = AddonCardTree.parse().copy(
+            offerHash = "same-store-second", quoteBasis = OfferQuoteBasis.TOTAL,
+            orders = AddonCardTree.parse().orders.take(1),
+        )
+        var state = liveJob(offer)
+        val region = state.regions.platforms.getValue(Platform.DoorDash)
+        val pickup = region.activeTask!!.copy(
+            arrivedAt = 4_000L, completedAt = if (confirmed) 5_000L else null,
+        )
+        val before = region.activeJob!!.copy(tasks = region.activeJob!!.tasks.map {
+            if (it.taskId == pickup.taskId) pickup else it
+        })
+        val drop = before.tasks.first { it.phase == TaskPhase.DROPOFF }
+        state = state.copy(regions = state.regions.copy(platforms = mapOf(
+            Platform.DoorDash to region.copy(activeJob = before, activeTask = drop, recentTasks = listOf(pickup)),
+        )))
+        state = machine.step(state, screen(10_000L, offer)).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = null, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        // Consume at the phase-less task edge to isolate add-on placeholder minting from resume.
+        state = machine.step(state, Observation.Screen(
+            timestamp = 12_000L, captureId = null, ruleId = "doordash.screen.task_active", metadata = ReplayMetadata.EMPTY,
+            flow = Flow.TaskActive, modeHint = Mode.Online, parsed = ParsedFields.None,
+        )).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(before.jobId, job.jobId)
+        assertEquals(2, job.acceptedOffers.size)
+        val added = job.tasks.filter { task -> before.tasks.none { it.taskId == task.taskId } }
+        val pickups = added.filter { it.phase == TaskPhase.PICKUP }
+        assertEquals(if (confirmed) 1 else 0, pickups.size)
+        if (confirmed) {
+            assertEquals("H-E-B", pickups.single().expectedStoreHint)
+            assertNull(pickups.single().arrivedAt)
+            assertNull(pickups.single().completedAt)
+        }
+        assertEquals(1, added.count { it.phase == TaskPhase.DROPOFF })
+    }
+
     private fun assertAddonCard(card: FlowCardSnapshot.Offer) {
         assertEquals(OfferQuoteBasis.INCREMENTAL, card.quoteBasis)
         assertEquals(1L, card.incrementalMinutes)

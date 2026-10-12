@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.domain.state.mintWakeId
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Task
+import cloud.trotter.dashbuddy.domain.state.TaskIntent
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import cloud.trotter.dashbuddy.domain.state.TaskSubFlow
 import timber.log.Timber
@@ -390,6 +391,16 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         val flowObs = obs as? Observation.FlowObservation ?: return current
+
+        // #1315: explicit completion-steps intent is a second delivery witness. The step wrapper's
+        // reconcileJobTasks mirrors this copy into Job.tasks; arrival/dwell and flow stay untouched.
+        val task = current.activeTask
+        if (obs is Observation.Click && obs.platform == current.platform &&
+            (obs.parsed as? ParsedFields.ClickFields)?.intent == TaskIntent.COMPLETE_DELIVERY &&
+            task?.phase == TaskPhase.DROPOFF && task.completionStepsAt == null && task.completedAt == null
+        ) {
+            current = current.copy(activeTask = task.copy(completionStepsAt = obs.timestamp))
+        }
 
         // Resolve what mode this observation implies
         val impliedMode = policy.resolveMode(flowObs.flow, flowObs.modeHint)
