@@ -120,6 +120,10 @@ data class DeliveryPayload(
     val arrivedAt: Long? = null,
     val completedAt: Long? = null,
     val odometerAtEntry: Double? = null,
+    /**
+     * Unused since #1310 — the fold stamps the arrival odometer from the `DELIVERY_ARRIVED`
+     * event's metadata; kept for payload compatibility.
+     */
     val odometerAtArrival: Double? = null,
     val deadlineMillis: Long? = null,
     /** Total pay for this delivery — populated on COMPLETED. */

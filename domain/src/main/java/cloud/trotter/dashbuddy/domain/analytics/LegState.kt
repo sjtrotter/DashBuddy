@@ -50,15 +50,20 @@ data class LegState(
     val pendingStoreLegs: List<PendingStoreLeg> = emptyList(),
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
     /**
-     * #1310 — the FIRST arrival's odometer by dropoff taskId, coherent with `Task.arrivedAt`,
-     * which also keeps the first; a re-arrival's extra miles make the sampler refuse the row.
+     * #1310 — the FIRST `DELIVERY_ARRIVED` event's odometer, present or absent — that event is
+     * the one whose timestamp became `Task.arrivedAt`. Key presence means first arrival seen;
+     * null means its odometer was unknown. A later re-arrival never fills a missing first reading
+     * (the pair would be incoherent).
      * Completion stamps it as `odometerAtArrival` and consumes it; a dropoff-phase unassign purges it.
      * Bounded at [MAX_PENDING] with drop-oldest independently of [pendingDropoffLegs]. An anchorless
      * arrival (no measurable leg) can sit only here, so the maps can evict different tasks. A task
      * left with only one fact folds null `odometerAtArrival` or `milesToDropoff`: fail-null, never a
      * sibling's reading.
+     * The sampler refuses a row whose accumulated dropoff leg disagrees with
+     * `firstArrivalOdometer − confirmationOdometer`; a re-arrival whose extra miles net to zero
+     * (odometer reset, stationary anchor) is accepted with a coherent first pair.
      */
-    val dropoffArrivalOdometers: Map<String, Double> = emptyMap(),
+    val dropoffArrivalOdometers: Map<String, Double?> = emptyMap(),
     val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),
     val completionHighWater: Long? = null,
     /** Positive deltas across session odometer events; resets re-anchor without subtracting miles. */

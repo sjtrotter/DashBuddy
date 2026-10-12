@@ -213,7 +213,7 @@ internal object DeliveryFolds {
             milesBasis = milesBasis,
             jobOfferCount = offerHashes?.size,
             soleOfferHash = offerHashes?.singleOrNull(),
-            odometerAtArrival = legState.dropoffArrivalOdometers[p.taskId] ?: p.odometerAtArrival,
+            odometerAtArrival = legState.dropoffArrivalOdometers[p.taskId],
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less

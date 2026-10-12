@@ -31,7 +31,21 @@ class LegStateCodecTest {
     fun `1310 legacy blob without arrival odometers decodes to an empty map`() {
         val state = LegStateCodec.decode("""{"prevLegOdometer":112.0,"pendingDropoffLegs":{"D1":7.0}}""")
         assertEquals(LegState(prevLegOdometer = 112.0, pendingDropoffLegs = mapOf("D1" to 7.0)), state)
-        assertEquals(emptyMap<String, Double>(), state.dropoffArrivalOdometers)
+        assertEquals(emptyMap<String, Double?>(), state.dropoffArrivalOdometers)
+    }
+
+    @Test
+    fun `1310 null first arrival odometer round-trips with its key present`() {
+        val state = LegState(dropoffArrivalOdometers = mapOf("A" to null))
+        val encoded = LegStateCodec.encode(state)
+        assertEquals("""{"dropoffArrivalOdometers":{"A":null}}""", encoded)
+        assertEquals(state, LegStateCodec.decode(encoded))
+    }
+
+    @Test
+    fun `1310 legacy blob with non-null arrival odometers still decodes`() {
+        val state = LegStateCodec.decode("""{"dropoffArrivalOdometers":{"A":112.0}}""")
+        assertEquals(LegState(dropoffArrivalOdometers = mapOf("A" to 112.0)), state)
     }
 
     @Test

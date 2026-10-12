@@ -156,9 +156,9 @@ data class DeliveryFold(
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
     /**
-     * The arrival odometer from the drop's `DELIVERY_ARRIVED` metadata (#1310; the payload field is
-     * the fallback). With `pickup_records.odometerAtConfirmation` it is the #254 sampler's measured
-     * transit distance.
+     * The arrival odometer from the drop's FIRST `DELIVERY_ARRIVED` metadata, present or absent
+     * (#1310). With `pickup_records.odometerAtConfirmation` it is the #254 sampler's measured
+     * transit distance; later re-arrivals never fill a missing first reading.
      */
     val odometerAtArrival: Double? = null,
 )

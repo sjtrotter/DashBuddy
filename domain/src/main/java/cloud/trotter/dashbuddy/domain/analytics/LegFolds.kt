@@ -126,7 +126,7 @@ private fun <T> List<T>.capPending(): List<T> =
  * Put a pending fact, retaining insertion order and dropping the oldest on overflow.
  * Independently capped maps can evict different tasks; missing facts fold null, never a sibling's reading.
  */
-private fun Map<String, Double>.putCapped(key: String, value: Double): Map<String, Double> {
+private fun <V> Map<String, V>.putCapped(key: String, value: V): Map<String, V> {
     val added = this + (key to value)
     return if (added.size <= LegState.MAX_PENDING) added else {
         // LinkedHashMap preserves insertion order; keep the newest cap.
@@ -170,9 +170,9 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
         pendingDropoffLegs = if (miles != null) {
             ls.pendingDropoffLegs.putCapped(taskId, (ls.pendingDropoffLegs[taskId] ?: 0.0) + miles)
         } else ls.pendingDropoffLegs,
-        // The arrival reading is a fact even when there was no anchor to measure a leg.
-        dropoffArrivalOdometers = if (odo != null && odo.isFinite() && taskId !in ls.dropoffArrivalOdometers) {
-            ls.dropoffArrivalOdometers.putCapped(taskId, odo)
+        // First arrival is a fact even when its odometer or the leg anchor is unknown.
+        dropoffArrivalOdometers = if (taskId !in ls.dropoffArrivalOdometers) {
+            ls.dropoffArrivalOdometers.putCapped(taskId, odo?.takeIf { it.isFinite() })
         } else ls.dropoffArrivalOdometers,
     ))
 }
