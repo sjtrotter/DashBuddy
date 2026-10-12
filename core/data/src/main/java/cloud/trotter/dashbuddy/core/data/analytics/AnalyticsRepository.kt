@@ -143,6 +143,7 @@ class AnalyticsRepository @Inject constructor(
                         jobs = d.jobs, miles = s.miles, onlineMillis = s.onlineMillis,
                         gross = g.gross, unattributed = g.unattributed, overAttributed = g.overAttributed,
                         fuelCost = d.fuelCost, nonFuelCost = d.nonFuelCost, cash = d.cash,
+                        payWithoutNet = d.payWithoutNet,
                         noSessionPay = ns.pay + ns.cash, noSessionDeliveries = ns.deliveries,
                         grossSources = GrossSources(
                             summaryReported = g.summaryReported,
@@ -213,6 +214,7 @@ class AnalyticsRepository @Inject constructor(
                             gross = g?.gross ?: 0.0, unattributed = g?.unattributed ?: 0.0,
                             overAttributed = g?.overAttributed ?: 0.0,
                             fuelCost = d?.fuelCost, nonFuelCost = d?.nonFuelCost, cash = d?.cash ?: 0.0,
+                            payWithoutNet = d?.payWithoutNet ?: 0.0,
                             noSessionPay = (ns?.pay ?: 0.0) + (ns?.cash ?: 0.0),
                             noSessionDeliveries = ns?.deliveries ?: 0,
                             grossSources = g?.let {
@@ -859,6 +861,7 @@ class AnalyticsRepository @Inject constructor(
     private fun assemble(
         deliveredPay: Double,
         deliveryNet: Double,
+        payWithoutNet: Double,
         deliveries: Int,
         jobs: Int,
         miles: Double,
@@ -876,7 +879,7 @@ class AnalyticsRepository @Inject constructor(
         // Locked accounting (#688): cash tips add to BOTH net and gross. [gross] already includes the
         // cash sum (folded in the DAO's `grossAndUnattributed`); net adds it here (it is deliberately
         // OUTSIDE the frozen delivery `netProfit`, so it can't be lost to a null-net row). The
-        // waterfall's cost = gross − net is unchanged (cash cancels), so the 4-step reconcile holds.
+        // derived cost subtracts payWithoutNet from gross − net; cash already cancels separately.
         // [overAttributed] (#701) is deliberately NOT folded into [net] — display-only review signal.
         // [noSessionPay] (#660) is a delivery-side pay/cash sum ALREADY inside [deliveryNet]/[cash]
         // (deliveryTotals counts a null-session row by its own completedAt, #655) — it is folded into
@@ -911,6 +914,7 @@ class AnalyticsRepository @Inject constructor(
             ),
             grossEarnings = gross + noSessionPay,
             netProfit = net,
+            payWithoutNet = payWithoutNet,
             unattributedPay = unattributed,
             netPerHour = NetProfit.perHour(net, hours),
             netPerMile = NetProfit.perMile(net, miles),

@@ -74,6 +74,8 @@ data class PeriodEconomics(
     /** Count of the deliveries behind [noSessionPay] — the "(No session)" bucket's delivery count. */
     val noSessionDeliveries: Int = 0,
     val grossSources: GrossSources = GrossSources.EMPTY,
+    /** Σ realized pay on null-net rows, excluded when deriving car costs from gross minus net. Cash cancels separately. */
+    val payWithoutNet: Double = 0.0,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(

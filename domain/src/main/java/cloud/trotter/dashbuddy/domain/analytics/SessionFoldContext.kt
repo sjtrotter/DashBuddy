@@ -11,8 +11,8 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * `SessionRecordEntity` at the transaction edge, but the fold arithmetic that advances it lives here
  * so it is `:domain:test`-able (same placement precedent as `DropPayApportioner`).
  *
- * Miles use per-job measured budgets in [legState]. Minutes allocate disjoint session time up to
- * [completionHighWater]; a later-folded earlier completion receives zero, never a negative duration.
+ * Miles use per-job and per-session measured budgets in [legState]. Minutes allocate disjoint session time up to
+ * [LegState.completionHighWater]; a later-folded earlier completion receives zero, never a negative duration.
  *
  * [lastEvaluatedCostPerMile] is the session-uniform operating cost-per-mile the offers were
  * evaluated against — the frozen-economy basis for every delivery in the session (see [RecordFolds]).
@@ -53,8 +53,6 @@ data class SessionFoldContext(
     val receiptedJobIds: Set<String> = emptySet(),
     /** Partition anchor: odometer at the previous completion; null ⇒ fall back to [startOdometer]. */
     val prevDropOdometer: Double? = null,
-    /** Max machine completedAt folded so far; persisted with [legState] at the transaction edge. */
-    val completionHighWater: Long? = null,
     /**
      * The operating cost-per-mile of the most recent closing offer with an evaluation, in this
      * session. Session-uniform (one `UserEconomy` per session), so it is the correct frozen basis

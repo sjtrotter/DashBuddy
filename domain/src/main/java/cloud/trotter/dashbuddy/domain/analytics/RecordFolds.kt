@@ -2,6 +2,9 @@ package cloud.trotter.dashbuddy.domain.analytics
 
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionEndSource
@@ -149,7 +152,7 @@ data class DeliveryFold(
     val milesToStore: Double? = null,
     /** Measured arrival leg for this task; allocation is capped by its job budget (#1108). */
     val milesToDropoff: Double? = null,
-    val milesBasis: String = MilesBasis.UNKNOWN,
+    val milesBasis: MilesBasis = MilesBasis.UNKNOWN,
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
     val odometerAtArrival: Double? = null,
@@ -409,6 +412,40 @@ data class OfferOutcomeCorrectionFold(
 object RecordFolds {
 
     fun foldEvent(
+        event: SequencedAppEvent,
+        context: SessionFoldContext?,
+        currentCostPerMile: Double?,
+    ): FoldOutcome {
+        val e = event.event
+        // #1033: receipt repricing is bookkeeping about an existing row. Preserve its context
+        // before either mileage accumulator runs; a write-time odometer on the correction must
+        // not stretch the session past the delivery or seed/advance that job's budget (#1108).
+        if (e.type == AppEventType.DELIVERY_RECEIPT_REPRICE) {
+            return foldMeasuredEvent(event, context, currentCostPerMile)
+        }
+        val sid = e.sessionId
+        val odo = event.metadata?.odometer
+        val jobId = when (val payload = e.payload) {
+            is PickupPayload -> payload.jobId
+            is DeliveryPayload -> payload.jobId
+            is TaskUnassignedPayload -> payload.jobId
+            is JobAcceptMismatchPayload -> payload.jobId
+            else -> null
+        }
+        val jobContext = if (sid != null && jobId != null) {
+            resolveContext(context, sid, e.occurredAt).measureJob(jobId, odo)
+        } else context
+        val measuredContext = jobContext?.takeIf {
+            it.sessionId == (sid ?: when (val payload = e.payload) {
+                is SessionStartPayload -> payload.sessionId
+                is SessionStopPayload -> payload.sessionId
+                else -> null
+            })
+        }?.measureSession(odo) ?: jobContext
+        return foldMeasuredEvent(event, measuredContext, currentCostPerMile)
+    }
+
+    private fun foldMeasuredEvent(
         event: SequencedAppEvent,
         context: SessionFoldContext?,
         currentCostPerMile: Double?,

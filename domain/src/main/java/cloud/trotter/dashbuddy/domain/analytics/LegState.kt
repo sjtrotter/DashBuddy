@@ -25,14 +25,24 @@ data class PendingStoreLeg(
     val closedAtOdometer: Double? = null,
 )
 
-/** Immutable job origin, measured high-water mileage B, and already allocated mileage C (#1108). */
+/**
+ * Positive-delta mileage B and already allocated mileage C, re-anchored on every reading (#1108).
+ * Initial inbound anchor = previous drop or dash start, independent of the current leg anchor.
+ * [anchored] records whether that inbound anchor existed; otherwise the first reading seeds B = 0.
+ */
 @Serializable
-data class JobMileageBudget(val originOdometer: Double, val measured: Double = 0.0, val allocated: Double = 0.0)
+data class JobMileageBudget(
+    val lastOdometer: Double,
+    val measured: Double = 0.0,
+    val allocated: Double = 0.0,
+    val anchored: Boolean = true,
+)
 
 /**
  * Bounded session allocation state, persisted in `session_records.legStateJson`.
- * Pending legs drop oldest at [MAX_PENDING]; job budgets NEVER evict or restart. Once the map is
- * full, new jobs remain UNKNOWN for the rest of the session. Completion time survives page boundaries.
+ * Pending legs drop oldest at [MAX_PENDING]; budgets evict the oldest delivered job at
+ * [MAX_JOB_BUDGETS]. Live-only saturation refuses new jobs. Session allocation and completion time
+ * survive page boundaries.
  */
 @Serializable
 data class LegState(
@@ -41,10 +51,15 @@ data class LegState(
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
     val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),
     val completionHighWater: Long? = null,
+    /** Positive deltas across session odometer events; resets re-anchor without subtracting miles. */
+    val sessionMeasured: Double = 0.0,
+    /** Sum of machine completion allocations, bounded by [sessionMeasured]. */
+    val sessionAllocated: Double = 0.0,
 ) {
     companion object {
         /** Bounded-ingestion cap on each pending collection (drop-oldest on overflow). */
         const val MAX_PENDING = 32
+        const val MAX_JOB_BUDGETS = 128
     }
 }
 

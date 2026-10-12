@@ -29,7 +29,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? PickupPayload
-        val withLeg = if (p != null) ctx.measureJob(p.jobId, odo).closeStoreLeg(p.taskId, p.jobId, p.storeName, odo) else ctx
+        val withLeg = if (p != null) ctx.closeStoreLeg(p.taskId, p.jobId, p.storeName, odo) else ctx
         return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
     }
 
@@ -44,7 +44,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? DeliveryPayload
-        val withLeg = if (p != null) ctx.measureJob(p.jobId, odo).addDropoffLeg(p.taskId, odo) else ctx
+        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
         return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
     }
 
@@ -58,7 +58,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? DeliveryPayload
-        val withAnchor = if (p != null) ctx.measureJob(p.jobId, odo).let { it.copy(legState = it.legState.advanceAnchor(odo)) } else ctx
+        val withAnchor = if (p != null) ctx.copy(legState = ctx.legState.advanceAnchor(odo)) else ctx
         return FoldOutcome(context = withAnchor.advance(e.occurredAt, odo))
     }
 
@@ -169,18 +169,33 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
 
 /**
  * The first odometer-bearing pickup/dropoff lifecycle event (including completion) captures the
- * pre-event leg anchor, or previous completion/session start for completion-only history. This
- * includes the inbound leg. Without an earlier anchor, the reading itself starts measurement.
- * The origin never moves; resets cannot reduce measured mileage. Saturation never evicts a budget.
+ * inbound anchor = previous drop or dash start (`prevDropOdometer ?: startOdometer`). Leg arrivals
+ * and confirmations do not change this seed. If another job has not completed yet, its miles can
+ * overlap this budget; the session cap bounds total allocations. Without an inbound anchor, the
+ * reading itself starts measurement and `anchored` is false.
+ * Each reading adds only a positive delta, then re-anchors even after a reset. At capacity,
+ * the oldest delivered job makes room; all-live saturation leaves a new job untracked.
  */
 internal fun SessionFoldContext.measureJob(jobId: String, odo: Double?): SessionFoldContext {
     if (odo == null || !odo.isFinite()) return this
-    val budgets = legState.jobMileageBudgets
+    var budgets = legState.jobMileageBudgets
     val existing = budgets[jobId]
-    if (existing == null && budgets.size >= LegState.MAX_PENDING) return this
-    val origin = legState.prevLegOdometer ?: prevDropOdometer ?: startOdometer ?: odo
-    val budget = existing ?: JobMileageBudget(origin)
-    val measured = maxOf(budget.measured, odo - budget.originOdometer, 0.0)
+    if (existing == null && budgets.size >= LegState.MAX_JOB_BUDGETS) {
+        val oldestDelivered = budgets.keys.firstOrNull { it in deliveredJobIds } ?: return this
+        budgets = budgets - oldestDelivered
+    }
+    val anchor = prevDropOdometer ?: startOdometer
+    val budget = existing ?: JobMileageBudget(anchor ?: odo, anchored = anchor != null)
+    val measured = budget.measured + (odo - budget.lastOdometer).coerceAtLeast(0.0)
     return copy(legState = legState.copy(jobMileageBudgets = budgets +
-        (jobId to budget.copy(measured = measured))))
+        (jobId to budget.copy(lastOdometer = odo, measured = measured))))
+}
+
+/** Measure before dispatch so every completion can spend only the session's remaining mileage. */
+internal fun SessionFoldContext.measureSession(odo: Double?): SessionFoldContext {
+    if (odo == null || !odo.isFinite()) return this
+    val anchor = lastOdometer ?: startOdometer ?: odo
+    return copy(lastOdometer = odo, legState = legState.copy(
+        sessionMeasured = legState.sessionMeasured + (odo - anchor).coerceAtLeast(0.0),
+    ))
 }

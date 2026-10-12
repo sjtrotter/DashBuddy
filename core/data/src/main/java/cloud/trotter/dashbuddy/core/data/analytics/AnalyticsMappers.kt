@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.core.database.analytics.OfferListRow
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionWithCashRow
 import cloud.trotter.dashbuddy.domain.analytics.AcceptedOfferOutcomeSample
+import cloud.trotter.dashbuddy.domain.analytics.MilesBasis
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.analytics.OfferListing
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcome
@@ -38,7 +39,7 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     cashTip = cashTip,
     milesToStore = milesToStore,
     milesToDropoff = milesToDropoff,
-    milesBasis = milesBasis,
+    milesBasis = try { MilesBasis.valueOf(milesBasis) } catch (_: IllegalArgumentException) { MilesBasis.UNKNOWN },
     sessionAssigned = sessionAssigned == 1,
     receiptRepriced = receiptRepricedAt != null,
 )

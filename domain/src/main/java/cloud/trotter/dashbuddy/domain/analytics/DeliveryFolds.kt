@@ -28,7 +28,7 @@ internal object DeliveryFolds {
         val p = e.payload as? DeliveryPayload
             ?: return FoldOutcome(context = context, skip = "DELIVERY_COMPLETED: missing/malformed payload")
         val sid = e.sessionId
-        val ctx = sid?.let { resolveContext(context, it, e.occurredAt).measureJob(p.jobId, event.metadata?.odometer) }
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
         val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
         val odo = event.metadata?.odometer
         val completedAt = p.completedAt ?: e.occurredAt
@@ -108,13 +108,13 @@ internal object DeliveryFolds {
         val basePay = if (soleDrop) receipt.totalBasePay else null
 
         // Session time is allocated once in sequence order, even when completedAt runs backward.
-        val prevAt = ctx?.completionHighWater?.let { maxOf(it, ctx.startedAt) } ?: ctx?.startedAt
+        val prevAt = ctx?.legState?.completionHighWater?.let { maxOf(it, ctx.startedAt) } ?: ctx?.startedAt
         val realizedMinutes = prevAt?.let { (completedAt - it).coerceAtLeast(0L) / 60_000.0 }
-        val completionHighWater = maxOf(ctx?.completionHighWater ?: completedAt, completedAt)
+        val completionHighWater = maxOf(ctx?.legState?.completionHighWater ?: completedAt, completedAt)
 
         // #688 phase B: consume this drop's per-leg mileage from the session leg accumulator.
         //  - milesToDropoff = this drop's own taskId entry (unambiguous).
-        //  - milesToStore   = one store leg of THIS job, stamped ONLY on a LEG-SUM row (milesToDropoff
+        //  - milesToStore   = one store leg of THIS job, stamped ONLY on a leg-measured row (milesToDropoff
         //    != null). Exact NORMALIZED-chain store-form match wins (#688 review Fix 3 — the #159
         //    StoreKeys SSOT, so a payout form-drift like "StoreX #55" still matches the pickup form;
         //    a null payload storeName can't match, the #526/#557 "Unknown store" family), else the
@@ -122,7 +122,7 @@ internal object DeliveryFolds {
         //    a shared-store stack's first drop claims the whole store leg, the sibling gets null).
         //  - A LEGACY row (missed DELIVERY_ARRIVED ⇒ milesToDropoff null) stamps NO store leg (#688
         //    review Fix 4) and retains the existing closed-store-leg retirement policy below.
-        //    #1108: measured legs are provenance; the job budget controls money independently.
+        //    #1108: measured legs are provenance; the job and session budgets control money independently.
         val legState = ctx?.legState ?: LegState()
         val milesToDropoff = legState.pendingDropoffLegs[p.taskId]
         val storeLegs = legState.pendingStoreLegs
@@ -145,7 +145,11 @@ internal object DeliveryFolds {
         val budget = legState.jobMileageBudgets[p.jobId]
         val remaining = budget?.let { (it.measured - it.allocated).coerceAtLeast(0.0) }
         val legSum = milesToDropoff?.let { (milesToStore ?: 0.0) + it }
-        val realizedMiles = remaining?.let { if (legSum != null) minOf(legSum, it) else it }
+        val jobAllocation = remaining?.takeUnless {
+            !budget.anchored && budget.measured == 0.0 && legSum == null
+        }?.let { if (legSum != null) minOf(legSum, it) else it }
+        val sessionRemaining = (legState.sessionMeasured - legState.sessionAllocated).coerceAtLeast(0.0)
+        val realizedMiles = jobAllocation?.let { minOf(it, sessionRemaining) }
         val milesBasis = when {
             realizedMiles == null -> MilesBasis.UNKNOWN
             legSum == null -> MilesBasis.LEGACY_SPAN
@@ -225,19 +229,19 @@ internal object DeliveryFolds {
             // preserves the anchor available to a newly observed job. Completion time only advances
             // to the maximum seen, regardless of the timestamp order of the event log.
             prevDropOdometer = odo ?: ctx.prevDropOdometer,
-            completionHighWater = completionHighWater,
             lastEventAt = maxOf(ctx.lastEventAt, e.occurredAt),
             lastOdometer = odo ?: ctx.lastOdometer,
             // #688: consume the claimed store leg + this drop's dropoff leg, then advance the leg
             // anchor to the completion odometer (null ⇒ anchor unchanged, miles roll forward).
             legState = legState.copy(
                 completionHighWater = completionHighWater,
+                sessionAllocated = legState.sessionAllocated + (realizedMiles ?: 0.0),
                 jobMileageBudgets = if (budget != null && realizedMiles != null) {
                     legState.jobMileageBudgets + (p.jobId to budget.copy(allocated = budget.allocated + realizedMiles))
                 } else legState.jobMileageBudgets,
                 prevLegOdometer = odo ?: legState.prevLegOdometer,
                 pendingStoreLegs = when {
-                    // Leg-sum row: consume the single claimed store leg.
+                    // Leg-measured row: consume the single claimed store leg.
                     claimIdx >= 0 -> storeLegs.filterIndexed { i, _ -> i != claimIdx }
                     // Preserve #688's conservative session-wide retirement of already-closed
                     // store legs (or unknown closure order). #1108 budgets independently prevent
@@ -245,7 +249,7 @@ internal object DeliveryFolds {
                     milesToDropoff == null -> storeLegs.filter { leg ->
                         leg.closedAtOdometer != null && odo != null && leg.closedAtOdometer > odo
                     }
-                    // Leg-sum row that found no store leg to claim: leave the queue untouched.
+                    // Leg-measured row that found no store leg to claim: leave the queue untouched.
                     else -> storeLegs
                 },
                 pendingDropoffLegs = if (milesToDropoff != null) {
@@ -276,7 +280,7 @@ internal object DeliveryFolds {
         val p = e.payload as? PickupPayload
             ?: return FoldOutcome(context = context, skip = "PICKUP_CONFIRMED: missing/malformed payload")
         val sid = e.sessionId
-        val ctx = sid?.let { resolveContext(context, it, e.occurredAt).measureJob(p.jobId, event.metadata?.odometer) }
+        val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
         val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire
         val pickup = PickupFold(
             eventSequenceId = event.sequenceId,

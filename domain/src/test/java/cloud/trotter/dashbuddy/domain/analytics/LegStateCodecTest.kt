@@ -11,7 +11,12 @@ class LegStateCodecTest {
         val state = LegState(
             prevLegOdometer = 712.45,
             completionHighWater = 1234567L,
-            jobMileageBudgets = mapOf("J1" to JobMileageBudget(705.0, 7.45, 3.2)),
+            sessionMeasured = 9.0,
+            sessionAllocated = 3.2,
+            jobMileageBudgets = mapOf(
+                "J1" to JobMileageBudget(712.45, 7.45, 3.2),
+                "J2" to JobMileageBudget(712.45, anchored = false),
+            ),
             pendingStoreLegs = listOf(
                 PendingStoreLeg("PA", "J1", "Bill Miller BBQ", 0.22),
                 PendingStoreLeg("PB", "J1", null, 0.16),

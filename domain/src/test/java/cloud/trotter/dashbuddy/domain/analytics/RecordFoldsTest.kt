@@ -82,16 +82,74 @@ class RecordFoldsTest {
             val outcome = RecordFolds.foldEvent(event, ctx, cpm)
             ctx = outcome.context?.let {
                 val restored = LegStateCodec.decode(LegStateCodec.encode(it.legState))
-                it.copy(legState = restored, completionHighWater = restored.completionHighWater)
+                it.copy(legState = restored)
             }
             ctx?.legState?.jobMileageBudgets?.values?.forEach {
                 assertTrue("induction: allocated <= measured", it.allocated <= it.measured + 1e-9)
                 assertTrue(it.allocated >= 0.0)
             }
+            ctx?.legState?.let {
+                assertTrue("session induction: allocated <= measured", it.sessionAllocated <= it.sessionMeasured + 1e-9)
+                assertTrue(it.sessionAllocated >= 0.0)
+            }
             outcome.delivery?.realizedMinutes?.let { assertTrue(it >= 0.0) }
             outcome
         }
         return outcomes to ctx
+    }
+
+    @Test
+    fun `1108 captured single delivery keeps receipt repricing outside the mileage partition`() {
+        // AnalyticsBackfillReplayTest replays single_delivery_2026_06_16, then stamps 100 + i.
+        // OFFER_RECEIVED precedes DASH_START; arrival resolves the store and emits a second NAV.
+        // The pre-arrival screen emits no DELIVERY_ARRIVED, and the idle tail emits no DASH_STOP.
+        // Its final REPRICE is bookkeeping: #1033 requires the session context to stay untouched.
+        val s = "single_delivery_2026_06_16"
+        val start = 1_781_644_035_438L
+        val pickupAt = 1_781_644_052_151L
+        val arrivedAt = 1_781_644_167_944L
+        val departureAt = 1_781_644_420_568L
+        val completedAt = 1_781_644_734_928L
+        val offer = acceptedOffer(pickupAt, null, presentedAt = start)
+        val pickup = PickupPayload(jobId = "J1", taskId = "P1", storeName = "StoreX",
+            phaseStartedAt = pickupAt)
+        val drop = DeliveryPayload(jobId = "J1", taskId = "D1", phaseStartedAt = departureAt)
+        val receipt = parsedPay(base = 2.0, tip = 1.1)
+        val events = listOf(
+            ev(AppEventType.OFFER_RECEIVED, s, start,
+                offer.copy(outcome = AppEventType.OFFER_RECEIVED), 100.0),
+            dashStart(s, start, 101.0),
+            ev(AppEventType.OFFER_ACCEPTED, s, pickupAt, offer, 102.0),
+            ev(AppEventType.PICKUP_NAV_STARTED, s, pickupAt, pickup, 103.0),
+            pickupArrived(s, arrivedAt, "J1", "P1", "StoreX", 104.0),
+            ev(AppEventType.PICKUP_NAV_STARTED, s, arrivedAt, pickup.copy(arrivedAt = arrivedAt), 105.0),
+            pickupConfirmed(s, departureAt, "J1", "P1", "StoreX", 106.0),
+            ev(AppEventType.DELIVERY_NAV_STARTED, s, departureAt, drop, 107.0),
+            ev(AppEventType.DELIVERY_CONFIRMED, s, completedAt, drop, 108.0),
+            delivery(s, completedAt, "J1", "D1", totalPay = 3.1, dropRealizedPay = 3.1,
+                parsedPay = receipt, odo = 109.0, phaseStartedAt = departureAt),
+            ev(AppEventType.DELIVERY_RECEIPT_REPRICE, s, completedAt,
+                DeliveryReceiptRepricePayload(jobId = "J1", taskId = "D1", totalPay = 3.1,
+                    parsedPay = receipt, dropRealizedPay = 3.1), 110.0),
+        )
+        val full = foldSession(events, currentCpm = cpm)
+        assertEquals("paging preserves the captured sequence", full, foldRestored(events))
+        val (outcomes, context) = full
+        val ctx = context!!
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertEquals("repricing preserves all session and job anchors/budgets",
+            outcomes[9].context, outcomes[10].context)
+        assertNotNull(outcomes[10].receiptReprice)
+        assertEquals(101.0, ctx.startOdometer!!, 0.0)
+        assertEquals(109.0, ctx.lastOdometer!!, 0.0)
+        assertEquals(8.0, row.realizedMiles!!, 0.0)
+        assertEquals("backfill invariant 4", ctx.lastOdometer - ctx.startOdometer, row.realizedMiles, 0.0)
+        assertEquals(JobMileageBudget(109.0, 8.0, 8.0), ctx.legState.jobMileageBudgets["J1"])
+        assertEquals(8.0, ctx.legState.sessionAllocated, 0.0)
+        assertEquals(MilesBasis.LEGACY_SPAN, row.milesBasis)
+        assertNull(row.milesToStore)
+        assertNull(row.milesToDropoff)
+        assertEquals(3.1 - 8.0 * cpm, row.netProfit!!, 1e-9)
     }
 
     @Test
@@ -151,7 +209,7 @@ class RecordFoldsTest {
     }
 
     @Test
-    fun `1108 budgets keep measured high water across backwards odometers and resets`() {
+    fun `1108 budgets accumulate positive deltas across backwards odometers and resets`() {
         val events = listOf(
             dashStart("reset", 1_000, 100.0),
             pickupArrived("reset", 2_000, "job", "p", "StoreX", 101.0),
@@ -163,32 +221,134 @@ class RecordFoldsTest {
         )
         val (outcomes, ctx) = foldRestored(events)
         assertEquals(foldSession(events, currentCpm = cpm), outcomes to ctx)
-        assertEquals(listOf(8.0, 0.0, 1.0), outcomes.mapNotNull { it.delivery?.realizedMiles })
-        assertEquals(JobMileageBudget(100.0, 9.0, 9.0), ctx!!.legState.jobMileageBudgets["job"])
-        assertEquals(5_000L, ctx.completionHighWater)
+        assertEquals(listOf(8.0, 0.0, 19.0), outcomes.mapNotNull { it.delivery?.realizedMiles })
+        assertEquals(JobMileageBudget(109.0, 27.0, 27.0), ctx!!.legState.jobMileageBudgets["job"])
+        assertEquals(5_000L, ctx.legState.completionHighWater)
     }
 
     @Test
-    fun `1108 saturated budgets never restart an old job and new jobs remain unknown`() {
+    fun `1108 session cap bounds overlapping jobs in both completion orders`() {
+        for (legacyFirst in listOf(false, true)) {
+            val prefix = listOf(
+                dashStart("overlap", 0, 100.0),
+                deliveryArrived("overlap", 1_000, "J1", "A", odo = 110.0),
+                // Inbound anchor = previous drop or dash start; J1 has not completed, so use 100.
+                ev(AppEventType.DELIVERY_CONFIRMED, "overlap", 2_000,
+                    DeliveryPayload(jobId = "J2", taskId = "B", phaseStartedAt = 0), 110.0),
+                deliveryArrived("overlap", 3_000, "J1", "A", odo = 113.0),
+            )
+            val a = delivery("overlap", 4_000, "J1", "A", odo = 120.0)
+            val b = delivery("overlap", 5_000, "J2", "B", odo = 120.0)
+            val events = prefix + if (legacyFirst) listOf(b, a) else listOf(a, b)
+            val result = foldRestored(events)
+            assertEquals(foldSession(events, currentCpm = cpm), result)
+            val rows = result.first.mapNotNull { it.delivery }
+            assertEquals(20.0, result.second!!.legState.jobMileageBudgets.getValue("J2").measured, 0.0)
+            assertEquals(20.0, rows.sumOf { it.realizedMiles!! }, 1e-9)
+            if (!legacyFirst) {
+                assertEquals(13.0, rows[0].realizedMiles!!, 1e-9)
+                assertEquals(7.0, rows[1].realizedMiles!!, 1e-9)
+            } else {
+                assertEquals(20.0, rows[0].realizedMiles!!, 1e-9)
+                assertEquals(0.0, rows[1].realizedMiles!!, 1e-9)
+                assertEquals(MilesBasis.BUDGET_CAPPED, rows[1].milesBasis)
+            }
+        }
+    }
+
+    @Test
+    fun `1108 inbound anchor is previous drop or dash start despite an advanced leg anchor`() {
+        for (previousDrop in listOf(null, 105.0)) {
+            val events = mutableListOf(dashStart("inbound", 0, 100.0))
+            if (previousDrop != null) {
+                events += delivery("inbound", 1_000, "J1", "A", odo = previousDrop)
+            }
+            // Another job advances the leg anchor one mile beyond the inbound anchor.
+            events += ev(AppEventType.DELIVERY_CONFIRMED, "inbound", 2_000,
+                DeliveryPayload(jobId = "other", taskId = "other-drop", phaseStartedAt = 0),
+                (previousDrop ?: 100.0) + 1.0)
+            events += delivery("inbound", 3_000, "J2", "B", odo = 109.0)
+            val result = foldRestored(events)
+            assertEquals(foldSession(events, currentCpm = cpm), result)
+            val expectedMiles = if (previousDrop == null) 9.0 else 4.0
+            assertEquals(expectedMiles, result.first.last().delivery!!.realizedMiles!!, 0.0)
+            assertEquals(JobMileageBudget(109.0, expectedMiles, expectedMiles, anchored = true),
+                result.second!!.legState.jobMileageBudgets.getValue("J2"))
+            assertEquals(9.0, result.second!!.legState.sessionAllocated, 0.0)
+        }
+    }
+
+    @Test
+    fun `1108 reset below initial anchor resumes real mileage from the reset reading`() {
+        val events = listOf(
+            dashStart("reset", 0, 9050.0),
+            pickupArrived("reset", 1_000, "J2", "P", "StoreX", 12.4),
+            deliveryArrived("reset", 2_000, "J2", "A", odo = 15.4),
+            delivery("reset", 3_000, "J2", "A", odo = 15.4),
+            delivery("reset", 4_000, "J2", "B", odo = 17.4),
+        )
+        val afterReset = foldRestored(events.take(2)).second!!.legState
+        assertEquals(0.0, afterReset.jobMileageBudgets.getValue("J2").measured, 0.0)
+        assertEquals(0.0, afterReset.sessionMeasured, 0.0)
+        val result = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), result)
+        val rows = result.first.mapNotNull { it.delivery }
+        assertEquals(3.0, rows[0].realizedMiles!!, 1e-9)
+        assertEquals(2.0, rows[1].realizedMiles!!, 1e-9)
+        assertEquals(MilesBasis.LEG_SUM, rows[0].milesBasis)
+        assertEquals(MilesBasis.LEGACY_SPAN, rows[1].milesBasis)
+    }
+
+    @Test
+    fun `1108 anchorless completion is unknown but anchored zero mileage is a legacy span`() {
+        for (anchor in listOf(null, 100.0)) {
+            val result = foldRestored(listOf(
+                dashStart("anchor", 0, anchor),
+                ev(AppEventType.DELIVERY_CONFIRMED, "anchor", 500,
+                    DeliveryPayload(jobId = "other", taskId = "other-drop", phaseStartedAt = 0), 100.0),
+                delivery("anchor", 1_000, "J", "D", odo = 100.0),
+            ))
+            val row = result.first.last().delivery!!
+            assertEquals(anchor != null, result.second!!.legState.jobMileageBudgets.getValue("J").anchored)
+            if (anchor == null) {
+                assertNull(row.realizedMiles)
+                assertEquals(MilesBasis.UNKNOWN, row.milesBasis)
+            } else {
+                assertEquals(0.0, row.realizedMiles!!, 0.0)
+                assertEquals(MilesBasis.LEGACY_SPAN, row.milesBasis)
+            }
+        }
+    }
+
+    @Test
+    fun `1108 full budget map evicts oldest delivered job to track job 129`() {
         val events = mutableListOf(dashStart("cap", 0, 100.0))
-        repeat(LegState.MAX_PENDING) { i ->
+        repeat(LegState.MAX_JOB_BUDGETS + 1) { i ->
             events += delivery("cap", (i + 1) * 1_000L, "j$i", "t$i", odo = 101.0 + i)
         }
-        events += delivery("cap", 40_000, "overflow", "x", odo = 150.0)
-        events += pickupArrived("cap", 41_000, "overflow", "p", "StoreX", 151.0)
-        events += deliveryArrived("cap", 42_000, "overflow", "y", odo = 152.0)
-        events += delivery("cap", 43_000, "overflow", "y", odo = 153.0)
-        events += delivery("cap", 44_000, "j0", "again", odo = 101.0)
-        val full = foldSession(events, currentCpm = cpm)
-        assertEquals(full, foldRestored(events))
-        full.first.mapNotNull { it.delivery }.filter { it.jobId == "overflow" }.forEach {
-            assertNull(it.realizedMiles)
-            assertNull(it.netProfit)
-            assertEquals(MilesBasis.UNKNOWN, it.milesBasis)
+        val result = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), result)
+        val budgets = result.second!!.legState.jobMileageBudgets
+        assertEquals(LegState.MAX_JOB_BUDGETS, budgets.size)
+        assertTrue("oldest delivered job evicted", "j0" !in budgets)
+        assertEquals(1.0, budgets.getValue("j128").allocated, 0.0)
+        assertEquals(129.0, result.second!!.legState.sessionAllocated, 0.0)
+    }
+
+    @Test
+    fun `1108 all-live budget saturation refuses a new job`() {
+        val events = mutableListOf(dashStart("live", 0, 100.0))
+        repeat(LegState.MAX_JOB_BUDGETS) { i ->
+            events += pickupArrived("live", (i + 1) * 1_000L, "j$i", "p$i", "StoreX", 101.0 + i)
         }
-        assertEquals(0.0, full.first.last().delivery!!.realizedMiles!!, 0.0)
-        assertEquals(LegState.MAX_PENDING, full.second!!.legState.jobMileageBudgets.size)
-        assertEquals(1.0, full.second!!.legState.jobMileageBudgets.getValue("j0").allocated, 0.0)
+        events += delivery("live", 200_000, "overflow", "D", totalPay = 12.0, odo = 250.0)
+        val result = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), result)
+        assertEquals(12.0, result.first.last().delivery!!.realizedPay!!, 0.0)
+        assertNull(result.first.last().delivery!!.netProfit)
+        assertNull(result.first.last().delivery!!.realizedMiles)
+        assertEquals(MilesBasis.UNKNOWN, result.first.last().delivery!!.milesBasis)
+        assertEquals(LegState.MAX_JOB_BUDGETS, result.second!!.legState.jobMileageBudgets.size)
     }
 
     private var seq = 0L
@@ -1432,6 +1592,7 @@ class RecordFoldsTest {
                 jobId = "J1", taskId = "t1", totalPay = receipt.total,
                 parsedPay = receipt, dropRealizedPay = receipt.total,
             ),
+            odometer = 4.0,
         )
         val out = RecordFolds.foldEvent(ev, ctx, null)
 
@@ -1449,6 +1610,7 @@ class RecordFoldsTest {
         // Bookkeeping about a past row, not session activity: liveness must NOT advance.
         assertEquals(ctx, out.context)
         assertEquals(1_000L, out.context!!.lastEventAt)
+        assertNull("repricing must not synthesize a session", RecordFolds.foldEvent(ev, null, null).context)
     }
 
     @Test

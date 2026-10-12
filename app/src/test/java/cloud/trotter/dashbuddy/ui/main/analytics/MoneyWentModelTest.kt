@@ -48,6 +48,26 @@ class MoneyWentModelTest {
         assertEquals(split.stayedWithYou, split.cameIn - split.carCosts, 1e-9)
     }
 
+    @Test
+    fun `paid null-net row does not become phantom car costs`() {
+        val split = MoneyWentModel.from(
+            economics(gross = 32.0, net = 12.0, fuel = 3.0, nonFuel = 5.0)
+                .copy(payWithoutNet = 12.0),
+        )
+        assertEquals(32.0, split.cameIn, 0.0)
+        assertEquals(12.0, split.stayedWithYou, 0.0)
+        assertEquals(8.0, split.carCosts, 0.0)
+        assertEquals(0.4, split.ratePerMile!!, 1e-9)
+        assertTrue(split.hasSplit)
+    }
+
+    @Test
+    fun `all paid rows without net contribute no measured car costs`() {
+        val split = MoneyWentModel.from(economics(gross = 12.0, net = 0.0).copy(payWithoutNet = 12.0))
+        assertEquals(0.0, split.carCosts, 0.0)
+        assertFalse(split.hasSplit)
+    }
+
     // ── Coverage guard: the 3-segment (kept / gas / wear) form ─────────────
 
     @Test

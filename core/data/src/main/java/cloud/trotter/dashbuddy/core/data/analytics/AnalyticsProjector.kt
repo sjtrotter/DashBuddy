@@ -900,7 +900,7 @@ class AnalyticsProjector @Inject constructor(
         jobsCompleted = jobsCompleted,
         startSource = startSource,
         // #688 phase B: persist the per-leg accumulator so it survives a batch-boundary rehydration.
-        legStateJson = LegStateCodec.encode(legState.copy(completionHighWater = completionHighWater)),
+        legStateJson = LegStateCodec.encode(legState),
     )
 
     private fun SessionRecordEntity.toContext(
@@ -931,7 +931,6 @@ class AnalyticsProjector @Inject constructor(
         deliveredJobIds = deliveredJobIds,
         receiptedJobIds = receiptedJobIds,
         prevDropOdometer = prevDropOdometer,
-        completionHighWater = LegStateCodec.decode(legStateJson).completionHighWater,
         lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
         lastEvaluatedFuelPerMile = lastEvaluatedFuelPerMile,
         lastEvaluatedNonFuelPerMile = lastEvaluatedNonFuelPerMile,

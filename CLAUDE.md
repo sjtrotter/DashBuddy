@@ -647,6 +647,8 @@ sites, so the reconciliation's Σ-attributed stays cash-free (#688);
 `originalPayBasis` is stamped at first fold and never rewritten (#703).
 #254 materializes per-platform time constants from eligible read-model drops, separately from user overrides, using measured transit pace and combined pickup/dropoff dwell.
 A pay-less row that drove miles carries `net = −cost` (#1133; `realizedPay` stays null).
+A paid null-net row retains its gross pay; `payWithoutNet` excludes that pay from MoneyWentModel's
+`gross − net` car-cost calculation (#1108 saturation), with cash already cancelling separately.
 
 **Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
 no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's
@@ -706,9 +708,13 @@ anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACC
 closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlier rows). The outcome,
 funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
 instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
-`milesToStore`/`milesToDropoff` with claim-once store legs; #1108 allocates `realizedMiles` from a per-job
-budget (measured high-water span minus prior allocations): min(leg sum, remaining) for arrived drops,
-remaining for legacy drops, null for untracked jobs. Session/period/IRS/CSV totals stay span-anchored; a driver
+`milesToStore`/`milesToDropoff` with claim-once store legs; #1108 allocates `realizedMiles` from
+per-job AND per-session budgets; positive-delta accumulation re-anchors after odometer resets.
+Arrived drops get min(leg sum, job remaining), legacy drops get job remaining, both capped by session
+remaining; untracked or unanchored zero-measured legacy drops stay null. The 128-job budget map evicts
+the oldest delivered job at capacity. `MilesBasis` is an enum (Room name, unknown-string fallback);
+the drill-down discloses BUDGET_CAPPED and LEGACY_SPAN beside mileage. `LegState` alone owns the
+serialized completion high-water. Session/period/IRS/CSV totals stay span-anchored; a driver
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 
