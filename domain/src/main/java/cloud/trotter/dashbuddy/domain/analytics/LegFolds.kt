@@ -44,7 +44,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? DeliveryPayload
-        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
+        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo, e.occurredAt, p.arrivedAt) else ctx
         return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
     }
 
@@ -164,15 +164,20 @@ internal fun SessionFoldContext.closeStoreLeg(
  * Close a to-dropoff leg, accumulating onto the drop's own [taskId] (a re-arrival adds to the same
  * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order.
  */
-internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
+internal fun SessionFoldContext.addDropoffLeg(
+    taskId: String,
+    odo: Double?,
+    occurredAt: Long,
+    arrivedAt: Long?,
+): SessionFoldContext {
     val (miles, ls) = legState.closeLeg(odo)
     return copy(legState = ls.copy(
         pendingDropoffLegs = if (miles != null) {
             ls.pendingDropoffLegs.putCapped(taskId, (ls.pendingDropoffLegs[taskId] ?: 0.0) + miles)
         } else ls.pendingDropoffLegs,
-        // First arrival is a fact even when its odometer or the leg anchor is unknown.
-        dropoffArrivalOdometers = if (taskId !in ls.dropoffArrivalOdometers) {
-            ls.dropoffArrivalOdometers.putCapped(taskId, odo?.takeIf { it.isFinite() })
+        // Only the step that stamped Task.arrivedAt owns its reading, even without a leg anchor.
+        dropoffArrivalOdometers = if (arrivedAt != null && occurredAt == arrivedAt) {
+            ls.dropoffArrivalOdometers.putCapped(taskId, ArrivalReading(arrivedAt, odo?.takeIf { it.isFinite() }))
         } else ls.dropoffArrivalOdometers,
     ))
 }
