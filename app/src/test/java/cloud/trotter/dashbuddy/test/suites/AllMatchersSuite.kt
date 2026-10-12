@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffGiftSheetRecognitionTe
 import cloud.trotter.dashbuddy.core.pipeline.rules.DropoffSheetRedactionParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.PickupWaitArrivalRecognitionTest
+import cloud.trotter.dashbuddy.core.pipeline.rules.ReceiptAnchorTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.PickupArrivedRedactParityTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.dashbuddy.core.pipeline.rules.ParseOutputGoldenTest
@@ -207,6 +208,7 @@ import org.junit.runners.Suite
     RuleIdLogSafetyTest::class,
     GoPuffRecognitionTest::class,
     PickupWaitArrivalRecognitionTest::class,
+    ReceiptAnchorTest::class,
     UberOfferKindAndStackStoreTest::class,
     cloud.trotter.dashbuddy.core.pipeline.rules.DoorDashAddonOfferTest::class,
     DashSummaryReanchorTest::class,

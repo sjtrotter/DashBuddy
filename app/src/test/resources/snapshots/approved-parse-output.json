@@ -2442,6 +2442,48 @@
             "subFlow": "NAVIGATION"
         }
     },
+    "dropoff_pre_arrival/2026-07-28_20-16-24-940__doordash__accessibility.window__dropoff_pre_arrival__22a4ac.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
+            "deadline": {
+                "text": "20:37",
+                "time": 1780259820000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
+    "dropoff_pre_arrival/2026-07-28_20-35-50-483__doordash__accessibility.window__dropoff_pre_arrival__196177.json": {
+        "ruleId": "doordash.screen.dropoff_pre_arrival",
+        "intent": "dropoff_pre_arrival",
+        "shape": "task",
+        "fields": {
+            "arrivalConfirmed": false,
+            "customerAddressHash": "7342b159859c4de641357a7c8243c1090043221af131d43681d8443b3e0a7100",
+            "customerNameHash": "b68919aff001d8366249403a2544fba2d833084f1ad22839b6310aadacb6a138",
+            "deadline": {
+                "text": "20:35",
+                "time": 1780259700000
+            },
+            "itemsRemaining": null,
+            "itemsShopped": null,
+            "phase": "DROPOFF",
+            "redCardTotal": null,
+            "storeAddress": null,
+            "storeName": null,
+            "subFlow": "NAVIGATION"
+        }
+    },
     "dropoff_pre_arrival/2026-07-29_19-02-29-477__doordash__accessibility.window__dropoff_pre_arrival__8fe217.json": {
         "ruleId": "doordash.screen.dropoff_pre_arrival",
         "intent": "dropoff_pre_arrival",

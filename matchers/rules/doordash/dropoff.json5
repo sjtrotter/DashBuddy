@@ -2228,9 +2228,19 @@
         "modeHint": "online"
       },
       "require": {
-        "allTextContainsAny": [
-          "this offer",
-          "delivery complete"
+        "all": [
+          {
+            "any": [
+              { "allTextContains": "this offer" },
+              { "allTextContains": "delivery complete" }
+            ]
+          },
+          {
+            "any": [
+              { "allTextContains": "this dash so far" },
+              { "exists": { "hasIdSuffix": "final_value" } }
+            ]
+          }
         ]
       },
       "reject": [
@@ -2254,9 +2264,15 @@
         },
         {
           "allTextContains": "Additional"
+        },
+        {
+          "exists": { "hasIdSuffix": "drop_off_bottom_sheet_container" }
+        },
+        {
+          "exists": { "hasIdSuffix": "complete_delivery_steps_button" }
         }
       ],
-      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on).",
+      "comment": "#564: reject the OFFER-only markers above ('Total will be higher'/'High paying offer'/'Additional') — an add-on offer popup carries 'this offer' (in 'priority for this offer') which satisfies require, but it is NOT a delivery summary. Without these rejects a transient offer/loading frame mid-stack masqueraded as a collapsed summary and fabricated a $0 completion (06-21 seq98, Burger King add-on). #935: post:task is a lifecycle flow, so a false receipt claim can complete a live task; this is not merely a capture label. The coordinator's census of ~250 fielded collapsed receipts (2026-07-03 through 2026-10-11), plus the corpus, found BOTH 'This offer' AND 'This dash so far' on EVERY genuine receipt: the 2026-01-28 id-bearing renders, 8.93.7 id-less renders (#1029), and every 8.9x-8.101.8 render since. The legacy final_value/expandable_view/earnings_ticker ids vanished after 2026-08-02; 'delivery complete' appeared on NO capture (a dead alternative retained for compatibility). Require both text sections, with final_value as a legacy rollback alternative to the dash-total section. The four #910 misclassifications (2026-07-28 20:16-20:35) were LIVE drop-off sheets carrying 'This offer' but no 'This dash so far'. Reject drop_off_bottom_sheet_container and complete_delivery_steps_button independently at rule level (#1222), so a combined frame carrying receipt text still cannot claim the live customer card. Keep all seven existing rejects and the #564 scar tissue above.",
       "parse": {
         "as": "post_task",
         "fields": {
