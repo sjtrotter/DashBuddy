@@ -113,6 +113,11 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [active] **🆕 NEW — a live drop-off sheet never shows as a receipt (#935).** Check that no
+  `delivery_summary_collapsed` capture carries the customer card (`drop_off_bottom_sheet_container`
+  or `complete_delivery_steps_button`). Every real receipt must still be recognized, and
+  `expand_earnings` must still fire. — Confirmed: 0/2
+
 - [active] **🆕 NEW — no 5-second ghost dash after End dash (#1311).** End a dash, dismiss the
   summary, and let the dash-controls sheet briefly reappear before the idle map. The session list
   and per-day stats must show only the ended dash, with no new zero-offer dash or start bubble.
