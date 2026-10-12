@@ -520,10 +520,6 @@ data class PendingReceiptReprice(
  * round 4, only once a fresh readable read on its own surface has AGREED with it
  * ([unconfirmed]), because a window in which nothing was ever on screen challenges nothing.
  *
- * #1311 also uses this pending for a hint-only Online screen shortly after a session end:
- * stay Offline, cancel on Offline, and on commit mint the session at [since]. Both origins
- * share the arming helper, grace length, and wake identity. Recovery drops either origin.
- *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
  * reducer pure.
@@ -628,6 +624,10 @@ data class PendingSessionPay(
  * commits immediately (an offer is authoritative online evidence, structurally
  * absent from the flap).
  *
+ * #1311 also uses this pending for a hint-only Online screen near a session end: stay Offline,
+ * cancel on Offline or Paused evidence (including at lapse), and mint the session at [since]
+ * on commit; both origins share the armer, grace, wake identity, and recovery drop.
+ *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the
  * reducer pure.
@@ -640,6 +640,8 @@ data class PendingModeResume(
     val deadline: Long,
     /** Which arm of the `MODE_RESUME_COMMIT` timer belongs to it — see [PlatformRegion.wakeSeq]. */
     val wakeId: Long = 0,
+    /** Latest idle parse deferred by an Offline-origin start; Paused resumes leave this null. */
+    val idleFields: ParsedFields.IdleFields? = null,
 )
 
 /**

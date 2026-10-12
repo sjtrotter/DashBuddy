@@ -25,17 +25,18 @@ import cloud.trotter.dashbuddy.domain.state.Platform
  * unacceptable for a number the dasher reads as their earnings. Dropping costs at most one settle
  * window: the committed total stands until the next idle frame re-parks the live one.
  *
- * **The graced resume** (`pendingModeResume`, #605 — dropped since #1054 round 3) is the same class
- * of thing, which round 2 got wrong by trying to keep it. Its window is 8 s of *un-contradicted
- * observation* — a paused frame inside it cancels — so committing one after a restart asserts that
- * 8 s of dead process time were 8 s of nobody contradicting it. And the commit is not inert:
+ * **The graced resume** (`pendingModeResume`, #605/#1311) covers Paused resumes and Offline starts,
+ * both dropped on recovery because neither can be confirmed by dead process time. Its window is
+ * 8 s of *un-contradicted observation* — a Paused or Offline frame, including at lapse, cancels —
+ * so committing one after a restart asserts that 8 s of dead process time were 8 s of nobody
+ * contradicting it. And the commit is not inert:
  * `applyModeTransition(…, Mode.Online)` MINTS a session when the region has none (a phantom dash off
  * any observation past the deadline — a notification, a click — with no online screen behind it),
  * and even with a live session `EffectMap.diffMode`'s Paused→Online arm CANCELS the
  * `SESSION_PAUSED_SAFETY` net. Round 2's session-null guard suppressed only the RE-ARM, which is not
  * the same thing: the resume stayed installed for the tail's own replayed `ScheduleTimeout` (not an
- * external effect, so recovery really arms it) or any later observation to commit. Dropping fails
- * toward **Paused**, the honest reading of a process that died under a pause sheet, and the next
+ * external effect, so recovery really arms it) or any later observation to commit. Dropping keeps
+ * **Paused or Offline**, the last confirmed mode, and the next
  * Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
  *
  * Neither drop needs a cancel (#1054 round 5): `SideEffectEngine` SKIPS arming a

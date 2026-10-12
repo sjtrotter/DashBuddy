@@ -71,7 +71,7 @@ class PlatformRegionStepper @Inject constructor() {
 
     /**
      * Deterministic entity-id mint (#344): derived only from replay-stable inputs
-     * (platform, obs.timestamp, [PlatformRegion.mintCounter]) so crash-recovery
+     * (platform, [timestamp], [PlatformRegion.mintCounter]) so crash-recovery
      * replay reproduces the live run's IDs. UUID.randomUUID broke effect
      * idempotency keys ("start_session:$sessionId") and diverged restored state
      * from already-persisted rows. Every mint MUST bump mintCounter in the same
@@ -82,7 +82,8 @@ class PlatformRegionStepper @Inject constructor() {
         region: PlatformRegion,
         obs: Observation,
         offset: Long = 0,
-    ): String = "$kind-${region.platform.wire}-${obs.timestamp}-${region.mintCounter + offset}"
+        timestamp: Long = obs.timestamp,
+    ): String = "$kind-${region.platform.wire}-$timestamp-${region.mintCounter + offset}"
 
 
     fun step(
@@ -185,6 +186,9 @@ class PlatformRegionStepper @Inject constructor() {
         policy: TransitionPolicy,
     ): PlatformRegion {
         var current = prev
+        val flowObs = obs as? Observation.FlowObservation
+        // Resolve once before lazy expiry so this frame's evidence also governs a pending resume.
+        val impliedMode = flowObs?.let { policy.resolveMode(it.flow, it.modeHint) }
 
         // Lazy expiry: a pending destructive transition (dash-end / task-retire)
         // whose deadline has passed is confirmed — committed now. Driven by
@@ -276,7 +280,15 @@ class PlatformRegionStepper @Inject constructor() {
         // [graceLapsed] (#1054), as above.
         current.pendingModeResume?.let { pend ->
             if (graceLapsed(pend.deadline, pend.wakeId, obs, TimeoutType.MODE_RESUME_COMMIT)) {
-                current = commitModeResume(current, obs, policy)
+                // #1311: end at 0 s, hint at 6 s, late wake, Offline at 14.001 s must CANCEL,
+                // not mint a session before the same frame goes Offline. Paused also contradicts
+                // either resume origin (#605); let the normal mode step apply that frame once.
+                current = when {
+                    impliedMode == Mode.Offline || impliedMode == Mode.Paused ->
+                        current.copy(pendingModeResume = null)
+                    obs is Observation.Timeout || flowObs != null -> commitModeResume(current, obs, policy)
+                    else -> current
+                }
             }
         }
 
@@ -390,7 +402,7 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
-        val flowObs = obs as? Observation.FlowObservation ?: return current
+        if (flowObs == null) return current
 
         // #1315: explicit completion-steps intent is a second delivery witness. The step wrapper's
         // reconcileJobTasks mirrors this copy into Job.tasks; arrival/dwell and flow stay untouched.
@@ -406,10 +418,6 @@ class PlatformRegionStepper @Inject constructor() {
                 completionStepsAt = obs.timestamp, completionStepsScreen = obs.screenRuleId,
             ))
         }
-
-        // Resolve what mode this observation implies
-        val impliedMode = policy.resolveMode(flowObs.flow, flowObs.modeHint)
-        val hintOnly = policy.resolveMode(flowObs.flow, null) == null
 
         val afterMode = when {
             // No mode signal
@@ -445,11 +453,14 @@ class PlatformRegionStepper @Inject constructor() {
 
             // #1311: the dash-controls sheet can reappear just after a summary ended the dash.
             // Only hints are provisional: a flow that itself implies Online still starts at once.
+            // The window gates ARMING only: a standing pending keeps its original since/deadline
+            // even when another hint arrives after the post-end window closes.
             current.mode == Mode.Offline && impliedMode == Mode.Online &&
-                obs is Observation.Screen && current.session == null && hintOnly &&
-                current.lastSessionEndedAt?.let {
-                    obs.timestamp - it <= policy.postEndHintGraceWindowMs(current.platform)
-                } == true -> armModeResume(current, obs, policy)
+                obs is Observation.Screen && isHintOnly(flowObs, policy) &&
+                (current.pendingModeResume != null || withinPostEndWindow(current, obs, policy)) &&
+                (current.session == null || current.pendingDestructive?.let {
+                    it.kind == DestructiveKind.SESSION_END && it.authoritative
+                } == true) -> armModeResume(current, obs, policy)
 
             // Screen or Notification — authoritative, apply immediately
             else -> {
@@ -519,7 +530,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // No session — start a fresh one.
                     region = region.copy(
                         session = Session(
-                            sessionId = mintId("session", region, obs),
+                            sessionId = mintId("session", region, obs, timestamp = startedAt),
                             startedAt = startedAt,
                         ),
                         mintCounter = region.mintCounter + 1,
@@ -578,14 +589,13 @@ class PlatformRegionStepper @Inject constructor() {
                 ),
             )
         }
-        if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
-            region = region.copy(pauseSafety = null)
-        }
-
         // Both resume origins resolve on a committed mode change, including authoritative flows
         // that bypass the grace (#1311). A pending must never outlive that transition.
         if (prev.mode != newMode) {
-            region = region.copy(pendingModeResume = null)
+            region = region.copy(
+                pauseSafety = if (prev.mode == Mode.Paused) null else region.pauseSafety,
+                pendingModeResume = null,
+            )
         }
 
         // #1052 round 3: coming back Online RE-BASES a frozen running-total park. A park is frozen
@@ -634,16 +644,25 @@ class PlatformRegionStepper @Inject constructor() {
         policy: TransitionPolicy,
     ): PlatformRegion {
         val existing = region.pendingModeResume
+        val idleFields = if (region.mode == Mode.Offline) {
+            ((obs as? Observation.FlowObservation)?.parsed as? ParsedFields.IdleFields)
+                ?: existing?.idleFields
+        } else null
         val since = existing?.since ?: obs.timestamp
         val deadline = since + policy.pauseResumeGraceMs(region.platform)
         // #1054: keep both the original since and wake identity while the deadline stands.
         if (existing != null && existing.deadline == deadline) {
-            return region.copy(lastObservedAt = obs.timestamp)
+            return region.copy(
+                lastObservedAt = obs.timestamp,
+                pendingModeResume = existing.copy(idleFields = idleFields),
+            )
         }
         val (withId, wakeId) = region.mintWakeId()
         return withId.copy(
             lastObservedAt = obs.timestamp,
-            pendingModeResume = PendingModeResume(since = since, deadline = deadline, wakeId = wakeId),
+            pendingModeResume = PendingModeResume(
+                since = since, deadline = deadline, wakeId = wakeId, idleFields = idleFields,
+            ),
         )
     }
 
@@ -652,11 +671,16 @@ class PlatformRegionStepper @Inject constructor() {
         region: PlatformRegion,
         obs: Observation,
         policy: TransitionPolicy,
-    ): PlatformRegion =
-        applyModeTransition(
+    ): PlatformRegion {
+        val pending = region.pendingModeResume
+        val resumed = applyModeTransition(
             region, Mode.Online, obs, policy,
-            startedAt = region.pendingModeResume?.since ?: obs.timestamp,
+            startedAt = pending?.since ?: obs.timestamp,
         )
+        return pending?.idleFields?.let {
+            updateSessionFields(resumed, obs, Flow.Idle, policy, it)
+        } ?: resumed
+    }
 
     /**
      * When the app comes Online from Offline (e.g., launched mid-pickup),
@@ -909,7 +933,7 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Update session fields from observations. `next` is the flow the read is being made
         // ON — the settle gate parks it with that flow (#1029, see [PendingSessionPay.flow]).
-        r = updateSessionFields(r, obs, next, policy)
+        r = updateSessionFields(r, obs, next, policy, obs.parsed)
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
@@ -978,11 +1002,11 @@ class PlatformRegionStepper @Inject constructor() {
 
     private fun updateSessionFields(
         region: PlatformRegion,
-        obs: Observation.FlowObservation,
+        obs: Observation,
         flow: Flow,
         policy: TransitionPolicy,
+        parsed: ParsedFields,
     ): PlatformRegion {
-        val parsed = obs.parsed
         var r = region
 
         when (parsed) {
@@ -1444,6 +1468,10 @@ class PlatformRegionStepper @Inject constructor() {
         }
     }
 
+    /**
+     * End the old session, preserving an Offline-origin pending start; an Online region must fall
+     * back Offline because an authoritative end can survive an ungraced Online frame (#1311).
+     */
     private fun endSession(
         region: PlatformRegion,
         timestamp: Long,
@@ -1535,15 +1563,14 @@ class PlatformRegionStepper @Inject constructor() {
         // shared with [completeActiveJob], so the two can never fall out of step.
         return region.clearCachedReceipt().copy(
             session = null,
+            mode = if (region.mode == Mode.Online) Mode.Offline else region.mode,
             lastSessionEndedAt = if (region.session != null) timestamp else region.lastSessionEndedAt,
             activeJob = null,
             activeTask = null,
             recentTasks = recentTasks,
             pendingDestructive = null,
-            // #1054 round 2: a terminal end invalidates the ended session's graced resume —
-            // `commitModeResume` → `applyModeTransition(…, Online)` MINTS a session when there is
-            // none, so keeping one would later start a phantom dash. (The diff cancels its timer.)
-            pendingModeResume = null,
+            // A Paused resume belongs to the ended session; an Offline pending is a NEW start.
+            pendingModeResume = region.pendingModeResume.takeIf { region.mode == Mode.Offline },
             idleEnteredAt = null,
             // #438 B3: the session's over — pending/accepted offers must not leak into the next dash.
             pendingOffers = emptyList(),
@@ -1638,3 +1665,19 @@ internal fun Flow.toTaskSubFlow(): TaskSubFlow? = when (this) {
     Flow.TaskPickupArrived, Flow.TaskDropoffArrived -> TaskSubFlow.ARRIVED
     else -> null
 }
+
+private fun postEndAnchor(region: PlatformRegion): Long? =
+    region.lastSessionEndedAt ?: region.pendingDestructive?.takeIf {
+        it.kind == DestructiveKind.SESSION_END && it.authoritative
+    }?.since
+
+private fun PlatformRegionStepper.withinPostEndWindow(
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): Boolean = postEndAnchor(region)?.let {
+    obs.timestamp - it <= policy.postEndHintGraceWindowMs(region.platform)
+} == true
+
+private fun isHintOnly(flowObs: Observation.FlowObservation, policy: TransitionPolicy): Boolean =
+    policy.resolveMode(flowObs.flow, null) == null

@@ -35,6 +35,8 @@ import timber.log.Timber
  * (session-end AND task-retire share the one mechanism), but it is called immediately after
  * [diffMode] in [EffectMap.diffPlatformRegion] and is small enough that a fourth file would be
  * more indirection than the ~90 combined lines warrant.
+ * Graced `DASH_START` uses the session's `startedAt` as `occurredAt` (#732/#1311); sequenceId orders
+ * append operations even when this domain timestamp lags the committing observation.
  */
 internal fun EffectMap.diffMode(
     prev: PlatformRegion,
@@ -165,7 +167,7 @@ internal fun EffectMap.diffMode(
                         source = SessionStartSource.INTERACTION,
                         startScreen = "WaitingForOffer",
                     )
-                    add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))
+                    add(logEffect(nextSession.sessionId, AppEventType.DASH_START, nextSession.startedAt, payload))
                     // #438 B5: StartOdometer now emits from diffCrossPlatform on the
                     // activeSessionCount 0→1 crossing, so a SECOND concurrent session starting
                     // does NOT re-fire Start (which would zero the first's accrued miles). The
@@ -331,17 +333,8 @@ internal fun EffectMap.diffPauseSafetyTimer(
     obs = obs,
 )
 
-/**
- * Schedule/cancel the wake-up timer for a graced screen-implied resume out of
- * Paused (#605) — the [PlatformRegion.pendingModeResume] mirror of
- * [diffGraceTimer]. A SEPARATE [TimeoutType.MODE_RESUME_COMMIT] (not a shared
- * GRACE_COMMIT) because both graces belong to the SAME platform region, so even the
- * (type, platform) timer key (#438 item 1) would not separate them under a shared
- * GRACE_COMMIT — a resume-grace timer would cross-cancel a live destructive grace
- * timer. Arm (or a re-arm with a new deadline) schedules; a cancel (paused frame
- * within the window, or the resume committing) cancels. A commit lands in the
- * cancel branch too — harmless, the timer has already fired or no-ops.
- */
+/** Schedule the separate resume wake for Paused resumes or Offline starts; cancel on Paused/Offline
+ * evidence (including a contradicting frame at lapse) or a committed resume (#605/#1311). */
 internal fun EffectMap.diffModeResumeTimer(
     prev: PlatformRegion,
     next: PlatformRegion,

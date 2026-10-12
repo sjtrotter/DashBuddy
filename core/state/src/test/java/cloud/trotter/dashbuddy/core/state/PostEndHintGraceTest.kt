@@ -9,9 +9,12 @@ import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.settings.GraceConfigProvider
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.state.SessionType
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingSessionPay
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
@@ -72,6 +75,129 @@ class PostEndHintGraceTest {
         assertFalse(effects.any { it is AppEffect.StartSession || it is AppEffect.UpdateBubble })
     }
 
+    private fun ending(previousEnd: Long? = null): AppState {
+        val online = machine.step(ended(previousEnd), screen(-10_000L)).newState
+        val summary = machine.step(online, screen(0L, Flow.SessionEnded, hint = null)).newState
+        val pending = requireNotNull(summary.region().pendingDestructive)
+        assertEquals(DestructiveKind.SESSION_END, pending.kind)
+        assertTrue(pending.authoritative)
+        assertEquals(t0 + 2_500L, pending.deadline)
+        assertEquals(Mode.Offline, summary.region().mode)
+        return summary
+    }
+
+    @Test
+    fun `hint inside authoritative end window survives end commit then Offline cancels`() {
+        for (byWake in listOf(true, false)) {
+            val summary = ending()
+            val arm = machine.step(summary, screen(1_000L))
+            val pending = requireNotNull(arm.newState.region().pendingModeResume)
+            assertNotNull(arm.newState.region().session)
+            assertEquals(summary.region().session, arm.newState.region().session)
+            assertEquals(Mode.Offline, arm.newState.region().mode)
+            assertNoStart(arm.effects)
+            val end = requireNotNull(arm.newState.region().pendingDestructive)
+            val observation = if (byWake) Observation.Timeout(
+                timestamp = end.deadline,
+                type = TimeoutType.GRACE_COMMIT,
+                targetPlatform = platform,
+                payload = ObservationPayload.GraceWake(end.wakeId),
+            ) else screen(2_501L)
+            val commit = machine.step(arm.newState, observation)
+            assertNull(commit.newState.region().session)
+            assertEquals(t0, commit.newState.region().lastSessionEndedAt)
+            assertEquals(pending, commit.newState.region().pendingModeResume)
+            assertEquals(Mode.Offline, commit.newState.region().mode)
+            assertNoStart(commit.effects)
+            val cancel = machine.step(commit.newState, screen(5_000L, Flow.Idle, Mode.Offline))
+            assertNull(cancel.newState.region().pendingModeResume)
+            assertNull(cancel.newState.region().session)
+            assertNoStart(cancel.effects)
+            val late = machine.step(cancel.newState, wake(pending.deadline, pending.wakeId))
+            assertNull(late.newState.region().session)
+            assertNoStart(late.effects)
+        }
+    }
+
+    @Test
+    fun `sustained hints inside authoritative end window mint exactly one new session`() {
+        val first = machine.step(ending(), screen(1_000L))
+        val second = machine.step(first.newState, screen(4_000L))
+        assertNull(second.newState.region().session)
+        assertEquals(first.newState.region().pendingModeResume, second.newState.region().pendingModeResume)
+        assertNoStart(first.effects + second.effects)
+        val third = machine.step(second.newState, screen(10_000L))
+        val session = requireNotNull(third.newState.region().session)
+        assertEquals(t0 + 1_000L, session.startedAt)
+        assertEquals(1, starts(first.effects + second.effects + third.effects).size)
+        assertEquals(1, third.effects.filterIsInstance<AppEffect.StartSession>().size)
+        val repeat = machine.step(third.newState, screen(11_000L))
+        assertEquals(session, repeat.newState.region().session)
+        assertNoStart(repeat.effects)
+    }
+
+    @Test
+    fun `authoritative end after an ungraced Online hint restores Offline so later hints can start`() {
+        // The requested anchor prefers the previous completed end, even while another end stands.
+        val summary = ending(previousEnd = t0 - 120_000L)
+        val flash = machine.step(summary, screen(1_000L))
+        assertEquals(Mode.Online, flash.newState.region().mode)
+        assertNotNull(flash.newState.region().session)
+        assertNull(flash.newState.region().pendingModeResume)
+        val end = requireNotNull(flash.newState.region().pendingDestructive)
+        val commit = machine.step(flash.newState, Observation.Timeout(
+            timestamp = end.deadline,
+            type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = platform,
+            payload = ObservationPayload.GraceWake(end.wakeId),
+        ))
+        assertNull(commit.newState.region().session)
+        assertEquals(Mode.Offline, commit.newState.region().mode)
+        val arm = machine.step(commit.newState, screen(4_000L))
+        val pending = requireNotNull(arm.newState.region().pendingModeResume)
+        val resumed = machine.step(arm.newState, wake(pending.deadline, pending.wakeId))
+        assertEquals(t0 + 4_000L, requireNotNull(resumed.newState.region().session).startedAt)
+        assertEquals(1, starts(resumed.effects).size)
+    }
+
+    @Test
+    fun `graced idle frames retain latest fields and replay them through the session settle path`() {
+        val first = machine.step(ended(), screen(6_000L, Flow.Idle).copy(parsed = ParsedFields.IdleFields(
+            zoneName = "A", sessionType = SessionType.PerOffer, sessionPay = 10.0,
+        )))
+        val fields = ParsedFields.IdleFields(zoneName = "B", sessionType = SessionType.ByTime, sessionPay = 20.0)
+        val second = machine.step(first.newState, screen(7_000L, Flow.Idle).copy(parsed = fields))
+        val third = machine.step(second.newState, screen(8_000L))
+        val pending = requireNotNull(third.newState.region().pendingModeResume)
+        assertEquals(fields, pending.idleFields)
+        assertEquals(first.newState.region().pendingModeResume!!.wakeId, pending.wakeId)
+        assertEquals(third.newState, StateJson.decodeFromString<AppState>(StateJson.encodeToString(third.newState)))
+        val commit = machine.step(third.newState, wake(pending.deadline, pending.wakeId))
+        val region = commit.newState.region()
+        assertEquals("B", region.zoneName)
+        assertEquals(SessionType.ByTime, region.sessionType)
+        assertNotNull(region.session)
+        assertEquals(20.0, requireNotNull(region.pendingSessionPay).value, 0.0)
+        assertEquals(Flow.Idle, region.pendingSessionPay!!.flow)
+        assertEquals(pending.deadline, region.pendingSessionPay!!.since)
+        val online = machine.step(AppState(), screen(0L)).newState
+        val paused = machine.step(online, screen(1_000L, Flow.Idle, Mode.Paused)).newState
+        val resume = machine.step(paused, screen(2_000L, Flow.Idle).copy(parsed = fields))
+        assertNull(requireNotNull(resume.newState.region().pendingModeResume).idleFields)
+    }
+
+    @Test
+    fun `wake at fourteen seconds stamps session identity and DASH_START at the six second hint`() {
+        val arm = machine.step(ended(at = 0L), screen(6_000L).copy(timestamp = 6_000L))
+        val pending = requireNotNull(arm.newState.region().pendingModeResume)
+        val commit = machine.step(arm.newState, wake(14_000L, pending.wakeId))
+        val session = requireNotNull(commit.newState.region().session)
+        assertEquals("session-${platform.wire}-6000-0", session.sessionId)
+        assertEquals(6_000L, session.startedAt)
+        assertEquals(6_000L, starts(commit.effects).single().event.occurredAt)
+        assertEquals(6_000L, (starts(commit.effects).single().event.payload as SessionStartPayload).startedAt)
+    }
+
     @Test
     fun `hint-only frames stay Offline and an Offline frame cancels without a session`() {
         // All three flows are ambiguous without their hint, including the flow-less timeline.
@@ -98,6 +224,113 @@ class PostEndHintGraceTest {
             assertNull(lateWake.newState.region().session)
             assertNoStart(lateWake.effects)
         }
+    }
+
+    @Test
+    fun `Offline frame at or just past the deadline drops pending without minting a session`() {
+        for (lateness in listOf(0L, 1L)) {
+            val arm = machine.step(ended(), screen(6_000L))
+            val pending = requireNotNull(arm.newState.region().pendingModeResume)
+            val cancel = machine.step(arm.newState, screen(pending.deadline - t0 + lateness, Flow.Idle, Mode.Offline))
+            val region = cancel.newState.region()
+            assertEquals(Mode.Offline, region.mode)
+            assertNull(region.pendingModeResume)
+            assertNull(region.session)
+            assertEquals(arm.newState.region().mintCounter, region.mintCounter)
+            assertNoStart(cancel.effects)
+            val lateWake = machine.step(cancel.newState, wake(pending.deadline + 2, pending.wakeId))
+            assertNull(lateWake.newState.region().session)
+            assertNoStart(lateWake.effects)
+        }
+    }
+
+    @Test
+    fun `Online or neutral frame just past the deadline commits at the first hint instant`() {
+        for (hint in listOf(Mode.Online, null)) {
+            val arm = machine.step(ended(), screen(6_000L))
+            val pending = requireNotNull(arm.newState.region().pendingModeResume)
+            val commit = machine.step(arm.newState, screen(pending.deadline - t0 + 1, hint = hint))
+            val region = commit.newState.region()
+            assertEquals(Mode.Online, region.mode)
+            assertNull(region.pendingModeResume)
+            assertEquals(pending.since, requireNotNull(region.session).startedAt)
+            assertEquals(pending.since, (starts(commit.effects).single().event.payload as SessionStartPayload).startedAt)
+            assertEquals(1, commit.effects.filterIsInstance<AppEffect.StartSession>().size)
+        }
+    }
+
+    @Test
+    fun `Paused-origin pending contradicted past deadline takes only the normal mode path`() {
+        val online = machine.step(AppState(), screen(0L)).newState
+        val paused = machine.step(online, screen(1_000L, Flow.Idle, Mode.Paused)).newState
+        // A frozen earnings read exposes an otherwise invisible Paused -> Online -> Offline flap:
+        // that intermediate Online transition would rebase it and mint another wake generation.
+        val frozen = PendingSessionPay(value = 12.0, since = t0, deadline = t0 + 2_000L, flow = Flow.Idle)
+        val withRead = paused.copy(regions = paused.regions.copy(platforms = mapOf(
+            platform to paused.region().copy(pendingSessionPay = frozen),
+        )))
+        val arm = machine.step(withRead, screen(6_000L))
+        val armed = arm.newState.region()
+        val pending = requireNotNull(armed.pendingModeResume)
+        assertEquals(Mode.Paused, armed.mode)
+        for (hint in listOf(Mode.Offline, Mode.Paused)) {
+            val frame = screen(pending.deadline - t0 + 1, Flow.Idle, hint)
+            val cancel = machine.step(arm.newState, frame)
+            val region = cancel.newState.region()
+            assertEquals(hint, region.mode)
+            assertNull(region.pendingModeResume)
+            assertEquals(armed.session, region.session)
+            assertEquals(frozen, region.pendingSessionPay)
+            assertNoStart(cancel.effects)
+
+            // Compare to the ordinary Paused -> Offline (or Paused confirmation) path without
+            // a resume pending. Its complete effects occur once, plus the resume timer cancel.
+            val withoutPending = arm.newState.copy(regions = arm.newState.regions.copy(platforms = mapOf(
+                platform to armed.copy(pendingModeResume = null),
+            )))
+            val normal = machine.step(withoutPending, frame)
+            assertEquals(normal.newState, cancel.newState)
+            val resumeCancel = AppEffect.CancelTimeout(TimeoutType.MODE_RESUME_COMMIT, platform)
+            assertEquals(1, cancel.effects.count { it == resumeCancel })
+            assertEquals(normal.effects, cancel.effects.filterNot { it == resumeCancel })
+            if (hint == Mode.Offline) {
+                assertEquals(frame.timestamp, requireNotNull(region.pendingDestructive).since)
+                assertEquals(1, cancel.effects.count {
+                    it == AppEffect.CancelTimeout(TimeoutType.SESSION_PAUSED_SAFETY, platform)
+                })
+            }
+        }
+    }
+
+    @Test
+    fun `pending armed near window end keeps gracing and an Offline frame cancels it`() {
+        val first = machine.step(ended(), screen(59_000L))
+        val second = machine.step(first.newState, screen(61_000L))
+        val pending = requireNotNull(second.newState.region().pendingModeResume)
+        assertEquals(t0 + 59_000L, pending.since)
+        assertEquals(first.newState.region().pendingModeResume, pending)
+        assertEquals(Mode.Offline, second.newState.region().mode)
+        assertNull(second.newState.region().session)
+        assertNoStart(first.effects + second.effects)
+        val cancel = machine.step(second.newState, screen(62_000L, Flow.Idle, Mode.Offline))
+        assertEquals(Mode.Offline, cancel.newState.region().mode)
+        assertNull(cancel.newState.region().pendingModeResume)
+        assertNull(cancel.newState.region().session)
+        assertNoStart(cancel.effects)
+    }
+
+    @Test
+    fun `pending armed near window end commits sustained hints at its original since`() {
+        val first = machine.step(ended(), screen(59_000L))
+        val second = machine.step(first.newState, screen(61_000L))
+        assertEquals(first.newState.region().pendingModeResume, second.newState.region().pendingModeResume)
+        assertNoStart(first.effects + second.effects)
+        val commit = machine.step(second.newState, screen(68_000L))
+        assertEquals(Mode.Online, commit.newState.region().mode)
+        assertNull(commit.newState.region().pendingModeResume)
+        assertEquals(t0 + 59_000L, requireNotNull(commit.newState.region().session).startedAt)
+        assertEquals(t0 + 59_000L, (starts(commit.effects).single().event.payload as SessionStartPayload).startedAt)
+        assertEquals(1, commit.effects.filterIsInstance<AppEffect.StartSession>().size)
     }
 
     @Test
