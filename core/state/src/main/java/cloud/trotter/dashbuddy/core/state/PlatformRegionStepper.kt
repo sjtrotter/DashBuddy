@@ -1399,6 +1399,14 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
+        // #1312: only the NEXT flow-bearing frame proves whole-job abandonment. A sibling
+        // task or an offer overlay keeps absorption; recognize-only frames leave R0 unchanged.
+        if (prevFlowVal == Flow.TaskUnassigned && nextFlowVal == Flow.Idle &&
+            current.activeTask == null && current.activeJob != null
+        ) {
+            return abandonActiveJob(current, obs.timestamp)
+        }
+
         // Post-task: keep job alive through PostTask for payout capture
         // Job ends when we leave PostTask for non-task flow
         //

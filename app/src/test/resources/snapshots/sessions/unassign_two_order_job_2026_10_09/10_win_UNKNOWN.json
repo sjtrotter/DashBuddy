@@ -1,0 +1,1112 @@
+{
+ "captureId": "00000000-0000-4000-8000-000000000000",
+ "pipelineId": "accessibility.window",
+ "schemaId": "uinode.v1",
+ "timestamp": 1791566013035,
+ "platform": "doordash",
+ "ruleId": null,
+ "classificationName": "UNKNOWN",
+ "metadata": {
+  "engineVersion": 1,
+  "rulesetFormatVersion": 2,
+  "rulesetReleaseTag": "dev",
+  "pipelineVersions": {
+   "accessibility": 1,
+   "accessibility.window": 1,
+   "accessibility.click": 1,
+   "accessibility.long_click": 1,
+   "accessibility.scroll": 1,
+   "accessibility.focus": 1,
+   "notification": 1
+  },
+  "stateMachineApiVersion": "1.0",
+  "appVersion": "0.230.0+88dee351",
+  "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys",
+  "platformAppVersion": "8.101.8"
+ },
+ "payload": {
+  "pane": "Pick up by 12:14",
+  "class": "android.widget.FrameLayout",
+  "isEnabled": true,
+  "bounds": {
+   "left": 0,
+   "top": 0,
+   "right": 1080,
+   "bottom": 2400
+  },
+  "children": [
+   {
+    "class": "android.widget.LinearLayout",
+    "isEnabled": true,
+    "bounds": {
+     "left": 0,
+     "top": 0,
+     "right": 1080,
+     "bottom": 2347
+    },
+    "children": [
+     {
+      "class": "android.widget.FrameLayout",
+      "isEnabled": true,
+      "bounds": {
+       "left": 0,
+       "top": 136,
+       "right": 1080,
+       "bottom": 2347
+      },
+      "children": [
+       {
+        "id": "com.doordash.driverapp:id/action_bar_root",
+        "class": "android.widget.LinearLayout",
+        "isEnabled": true,
+        "bounds": {
+         "left": 0,
+         "top": 136,
+         "right": 1080,
+         "bottom": 2347
+        },
+        "children": [
+         {
+          "id": "android:id/content",
+          "class": "android.widget.FrameLayout",
+          "isEnabled": true,
+          "bounds": {
+           "left": 0,
+           "top": 136,
+           "right": 1080,
+           "bottom": 2347
+          },
+          "children": [
+           {
+            "id": "com.doordash.driverapp:id/container",
+            "class": "android.view.ViewGroup",
+            "isEnabled": true,
+            "bounds": {
+             "left": 0,
+             "top": 136,
+             "right": 1080,
+             "bottom": 2347
+            },
+            "children": [
+             {
+              "id": "com.doordash.driverapp:id/toolbar_container",
+              "class": "android.widget.LinearLayout",
+              "isEnabled": true,
+              "bounds": {
+               "left": 0,
+               "top": 136,
+               "right": 1080,
+               "bottom": 278
+              },
+              "children": [
+               {
+                "id": "com.doordash.driverapp:id/toolbar",
+                "class": "android.view.ViewGroup",
+                "isEnabled": true,
+                "bounds": {
+                 "left": 0,
+                 "top": 136,
+                 "right": 1080,
+                 "bottom": 278
+                },
+                "children": [
+                 {
+                  "desc": "Current dash",
+                  "tooltip": "Current dash",
+                  "class": "android.widget.ImageButton",
+                  "isClickable": true,
+                  "isEnabled": true,
+                  "clickAction": true,
+                  "focusable": true,
+                  "bounds": {
+                   "left": 0,
+                   "top": 144,
+                   "right": 125,
+                   "bottom": 269
+                  }
+                 },
+                 {
+                  "text": "Pick up by 12:14",
+                  "class": "android.widget.TextView",
+                  "isEnabled": true,
+                  "bounds": {
+                   "left": 133,
+                   "top": 163,
+                   "right": 422,
+                   "bottom": 213
+                  }
+                 },
+                 {
+                  "text": "Arrived on time",
+                  "class": "android.widget.TextView",
+                  "isEnabled": true,
+                  "bounds": {
+                   "left": 133,
+                   "top": 213,
+                   "right": 352,
+                   "bottom": 250
+                  }
+                 },
+                 {
+                  "class": "androidx.appcompat.widget.LinearLayoutCompat",
+                  "isEnabled": true,
+                  "bounds": {
+                   "left": 866,
+                   "top": 144,
+                   "right": 1080,
+                   "bottom": 269
+                  },
+                  "children": [
+                   {
+                    "desc": "Safety",
+                    "tooltip": "Safety",
+                    "id": "com.doordash.driverapp:id/action_dasher_safety",
+                    "class": "android.widget.Button",
+                    "isClickable": true,
+                    "isEnabled": true,
+                    "clickAction": true,
+                    "focusable": true,
+                    "bounds": {
+                     "left": 866,
+                     "top": 153,
+                     "right": 973,
+                     "bottom": 260
+                    }
+                   },
+                   {
+                    "desc": "Help",
+                    "tooltip": "Help",
+                    "id": "com.doordash.driverapp:id/action_self_help",
+                    "class": "android.widget.Button",
+                    "isClickable": true,
+                    "isEnabled": true,
+                    "clickAction": true,
+                    "focusable": true,
+                    "bounds": {
+                     "left": 973,
+                     "top": 153,
+                     "right": 1080,
+                     "bottom": 260
+                    }
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "class": "android.widget.FrameLayout",
+              "isEnabled": true,
+              "bounds": {
+               "left": 0,
+               "top": 278,
+               "right": 1080,
+               "bottom": 2347
+              },
+              "children": [
+               {
+                "id": "com.doordash.driverapp:id/fragment",
+                "class": "android.widget.FrameLayout",
+                "isEnabled": true,
+                "bounds": {
+                 "left": 0,
+                 "top": 278,
+                 "right": 1080,
+                 "bottom": 2347
+                },
+                "children": [
+                 {
+                  "id": "com.doordash.driverapp:id/container",
+                  "class": "android.view.ViewGroup",
+                  "isEnabled": true,
+                  "bounds": {
+                   "left": 0,
+                   "top": 278,
+                   "right": 1080,
+                   "bottom": 2347
+                  },
+                  "children": [
+                   {
+                    "id": "com.doordash.driverapp:id/main_view_container",
+                    "class": "android.widget.ScrollView",
+                    "isEnabled": true,
+                    "focusable": true,
+                    "bounds": {
+                     "left": 0,
+                     "top": 278,
+                     "right": 1080,
+                     "bottom": 2151
+                    },
+                    "children": [
+                     {
+                      "id": "com.doordash.driverapp:id/bottom_sheet_container",
+                      "class": "android.view.ViewGroup",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 0,
+                       "top": 278,
+                       "right": 1080,
+                       "bottom": 2151
+                      },
+                      "children": [
+                       {
+                        "id": "com.doordash.driverapp:id/at_store_contact_view",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 0,
+                         "top": 278,
+                         "right": 1080,
+                         "bottom": 481
+                        },
+                        "children": [
+                         {
+                          "text": "Order for",
+                          "id": "com.doordash.driverapp:id/customer_name_label",
+                          "class": "android.widget.TextView",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 36,
+                           "top": 314,
+                           "right": 267,
+                           "bottom": 361
+                          }
+                         },
+                         {
+                          "text": "[redacted]",
+                          "id": "com.doordash.driverapp:id/customer_name",
+                          "class": "android.widget.TextView",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 36,
+                           "top": 379,
+                           "right": 767,
+                           "bottom": 463
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/call_button",
+                          "class": "android.widget.ImageButton",
+                          "isClickable": true,
+                          "isEnabled": true,
+                          "clickAction": true,
+                          "focusable": true,
+                          "bounds": {
+                           "left": 803,
+                           "top": 344,
+                           "right": 892,
+                           "bottom": 433
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/text_button",
+                          "class": "android.view.ViewGroup",
+                          "isClickable": true,
+                          "isEnabled": true,
+                          "clickAction": true,
+                          "focusable": true,
+                          "bounds": {
+                           "left": 928,
+                           "top": 331,
+                           "right": 1044,
+                           "bottom": 447
+                          },
+                          "children": [
+                           {
+                            "id": "com.doordash.driverapp:id/chat_button_internal",
+                            "class": "android.widget.ImageButton",
+                            "isClickable": true,
+                            "isEnabled": true,
+                            "clickAction": true,
+                            "focusable": true,
+                            "bounds": {
+                             "left": 943,
+                             "top": 346,
+                             "right": 1030,
+                             "bottom": 433
+                            }
+                           }
+                          ]
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/mni_header_view",
+                          "class": "android.view.ViewGroup",
+                          "isEnabled": true,
+                          "visible": false,
+                          "bounds": {
+                           "left": 0,
+                           "top": 481,
+                           "right": 1080,
+                           "bottom": 481
+                          }
+                         }
+                        ]
+                       },
+                       {
+                        "id": "com.doordash.driverapp:id/instructions_view",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 0,
+                         "top": 481,
+                         "right": 1080,
+                         "bottom": 2151
+                        },
+                        "children": [
+                         {
+                          "id": "com.doordash.driverapp:id/divider",
+                          "class": "android.view.View",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 0,
+                           "top": 517,
+                           "right": 1080,
+                           "bottom": 519
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/instructions_list",
+                          "class": "androidx.recyclerview.widget.RecyclerView",
+                          "isEnabled": true,
+                          "focusable": true,
+                          "collRows": 2,
+                          "collCols": 1,
+                          "bounds": {
+                           "left": 0,
+                           "top": 519,
+                           "right": 1080,
+                           "bottom": 2151
+                          },
+                          "children": [
+                           {
+                            "class": "android.view.ViewGroup",
+                            "isEnabled": true,
+                            "itemRow": 0,
+                            "itemCol": 0,
+                            "bounds": {
+                             "left": 0,
+                             "top": 519,
+                             "right": 1080,
+                             "bottom": 2151
+                            },
+                            "children": [
+                             {
+                              "id": "com.doordash.driverapp:id/instructions_icon",
+                              "class": "android.widget.ImageView",
+                              "isEnabled": true,
+                              "bounds": {
+                               "left": 36,
+                               "top": 564,
+                               "right": 83,
+                               "bottom": 609
+                              }
+                             },
+                             {
+                              "text": "Parking instructions",
+                              "id": "com.doordash.driverapp:id/instructions_title",
+                              "class": "android.widget.TextView",
+                              "isEnabled": true,
+                              "bounds": {
+                               "left": 119,
+                               "top": 555,
+                               "right": 973,
+                               "bottom": 601
+                              }
+                             },
+                             {
+                              "id": "com.doordash.driverapp:id/expand_icon",
+                              "class": "android.widget.ImageView",
+                              "isClickable": true,
+                              "isEnabled": true,
+                              "clickAction": true,
+                              "focusable": true,
+                              "bounds": {
+                               "left": 991,
+                               "top": 555,
+                               "right": 1044,
+                               "bottom": 608
+                              }
+                             },
+                             {
+                              "id": "com.doordash.driverapp:id/instructions_expandable_view",
+                              "class": "android.widget.LinearLayout",
+                              "isEnabled": true,
+                              "bounds": {
+                               "left": 119,
+                               "top": 628,
+                               "right": 1044,
+                               "bottom": 2151
+                              },
+                              "children": [
+                               {
+                                "id": "com.doordash.driverapp:id/instructions_expanded_container",
+                                "class": "android.view.ViewGroup",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 119,
+                                 "top": 628,
+                                 "right": 1044,
+                                 "bottom": 2151
+                                },
+                                "children": [
+                                 {
+                                  "text": "The order can be found on a pick-up shelf inside the caf\u00e9. We ask that you do not use the drive-thru.",
+                                  "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
+                                  "class": "android.widget.TextView",
+                                  "isEnabled": true,
+                                  "bounds": {
+                                   "left": 119,
+                                   "top": 628,
+                                   "right": 1044,
+                                   "bottom": 730
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           },
+                           {
+                            "class": "android.view.ViewGroup",
+                            "isEnabled": true,
+                            "visible": false,
+                            "itemRow": 1,
+                            "itemCol": 0,
+                            "bounds": {
+                             "left": 0,
+                             "top": 6207,
+                             "right": 1080,
+                             "bottom": 2151
+                            },
+                            "children": [
+                             {
+                              "id": "com.doordash.driverapp:id/instructions_icon",
+                              "class": "android.widget.ImageView",
+                              "isEnabled": true,
+                              "visible": false,
+                              "bounds": {
+                               "left": 36,
+                               "top": 6252,
+                               "right": 67,
+                               "bottom": 2151
+                              }
+                             },
+                             {
+                              "text": "Pickup window",
+                              "id": "com.doordash.driverapp:id/instructions_title",
+                              "class": "android.widget.TextView",
+                              "isEnabled": true,
+                              "visible": false,
+                              "bounds": {
+                               "left": 103,
+                               "top": 6243,
+                               "right": 973,
+                               "bottom": 2151
+                              }
+                             },
+                             {
+                              "id": "com.doordash.driverapp:id/expand_icon",
+                              "class": "android.widget.ImageView",
+                              "isClickable": true,
+                              "isEnabled": true,
+                              "clickAction": true,
+                              "visible": false,
+                              "focusable": true,
+                              "bounds": {
+                               "left": 991,
+                               "top": 6243,
+                               "right": 1044,
+                               "bottom": 2151
+                              }
+                             },
+                             {
+                              "id": "com.doordash.driverapp:id/instructions_expandable_view",
+                              "class": "android.widget.LinearLayout",
+                              "isEnabled": true,
+                              "visible": false,
+                              "bounds": {
+                               "left": 103,
+                               "top": 6316,
+                               "right": 1044,
+                               "bottom": 2151
+                              },
+                              "children": [
+                               {
+                                "id": "com.doordash.driverapp:id/instructions_expanded_container",
+                                "class": "android.view.ViewGroup",
+                                "isEnabled": true,
+                                "visible": false,
+                                "bounds": {
+                                 "left": 103,
+                                 "top": 6316,
+                                 "right": 1044,
+                                 "bottom": 2151
+                                },
+                                "children": [
+                                 {
+                                  "text": "Remember to check the receipt on the bag for any drinks!",
+                                  "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
+                                  "class": "android.widget.TextView",
+                                  "isEnabled": true,
+                                  "visible": false,
+                                  "bounds": {
+                                   "left": 103,
+                                   "top": 6316,
+                                   "right": 1044,
+                                   "bottom": 2151
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       },
+                       {
+                        "id": "com.doordash.driverapp:id/order_items_view",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "visible": false,
+                        "bounds": {
+                         "left": 0,
+                         "top": 9420,
+                         "right": 1080,
+                         "bottom": 2151
+                        },
+                        "children": [
+                         {
+                          "id": "com.doordash.driverapp:id/divider_orders",
+                          "class": "android.view.View",
+                          "isEnabled": true,
+                          "visible": false,
+                          "bounds": {
+                           "left": 0,
+                           "top": 9420,
+                           "right": 1080,
+                           "bottom": 2151
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/ic_items_v2",
+                          "class": "android.widget.ImageView",
+                          "isEnabled": true,
+                          "visible": false,
+                          "bounds": {
+                           "left": 27,
+                           "top": 9449,
+                           "right": 80,
+                           "bottom": 2151
+                          }
+                         },
+                         {
+                          "text": "1 item",
+                          "id": "com.doordash.driverapp:id/items_title_v2",
+                          "class": "android.widget.TextView",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 107,
+                           "top": 1044,
+                           "right": 973,
+                           "bottom": 1096
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/expand_button_v2",
+                          "class": "android.widget.ImageView",
+                          "isClickable": true,
+                          "isEnabled": true,
+                          "clickAction": true,
+                          "focusable": true,
+                          "bounds": {
+                           "left": 973,
+                           "top": 1044,
+                           "right": 1062,
+                           "bottom": 1097
+                          }
+                         },
+                         {
+                          "id": "com.doordash.driverapp:id/items_content_v2",
+                          "class": "androidx.recyclerview.widget.RecyclerView",
+                          "isEnabled": true,
+                          "focusable": true,
+                          "collRows": 1,
+                          "collCols": 1,
+                          "bounds": {
+                           "left": 27,
+                           "top": 1114,
+                           "right": 1062,
+                           "bottom": 1347
+                          },
+                          "children": [
+                           {
+                            "class": "android.view.ViewGroup",
+                            "isEnabled": true,
+                            "itemRow": 0,
+                            "itemCol": 0,
+                            "bounds": {
+                             "left": 27,
+                             "top": 1114,
+                             "right": 1062,
+                             "bottom": 1347
+                            },
+                            "children": [
+                             {
+                              "id": "com.doordash.driverapp:id/item_list_expanded_view",
+                              "class": "android.view.ViewGroup",
+                              "isClickable": true,
+                              "isEnabled": true,
+                              "clickAction": true,
+                              "focusable": true,
+                              "bounds": {
+                               "left": 27,
+                               "top": 1114,
+                               "right": 1062,
+                               "bottom": 1347
+                              },
+                              "children": [
+                               {
+                                "text": "1 \u00d7",
+                                "id": "com.doordash.driverapp:id/order_item_count",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 27,
+                                 "top": 1150,
+                                 "right": 80,
+                                 "bottom": 1203
+                                }
+                               },
+                               {
+                                "text": "Soup/Mac and Soup/Mac",
+                                "id": "com.doordash.driverapp:id/order_item_name",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 116,
+                                 "top": 1150,
+                                 "right": 1026,
+                                 "bottom": 1197
+                                }
+                               },
+                               {
+                                "text": "Sides: French Baguette (190 Cal.)\nPick 1: Mac & Cheese (Cup) (490 Cal.)\nPick 2: Broccoli Cheddar Soup (Bowl) (420 Cal.)",
+                                "id": "com.doordash.driverapp:id/order_item_instructions",
+                                "class": "android.widget.TextView",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 116,
+                                 "top": 1197,
+                                 "right": 1026,
+                                 "bottom": 1338
+                                }
+                               },
+                               {
+                                "id": "com.doordash.driverapp:id/flowTags",
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "visible": false,
+                                "bounds": {
+                                 "left": 116,
+                                 "top": 1347,
+                                 "right": 1026,
+                                 "bottom": 1347
+                                }
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       },
+                       {
+                        "id": "com.doordash.driverapp:id/mx_contact_view",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 0,
+                         "top": 1347,
+                         "right": 1080,
+                         "bottom": 1489
+                        },
+                        "children": [
+                         {
+                          "id": "com.doordash.driverapp:id/contact_view",
+                          "class": "android.view.ViewGroup",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 0,
+                           "top": 1347,
+                           "right": 1080,
+                           "bottom": 1489
+                          },
+                          "children": [
+                           {
+                            "id": "com.doordash.driverapp:id/divider",
+                            "class": "android.view.View",
+                            "isEnabled": true,
+                            "bounds": {
+                             "left": 0,
+                             "top": 1383,
+                             "right": 1080,
+                             "bottom": 1385
+                            }
+                           },
+                           {
+                            "id": "com.doordash.driverapp:id/instructions_icon",
+                            "class": "android.widget.ImageView",
+                            "isEnabled": true,
+                            "bounds": {
+                             "left": 36,
+                             "top": 1421,
+                             "right": 89,
+                             "bottom": 1474
+                            }
+                           },
+                           {
+                            "text": "Panera Bread",
+                            "id": "com.doordash.driverapp:id/instructions_title",
+                            "class": "android.widget.TextView",
+                            "isEnabled": true,
+                            "bounds": {
+                             "left": 125,
+                             "top": 1421,
+                             "right": 955,
+                             "bottom": 1463
+                            }
+                           },
+                           {
+                            "id": "com.doordash.driverapp:id/accessory_button",
+                            "class": "android.widget.ImageButton",
+                            "isClickable": true,
+                            "isEnabled": true,
+                            "clickAction": true,
+                            "focusable": true,
+                            "bounds": {
+                             "left": 973,
+                             "top": 1418,
+                             "right": 1044,
+                             "bottom": 1489
+                            }
+                           }
+                          ]
+                         }
+                        ]
+                       },
+                       {
+                        "id": "com.doordash.driverapp:id/pickup_survey_view",
+                        "class": "android.view.ViewGroup",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 0,
+                         "top": 1489,
+                         "right": 1080,
+                         "bottom": 2040
+                        },
+                        "children": [
+                         {
+                          "class": "android.view.View",
+                          "isEnabled": true,
+                          "bounds": {
+                           "left": 0,
+                           "top": 1489,
+                           "right": 1080,
+                           "bottom": 2040
+                          },
+                          "children": [
+                           {
+                            "class": "android.view.View",
+                            "isEnabled": true,
+                            "bounds": {
+                             "left": 0,
+                             "top": 1489,
+                             "right": 1080,
+                             "bottom": 1579
+                            }
+                           },
+                           {
+                            "class": "android.view.View",
+                            "isEnabled": true,
+                            "bounds": {
+                             "left": 36,
+                             "top": 1563,
+                             "right": 1044,
+                             "bottom": 1987
+                            },
+                            "children": [
+                             {
+                              "desc": "",
+                              "class": "android.widget.ImageView",
+                              "isEnabled": true,
+                              "srFocusable": true,
+                              "bounds": {
+                               "left": 36,
+                               "top": 1563,
+                               "right": 89,
+                               "bottom": 1616
+                              }
+                             },
+                             {
+                              "class": "android.view.View",
+                              "isEnabled": true,
+                              "bounds": {
+                               "left": 125,
+                               "top": 1563,
+                               "right": 1044,
+                               "bottom": 1987
+                              },
+                              "children": [
+                               {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 125,
+                                 "top": 1563,
+                                 "right": 1044,
+                                 "bottom": 1783
+                                },
+                                "children": [
+                                 {
+                                  "text": "Merchant delay protection",
+                                  "class": "android.widget.TextView",
+                                  "isEnabled": true,
+                                  "srFocusable": true,
+                                  "bounds": {
+                                   "left": 125,
+                                   "top": 1563,
+                                   "right": 1044,
+                                   "bottom": 1615
+                                  }
+                                 },
+                                 {
+                                  "text": "Since you arrived before your pickup time, your on-time rate is protected for factors outside your control. To stay protected:",
+                                  "class": "android.widget.TextView",
+                                  "isEnabled": true,
+                                  "srFocusable": true,
+                                  "bounds": {
+                                   "left": 125,
+                                   "top": 1624,
+                                   "right": 1044,
+                                   "bottom": 1783
+                                  }
+                                 }
+                                ]
+                               },
+                               {
+                                "class": "android.view.View",
+                                "isEnabled": true,
+                                "bounds": {
+                                 "left": 125,
+                                 "top": 1810,
+                                 "right": 1044,
+                                 "bottom": 1987
+                                },
+                                "children": [
+                                 {
+                                  "class": "android.view.View",
+                                  "isEnabled": true,
+                                  "bounds": {
+                                   "left": 125,
+                                   "top": 1810,
+                                   "right": 1044,
+                                   "bottom": 1857
+                                  },
+                                  "children": [
+                                   {
+                                    "desc": "",
+                                    "class": "android.widget.ImageView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 125,
+                                     "top": 1810,
+                                     "right": 161,
+                                     "bottom": 1846
+                                    }
+                                   },
+                                   {
+                                    "text": "Stay in the restaurant",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 179,
+                                     "top": 1810,
+                                     "right": 1044,
+                                     "bottom": 1857
+                                    }
+                                   }
+                                  ]
+                                 },
+                                 {
+                                  "class": "android.view.View",
+                                  "isEnabled": true,
+                                  "bounds": {
+                                   "left": 125,
+                                   "top": 1875,
+                                   "right": 1044,
+                                   "bottom": 1922
+                                  },
+                                  "children": [
+                                   {
+                                    "desc": "",
+                                    "class": "android.widget.ImageView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 125,
+                                     "top": 1875,
+                                     "right": 161,
+                                     "bottom": 1911
+                                    }
+                                   },
+                                   {
+                                    "text": "Pick up the order as soon as it's ready",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 179,
+                                     "top": 1875,
+                                     "right": 1044,
+                                     "bottom": 1922
+                                    }
+                                   }
+                                  ]
+                                 },
+                                 {
+                                  "class": "android.view.View",
+                                  "isEnabled": true,
+                                  "bounds": {
+                                   "left": 125,
+                                   "top": 1940,
+                                   "right": 1044,
+                                   "bottom": 1987
+                                  },
+                                  "children": [
+                                   {
+                                    "desc": "",
+                                    "class": "android.widget.ImageView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 125,
+                                     "top": 1940,
+                                     "right": 161,
+                                     "bottom": 1976
+                                    }
+                                   },
+                                   {
+                                    "text": "Leave right after pickup",
+                                    "class": "android.widget.TextView",
+                                    "isEnabled": true,
+                                    "srFocusable": true,
+                                    "bounds": {
+                                     "left": 179,
+                                     "top": 1940,
+                                     "right": 1044,
+                                     "bottom": 1987
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   },
+                   {
+                    "id": "com.doordash.driverapp:id/pick_up_action_view",
+                    "class": "android.view.ViewGroup",
+                    "isEnabled": true,
+                    "bounds": {
+                     "left": 0,
+                     "top": 2151,
+                     "right": 1080,
+                     "bottom": 2347
+                    },
+                    "children": [
+                     {
+                      "id": "com.doordash.driverapp:id/button_bg",
+                      "class": "android.view.View",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 0,
+                       "top": 2151,
+                       "right": 1080,
+                       "bottom": 2347
+                      }
+                     },
+                     {
+                      "id": "com.doordash.driverapp:id/primary_action_button",
+                      "class": "android.widget.Button",
+                      "isClickable": true,
+                      "isEnabled": true,
+                      "clickAction": true,
+                      "focusable": true,
+                      "bounds": {
+                       "left": 36,
+                       "top": 2204,
+                       "right": 1044,
+                       "bottom": 2311
+                      },
+                      "children": [
+                       {
+                        "text": "Scan receipt",
+                        "id": "com.doordash.driverapp:id/textView_prism_button_title",
+                        "class": "android.widget.TextView",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 413,
+                         "top": 2225,
+                         "right": 667,
+                         "bottom": 2291
+                        }
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "windowContext": {
+  "windowId": 7510,
+  "windowType": 1,
+  "windowLayer": 0,
+  "isActive": true,
+  "isFocused": true,
+  "totalWindowCount": 4
+ }
+}

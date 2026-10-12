@@ -1,0 +1,284 @@
+{
+ "captureId": "00000000-0000-4000-8000-000000000000",
+ "pipelineId": "accessibility.window",
+ "schemaId": "uinode.v1",
+ "timestamp": 1791566084933,
+ "platform": "doordash",
+ "ruleId": "doordash.screen.timeline_task_detail",
+ "classificationName": "timeline_task_detail",
+ "metadata": {
+  "engineVersion": 1,
+  "rulesetFormatVersion": 2,
+  "rulesetReleaseTag": "dev",
+  "pipelineVersions": {
+   "accessibility": 1,
+   "accessibility.window": 1,
+   "accessibility.click": 1,
+   "accessibility.long_click": 1,
+   "accessibility.scroll": 1,
+   "accessibility.focus": 1,
+   "notification": 1
+  },
+  "stateMachineApiVersion": "1.0",
+  "appVersion": "0.230.0+88dee351",
+  "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys",
+  "platformAppVersion": "8.101.8"
+ },
+ "payload": {
+  "class": "android.widget.FrameLayout",
+  "isEnabled": true,
+  "bounds": {
+   "left": 0,
+   "top": 0,
+   "right": 1080,
+   "bottom": 2400
+  },
+  "children": [
+   {
+    "class": "android.widget.FrameLayout",
+    "isEnabled": true,
+    "bounds": {
+     "left": 0,
+     "top": 0,
+     "right": 1080,
+     "bottom": 2400
+    },
+    "children": [
+     {
+      "id": "android:id/content",
+      "class": "android.widget.FrameLayout",
+      "isEnabled": true,
+      "bounds": {
+       "left": 0,
+       "top": 0,
+       "right": 1080,
+       "bottom": 2400
+      },
+      "children": [
+       {
+        "class": "android.view.ViewGroup",
+        "isEnabled": true,
+        "bounds": {
+         "left": 0,
+         "top": 0,
+         "right": 1080,
+         "bottom": 2400
+        },
+        "children": [
+         {
+          "class": "android.view.View",
+          "isEnabled": true,
+          "bounds": {
+           "left": 0,
+           "top": 0,
+           "right": 1080,
+           "bottom": 2400
+          },
+          "children": [
+           {
+            "class": "android.view.View",
+            "isEnabled": true,
+            "bounds": {
+             "left": 0,
+             "top": 0,
+             "right": 1080,
+             "bottom": 2400
+            },
+            "children": [
+             {
+              "class": "android.view.View",
+              "isEnabled": true,
+              "bounds": {
+               "left": 0,
+               "top": 0,
+               "right": 1080,
+               "bottom": 2400
+              },
+              "children": [
+               {
+                "desc": "Close sheet",
+                "class": "android.view.View",
+                "isClickable": true,
+                "isEnabled": true,
+                "clickAction": true,
+                "srFocusable": true,
+                "bounds": {
+                 "left": 0,
+                 "top": 0,
+                 "right": 1080,
+                 "bottom": 1555
+                }
+               },
+               {
+                "pane": "Bottom Sheet",
+                "class": "android.view.View",
+                "isEnabled": true,
+                "bounds": {
+                 "left": 0,
+                 "top": 1555,
+                 "right": 1080,
+                 "bottom": 2400
+                },
+                "children": [
+                 {
+                  "class": "android.view.View",
+                  "isEnabled": true,
+                  "bounds": {
+                   "left": 0,
+                   "top": 1555,
+                   "right": 1080,
+                   "bottom": 2365
+                  },
+                  "children": [
+                   {
+                    "class": "android.view.View",
+                    "isEnabled": true,
+                    "srFocusable": true,
+                    "bounds": {
+                     "left": 514,
+                     "top": 1555,
+                     "right": 567,
+                     "bottom": 1600
+                    },
+                    "children": [
+                     {
+                      "class": "android.view.View",
+                      "isClickable": true,
+                      "isEnabled": true,
+                      "clickAction": true,
+                      "focusable": true,
+                      "srFocusable": true,
+                      "bounds": {
+                       "left": 487,
+                       "top": 1515,
+                       "right": 594,
+                       "bottom": 1591
+                      },
+                      "children": [
+                       {
+                        "class": "android.view.View",
+                        "isEnabled": true,
+                        "bounds": {
+                         "left": 487,
+                         "top": 1515,
+                         "right": 594,
+                         "bottom": 1591
+                        }
+                       }
+                      ]
+                     }
+                    ]
+                   },
+                   {
+                    "text": "Pickup for [redacted:cf7a]",
+                    "class": "android.widget.TextView",
+                    "isEnabled": true,
+                    "srFocusable": true,
+                    "bounds": {
+                     "left": 344,
+                     "top": 1600,
+                     "right": 737,
+                     "bottom": 1652
+                    }
+                   },
+                   {
+                    "class": "android.view.View",
+                    "isClickable": true,
+                    "isEnabled": true,
+                    "clickAction": true,
+                    "focusable": true,
+                    "srFocusable": true,
+                    "bounds": {
+                     "left": 45,
+                     "top": 2115,
+                     "right": 1035,
+                     "bottom": 2222
+                    },
+                    "children": [
+                     {
+                      "text": "Copy address",
+                      "class": "android.widget.TextView",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 401,
+                       "top": 2129,
+                       "right": 679,
+                       "bottom": 2181
+                      }
+                     },
+                     {
+                      "class": "android.widget.Button",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 45,
+                       "top": 2098,
+                       "right": 1035,
+                       "bottom": 2205
+                      }
+                     }
+                    ]
+                   },
+                   {
+                    "class": "android.view.View",
+                    "isClickable": true,
+                    "isEnabled": true,
+                    "clickAction": true,
+                    "focusable": true,
+                    "srFocusable": true,
+                    "bounds": {
+                     "left": 45,
+                     "top": 2221,
+                     "right": 1035,
+                     "bottom": 2328
+                    },
+                    "children": [
+                     {
+                      "text": "Jump to this task",
+                      "class": "android.widget.TextView",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 367,
+                       "top": 2249,
+                       "right": 714,
+                       "bottom": 2301
+                      }
+                     },
+                     {
+                      "class": "android.widget.Button",
+                      "isEnabled": true,
+                      "bounds": {
+                       "left": 45,
+                       "top": 2221,
+                       "right": 1035,
+                       "bottom": 2328
+                      }
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "windowContext": {
+  "windowId": 7522,
+  "windowType": 1,
+  "windowLayer": 0,
+  "isActive": true,
+  "isFocused": true,
+  "totalWindowCount": 4
+ }
+}

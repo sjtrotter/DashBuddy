@@ -571,7 +571,9 @@ set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFI
 hash join that could over-remove a sibling), by customer hash for a pickup-phase one; the cross-frame
 retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
 `Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
-`taskId`; a misread self-heals only while the job stayed open.
+`taskId`; a misread self-heals only while the job stayed open; a `task:unassigned` frame followed by the Idle screen
+abandons the whole job: every open task is marked unassigned (never completed) and the job closes, so the
+next accept mints fresh (#1312).
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 

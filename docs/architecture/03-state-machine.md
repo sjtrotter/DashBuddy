@@ -675,6 +675,31 @@ same-order frame resumes the task (the resume copy sites clear `unassignedAt`) �
 job stayed OPEN; after a single-order abandon the job closes and a later same-order frame mints a
 NEW jobId the resume lookup can't reach (documented residual).
 
+**#1312 — whole-job abandonment.** In the 10-09 session both orders ran on one task; the
+second unassign confirmation was recognized but swallowed by the retro-mark gate, Idle appeared
+5 seconds later, and the next accept was absorbed into the abandoned job. Confirmation wording
+is not scope evidence; the next flow-bearing frame is. `TaskUnassigned → Idle`, with no active
+task and an active job, marks every still-OPEN task with `unassignedAt = obs.timestamp`, never
+`completedAt` — open per phase: a dropoff until it is delivered (`completedAt`), a pickup until it is
+CONFIRMED (`confirmedAt`, the pickup→dropoff sweep edge, #1315). A pickup displaced by a sibling pickup
+carries `completedAt` but no confirmation and emitted no `PICKUP_CONFIRMED`, so under a whole-job abandon
+it is marked unassigned too (the fielded "Panera Bread" slot displaced by the "Panera - Corporate"
+relabel); its `completedAt` is left intact, the #736 retro-mark precedent for a task carrying both marks.
+The tasks move into `recentTasks`, the non-unassigned job mirror is reconciled, and
+`completeActiveJob` closes the job with its existing receipt bookkeeping. Each newly marked task
+emits one per-taskId `TASK_UNASSIGNED`; no pickup confirmation, pay, or delivery row is fabricated.
+The normal `diffJobClose` tripwire still runs. Its existing accounting counts explicit unassignments
+as resolved orders and keeps the two-accept floor for this in-session close, so the one-accept
+fixture emits no `JOB_ACCEPT_MISMATCH`; abandonment is not an "accepted 1 / accounted 0" mismatch
+under the current detector.
+Flow-less recognize-only frames leave R0's flow unchanged and preserve the edge. A sibling task
+frame or `OfferPresented` overlay between confirmation and Idle deliberately keeps the job for
+absorption; an interlude does not re-open this edge. `TaskUnassigned → PostTask → Idle` still closes
+through #596, without this abandonment sweep. Refusing the next add-on merely because the last
+lifecycle evidence was an unassign without physical progress was rejected: a legitimate add-on
+while a sibling survives would mint a fresh job and strand the sibling's placeholders. Absorption
+is the preferred failure direction; Idle supplies the positive terminal evidence (#527).
+
 
 ## Arrival re-evaluation (#823 Phase 2)
 

@@ -1,0 +1,59 @@
+{
+ "captureId": "00000000-0000-4000-8000-000000000000",
+ "pipelineId": "accessibility.click",
+ "schemaId": "click_context.v1",
+ "timestamp": 1791566706199,
+ "platform": "doordash",
+ "ruleId": null,
+ "classificationName": "UNKNOWN",
+ "metadata": {
+  "engineVersion": 1,
+  "rulesetFormatVersion": 2,
+  "rulesetReleaseTag": "dev",
+  "pipelineVersions": {
+   "accessibility": 1,
+   "accessibility.window": 1,
+   "accessibility.click": 1,
+   "accessibility.long_click": 1,
+   "accessibility.scroll": 1,
+   "accessibility.focus": 1,
+   "notification": 1
+  },
+  "stateMachineApiVersion": "1.0",
+  "appVersion": "0.230.0+88dee351",
+  "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys",
+  "platformAppVersion": "8.101.8"
+ },
+ "payload": {
+  "node": {
+   "desc": "Submit",
+   "id": "com.doordash.driverapp:id/button_submit",
+   "class": "android.widget.Button",
+   "isClickable": true,
+   "isEnabled": true,
+   "clickAction": true,
+   "focusable": true,
+   "bounds": {
+    "left": 53,
+    "top": 2240,
+    "right": 1027,
+    "bottom": 2347
+   },
+   "children": [
+    {
+     "text": "Submit",
+     "id": "com.doordash.driverapp:id/textView_prism_button_title",
+     "class": "android.widget.TextView",
+     "isEnabled": true,
+     "bounds": {
+      "left": 466,
+      "top": 2261,
+      "right": 614,
+      "bottom": 2327
+     }
+    }
+   ]
+  },
+  "screenTarget": "pickup_unassigned_confirmation"
+ }
+}
