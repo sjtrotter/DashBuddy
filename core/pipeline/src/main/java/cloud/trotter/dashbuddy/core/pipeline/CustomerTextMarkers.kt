@@ -244,7 +244,7 @@ object CustomerTextMarkers {
         // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
         // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime
         // UNKNOWN scrub keeps its deliberate set; the census withholds their own field and seeds nothing
-        // (CONTENT). Kept LAST so a first-match lookup never shadows a runtime row above.
+        // (CONTENT). Kept after overlapping runtime rows so a first-match lookup never shadows them.
         // The embedded Google-Nav maneuver cluster (#886): a number-LESS destination street carries no
         // digits, so no address shape catches it — ids are the only handle.
         IdMarker("primaryManeuverText", IdentityKind.CONTENT, RuntimeScrub.NEVER),
@@ -263,6 +263,8 @@ object CustomerTextMarkers {
         IdMarker("step_description", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("instructions_list", IdentityKind.CONTENT, RuntimeScrub.NEVER),
         IdMarker("instruction_text", IdentityKind.CONTENT, RuntimeScrub.NEVER),
+        // #1314 — the gift order's recipient (8.101.8 `group_gift_banner`); a bare `First I` with no lead-in, invisible to the text markers.
+        IdMarker("gift_recipient_name", IdentityKind.NAME, idProtect = true),
     )
 
     /** Every table suffix — the commit-path intake list, DERIVED (review AL3; `SnapshotRedactor`). */
@@ -274,7 +276,7 @@ object CustomerTextMarkers {
      * (census-only). There is no value-dependent mode (ZZ1): the runtime path fails closed on the id alone.
      * [idProtect] (#1160 review AB4): the census adds the row's WHOLE value as an id-only run — true only
      * where the value can plausibly be a name a test tag embeds (`customer_name`, `order_cx_name`,
-     * `user_name`, `tvTitle`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
+     * `user_name`, `tvTitle`, `gift_recipient_name`); a chat reply (`tvLastMessage` "Ok") must not null `ok_button`, and an
      * address or content row never protects an id by its whole value.
      */
     data class IdMarker(

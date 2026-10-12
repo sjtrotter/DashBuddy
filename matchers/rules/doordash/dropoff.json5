@@ -1040,6 +1040,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -1201,7 +1207,7 @@
         "flow": "task:dropoff:navigation",
         "modeHint": "online"
       },
-      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed. (4) #1058, fielded 08-28 (4 envelopes): the ALCOHOL arrival card renders `alcohol_dropoff_instructions_title` INSTEAD of any customer lead-in — no `Deliver to` / `Heading to` / `Delivery for` node exists on it — so all three arms above missed and the sheet fell UNKNOWN, shipping its `address_subpremise_line` and its `dasher_instruction_content_collapsed` (a customer note carrying a door code) verbatim on the UNKNOWN capture path. The fourth arm is purely ID-anchored (#938: view ids do not localize): the drop-off bottom sheet container + the alcohol scan icon + the Directions button, three ids that co-occur only on this card (two committed fixtures carry all three, both already `dropoff_pre_arrival`). Recognition alone closes the leak — this rule's `redact` already declares both leaked ids — and the parse's name/address fields are nullable coalesces that simply resolve null on this render, so nothing is fabricated.",
+      "comment": "Dropoff layouts (#462/#460/#549): (1) the en-route nav card ('Deliver to <name>' + Directions/Call/Message); (2) the arrival detail card with 'Delivery for' + 'Hand it to recipient'; (3) #549: the arrival detail card whose instruction is NOT 'Hand it to recipient' (e.g. 'Leave it at the door'), anchored on 'Delivery for' + the complete_delivery_steps_button id (the third require branch) — it was dropping to UNKNOWN. The arrival card's first text is 'Delivery for'/'Deliver by', neither of which startsWith 'Deliver to'. 'Hand it to recipient' / complete_delivery_steps_button are the dropoff-specific discriminators (the pickup card also carries 'Delivery for', so keying on that alone would steal it). The arrival card's address nodes carry ids (address_line_1/_2), so customerAddressHash uses a coalesce (id-less shape first, by-id second). The alcohol variant additionally carries the priority-0 sensitive id/signature banner (#463), blocked before reaching here. Recognize-only (flow stays task:dropoff:navigation); the gate-code/instruction node is never parsed. (4) #1058, fielded 08-28 (4 envelopes): the ALCOHOL arrival card renders `alcohol_dropoff_instructions_title` INSTEAD of any customer lead-in — no `Deliver to` / `Heading to` / `Delivery for` node exists on it — so all three arms above missed and the sheet fell UNKNOWN, shipping its `address_subpremise_line` and its `dasher_instruction_content_collapsed` (a customer note carrying a door code) verbatim on the UNKNOWN capture path. The fourth arm is purely ID-anchored (#938: view ids do not localize): the drop-off bottom sheet container + the alcohol scan icon + the Directions button, three ids that co-occur only on this card (two committed fixtures carry all three, both already `dropoff_pre_arrival`). Recognition alone closes the leak — this rule's `redact` already declares both leaked ids — and the parse's name/address fields are nullable coalesces that simply resolve null on this render, so nothing is fabricated. #1314: the 8.101.8 gift sheet labels `user_name_label` as 'Gift sender' and is anchored by `group_gift_banner` + `drop_off_bottom_sheet_container` + `gift_recipient_name` (locale-immune ids, #938); the sender in `user_name` IS the ordering customer, so the third name coalesce preserves the pickup `customer_name` lineage (#526/#733), while the recipient is masked with normalized-name hex and never parsed (fail-null beats a wrong join). Four captures fell UNKNOWN on 2026-10-11 and leaked the recipient, also losing DELIVERY_ARRIVED and holding the job open for 2.5 h (#1315).",
       "require": {
         "any": [
           {
@@ -1281,6 +1287,25 @@
                 }
               }
             ]
+          },
+          {
+            "all": [
+              {
+                "exists": {
+                  "hasIdSuffix": "group_gift_banner"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "drop_off_bottom_sheet_container"
+                }
+              },
+              {
+                "exists": {
+                  "hasIdSuffix": "gift_recipient_name"
+                }
+              }
+            ]
           }
         ]
       },
@@ -1320,6 +1345,17 @@
                   "hasTextContaining": "Delivery for"
                 },
                 "navigate": "sibling(1)",
+                "read": "text",
+                "transform": [
+                  "trim",
+                  "normalizeCustomerName",
+                  "sha256"
+                ]
+              },
+              {
+                "find": {
+                  "hasIdSuffix": "user_name"
+                },
                 "read": "text",
                 "transform": [
                   "trim",
@@ -2640,6 +2676,12 @@
         },
         {
           "find": {
+            "hasIdSuffix": "gift_recipient_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
             "hasIdSuffix": "address_line_1"
           }
         },
@@ -3604,6 +3646,12 @@
         {
           "find": {
             "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "gift_recipient_name"
           },
           "normalize": "customerName"
         },

@@ -113,6 +113,10 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [active] **🆕 NEW — gift order drop-off sheet recognized + masked (#1314).** On a gift delivery,
+  the arrival sheet shows as `dropoff_pre_arrival`, `DELIVERY_ARRIVED` lands, and the capture's
+  `gift_recipient_name` and `user_name` read `[redacted:xxxx]`. — Confirmed: 0/2
+
 - **#254** — verify defaults through 9 eligible deliveries; at 10, Economy shows the platform count and automatic values; confirm pickup-plus-door overhead, independent override/automatic controls, persistence after restart/vehicle change, and exclusion of shops/stacks/missing arrivals. Compare subsequent offer time estimates with observed work.
   - Confirmed: 0/2
 

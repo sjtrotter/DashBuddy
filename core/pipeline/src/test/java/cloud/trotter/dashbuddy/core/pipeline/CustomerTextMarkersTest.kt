@@ -388,6 +388,8 @@ class CustomerTextMarkersTest {
                 "tvLastMessage",
                 // #919 — deliberately ADDED: the chat compose box holds user-authored draft text.
                 "message_input",
+                // #1314 — the gift recipient has no customer lead-in.
+                "gift_recipient_name",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -407,6 +409,7 @@ class CustomerTextMarkersTest {
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
                 "message_input" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "gift_recipient_name" to CustomerTextMarkers.IdentityKind.NAME,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
                 .associate { it.suffix to it.kind },
@@ -417,6 +420,13 @@ class CustomerTextMarkersTest {
     fun `the UNKNOWN-envelope scrub covers the NN2-promoted order_cx_name (review OO3)`() {
         val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_cx_name", text = "Morgan")
         assertEquals("order_cx_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
+        assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
+    }
+
+    @Test
+    fun `the UNKNOWN-envelope scrub covers the gift recipient (#1314)`() {
+        val node = UiNode(viewIdResourceName = "com.doordash.driverapp:id/gift_recipient_name", text = "Devin R")
+        assertEquals("gift_recipient_name", CustomerTextMarkers.firstUnredactedIdMarker(node))
         assertEquals("[redacted]", CustomerTextMarkers.scrubUnknown(node).text)
     }
 
@@ -454,7 +464,7 @@ class CustomerTextMarkersTest {
     @Test
     fun `idProtect is pinned - only rows whose value a test tag can embed (review AB4)`() {
         assertEquals(
-            setOf("customer_name", "user_name", "order_cx_name", "tvTitle"),
+            setOf("customer_name", "user_name", "order_cx_name", "tvTitle", "gift_recipient_name"),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.idProtect }.map { it.suffix }.toSet(),
         )
     }

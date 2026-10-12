@@ -45,9 +45,14 @@ class PickupArrivedRedactParityTest {
             "customer_name" to "doordash.screen.pickup_arrival",
             "order_cx_name" to "doordash.screen.pickup_order_picker",
         )
-        nameSuffixes.associateWith { suffix ->
+        // A NAME id that never renders on a pickup surface is EXCLUDED here by name, with its reason — a new
+        // NAME row still fails loud until a human either maps a pickup reference or records the exclusion.
+        val excludedWithReason = mapOf(
+            "gift_recipient_name" to "renders only on the gift drop-off sheet (dropoff_pre_arrival, #1314)",
+        )
+        nameSuffixes.filterNot { it in excludedWithReason }.associateWith { suffix ->
             val referenceId = referenceRuleIds[suffix]
-                ?: error("NAME id '$suffix' needs an explicit redact reference rule mapping")
+                ?: error("NAME id '$suffix' needs an explicit redact reference rule mapping, or an exclusion with a reason")
             val rule = screens.single { it.getValue("id").jsonPrimitive.content == referenceId }
             val entries = nameIdEntries(rule, suffix)
             assertEquals("$referenceId must have exactly one $suffix redact reference", 1, entries.size)
@@ -55,7 +60,8 @@ class PickupArrivedRedactParityTest {
         }
     }
 
-    private val ruleIdsCarryingReferences by lazy {
+    /** Every platform's screen rules by id (the sweep is platform-neutral: a claim by any rule is judged). */
+    private val rulesByIdAllPlatforms: Map<String, JsonObject> by lazy {
         File(TestRulesetFactory.rulesDir).walkTopDown()
             .filter { it.isFile && it.extension == "json" }
             .sortedBy { it.path }
@@ -63,8 +69,19 @@ class PickupArrivedRedactParityTest {
                 Json.parseToJsonElement(file.readText()).jsonObject["screens"]?.jsonArray.orEmpty()
                     .asSequence().map { it.jsonObject }
             }
-            .filter { rule -> references.all { (suffix, reference) -> reference in nameIdEntries(rule, suffix) } }
-            .map { it.getValue("id").jsonPrimitive.content }.toSet()
+            .associateBy { it.getValue("id").jsonPrimitive.content }
+    }
+
+    /**
+     * A NAME id present on a recognized frame must be HASHED by the claiming rule: exactly one entry anchored on
+     * that suffix, `normalize: customerName`, no `plainMask`. Reference-free on purpose — Test A pins the
+     * arrived-pickup family to the reference bytes; this sweep only asks "is this id masked to a customer hex".
+     */
+    private fun hashesNameId(rule: JsonObject, suffix: String): Boolean {
+        val entries = nameIdEntries(rule, suffix)
+        return entries.size == 1 && entries.single().jsonObject.let {
+            it["normalize"]?.jsonPrimitive?.content == "customerName" && !it.containsKey("plainMask")
+        }
     }
 
     private fun declaresArrival(ruleOrBranch: JsonObject): Boolean =
@@ -120,7 +137,6 @@ class PickupArrivedRedactParityTest {
             .filter { it.isFile && it.extension == "json" && it.name != "approved-parse-output.json" }
             .filterNot { it.parentFile == File(base, "UNKNOWN") } // the staging root's own files, never its committed negative/ child
             .sortedBy { it.path }
-        val coveredRuleIds = ruleIdsCarryingReferences
         val violations = mutableListOf<String>()
         var framesWithNameId = 0
 
@@ -140,16 +156,24 @@ class PickupArrivedRedactParityTest {
                 violations += "$path: loadNode failed: ${e.message}; cause: ${e.cause?.message}"
                 continue
             }
-            if (!carriesNameId(tree)) continue
+            val present = nameSuffixes.filter { suffix -> carriesId(tree, suffix) }
+            if (present.isEmpty()) continue
             framesWithNameId++
             try {
                 val ruleId = TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId
                 val isNegative = file.absoluteFile.startsWith(negativeDir.absoluteFile)
                 when {
                     ruleId == null && isNegative -> Unit // the negative corpus must stay UNKNOWN; the backstop owns it
-                    ruleId == null -> violations += "$path: NAME-id frame is unclaimed"
-                    ruleId !in coveredRuleIds ->
-                        violations += "$path: $ruleId does not carry all NAME-id reference redact entries"
+                    ruleId == null -> violations += "$path: NAME-id frame ($present) is unclaimed"
+                    else -> {
+                        val rule = rulesByIdAllPlatforms[ruleId]
+                            ?: run { violations += "$path: claimed by $ruleId, which no generated asset declares"; null }
+                        rule?.let { r ->
+                            present.filterNot { hashesNameId(r, it) }.forEach { suffix ->
+                                violations += "$path: $ruleId does not hash the NAME id '$suffix' (one normalize: customerName entry, no plainMask)"
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 violations += "$path: matchFirst failed: ${e.message}"
@@ -161,8 +185,8 @@ class PickupArrivedRedactParityTest {
         assertTrue("#1309 corpus violations:\n${violations.joinToString("\n")}", violations.isEmpty())
     }
 
-    private fun carriesNameId(node: UiNode): Boolean =
-        nameSuffixes.any { node.matchesId(it) } || node.children.any { carriesNameId(it) }
+    private fun carriesId(node: UiNode, suffix: String): Boolean =
+        node.matchesId(suffix) || node.children.any { carriesId(it, suffix) }
 
     private fun schemaIdOf(file: File): String? = runCatching {
         Json.parseToJsonElement(file.readText()).jsonObject["schemaId"]?.jsonPrimitive?.content

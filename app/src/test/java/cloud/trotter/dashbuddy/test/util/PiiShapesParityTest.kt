@@ -77,6 +77,7 @@ class PiiShapesParityTest {
             // runtime ID_MARKER_TABLE suffix): the two instruction-body ids.
             "description_text_view",
             "dasher_instruction_content_expanded",
+            "gift_recipient_name", // #1314
         )
 
         val ORIGINAL_NAME_PREFIXES: List<String> = listOf(
