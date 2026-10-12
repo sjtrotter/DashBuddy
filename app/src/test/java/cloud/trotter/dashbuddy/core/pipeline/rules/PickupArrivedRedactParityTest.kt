@@ -84,10 +84,17 @@ class PickupArrivedRedactParityTest {
     @Test
     fun `corpus customer name frames are claimed by rules carrying the reference redact`() {
         val base = File("src/test/resources/snapshots")
-        val excludedDirectories = setOf("INBOX", "UNKNOWN", "SENSITIVE")
+        // INBOX and the UNKNOWN staging root are gitignored traffic; SENSITIVE frames are dropped at the
+        // content gate before any envelope exists, so no redact ever runs on them. `UNKNOWN/negative`
+        // IS committed corpus (#941) and stays in the walk: a customer-bearing negative frame must stay
+        // UNKNOWN (the backstop's territory), and if a rule ever claims one, that rule must mask it.
+        val negativeDir = File(base, "UNKNOWN/negative")
         val fixtures = base.walkTopDown()
-            .onEnter { it.name !in excludedDirectories }
+            .onEnter { dir ->
+                dir.name !in setOf("INBOX", "SENSITIVE")
+            }
             .filter { it.isFile && it.extension == "json" && it.name != "approved-parse-output.json" }
+            .filterNot { it.parentFile == File(base, "UNKNOWN") } // the staging root's own files, never its committed negative/ child
             .sortedBy { it.path }
         val coveredRuleIds = ruleIdsCarryingReference
         val violations = mutableListOf<String>()
@@ -96,9 +103,13 @@ class PickupArrivedRedactParityTest {
         for (file in fixtures) {
             val path = file.relativeTo(base).invariantSeparatorsPath
             // Click envelopes (`click_context.v1`, whose payload wraps a node + screenTarget) and the
-            // notification-census fixtures (`notification.v1`) are not screen trees; everything else
-            // committed must load, or it is a corpus defect (#941).
-            if (!isScreenTree(file)) continue
+            // notification-census fixtures (`notification.v1`) are not screen trees. Any OTHER schema is
+            // a violation, never a skip (Astra r1): a renamed screen schema must not vanish from coverage.
+            when (val schema = schemaIdOf(file)) {
+                null, SCREEN_SCHEMA -> Unit
+                in NON_SCREEN_SCHEMAS -> continue
+                else -> { violations += "$path: unexpected schemaId '$schema' (add it to NON_SCREEN_SCHEMAS only if it is not a screen tree)"; continue }
+            }
             val tree = try {
                 TestResourceLoader.loadNode(file)
             } catch (e: Exception) {
@@ -109,7 +120,9 @@ class PickupArrivedRedactParityTest {
             framesWithCustomerName++
             try {
                 val ruleId = TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId
+                val isNegative = file.absoluteFile.startsWith(negativeDir.absoluteFile)
                 when {
+                    ruleId == null && isNegative -> Unit // the negative corpus must stay UNKNOWN; the backstop owns it
                     ruleId == null -> violations += "$path: customer_name frame is unclaimed"
                     ruleId.startsWith("uber.") ->
                         violations += "$path: claimed by $ruleId; Uber customer_name coverage needs human review"
@@ -130,11 +143,13 @@ class PickupArrivedRedactParityTest {
         node.viewIdResourceName?.substringAfterLast('/') == "customer_name" ||
             node.children.any { carriesCustomerName(it) }
 
-    private fun isScreenTree(file: File): Boolean {
-        val schemaId = runCatching {
-            Json.parseToJsonElement(file.readText()).jsonObject["schemaId"]?.jsonPrimitive?.content
-        }.getOrNull()
-        return schemaId == null || schemaId == "uinode.v1"
+    private fun schemaIdOf(file: File): String? = runCatching {
+        Json.parseToJsonElement(file.readText()).jsonObject["schemaId"]?.jsonPrimitive?.content
+    }.getOrNull()
+
+    private companion object {
+        const val SCREEN_SCHEMA = "uinode.v1"
+        val NON_SCREEN_SCHEMAS = setOf("click_context.v1", "notification.v1")
     }
 
     /**
