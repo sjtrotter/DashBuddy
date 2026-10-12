@@ -257,6 +257,66 @@ class RecordFoldsTest {
     }
 
     @Test
+    fun `1108 pre-start mileage is excluded from overlapping jobs in both completion orders`() {
+        for (alreadyStarted in listOf(false, true)) {
+            for (legacyFirst in listOf(false, true)) {
+                val s = "pre-start-overlap"
+                // Cover both the placeholder upgrade and a real start with no odometer yet.
+                val priorStart = if (alreadyStarted) listOf(dashStart(s, 0, null)) else emptyList()
+                val prefix = priorStart + listOf(
+                    ev(AppEventType.OFFER_RECEIVED, s, 1_000,
+                        acceptedOffer(1_000, null).copy(outcome = AppEventType.OFFER_RECEIVED), 100.0),
+                    dashStart(s, 2_000, 101.0),
+                    deliveryArrived(s, 3_000, "J1", "A", odo = 110.0),
+                    ev(AppEventType.DELIVERY_CONFIRMED, s, 4_000,
+                        DeliveryPayload(jobId = "J2", taskId = "B", phaseStartedAt = 2_000), 110.0),
+                    deliveryArrived(s, 5_000, "J1", "A", odo = 113.0),
+                )
+                val a = delivery(s, 6_000, "J1", "A", odo = 120.0)
+                val b = delivery(s, 7_000, "J2", "B", odo = 120.0)
+                val events = prefix + if (legacyFirst) listOf(b, a) else listOf(a, b)
+                val result = foldRestored(events)
+                assertEquals(foldSession(events, currentCpm = cpm), result)
+                val rows = result.first.mapNotNull { it.delivery }
+                assertEquals(2, rows.size)
+                assertTrue(rows.all { it.sessionId == s })
+                // A placeholder start re-bases at 101 (the 100→101 mile was PRE-start). A session
+                // that was ALREADY started (with no odometer yet) keeps that mile: it was driven in-dash,
+                // and a recovery re-start must never erase measured mileage (Astra r3).
+                val span = if (alreadyStarted) 20.0 else 19.0
+                assertTrue("allocations stay within the measured dash span",
+                    rows.sumOf { requireNotNull(it.realizedMiles) } <= span + 1e-9)
+                assertEquals(span, requireNotNull(result.second).legState.sessionMeasured, 1e-9)
+            }
+        }
+    }
+
+    @Test
+    fun `1108 pay adjustment odometer leaves session and job mileage measurements unchanged`() {
+        val s = "adjustment-budget"
+        val prefix = listOf(
+            dashStart(s, 0, 100.0),
+            deliveryArrived(s, 1_000, "J1", "A", odo = 105.0),
+        )
+        val completed = delivery(s, 2_000, "J1", "A", odo = 105.0)
+        val (outcomes, context) = foldSession(prefix + listOf(
+            completed,
+            deliveryArrived(s, 3_000, "J2", "B", odo = 110.0),
+            ev(AppEventType.PAY_ADJUSTMENT, s, 4_000,
+                PayAdjustmentPayload(targetEventSequenceId = completed.sequenceId,
+                    sessionId = s, newPay = 12.0, note = "fix"), odometer = 200.0),
+        ))
+        val before = requireNotNull(outcomes[3].context).legState
+        val after = requireNotNull(context).legState
+        assertEquals(10.0, before.sessionMeasured, 0.0)
+        assertEquals(10.0, after.sessionMeasured, 0.0)
+        assertEquals(setOf("J1", "J2"), before.jobMileageBudgets.keys)
+        assertEquals(before.jobMileageBudgets.mapValues { it.value.measured },
+            after.jobMileageBudgets.mapValues { it.value.measured })
+        assertNotNull(outcomes.last().payAdjustment)
+    }
+
+    @Test
     fun `1108 inbound anchor is previous drop or dash start despite an advanced leg anchor`() {
         for (previousDrop in listOf(null, 105.0)) {
             val events = mutableListOf(dashStart("inbound", 0, 100.0))

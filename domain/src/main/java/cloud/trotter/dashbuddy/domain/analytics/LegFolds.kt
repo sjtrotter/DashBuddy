@@ -173,8 +173,11 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
  * and confirmations do not change this seed. If another job has not completed yet, its miles can
  * overlap this budget; the session cap bounds total allocations. Without an inbound anchor, the
  * reading itself starts measurement and `anchored` is false.
- * Each reading adds only a positive delta, then re-anchors even after a reset. At capacity,
- * the oldest delivered job makes room; all-live saturation leaves a new job untracked.
+ * Each reading adds only a positive delta, then re-anchors even after a reset. At capacity
+ * (128 live budgets in ONE dash — far beyond any fielded dash) the oldest job with a completed
+ * drop makes room; if that job still had an unfinished sibling, the sibling later folds UNKNOWN
+ * (null miles) unless another job with a completed drop can be evicted to re-admit it — the same
+ * fail-null outcome the new job would have had without the eviction. Never an over-count.
  */
 internal fun SessionFoldContext.measureJob(jobId: String, odo: Double?): SessionFoldContext {
     if (odo == null || !odo.isFinite()) return this

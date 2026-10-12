@@ -411,16 +411,28 @@ data class OfferOutcomeCorrectionFold(
  */
 object RecordFolds {
 
+    /**
+     * A correction describes a past row; its write-time odometer (if any) never measures
+     * the session or a job budget. Field corrections carry no odometer stamp today;
+     * their handlers retain their own liveness advances.
+     */
+    private val BOOKKEEPING_EVENTS = setOf(
+        AppEventType.DELIVERY_RECEIPT_REPRICE,
+        AppEventType.PAY_ADJUSTMENT,
+        AppEventType.DELIVERY_ADJUSTMENT,
+        AppEventType.MANUAL_DELIVERY,
+        AppEventType.DELIVERY_SESSION_ASSIGN,
+        AppEventType.OFFER_OUTCOME_CORRECTION,
+        AppEventType.SESSION_REPORT_CORRECTION,
+    )
+
     fun foldEvent(
         event: SequencedAppEvent,
         context: SessionFoldContext?,
         currentCostPerMile: Double?,
     ): FoldOutcome {
         val e = event.event
-        // #1033: receipt repricing is bookkeeping about an existing row. Preserve its context
-        // before either mileage accumulator runs; a write-time odometer on the correction must
-        // not stretch the session past the delivery or seed/advance that job's budget (#1108).
-        if (e.type == AppEventType.DELIVERY_RECEIPT_REPRICE) {
+        if (e.type in BOOKKEEPING_EVENTS) {
             return foldMeasuredEvent(event, context, currentCostPerMile)
         }
         val sid = e.sessionId
@@ -498,7 +510,7 @@ object RecordFolds {
             ?: return FoldOutcome(context = context, skip = "DASH_START: missing/malformed payload")
         val sid = e.sessionId ?: p.sessionId
         val platform = Platform.fromName(p.platform) ?: Platform.Unknown
-        val odo = event.metadata?.odometer
+        val odo = event.metadata?.odometer?.takeIf { it.isFinite() }
         // A RECOVERY (or any duplicate) re-start of a session that was ALREADY STARTED WITH A REAL
         // PLATFORM must NOT clobber the original startedAt/platform/startOdometer — keep the earlier
         // anchor, only fill a still-null odometer and advance liveness. Not a fresh session ⇒ no
@@ -515,6 +527,9 @@ object RecordFolds {
                     // Already a real start — keep its original startSource; only fill if somehow null.
                     startSource = context.startSource ?: p.source,
                     // #688: keep the running leg anchor; only fill it if the placeholder had none.
+                    // No session re-base here (#1108 r3): the session was ALREADY started, so every
+                    // mile measured since is in-dash mileage — a recovery re-start that first carries
+                    // an odometer must not erase it.
                     legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
                 ),
             )
@@ -534,7 +549,15 @@ object RecordFolds {
                     started = true,
                     startSource = p.source,
                     // #688: the placeholder's counters/liveness carry over; seed the leg anchor if unset.
-                    legState = context.legState.copy(prevLegOdometer = context.legState.prevLegOdometer ?: odo),
+                    legState = context.legState.copy(
+                        prevLegOdometer = context.legState.prevLegOdometer ?: odo,
+                        // #1108: the placeholder measured a PRE-start reading; re-base the session
+                        // measurement at the start odometer (after measureSession ran), keeping only
+                        // what a pre-start completion already allocated.
+                        sessionMeasured = if (context.startOdometer == null && odo != null) {
+                            context.legState.sessionAllocated
+                        } else context.legState.sessionMeasured,
+                    ),
                 ),
                 freshSession = true,
             )

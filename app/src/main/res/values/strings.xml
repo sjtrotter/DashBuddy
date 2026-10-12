@@ -483,7 +483,7 @@
     <!-- #1033 layer 2: the receipt was expanded after this delivery was already recorded, so the
          row was re-priced from the receipt's own itemization instead of the offer-pay estimate. -->
     <string name="session_detail_receipt_repriced">receipt pay</string>
-    <string name="session_detail_drop_allocation">Miles and time allocated across this job\'s drops - this drop\'s legs: → store %1$s mi, → door %2$s mi</string>
+    <string name="session_detail_drop_allocation">allocated within the dash · → store %1$s mi · → door %2$s mi</string>
     <string name="session_detail_miles_legacy_span">miles from the odometer span - arrival not seen</string>
     <string name="session_detail_unpaid_drop">no pay recorded · car costs only</string>
     <string name="session_detail_net_format">kept %1$s</string>
