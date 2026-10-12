@@ -734,11 +734,19 @@ Room **18** adds seven nullable evidence columns: delivery `jobOfferCount`, `sol
 Projector **13** refolds historical payloads to backfill them. Delivery lineage requires a nonempty
 list of entirely nonblank offer hashes, deduplicated before count/singleton projection. Pickup
 confirmation odometer comes from the closing event metadata; delivery arrival odometer comes from
-its payload. Empty orders yield null classification/count; any UNKNOWN order type yields null
+`DELIVERY_ARRIVED` metadata in the fold, with its completion payload field as fallback (#1310).
+Empty orders yield null classification/count; any UNKNOWN order type yields null
 `isShop`, never proven non-shopping. The domain-owned #882 `OrderChipShape` stamps chip multiplicity
 into `orderCount` and permits `orderCountProven == true` only for nonempty orders whose names are
 nonblank stores or explicit `(1)` chips; learning requires that proof as well as `orderCount == 1`.
 `AnalyticsRecordMappers` preserves the existing frozen mappings.
+
+**#1310 — arrival odometer.** Field evidence showed 258/258 `DELIVERY_ARRIVED` events stamped with
+an odometer but 0/266 delivery rows populated. Like the pickup side, the fold now reads event metadata:
+it retains the last finite arrival odometer by dropoff taskId, even without a measurable leg, and
+consumes it at completion (or purges it on a dropoff-phase unassign). Projector **15** refolds history
+to backfill `odometerAtArrival`, supplying the #254 sampler's measured transit distance alongside
+pickup `odometerAtConfirmation`. The reducer never reads GPS.
 
 `TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
 all delivery/pickup children and linked accepted offers by `(platform, sessionId, jobId)` before

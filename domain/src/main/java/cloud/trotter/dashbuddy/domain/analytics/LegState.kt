@@ -49,6 +49,12 @@ data class LegState(
     val prevLegOdometer: Double? = null,
     val pendingStoreLegs: List<PendingStoreLeg> = emptyList(),
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
+    /**
+     * #1310 — the last arrival odometer by dropoff taskId that completion stamps as
+     * `odometerAtArrival`; consumed at completion, purged on a dropoff-phase unassign.
+     * Bounded at [MAX_PENDING] with drop-oldest like [pendingDropoffLegs].
+     */
+    val dropoffArrivalOdometers: Map<String, Double> = emptyMap(),
     val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),
     val completionHighWater: Long? = null,
     /** Positive deltas across session odometer events; resets re-anchor without subtracting miles. */

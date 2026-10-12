@@ -86,7 +86,10 @@ internal object LegFolds {
             TaskPhase.PICKUP ->
                 ls.copy(pendingStoreLegs = ls.pendingStoreLegs.filterNot { it.pickupTaskId == p.taskId })
             TaskPhase.DROPOFF ->
-                ls.copy(pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId)
+                ls.copy(
+                    pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId,
+                    dropoffArrivalOdometers = ls.dropoffArrivalOdometers - p.taskId,
+                )
         }
         return FoldOutcome(context = ctx.copy(legState = cleaned).advance(e.occurredAt, odo))
     }
@@ -118,6 +121,15 @@ internal fun LegState.closeLeg(odo: Double?): Pair<Double?, LegState> = when {
 /** Cap a pending list at [LegState.MAX_PENDING] with deterministic drop-oldest (bounded ingestion). */
 private fun <T> List<T>.capPending(): List<T> =
     if (size <= LegState.MAX_PENDING) this else takeLast(LegState.MAX_PENDING)
+
+/** Put a pending fact, retaining insertion order and dropping the oldest on overflow. */
+private fun Map<String, Double>.putCapped(key: String, value: Double): Map<String, Double> {
+    val added = this + (key to value)
+    return if (added.size <= LegState.MAX_PENDING) added else {
+        // LinkedHashMap preserves insertion order; keep the newest cap.
+        added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
+    }
+}
 
 /**
  * Close a to-store leg and queue it (or accumulate into the same [pickupTaskId] entry on a
@@ -151,20 +163,15 @@ internal fun SessionFoldContext.closeStoreLeg(
  */
 internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
     val (miles, ls) = legState.closeLeg(odo)
-    if (miles == null) return copy(legState = ls)
-    val existing = ls.pendingDropoffLegs[taskId]
-    val merged = if (existing != null) {
-        ls.pendingDropoffLegs + (taskId to (existing + miles))
-    } else {
-        val added = ls.pendingDropoffLegs + (taskId to miles)
-        if (added.size <= LegState.MAX_PENDING) {
-            added
-        } else {
-            // Drop-oldest by insertion order (LinkedHashMap preserves it); keep the newest cap.
-            added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
-        }
-    }
-    return copy(legState = ls.copy(pendingDropoffLegs = merged))
+    return copy(legState = ls.copy(
+        pendingDropoffLegs = if (miles != null) {
+            ls.pendingDropoffLegs.putCapped(taskId, (ls.pendingDropoffLegs[taskId] ?: 0.0) + miles)
+        } else ls.pendingDropoffLegs,
+        // The arrival reading is a fact even when there was no anchor to measure a leg.
+        dropoffArrivalOdometers = if (odo != null && odo.isFinite()) {
+            ls.dropoffArrivalOdometers.putCapped(taskId, odo)
+        } else ls.dropoffArrivalOdometers,
+    ))
 }
 
 /**

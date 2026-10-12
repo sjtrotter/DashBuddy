@@ -1800,6 +1800,111 @@ class RecordFoldsTest {
     // ── #688 phase B: per-leg mileage ──────────────────────────────────────
 
     @Test
+    fun `1310 single-order arrival metadata matches measured transit distance`() {
+        val (outcomes, context) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        val pickup = outcomes.mapNotNull { it.pickup }.single()
+        val arrival = requireNotNull(row.odometerAtArrival)
+        val miles = requireNotNull(row.milesToDropoff)
+        assertEquals(112.0, arrival, 0.0)
+        assertEquals(7.0, miles, 0.0)
+        assertEquals(miles, arrival - requireNotNull(pickup.odometerAtConfirmation), 1e-9)
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 re-arrival replaces the arrival odometer`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 113.0),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertEquals(112.0, requireNotNull(row.odometerAtArrival), 0.0)
+    }
+
+    @Test
+    fun `1310 dropoff unassign purges arrival before sibling completion`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+            taskUnassigned("arrival", 660_000, "J1", "D1", TaskPhase.DROPOFF),
+            delivery("arrival", 900_000, "J1", "D2", odo = 112.0),
+        ))
+        assertEquals(mapOf("D1" to 110.0), requireNotNull(outcomes[1].context).legState.dropoffArrivalOdometers)
+        assertTrue(requireNotNull(outcomes[2].context).legState.dropoffArrivalOdometers.isEmpty())
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 completion without arrival keeps arrival odometer null`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0),
+        ))
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 arrival with null metadata odometer keeps arrival odometer null`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = null)
+                .copy(metadata = EventMetadata(odometer = null)),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0),
+        ))
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 anchorless arrival is recorded and consumed without a measured leg`() {
+        val (outcomes, context) = foldSession(listOf(
+            dashStart("arrival", 0, odo = null),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 113.0),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertNull(row.milesToDropoff)
+        assertEquals(112.0, requireNotNull(row.odometerAtArrival), 0.0)
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 pending arrival and mileage maps both drop the oldest at capacity`() {
+        val events = listOf(dashStart("arrival", 0, odo = 100.0)) +
+            (0..LegState.MAX_PENDING).map { i ->
+                deliveryArrived("arrival", (i + 1) * 60_000L, "J1", "D$i", odo = 101.0 + i)
+            }
+        val state = requireNotNull(foldSession(events).second).legState
+        val expectedKeys = (1..LegState.MAX_PENDING).map { "D$it" }
+        assertEquals(expectedKeys, state.pendingDropoffLegs.keys.toList())
+        assertEquals(expectedKeys, state.dropoffArrivalOdometers.keys.toList())
+        assertEquals(101.0 + LegState.MAX_PENDING,
+            state.dropoffArrivalOdometers.getValue("D${LegState.MAX_PENDING}"), 0.0)
+    }
+
+    @Test
+    fun `1310 payload arrival is a fallback and metadata takes precedence`() {
+        for (hasArrival in listOf(false, true)) {
+            val events = mutableListOf(dashStart("arrival", 0, odo = 100.0))
+            if (hasArrival) events += deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0)
+            events += ev(AppEventType.DELIVERY_COMPLETED, "arrival", 900_000,
+                DeliveryPayload(jobId = "J1", taskId = "D1", phaseStartedAt = 300_000,
+                    arrivedAt = 780_000, completedAt = 900_000, odometerAtArrival = 111.0),
+                odometer = 113.0)
+            val row = foldSession(events).first.mapNotNull { it.delivery }.single()
+            assertEquals(if (hasArrival) 112.0 else 111.0, requireNotNull(row.odometerAtArrival), 0.0)
+        }
+    }
+
+    @Test
     fun `criterion 1 - simple job splits realizedMiles into store and dropoff legs`() {
         val s = "L1"
         // 100 → arrive store 100.5 (to-store 0.5) → confirm 100.6 → arrive door 103.0 (to-dropoff 2.4)

@@ -213,7 +213,7 @@ internal object DeliveryFolds {
             milesBasis = milesBasis,
             jobOfferCount = offerHashes?.size,
             soleOfferHash = offerHashes?.singleOrNull(),
-            odometerAtArrival = p.odometerAtArrival,
+            odometerAtArrival = legState.dropoffArrivalOdometers[p.taskId] ?: p.odometerAtArrival,
         )
 
         // #691: mark the job receipted once any drop folds RECEIPT EVIDENCE, so a later receipt-less
@@ -234,6 +234,7 @@ internal object DeliveryFolds {
             // #688: consume the claimed store leg + this drop's dropoff leg, then advance the leg
             // anchor to the completion odometer (null ⇒ anchor unchanged, miles roll forward).
             legState = legState.copy(
+                dropoffArrivalOdometers = legState.dropoffArrivalOdometers - p.taskId,
                 completionHighWater = completionHighWater,
                 sessionAllocated = legState.sessionAllocated + (realizedMiles ?: 0.0),
                 jobMileageBudgets = if (budget != null && realizedMiles != null) {

@@ -1039,6 +1039,7 @@ class AnalyticsProjector @Inject constructor(
         // 12: #1133 — pay-less rows carry −cost as net
         // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
         // #1108: per-job mileage budgets and session completion high-water allocation.
-        private const val PROJECTOR_VERSION = 14
+        // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills every arrived drop)
+        private const val PROJECTOR_VERSION = 15
     }
 }

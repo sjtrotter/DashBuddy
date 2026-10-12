@@ -22,8 +22,16 @@ class LegStateCodecTest {
                 PendingStoreLeg("PB", "J1", null, 0.16),
             ),
             pendingDropoffLegs = mapOf("DA" to 2.98, "DB" to 3.39),
+            dropoffArrivalOdometers = mapOf("DA" to 709.06, "DB" to 712.45),
         )
         assertEquals(state, LegStateCodec.decode(LegStateCodec.encode(state)))
+    }
+
+    @Test
+    fun `1310 legacy blob without arrival odometers decodes to an empty map`() {
+        val state = LegStateCodec.decode("""{"prevLegOdometer":112.0,"pendingDropoffLegs":{"D1":7.0}}""")
+        assertEquals(LegState(prevLegOdometer = 112.0, pendingDropoffLegs = mapOf("D1" to 7.0)), state)
+        assertEquals(emptyMap<String, Double>(), state.dropoffArrivalOdometers)
     }
 
     @Test
