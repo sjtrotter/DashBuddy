@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.FlowRegion
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -39,6 +40,7 @@ class PerPlatformGraceConfigTest {
     /** Every field differs from the default so a wrong-field read can't pass. */
     private val ddOverride = GraceConfig(
         gracePeriodMs = 5_000L,
+        jobAbandonGraceMs = 7_000L,
         authoritativeGraceMs = 1_200L,
         pauseResumeGraceMs = 4_000L,
         pauseTimeoutBufferMs = 2_500L,
@@ -93,6 +95,21 @@ class PerPlatformGraceConfigTest {
         val next = stepper.step(taskRegion(platform), prevFlow, FlowRegion(flow = Flow.PostTask), obs, policy)
         assertEquals(DestructiveKind.TASK_RETIRE, next.pendingDestructive?.kind)
         return next.pendingDestructive!!.deadline
+    }
+
+    @Test
+    fun `job abandon grace uses the platform override and defaults independently`() {
+        for (platform in Platform.entries.filter { it != Platform.Unknown }) {
+            val expected = if (platform in provider.snapshot()) 7_000L else 5_000L
+            assertEquals(expected, policy.jobAbandonGraceMs(platform))
+            val next = stepper.step(
+                taskRegion(platform).copy(activeTask = null),
+                FlowRegion(flow = Flow.TaskUnassigned), FlowRegion(flow = Flow.Idle),
+                idleObs(platform, 1_000L).copy(idleSurface = IdleSurface.NO_ORDERS), policy,
+            )
+            assertEquals(DestructiveKind.JOB_ABANDON, next.pendingDestructive?.kind)
+            assertEquals(1_000L + expected, next.pendingDestructive?.deadline)
+        }
     }
 
     // ---- stepper side: pendingDestructive deadlines key per platform ----

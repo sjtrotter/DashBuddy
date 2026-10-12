@@ -1,10 +1,16 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.core.state.model.Transition
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
+import cloud.trotter.dashbuddy.domain.settings.GraceConfig
+import cloud.trotter.dashbuddy.domain.state.DestructiveKind
+import cloud.trotter.dashbuddy.domain.state.PendingDestructive
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -26,7 +32,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #1312: the next flow-bearing frame, not the confirmation wording, proves abandonment scope. */
+/** #1312: marked idle arms a destructive grace; surviving task evidence restores absorption. */
 class UnassignIdleClosesJobTest {
     private val platform = Platform.DoorDash
     private val stepper = PlatformRegionStepper()
@@ -74,6 +80,16 @@ class UnassignIdleClosesJobTest {
             assertEquals(2, after.activeJob!!.tasks.count { it.phase == TaskPhase.DROPOFF })
         }
 
+    private fun wake(state: AppState, at: Long = region(state).pendingDestructive!!.deadline) =
+        Observation.Timeout(timestamp = at, type = TimeoutType.GRACE_COMMIT, targetPlatform = platform,
+            payload = ObservationPayload.GraceWake(region(state).pendingDestructive!!.wakeId))
+
+    private fun armAndCommit(state: AppState): Transition {
+        val armed = machine.step(state, frame(5_300L, Flow.Idle))
+        assertEquals(DestructiveKind.JOB_ABANDON, region(armed.newState).pendingDestructive?.kind)
+        return machine.step(armed.newState, wake(armed.newState))
+    }
+
     private fun unassignedEffects(effects: List<AppEffect>) = effects.filterIsInstance<AppEffect.LogEvent>()
         .filter { it.event.type == AppEventType.TASK_UNASSIGNED }
 
@@ -105,25 +121,43 @@ class UnassignIdleClosesJobTest {
     }
 
     @Test
-    fun `unassign then idle abandons every open task once and next accept mints fresh`() {
+    fun `unassign then marked idle arms grace and wake abandons once before next accept mints fresh`() {
         // Null exercises the #736 WARN branch; a nonmatching hash also leaves both TBD drops.
         for (hash in listOf(null, "unmatched-customer")) {
             val first = unassign(initial(hash))
+            assertEquals(listOf("Unassigned: Store A"),
+                first.effects.filterIsInstance<AppEffect.UpdateBubble>().map { it.text })
             val repeated = machine.step(first.newState, frame(300L, Flow.TaskUnassigned))
-            val closed = machine.step(repeated.newState, frame(5_300L, Flow.Idle))
+            val armed = machine.step(repeated.newState, frame(5_300L, Flow.Idle))
+            val pending = requireNotNull(region(armed.newState).pendingDestructive)
+            assertEquals(DestructiveKind.JOB_ABANDON, pending.kind)
+            assertEquals(Flow.TaskUnassigned, pending.armedFromFlow)
+            assertEquals(5_300L, pending.since)
+            assertEquals(5_300L, pending.windowFrom)
+            assertEquals(5_300L + GraceConfig.JOB_ABANDON_GRACE_MS, pending.deadline)
+            assertTrue(pending.wakeId > 0L)
+            assertEquals("job", region(armed.newState).activeJob?.jobId)
+            assertTrue(unassignedEffects(armed.effects).isEmpty())
+            val timer = armed.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
+                .single { it.type == TimeoutType.GRACE_COMMIT }
+            assertEquals(pending.deadline, timer.deadlineMs)
+            assertEquals(GraceConfig.JOB_ABANDON_GRACE_MS, timer.durationMs)
+            assertEquals(ObservationPayload.GraceWake(pending.wakeId), timer.payload)
+            val closed = machine.step(armed.newState, wake(armed.newState))
+            assertNull(region(closed.newState).pendingDestructive)
             assertAbandoned(closed.newState, 5_300L)
-            assertEquals("one bubble for the three-task abandon batch", listOf("Unassigned: 3 orders"),
+            assertEquals("one bubble counts two drops, not three tasks", listOf("Unassigned: 2 orders"),
                 closed.effects.filterIsInstance<AppEffect.UpdateBubble>().map { it.text })
             // The normal close tripwire runs: explicit unassignments are accounted, and this
             // in-session single accept is also below its existing two-accept floor (#810/#1095).
             assertTrue(closed.effects.filterIsInstance<AppEffect.LogEvent>()
                 .none { it.event.type == AppEventType.JOB_ACCEPT_MISMATCH })
-            val again = machine.step(closed.newState, frame(5_400L, Flow.Idle))
+            val again = machine.step(closed.newState, frame(10_400L, Flow.Idle))
             assertOneUnassignPerTask(first.effects + repeated.effects + closed.effects + again.effects)
 
             val accepted = stepper.consumeAcceptIntoJob(region(again.newState),
-                frame(6_000L, Flow.TaskPickupNavigation),
-                AcceptInputs("second", AcceptedOfferEconomics(offerHash = "second", acceptedAt = 6_000L),
+                frame(11_000L, Flow.TaskPickupNavigation),
+                AcceptInputs("second", AcceptedOfferEconomics(offerHash = "second", acceptedAt = 11_000L),
                     listOf("Store C"), 1))
             val fresh = requireNotNull(accepted.activeJob)
             assertTrue(fresh.jobId != "job")
@@ -174,7 +208,7 @@ class UnassignIdleClosesJobTest {
         assertNull(displaced.completionStepsAt)
         assertEquals(sibling.taskId, region(switched.newState).activeTask?.taskId)
         val unassigned = machine.step(switched.newState, frame(200L, Flow.TaskUnassigned))
-        val closed = machine.step(unassigned.newState, frame(5_300L, Flow.Idle))
+        val closed = armAndCommit(unassigned.newState)
         assertNull(region(closed.newState).activeJob)
         val abandoned = region(closed.newState).recentTasks.single { it.taskId == drop.taskId }
         assertEquals(5_300L, abandoned.unassignedAt)
@@ -210,7 +244,7 @@ class UnassignIdleClosesJobTest {
                     activeJob = job.copy(tasks = job.tasks + delivered),
                 )),
             ))
-            val closed = machine.step(crowded, frame(5_300L, Flow.Idle))
+            val closed = armAndCommit(crowded)
             val after = region(closed.newState)
             assertNull(after.activeJob)
             assertEquals(23, after.recentTasks.size)
@@ -269,8 +303,160 @@ class UnassignIdleClosesJobTest {
         val recognized = machine.step(first.newState, frame(300L, null).copy(modeHint = null))
         assertEquals(Flow.TaskUnassigned, recognized.newState.regions.flow.flow)
         assertEquals(region(first.newState).recentTasks, region(recognized.newState).recentTasks)
-        val idle = machine.step(recognized.newState, frame(5_300L, Flow.Idle))
+        val idle = armAndCommit(recognized.newState)
         assertAbandoned(idle.newState, 5_300L)
         assertOneUnassignPerTask(first.effects + recognized.effects + idle.effects)
+    }
+
+    @Test
+    fun `marked idle then sibling task two seconds later cancels abandon and restores absorption`() {
+        val first = unassign()
+        val armed = machine.step(first.newState, frame(5_300L, Flow.Idle))
+        val oldWake = wake(armed.newState)
+        val resumed = machine.step(armed.newState, frame(7_300L, Flow.TaskPickupNavigation,
+            ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION,
+                storeName = "Store B", customerNameHash = "sibling-customer")))
+        assertNull(region(resumed.newState).pendingDestructive)
+        assertEquals("job", region(resumed.newState).activeJob?.jobId)
+        assertEquals(sibling.taskId, region(resumed.newState).activeTask?.taskId)
+        assertTrue(unassignedEffects(resumed.effects).isEmpty())
+        assertTrue(resumed.effects.filterIsInstance<AppEffect.CancelTimeout>()
+            .any { it.type == TimeoutType.GRACE_COMMIT })
+        val stale = machine.step(resumed.newState, oldWake)
+        assertEquals("job", region(stale.newState).activeJob?.jobId)
+        assertTrue(unassignedEffects(stale.effects).isEmpty())
+        val accepted = stepper.consumeAcceptIntoJob(region(stale.newState),
+            frame(11_000L, Flow.TaskPickupNavigation),
+            AcceptInputs("addon", AcceptedOfferEconomics(offerHash = "addon", acceptedAt = 11_000L),
+                listOf("Store C"), 1))
+        assertEquals("job", accepted.activeJob?.jobId)
+    }
+
+    @Test
+    fun `marked idle commits on a non-task frame strictly past deadline but not at the tie`() {
+        val first = unassign()
+        val armed = machine.step(first.newState, frame(5_300L, Flow.Idle))
+        val deadline = region(armed.newState).pendingDestructive!!.deadline
+        val tied = machine.step(armed.newState, frame(deadline, Flow.Idle))
+        assertEquals("job", region(tied.newState).activeJob?.jobId)
+        assertEquals(region(armed.newState).pendingDestructive, region(tied.newState).pendingDestructive)
+        val closed = machine.step(tied.newState, frame(deadline + 1L, Flow.Idle))
+        assertAbandoned(closed.newState, 5_300L)
+        assertNull(region(closed.newState).pendingDestructive)
+        assertOneUnassignPerTask(first.effects + armed.effects + tied.effects + closed.effects)
+    }
+
+    @Test
+    fun `any task frame cancels abandon even without parsed fields or past deadline`() {
+        val armed = machine.step(unassign().newState, frame(5_300L, Flow.Idle))
+        val deadline = region(armed.newState).pendingDestructive!!.deadline
+        for (at in listOf(7_300L, deadline, deadline + 1L)) {
+            val resumed = machine.step(armed.newState, frame(at, Flow.TaskActive))
+            assertNull(region(resumed.newState).pendingDestructive)
+            assertEquals("job", region(resumed.newState).activeJob?.jobId)
+            assertTrue(unassignedEffects(resumed.effects).isEmpty())
+        }
+    }
+
+    @Test
+    fun `offer overlay preserves armed abandon inside and past its window`() {
+        val armed = machine.step(unassign().newState, frame(5_300L, Flow.Idle))
+        val pending = region(armed.newState).pendingDestructive!!
+        val overlay = machine.step(armed.newState, frame(7_300L, Flow.OfferPresented))
+        val overdue = machine.step(overlay.newState, frame(pending.deadline + 1L, Flow.OfferPresented))
+        for (step in listOf(overlay, overdue)) {
+            assertEquals(pending, region(step.newState).pendingDestructive)
+            assertEquals("job", region(step.newState).activeJob?.jobId)
+            assertTrue(unassignedEffects(step.effects).isEmpty())
+        }
+        val closed = machine.step(overdue.newState, wake(overdue.newState, pending.deadline + 2L))
+        assertAbandoned(closed.newState, pending.since)
+    }
+
+    @Test
+    fun `unassign confirmation rerender preserves the armed whole-job abandon`() {
+        val armed = machine.step(unassign().newState, frame(5_300L, Flow.Idle))
+        val repeated = machine.step(armed.newState, frame(7_300L, Flow.TaskUnassigned))
+        assertEquals(region(armed.newState).pendingDestructive, region(repeated.newState).pendingDestructive)
+        assertTrue(unassignedEffects(repeated.effects).isEmpty())
+        val closed = machine.step(repeated.newState, wake(repeated.newState))
+        assertAbandoned(closed.newState, 5_300L)
+    }
+
+    @Test
+    fun `post task clears armed abandon and leaves closure to 596`() {
+        val armed = machine.step(unassign().newState, frame(5_300L, Flow.Idle))
+        val pending = region(armed.newState).pendingDestructive!!
+        for (at in listOf(7_300L, pending.deadline + 1L)) {
+            val postTask = machine.step(armed.newState, frame(at, Flow.PostTask))
+            assertNull(region(postTask.newState).pendingDestructive)
+            assertEquals("job", region(postTask.newState).activeJob?.jobId)
+            val closed = machine.step(postTask.newState, frame(at + 1L, Flow.Idle))
+            assertNull(region(closed.newState).activeJob)
+            assertTrue(unassignedEffects(postTask.effects + closed.effects).isEmpty())
+        }
+    }
+
+    @Test
+    fun `marked idle preserves an existing destructive pending`() {
+        val first = unassign().newState
+        for (kind in DestructiveKind.entries) {
+            val pending = PendingDestructive(kind, since = 200L, deadline = 20_000L,
+                authoritative = true, wakeId = 1L, windowFrom = 200L)
+            val starting = first.copy(regions = first.regions.copy(platforms = mapOf(
+                platform to region(first).copy(pendingDestructive = pending, wakeSeq = 1L),
+            )))
+            val idle = machine.step(starting, frame(5_300L, Flow.Idle))
+            assertEquals(pending, region(idle.newState).pendingDestructive)
+            assertEquals("job", region(idle.newState).activeJob?.jobId)
+            assertTrue(unassignedEffects(idle.effects).isEmpty())
+        }
+    }
+
+    @Test
+    fun `only the matching grace wake commits abandon including after clock rollback`() {
+        val armed = machine.step(unassign().newState, frame(5_300L, Flow.Idle))
+        val correct = wake(armed.newState, 5_000L)
+        val deadline = region(armed.newState).pendingDestructive!!.deadline
+        val stale = machine.step(armed.newState, correct.copy(timestamp = deadline + 1L,
+            payload = ObservationPayload.GraceWake(region(armed.newState).pendingDestructive!!.wakeId + 1L)))
+        assertEquals(region(armed.newState).pendingDestructive, region(stale.newState).pendingDestructive)
+        assertTrue(unassignedEffects(stale.effects).isEmpty())
+        val closed = machine.step(stale.newState, correct)
+        assertAbandoned(closed.newState, 5_300L)
+    }
+
+    @Test
+    fun `recovery mid-window rebases re-arms and commits abandon once at original idle instant`() {
+        val first = unassign()
+        val armed = machine.step(first.newState, frame(5_300L, Flow.Idle))
+        val observed = machine.step(armed.newState, frame(7_300L, null))
+        val original = region(observed.newState).pendingDestructive!!
+        val restored = observed.newState.recoveryHygiene(nowMs = 100_000L)
+        val pending = region(restored).pendingDestructive!!
+        assertEquals(DestructiveKind.JOB_ABANDON, pending.kind)
+        assertEquals(original.since, pending.since)
+        assertEquals(original.armedFromFlow, pending.armedFromFlow)
+        assertEquals(original.windowFrom, pending.windowFrom)
+        assertEquals(100_000L, pending.servedFrom)
+        assertEquals(103_000L, pending.deadline)
+        assertTrue(pending.wakeId != original.wakeId)
+        val timer = restored.pendingDeadlineTimers().single()
+        assertEquals(TimeoutType.GRACE_COMMIT, timer.type)
+        assertEquals(platform, timer.platform)
+        assertEquals(pending.deadline, timer.wake.deadline)
+        assertEquals(pending.wakeId, timer.wake.wakeId)
+        val stale = machine.step(restored, wake(observed.newState, 100_001L))
+        assertEquals(pending, region(stale.newState).pendingDestructive)
+        val fire = Observation.Timeout(timestamp = timer.wake.deadline, type = timer.type,
+            targetPlatform = timer.platform, payload = ObservationPayload.GraceWake(timer.wake.wakeId))
+        val closed = machine.step(stale.newState, fire)
+        assertAbandoned(closed.newState, original.since)
+        assertNull(region(closed.newState).pendingDestructive)
+        assertTrue(closed.newState.pendingDeadlineTimers().isEmpty())
+        val duplicate = machine.step(closed.newState, fire.copy(timestamp = fire.timestamp + 1L))
+        assertTrue(unassignedEffects(duplicate.effects).isEmpty())
+        assertOneUnassignPerTask(first.effects + armed.effects + observed.effects + stale.effects +
+            closed.effects + duplicate.effects)
     }
 }

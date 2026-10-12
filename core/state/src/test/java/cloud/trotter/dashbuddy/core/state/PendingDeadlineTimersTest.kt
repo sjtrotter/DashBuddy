@@ -93,6 +93,32 @@ class PendingDeadlineTimersTest {
     }
 
     @Test
+    fun `job abandon hygiene re-arms full partial and elapsed windows with original provenance`() {
+        val platform = Platform.entries.first { it != Platform.Unknown }
+        val pending = PendingDestructive(DestructiveKind.JOB_ABANDON,
+            since = 10_500L, deadline = 15_500L, armedFromFlow = Flow.TaskUnassigned,
+            wakeId = 1L, windowFrom = 10_500L)
+        for ((lastSeen, remaining) in listOf(10_500L to 5_000L, 12_500L to 3_000L, 16_500L to 0L)) {
+            val original = state(region(platform, destructive = pending).copy(wakeSeq = 1L))
+                .copy(timestamp = lastSeen)
+            val cleaned = original.recoveryHygiene(nowMs = NOW)
+            val kept = cleaned.regions.platforms.getValue(platform).pendingDestructive!!
+            assertEquals(pending.kind, kept.kind)
+            assertEquals(pending.since, kept.since)
+            assertEquals(pending.armedFromFlow, kept.armedFromFlow)
+            assertEquals(pending.windowFrom, kept.windowFrom)
+            assertEquals(NOW, kept.servedFrom)
+            assertEquals(NOW + remaining, kept.deadline)
+            assertTrue(kept.wakeId != pending.wakeId)
+            val timer = cleaned.pendingDeadlineTimers().single()
+            assertEquals(TimeoutType.GRACE_COMMIT, timer.type)
+            assertEquals(platform, timer.platform)
+            assertEquals(kept.deadline, timer.wake.deadline)
+            assertEquals(kept.wakeId, timer.wake.wakeId)
+        }
+    }
+
+    @Test
     fun `a graced resume is NEVER enumerated, with a session or without one`() {
         // #1054 round 3. Round 2 guarded this on `session != null`, reasoning that a session-less
         // resume would MINT a phantom dash (`applyModeTransition(…, Online)` mints when there is

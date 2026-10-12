@@ -123,13 +123,15 @@ internal fun EffectMap.diffTask(
             )
         }
         if (abandonedTasks.isNotEmpty()) {
-            val singleTask = abandonedTasks.singleOrNull()
+            // One DROPOFF placeholder per order; pickup tasks must not inflate the count (#1312).
+            val orderCount = abandonedTasks.count { it.phase == TaskPhase.DROPOFF }
+            val singleTask = abandonedTasks.first().takeIf { orderCount <= 1 }
             add(
                 AppEffect.UpdateBubble(
                     if (singleTask != null) "Unassigned: ${singleTask.storeName ?: UNKNOWN_STORE}"
-                    else "Unassigned: ${abandonedTasks.size} orders",
+                    else "Unassigned: ${orderCount} orders",
                     ChatPersona.Navigator,
-                    dedupeScope = singleTask?.taskId ?: abandonedTasks.joinToString(",") { it.taskId },
+                    dedupeScope = abandonedTasks.joinToString(",") { it.taskId },
                     sessionId = predecessorSessionId,
                 ),
             )

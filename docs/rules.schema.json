@@ -325,7 +325,7 @@
         "idleSurface": {
           "type": "string",
           "enum": ["no_orders"],
-          "description": "Rule-declared idle surface structurally proving no order is held (#1312). Requires resolved flow: idle. Vocabulary: StateMachineContract.IDLE_SURFACES."
+          "description": "Rule-declared idle surface declares that this idle screen means the dasher holds no order (#1312). Requires resolved flow: idle. Vocabulary: StateMachineContract.IDLE_SURFACES."
         },
         "offerSurface": {
           "type": "string",

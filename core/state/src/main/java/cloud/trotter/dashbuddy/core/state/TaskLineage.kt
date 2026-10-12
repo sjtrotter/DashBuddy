@@ -225,8 +225,10 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
 }
 
 /**
- * #1312: A rule-declared no-orders surface after unassignment proves no order survives. Resolve every open
- * pickup/dropoff into recentTasks (the effect emitter's source), never into a completion.
+ * #1312: Commit the graced whole-job abandon at the marked idle frame's original instant.
+ * Any task-flow frame cancels the abandon (the simple retire-grace rule, no task identity required);
+ * offers preserve it and PostTask clears it for #596. Resolve every open pickup/dropoff into
+ * recentTasks (the effect emitter's source), never into a completion.
  * Fresh lineage wins over the job mirror, including the task already abandoned by #736.
  * This step may overflow the recent-task cap: evict nothing until the close sweep has read older
  * delivered drops awaiting receipt-less completion. The next ordinary step applies the cap.
@@ -281,7 +283,7 @@ internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: 
  *    absorption (#596 class), never fabrication.
  * 3. If the job then owns no outstanding dropoff placeholder and no other open task → close it
  *    (single-order case: the job closes here, on the confirmation frame).
- * 4. A pending `TASK_RETIRE` is superseded (cleared); a pending `SESSION_END` is preserved;
+ * 4. A pending `TASK_RETIRE` is superseded (cleared); `SESSION_END` and `JOB_ABANDON` survive;
  *    `pendingModeResume` is untouched (#605 non-interaction — the sheet is Online).
  * 5. Idempotent, with the retro-mark EDGE-GATED (#752 review): the cross-frame retro-mark (step 1)
  *    only runs on the edge INTO `TaskUnassigned` (prev flow ≠ `TaskUnassigned`), so a SECOND
@@ -295,9 +297,9 @@ internal fun PlatformRegionStepper.abandonActiveTask(
     prevFlowVal: Flow,
 ): PlatformRegion {
     val abandoned = region.activeTask
-    // Step 4: the abandon supersedes a pending TASK_RETIRE; a SESSION_END is the graced-offline
-    // state and must survive.
-    val keptPending = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
+    // Step 4: supersede only TASK_RETIRE. A confirmation re-render must preserve the graced
+    // session end and the whole-job abandon (#1312); it is not surviving-task evidence.
+    val keptPending = region.pendingDestructive?.takeUnless { it.kind == DestructiveKind.TASK_RETIRE }
 
     // Cross-frame retro-mark (#736 review, widened by #752): when the active task is ALREADY gone —
     // the retire grace committed on a PRIOR frame (a help-flow offer/idle intrusion armed

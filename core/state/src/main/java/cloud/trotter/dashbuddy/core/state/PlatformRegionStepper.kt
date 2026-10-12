@@ -191,7 +191,7 @@ class PlatformRegionStepper @Inject constructor() {
         // Resolve once before lazy expiry so this frame's evidence also governs a pending resume.
         val impliedMode = flowObs?.let { policy.resolveMode(it.flow, it.modeHint) }
 
-        // Lazy expiry: a pending destructive transition (dash-end / task-retire)
+        // Lazy expiry: a pending destructive transition (dash-end / task-retire / job-abandon)
         // whose deadline has passed is confirmed — committed now. Driven by
         // obs.timestamp (never a wall clock) so crash-recovery replay matches.
         // Runs BEFORE the timeout branch: a routed timeout (#342) is exactly the
@@ -200,6 +200,19 @@ class PlatformRegionStepper @Inject constructor() {
         // Lapse is [graceLapsed] (#1054): strictly past for a frame, or this pending's OWN wake
         // (identified by its `GraceWake` payload) whenever it lands. See `GraceExpiry.kt`.
         current.pendingDestructive?.let { pend ->
+            if (pend.kind == DestructiveKind.JOB_ABANDON) {
+                // Any task frame restores absorption, even without parsed task identity. PostTask
+                // hands ownership to #596. Check before expiry so neither can abandon a live job.
+                if (flowObs?.flow?.isTaskFlow() == true || flowObs?.flow == Flow.PostTask) {
+                    current = current.copy(pendingDestructive = null)
+                    return@let
+                }
+                // An offer overlay supplies no abandonment evidence, even past the deadline.
+                // Only this pending's wake or a later non-task frame may commit it.
+                if (flowObs?.flow == Flow.OfferPresented ||
+                    (flowObs == null && !obs.isWakeFor(TimeoutType.GRACE_COMMIT, pend.wakeId))
+                ) return@let
+            }
             if (graceLapsed(pend.deadline, pend.wakeId, obs, TimeoutType.GRACE_COMMIT)) {
                 // #736 same-frame supersession: an incoming `task:unassigned` frame is the
                 // authoritative abandon of the active task. Committing an overdue TASK_RETIRE here
@@ -1354,6 +1367,10 @@ class PlatformRegionStepper @Inject constructor() {
         )
     }
 
+    /**
+     * #1312's marked-idle abandon may arm only into an empty destructive slot. Preserve an existing
+     * pending: replacing it would discard that decision's evidence, deadline and wake identity.
+     */
     private fun updateJobLifecycle(
         region: PlatformRegion,
         prevFlowVal: Flow,
@@ -1400,13 +1417,22 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
 
-        // #1312: only a rule-declared online no-orders surface on the NEXT flow-bearing frame
-        // proves whole-job abandonment. Bare Idle can be navigation; recognize-only frames leave R0 unchanged.
+        // #1312: the marked NEXT flow-bearing frame arms a cancellable whole-job abandon.
+        // Bare Idle can be navigation; recognize-only frames leave R0 unchanged.
         if (prevFlowVal == Flow.TaskUnassigned && nextFlowVal == Flow.Idle &&
             (obs as? Observation.Screen)?.idleSurface == IdleSurface.NO_ORDERS && obs.modeHint == Mode.Online &&
-            current.activeTask == null && current.activeJob != null
+            current.activeTask == null && current.activeJob != null && current.pendingDestructive == null
         ) {
-            return abandonActiveJob(current, obs.timestamp)
+            return current.withWakeIdIfDeadlineMoved(
+                prev = null,
+                obs = obs,
+                next = PendingDestructive(
+                    kind = DestructiveKind.JOB_ABANDON,
+                    since = obs.timestamp,
+                    deadline = obs.timestamp + policy.jobAbandonGraceMs(current.platform),
+                    armedFromFlow = Flow.TaskUnassigned,
+                ),
+            )
         }
 
         // Post-task: keep job alive through PostTask for payout capture
@@ -1443,6 +1469,7 @@ class PlatformRegionStepper @Inject constructor() {
         // [timestamp] is the honest completion instant (the grace's `since`, #732); [observedAt] is
         // the frame that commits it, which is what a re-price decided here must be stamped with.
         DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
+        DestructiveKind.JOB_ABANDON -> abandonActiveJob(region.copy(pendingDestructive = null), timestamp)
     }
 
     /**

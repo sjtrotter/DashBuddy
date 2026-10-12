@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.settings.GraceConfig
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -31,8 +33,8 @@ import java.io.File
  * close the job, and the H-E-B accept was folded into the dead Panera job as an add-on — its drop then
  * resolved onto a Panera dropoff placeholder.
  *
- * Correct behaviour (hand-authored invariants): the `TaskUnassigned → Idle` edge closes the job as
- * ABANDONED — every still-open task is marked `unassignedAt` (never `completedAt`), one
+ * Correct behaviour (hand-authored invariants): the `TaskUnassigned → Idle` edge arms a grace whose
+ * wake closes the job as ABANDONED — every still-open task is marked `unassignedAt` (never `completedAt`), one
  * `TASK_UNASSIGNED` per task — and the H-E-B accept mints a fresh job.
  *
  * Fixture `sessions/unassign_two_order_job_2026_10_09/` is the 12:08:35–12:25:48 capture run plus
@@ -65,7 +67,9 @@ class TwoOrderUnassignReplayTest {
             .filter { it.name.contains("_cli_") }.sortedBy { it.name }
             .map { SessionReplay.loadClickFrame("$session/${it.name}") }
         assertEquals("all supplied envelopes participate", 39, screens.size + clicks.size)
-        return SessionReplay.reduceMixed(screens + clicks).also { println(SessionReplay.trace(it)) }
+        val idleAt = screens.single { it.frame.file == idle }.atMs
+        val wake = SessionReplay.graceCommit(idleAt + GraceConfig.DEFAULT.jobAbandonGraceMs)
+        return SessionReplay.reduceMixed(screens + clicks + wake).also { println(SessionReplay.trace(it)) }
     }
 
     /** Every task snapshot a region exposes; later entries are fresher (lineage wins over the job mirror). */
@@ -115,10 +119,11 @@ class TwoOrderUnassignReplayTest {
         // of them ends unassigned and none completes, not the literal count.
         assertTrue("at least the two dropoff placeholders + the never-bound pickup placeholder", placeholders.size >= 3)
 
-        // (a) After U2 and the Idle frame the dasher holds no order: the job is closed.
-        val idleStep = step(idle)
-        assertNull("TaskUnassigned → Idle closes the abandoned job", dd(idleStep).activeJob)
-        assertNull("no active task after the Idle frame", dd(idleStep).activeTask)
+        // (a) The marked Idle arms the abandon; its grace wake closes the job before the offer.
+        assertNotNull("job stays open during grace", dd(step(idle)).activeJob)
+        val commitStep = steps.single { it.observation is Observation.Timeout }
+        assertNull("TaskUnassigned → Idle → grace wake closes the abandoned job", dd(commitStep).activeJob)
+        assertNull("no active task after the abandon commit", dd(commitStep).activeTask)
 
         // (b) The H-E-B accept mints a FRESH job, not an add-on onto the dead one.
         val fresh = dd(step(hebPickup)).activeJob
@@ -152,7 +157,7 @@ class TwoOrderUnassignReplayTest {
 
         // (e) The three placeholders end abandoned, never completed.
         val u2At = step(u2Confirmation).observation.timestamp
-        val idleAt = idleStep.observation.timestamp
+        val idleAt = step(idle).observation.timestamp
         val lastSeen = LinkedHashMap<String, Task>()
         steps.forEach { s -> tasksOf(dd(s)).filter { it.taskId in placeholders }.forEach { lastSeen[it.taskId] = it } }
         assertEquals("every placeholder is visible in the trace", placeholders, lastSeen.keys)

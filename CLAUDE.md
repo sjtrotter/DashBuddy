@@ -574,8 +574,9 @@ hash join that could over-remove a sibling), by customer hash for a pickup-phase
 retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
 `Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
 `taskId`; a misread self-heals only while the job stayed open; a `task:unassigned` frame
-followed by the Finding-offers screen (`state.idleSurface: no_orders`) abandons the whole job when
-`modeHint` is online and no task is active. Bare Idle (including navigation) and offline frames do not.
+followed by the Finding-offers screen (`state.idleSurface: no_orders`) arms a 5 s per-platform
+`JOB_ABANDON` grace (task cancels, offer preserves, PostTask yields to #596; commit stamps the idle instant)
+when `modeHint` is online and no task is active. Bare Idle (including navigation) and offline frames do not.
 Open means no `isDeliveredEvidenced()` for a dropoff or no `confirmedAt` for a pickup; displacement
 stamps stay intact. The abandon step evicts nothing from `recentTasks`, preserving older delivered
 drops for the close sweep, and emits one bubble for the batch plus one unassign event per task.
