@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
@@ -41,7 +42,7 @@ class StandaloneOfferClosesStaleJobTest {
     private val pickup = Task("old-pickup", "old-job", TaskPhase.PICKUP,
         storeName = "Old Store", startedAt = 100L, arrivedAt = 150L, confirmedAt = 200L, completedAt = 200L)
     private val dropoff = Task("old-dropoff", "old-job", TaskPhase.DROPOFF, startedAt = 100L)
-    private val offer = ParsedOffer(offerHash = "new-offer", payAmount = 7.0,
+    private val offer = ParsedOffer(offerHash = "new-offer", offerScope = OfferScope.STANDALONE, payAmount = 7.0,
         distanceMiles = 3.0, timeToCompleteMinutes = 12L)
     private val frame = Observation.Screen(
         timestamp = 1_000L, captureId = null, ruleId = "${platform.wire}.screen.synthetic",
@@ -81,6 +82,16 @@ class StandaloneOfferClosesStaleJobTest {
 
     private fun region(state: AppState) = state.regions.platforms.getValue(platform)
 
+    private fun withRegion(state: AppState, region: PlatformRegion) = state.copy(
+        regions = state.regions.copy(platforms = mapOf(platform to region)),
+    )
+
+    private fun completedEffects(effects: List<AppEffect>, taskId: String) =
+        effects.filterIsInstance<AppEffect.LogEvent>().filter {
+            it.event.type == AppEventType.DELIVERY_COMPLETED &&
+                (it.event.payload as? DeliveryPayload)?.taskId == taskId
+        }
+
     private fun unassignedEffects(effects: List<AppEffect>) = effects.filterIsInstance<AppEffect.LogEvent>()
         .filter { it.event.type == AppEventType.TASK_UNASSIGNED }
 
@@ -117,6 +128,77 @@ class StandaloneOfferClosesStaleJobTest {
         val unassigned = unassignedEffects(result.effects)
         assertEquals(1, unassigned.size)
         assertEquals(dropoff.taskId, (unassigned.single().event.payload as TaskUnassignedPayload).taskId)
+    }
+
+    @Test
+    fun `standalone accept completes the active arrived drop once and clears old active lineage`() {
+        for (arrivalWitness in listOf(true, false)) {
+            val before = initial()
+            val old = region(before)
+            val active = dropoff.copy(customerNameHash = "old-customer",
+                arrivedAt = if (arrivalWitness) 300L else null,
+                completionStepsAt = if (arrivalWitness) null else 350L)
+            // The active copy must beat both the stale recent copy and the job placeholder.
+            val seeded = withRegion(before, old.copy(activeTask = active,
+                recentTasks = old.recentTasks + dropoff))
+            val result = machine.step(seeded, frame)
+            val after = region(result.newState)
+            assertFresh(after)
+            val copies = (after.recentTasks + listOfNotNull(after.activeTask)).filter { it.taskId == active.taskId }
+            assertEquals(1, copies.size)
+            val completed = copies.single()
+            assertEquals(frame.timestamp, completed.completedAt)
+            assertEquals(frame.timestamp, completed.staleCloseCompletedAt)
+            assertNull(completed.unassignedAt)
+            assertEquals(active.arrivedAt, completed.arrivedAt)
+            assertEquals(active.completionStepsAt, completed.completionStepsAt)
+            assertTrue(after.activeTask == null || after.activeTask?.jobId == after.activeJob?.jobId)
+            assertEquals(1, completedEffects(result.effects, active.taskId).size)
+            assertEquals(listOf(completed), mintingDropoffTasks(region(seeded), after, active.jobId,
+                retirePending = false, emittedThisStep = emptySet()))
+            assertTrue(unassignedEffects(result.effects).isEmpty())
+        }
+    }
+
+    @Test
+    fun `standalone accept unassigns an active un-arrived drop once and clears old active lineage`() {
+        val before = initial()
+        val old = region(before)
+        val active = dropoff.copy(customerNameHash = "old-customer")
+        val result = machine.step(withRegion(before, old.copy(activeTask = active)), frame)
+        val after = region(result.newState)
+        assertAbandoned(after)
+        val copies = (after.recentTasks + listOfNotNull(after.activeTask)).filter { it.taskId == active.taskId }
+        assertEquals(1, copies.size)
+        assertEquals(frame.timestamp, copies.single().unassignedAt)
+        assertNull(copies.single().staleCloseCompletedAt)
+        assertTrue(after.activeTask == null || after.activeTask?.jobId == after.activeJob?.jobId)
+        val unassigned = unassignedEffects(result.effects)
+        assertEquals(1, unassigned.size)
+        assertEquals(active.taskId, (unassigned.single().event.payload as TaskUnassignedPayload).taskId)
+        assertTrue(completedEffects(result.effects, active.taskId).isEmpty())
+    }
+
+    @Test
+    fun `standalone accept still mints a delivered drop evicted by same-step activation cap`() {
+        val before = initial()
+        val old = region(before)
+        val delivered = dropoff.copy(taskId = "old-delivered", customerNameHash = "delivered-customer",
+            arrivedAt = 300L, completedAt = 400L)
+        val recent = listOf(delivered) + (1..18).map {
+            Task("older-$it", "other-job", TaskPhase.PICKUP, startedAt = 1L, completedAt = 2L)
+        } + pickup
+        assertEquals(20, recent.size)
+        val job = requireNotNull(old.activeJob)
+        val crowded = old.copy(recentTasks = recent, activeJob = job.copy(tasks = job.tasks + delivered))
+        val result = machine.step(withRegion(before, crowded), frame)
+        val after = region(result.newState)
+        assertFresh(after)
+        assertEquals(PlatformRegionStepper.MAX_RECENT_TASKS, after.recentTasks.size)
+        assertTrue(after.recentTasks.none { it.taskId == delivered.taskId })
+        assertEquals(1, completedEffects(result.effects, delivered.taskId).size)
+        assertEquals(listOf(delivered.taskId), mintingDropoffTasks(crowded, after, job.jobId,
+            retirePending = false, emittedThisStep = emptySet()).map { it.taskId })
     }
 
     @Test
@@ -176,17 +258,20 @@ class StandaloneOfferClosesStaleJobTest {
 
     @Test
     fun `click-less acceptance follows scope independently of quote basis`() {
-        for (scope in OfferScope.entries) {
-            for (basis in OfferQuoteBasis.entries) {
-                val parsed = offer.copy(offerScope = scope, quoteBasis = basis)
-                val presented = machine.step(AppState(), frame.copy(
-                    timestamp = 800L, flow = Flow.OfferPresented,
-                    parsed = ParsedFields.OfferFields(parsedOffer = parsed),
-                ))
-                val result = machine.step(presented.newState, frame)
-                val accepted = requireNotNull(region(result.newState).activeJob).acceptedOffers
-                assertEquals("$scope / $basis", if (scope == OfferScope.STANDALONE) 1 else 0, accepted.size)
-            }
+        val reachablePairs = listOf(
+            OfferScope.STANDALONE to OfferQuoteBasis.TOTAL,
+            OfferScope.ADD_ON to OfferQuoteBasis.TOTAL,
+            OfferScope.ADD_ON to OfferQuoteBasis.INCREMENTAL,
+        )
+        for ((scope, basis) in reachablePairs) {
+            val parsed = offer.copy(offerScope = scope, quoteBasis = basis)
+            val presented = machine.step(AppState(), frame.copy(
+                timestamp = 800L, flow = Flow.OfferPresented,
+                parsed = ParsedFields.OfferFields(parsedOffer = parsed),
+            ))
+            val result = machine.step(presented.newState, frame)
+            val accepted = requireNotNull(region(result.newState).activeJob).acceptedOffers
+            assertEquals("$scope / $basis", if (parsed.effectiveScope == OfferScope.STANDALONE) 1 else 0, accepted.size)
         }
     }
 

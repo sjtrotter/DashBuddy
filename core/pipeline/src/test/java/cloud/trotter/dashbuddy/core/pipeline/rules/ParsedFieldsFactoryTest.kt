@@ -52,18 +52,27 @@ class ParsedFieldsFactoryTest {
             (ParsedFieldsFactory.create("offer", fields + extra) as ParsedFields.OfferFields).parsedOffer
         val standalone = parse()
         val addOn = parse(mapOf("offerScope" to "add_on"))
-        assertEquals(OfferScope.STANDALONE, standalone.offerScope)
-        assertEquals(OfferScope.STANDALONE, parse(mapOf("offerScope" to "standalone")).offerScope)
-        assertEquals(OfferScope.ADD_ON, addOn.offerScope)
+        assertEquals(OfferScope.STANDALONE, standalone.effectiveScope)
+        assertEquals(OfferScope.STANDALONE, parse(mapOf("offerScope" to "standalone")).effectiveScope)
+        assertEquals(OfferScope.ADD_ON, addOn.effectiveScope)
         assertEquals(standalone.offerHash, addOn.offerHash)
         assertNotNull(standalone.presentationKey)
         assertEquals(standalone.presentationKey, addOn.presentationKey)
         assertEquals(addOn, Json.decodeFromString<ParsedOffer>(Json.encodeToString(addOn)))
-        assertEquals(OfferScope.STANDALONE, Json.decodeFromString<ParsedOffer>("""{"offerHash":"old"}""").offerScope)
-        assertFalse(Json.encodeToString(standalone).contains("offerScope"))
+        assertTrue(Json.encodeToString(standalone).contains("\"offerScope\":\"STANDALONE\""))
         val withDefaults = Json { encodeDefaults = true }
         assertTrue(withDefaults.encodeToString(standalone).contains(""""offerScope":"STANDALONE""""))
         assertTrue(withDefaults.encodeToString(standalone).contains(""""quoteBasis":"TOTAL""""))
+    }
+
+    @Test
+    fun `legacy serialized offer derives scope from quote basis`() {
+        val incremental = Json.decodeFromString<ParsedOffer>("""{"offerHash":"old","quoteBasis":"INCREMENTAL"}""")
+        assertNull(incremental.offerScope)
+        assertEquals(OfferScope.ADD_ON, incremental.effectiveScope)
+        val total = Json.decodeFromString<ParsedOffer>("""{"offerHash":"old"}""")
+        assertNull(total.offerScope)
+        assertEquals(OfferScope.STANDALONE, total.effectiveScope)
     }
 
     private fun offerWithOrderType(orderType: String?): OrderType {

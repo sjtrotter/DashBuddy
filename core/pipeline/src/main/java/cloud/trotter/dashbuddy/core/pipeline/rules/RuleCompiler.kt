@@ -764,6 +764,13 @@ object RuleCompiler {
         parseFields?.forEach { (name, spec) ->
             StateMachineContract.PARSE_DECLARATION_LITERALS[name]?.let { allowed -> validateDeclarationLiteral(name, spec, allowed, ruleId) }
         }
+        if (declaredLiteral(parseFields?.get("quoteBasis"))?.content == StateMachineContract.QUOTE_BASIS_INCREMENTAL &&
+            declaredLiteral(parseFields?.get("offerScope"))?.content != StateMachineContract.OFFER_SCOPE_ADD_ON) {
+            throw RuleCompileException(
+                "Rule '$ruleId': quoteBasis incremental requires offerScope add_on",
+                isolable = true,
+            )
+        }
         val declaredFields = parseFields?.keys ?: emptySet()
         if (parseAs != null) {
             ParsedFieldsFactory.validateShapeFields(parseAs, declaredFields, ruleId)
@@ -864,12 +871,15 @@ object RuleCompiler {
      * Accepts the `{"literal": "<v>"}` object form AND the bare string form the notification parse already
      * accepts as a constant (fable review F5); the message derives its vocabulary from the contract table.
      */
-    internal fun validateDeclarationLiteral(name: String, spec: JsonElement, allowed: Set<String>, ruleId: String) {
-        val literal = when (spec) {
+    private fun declaredLiteral(spec: JsonElement?): JsonPrimitive? =
+        when (spec) {
             is JsonPrimitive -> spec
             is JsonObject -> spec["literal"] as? JsonPrimitive
             else -> null
         }
+
+    internal fun validateDeclarationLiteral(name: String, spec: JsonElement, allowed: Set<String>, ruleId: String) {
+        val literal = declaredLiteral(spec)
         if (literal == null || !literal.isString || literal.content !in allowed) {
             val value = literal?.content ?: "non-literal"
             throw RuleCompileException(

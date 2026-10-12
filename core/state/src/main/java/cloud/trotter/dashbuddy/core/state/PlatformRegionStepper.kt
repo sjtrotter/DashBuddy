@@ -1471,6 +1471,7 @@ class PlatformRegionStepper @Inject constructor() {
         DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
         DestructiveKind.JOB_ABANDON -> abandonActiveJob(
             region.copy(pendingDestructive = null), timestamp, reason = "unassign then no-orders idle (#1312)",
+            arrivedDropsComplete = false,
         )
     }
 

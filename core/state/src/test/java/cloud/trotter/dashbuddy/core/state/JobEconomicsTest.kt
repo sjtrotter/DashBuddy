@@ -209,11 +209,27 @@ class JobEconomicsTest {
     fun `re-accepting the same offer does not double-count`() {
         val r1 = stepAccept(
             onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5, scope = OfferScope.STANDALONE),
+            acceptObs(2_000L, "H-E-B"),
+        )
+
+        val job = r1.activeJob
+        assertEquals("job-1", job?.jobId)
+        assertNotNull(job)
+        assertEquals("offer-1 already counted → no duplicate", 1, job!!.acceptedOffers.size)
+        assertEquals(6.0, job.totalNetPay, 0.001)
+    }
+
+    @Test
+    fun `re-accepting the same add-on offer does not double-count`() {
+        val r1 = stepAccept(
+            onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
             acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5, scope = OfferScope.ADD_ON),
             acceptObs(2_000L, "H-E-B"),
         )
 
         val job = r1.activeJob
+        assertEquals("job-1", job?.jobId)
         assertNotNull(job)
         assertEquals("offer-1 already counted → no duplicate", 1, job!!.acceptedOffers.size)
         assertEquals(6.0, job.totalNetPay, 0.001)

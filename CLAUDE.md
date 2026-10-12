@@ -395,7 +395,7 @@ recognise the source frame → stay UNKNOWN on the negative corpus → compile m
   currency figure, disclaimer, merchant-holder + address sibling); `side_nav_drawer` rejects that
   signature; `parseTotalMinutes` feeds `timeToCompleteMinutes` (an estimate, never a deadline). Compose
   taps produced no click envelopes in the field — accept is inferred from the pickup-phase exit.
-- **Compose add-on (#1121):** branch 2 pairs delta pay/route inside `offerBody`; `quoteBasis: incremental` means no verdict, no derived economics, and `offerScope: add_on` means no click-less accept.
+- **Compose add-on (#1121):** branch 2 pairs delta pay/route inside `offerBody`; `quoteBasis: incremental` requires `offerScope: add_on` at compile time: no verdict, derived economics, or click-less accept.
 - **#1147 node predicates:** `hasPaneTitle*`, `hasRoleDescription`, `hasClickActionLabel*`,
   `hasHintText*` and the flags `isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`
   read the TalkBack-study fields (none in `allText`, no regex forms); no shipped rule uses them yet.
@@ -544,7 +544,7 @@ observed tap outranks the sheet; a click-less accept is inferred only over a NON
 click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface` and `idleSurface`;
 inferred outcomes are named in the event description.
 
-**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend; an explicit add-on accept mints `stopCount − new pickups` dropoffs, never one per listed row (#1304), floor 1; a parsed `offerScope: standalone` accept over a live, not-complete job closes it through the #1312 abandon and mints fresh (#1119 slice 1).
+**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend; an explicit add-on accept mints `stopCount − new pickups` dropoffs, never one per listed row (#1304), floor 1; a new standalone accept closes a stale job (un-arrived drops/unconfirmed pickups unassigned, arrived drops marked complete, active task cleared), while owned re-accepts do nothing and legacy scope follows quote basis (#1119 slice 1).
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
 mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,

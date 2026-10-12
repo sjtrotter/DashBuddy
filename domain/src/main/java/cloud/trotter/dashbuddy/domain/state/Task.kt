@@ -88,6 +88,14 @@ data class Task(
      * `@Serializable` default-null ⇒ old snapshots/journals decode unchanged (no migration).
      */
     val honoredRetireAt: Long? = null,
+    /**
+     * #1119 slice 1: the stepper's own statement that this ARRIVED dropoff's completion was
+     * stamped by the stale-job close (a standalone offer accepted over the job), at this instant.
+     * A timestamp is not provenance (see [honoredRetireAt]); the emitter reads the mark, never
+     * re-derives it. Null on every other path; default-null keeps old snapshots and journals
+     * decoding unchanged.
+     */
+    val staleCloseCompletedAt: Long? = null,
     val recovered: Boolean = false,
     /**
      * The `offerHash` of the accepted offer that **created this slot** (#997) — a weak provenance

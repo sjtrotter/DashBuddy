@@ -29,7 +29,7 @@ class DoorDashAddonOfferTest {
         assertNull(offer.offerKind)
         assertNull(offer.presentationKey)
         assertEquals(OfferQuoteBasis.INCREMENTAL, offer.quoteBasis)
-        assertEquals(OfferScope.ADD_ON, offer.offerScope)
+        assertEquals(OfferScope.ADD_ON, offer.effectiveScope)
         assertEquals(listOf(95, 32), offer.orders.map { it.itemCount })
         assertEquals(listOf(OrderType.SHOP_FOR_ITEMS, OrderType.SHOP_FOR_ITEMS), offer.orders.map { it.orderType })
         assertEquals(listOf(CountUnit.ITEMS, CountUnit.ITEMS), offer.orders.map { it.countUnit })
@@ -51,7 +51,7 @@ class DoorDashAddonOfferTest {
         assertEquals("offer", match.shape)
         val parsed = (ParsedFieldsFactory.create(match.shape, match.fields) as ParsedFields.OfferFields).parsedOffer
         assertEquals(OfferQuoteBasis.INCREMENTAL, parsed.quoteBasis)
-        assertEquals(OfferScope.ADD_ON, parsed.offerScope)
+        assertEquals(OfferScope.ADD_ON, parsed.effectiveScope)
     }
 
     @Test

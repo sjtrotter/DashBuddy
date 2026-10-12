@@ -264,7 +264,7 @@ private fun countdownExpiresAt(obs: Observation, offerFields: ParsedFields.Offer
 private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
     if (destination?.isTaskFlow() != true) return false
     // #1119 slice 1: lifecycle scope blocks click-less add-on accepts even without return-flow context.
-    if (offer.offerFields.parsedOffer.offerScope == OfferScope.ADD_ON) return false
+    if (offer.offerFields.parsedOffer.effectiveScope == OfferScope.ADD_ON) return false
     // #1104 (Astra r1 F2): the non-task-returnFlow guard now covers PHASED destinations too. A
     // mid-job ADD-ON offer's returnFlow IS a task flow (pickup navigation for job A); when the dasher
     // declines it — through the confirm sheet, with no click event on 8.97.8 — the very next frame

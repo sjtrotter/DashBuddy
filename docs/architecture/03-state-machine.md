@@ -549,11 +549,19 @@ sheet or timeout preserves #1104/#1118. Marginal scoring, route recomputation an
 minting remain out of scope.
 
 **Offer scope (#1119 slice 1).** A parsed STANDALONE offer accepted over a live job that has not
-proven complete closes it through the #1312 whole-job abandon: open tasks are unassigned, never
-completed, with one `TASK_UNASSIGNED` per task; the job closes and a fresh job mints. ADD_ON appends;
-an unparsed accept keeps the append path. The #596 physically-complete check still runs first.
+proven complete closes it through the whole-job abandon: un-arrived drops and unconfirmed pickups
+are unassigned; an ARRIVED (or complete-steps-witnessed) un-completed drop completes at the accept
+instant and is mint-qualified through `Task.staleCloseCompletedAt`; already-evidenced drops are
+untouched. The old active task is cleared, the job closes, and a fresh job mints. ADD_ON appends;
+an unparsed accept keeps the append path. A re-accepted owned offer is a no-op, before either close
+path; otherwise the #596 physically-complete check still runs first. A legacy serialized offer
+with absent scope derives it from the quote basis (incremental → ADD_ON, otherwise STANDALONE);
+fresh parses set it explicitly. At compile time, `quoteBasis: incremental` requires
+`offerScope: add_on`. Only DoorDash declares `add_on` today; Uber's add-on form is unlabelled and
+inert until #826 lands (see the rule's comment).
 Residual risk: a standalone card that really was a stack (never observed in 918 fielded offers)
-splits one job in two, failing toward orphaned placeholders, never toward forged pay.
+splits one job in two; an arrived drop is paid as a normal completion would be (the same
+exposure today's displacement stamp already carries); an un-arrived one is never paid.
 
 **Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
 tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,

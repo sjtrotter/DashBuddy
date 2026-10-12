@@ -135,7 +135,7 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
         storeHints = storeHints,
         dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
         stopCount = parsedOffer?.stopCount,
-        offerScope = parsedOffer?.offerScope,
+        offerScope = parsedOffer?.effectiveScope,
     )
 }
 
@@ -151,6 +151,9 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     inputs: AcceptInputs,
 ): PlatformRegion {
     val existing = region.activeJob ?: return mintFreshJobFromAccept(region, obs, inputs)
+
+    // #1119 slice 1: a re-presented, re-accepted offer the job already owns is the same decision, never a close.
+    if (inputs.offerHash != null && existing.acceptedOffers.any { it.offerHash == inputs.offerHash }) return region
 
     // #596 T2: an accept while the active job is already physically complete is an INDEPENDENT
     // offer, not an add-on — do NOT fold it into a never-closed job (the 06-30 job-61 case: one
@@ -182,7 +185,7 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
 
     // #1119 slice 1: a parsed STANDALONE offer accepted over a live job means the live job is stale on our side
     // (the platform only stacks through an ADD_ON card). Close it through the #1312 whole-job abandon: open tasks
-    // are marked unassigned (never completed), the job closes, and the new offer mints fresh. An ADD_ON or an
+    // are marked unassigned, arrived drops complete, and the new offer mints fresh. An ADD_ON or an
     // unparsed offer keeps the append path. Field evidence: design/2026-10-12-1312/addon-card-evidence.md.
     if (inputs.offerScope == OfferScope.STANDALONE) {
         // #1119 slice 1: TASK_RETIRE has nothing left to commit after abandon; other pending kinds survive.
@@ -190,7 +193,8 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
             region.copy(pendingDestructive = null)
         } else region
         return mintFreshJobFromAccept(
-            abandonActiveJob(stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)"),
+            abandonActiveJob(stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)",
+                arrivedDropsComplete = true),
             obs, inputs,
         )
     }

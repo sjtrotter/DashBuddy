@@ -224,6 +224,28 @@ class UnassignIdleClosesJobTest {
     }
 
     @Test
+    fun `explicit unassign close leaves an arrived unfinished drop unassigned`() {
+        val first = unassign()
+        val old = region(first.newState)
+        val job = requireNotNull(old.activeJob)
+        val arrived = job.tasks.first { it.phase == TaskPhase.DROPOFF }.copy(
+            customerNameHash = "arrived-customer", arrivedAt = 150L,
+        )
+        val seeded = first.newState.copy(regions = first.newState.regions.copy(
+            platforms = mapOf(platform to old.copy(recentTasks = old.recentTasks + arrived)),
+        ))
+        val closed = armAndCommit(seeded)
+        val abandoned = region(closed.newState).recentTasks.single { it.taskId == arrived.taskId }
+        assertEquals(5_300L, abandoned.unassignedAt)
+        assertNull(abandoned.completedAt)
+        assertNull(abandoned.staleCloseCompletedAt)
+        assertFalse(closed.effects.filterIsInstance<AppEffect.LogEvent>().any {
+            it.event.type == AppEventType.DELIVERY_COMPLETED &&
+                (it.event.payload as? DeliveryPayload)?.taskId == arrived.taskId
+        })
+    }
+
+    @Test
     fun `abandon evicts nothing and still completes an older delivered receiptless drop`() {
         // Both arrival and a complete-steps tap are delivery evidence (#1315).
         for (arrived in listOf(true, false)) {
