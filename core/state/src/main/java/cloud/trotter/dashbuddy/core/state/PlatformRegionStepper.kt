@@ -790,8 +790,12 @@ class PlatformRegionStepper @Inject constructor() {
         return pendingDestructive
             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
             ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
-            ?.takeIf { drop.completedInline(it.since).isDeliveredEvidenced() }
+            ?.takeIf { drop.completedInline(drop.honoredRetireInstant(it.since)).isDeliveredEvidenced() }
     }
+
+    /** #1315: a witness-only completion cannot precede the tap that supplies its evidence. */
+    private fun Task.honoredRetireInstant(since: Long): Long =
+        if (arrivedAt == null) maxOf(since, completionStepsAt ?: since) else since
 
     /**
      * Update session/job/task based on flow transitions.
@@ -1494,10 +1498,10 @@ class PlatformRegionStepper @Inject constructor() {
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
         val matured = observedAt >= (pend?.absorbedRetireDeadline ?: Long.MIN_VALUE)
         // The same delivery evidence gate as T1 and absorption, including restored absorbed state.
-        val honoredAt = pend?.absorbedRetireSince?.takeIf { at ->
-            matured && region.activeTask?.let {
-                it.phase == TaskPhase.DROPOFF && it.completedInline(at).isDeliveredEvidenced()
-            } == true
+        val honoredAt = region.activeTask?.let { task ->
+            pend?.absorbedRetireSince?.let { task.honoredRetireInstant(it) }?.takeIf { at ->
+                matured && task.phase == TaskPhase.DROPOFF && task.completedInline(at).isDeliveredEvidenced()
+            }
         }
         val completedTask = region.activeTask?.let {
             if (honoredAt != null) {

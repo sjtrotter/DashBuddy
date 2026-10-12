@@ -2,6 +2,8 @@ package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
+import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -17,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** #1315: displacement is not confirmation; confirmed same-store revisits own a new arrival. */
@@ -58,8 +61,9 @@ class SameStoreReacceptTest {
     private fun navigate(placeholders: List<Task>): PlatformRegion {
         val state = confirmed()
         val r = region(state)
-        return region(machine.step(withRegion(state, r.copy(activeJob = r.activeJob!!.copy(
-            tasks = r.activeJob.tasks + placeholders,
+        val job = requireNotNull(r.activeJob)
+        return region(machine.step(withRegion(state, r.copy(activeJob = job.copy(
+            tasks = job.tasks + placeholders,
         ))), frame(500L, Flow.TaskPickupNavigation)).newState)
     }
 
@@ -67,8 +71,9 @@ class SameStoreReacceptTest {
     fun `confirmed pickup yields to an open placeholder through either store matching tier`() {
         for (hint in listOf("H-E-B", "h-e-b", "H-E-B (123)")) {
             val after = navigate(listOf(placeholder.copy(expectedStoreHint = hint)))
-            assertEquals(hint, placeholder.taskId, after.activeTask!!.taskId)
-            assertNull(after.activeTask.arrivedAt)
+            val task = requireNotNull(after.activeTask) { "Expected active task" }
+            assertEquals(hint, placeholder.taskId, task.taskId)
+            assertNull(task.arrivedAt)
             assertEquals(300L, after.recentTasks.single { it.taskId == pickup.taskId }.confirmedAt)
         }
     }
@@ -78,10 +83,11 @@ class SameStoreReacceptTest {
         for (placeholders in listOf(emptyList(), listOf(placeholder.copy(expectedStoreHint = "Target")),
             listOf(placeholder.copy(expectedStoreHint = null)))) {
             val after = navigate(placeholders)
-            assertEquals(pickup.taskId, after.activeTask!!.taskId)
-            assertEquals(200L, after.activeTask.arrivedAt)
-            assertNull(after.activeTask.completedAt)
-            assertEquals(300L, after.activeTask.confirmedAt)
+            val task = requireNotNull(after.activeTask) { "Expected active task" }
+            assertEquals(pickup.taskId, task.taskId)
+            assertEquals(200L, task.arrivedAt)
+            assertNull(task.completedAt)
+            assertEquals(300L, task.confirmedAt)
         }
     }
 
@@ -94,15 +100,17 @@ class SameStoreReacceptTest {
         val before = initial(extra = listOf(placeholder), recent = listOf(abandoned))
         val r = region(before)
         val active = pickup.copy(storeName = "Target", arrivedAt = 250L)
+        val job = requireNotNull(r.activeJob)
         val restored = withRegion(before, r.copy(activeTask = active,
-            activeJob = r.activeJob!!.copy(tasks = r.activeJob.tasks.map {
+            activeJob = job.copy(tasks = job.tasks.map {
                 if (it.taskId == pickup.taskId) active else it
             })))
         val after = region(machine.step(restored, frame(500L, Flow.TaskPickupNavigation)).newState)
-        assertEquals(placeholder.taskId, after.activeTask!!.taskId)
-        assertEquals("H-E-B", after.activeTask.storeName)
-        assertNull(after.activeTask.arrivedAt)
-        assertNull(after.activeTask.confirmedAt)
+        val task = requireNotNull(after.activeTask) { "Expected active task" }
+        assertEquals(placeholder.taskId, task.taskId)
+        assertEquals("H-E-B", task.storeName)
+        assertNull(task.arrivedAt)
+        assertNull(task.confirmedAt)
         assertEquals(abandoned, after.recentTasks.single { it.taskId == abandoned.taskId })
     }
 
@@ -110,8 +118,9 @@ class SameStoreReacceptTest {
     fun `placeholder resolution prefers exact case insensitive hint over token match`() {
         val noisy = placeholder.copy(taskId = "noisy", expectedStoreHint = "H-E-B (123)")
         val after = navigate(listOf(noisy, placeholder.copy(expectedStoreHint = "h-e-b")))
-        assertEquals(placeholder.taskId, after.activeTask!!.taskId)
-        assertNull(after.activeTask.arrivedAt)
+        val task = requireNotNull(after.activeTask) { "Expected active task" }
+        assertEquals(placeholder.taskId, task.taskId)
+        assertNull(task.arrivedAt)
     }
 
     @Test
@@ -131,11 +140,46 @@ class SameStoreReacceptTest {
             assertEquals(2, accepted.activeJob!!.tasks.count { it.phase == TaskPhase.PICKUP })
             state = machine.step(withRegion(state, accepted), frame(500L, Flow.TaskPickupNavigation)).newState
             val after = region(state)
-            assertEquals(pickup.taskId, after.activeTask!!.taskId)
-            assertEquals(200L, after.activeTask.arrivedAt)
-            assertNull(after.activeTask.confirmedAt)
-            assertNull(after.activeTask.completedAt)
+            val task = requireNotNull(after.activeTask) { "Expected active task" }
+            assertEquals(pickup.taskId, task.taskId)
+            assertEquals(200L, task.arrivedAt)
+            assertNull(task.confirmedAt)
+            assertNull(task.completedAt)
         }
+    }
+
+    @Test
+    fun `dropoff after grace-retired pickup confirms it and same-store addon mints a placeholder`() {
+        val idle = machine.step(arrived(), frame(1_000L, Flow.TaskPickupNavigation).copy(
+            flow = Flow.Idle, parsed = ParsedFields.None,
+        )).newState
+        val pending = requireNotNull(region(idle).pendingDestructive)
+        val retired = machine.step(idle, Observation.Timeout(
+            timestamp = pending.deadline + 1L, type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId),
+        )).newState
+        assertNull(region(retired).activeTask)
+        assertNull(region(retired).recentTasks.single { it.taskId == pickup.taskId }.confirmedAt)
+        val at = pending.deadline + 2L
+        val dropoff = machine.step(retired, frame(at, Flow.TaskDropoffNavigation))
+        val confirmed = region(dropoff.newState)
+        val task = confirmed.recentTasks.single { it.taskId == pickup.taskId }
+        assertEquals(at, task.confirmedAt)
+        assertEquals(task, requireNotNull(confirmed.activeJob).tasks.single { it.taskId == pickup.taskId })
+        val again = region(machine.step(dropoff.newState, frame(at + 1L, Flow.TaskDropoffNavigation)).newState)
+        assertEquals(at, again.recentTasks.single { it.taskId == pickup.taskId }.confirmedAt)
+        val inputs = AcceptInputs("second", AcceptedOfferEconomics(offerHash = "second", acceptedAt = at + 2L),
+            listOf("H-E-B"), 1)
+        val accepted = PlatformRegionStepper().appendAddOn(again, requireNotNull(again.activeJob),
+            frame(at + 2L, Flow.TaskDropoffNavigation), inputs)
+        val pickups = requireNotNull(accepted.activeJob).tasks.filter { it.phase == TaskPhase.PICKUP }
+        assertEquals(2, pickups.size)
+        val fresh = pickups.single { it.taskId != pickup.taskId }
+        assertEquals("H-E-B", fresh.expectedStoreHint)
+        assertNull(fresh.storeName)
+        assertNull(fresh.arrivedAt)
+        assertNull(fresh.confirmedAt)
+        assertTrue(pickups.any { it.taskId == pickup.taskId && it.confirmedAt == at })
     }
 
     @Test

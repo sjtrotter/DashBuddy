@@ -57,6 +57,11 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
 
         val currentTask = region.activeTask
         val jobId = region.activeJob?.jobId ?: return region
+        // #1315: grace may already have retired the pickup before this dropoff frame.
+        // Confirm its arrived lineage on every dropoff activation, even without a displacement.
+        val recentTasks = if (taskPhase == TaskPhase.DROPOFF) {
+            confirmJobPickups(region.recentTasks, jobId, obs.timestamp)
+        } else region.recentTasks
 
         // Phase/subflow change → new task or update.
         //
@@ -129,11 +134,8 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                 completedAt = retireSince ?: obs.timestamp,
                 confirmedAt = if (confirmsPickups) obs.timestamp else currentTask.confirmedAt,
             )
-            // #1315: every displacement path (resume, either placeholder, fresh mint) shares
-            // the pickup→dropoff sweep edge. Pickup→pickup only stamps completedAt, not confirmation.
-            val displacedRecent = (region.recentTasks + listOfNotNull(displaced)).let {
-                if (confirmsPickups) confirmJobPickups(it, jobId, obs.timestamp) else it
-            }
+            // Pickup→pickup only stamps completedAt, not confirmation.
+            val displacedRecent = recentTasks + listOfNotNull(displaced)
 
             // #503 slice 2/3b-2: returning to a prior subtask of this job (A→B→A, or back to a
             // store after an offer interlude that retired the task) RESUMES its identity instead
@@ -192,7 +194,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                         itemsShopped = taskFields?.itemsShopped ?: resumable.itemsShopped,
                         redCardTotal = taskFields?.redCardTotal ?: resumable.redCardTotal,
                         arrivedAt = if (justArrived) obs.timestamp else resumable.arrivedAt,
-                    ),
+                    ).clearWitnessIfNavigatedAway(obs, taskPhase, taskSubFlow),
                     recentTasks = displacedRecent.filterNot { it.taskId == resumable.taskId }.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                     pendingDestructive = null,
                 )
@@ -302,7 +304,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                 taskFields?.customerNameHash == null &&
                 taskFields?.customerAddressHash == null
             ) {
-                return region
+                return region.copy(recentTasks = recentTasks)
             }
 
             // Fresh mint shares the same displaced copy and confirmation sweep as resolution/resume.
@@ -352,13 +354,6 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
         // requires the other slot open too — the D4 lifecycle contract).
         val (baseJob, baseTask) = maybeSwapMisboundPickup(region, currentTask, taskPhase, taskFields)
         val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && baseTask.arrivedAt == null
-        // #1315: 35_win_UNKNOWN re-renders the tapped gift sheet as NAVIGATION; the same screen
-        // keeps the witness. A different navigation screen clears both fields. Null screen context
-        // (legacy snapshot / unprimed click) fails toward not delivered on any navigation frame.
-        // A flowless click/warning inherits the acted flow, so require an observed navigation flow.
-        val navigatedAway = taskPhase == TaskPhase.DROPOFF && taskSubFlow == TaskSubFlow.NAVIGATION &&
-            obs.flow == Flow.TaskDropoffNavigation && baseTask.completionStepsAt != null &&
-            obs.ruleId != baseTask.completionStepsScreen
         return region.copy(
             activeJob = baseJob,
             activeTask = baseTask.copy(
@@ -376,9 +371,8 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                 itemsShopped = taskFields?.itemsShopped ?: baseTask.itemsShopped,
                 redCardTotal = taskFields?.redCardTotal ?: baseTask.redCardTotal,
                 arrivedAt = if (justArrived) obs.timestamp else baseTask.arrivedAt,
-                completionStepsAt = if (navigatedAway) null else baseTask.completionStepsAt,
-                completionStepsScreen = if (navigatedAway) null else baseTask.completionStepsScreen,
-            ),
+            ).clearWitnessIfNavigatedAway(obs, taskPhase, taskSubFlow),
+            recentTasks = recentTasks,
             pendingDestructive = null,
         )
     }
@@ -520,3 +514,17 @@ private fun confirmJobPickups(recentTasks: List<Task>, jobId: String, at: Long):
             task.unassignedAt == null && task.confirmedAt == null
         ) task.copy(confirmedAt = at) else task
     }
+
+/** #1315: the same tapped screen keeps its witness; navigation elsewhere clears it, even on resume. */
+private fun Task.clearWitnessIfNavigatedAway(
+    obs: Observation.FlowObservation,
+    taskPhase: TaskPhase,
+    taskSubFlow: TaskSubFlow,
+): Task {
+    // Flowless observations inherit the acted flow, so require an observed navigation flow.
+    // Missing screen context (legacy snapshot / unprimed click) clears on any navigation frame.
+    val navigatedAway = taskPhase == TaskPhase.DROPOFF && taskSubFlow == TaskSubFlow.NAVIGATION &&
+        obs.flow == Flow.TaskDropoffNavigation && completionStepsAt != null &&
+        obs.ruleId != completionStepsScreen
+    return if (navigatedAway) copy(completionStepsAt = null, completionStepsScreen = null) else this
+}

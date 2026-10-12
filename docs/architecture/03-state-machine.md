@@ -300,6 +300,9 @@ endSession share one standard — arrival OR a completion-steps tap the dasher d
 from (#1315). The active task must be an EVIDENCED, un-unassigned DROPOFF. A gift sheet can supply
 the tap without an arrival stamp; a SESSION_END armed inside that drop's retire window now absorbs
 it and honors the completion once the retire matures, minting `DELIVERY_COMPLETED` just as T1 does.
+When the tap is the only evidence, the honored instant is the later of the retire's `since` and
+`completionStepsAt`; an arrived drop keeps the retire's `since` (#1315). A different navigation
+screen clears both witness fields during accumulation and resume, including the geofence refusal.
 `completedInline` lets `isDeliveredEvidenced` read the committing retire consistently at each gate.
 Provenance still requires a watched retire: evidence is an extra condition on rule 1, never a
 substitute for the standing retire (the rejected rule 2 below).

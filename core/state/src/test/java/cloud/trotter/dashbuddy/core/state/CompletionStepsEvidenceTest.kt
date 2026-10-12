@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.core.state.model.Transition
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
@@ -85,9 +86,10 @@ class CompletionStepsEvidenceTest {
         for (flow in listOf(Flow.TaskDropoffArrived, Flow.Idle)) {
             val tapped = machine.step(state(), click(200L)).newState
             val after = machine.step(tapped, screen(300L, flow)).newState.regions.platforms.getValue(Platform.DoorDash)
-            assertEquals(200L, after.activeTask!!.completionStepsAt)
-            assertEquals("doordash.screen.tapped", after.activeTask.completionStepsScreen)
-            assertEquals(after.activeTask, after.activeJob!!.tasks.single())
+            val task = requireNotNull(after.activeTask) { "Expected active task" }
+            assertEquals(200L, task.completionStepsAt)
+            assertEquals("doordash.screen.tapped", task.completionStepsScreen)
+            assertEquals(task, after.activeJob!!.tasks.single())
         }
     }
 
@@ -97,9 +99,10 @@ class CompletionStepsEvidenceTest {
         assertEquals(200L, tapped.regions.platforms.getValue(Platform.DoorDash).activeTask!!.completionStepsAt)
         val after = machine.step(tapped, screen(300L, Flow.TaskDropoffNavigation))
             .newState.regions.platforms.getValue(Platform.DoorDash)
-        assertNull(after.activeTask!!.completionStepsAt)
-        assertNull(after.activeTask.completionStepsScreen)
-        assertEquals(after.activeTask, after.activeJob!!.tasks.single())
+        val task = requireNotNull(after.activeTask) { "Expected active task" }
+        assertNull(task.completionStepsAt)
+        assertNull(task.completionStepsScreen)
+        assertEquals(task, after.activeJob!!.tasks.single())
     }
 
     @Test
@@ -145,13 +148,99 @@ class CompletionStepsEvidenceTest {
     }
 
     @Test
-    fun `flowless warning retains tap until an actual navigation frame`() {
+    fun `flowless recognition retains tap until an actual navigation frame`() {
         val tapped = machine.step(state(), click(200L)).newState
         val warning = screen(250L, Flow.TaskDropoffNavigation).copy(flow = null, parsed = ParsedFields.None)
         val warned = machine.step(tapped, warning).newState
         assertEquals(200L, warned.regions.platforms.getValue(Platform.DoorDash).activeTask!!.completionStepsAt)
         val navigating = machine.step(warned, screen(300L, Flow.TaskDropoffNavigation)).newState
         assertNull(navigating.regions.platforms.getValue(Platform.DoorDash).activeTask!!.completionStepsAt)
+    }
+
+    @Test
+    fun `geofence refusal clears witness and cannot complete the drop or job through grace`() {
+        val tapped = machine.step(state(), click(200L)).newState
+        val warning = screen(300L, Flow.TaskDropoffNavigation).copy(
+            ruleId = "doordash.screen.dropoff_geofence_warning", modeHint = null, parsed = ParsedFields.None,
+        )
+        val refused = machine.step(tapped, warning)
+        val region = refused.newState.regions.platforms.getValue(Platform.DoorDash)
+        val task = requireNotNull(region.activeTask) { "Refusal keeps the drop active" }
+        assertNull(task.completionStepsAt)
+        assertNull(task.completionStepsScreen)
+        assertNull(task.completedAt)
+        assertEquals(task, requireNotNull(region.activeJob).tasks.single())
+        val idle = machine.step(refused.newState, screen(1_000L, Flow.Idle))
+        val result = commitGrace(idle.newState)
+        val after = result.newState.regions.platforms.getValue(Platform.DoorDash)
+        val job = requireNotNull(after.activeJob) { "A refused delivery must leave the job open" }
+        val retired = after.recentTasks.single { it.taskId == drop.taskId }
+        assertFalse(retired.isDeliveredEvidenced())
+        assertFalse(isJobPhysicallyComplete(job, after.recentTasks, after.activeTask))
+        assertTrue((refused.effects + idle.effects + result.effects).filterIsInstance<AppEffect.LogEvent>()
+            .none { it.event.type == AppEventType.DELIVERY_COMPLETED })
+    }
+
+    @Test
+    fun `honored retire cannot predate its only witness but preserves arrived retire time`() {
+        for (arrival in listOf(null, 150L)) for (summary in listOf(false, true)) {
+            val idle = machine.step(state(drop.copy(arrivedAt = arrival)), screen(1_000L, Flow.Idle)).newState
+            val tapped = machine.step(idle, click(2_000L)).newState
+            val end = if (summary) {
+                screen(3_000L, Flow.SessionEnded).copy(parsed = ParsedFields.SessionEndedFields())
+            } else {
+                screen(3_000L, Flow.Idle).copy(modeHint = Mode.Offline)
+            }
+            val ending = machine.step(tapped, end).newState
+            val pending = requireNotNull(ending.regions.platforms.getValue(Platform.DoorDash).pendingDestructive)
+            assertEquals(DestructiveKind.SESSION_END, pending.kind)
+            assertEquals(1_000L, pending.absorbedRetireSince)
+            val result = commitGrace(ending)
+            val retired = result.newState.regions.platforms.getValue(Platform.DoorDash).recentTasks
+                .single { it.taskId == drop.taskId }
+            val expected = if (arrival == null) 2_000L else 1_000L
+            assertEquals(expected, retired.completedAt)
+            assertEquals(expected, retired.honoredRetireAt)
+            assertEquals(1, result.effects.filterIsInstance<AppEffect.LogEvent>()
+                .count { it.event.type == AppEventType.DELIVERY_COMPLETED })
+        }
+    }
+
+    @Test
+    fun `resuming retired A clears witness on a different navigation screen only`() {
+        for (screenId in listOf("doordash.screen.tapped", "doordash.screen.other")) {
+            val before = state()
+            val region = before.regions.platforms.getValue(Platform.DoorDash)
+            val job = requireNotNull(region.activeJob)
+            // An outstanding sibling keeps the job open so the retired A can resume.
+            val open = before.copy(regions = before.regions.copy(platforms = mapOf(
+                Platform.DoorDash to region.copy(activeJob = job.copy(tasks = job.tasks +
+                    drop.copy(taskId = "sibling", customerNameHash = "sibling"))),
+            )))
+            val tapped = machine.step(open, click(200L)).newState
+            val idle = machine.step(tapped, screen(1_000L, Flow.Idle)).newState
+            val retired = commitGrace(idle).newState
+            val retiredRegion = retired.regions.platforms.getValue(Platform.DoorDash)
+            assertNull(retiredRegion.activeTask)
+            assertEquals(200L, retiredRegion.recentTasks.single { it.taskId == drop.taskId }.completionStepsAt)
+            val after = machine.step(retired, screen(requireNotNull(idle.regions.platforms.getValue(Platform.DoorDash).pendingDestructive).deadline + 2L, Flow.TaskDropoffNavigation)
+                .copy(ruleId = screenId)).newState.regions.platforms.getValue(Platform.DoorDash)
+            val task = requireNotNull(after.activeTask) { "Expected A to resume" }
+            assertEquals(drop.taskId, task.taskId)
+            assertNull(task.completedAt)
+            val kept = screenId == "doordash.screen.tapped"
+            assertEquals(if (kept) 200L else null, task.completionStepsAt)
+            assertEquals(if (kept) screenId else null, task.completionStepsScreen)
+            assertEquals(task, requireNotNull(after.activeJob).tasks.single { it.taskId == drop.taskId })
+        }
+    }
+
+    private fun commitGrace(state: AppState): Transition {
+        val pending = requireNotNull(state.regions.platforms.getValue(Platform.DoorDash).pendingDestructive)
+        return machine.step(state, Observation.Timeout(
+            timestamp = pending.deadline + 1L, type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId),
+        ))
     }
 
     @Test
@@ -179,9 +268,10 @@ class CompletionStepsEvidenceTest {
         val tapped = machine.step(state(drop.copy(customerNameHash = null)), click(200L)).newState
         val after = machine.step(tapped, screen(300L, Flow.TaskDropoffNavigation))
             .newState.regions.platforms.getValue(Platform.DoorDash)
-        assertEquals(drop.taskId, after.activeTask!!.taskId)
+        val task = requireNotNull(after.activeTask) { "Expected active task" }
+        assertEquals(drop.taskId, task.taskId)
         assertEquals(1, after.activeJob!!.tasks.size)
-        assertNull(after.activeTask.completionStepsAt)
+        assertNull(task.completionStepsAt)
     }
 
     @Test
@@ -189,11 +279,12 @@ class CompletionStepsEvidenceTest {
         val before = state()
         val first = machine.step(before, click(200L))
         val region = first.newState.regions.platforms.getValue(Platform.DoorDash)
-        assertEquals(200L, region.activeTask!!.completionStepsAt)
-        assertEquals("doordash.screen.tapped", region.activeTask.completionStepsScreen)
-        assertEquals(region.activeTask, region.activeJob!!.tasks.single())
-        assertNull(region.activeTask!!.arrivedAt)
-        assertNull(region.activeTask!!.completedAt)
+        val task = requireNotNull(region.activeTask) { "Expected active task" }
+        assertEquals(200L, task.completionStepsAt)
+        assertEquals("doordash.screen.tapped", task.completionStepsScreen)
+        assertEquals(task, region.activeJob!!.tasks.single())
+        assertNull(task.arrivedAt)
+        assertNull(task.completedAt)
         assertEquals(before.regions.flow.flow, first.newState.regions.flow.flow)
         // The synthetic initial state may reconcile ordinary effects; intent adds none.
         val neutral = machine.step(before, click(200L).copy(parsed = ParsedFields.None))

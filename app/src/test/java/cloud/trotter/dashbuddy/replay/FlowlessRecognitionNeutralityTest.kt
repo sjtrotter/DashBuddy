@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.replay
 
+import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.SessionReplay
 import org.junit.Assert.assertEquals
@@ -29,6 +30,20 @@ import org.junit.Test
  * machine, per the root CLAUDE.md), and this test folds through the state machine.
  */
 class FlowlessRecognitionNeutralityTest {
+
+    @Test
+    fun `geofence refusal declares navigation without a mode hint (#1315)`() {
+        // This refusal is no longer flowless: its different screen clears a completion witness.
+        val frames = SessionReplay.loadSession("snapshots/dropoff_geofence_warning")
+        assertTrue(frames.isNotEmpty())
+        val observations = SessionReplay.replayRecognition(frames)
+        observations.forEach { obs ->
+            assertEquals("doordash.screen.dropoff_geofence_warning", obs.ruleId)
+            assertEquals(Flow.TaskDropoffNavigation, obs.flow)
+            assertEquals(null, obs.modeHint)
+        }
+    }
+
 
     @Test
     fun `the receipt-scan frames recognize, carry no flow, and leave PlatformRegion untouched (#995)`() {
