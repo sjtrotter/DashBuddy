@@ -9,9 +9,10 @@ import kotlinx.serialization.Serializable
  * Earnings: null = no parsed/accumulated figure yet; never coerce to 0.0 for display (#1041).
  * A new `0.0` represents a parsed $0.00 total. A legacy snapshot/journal blob's `0.0` was
  * written by `encodeDefaults` for a NEVER-parsed session: an unknown sentinel, not a parsed value.
- * It still decodes as `0.0`, rather than being migrated to null. A crash-restore across this exact
- * upgrade can therefore make the new HUD render `$0.00` once for a dash that never parsed a total
- * (master did the same on every cold start) — accepted; the new writers never persist a `0.0`.
+ * It still decodes as `0.0`, rather than being migrated to null, and a restored `0.0` is re-serialized
+ * by later snapshots of that same dash, so the HUD renders `$0.00` for that dash after a crash-restore
+ * across this upgrade (master did the same on every cold start) — accepted. What changed: a FRESH
+ * never-parsed session no longer manufactures a zero.
  */
 @Serializable
 data class Session(
