@@ -45,6 +45,7 @@ internal fun EffectMap.diffDeliveryCompletion(
     // Task ids the PostTask-exit block emits a DELIVERY_COMPLETED for this step — the #596
     // close-out block below must NOT re-emit them (dual-mint exclusivity, amdt #2).
     val emittedThisStep = mutableSetOf<String>()
+    val receiptCoverage = p.cachedReceiptCoverage()
     if (actedPrevFlow == Flow.PostTask && actedNextFlow != Flow.PostTask) {
         val taskCompletedOverride = triggerOverrideEffects(obs, TransitionTrigger.TASK_COMPLETED)
         if (taskCompletedOverride != null) {
@@ -69,47 +70,14 @@ internal fun EffectMap.diffDeliveryCompletion(
             // coverage-gated below; an uncovered drop can still fold its OFFER_PAY estimate.
             // Coverage never decides WHICH drop completes — that is the subject's job, and its
             // un-arrived-drop residual is #1081.
-            val coveredTaskIds = p.lastPostTaskCoverage?.taskIds
+            val coveredTaskIds = receiptCoverage?.taskIds
             val describedByReceipt =
                 completedTask != null && coveredTaskIds?.contains(completedTask.taskId) == true
             if (completedTask != null) {
                 val retireSince = p.pendingDestructive
                     ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-                // #1120: final shape belongs to this receipt's order set. A multi-offer receipt
-                // covers only its subject, so a later offer's open drop cannot withhold its pay.
-                // Zero/one observed accepts still pool: include future covered slots in the gate
-                // to preserve #1073's last-drop wait, even before they have completion evidence.
-                val finalShape = p.activeJob?.let { job ->
-                    val receiptShapeTaskIds = if (job.acceptedOffers.size <= 1) {
-                        job.tasks.mapTo(mutableSetOf()) { it.taskId }
-                    } else {
-                        coveredTaskIds.orEmpty()
-                    }
-                    OfferPayFallback.isFinalShape(job, completedTask.taskId, receiptShapeTaskIds)
-                } ?: true
-                // #528/#630 R1: attribute this drop's share of the combined receipt over the
-                // minting-qualified denominator (the exact rows that will ever mint), so the shares
-                // sum to the receipt total. Withhold entirely on a non-final exit (R2/R4).
-                val dropShare = if (finalShape) {
-                    DropPayApportioner.apportion(
-                        parsedPay = p.lastPostTaskFields?.parsedPay,
-                        // #1073 round 13: a receipt prices only the drops it DESCRIBED when it was
-                        // read — see [ReceiptCoverage]. Same intersection the re-price applies, so
-                        // the mint and a later correction cannot disagree and Σ shares == the
-                        // receipt total by construction. An UNCOVERED sibling takes no share (and,
-                        // by the amdt-#3 rule below, no receipt on its payload either), so it folds
-                        // its offer estimate, or stays unpriced if unavailable, without taking
-                        // money out of an older receipt — fail-null (#745). Null coverage (a pre-round-13 snapshot)
-                        // covers nothing, same direction.
-                        dropoffTasks = mintingDropoffTasks(
-                            p, next, p.activeJob?.jobId,
-                            retirePending = retireSince != null,
-                            emittedThisStep = emittedThisStep + completedTask.taskId,
-                        ).describedBy(p.lastPostTaskCoverage),
-                    )[completedTask.taskId]
-                } else {
-                    null
-                }
+                val finalShape = receiptExitFinalShape(p, completedTask.taskId)
+                val dropShare = exitReceiptShare(p, next, completedTask)
                 // #630 R2 (load-bearing): a non-final exit must NOT attach the partial receipt to the
                 // payload either — else the fold's RECEIPT_TOTAL arm stamps the WHOLE partial total on
                 // this row, turning the under-attribution into an OVER-count once siblings mint. The
@@ -288,19 +256,7 @@ internal fun EffectMap.diffDeliveryCompletion(
         // #528: split the combined receipt across the job's delivered drops once, so each
         // close-out completion carries its own share (the receipt-skip null rows and the
         // one over-full row become per-drop shares that sum to the receipt total).
-        val dropShares = DropPayApportioner.apportion(
-            parsedPay = p.lastPostTaskFields?.parsedPay,
-            // #1073 round 13: intersected with what the CACHED receipt described when it was read
-            // (see the PostTask-exit site above). This is the copy that made the round-12 rule
-            // wrong — the teardown's re-price scoped its denominator while this one did not, so a
-            // 3-drop job's T1 receipt was re-priced whole to T1 here AND split $10 to a
-            // receipt-less T2 there: Σ $30 over a $20 receipt.
-            dropoffTasks = mintingDropoffTasks(
-                p, next, closedJob.jobId,
-                retirePending = retirePending,
-                emittedThisStep = emittedThisStep,
-            ).describedBy(p.lastPostTaskCoverage),
-        )
+        val dropShares = closeReceiptShares(p, next, emittedThisStep)
         for (task in next.recentTasks) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
@@ -337,7 +293,7 @@ internal fun EffectMap.diffDeliveryCompletion(
             // #1073 round 14 (R1): AND only when the receipt describes it. The announce id alone was
             // not enough — an uncovered drop that happened to be the announced one folded the whole
             // receipt as `RECEIPT_TOTAL` while a covered sibling was re-priced at the same total.
-            val describedByReceipt = p.lastPostTaskCoverage?.taskIds?.contains(task.taskId) == true
+            val describedByReceipt = receiptCoverage?.taskIds?.contains(task.taskId) == true
             val postTaskFields = p.lastPostTaskFields
                 ?.takeIf { p.lastAnnouncedPostTaskTaskId == task.taskId && describedByReceipt }
             // #1120: only receipt-covered drops suppress the offer estimate. Uncovered siblings
@@ -346,7 +302,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                 .also { warnIfUnsplit(closedJob, task.taskId, it) }
             // An uncovered drop with neither a receipt share nor an offer estimate stays unpriced.
             // Keep that visible even though coverage no longer suppresses its estimate (#1120).
-            if (p.lastPostTaskCoverage != null && !describedByReceipt &&
+            if (receiptCoverage != null && !describedByReceipt &&
                 dropShares[task.taskId] == null && offerResult.share == null
             ) {
                 Timber.tag("StateMachine").w(
@@ -618,7 +574,7 @@ private fun receiptCoveredEstimateTaskIds(region: PlatformRegion, job: Job): Set
     val fields = region.lastPostTaskFields ?: return emptySet()
     val payBearing = fields.parsedPay != null || fields.totalPay > 0.0
     if (!payBearing) return emptySet()
-    val covered = region.lastPostTaskCoverage?.taskIds.orEmpty()
+    val covered = region.cachedReceiptCoverage()?.taskIds.orEmpty()
     return (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == job.jobId && it.taskId in covered }
         .map { it.taskId }
@@ -673,4 +629,47 @@ internal fun mintingDropoffTasks(
             val justRetiredUnderGrace = retirePending && p.activeTask?.taskId == t.taskId
             alreadyCompleted || justRetiredUnderGrace || t.taskId in emittedThisStep
         }
+}
+
+/** A preserves #1073's whole-job gate; B checks only this receipt's pool. */
+internal fun receiptExitFinalShape(region: PlatformRegion, subject: String): Boolean =
+    region.activeJob?.let { job ->
+        val scope = if (job.acceptedOffers.size <= 1) job.tasks.mapTo(mutableSetOf()) { it.taskId }
+            else region.cachedReceiptCoverage()?.taskIds.orEmpty()
+        OfferPayFallback.isFinalShape(job, subject, scope)
+    } ?: true
+
+/** Pure mint share decisions, shared by the effect payload and the stepper's stamp. */
+private fun exitReceiptShare(p: PlatformRegion, next: PlatformRegion, task: Task): Double? {
+    if (!receiptExitFinalShape(p, task.taskId)) return null
+    return DropPayApportioner.apportion(
+        p.lastPostTaskFields?.parsedPay,
+        mintingDropoffTasks(p, next, p.activeJob?.jobId,
+            retirePending = p.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE,
+            emittedThisStep = setOf(task.taskId)).describedBy(p.cachedReceiptCoverage()),
+    )[task.taskId]
+}
+
+private fun closeReceiptShares(p: PlatformRegion, next: PlatformRegion, emitted: Set<String>) =
+    DropPayApportioner.apportion(
+        p.lastPostTaskFields?.parsedPay,
+        mintingDropoffTasks(p, next, p.activeJob?.jobId,
+            retirePending = p.retirePendingForMint(), emittedThisStep = emitted)
+            .describedBy(p.cachedReceiptCoverage()),
+    )
+
+internal fun mintReceiptShares(
+    p: PlatformRegion, next: PlatformRegion, from: Flow, to: Flow,
+    exitOverridden: Boolean = false,
+): Map<String, Double> = buildMap {
+    val exit = if (exitOverridden) null else exitMintCandidate(p, next, from, to)
+    if (exit != null) exitReceiptShare(p, next, exit)?.let { put(exit.taskId, it) }
+    val job = p.activeJob
+    if (job != null && next.activeJob?.jobId != job.jobId) {
+        val shares = closeReceiptShares(p, next, setOfNotNull(exit?.taskId))
+        next.recentTasks.filter {
+            it.jobId == job.jobId && it.isAccountableDropoff && it.completedAt != null &&
+                mintQualified(p, p.retirePendingForMint(), it) && it.taskId != exit?.taskId
+        }.forEach { task -> shares[task.taskId]?.let { put(task.taskId, it) } }
+    }
 }

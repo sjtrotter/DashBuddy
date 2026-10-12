@@ -125,13 +125,16 @@ class EffectMapDropPayTest {
         assertNotNull(aRow.parsedPay)
 
         val completedB = b.copy(completedAt = 500L)
-        val later = read(completedB, listOf(a), 20.50, job.copy(tasks = listOf(a, completedB)))
+        val pricedA = first.stampReceiptShares(
+            mintReceiptShares(first, first, Flow.PostTask, Flow.Idle).keys, 3_000L,
+        ).activeTask!!
+        val later = read(completedB, listOf(pricedA), 20.50, job.copy(tasks = listOf(pricedA, completedB)))
         assertEquals(setOf("B"), later.lastPostTaskCoverage!!.taskIds)
         val bRow = mint(later)
         assertEquals(20.50, bRow.dropRealizedPay!!, 0.0)
         val repriced = PlatformRegionStepper().completeActiveJob(
             later.copy(
-                activeTask = null, recentTasks = listOf(a, completedB),
+                activeTask = null, recentTasks = later.recentTasks + later.activeTask!!,
                 jobReceiptAnchors = JobReceiptAnchors(jobId = "J", firstEnteredAt = 400L),
             ), at = 4_000L,
         )

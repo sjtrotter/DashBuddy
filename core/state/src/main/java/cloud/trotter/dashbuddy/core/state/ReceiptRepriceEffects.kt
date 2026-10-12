@@ -136,49 +136,78 @@ internal fun PlatformRegion.receiptSubjectTaskId(): String? {
 private val Task.isReceiptSubject: Boolean
     get() = phase == TaskPhase.DROPOFF && unassignedAt == null
 
-/**
- * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
- *
- * #1120: a single order set (zero or one observed accepts) covers its accountable,
- * completion-evidenced drops plus the accountable subject. MULTI-offer jobs cover only the subject:
- * mintedByOfferHash is a hint that can bind different offers to the same placeholder stamp, so it cannot scope a receipt.
- * A multi-offer stack may therefore under-pool; fail-null beats pricing another offer's drops.
- * The subject need not have completed yet: its retire grace may still be running (#1081).
- * Only activeJob retains acceptedOffers; recentTasks retains job IDs, not Job records. Once
- * the subject's job is gone (no matching active job), coverage falls back to subject-only.
- *
- * Pure: region records only — no wall clock, no `Platform` literal.
- */
+private fun PlatformRegion.receiptHasMultipleOffers(jobId: String): Boolean =
+    activeJob?.takeIf { it.jobId == jobId }?.acceptedOffers?.size?.let { it > 1 }
+        ?: lastClosedJobReceipt?.takeIf { it.jobId == jobId }?.multiOffer ?: false
+
+/** A pools the whole job; B pools unpriced completed siblings; C reuses repeated itemization. */
 internal fun receiptCoverageAt(region: PlatformRegion, subjectTaskId: String?): ReceiptCoverage {
     val tasks = region.recentTasks + listOfNotNull(region.activeTask)
     val subject = tasks.firstOrNull { it.taskId == subjectTaskId }
-        ?: return ReceiptCoverage(taskIds = emptySet())
-    val job = region.activeJob?.takeIf { it.jobId == subject.jobId }
-    val singleOffer = job != null && job.acceptedOffers.size <= 1
-    val covered = tasks
-        .filter {
-            it.jobId == subject.jobId && it.isAccountableDropoff &&
-                (it.taskId == subjectTaskId || (singleOffer && it.completedAt != null))
-        }
-        .map { it.taskId }
-        .toSet()
-    return ReceiptCoverage(taskIds = covered)
+        ?: return ReceiptCoverage()
+    val multiOffer = region.receiptHasMultipleOffers(subject.jobId)
+    return ReceiptCoverage(tasks.filter {
+        it.jobId == subject.jobId && it.isAccountableDropoff &&
+            (it.taskId == subjectTaskId ||
+                (it.completedAt != null && (!multiOffer || it.receiptPricedAt == null)))
+    }.mapTo(mutableSetOf()) { it.taskId })
 }
 
-/**
- * The ONE writer of the cached-receipt triple (#1073 round 13): the receipt, the drops it describes,
- * and the task it was announced for. Keeping them in one `copy` is what makes "the mint and the
- * re-price read the same denominator" structural rather than a convention.
- */
+/** One cache writer. Reading alone never stamps a drop as priced. */
 internal fun cacheReceipt(
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
     subjectTaskId: String?,
-): PlatformRegion = region.copy(
-    lastPostTaskFields = parsed,
-    lastPostTaskCoverage = receiptCoverageAt(region, subjectTaskId),
-    lastAnnouncedPostTaskTaskId = subjectTaskId ?: region.lastAnnouncedPostTaskTaskId,
-)
+): PlatformRegion {
+    val mark = region.lastClosedJobReceipt
+    val previous = region.cachedReceiptCoverage() ?: mark?.coverage
+    val previousSubject = if (region.lastPostTaskFields != null) region.lastAnnouncedPostTaskTaskId
+        else mark?.subjectTaskId
+    val previousPay = region.lastPostTaskFields?.parsedPay ?: mark?.lastDecidedPay
+    val tasks = region.recentTasks + listOfNotNull(region.activeTask)
+    val subject = tasks.firstOrNull { it.taskId == subjectTaskId }
+    val sameJob = subject != null && previousSubject != null &&
+        tasks.any { it.taskId == previousSubject && it.jobId == subject.jobId }
+    // #1033's structural ParsedPay equality, never a content fingerprint. Two distinct offers
+    // with identical itemization conservatively pool: under-pooling is safer than doubling pay.
+    val sameReceipt = sameJob && region.receiptHasMultipleOffers(subject.jobId) && previous != null &&
+        (subjectTaskId == previousSubject || (parsed.parsedPay != null && parsed.parsedPay == previousPay))
+    val fresh = receiptCoverageAt(region, subjectTaskId)
+    val coverage = if (sameReceipt) {
+        val accountable = tasks.filter { it.jobId == subject.jobId && it.isAccountableDropoff }
+            .mapTo(mutableSetOf()) { it.taskId }
+        previous.copy(taskIds = (previous.taskIds + listOfNotNull(subjectTaskId)) intersect accountable)
+    } else fresh
+    return region.copy(
+        lastPostTaskFields = parsed,
+        lastPostTaskCoverage = coverage,
+        lastAnnouncedPostTaskTaskId = subjectTaskId ?: region.lastAnnouncedPostTaskTaskId,
+    )
+}
+
+/** Narrow restored coverage, retaining shares actually assigned by THIS receipt for re-pooling. */
+internal fun PlatformRegion.cachedReceiptCoverage(): ReceiptCoverage? = lastPostTaskCoverage?.let { saved ->
+    val eligible = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId).taskIds + saved.pricedTaskIds
+    val accountable = (recentTasks + listOfNotNull(activeTask)).filter { it.isAccountableDropoff }
+        .mapTo(mutableSetOf()) { it.taskId }
+    saved.copy(taskIds = saved.taskIds intersect eligible intersect accountable)
+}
+
+/** Single stamp owner for both pure decisions; time and the actual assigned share ids are inputs. */
+internal fun PlatformRegion.stampReceiptShares(taskIds: Set<String>, at: Long): PlatformRegion {
+    if (taskIds.isEmpty()) return this
+    fun Task.stamped() = if (taskId in taskIds && isAccountableDropoff) {
+        copy(receiptPricedAt = receiptPricedAt ?: at)
+    } else this
+    return copy(
+        activeTask = activeTask?.stamped(),
+        recentTasks = recentTasks.map { it.stamped() },
+        activeJob = activeJob?.let { it.copy(tasks = it.tasks.map { task -> task.stamped() }) },
+        lastPostTaskCoverage = lastPostTaskCoverage?.let {
+            it.copy(pricedTaskIds = it.pricedTaskIds + (taskIds intersect it.taskIds))
+        },
+    )
+}
 
 /** The ONE clearer — both `endSession` and `completeActiveJob` drop the receipt AND its coverage. */
 internal fun PlatformRegion.clearCachedReceipt(): PlatformRegion =
@@ -242,7 +271,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     postTaskTaskId: String?,
     /**
      * What this receipt described when it was READ (#1073 round 13) — a fresh [receiptCoverageAt] on
-     * the frame path; cached coverage intersected with recomputed coverage at [decideFromCachedReceipt].
+     * the frame path, including repeated receipt membership; narrowed cached coverage at close.
      * The denominator is intersected with it; null describes nothing.
      */
     coverage: ReceiptCoverage?,
@@ -268,13 +297,14 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     if (region.activeJob != null) return region
 
     // The ONE thing the stepper suppresses on: its own last decision (#1033 review round 8). A
-    // receipt frame re-rendering unchanged must not spend a revision. It deliberately does NOT try to
+    // receipt frame re-rendering unchanged over the same pool must not spend a revision. Extending
+    // that pool must re-apportion even identical pay (#1120 C). It deliberately does NOT try to
     // model what the completion ROWS hold — rounds 6–7 did, and both attempts failed toward refusing
     // a legitimate correction (mirroring the mint's exit edge misses its eligibility/final-shape
     // filtering; one task's first completion cannot describe a multi-drop job). The stepper cannot
     // know what persisted; the projector can, and `applyReceiptReprice` no-ops a re-price whose
     // values the row already holds. A redundant event is cheap; a refused correction is not.
-    if (parsedPay == mark.lastDecidedPay) return region
+    if (parsedPay == mark.lastDecidedPay && coverage?.taskIds == mark.coverage?.taskIds) return region
 
     // OWNERSHIP, and this is the whole of it (#1033 review round 6).
     //
@@ -293,8 +323,6 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // 1's 8 s collapsed-receipt window is the path that lands that expansion in time; an expansion
     // later than that keeps the #691 `OFFER_PAY` estimate.
     //
-    // #1120: post-close frames cover only the subject because acceptedOffers is gone. Cached
-    // decisions may still pool when the pre-close source proves a single-offer job.
     val receiptSeenAt = mark.receiptSeenAt ?: return region
     val acceptResolvedAt = region.lastAcceptResolvedAt
     if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
@@ -386,8 +414,10 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
         lastClosedJobReceipt = mark.copy(
             repriceRevision = revision,
             lastDecidedPay = parsedPay,
+            coverage = coverage?.copy(pricedTaskIds = coverage.pricedTaskIds + shares.keys),
+            subjectTaskId = anchor,
         ),
-    )
+    ).stampReceiptShares(shares.keys, decidedAt)
 }
 
 /**
@@ -401,7 +431,8 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
  * nothing on its own — `describedBy` empties the denominator — so a pre-round-13 snapshot is
  * fail-null with no extra guard. Cached coverage is intersected with [receiptCoverageAt]
  * recomputed on [source] for the cached subject before use: restored pre-#1120 snapshots may
- * carry wider coverage, which must never re-price another offer after restart.
+ * carry wider coverage, which must never re-price a sibling already priced by another receipt.
+ * This receipt's own prior share recipients remain eligible for updates and repeated itemization.
  */
 internal fun PlatformRegionStepper.decideFromCachedReceipt(
     source: PlatformRegion,
@@ -414,11 +445,7 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
         region = closed,
         parsed = cached,
         postTaskTaskId = null,
-        coverage = source.lastPostTaskCoverage?.let { cachedCoverage ->
-            ReceiptCoverage(
-                cachedCoverage.taskIds intersect receiptCoverageAt(source, source.lastAnnouncedPostTaskTaskId).taskIds,
-            )
-        },
+        coverage = source.cachedReceiptCoverage(),
         decidedAt = decidedAt,
         captureId = null,
         mintRanForJob = mintRanForJob,

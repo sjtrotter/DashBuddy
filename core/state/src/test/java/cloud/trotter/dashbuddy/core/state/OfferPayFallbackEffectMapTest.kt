@@ -369,9 +369,9 @@ class OfferPayFallbackEffectMapTest {
     }
 
     @Test
-    fun `FIX2b — an unattributable pay-bearing receipt (announce id null) SUPPRESSES (fail-closed)`() {
+    fun `restored receipt without a subject cannot suppress the drop estimate`() {
         // A pay-bearing lastPostTaskFields with a NULL announce id cannot be attributed to any task.
-        // Fail-closed against over-count: suppress the estimate (a receipt might belong to this job).
+        // Recomputed coverage is empty, so the saved wide coverage cannot suppress this estimate.
         val d1 = dropoff("d1", "H-E-B", "cA", completedAt = 400L)
         val unattributable = ParsedFields.PostTaskFields(totalPay = 11.0, parsedPay = null, sessionEarnings = 40.0)
         val regionPrev = PlatformRegion(
@@ -382,9 +382,7 @@ class OfferPayFallbackEffectMapTest {
             recentTasks = listOf(d1),
             lastPostTaskFields = unattributable,
             lastAnnouncedPostTaskTaskId = null,
-            // #1073 round 15: the receipt is a REAL one (it describes this job's drop) — only its
-            // ANNOUNCE id is missing, which is what this test is about. A receipt whose coverage
-            // names nobody is a different case, and no longer suppresses (see the round-15 test).
+            // A restored snapshot carries coverage without the subject needed to validate it.
             lastPostTaskCoverage = ReceiptCoverage(setOf("d1")),
         )
         val regionNext = regionPrev.copy(activeJob = null)
@@ -393,7 +391,8 @@ class OfferPayFallbackEffectMapTest {
         val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionNext))
 
         val rows = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L))
-        assertNull("unattributable pay-bearing receipt → suppress (fail-closed)", rows.single().offerPayShare)
+        assertEquals(7.50, rows.single().offerPayShare!!, 0.0)
+        assertNull(rows.single().totalPay)
     }
 
     @Test

@@ -314,9 +314,8 @@ data class PlatformRegion(
  * The receipt state of a job at the instant it closed (#1033 layer 2) — see
  * [PlatformRegion.lastClosedJobReceipt].
  *
- * Deliberately NOT the receipt itself: all the re-price decision needs is "which job" and "did the
- * completions that were just minted already carry THIS itemization". Keeping only the total + the
- * itemized flag also keeps the marker cheap to serialize into every snapshot.
+ * Keeps ownership, the last decided itemization and its covered pool after the receipt cache
+ * clears. The offer-count branch survives with it, so a late update preserves A/B/C semantics.
  */
 @Serializable
 data class ClosedJobReceipt(
@@ -362,7 +361,8 @@ data class ClosedJobReceipt(
     val repriceRevision: Int = 0,
     /**
      * The itemization this marker's LAST decision was made from (#1033 review round 8) — the only
-     * thing the stepper suppresses on, compared STRUCTURALLY (round 10).
+     * pay value the stepper compares STRUCTURALLY (round 10). Suppression also requires the same
+     * covered task ids: extending a repeated receipt's pool must re-apportion unchanged pay.
      *
      * It was a `hashCode()` for one round, which silently swallowed a real correction: base $2.05 +
      * tip $5.50 and base $2.00 + tip $5.60 collide on Kotlin's `-1866903064`, so the second receipt
@@ -383,6 +383,10 @@ data class ClosedJobReceipt(
      * no-op. Cheap, and it cannot lose a correction.
      */
     val lastDecidedPay: ParsedPay? = null,
+    /** Preserve A/B selection and the receipt's pool across cache clearing at job close. */
+    val multiOffer: Boolean = false,
+    val coverage: ReceiptCoverage? = null,
+    val subjectTaskId: String? = null,
 )
 
 /**
@@ -390,25 +394,18 @@ data class ClosedJobReceipt(
  * (#1073 round 13) — the discriminator the mint's `apportion` denominator and the re-price's are
  * BOTH intersected with, so the two cannot disagree.
  *
- * The rule (#1120): on a job with zero or one observed accepts, cover the accountable subject and every accountable
- * dropoff of its job with completion evidence at read time. On a multi-offer or gone/unknown job,
- * cover only the subject. Offer hashes are hints and cannot scope receipt coverage. A sibling
- * delivered LATER is not in it — the receipt could not have priced a delivery that had not happened.
- *
- * **A `completedAt` timestamp comparison was tried first and rejected in the same series.**
- * `Task.completedAt` carries the LATEST retire arm's `since` (`TaskLifecycle` clears and re-arms it
- * on every task-frame branch, an Online→Offline arm REPLACES it, and a displacement stamps
- * `retireSince ?: obs.timestamp`), so the receipt's OWN anchor could carry a stamp later than the
- * frame the receipt was read on and be excluded from its own receipt; and "no `completedAt` yet"
- * admitted any active drop under a `TASK_RETIRE` grace, not just the anchor. A SET captured at read
- * time has neither failure mode, and — unlike a timestamp — it can be handed to the mint too.
- *
- * Cached re-pricing intersects this saved set with freshly recomputed coverage before use.
+ * A job with zero or one accepted offer pools completion-evidenced accountable drops and checks
+ * final shape over the whole job (#1073). Multi-offer jobs pool unpriced completed siblings with
+ * the subject. Structurally identical itemization on another subject extends the preceding pool;
+ * distinct offers with identical itemization under-pool safely instead of doubling the receipt.
+ * Actual share assignments are retained so later receipt updates can re-price the same pool.
  */
 @Serializable
 data class ReceiptCoverage(
     /** The `taskId`s this receipt describes. Empty means it describes nothing. */
     val taskIds: Set<String> = emptySet(),
+    /** Members that actually took a share from this receipt, retained through repeat/update reads. */
+    val pricedTaskIds: Set<String> = emptySet(),
 )
 
 /**

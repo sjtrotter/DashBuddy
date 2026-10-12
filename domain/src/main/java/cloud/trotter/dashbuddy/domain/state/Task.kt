@@ -48,6 +48,11 @@ data class Task(
     val startedAt: Long,
     val completedAt: Long? = null,
     /**
+     * #1120 — the first decision assigning this drop a receipt DROP_SHARE (mint or re-price).
+     * A read alone never stamps it; multi-offer coverage excludes it from a different receipt.
+     */
+    val receiptPricedAt: Long? = null,
+    /**
      * #1315 — the pickup→dropoff edge at which this PICKUP was confirmed, the stepper twin
      * of the PICKUP_CONFIRMED sweep; null for an unconfirmed or displaced-only pickup.
      */

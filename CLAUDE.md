@@ -660,12 +660,9 @@ eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNA
 an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
 store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
 matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
-structural. **Receipt coverage (#1073/#1120) is hint-free:** a job with zero or one observed accepts covers its accountable,
-completion-evidenced drops plus the subject; a multi-offer or gone/unknown job covers the subject only
-(`acceptedOffers` is available only on `activeJob`), and cached re-price coverage is intersected with
-this rule recomputed now. `ReceiptCoverage` gates mint apportion, receipt attach, re-price and per-drop
-estimate suppression; completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
-else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
+structural. **Receipt coverage (#1073/#1120):** A job with ≤1 accepted offer (including zero observed accepts) covers every accountable, completion-evidenced drop plus the subject, ignores pricing stamps, and withholds shares until the whole job is final (#1073).
+A multi-offer job covers the subject plus accountable, completed siblings with `receiptPricedAt == null`, checks final shape over that set, and stamps drops only when mint or re-price assigns a receipt `DROP_SHARE`.
+In a multi-offer job, structurally equal `ParsedPay` on a different subject reuses the previous coverage plus that subject and re-pools it; genuinely different offers with identical itemization conservatively under-pool instead of doubling pay.
 
 **Late-expanded receipt re-price (#1033 layer 2):** `EffectMap.diffReceiptReprice` emits one
 `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job, decided as a pure STEPPER transition

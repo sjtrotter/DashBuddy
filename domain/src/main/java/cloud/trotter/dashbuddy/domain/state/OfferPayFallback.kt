@@ -380,9 +380,8 @@ object OfferPayFallback {
      * **accountable** dropoff in [coveredTaskIds] of [job] — has every OTHER covered dropoff completed
      * (`completedAt != null`)?
      *
-     * Callers supply the pay scope: all job slots for the pooled estimate / single-order-set
-     * receipt (including slots that may join its coverage on completion), only receipt-covered
-     * task ids for a multi-offer receipt. An unrelated offer cannot withhold this receipt.
+     * Callers supply the pay scope: all job slots for the pooled estimate, only receipt-covered
+     * task ids for a receipt. An uncovered drop cannot withhold this receipt.
      *
      * The sibling scan is filtered through [Task.isAccountableDropoff] — the SAME identity+unassign
      * filter the mint denominator (`DeliveryCompletionEffects.mintingDropoffTasks`) uses (Principle 5,

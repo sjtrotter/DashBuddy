@@ -390,18 +390,29 @@ that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`
 what lets `TaskEffects` emit the proper `TASK_UNASSIGNED` off it. The dash really did end; the order
 really was abandoned; no money is fabricated.
 
-**Receipt coverage (#1073, #1120)** is hint-free: a job with zero or one observed accepted offers covers
-its accountable, completion-evidenced drops plus the subject; a multi-offer job covers the subject
-only. `acceptedOffers` lives only on `activeJob`; `recentTasks` retains job IDs, so a gone or unknown
-job also covers only the subject. A multi-offer stack may under-pool and keep an earlier drop's
-mint-time basis (fail-null beats fail-wrong). The mint checks final shape within the receipt's order set:
-a multi-offer subject gets its own receipt even while another offer is open; zero/one-accept stacks
-retain the last-drop wait. Cached re-price coverage is intersected with the rule
-recomputed for the cached subject before use, so restored wide coverage cannot cross-price.
+**Receipt coverage (#1073, #1120)** has three rules. A job with ≤1 accepted offer (zero means
+one unobserved order set) covers the accountable, completion-evidenced drops plus the subject,
+ignores pricing stamps, and checks final shape over the whole job: the final receipt pools (#1073).
+A multi-offer job covers the subject plus accountable, completed siblings with `receiptPricedAt == null`
+and checks final shape over that set. When another subject shows structurally equal `ParsedPay`
+(the same `==` comparison as #1033), the prior coverage is extended with that subject and re-pooled.
+Two distinct offers with identical itemization conservatively under-pool; they never double the receipt.
+
+`cacheReceipt` only caches evidence. `DeliveryCompletionEffects` owns pure mint-share calculations,
+shared by the payload and the stepper; `decideReceiptReprice` owns re-price shares. Both pass actual
+share recipients and observation time to the single `stampReceiptShares` writer. Reading a receipt
+or taking only a collapsed `RECEIPT_TOTAL` never stamps `receiptPricedAt`. `ReceiptCoverage.pricedTaskIds`
+remembers recipients of THIS receipt so repeats and updates retain its pool while restored wide
+coverage excludes unrelated stamped siblings. `ClosedJobReceipt` preserves the offer-count branch,
+coverage and subject across cache clearing, so a post-close combined update corrects both pooled drops.
 Receipt suppression is per covered drop at inline mint and close attribution; uncovered siblings
-remain eligible for OFFER_PAY and fold on their own basis. This fixes the 2026-09-20 job …-674 ($20.50 overwrote the
-earlier $28.51 receipt) and 2026-10-11 job …-977 ($10.40 split over five drops of four offers)
-sightings; completion eligibility remains independent of coverage.
+remain eligible for OFFER_PAY and fold on their own basis. The 2026-09-20 job …-674 keeps its earlier
+$28.51 receipt when the second drop's different $20.50 receipt arrives. Completion eligibility remains
+independent of coverage; unassigned drops are never covered.
+
+**Residual:** the 2026-10-11 five-drop job …-977 still pools its single late $10.40 receipt over the
+subject and four unpriced siblings. Attribution is wrong, but summed receipt shares do not exceed
+receipts. The overgrown job is the #1315 defect; receipt→offer matching is the follow-up for this shape.
 
 **A completion the PostTask exit already minted is recorded PER TASK** (round 4). The exit block
 mints the drop the receipt was about and leaves it ACTIVE — its `completedAt` is stamped only when

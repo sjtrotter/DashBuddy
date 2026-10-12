@@ -583,19 +583,28 @@ is not identity, and it let a stacked job's $20 receipt redistribute the closed 
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
 window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
-was read (#1073, rounds 13–14):** `ReceiptCoverage` (#1120) covers the accountable subject plus
-all accountable, completion-evidenced drops only when the matching `activeJob.acceptedOffers.size`
-is at most one (zero includes unobserved accepts). Multi-offer jobs cover the subject only,
-irrespective of placeholder hashes (which
-can bind different offers to the same stamp). `recentTasks` retains no Job/acceptedOffers record,
-so post-close or unknown jobs also use subject-only coverage. A multi-offer stack can under-pool,
-leaving earlier drops on their mint-time basis; fail-null beats fail-wrong. The mint checks final shape within the receipt's order set:
-a multi-offer subject gets its own receipt even while another offer is open; zero/one-accept stacks
-retain the last-drop wait. Coverage is captured
-beside the cached receipt and intersects the mint's apportion denominator, receipt ATTACH, and
-re-price denominator. Cached re-pricing additionally intersects saved coverage with coverage
-recomputed for the cached subject, rejecting wide restored snapshots. These changes address the
-2026-09-20 job …-674 and 2026-10-11 job …-977 cross-offer receipt sightings. An uncovered sibling
+was read (#1073, rounds 13–14):** `ReceiptCoverage` (#1120) uses the accepted-offer count to preserve #1073:
+with ≤1 accepted offer (including zero), all accountable completed drops plus the subject pool,
+pricing stamps are ignored, and inline shares wait for the whole job's final shape. With multiple
+offers, the subject pools with accountable completed siblings that have no `receiptPricedAt` stamp,
+and final shape is checked over that covered set. Structurally equal `ParsedPay` on a different
+subject extends the preceding receipt's coverage and re-pools it, so a repeated unsplit $20 across
+two drops remains $20. Distinct offers with identical itemization conservatively under-pool rather
+than doubling pay; different itemization starts a new receipt.
+
+A stamp means a receipt `DROP_SHARE` was assigned, never merely read. The pure mint-share helpers
+in `DeliveryCompletionEffects` serve both the effect payload and stepper; re-price uses its decided
+`shares`. The single `stampReceiptShares` writer records their recipients with observation time.
+Coverage retains recipients of this receipt in `pricedTaskIds`, letting repeated or updated receipts
+re-price the same pool even after every member is stamped. The close marker preserves coverage,
+subject and the multi-offer branch after the cache clears. Mint and re-price both narrow restored
+wide coverage, excluding stamped siblings without evidence of a share from this receipt.
+Coverage gates apportionment, receipt attach and per-drop estimate suppression. The 2026-09-20
+job …-674 retains drop 1's $28.51 receipt when drop 2's different $20.50 receipt arrives.
+**Residual:** the 2026-10-11 five-drop job …-977 pools its single late $10.40 receipt over the subject
+and four unpriced siblings: wrong attribution, but summed receipt shares do not exceed receipts.
+The overgrown job is the #1315 defect; receipt→offer matching is the follow-up for that shape.
+An uncovered sibling
 can still use OFFER_PAY; without an estimate it stays unpriced and rides the review flag
 instead of taking an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
 receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
@@ -621,7 +630,7 @@ never re-price its genuinely delivered siblings DOWN (fail-null, #745).
 A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
 #691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
 rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
-outside its own receipt. After the job is gone, a new receipt frame covers only its subject (#1120).
+outside its own receipt. Job closure preserves the coverage branch and current receipt pool (#1120).
 Effect keys are
 `…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
 itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency

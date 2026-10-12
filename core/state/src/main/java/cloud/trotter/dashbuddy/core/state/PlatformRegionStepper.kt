@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.ratings.RatingsSnapshot
+import cloud.trotter.dashbuddy.domain.pipeline.TransitionTrigger
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -114,7 +115,14 @@ class PlatformRegionStepper @Inject constructor() {
                             prevFlow, obs,
                         ),
                         prevFlow, nextFlow, obs, policy,
-                    ),
+                    ).let { next ->
+                        val (from, to) = actedFlowEdge(prev, prevFlow, obs)
+                        val exitOverridden = (obs as? Observation.FlowObservation)?.transitionOverrides
+                            ?.containsKey(TransitionTrigger.TASK_COMPLETED) == true
+                        next.stampReceiptShares(
+                            mintReceiptShares(prev, next, from, to, exitOverridden).keys, obs.timestamp,
+                        )
+                    },
                 ),
             ).let { requestArrivalEstimate(it, obs) },
         ),
@@ -1510,6 +1518,9 @@ class PlatformRegionStepper @Inject constructor() {
                     lastClosedJobReceipt = ClosedJobReceipt(
                         jobId = job.jobId,
                         receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
+                        multiOffer = job.acceptedOffers.size > 1,
+                        coverage = region.cachedReceiptCoverage(),
+                        subjectTaskId = region.lastAnnouncedPostTaskTaskId,
                     ),
                 ),
                 decidedAt = observedAt,
@@ -1606,6 +1617,9 @@ class PlatformRegionStepper @Inject constructor() {
             lastClosedJobReceipt = ClosedJobReceipt(
                 jobId = job.jobId,
                 receiptSeenAt = region.jobReceiptAnchors?.firstEnteredAt,
+                multiOffer = job.acceptedOffers.size > 1,
+                coverage = region.cachedReceiptCoverage(),
+                subjectTaskId = region.lastAnnouncedPostTaskTaskId,
             ),
         )
         // #1033 round 9: ask ONCE MORE, from the receipt this close is about to drop.

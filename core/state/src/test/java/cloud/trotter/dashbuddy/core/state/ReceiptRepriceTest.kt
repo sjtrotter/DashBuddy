@@ -302,14 +302,14 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `a post-close receipt re-prices only its subject when accepted offers are gone`() {
+    fun `a post-close receipt re-prices its subject and unpriced completed sibling`() {
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
             mark = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
         )
         val events = repriceEvents(region, parsed = expanded(stackedReceipt))
-        assertEquals("job gone — subject only", 1, events.size)
-        assertEquals(setOf("t2"), events.map { it.taskId }.toSet())
+        assertEquals("completed unpriced sibling remains covered", 2, events.size)
+        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
         assertEquals(
             "Σ shares == the receipt total, to the cent",
             Math.round(stackedReceipt.total * 100.0),
@@ -824,8 +824,8 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 8 — a late receipt with no job record targets only the last completed drop`() {
-        // #1120: after close no acceptedOffers record remains, so fail-null on sibling coverage.
+    fun `round 8 — a late receipt with no job record pools the unpriced completed drops`() {
+        // #1120: completed unpriced siblings remain covered after the Job record is gone.
         val stacked = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 4.00)),
             customerTips = listOf(
@@ -839,17 +839,17 @@ class ReceiptRepriceTest {
         val fold = Fold(region).step(postTaskObs(expanded(stacked), 21_000L))
 
         val payloads = fold.reprices().map { it.payload as DeliveryReceiptRepricePayload }
-        assertEquals("only the subject is covered", 1, payloads.size)
-        assertEquals(setOf("t2"), payloads.map { it.taskId }.toSet())
-        payloads.forEach { assertEquals(20.00, it.dropRealizedPay, 0.0001) }
+        assertEquals("both unpriced drops are covered", 2, payloads.size)
+        assertEquals(setOf("t1", "t2"), payloads.map { it.taskId }.toSet())
+        payloads.forEach { assertEquals(10.00, it.dropRealizedPay, 0.0001) }
         assertEquals(
             "Σ shares == the receipt total",
             Math.round(stacked.total * 100.0),
             payloads.sumOf { Math.round(it.dropRealizedPay * 100.0) },
         )
-        // Only the subject consumes a durable re-price key.
+        // Each covered drop consumes a durable re-price key.
         val fired = mutableSetOf<String?>()
-        assertEquals(1, fold.effectKeys.count { fired.add(it) })
+        assertEquals(2, fold.effectKeys.count { fired.add(it) })
     }
 
     // ---- round 10: the terminal session end, and structural decision equality --------------
@@ -1143,11 +1143,11 @@ class ReceiptRepriceTest {
     )
 
     @Test
-    fun `round 13 — a receipt frame after close covers only its subject`() {
-        // Driven through a real frame: once the Job is gone, its offer count cannot be proved.
+    fun `round 13 — a receipt frame after close still covers unpriced completed siblings`() {
+        // Driven through a real frame: job closure does not change receipt coverage.
         val events = repriceEvents(twoDropClosedJob(), parsed = expanded(stackedReceipt), at = 21_000L)
-        assertEquals("job gone — subject only", 1, events.size)
-        assertEquals(setOf("t2"), events.map { it.taskId }.toSet())
+        assertEquals("completed unpriced sibling remains covered", 2, events.size)
+        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
         assertEquals(
             "Σ shares == the receipt total, to the cent",
             Math.round(stackedReceipt.total * 100.0),
@@ -1167,10 +1167,10 @@ class ReceiptRepriceTest {
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 21_000L))
         assertEquals(
             "the frame refreshed the cache",
-            setOf("t2"),
+            setOf("t1", "t2"),
             fold.region.lastPostTaskCoverage!!.taskIds,
         )
-        assertEquals(1, fold.reprices().size)
+        assertEquals(2, fold.reprices().size)
     }
 
     @Test
@@ -1367,8 +1367,7 @@ class ReceiptRepriceTest {
             exitMinted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
         )
 
-        // Once the retire commits, acceptedOffers is gone. A later combined receipt cannot prove
-        // sibling coverage (#1120): only T2 changes; T1 keeps its earlier $20 mint-time basis.
+        // #1073: the single-offer final combined receipt pools both delivered drops.
         val combined = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 14.00)),
             customerTips = listOf(
@@ -1382,10 +1381,10 @@ class ReceiptRepriceTest {
             .associate { it.taskId to it.dropRealizedPay }
         assertEquals(setOf("t1", "t2"), shares.keys)
         assertEquals(
-            "the earlier drop keeps its original receipt basis",
-            20.0, shares.getValue("t1"), 0.0,
+            "the combined receipt re-pools the earlier drop",
+            15.0, shares.getValue("t1"), 0.0,
         )
-        assertEquals(combined.total, shares.getValue("t2"), 0.0)
+        assertEquals(15.0, shares.getValue("t2"), 0.0)
     }
 
     @Test
