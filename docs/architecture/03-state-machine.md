@@ -303,6 +303,10 @@ it and honors the completion once the retire matures, minting `DELIVERY_COMPLETE
 When the tap is the only evidence, the honored instant is the later of the retire's `since` and
 `completionStepsAt`; an arrived drop keeps the retire's `since` (#1315). A different navigation
 screen clears both witness fields during accumulation and resume, including the geofence refusal.
+**Accepted residual (Astra r3 of PR #1321):** a refusal or navigation frame that arrives only AFTER the
+retire grace has already committed the tap-witnessed drop cannot undo it — `DELIVERY_COMPLETED` is append-only — exactly
+as an ARRIVED drop abandoned inside its retire window closes today (#1101 class). A refusal rendered when the tap is
+refused (the realistic ordering) lands before the retire and clears the witness.
 `completedInline` lets `isDeliveredEvidenced` read the committing retire consistently at each gate.
 Provenance still requires a watched retire: evidence is an extra condition on rule 1, never a
 substitute for the standing retire (the rejected rule 2 below).

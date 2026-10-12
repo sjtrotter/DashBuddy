@@ -1805,7 +1805,7 @@
     {
       "id": "doordash.screen.dropoff_geofence_warning",
       "priority": 84,
-      "comment": "#1315: this refusal of a complete-delivery tap is a different dropoff navigation screen; declaring its flow clears the tap witness. No modeHint: the dasher may be paused.",
+      "comment": "#1315: this refusal of a complete-delivery tap is a different dropoff navigation screen; declaring its flow clears the tap witness through the stepper's navigated-away rule. Mode: like every other `task:dropoff:navigation` surface the flow implies Online under TransitionPolicy (the #605 debounced resume) — the dasher is on a delivery surface; this rule inherits the family's semantics rather than staying flowless (Astra r3 of PR #1321, adjudicated).",
       "state": { "flow": "task:dropoff:navigation" },
       "redact": [
         {
