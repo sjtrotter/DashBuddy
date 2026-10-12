@@ -849,7 +849,7 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   bare-`}` rule to every compiled pattern); `CustomerTextMarkers.ID_MARKER_TABLE` is the ONE owner of
   "what kind of value an id carries" — `IdMarker(suffix, kind, runtimeScrub)`, kind NAME / ADDRESS /
   EXACT / PERSON_OR_MERCHANT / CONTENT, runtime scrub ALWAYS / NEVER — and `ID_MARKERS` is its ALWAYS
-  projection: #1314 adds `gift_recipient_name` (NAME, idProtect): the 8.101.8 gift order's recipient — the FIRST id added because a field leak found it rather than a review; #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
+  projection: #1314 adds `gift_recipient_name` (NAME, idProtect): the 8.101.8 gift order's recipient — found by the 10-11 pull; the gift arm also carries `dropoff_customer_unavailable`'s Contact entries because 73 wins a combined frame (#993 doctrine); #1160 added `order_cx_name`, `tvTitle` and `tvLastMessage` to the runtime UNKNOWN scrub,
   all ALWAYS on the id alone (review round 11: no value-shape gate — "李明", "de la Cruz" read as chrome to
   any shape — so an UNKNOWN sheet title under `tvTitle`, "Pick up order", loses its X-Ray line, ADR residual
   11); the recognized `doordash.screen.chat` / `chat_conversation` rules

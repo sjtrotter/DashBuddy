@@ -1772,6 +1772,13 @@ class CaptureRedactionCorpusTest {
      * exists to remove. `comment` values are skipped (they discuss these predicates in prose).
      */
     private fun isGenericShapeEntry(entry: kotlinx.serialization.json.JsonObject): Boolean {
+        // #1314: a mandatory own-id anchor is not a generic shape, even when its other
+        // conjuncts exclude chrome by regex (the Contact entries). An id inside `any`
+        // does not constrain every branch, so it must not exempt a generic alternative.
+        val find = entry["find"]?.jsonObject
+        if (find?.containsKey("hasIdSuffix") == true ||
+            find?.get("all")?.jsonArray?.any { it.jsonObject.containsKey("hasIdSuffix") } == true
+        ) return false
         var hit = false
         fun walk(e: kotlinx.serialization.json.JsonElement) {
             when (e) {
@@ -1791,6 +1798,17 @@ class CaptureRedactionCorpusTest {
         }
         walk(entry)
         return hit
+    }
+
+    @Test
+    fun `generic shape ordering guard distinguishes mandatory id anchors from alternatives`() {
+        fun entry(find: String) = Json.parseToJsonElement("""{"find": $find}""").jsonObject
+        val id = """{"hasIdSuffix": "step_title"}"""
+        val shape = """{"hasTextMatchesRegex": "[0-9]+.*"}"""
+        val chrome = """{"not": {"hasTextMatchesRegex": "(?i)^Contact support$"}}"""
+        assertFalse(isGenericShapeEntry(entry("""{"all": [$id, $chrome]}""")))
+        assertTrue(isGenericShapeEntry(entry(shape)))
+        assertTrue(isGenericShapeEntry(entry("""{"any": [$id, $shape]}""")))
     }
 
     /**

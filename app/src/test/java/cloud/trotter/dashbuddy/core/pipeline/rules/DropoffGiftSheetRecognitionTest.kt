@@ -3,11 +3,17 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.WHOLE_MASK_HEX
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.hexIn
+import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.wholeMaskAfter
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -80,6 +86,66 @@ class DropoffGiftSheetRecognitionTest {
             assertNotNull(fixture, match.fields["customerNameHash"])
             assertEquals(fixture, nameHash("[redacted]"), match.fields["customerNameHash"])
         }
+    }
+
+    @Test
+    fun `gift label is required unless another pre-arrival arm matches`() {
+        val deliverTo = rewrite(load(), mapOf("user_name_label" to "Deliver to")).restoreParents()
+        assertEquals(ruleId, screens.matchFirst(deliverTo, platformWire = "doordash")?.ruleId)
+
+        val customer = rewrite(load(), mapOf("user_name_label" to "Customer")).restoreParents()
+        assertTrue("no navigation lead-in may rescue the gift arm", nodes(customer).none {
+            it.text?.contains("Deliver to") == true || it.text?.contains("Heading to") == true
+        })
+        val winner = screens.matchFirst(customer, platformWire = "doordash")?.ruleId ?: "UNKNOWN"
+        println("#1314 gift label rewritten to Customer: $winner")
+        assertFalse("gift label absent; winner=$winner", winner == ruleId)
+    }
+
+    @Test
+    fun `combined gift and unavailable frame carries the overlay Contact mask`() {
+        val gift = load()
+        val contact = UiNode(viewIdResourceName = "com.doordash.driverapp:id/step_title", text = "Contact Jane L")
+        val combined = gift.copy(children = gift.children + listOf(
+            UiNode(
+                viewIdResourceName = "com.doordash.driverapp:id/textView_navBar_title",
+                text = "Can’t hand order to customer",
+            ),
+            contact,
+        )).restoreParents()
+        assertEquals(ruleId, screens.matchFirst(combined, platformWire = "doordash")?.ruleId)
+
+        val masked = preArrival.redact.apply(combined)
+        val title = node(masked, "step_title").text!!
+        assertTrue("Contact name must mask whole: $title", wholeMaskAfter("Contact ").matches(title))
+        val overlayTitle = screens.ruleById("doordash.screen.dropoff_customer_unavailable")!!.redact.apply(
+            contact.copy().restoreParents(),
+        ).text!!
+        assertEquals(hexIn(overlayTitle, "unavailable Contact"), hexIn(title, "combined Contact"))
+        assertFalse("overlay customer must not serialize raw", UiNodeSchema.serialize(masked).contains("Jane L"))
+
+        val support = rewrite(combined, mapOf("step_title" to "Contact support")).restoreParents()
+        assertEquals(ruleId, screens.matchFirst(support, platformWire = "doordash")?.ruleId)
+        assertEquals("Contact support", node(preArrival.redact.apply(support), "step_title").text)
+    }
+
+    @Test
+    fun `generated pre-arrival Contact entries match customer-unavailable verbatim except comments`() {
+        val root = Json.parseToJsonElement(File(TestRulesetFactory.rulesDir, "doordash.json").readText()).jsonObject
+        val contactIds = setOf("step_title", "contact_cx_step_title")
+        fun contactEntries(id: String): List<JsonObject> {
+            val screen = root["screens"]!!.jsonArray.single {
+                it.jsonObject["id"]?.jsonPrimitive?.content == id
+            }.jsonObject
+            val entries = screen["redact"]!!.jsonArray.map { it.jsonObject }.filter { entry ->
+                entry["find"]?.jsonObject?.get("all")?.jsonArray?.any {
+                    it.jsonObject["hasIdSuffix"]?.jsonPrimitive?.content in contactIds
+                } == true
+            }
+            assertEquals("$id must carry both Contact entries", 2, entries.size)
+            return entries.map { JsonObject(it.filterKeys { key -> key != "comment" }) }
+        }
+        assertEquals(contactEntries("doordash.screen.dropoff_customer_unavailable"), contactEntries(ruleId))
     }
 
     @Test
