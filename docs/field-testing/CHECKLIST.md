@@ -22,6 +22,7 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
 - [active] 🆕 NEW — unassigning the LAST order of a job (DoorDash returns to "Finding offers") closes the job: the next accepted offer shows as a new job in the drill-down, not as an add-on to the abandoned one (#1312) — Confirmed: 0/2
+- [active] 🆕 NEW — accepting an ORDINARY offer card while the app still shows a job open closes that job and starts a new one: the drill-down shows two jobs, the old one's un-arrived drops read "unassigned" and an arrived drop reads completed at the accept time; accepting an "Add to route" card still joins the running job (#1119 slice 1, PR #1334) — Confirmed: 0/2
 
 - [active] 🆕 NEW — the HUD earnings reads "—" until the first parsed total of the dash, never "$0.00"; the first settled read replaces it (#1041). — Confirmed: 0/2
 
