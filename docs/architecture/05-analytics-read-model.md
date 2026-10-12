@@ -581,11 +581,14 @@ over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — acc
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
 window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
 was read (#1073, rounds 13–14):** `ReceiptCoverage` (the receipt's SUBJECT + every accountable drop of
-its job with completion evidence at that frame) is captured beside the cached receipt, and the mint's
-`apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
+its job with completion evidence at that frame and the same non-null `mintedByOfferHash`, #1120) is
+captured beside the cached receipt, and the mint's `apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
 with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the receipt total holds by
-construction; an uncovered sibling folds unpriced (fail-null, one WARN at the close) instead of taking
-an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
+construction. The stamp is a hint, not identity: a mismatched hint under-pools rather than crossing
+offer hashes, and a hash-less subject covers itself alone (fail-null); this fixes the 2026-09-20
+job …-674 ($20.50 overwrote an earlier $28.51 receipt) and 2026-10-11 job …-977 ($10.40 split over
+five drops of four offers) sightings. An uncovered sibling folds unpriced (fail-null, one WARN at the
+close) instead of taking an older receipt's money. Gating the SHARE alone was not enough: the fold prices any drop carrying a
 receipt at the whole `totalPay` (`RECEIPT_TOTAL`), so an uncovered drop folded $20 while the covered
 one was re-priced at the same $20. But **completion eligibility is NEVER coverage-gated** — a
 delivered, arrived drop always mints, and coverage gates only the attach and the share (round 14

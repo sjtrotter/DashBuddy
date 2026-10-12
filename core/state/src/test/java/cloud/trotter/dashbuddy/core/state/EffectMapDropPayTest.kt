@@ -66,6 +66,9 @@ class EffectMapDropPayTest {
         customerNameHash = cust,
         startedAt = 300L,
         completedAt = completedAt,
+        // #1120: these pooled-stack fixtures describe ONE offer. Hash-less drops now cover only
+        // themselves; completed siblings pool only when their mint-time offer hints agree.
+        mintedByOfferHash = "single-offer",
     )
 
     private fun completedRows(prev: AppState, next: AppState, obs: Observation): List<DeliveryPayload> =

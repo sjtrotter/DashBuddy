@@ -659,7 +659,8 @@ eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNA
 an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
 store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
 matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
-structural. **A receipt speaks only for the drops it described when read (#1073):** `ReceiptCoverage` is
+structural. **A receipt speaks only for the drops it described when read (#1073)** — the subject plus its OFFER's
+other delivered drops (`mintedByOfferHash`, #1120); a hash-less subject covers itself alone: `ReceiptCoverage` is
 captured with the cached receipt and intersects the mint apportion, the attach and the re-price
 denominator (one owner); completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
 else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.

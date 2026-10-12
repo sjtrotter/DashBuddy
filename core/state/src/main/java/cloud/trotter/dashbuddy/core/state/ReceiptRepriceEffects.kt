@@ -139,8 +139,13 @@ private val Task.isReceiptSubject: Boolean
 /**
  * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
  *
- * Every accountable dropoff of the subject's job that already carried completion evidence, plus the
- * subject itself — which is in its own receipt by definition, and whose `completedAt` is not stamped
+ * #1120: only accountable dropoffs of the subject's job: the subject itself, plus completed siblings
+ * sharing its non-null [Task.mintedByOfferHash]. A hash-less subject covers itself alone (fail-null).
+ * The stamp is a HINT, not an identity: a mismatched hint under-pools rather than crossing offer
+ * hashes to price another offer's drops — the safe direction. A genuine single-offer stack still pools.
+ * Field sightings: 2026-09-20 job …-674 split the second offer's $20.50 over both drops, overwriting
+ * the first's $28.51; 2026-10-11 job …-977 split the last offer's $10.40 over five drops of four offers.
+ * The subject is in its own receipt by definition, and its `completedAt` is not stamped
  * until its retire grace commits. Nothing UNQUALIFIED can enter: the subject comes from
  * [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a pickup.
  * It CAN be an un-arrived drop when one is active, which is the #1081 residual stated there: a false
@@ -152,12 +157,16 @@ private val Task.isReceiptSubject: Boolean
  */
 internal fun receiptCoverageAt(region: PlatformRegion, subjectTaskId: String?): ReceiptCoverage {
     val tasks = region.recentTasks + listOfNotNull(region.activeTask)
+    val subject = tasks.firstOrNull { it.taskId == subjectTaskId }
+    val subjectOfferHash = subject?.mintedByOfferHash
     val jobId = region.activeJob?.jobId
-        ?: tasks.firstOrNull { it.taskId == subjectTaskId }?.jobId
+        ?: subject?.jobId
     val covered = tasks
         .filter {
             it.jobId == jobId && it.isAccountableDropoff &&
-                (it.taskId == subjectTaskId || it.completedAt != null)
+                (it.taskId == subjectTaskId ||
+                    (it.completedAt != null && subjectOfferHash != null &&
+                        it.mintedByOfferHash == subjectOfferHash))
         }
         .map { it.taskId }
         .toSet()

@@ -390,6 +390,13 @@ that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`
 what lets `TaskEffects` emit the proper `TASK_UNASSIGNED` off it. The dash really did end; the order
 really was abandoned; no money is fabricated.
 
+**Receipt coverage (#1073, #1120)** scopes the mint and re-price to the subject plus its job's other
+accountable, completed drops sharing the same non-null `mintedByOfferHash`: the hash is a hint,
+not identity, so a mismatched hint under-pools rather than crossing offer hashes, and a hash-less
+subject covers itself alone (fail-null). This fixes the 2026-09-20 job …-674 ($20.50 overwrote the
+earlier $28.51 receipt) and 2026-10-11 job …-977 ($10.40 split over five drops of four offers)
+sightings; completion eligibility remains independent of coverage.
+
 **A completion the PostTask exit already minted is recorded PER TASK** (round 4). The exit block
 mints the drop the receipt was about and leaves it ACTIVE — its `completedAt` is stamped only when
 the retire commits — so on a later step neither `recentTasks` nor the current pending's provenance

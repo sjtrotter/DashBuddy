@@ -110,6 +110,9 @@ class ReceiptRepriceTest {
         customerNameHash = "cust-$id",
         startedAt = 3_000L,
         completedAt = completedAt,
+        // #1120: these pooled-stack fixtures describe ONE offer. Hash-less drops now cover only
+        // themselves; completed siblings pool only when their mint-time offer hints agree.
+        mintedByOfferHash = "single-offer",
     )
 
     private fun appState(region: PlatformRegion, flow: Flow) = AppState(
@@ -259,7 +262,7 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `a stacked receipt re-prices every delivered sibling and the shares sum to the total`() {
+    fun `a single-offer stacked receipt re-prices every delivered sibling and shares sum to the total`() {
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
             mark = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
@@ -781,7 +784,7 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 8 — a two-drop job's late receipt apportions across BOTH rows`() {
+    fun `round 8 — a single-offer two-drop job's late receipt apportions across BOTH rows`() {
         // One task's completion cannot describe a multi-drop job — which is why the marker stopped
         // trying. The whole-job receipt re-prices every delivered drop, $10/$10, under distinct
         // durable keys.
@@ -1497,7 +1500,7 @@ class ReceiptRepriceTest {
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 15_000L))
         assertEquals("the ACTIVE drop is the subject, arrival or not", "t2", fold.region.lastAnnouncedPostTaskTaskId)
         assertEquals(
-            "…and its receipt covers the whole job",
+            "…and its receipt covers both drops of this offer",
             setOf("t1", "t2"),
             fold.region.lastPostTaskCoverage!!.taskIds,
         )

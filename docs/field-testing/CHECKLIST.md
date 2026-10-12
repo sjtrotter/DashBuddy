@@ -113,6 +113,10 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [active] 🆕 NEW — a later offer's receipt never re-prices an earlier offer's drop (#1120).
+  What to watch: on a multi-offer job, each drop's `payBasis`/pay equals its own receipt.
+  Confirmed: 0/2
+
 - [active] **🆕 NEW — a live drop-off sheet never shows as a receipt (#935).** Check that no
   `delivery_summary_collapsed` capture carries the customer card (`drop_off_bottom_sheet_container`
   or `complete_delivery_steps_button`). Every real receipt must still be recognized, and

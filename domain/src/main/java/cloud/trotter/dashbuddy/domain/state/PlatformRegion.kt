@@ -392,7 +392,8 @@ data class ClosedJobReceipt(
  *
  * The rule: a receipt speaks for the announced task plus every accountable dropoff of that task's
  * job which already had completion evidence (`completedAt != null && unassignedAt == null`) when the
- * receipt was on screen. A sibling delivered LATER is not in it — the receipt could not have priced
+ * receipt was on screen AND shares its non-null `mintedByOfferHash` (#1120). A hash-less subject
+ * covers itself alone. A sibling delivered LATER is not in it — the receipt could not have priced
  * a delivery that had not happened.
  *
  * **A `completedAt` timestamp comparison was tried first and rejected in the same series.**
@@ -403,8 +404,7 @@ data class ClosedJobReceipt(
  * admitted any active drop under a `TASK_RETIRE` grace, not just the anchor. A SET captured at read
  * time has neither failure mode, and — unlike a timestamp — it can be handed to the mint too.
  *
- * Assumes ONE receipt describes the whole job — see #1077 for add-on jobs, where a second accepted
- * offer can bring its own receipt and that premise stops holding.
+ * A receipt describes its subject's OFFER, which can be only part of an add-on job (#1120).
  */
 @Serializable
 data class ReceiptCoverage(
