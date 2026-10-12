@@ -374,8 +374,17 @@
       }
     },
     {
+      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
       "id": "doordash.screen.pickup_shopping",
       "priority": 72,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -439,6 +448,7 @@
       }
     },
     {
+      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
       "id": "doordash.screen.pickup_verify_items",
       "priority": 76,
       "redact": [
@@ -449,6 +459,12 @@
           "keepPrefix": [
             "Verify items for "
           ],
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
           "normalize": "customerName"
         }
       ],
@@ -830,8 +846,17 @@
       }
     },
     {
+      "comment": "#1309: the fielded 2026-10-10 recognized leak on 8.101.8's confirm-pickup sheet exposed `customer_name` because this rule had no redact and `ID_MARKERS` is UNKNOWN-only; the entry mirrors `pickup_arrival` byte-for-byte so one customer masks to ONE hex across every pickup surface, equal to the persisted `customerNameHash` prefix. Recognize/state-only rule: redact without parse is legal (the `pickup_select_issue` precedent), parse goldens untouched; `order_item_name` / `order_item_instructions` stay RAW because the corpus shows merchant-owned item names and options only (`Size Choice: Large`, `Sauce: Chipotle Ranch`), not customer PII.",
       "id": "doordash.screen.pickup_picked_up",
       "priority": 98,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -904,8 +929,17 @@
       }
     },
     {
+      "comment": "#1309: this rule also had no redact, the same gap as the fielded 2026-10-10 recognized leak on 8.101.8's confirm-pickup sheet (`pickup_picked_up`), and `ID_MARKERS` is UNKNOWN-only; the entry mirrors `pickup_arrival` byte-for-byte so one customer masks to ONE hex across every pickup surface, equal to the persisted `customerNameHash` prefix. Recognize/state-only rule: redact without parse is legal (the `pickup_select_issue` precedent), parse goldens untouched.",
       "id": "doordash.screen.pickup_verify",
       "priority": 101,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived",
         "modeHint": "online"
@@ -1389,9 +1423,17 @@
       }
     },
     {
-      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings.",
+      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings. #1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
       "id": "doordash.screen.pickup_steps",
       "priority": 104,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "branches": [
         {
           "comment": "Normal DoorDash pickup steps (receipt photo / confirm pickup) — recognize-only.",
@@ -1528,7 +1570,7 @@
     {
       "id": "doordash.screen.shopping_item",
       "priority": 75,
-      "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry.",
+      "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry. #1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent). #1309: the Customer-Notes plain entry ahead of it could claim a `customer_name` node that also carried that description; accepted — it still masks, no such render exists.",
       "redact": [
         {
           "comment": "The container's fused contentDescription ('Customer Notes: <note>'). Matched by desc (the node has no id and no text), keepPrefix keeps the label half.",
@@ -1553,6 +1595,12 @@
             ]
           },
           "plainMask": true
+        },
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -1572,8 +1620,17 @@
       ]
     },
     {
+      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
       "id": "doordash.screen.shopping_checkout",
       "priority": 78,
+      "redact": [
+        {
+          "find": {
+            "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        }
+      ],
       "state": {
         "flow": "task:pickup:arrived"
       },
