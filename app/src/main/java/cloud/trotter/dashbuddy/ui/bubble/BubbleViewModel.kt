@@ -32,10 +32,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -191,24 +193,22 @@ class BubbleViewModel @Inject constructor(
 
     // Session earnings: carries the last known value forward through states
     // that don't have it. Resets when session changes.
-    val sessionEarnings = combine(stateManager.state, focusedPlatform) { state, platform ->
+    val sessionEarnings: StateFlow<Double?> = combine(stateManager.state, focusedPlatform) { state, platform ->
         platform?.let { state.regions.platforms[it] }
-    }.scan(Pair<String?, Double>(null, 0.0)) { (lastSessionId, lastKnown), region ->
+    }.scan(Pair<String?, Double?>(null, null)) { (lastSessionId, lastKnown), region ->
         val session = region?.session
         val sessionId = session?.sessionId
         val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
         val earnings = when {
-            isNewSession -> 0.0
-            session != null -> {
-                val running = session.runningEarnings
-                if (running > 0) running else lastKnown
-            }
+            isNewSession -> session.runningEarnings
+            session != null -> session.runningEarnings ?: lastKnown
             else -> lastKnown
         }
         Pair(sessionId ?: lastSessionId, earnings)
     }
+        .drop(1)
         .map { it.second }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
 
     /**

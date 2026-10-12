@@ -45,6 +45,27 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
  */
 class SerializationRoundTripTest {
 
+    @Test
+    fun `session earnings round-trip null and read zero distinctly (#1041)`() {
+        for (earnings in listOf(null, 0.0, 12.50)) {
+            val session = Session("s1", startedAt = 100L, runningEarnings = earnings, accumulatedDeliveryPay = earnings)
+            assertEquals(session, StateJson.decodeFromString<Session>(StateJson.encodeToString(session)))
+        }
+    }
+
+    @Test
+    fun `legacy session zeros stay read zeros and missing earnings default to null (#1041)`() {
+        val legacy = """{"sessionId":"s1","startedAt":100,"runningEarnings":0.0,"accumulatedDeliveryPay":0.0}"""
+        assertEquals(
+            Session("s1", startedAt = 100L, runningEarnings = 0.0, accumulatedDeliveryPay = 0.0),
+            StateJson.decodeFromString<Session>(legacy),
+        )
+        assertEquals(
+            Session("s1", startedAt = 100L),
+            StateJson.decodeFromString<Session>("""{"sessionId":"s1","startedAt":100}"""),
+        )
+    }
+
     private val parsedTime = ParsedTime(text = "5:39 PM", time = 1_000_000L)
 
     private fun allSubtypes(): List<ParsedFields> = listOf(

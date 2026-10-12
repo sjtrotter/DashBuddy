@@ -807,14 +807,14 @@ class DashEndHonorsTaskRetireTest {
                 since = idleAt, wakeId = 12L,
             ),
         )
-        assertEquals("the fixture starts with a stale total", 0.0, armed.session!!.runningEarnings, 0.0001)
+        assertEquals("the fixture starts with a stale total", 0.0, armed.session?.runningEarnings ?: Double.NaN, 0.0001)
 
         // ONE idle frame, past BOTH deadlines: the destructive expiry retires the drop and closes the
         // job (T1), and the settle park commits — on the same observation, with the session alive.
         val oneFrame = screen(Flow.Idle, idleAt + 11_000L)
         val after = step(armed, Flow.Idle, oneFrame)
         assertEquals("the session survives the step", "dash-A", after.session?.sessionId)
-        assertEquals("…and the park settled on THIS frame", 21.0, after.session!!.runningEarnings, 0.0001)
+        assertEquals("…and the park settled on THIS frame", 21.0, after.session?.runningEarnings ?: Double.NaN, 0.0001)
         assertNull("…which is also the frame that closed the job", after.activeJob)
 
         val row = deliveries(completions(armed, after, oneFrame)).single()

@@ -478,7 +478,9 @@ deadline and a park at-or-past — and ORDER matters: a flow frame runs the expi
 stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a
 `$0.00` read never overwrites a positive total. A park is FROZEN while the dash is not `Mode.Online` and
 re-based UNCONFIRMED on the way back (a fresh agreeing read on its own surface is required to commit).
-Crash recovery DROPS any restored park.
+Crash recovery DROPS any restored park. `Session.runningEarnings` /
+`accumulatedDeliveryPay` are nullable — null is never-parsed and renders as the em dash, never `$0.00`
+(#1041).
 
 **Timer identity (#1054):** every arm from `ModeEffects.diffDeadlineTimer` carries
 `ObservationPayload.GraceWake(wakeId)`, a per-region generation from `PlatformRegion.wakeSeq` via

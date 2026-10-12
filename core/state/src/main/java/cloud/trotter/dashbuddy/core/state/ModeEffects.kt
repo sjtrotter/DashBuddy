@@ -37,6 +37,8 @@ import timber.log.Timber
  * more indirection than the ~90 combined lines warrant.
  * Graced `DASH_START` uses the session's `startedAt` as `occurredAt` (#732/#1311); sequenceId orders
  * append operations even when this domain timestamp lags the committing observation.
+ * Earnings nullability now says never-parsed (#1041); the early-offline `takeIf` still preserves
+ * #1030's summary-vs-early-offline rule, where even a parsed zero is not a report.
  */
 internal fun EffectMap.diffMode(
     prev: PlatformRegion,
@@ -134,11 +136,10 @@ internal fun EffectMap.diffMode(
                                 sessionId = endedSessionId,
                                 endedAt = endedAt,
                                 source = SessionEndSource.EARLY_OFFLINE,
-                                // #1030: nothing is parsed on this path — `Session.runningEarnings`
-                                // is a non-nullable `Double = 0.0`, so stamping it raw wrote a hard
-                                // `0.0` that reads downstream as "the platform reported $0". Absent
-                                // is the honest stamp. Rule owner: `RecordFolds.reportedEarningsOf`.
-                                totalEarnings = endedSession.runningEarnings.takeIf { it > 0.0 },
+                                // #1041: the nullable type now says never-parsed. The takeIf keeps
+                                // #1030's summary-vs-early-offline rule: even a parsed zero on this
+                                // path is not a report. Owner: `RecordFolds.reportedEarningsOf`.
+                                totalEarnings = endedSession.runningEarnings?.takeIf { it > 0.0 },
                                 platform = prev.platform.name, // #314 capture-gap: harden the log
                             ),
                         ),
