@@ -155,6 +155,12 @@ data class DeliveryFold(
     val milesBasis: MilesBasis = MilesBasis.UNKNOWN,
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
+    /**
+     * The arrival odometer from the `DELIVERY_ARRIVED` event that STAMPED `Task.arrivedAt`
+     * (`occurredAt == payload.arrivedAt`, #1310), present or absent. With
+     * `pickup_records.odometerAtConfirmation` it is the #254 sampler's measured transit distance;
+     * a re-arrival or re-sight never fills a missing reading.
+     */
     val odometerAtArrival: Double? = null,
 )
 

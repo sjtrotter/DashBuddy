@@ -22,13 +22,44 @@ class LegStateCodecTest {
                 PendingStoreLeg("PB", "J1", null, 0.16),
             ),
             pendingDropoffLegs = mapOf("DA" to 2.98, "DB" to 3.39),
+            dropoffArrivalOdometers = mapOf("DA" to ArrivalReading(1_000, 709.06), "DB" to ArrivalReading(2_000, 712.45)),
         )
         assertEquals(state, LegStateCodec.decode(LegStateCodec.encode(state)))
     }
 
     @Test
+    fun `1310 legacy blob without arrival readings decodes with an empty map and keeps its other facts`() {
+        val state = LegStateCodec.decode("""{"prevLegOdometer":112.0,"pendingDropoffLegs":{"D1":7.0}}""")
+        assertEquals(LegState(prevLegOdometer = 112.0, pendingDropoffLegs = mapOf("D1" to 7.0)), state)
+        assertEquals(emptyMap<String, ArrivalReading>(), state.dropoffArrivalOdometers)
+    }
+
+    @Test
+    fun `1310 arrival reading with null odometer round-trips`() {
+        val state = LegState(dropoffArrivalOdometers = mapOf("A" to ArrivalReading(1_000, null)))
+        val encoded = LegStateCodec.encode(state)
+        assertEquals("""{"dropoffArrivalOdometers":{"A":{"arrivedAt":1000,"odometer":null}}}""", encoded)
+        assertEquals(state, LegStateCodec.decode(encoded))
+    }
+
+    @Test
+    fun `1310 legacy numeric and null arrival readings fail closed to empty state`() {
+        for (reading in listOf("112.0", "null")) {
+            // Nonempty valid fields prove the serialization failure discards the WHOLE state.
+            val blob = """{"prevLegOdometer":112.0,"pendingDropoffLegs":{"A":7.0},"dropoffArrivalOdometers":{"A":$reading}}"""
+            assertEquals(LegState(), LegStateCodec.decode(blob))
+        }
+    }
+
+    @Test
     fun `an empty leg state round-trips`() {
         assertEquals(LegState(), LegStateCodec.decode(LegStateCodec.encode(LegState())))
+    }
+
+    @Test
+    fun `1310 empty arrival map still round-trips other allocation facts`() {
+        val state = LegState(prevLegOdometer = 112.0, pendingDropoffLegs = mapOf("A" to 7.0))
+        assertEquals(state, LegStateCodec.decode(LegStateCodec.encode(state)))
     }
 
     @Test

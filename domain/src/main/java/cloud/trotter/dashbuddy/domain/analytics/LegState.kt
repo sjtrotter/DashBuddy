@@ -38,6 +38,10 @@ data class JobMileageBudget(
     val anchored: Boolean = true,
 )
 
+/** The timestamp stamped on the arrival step and the reading taken by that step's event. */
+@Serializable
+data class ArrivalReading(val arrivedAt: Long, val odometer: Double?)
+
 /**
  * Bounded session allocation state, persisted in `session_records.legStateJson`.
  * Pending legs drop oldest at [MAX_PENDING]; budgets evict the oldest delivered job at
@@ -49,6 +53,21 @@ data class LegState(
     val prevLegOdometer: Double? = null,
     val pendingStoreLegs: List<PendingStoreLeg> = emptyList(),
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
+    /**
+     * #1310 — the reading taken by the ONE `DELIVERY_ARRIVED` event whose
+     * `occurredAt == payload.arrivedAt`, i.e. the event emitted on the step that stamped
+     * `Task.arrivedAt`. A re-arrival or resume re-sight carries the kept `arrivedAt` and a later
+     * `occurredAt`, so it never qualifies. A null `odometer` means that event had no reading;
+     * it stays unknown. Completion stamps the reading only when
+     * `reading.arrivedAt == completion.arrivedAt` (a second lock against eviction + reinsertion),
+     * then consumes it; a dropoff-phase unassign purges it.
+     * Bounded at [MAX_PENDING], drop-oldest, independent of [pendingDropoffLegs]; a missing fact
+     * folds null. An anchorless arrival can sit only here, so the maps can evict different tasks.
+     * Recovery replay of an UNFIRED arrival event stamps metadata at replay time: the current
+     * odometer under the original `occurredAt`. This pre-existing property applies to every
+     * edge-stamped odometer, including `odometerAtConfirmation`.
+     */
+    val dropoffArrivalOdometers: Map<String, ArrivalReading> = emptyMap(),
     val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),
     val completionHighWater: Long? = null,
     /** Positive deltas across session odometer events; resets re-anchor without subtracting miles. */
@@ -70,7 +89,9 @@ data class LegState(
  *
  * **Fail-closed decode:** a null/blank/malformed blob degrades to an EMPTY [LegState] — the session's
  * allocation state is unavailable until another defensible anchor is observed. This is the
- * spec-level guard that makes a garbage `legStateJson` column safe.
+ * spec-level guard that makes a garbage `legStateJson` column safe. A blob written before a field
+ * existed decodes with that field's default (the arrival map empty: no stamped reading is known, so
+ * the row folds null `odometerAtArrival` — fail-null, the other facts kept).
  */
 object LegStateCodec {
     private val json = Json { ignoreUnknownKeys = true }

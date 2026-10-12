@@ -980,7 +980,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(15, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -2165,12 +2165,16 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         insert(AppEventType.DELIVERY_ARRIVED, sid, 1_020_000,
             DeliveryPayload(jobId = "time-job", taskId = "drop", storeName = "Store",
-                phaseStartedAt = 540_000, arrivedAt = 1_020_000, odometerAtArrival = 106.0), 106.0)
+                phaseStartedAt = 540_000, arrivedAt = 1_020_000), 106.0)
+        // #1310: persist the metadata-only arrival before a fresh projector folds completion.
+        projector().catchUp()
         val seq = insert(AppEventType.DELIVERY_COMPLETED, sid, 1_200_000,
             DeliveryPayload(jobId = "time-job", taskId = "drop", storeName = "Store",
                 phaseStartedAt = 540_000, arrivedAt = 1_020_000, completedAt = 1_200_000,
-                odometerAtArrival = 106.0, jobOfferHashes = listOf("time-offer")), 106.0)
+                jobOfferHashes = listOf("time-offer")), 106.0)
         projector().catchUp()
+        val delivery = requireNotNull(analyticsDao.deliveryRecord(seq))
+        assertEquals(106.0, requireNotNull(delivery.odometerAtArrival), 0.0)
         val dao = db.timeConstantDao()
         val rows = dao.observations(AppEventType.OFFER_ACCEPTED.name).first()
         val learned = TimeConstantRepository(dao).learnedTimeConstants.first()
@@ -2185,11 +2189,11 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 12))
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 14))
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        assertEquals(14, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(15, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
 }

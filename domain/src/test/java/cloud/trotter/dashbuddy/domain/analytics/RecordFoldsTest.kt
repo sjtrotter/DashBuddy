@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantObservation
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstants
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
@@ -38,6 +40,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -235,7 +238,7 @@ class RecordFoldsTest {
                 // Inbound anchor = previous drop or dash start; J1 has not completed, so use 100.
                 ev(AppEventType.DELIVERY_CONFIRMED, "overlap", 2_000,
                     DeliveryPayload(jobId = "J2", taskId = "B", phaseStartedAt = 0), 110.0),
-                deliveryArrived("overlap", 3_000, "J1", "A", odo = 113.0),
+                deliveryArrived("overlap", 3_000, "J1", "A", odo = 113.0, arrivedAt = 1_000),
             )
             val a = delivery("overlap", 4_000, "J1", "A", odo = 120.0)
             val b = delivery("overlap", 5_000, "J2", "B", odo = 120.0)
@@ -270,7 +273,7 @@ class RecordFoldsTest {
                     deliveryArrived(s, 3_000, "J1", "A", odo = 110.0),
                     ev(AppEventType.DELIVERY_CONFIRMED, s, 4_000,
                         DeliveryPayload(jobId = "J2", taskId = "B", phaseStartedAt = 2_000), 110.0),
-                    deliveryArrived(s, 5_000, "J1", "A", odo = 113.0),
+                    deliveryArrived(s, 5_000, "J1", "A", odo = 113.0, arrivedAt = 3_000),
                 )
                 val a = delivery(s, 6_000, "J1", "A", odo = 120.0)
                 val b = delivery(s, 7_000, "J2", "B", odo = 120.0)
@@ -460,15 +463,18 @@ class RecordFoldsTest {
         identityLess: Boolean = false,
         // #997 per-drop→offer lineage. Provenance only — no fold consumer today (pinned below).
         offerPayAttributedHash: String? = null,
+        arrivedAt: Long = at - 120_000,
+        jobOfferHashes: List<String> = emptyList(),
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
             jobId = jobId, taskId = taskId, storeName = storeName,
             customerHash = if (identityLess) null else "cust-$taskId",
             addressHash = if (identityLess) null else "addr-$taskId",
-            phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
+            phaseStartedAt = phaseStartedAt, arrivedAt = arrivedAt, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
             offerPayShare = offerPayShare, offerPayAttributedHash = offerPayAttributedHash,
+            jobOfferHashes = jobOfferHashes,
         ),
         odometer = odo,
     )
@@ -502,9 +508,17 @@ class RecordFoldsTest {
         odometer = odo,
     )
 
-    private fun deliveryArrived(sid: String, at: Long, jobId: String, taskId: String, storeName: String? = "StoreX", odo: Double?) = ev(
+    private fun deliveryArrived(
+        sid: String,
+        at: Long,
+        jobId: String,
+        taskId: String,
+        storeName: String? = "StoreX",
+        odo: Double?,
+        arrivedAt: Long? = at,
+    ) = ev(
         AppEventType.DELIVERY_ARRIVED, sid, at,
-        DeliveryPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = at),
+        DeliveryPayload(jobId = jobId, taskId = taskId, storeName = storeName, phaseStartedAt = at - 300_000, arrivedAt = arrivedAt),
         odometer = odo,
     )
 
@@ -1799,6 +1813,335 @@ class RecordFoldsTest {
 
     // ── #688 phase B: per-leg mileage ──────────────────────────────────────
 
+    private fun singleOrderAccepted(sid: String): SequencedAppEvent {
+        val payload = acceptedOffer(0, null)
+        return ev(AppEventType.OFFER_ACCEPTED, sid, payload.decidedAt, payload.copy(
+            parsedOffer = payload.parsedOffer.copy(orders = listOf(
+                ParsedOrder(0, OrderType.PICKUP, "StoreX", 1, false, emptySet()),
+            )),
+        ))
+    }
+
+    /** Mirror TimeConstantDao's grouped joins and TimeConstantRepository's row mapping. */
+    private fun observationOf(delivery: DeliveryFold, outcomes: List<FoldOutcome>): TimeConstantObservation {
+        val deliveries = outcomes.mapNotNull { it.delivery }.filter {
+            it.platform == delivery.platform && it.sessionId == delivery.sessionId && it.jobId == delivery.jobId
+        }
+        val pickups = outcomes.mapNotNull { it.pickup }.filter {
+            it.platform == delivery.platform && it.sessionId != null &&
+                it.sessionId == delivery.sessionId && it.jobId == delivery.jobId
+        }
+        // OfferFold has no linkedJobId: the projector stamps it from these exact-hash resolutions.
+        val linkedHashes = outcomes.mapNotNull { it.resolution }.filter {
+            it.platform == delivery.platform && it.sessionId != null &&
+                it.sessionId == delivery.sessionId && it.jobId == delivery.jobId
+        }.flatMap { it.offerHashes }.toSet()
+        val accepted = outcomes.mapNotNull { it.offer }.filter {
+            it.platform == delivery.platform && it.sessionId != null && it.sessionId == delivery.sessionId &&
+                it.outcome == AppEventType.OFFER_ACCEPTED.name && it.offerHash in linkedHashes
+        }
+        val matches = accepted.filter { it.offerHash == delivery.soleOfferHash }
+        val pickup = pickups.singleOrNull()
+        val offer = matches.singleOrNull()
+        // These fixtures fold no corrections; the mapper leaves these entity defaults untouched.
+        check(outcomes.none { it.sessionAssign != null || it.offerOutcomeCorrection != null })
+        return TimeConstantObservation(
+            platform = Platform.fromWire(delivery.platform) ?: Platform.Unknown,
+            eventSequenceId = delivery.eventSequenceId,
+            phaseStartedAt = delivery.phaseStartedAt,
+            arrivedAt = delivery.arrivedAt,
+            completedAt = delivery.completedAt,
+            sessionId = delivery.sessionId,
+            sessionAssigned = 0, // DeliveryRecordEntity's first-fold default, not a DAO aggregate.
+            payBasis = delivery.payBasis,
+            originalPayBasis = delivery.payBasis, // AnalyticsRecordMappers stamps this at first fold.
+            realizedMinutes = delivery.realizedMinutes,
+            milesToStore = delivery.milesToStore,
+            milesToDropoff = delivery.milesToDropoff,
+            odometerAtArrival = delivery.odometerAtArrival,
+            pickupOdometerAtConfirmation = pickup?.odometerAtConfirmation,
+            jobOfferCount = delivery.jobOfferCount,
+            soleOfferHash = delivery.soleOfferHash,
+            orderCount = offer?.orderCount,
+            orderCountProven = offer?.orderCountProven,
+            isShop = offer?.isShop,
+            offerOutcomeResolved = null, // OfferRecordEntity's default; no correction folded.
+            deliveryCount = deliveries.size,
+            pickupCount = pickups.size,
+            acceptedOfferCount = accepted.size,
+            matchingOfferCount = matches.size,
+            offerDecidedAt = offer?.decidedAt,
+            pickupPhaseStartedAt = pickup?.phaseStartedAt,
+            pickupArrivedAt = pickup?.arrivedAt,
+            pickupConfirmedAt = pickup?.confirmedAt,
+            pickupActivity = pickup?.activity,
+        )
+    }
+
+    @Test
+    fun `1310 single-order arrival metadata matches measured transit distance`() {
+        val (outcomes, context) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0, jobOfferHashes = listOf("h1")),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        val pickup = outcomes.mapNotNull { it.pickup }.single()
+        val arrival = requireNotNull(row.odometerAtArrival)
+        val miles = requireNotNull(row.milesToDropoff)
+        assertEquals(112.0, arrival, 0.0)
+        assertEquals(7.0, miles, 0.0)
+        assertEquals(miles, arrival - requireNotNull(pickup.odometerAtConfirmation), 1e-9)
+        val sample = requireNotNull(TimeConstants.sample(observationOf(row, outcomes)))
+        val transitMinutes = (requireNotNull(row.arrivedAt) - requireNotNull(pickup.confirmedAt)) / 60_000.0
+        assertEquals(transitMinutes / miles, sample.minutesPerMile, 1e-9)
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 re-arrival with extra miles keeps the stamped reading and the sampler refuses the row`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000),
+            // TaskLifecycle keeps the first arrival timestamp across a grace flap.
+            delivery("arrival", 900_000, "J1", "D1", odo = 113.0, arrivedAt = 600_000,
+                jobOfferHashes = listOf("h1")),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertEquals(110.0, requireNotNull(row.odometerAtArrival), 0.0)
+        assertEquals(600_000L, requireNotNull(row.arrivedAt))
+        assertEquals(7.0, requireNotNull(row.milesToDropoff), 0.0)
+        val pickup = outcomes.mapNotNull { it.pickup }.single()
+        assertEquals(5.0,
+            requireNotNull(row.odometerAtArrival) - requireNotNull(pickup.odometerAtConfirmation), 0.0)
+        assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+    }
+
+    @Test
+    fun `1310 null stamped arrival stays unknown after re-arrival and the sampler refuses the row`() {
+        val events = listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = null)
+                .copy(metadata = EventMetadata(odometer = null)),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000,
+                jobOfferHashes = listOf("h1")),
+        )
+        val (outcomes, context) = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), outcomes to context)
+        assertEquals(mapOf("D1" to ArrivalReading(600_000, null)),
+            requireNotNull(outcomes[4].context).legState.dropoffArrivalOdometers)
+        assertEquals(mapOf("D1" to ArrivalReading(600_000, null)),
+            requireNotNull(outcomes[5].context).legState.dropoffArrivalOdometers)
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertNull(row.odometerAtArrival)
+        assertEquals(600_000L, requireNotNull(row.arrivedAt))
+        assertEquals(7.0, requireNotNull(row.milesToDropoff), 0.0)
+        assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 re-arrival with zero extra miles preserves a coherent stamped pair and is sampled`() {
+        for (rearrivalOdometer in listOf(100.0, 110.0)) {
+            val (outcomes, _) = foldSession(listOf(
+                dashStart("arrival", 0, odo = 100.0),
+                singleOrderAccepted("arrival"),
+                pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+                pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+                deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+                deliveryArrived("arrival", 780_000, "J1", "D1", odo = rearrivalOdometer, arrivedAt = 600_000),
+                delivery("arrival", 900_000, "J1", "D1", odo = rearrivalOdometer,
+                    arrivedAt = 600_000, jobOfferHashes = listOf("h1")),
+            ))
+            val row = outcomes.mapNotNull { it.delivery }.single()
+            assertEquals(110.0, requireNotNull(row.odometerAtArrival), 0.0)
+            assertEquals(5.0, requireNotNull(row.milesToDropoff), 0.0)
+            val sample = requireNotNull(TimeConstants.sample(observationOf(row, outcomes)))
+            assertEquals(1.0, sample.minutesPerMile, 1e-9)
+        }
+    }
+
+    @Test
+    fun `1310 eviction then re-arrival cannot reinsert the reading and the sampler refuses`() {
+        val events = listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+        ) + (1..LegState.MAX_PENDING).map { i ->
+            deliveryArrived("arrival", 610_000L + i, "other-job-$i", "other-task-$i", odo = 110.0)
+        } + listOf(
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000,
+                jobOfferHashes = listOf("h1")),
+        )
+        val (outcomes, context) = foldRestored(events)
+        assertEquals(foldSession(events, currentCpm = cpm), outcomes to context)
+        assertEquals(ArrivalReading(600_000, 110.0),
+            requireNotNull(outcomes[4].context).legState.dropoffArrivalOdometers["D1"])
+        val evicted = requireNotNull(outcomes[4 + LegState.MAX_PENDING].context).legState
+        assertFalse(evicted.dropoffArrivalOdometers.containsKey("D1"))
+        assertFalse(evicted.pendingDropoffLegs.containsKey("D1"))
+        val resighted = requireNotNull(outcomes[outcomes.lastIndex - 1].context).legState
+        assertFalse(resighted.dropoffArrivalOdometers.containsKey("D1"))
+        assertEquals(2.0, requireNotNull(resighted.pendingDropoffLegs["D1"]), 0.0)
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertNull(row.odometerAtArrival)
+        assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+    }
+
+    @Test
+    fun `1310 unassign then same-id resume cannot recreate the reading and the sampler refuses`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+            taskUnassigned("arrival", 660_000, "J1", "D1", TaskPhase.DROPOFF),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000,
+                jobOfferHashes = listOf("h1")),
+        ))
+        assertEquals(ArrivalReading(600_000, 110.0),
+            requireNotNull(outcomes[4].context).legState.dropoffArrivalOdometers["D1"])
+        val purged = requireNotNull(outcomes[5].context).legState
+        assertTrue(purged.dropoffArrivalOdometers.isEmpty())
+        assertTrue(purged.pendingDropoffLegs.isEmpty())
+        assertTrue(requireNotNull(outcomes[6].context).legState.dropoffArrivalOdometers.isEmpty())
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertEquals(2.0, requireNotNull(row.milesToDropoff), 0.0)
+        assertNull(row.odometerAtArrival)
+        assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+    }
+
+    @Test
+    fun `1310 only a re-sight arrival event leaves the reading unknown`() {
+        for (keptArrival in listOf(600_000L, null)) {
+            val (outcomes, _) = foldSession(listOf(
+                dashStart("arrival", 0, odo = 100.0),
+                singleOrderAccepted("arrival"),
+                pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+                pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+                // The stamping event was suppressed; this event cannot supply its reading.
+                deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0, arrivedAt = keptArrival),
+                delivery("arrival", 900_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000,
+                    jobOfferHashes = listOf("h1")),
+            ))
+            assertTrue(requireNotNull(outcomes[4].context).legState.dropoffArrivalOdometers.isEmpty())
+            val row = outcomes.mapNotNull { it.delivery }.single()
+            assertEquals(7.0, requireNotNull(row.milesToDropoff), 0.0)
+            assertNull(row.odometerAtArrival)
+            assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+        }
+    }
+
+    @Test
+    fun `1310 completion with a different arrivedAt consumes the reading but stamps null`() {
+        val (outcomes, context) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            singleOrderAccepted("arrival"),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0, arrivedAt = 600_000,
+                jobOfferHashes = listOf("h1")),
+        ))
+        assertEquals(ArrivalReading(780_000, 112.0),
+            requireNotNull(outcomes[4].context).legState.dropoffArrivalOdometers["D1"])
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertNull(row.odometerAtArrival)
+        assertNull(TimeConstants.sample(observationOf(row, outcomes)))
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 dropoff unassign purges arrival before sibling completion`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
+            taskUnassigned("arrival", 660_000, "J1", "D1", TaskPhase.DROPOFF),
+            delivery("arrival", 900_000, "J1", "D2", odo = 112.0),
+        ))
+        assertEquals(mapOf("D1" to ArrivalReading(600_000, 110.0)), requireNotNull(outcomes[1].context).legState.dropoffArrivalOdometers)
+        assertTrue(requireNotNull(outcomes[2].context).legState.dropoffArrivalOdometers.isEmpty())
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 completion without arrival keeps arrival odometer null`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0),
+        ))
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 arrival with null metadata odometer keeps arrival odometer null`() {
+        val (outcomes, _) = foldSession(listOf(
+            dashStart("arrival", 0, odo = 100.0),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = null)
+                .copy(metadata = EventMetadata(odometer = null)),
+            delivery("arrival", 900_000, "J1", "D1", odo = 112.0),
+        ))
+        assertNull(outcomes.mapNotNull { it.delivery }.single().odometerAtArrival)
+    }
+
+    @Test
+    fun `1310 anchorless arrival is recorded and consumed without a measured leg`() {
+        val (outcomes, context) = foldSession(listOf(
+            dashStart("arrival", 0, odo = null),
+            deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
+            delivery("arrival", 900_000, "J1", "D1", odo = 113.0),
+        ))
+        val row = outcomes.mapNotNull { it.delivery }.single()
+        assertNull(row.milesToDropoff)
+        assertEquals(112.0, requireNotNull(row.odometerAtArrival), 0.0)
+        assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
+    }
+
+    @Test
+    fun `1310 pending arrival and mileage maps both drop the oldest at capacity`() {
+        val events = listOf(dashStart("arrival", 0, odo = 100.0)) +
+            (0..LegState.MAX_PENDING).map { i ->
+                deliveryArrived("arrival", (i + 1) * 60_000L, "J1", "D$i", odo = 101.0 + i)
+            }
+        val state = requireNotNull(foldSession(events).second).legState
+        val expectedKeys = (1..LegState.MAX_PENDING).map { "D$it" }
+        assertEquals(expectedKeys, state.pendingDropoffLegs.keys.toList())
+        assertEquals(expectedKeys, state.dropoffArrivalOdometers.keys.toList())
+        assertEquals(101.0 + LegState.MAX_PENDING,
+            requireNotNull(state.dropoffArrivalOdometers.getValue("D${LegState.MAX_PENDING}").odometer), 0.0)
+    }
+
+    @Test
+    fun `1310 payload odometer field is ignored - the fold is the one owner`() {
+        for (hasArrival in listOf(false, true)) {
+            val events = mutableListOf(dashStart("arrival", 0, odo = 100.0))
+            if (hasArrival) events += deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0)
+            events += ev(AppEventType.DELIVERY_COMPLETED, "arrival", 900_000,
+                DeliveryPayload(jobId = "J1", taskId = "D1", phaseStartedAt = 300_000,
+                    arrivedAt = 780_000, completedAt = 900_000, odometerAtArrival = 999.0),
+                odometer = 113.0)
+            val row = foldSession(events).first.mapNotNull { it.delivery }.single()
+            if (hasArrival) assertEquals(112.0, requireNotNull(row.odometerAtArrival), 0.0)
+            else assertNull(row.odometerAtArrival)
+        }
+    }
+
     @Test
     fun `criterion 1 - simple job splits realizedMiles into store and dropoff legs`() {
         val s = "L1"
@@ -1906,7 +2249,7 @@ class RecordFoldsTest {
                 pickupArrived(s, 1_500, "J1", "P1", "StoreX", odo = 100.0),
                 pickupConfirmed(s, 1_600, "J1", "P1", "StoreX", odo = 100.0),
                 deliveryArrived(s, 2_000, "J1", "D1", odo = 102.0), // 2.0 from confirm anchor
-                deliveryArrived(s, 2_500, "J1", "D1", odo = 102.5), // grace re-arrival: +0.5, same taskId
+                deliveryArrived(s, 2_500, "J1", "D1", odo = 102.5, arrivedAt = 2_000), // grace re-arrival: +0.5, same taskId
                 delivery(s, 3_000, "J1", "D1", totalPay = 10.0, odo = 102.6),
             ),
         )
@@ -2251,7 +2594,7 @@ class RecordFoldsTest {
             val valid = hashes.takeIf { it.isNotEmpty() && it.none(String::isBlank) }?.distinct()
             assertEquals(valid?.size, drop.jobOfferCount)
             assertEquals(valid?.singleOrNull(), drop.soleOfferHash)
-            assertEquals(105.0, drop.odometerAtArrival!!, 0.0)
+            assertNull("payload arrival is ignored without an arrival event", drop.odometerAtArrival)
         }
         for (odo in listOf(null, 102.0)) {
             val folded = RecordFolds.foldEvent(pickupConfirmed("time", 30, "job", "pick", "Store", odo), ctx, cpm).pickup!!

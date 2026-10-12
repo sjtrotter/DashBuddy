@@ -44,7 +44,7 @@ internal object LegFolds {
         val ctx = resolveContext(context, sid, e.occurredAt)
         val odo = event.metadata?.odometer
         val p = e.payload as? DeliveryPayload
-        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo) else ctx
+        val withLeg = if (p != null) ctx.addDropoffLeg(p.taskId, odo, e.occurredAt, p.arrivedAt) else ctx
         return FoldOutcome(context = withLeg.advance(e.occurredAt, odo))
     }
 
@@ -86,7 +86,10 @@ internal object LegFolds {
             TaskPhase.PICKUP ->
                 ls.copy(pendingStoreLegs = ls.pendingStoreLegs.filterNot { it.pickupTaskId == p.taskId })
             TaskPhase.DROPOFF ->
-                ls.copy(pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId)
+                ls.copy(
+                    pendingDropoffLegs = ls.pendingDropoffLegs - p.taskId,
+                    dropoffArrivalOdometers = ls.dropoffArrivalOdometers - p.taskId,
+                )
         }
         return FoldOutcome(context = ctx.copy(legState = cleaned).advance(e.occurredAt, odo))
     }
@@ -120,6 +123,18 @@ private fun <T> List<T>.capPending(): List<T> =
     if (size <= LegState.MAX_PENDING) this else takeLast(LegState.MAX_PENDING)
 
 /**
+ * Put a pending fact, retaining insertion order and dropping the oldest on overflow.
+ * Independently capped maps can evict different tasks; missing facts fold null, never a sibling's reading.
+ */
+private fun <V> Map<String, V>.putCapped(key: String, value: V): Map<String, V> {
+    val added = this + (key to value)
+    return if (added.size <= LegState.MAX_PENDING) added else {
+        // LinkedHashMap preserves insertion order; keep the newest cap.
+        added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
+    }
+}
+
+/**
  * Close a to-store leg and queue it (or accumulate into the same [pickupTaskId] entry on a
  * re-arrival). Bounded at [LegState.MAX_PENDING]. Stamps `closedAtOdometer` = this arrival's [odo]
  * (guaranteed non-null on the `miles != null` branch) so a legacy-basis completion can retire only the
@@ -149,22 +164,22 @@ internal fun SessionFoldContext.closeStoreLeg(
  * Close a to-dropoff leg, accumulating onto the drop's own [taskId] (a re-arrival adds to the same
  * entry). Bounded at [LegState.MAX_PENDING] with drop-oldest by insertion order.
  */
-internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): SessionFoldContext {
+internal fun SessionFoldContext.addDropoffLeg(
+    taskId: String,
+    odo: Double?,
+    occurredAt: Long,
+    arrivedAt: Long?,
+): SessionFoldContext {
     val (miles, ls) = legState.closeLeg(odo)
-    if (miles == null) return copy(legState = ls)
-    val existing = ls.pendingDropoffLegs[taskId]
-    val merged = if (existing != null) {
-        ls.pendingDropoffLegs + (taskId to (existing + miles))
-    } else {
-        val added = ls.pendingDropoffLegs + (taskId to miles)
-        if (added.size <= LegState.MAX_PENDING) {
-            added
-        } else {
-            // Drop-oldest by insertion order (LinkedHashMap preserves it); keep the newest cap.
-            added.entries.toList().takeLast(LegState.MAX_PENDING).associate { it.key to it.value }
-        }
-    }
-    return copy(legState = ls.copy(pendingDropoffLegs = merged))
+    return copy(legState = ls.copy(
+        pendingDropoffLegs = if (miles != null) {
+            ls.pendingDropoffLegs.putCapped(taskId, (ls.pendingDropoffLegs[taskId] ?: 0.0) + miles)
+        } else ls.pendingDropoffLegs,
+        // Only the step that stamped Task.arrivedAt owns its reading, even without a leg anchor.
+        dropoffArrivalOdometers = if (arrivedAt != null && occurredAt == arrivedAt) {
+            ls.dropoffArrivalOdometers.putCapped(taskId, ArrivalReading(arrivedAt, odo?.takeIf { it.isFinite() }))
+        } else ls.dropoffArrivalOdometers,
+    ))
 }
 
 /**

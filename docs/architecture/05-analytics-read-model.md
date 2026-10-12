@@ -734,11 +734,38 @@ Room **18** adds seven nullable evidence columns: delivery `jobOfferCount`, `sol
 Projector **13** refolds historical payloads to backfill them. Delivery lineage requires a nonempty
 list of entirely nonblank offer hashes, deduplicated before count/singleton projection. Pickup
 confirmation odometer comes from the closing event metadata; delivery arrival odometer comes from
-its payload. Empty orders yield null classification/count; any UNKNOWN order type yields null
+the structurally identified stamping `DELIVERY_ARRIVED` event's metadata in the fold (#1310).
+Empty orders yield null classification/count; any UNKNOWN order type yields null
 `isShop`, never proven non-shopping. The domain-owned #882 `OrderChipShape` stamps chip multiplicity
 into `orderCount` and permits `orderCountProven == true` only for nonempty orders whose names are
 nonblank stores or explicit `(1)` chips; learning requires that proof as well as `orderCount == 1`.
 `AnalyticsRecordMappers` preserves the existing frozen mappings.
+
+**#1310 — arrival odometer.** Field evidence in the 2026-10-11 pull showed 258/258 `DELIVERY_ARRIVED`
+events stamped with an odometer but 0/266 delivery rows populated. Like the pickup side, the fold now
+reads event metadata from the ONE `DELIVERY_ARRIVED` whose `occurredAt == payload.arrivedAt`:
+the event emitted on the step that stamped `Task.arrivedAt`. It retains an
+`ArrivalReading(arrivedAt, odometer)` by dropoff taskId, even without a measurable leg. A re-arrival
+or resume re-sight carries the kept `arrivedAt` and a later `occurredAt`, so it never qualifies,
+including after eviction or an unassign purge. A null odometer stays unknown; non-finite readings
+are stored as null. Completion stamps `odometerAtArrival` only when the stored reading's
+`arrivedAt == completion.arrivedAt` (the second lock against eviction + reinsertion), then consumes
+the entry. A dropoff-phase unassign purges it. The map drops the oldest entry at `MAX_PENDING`,
+independently from `pendingDropoffLegs`; a missing fact folds null. A blob written before the map
+existed decodes with an empty map and keeps its other facts (the codec's field-default rule); a blob
+whose entries are not `ArrivalReading` objects (the unshipped review-round shapes) is malformed and
+fails closed to an empty `LegState`.
+Projector **15** refolds history to backfill qualifying finite readings that survived the bounded
+map, supplying the #254 sampler's measured transit distance alongside pickup
+`odometerAtConfirmation`. The sampler refuses a row whose accumulated dropoff leg disagrees with
+`arrivalOdometer − confirmationOdometer`; zero extra miles can preserve a coherent stamped pair.
+The residual is metadata TIMING: the odometer is sampled when the `LogEvent` executes, not when the
+observation was reduced, so a delayed effect queue — and recovery replay of an UNFIRED
+`DELIVERY_ARRIVED` — can place a later odometer under the original `occurredAt`; because the same
+reading then feeds both the leg distance and the arrival odometer, such a row can pass the sampler's
+equality. This is a pre-existing property of every edge-stamped odometer, including
+`odometerAtConfirmation`; it is not introduced here.
+The reducer never reads GPS.
 
 `TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
 all delivery/pickup children and linked accepted offers by `(platform, sessionId, jobId)` before
