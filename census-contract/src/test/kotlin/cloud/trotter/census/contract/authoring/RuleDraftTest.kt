@@ -194,6 +194,10 @@ class RuleDraftTest {
             assertTrue(errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive(basis))))).none { "quoteBasis" in it })
         }
         assertTrue("invalid constant type for quoteBasis" in errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive("addon"))))))
+        for (scope in listOf("standalone", "add_on")) {
+            assertTrue(errors(offerShape.copy(constants = listOf(Constant("offerScope", JsonPrimitive(scope))))).none { "offerScope" in it })
+        }
+        assertTrue("invalid constant type for offerScope" in errors(offerShape.copy(constants = listOf(Constant("offerScope", JsonPrimitive("bogus"))))))
         assertEquals(listOf("hash field customerNameHash requires a node assignment"), errors(base.copy(
             screenClass = "task:dropoff:navigation", shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
         )))

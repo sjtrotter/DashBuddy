@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.state
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
@@ -62,11 +63,12 @@ class JobEconomicsTest {
 
     // #438 B3: an accept-latched offer that has already left presentation — an accepted-pending-
     // consumption survivor on the region's own pendingOffers, ready for the task edge to mint.
-    private fun acceptedOffer(offerHash: String, net: Double, est: Double, dist: Double, pay: Double) = PendingOffer(
+    private fun acceptedOffer(offerHash: String, net: Double, est: Double, dist: Double, pay: Double, scope: OfferScope = OfferScope.STANDALONE) = PendingOffer(
         offerHash = offerHash,
         offerFields = ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
+                offerScope = scope,
                 payAmount = pay,
                 distanceMiles = dist,
                 timeToCompleteMinutes = est.toLong(),
@@ -189,7 +191,7 @@ class JobEconomicsTest {
     fun `add-on offer accepted mid-job accumulates onto the active job`() {
         val r1 = stepAccept(
             onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
-            acceptedOffer("offer-2", net = 5.0, est = 12.0, dist = 3.0, pay = 7.0),
+            acceptedOffer("offer-2", net = 5.0, est = 12.0, dist = 3.0, pay = 7.0, scope = OfferScope.ADD_ON),
             acceptObs(2_000L, "Chipotle"),
         )
 
@@ -207,7 +209,7 @@ class JobEconomicsTest {
     fun `re-accepting the same offer does not double-count`() {
         val r1 = stepAccept(
             onlineRegion(activeJob = jobWith("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5)),
-            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5),
+            acceptedOffer("offer-1", net = 6.0, est = 18.0, dist = 4.0, pay = 8.5, scope = OfferScope.ADD_ON),
             acceptObs(2_000L, "H-E-B"),
         )
 

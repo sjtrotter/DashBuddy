@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
 import cloud.trotter.dashbuddy.domain.state.DestructiveKind
@@ -82,6 +83,11 @@ internal data class AcceptInputs(
     val dropoffCount: Int,
     /** #1304: the INCREMENTAL card's `+N stops` — pickups + dropoffs added; null when unparsed. */
     val stopCount: Int? = null,
+    /**
+     * null when the offer was not parsed; the consumer then keeps today's append behaviour
+     * (fail toward the old rule, never toward a surprise close).
+     */
+    val offerScope: OfferScope? = null,
 )
 
 internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
@@ -129,6 +135,7 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
         storeHints = storeHints,
         dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
         stopCount = parsedOffer?.stopCount,
+        offerScope = parsedOffer?.offerScope,
     )
 }
 
@@ -171,6 +178,21 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
             } else region
             return mintFreshJobFromAccept(completeActiveJob(committed, obs.timestamp), obs, inputs)
         }
+    }
+
+    // #1119 slice 1: a parsed STANDALONE offer accepted over a live job means the live job is stale on our side
+    // (the platform only stacks through an ADD_ON card). Close it through the #1312 whole-job abandon: open tasks
+    // are marked unassigned (never completed), the job closes, and the new offer mints fresh. An ADD_ON or an
+    // unparsed offer keeps the append path. Field evidence: design/2026-10-12-1312/addon-card-evidence.md.
+    if (inputs.offerScope == OfferScope.STANDALONE) {
+        // #1119 slice 1: TASK_RETIRE has nothing left to commit after abandon; other pending kinds survive.
+        val stale = if (region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE) {
+            region.copy(pendingDestructive = null)
+        } else region
+        return mintFreshJobFromAccept(
+            abandonActiveJob(stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)"),
+            obs, inputs,
+        )
     }
 
     return appendAddOn(region, existing, obs, inputs)

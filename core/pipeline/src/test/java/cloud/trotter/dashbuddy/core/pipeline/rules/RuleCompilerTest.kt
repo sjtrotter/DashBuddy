@@ -42,6 +42,33 @@ class RuleCompilerTest {
     }
 
     @Test
+    fun `offerScope declaration is load validated in inherited and branch-local parses`() {
+        for (value in listOf("standalone", "add_on", "bogus")) {
+            val parse = """"parse":{"as":"offer","fields":{
+                "payAmount":{"literal":10.5},"distance":{"literal":1.5},
+                "timeToCompleteMinutes":{"literal":1},"offerScope":{"literal":"$value"}
+            }}"""
+            for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
+                // #1119 slice 1: a sensitive rule propagates the declaration error instead of isolating it.
+                val source = """[{"id":"test.sensitive.offer","priority":10,$body}]"""
+                if (value == "bogus") {
+                    val failure = try {
+                        RuleCompiler.compileRules<UiNode>(parseJson(source).jsonArray, RuleContext.SCREEN)
+                        null
+                    } catch (e: RuleCompileException) {
+                        e
+                    }
+                    assertTrue("invalid scope must fail loudly", failure?.message?.contains("offerScope") == true)
+                    assertTrue(failure?.message?.contains("bogus") == true)
+                } else {
+                    val rules = RuleCompiler.compileRules<UiNode>(parseJson(source).jsonArray, RuleContext.SCREEN)
+                    assertEquals(1, rules.size)
+                }
+            }
+        }
+    }
+
+    @Test
     fun `idleSurface compiles on rules and branches and reaches match results`() {
         val state = """"state":{"flow":"idle","idleSurface":"no_orders"}"""
         for (body in listOf(

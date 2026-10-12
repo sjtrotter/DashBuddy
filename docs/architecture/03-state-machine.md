@@ -543,10 +543,17 @@ An INCREMENTAL accept in `appendAddOn` mints `stopCount − |new pickup hints|` 
 null (3+-digit route, or a pre-#1304 journal row) or out of 1..8 → 1), never `orders.size`, because the card lists the owned order too
 (#1304, fielded 2026-10-09 ×3).
 `quotedItemCount`/`offerUnitCount` are null for an INCREMENTAL accept.
-A job containing an increment has no complete blended net/rate/time. Incremental quotes never infer
+A job containing an increment has no complete blended net/rate/time. ADD_ON offers never infer
 click-less acceptance, including when return-flow context is absent; original-task return after a
 sheet or timeout preserves #1104/#1118. Marginal scoring, route recomputation and click-less add-on
 minting remain out of scope.
+
+**Offer scope (#1119 slice 1).** A parsed STANDALONE offer accepted over a live job that has not
+proven complete closes it through the #1312 whole-job abandon: open tasks are unassigned, never
+completed, with one `TASK_UNASSIGNED` per task; the job closes and a fresh job mints. ADD_ON appends;
+an unparsed accept keeps the append path. The #596 physically-complete check still runs first.
+Residual risk: a standalone card that really was a stack (never observed in 918 fielded offers)
+splits one job in two, failing toward orphaned placeholders, never toward forged pay.
 
 **Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
 tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,

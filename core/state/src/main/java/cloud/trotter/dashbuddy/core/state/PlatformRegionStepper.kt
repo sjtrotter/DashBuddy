@@ -1469,7 +1469,9 @@ class PlatformRegionStepper @Inject constructor() {
         // [timestamp] is the honest completion instant (the grace's `since`, #732); [observedAt] is
         // the frame that commits it, which is what a re-price decided here must be stamped with.
         DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
-        DestructiveKind.JOB_ABANDON -> abandonActiveJob(region.copy(pendingDestructive = null), timestamp)
+        DestructiveKind.JOB_ABANDON -> abandonActiveJob(
+            region.copy(pendingDestructive = null), timestamp, reason = "unassign then no-orders idle (#1312)",
+        )
     }
 
     /**

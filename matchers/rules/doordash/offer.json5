@@ -1038,7 +1038,9 @@
                   }
                 }
               },
-              "quoteBasis": "incremental"
+              "quoteBasis": "incremental",
+              // #1119 slice 1: the add-to-route card joins the live job; the ordinary card (branches 0/1, default standalone) closes a stale one.
+              "offerScope": "add_on"
             }
           },
           "validate": [

@@ -34,6 +34,10 @@ object StateMachineContract {
     const val QUOTE_BASIS_TOTAL = "total"
     const val QUOTE_BASIS_INCREMENTAL = "incremental"
     val SUPPORTED_QUOTE_BASES: Set<String> = setOf(QUOTE_BASIS_TOTAL, QUOTE_BASIS_INCREMENTAL)
+    /** #1119 slice 1: rule-declared offer lifecycle vocabulary. */
+    const val OFFER_SCOPE_STANDALONE = "standalone"
+    const val OFFER_SCOPE_ADD_ON = "add_on"
+    val SUPPORTED_OFFER_SCOPES: Set<String> = setOf(OFFER_SCOPE_STANDALONE, OFFER_SCOPE_ADD_ON)
     /**
      * Parse fields that are DECLARATIONS, not extractions (#1069): a literal whose value must come from the
      * listed vocabulary, load-validated per file by `RuleCompiler` (fail-loud, isolable) and offered as enum
@@ -42,6 +46,7 @@ object StateMachineContract {
     val PARSE_DECLARATION_LITERALS: Map<String, Set<String>> = mapOf(
         "presentationIdentity" to SUPPORTED_PRESENTATION_IDENTITIES,
         "quoteBasis" to SUPPORTED_QUOTE_BASES,
+        "offerScope" to SUPPORTED_OFFER_SCOPES,
     )
     val SUPPORTED_VERBS: Set<String> = EffectVerb.entries.map { it.wire }.toSet()
     val SUPPORTED_TRIGGERS: Set<String> = TransitionTrigger.entries.map { it.wire }.toSet()

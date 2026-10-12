@@ -37,6 +37,8 @@ object RuleAuthoringVocabulary {
     val PRESENTATION_IDENTITIES: List<String> = listOf("store", "economics")
     /** #1121: mirrors `StateMachineContract.SUPPORTED_QUOTE_BASES`. */
     val QUOTE_BASES: List<String> = listOf("total", "incremental")
+    /** #1119 slice 1: mirrors `StateMachineContract.SUPPORTED_OFFER_SCOPES`. */
+    val OFFER_SCOPES: List<String> = listOf("standalone", "add_on")
 
     val FLOWS: List<String> = listOf(
         "idle", "offer:presented", "task:pickup:navigation", "task:pickup:arrived",
@@ -138,6 +140,7 @@ object RuleAuthoringVocabulary {
             FieldSpec("assignmentId", FieldType.STRING),
             FieldSpec("presentationIdentity", FieldType.STRING),
             FieldSpec("quoteBasis", FieldType.STRING),
+            FieldSpec("offerScope", FieldType.STRING),
             FieldSpec("storeName", FieldType.STRING),
         ),
     )

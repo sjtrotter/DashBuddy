@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 
 import cloud.trotter.dashbuddy.domain.model.accessibility.ParsedTime
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.OfferKind
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.CountUnit
@@ -345,6 +346,9 @@ object ParsedFieldsFactory {
         val quoteBasis = if (f.str("quoteBasis") == StateMachineContract.QUOTE_BASIS_INCREMENTAL) {
             OfferQuoteBasis.INCREMENTAL
         } else OfferQuoteBasis.TOTAL
+        val offerScope = if (f.str("offerScope") == StateMachineContract.OFFER_SCOPE_ADD_ON) {
+            OfferScope.ADD_ON
+        } else OfferScope.STANDALONE
         val baseHashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
         // Astra r2: the token LEADS the input. A tokenless input always starts with the pay amount (a number
         // or "null"), so no store name can forge the `assignment=` segment — a suffix could be forged by a
@@ -396,6 +400,7 @@ object ParsedFieldsFactory {
             parsedOffer = ParsedOffer(
                 offerHash = offerHash,
                 quoteBasis = quoteBasis,
+                offerScope = offerScope,
                 presentationKey = presentationKey,
                 assignmentIdHash = assignmentIdHash,
                 // #461: the offer's item count is the SHOP item count — sum only the shop orders'

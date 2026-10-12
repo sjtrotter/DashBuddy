@@ -486,6 +486,7 @@ object RuleDraft {
         "sessionType" -> Vocabulary.SESSION_TYPES
         "presentationIdentity" -> Vocabulary.PRESENTATION_IDENTITIES // #1069
         "quoteBasis" -> Vocabulary.QUOTE_BASES
+        "offerScope" -> Vocabulary.OFFER_SCOPES
         else -> null
     }
 

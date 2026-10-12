@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -52,12 +53,12 @@ class OwnedOfferSurvivalTest {
         itemCount = 1, isItemCountEstimated = false, badges = emptySet(),
     )
 
-    private fun offerObs(t: Long, hash: String, stores: List<String>, pay: Double = 12.0) = Observation.Screen(
+    private fun offerObs(t: Long, hash: String, stores: List<String>, pay: Double = 12.0, scope: OfferScope = OfferScope.STANDALONE) = Observation.Screen(
         timestamp = t, captureId = null, ruleId = "doordash.screen.offer",
         metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
         parsed = ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
-                offerHash = hash, payAmount = pay, distanceMiles = 5.0, timeToCompleteMinutes = 20L,
+                offerHash = hash, offerScope = scope, payAmount = pay, distanceMiles = 5.0, timeToCompleteMinutes = 20L,
                 orders = stores.mapIndexed { i, s -> order(i, s) },
             ),
         ),
@@ -230,7 +231,7 @@ class OwnedOfferSurvivalTest {
         )
         val r = drive(
             region(activeJob = existing),
-            offerObs(3_000L, "o2", listOf("Mama Margies"), pay = 8.0),
+            offerObs(3_000L, "o2", listOf("Mama Margies"), pay = 8.0, scope = OfferScope.ADD_ON),
             acceptClick(3_050L),
             teardownObs(3_500L),
             dropoffNav(4_000L, "cx-2"),
@@ -287,10 +288,10 @@ class OwnedOfferSurvivalTest {
         )
         val r = drive(
             region(activeJob = existing),
-            offerObs(3_000L, "o2", listOf("Mama Margies"), pay = 8.0),
+            offerObs(3_000L, "o2", listOf("Mama Margies"), pay = 8.0, scope = OfferScope.ADD_ON),
             acceptClick(3_050L),
             teardownObs(3_400L),                             // o2 survivor armed
-            offerObs(3_600L, "o2", listOf("Mama Margies"), pay = 8.0), // re-present = revocation
+            offerObs(3_600L, "o2", listOf("Mama Margies"), pay = 8.0, scope = OfferScope.ADD_ON), // re-present = revocation
             declineClick(3_700L),                            // dasher declines it this time
             teardownObs(3_900L),
             dropoffNav(4_200L, "cx-1"),                      // active job's task flow resumes

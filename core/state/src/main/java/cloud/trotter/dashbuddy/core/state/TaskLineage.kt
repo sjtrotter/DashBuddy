@@ -233,7 +233,7 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
  * This step may overflow the recent-task cap: evict nothing until the close sweep has read older
  * delivered drops awaiting receipt-less completion. The next ordinary step applies the cap.
  */
-internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
+internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: Long, reason: String): PlatformRegion {
     val job = region.activeJob ?: return region
     val tasks = (region.recentTasks.filter { it.jobId == job.jobId } + job.tasks)
         .distinctBy { it.taskId }
@@ -254,8 +254,8 @@ internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: 
         recentTasks = region.recentTasks.filterNot { it.taskId in newlyUnassignedIds } + newlyUnassigned,
     ))
     Timber.tag("StateMachine").w(
-        "#1312 unassign → idle: job %s abandoned, %d open task(s) marked unassigned",
-        job.jobId, newlyUnassigned.size,
+        "job %s abandoned (%s), %d open task(s) marked unassigned",
+        job.jobId, reason, newlyUnassigned.size,
     )
     return completeActiveJob(abandoned, at)
 }

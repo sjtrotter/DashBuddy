@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -108,10 +109,11 @@ class StateMachineTest {
         timestamp = timestamp, type = type, targetPlatform = targetPlatform, payload = payload,
     )
 
-    private fun offerFields(storeName: String = "Chipotle", hash: String = "hash-123") =
+    private fun offerFields(storeName: String = "Chipotle", hash: String = "hash-123", scope: OfferScope = OfferScope.STANDALONE) =
         ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
                 offerHash = hash,
+                offerScope = scope,
                 payAmount = 7.50,
                 distanceMiles = 3.2,
                 orders = listOf(
@@ -965,7 +967,7 @@ class StateMachineTest {
         // #1104: a mid-job add-on's accept is proven by its CLICK (the legacy card emits one) — the
         // pickup surface re-rendering after it is no longer read as the accept on its own, because
         // the same re-render follows a declined add-on.
-        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Wendy's", "hash-B"))).newState
+        state = machine.step(state, screenObs(flow = Flow.OfferPresented, parsed = offerFields("Wendy's", "hash-B", OfferScope.ADD_ON))).newState
         state = machine.step(state, clickObs(intent = cloud.trotter.dashbuddy.domain.state.OfferIntent.ACCEPT, ruleId = "doordash.click.accept_offer")).newState
         state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields(storeName = "Wendy's"))).newState
 

@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.core.pipeline.rules
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -41,6 +42,28 @@ class ParsedFieldsFactoryTest {
         assertNotEquals(total.offerHash, incremental.offerHash)
         assertEquals(OfferQuoteBasis.TOTAL, Json.decodeFromString<ParsedOffer>("""{"offerHash":"old"}""").quoteBasis)
         assertEquals(incremental, Json.decodeFromString<ParsedOffer>(Json.encodeToString(incremental)))
+    }
+
+    @Test
+    fun `offer scope defaults to standalone and preserves hashes and serialization defaults`() {
+        val fields = mapOf("payAmount" to 10.5, "distance" to 1.5, "timeToCompleteMinutes" to 1L,
+            "presentationIdentity" to "store", "orders" to listOf(mapOf("storeName" to "H-E-B")))
+        fun parse(extra: Map<String, Any?> = emptyMap()) =
+            (ParsedFieldsFactory.create("offer", fields + extra) as ParsedFields.OfferFields).parsedOffer
+        val standalone = parse()
+        val addOn = parse(mapOf("offerScope" to "add_on"))
+        assertEquals(OfferScope.STANDALONE, standalone.offerScope)
+        assertEquals(OfferScope.STANDALONE, parse(mapOf("offerScope" to "standalone")).offerScope)
+        assertEquals(OfferScope.ADD_ON, addOn.offerScope)
+        assertEquals(standalone.offerHash, addOn.offerHash)
+        assertNotNull(standalone.presentationKey)
+        assertEquals(standalone.presentationKey, addOn.presentationKey)
+        assertEquals(addOn, Json.decodeFromString<ParsedOffer>(Json.encodeToString(addOn)))
+        assertEquals(OfferScope.STANDALONE, Json.decodeFromString<ParsedOffer>("""{"offerHash":"old"}""").offerScope)
+        assertFalse(Json.encodeToString(standalone).contains("offerScope"))
+        val withDefaults = Json { encodeDefaults = true }
+        assertTrue(withDefaults.encodeToString(standalone).contains(""""offerScope":"STANDALONE""""))
+        assertTrue(withDefaults.encodeToString(standalone).contains(""""quoteBasis":"TOTAL""""))
     }
 
     private fun offerWithOrderType(orderType: String?): OrderType {

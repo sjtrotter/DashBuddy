@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -81,7 +82,7 @@ class PerOfferPayAttributionTest {
         offerHash = hash,
         offerFields = ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
-                offerHash = hash, payAmount = pay, distanceMiles = 4.0, timeToCompleteMinutes = 20L,
+                offerHash = hash, offerScope = OfferScope.ADD_ON, payAmount = pay, distanceMiles = 4.0, timeToCompleteMinutes = 20L,
                 orders = stores.mapIndexed { i, s -> order(i, s) },
             ),
         ),
