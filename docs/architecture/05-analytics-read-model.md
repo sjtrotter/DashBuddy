@@ -751,15 +751,20 @@ including after eviction or an unassign purge. A null odometer stays unknown; no
 are stored as null. Completion stamps `odometerAtArrival` only when the stored reading's
 `arrivedAt == completion.arrivedAt` (the second lock against eviction + reinsertion), then consumes
 the entry. A dropoff-phase unassign purges it. The map drops the oldest entry at `MAX_PENDING`,
-independently from `pendingDropoffLegs`; a missing fact folds null. Legacy blobs without the map or
-with numeric/null entries instead of `ArrivalReading` fail closed to an empty `LegState`.
+independently from `pendingDropoffLegs`; a missing fact folds null. A blob written before the map
+existed decodes with an empty map and keeps its other facts (the codec's field-default rule); a blob
+whose entries are not `ArrivalReading` objects (the unshipped review-round shapes) is malformed and
+fails closed to an empty `LegState`.
 Projector **15** refolds history to backfill qualifying finite readings that survived the bounded
 map, supplying the #254 sampler's measured transit distance alongside pickup
 `odometerAtConfirmation`. The sampler refuses a row whose accumulated dropoff leg disagrees with
 `arrivalOdometer − confirmationOdometer`; zero extra miles can preserve a coherent stamped pair.
-The one residual is recovery replay of an UNFIRED `DELIVERY_ARRIVED`: metadata is stamped at replay
-time, placing the current odometer under the original `occurredAt`. This is a pre-existing property
-of every edge-stamped odometer, including `odometerAtConfirmation`.
+The residual is metadata TIMING: the odometer is sampled when the `LogEvent` executes, not when the
+observation was reduced, so a delayed effect queue — and recovery replay of an UNFIRED
+`DELIVERY_ARRIVED` — can place a later odometer under the original `occurredAt`; because the same
+reading then feeds both the leg distance and the arrival odometer, such a row can pass the sampler's
+equality. This is a pre-existing property of every edge-stamped odometer, including
+`odometerAtConfirmation`; it is not introduced here.
 The reducer never reads GPS.
 
 `TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
