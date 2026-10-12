@@ -122,7 +122,10 @@ internal fun LegState.closeLeg(odo: Double?): Pair<Double?, LegState> = when {
 private fun <T> List<T>.capPending(): List<T> =
     if (size <= LegState.MAX_PENDING) this else takeLast(LegState.MAX_PENDING)
 
-/** Put a pending fact, retaining insertion order and dropping the oldest on overflow. */
+/**
+ * Put a pending fact, retaining insertion order and dropping the oldest on overflow.
+ * Independently capped maps can evict different tasks; missing facts fold null, never a sibling's reading.
+ */
 private fun Map<String, Double>.putCapped(key: String, value: Double): Map<String, Double> {
     val added = this + (key to value)
     return if (added.size <= LegState.MAX_PENDING) added else {
@@ -168,7 +171,7 @@ internal fun SessionFoldContext.addDropoffLeg(taskId: String, odo: Double?): Ses
             ls.pendingDropoffLegs.putCapped(taskId, (ls.pendingDropoffLegs[taskId] ?: 0.0) + miles)
         } else ls.pendingDropoffLegs,
         // The arrival reading is a fact even when there was no anchor to measure a leg.
-        dropoffArrivalOdometers = if (odo != null && odo.isFinite()) {
+        dropoffArrivalOdometers = if (odo != null && odo.isFinite() && taskId !in ls.dropoffArrivalOdometers) {
             ls.dropoffArrivalOdometers.putCapped(taskId, odo)
         } else ls.dropoffArrivalOdometers,
     ))

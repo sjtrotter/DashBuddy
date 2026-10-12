@@ -50,9 +50,13 @@ data class LegState(
     val pendingStoreLegs: List<PendingStoreLeg> = emptyList(),
     val pendingDropoffLegs: Map<String, Double> = emptyMap(),
     /**
-     * #1310 — the last arrival odometer by dropoff taskId that completion stamps as
-     * `odometerAtArrival`; consumed at completion, purged on a dropoff-phase unassign.
-     * Bounded at [MAX_PENDING] with drop-oldest like [pendingDropoffLegs].
+     * #1310 — the FIRST arrival's odometer by dropoff taskId, coherent with `Task.arrivedAt`,
+     * which also keeps the first; a re-arrival's extra miles make the sampler refuse the row.
+     * Completion stamps it as `odometerAtArrival` and consumes it; a dropoff-phase unassign purges it.
+     * Bounded at [MAX_PENDING] with drop-oldest independently of [pendingDropoffLegs]. An anchorless
+     * arrival (no measurable leg) can sit only here, so the maps can evict different tasks. A task
+     * left with only one fact folds null `odometerAtArrival` or `milesToDropoff`: fail-null, never a
+     * sibling's reading.
      */
     val dropoffArrivalOdometers: Map<String, Double> = emptyMap(),
     val jobMileageBudgets: Map<String, JobMileageBudget> = emptyMap(),

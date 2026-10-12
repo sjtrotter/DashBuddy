@@ -741,12 +741,15 @@ into `orderCount` and permits `orderCountProven == true` only for nonempty order
 nonblank stores or explicit `(1)` chips; learning requires that proof as well as `orderCount == 1`.
 `AnalyticsRecordMappers` preserves the existing frozen mappings.
 
-**#1310 — arrival odometer.** Field evidence showed 258/258 `DELIVERY_ARRIVED` events stamped with
-an odometer but 0/266 delivery rows populated. Like the pickup side, the fold now reads event metadata:
-it retains the last finite arrival odometer by dropoff taskId, even without a measurable leg, and
+**#1310 — arrival odometer.** Field evidence in the 2026-10-11 pull showed 258/258 `DELIVERY_ARRIVED`
+events stamped with an odometer but 0/266 delivery rows populated. Like the pickup side, the fold now
+reads event metadata:
+it retains the first finite arrival odometer by dropoff taskId, even without a measurable leg, and
 consumes it at completion (or purges it on a dropoff-phase unassign). Projector **15** refolds history
-to backfill `odometerAtArrival`, supplying the #254 sampler's measured transit distance alongside
-pickup `odometerAtConfirmation`. The reducer never reads GPS.
+to backfill `odometerAtArrival` for every arrived drop whose reading survived the bounded map,
+supplying the #254 sampler's measured transit distance alongside pickup `odometerAtConfirmation`.
+The first reading stays coherent with `Task.arrivedAt`; a re-arrival's extra miles make the sampler
+refuse the row. The reducer never reads GPS.
 
 `TimeConstantDao` reads only these read-model tables, selecting numerical/provenance facts. It groups
 all delivery/pickup children and linked accepted offers by `(platform, sessionId, jobId)` before

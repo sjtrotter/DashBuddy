@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.evaluation.OfferQuality
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantObservation
+import cloud.trotter.dashbuddy.domain.evaluation.TimeConstants
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
@@ -460,13 +462,14 @@ class RecordFoldsTest {
         identityLess: Boolean = false,
         // #997 per-drop→offer lineage. Provenance only — no fold consumer today (pinned below).
         offerPayAttributedHash: String? = null,
+        arrivedAt: Long = at - 120_000,
     ) = ev(
         AppEventType.DELIVERY_COMPLETED, sid, at,
         DeliveryPayload(
             jobId = jobId, taskId = taskId, storeName = storeName,
             customerHash = if (identityLess) null else "cust-$taskId",
             addressHash = if (identityLess) null else "addr-$taskId",
-            phaseStartedAt = phaseStartedAt, arrivedAt = at - 120_000, completedAt = at,
+            phaseStartedAt = phaseStartedAt, arrivedAt = arrivedAt, completedAt = at,
             totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
             offerPayShare = offerPayShare, offerPayAttributedHash = offerPayAttributedHash,
         ),
@@ -1799,6 +1802,38 @@ class RecordFoldsTest {
 
     // ── #688 phase B: per-leg mileage ──────────────────────────────────────
 
+    private fun observationOf(delivery: DeliveryFold, pickup: PickupFold) = TimeConstantObservation(
+        platform = requireNotNull(Platform.fromName(delivery.platform)),
+        eventSequenceId = delivery.eventSequenceId,
+        phaseStartedAt = delivery.phaseStartedAt,
+        arrivedAt = delivery.arrivedAt,
+        completedAt = delivery.completedAt,
+        sessionId = delivery.sessionId,
+        sessionAssigned = 0,
+        payBasis = delivery.payBasis,
+        originalPayBasis = null,
+        realizedMinutes = delivery.realizedMinutes,
+        milesToStore = delivery.milesToStore,
+        milesToDropoff = delivery.milesToDropoff,
+        odometerAtArrival = delivery.odometerAtArrival,
+        pickupOdometerAtConfirmation = pickup.odometerAtConfirmation,
+        jobOfferCount = 1,
+        soleOfferHash = "h",
+        orderCount = 1,
+        orderCountProven = true,
+        isShop = false,
+        offerOutcomeResolved = null,
+        deliveryCount = 1,
+        pickupCount = 1,
+        acceptedOfferCount = 1,
+        matchingOfferCount = 1,
+        offerDecidedAt = pickup.phaseStartedAt,
+        pickupPhaseStartedAt = pickup.phaseStartedAt,
+        pickupArrivedAt = pickup.arrivedAt,
+        pickupConfirmedAt = pickup.confirmedAt,
+        pickupActivity = null,
+    )
+
     @Test
     fun `1310 single-order arrival metadata matches measured transit distance`() {
         val (outcomes, context) = foldSession(listOf(
@@ -1815,19 +1850,29 @@ class RecordFoldsTest {
         assertEquals(112.0, arrival, 0.0)
         assertEquals(7.0, miles, 0.0)
         assertEquals(miles, arrival - requireNotNull(pickup.odometerAtConfirmation), 1e-9)
+        val sample = requireNotNull(TimeConstants.sample(observationOf(row, pickup)))
+        val transitMinutes = (requireNotNull(row.arrivedAt) - requireNotNull(pickup.confirmedAt)) / 60_000.0
+        assertEquals(transitMinutes / miles, sample.minutesPerMile, 1e-9)
         assertTrue(requireNotNull(context).legState.dropoffArrivalOdometers.isEmpty())
     }
 
     @Test
-    fun `1310 re-arrival replaces the arrival odometer`() {
+    fun `1310 re-arrival keeps the first arrival odometer and the sampler refuses the row`() {
         val (outcomes, _) = foldSession(listOf(
             dashStart("arrival", 0, odo = 100.0),
+            pickupArrived("arrival", 240_000, "J1", "P1", "StoreX", odo = 105.0),
+            pickupConfirmed("arrival", 300_000, "J1", "P1", "StoreX", odo = 105.0),
             deliveryArrived("arrival", 600_000, "J1", "D1", odo = 110.0),
             deliveryArrived("arrival", 780_000, "J1", "D1", odo = 112.0),
-            delivery("arrival", 900_000, "J1", "D1", odo = 113.0),
+            // TaskLifecycle keeps the first arrival timestamp across a grace flap.
+            delivery("arrival", 900_000, "J1", "D1", odo = 113.0, arrivedAt = 600_000),
         ))
         val row = outcomes.mapNotNull { it.delivery }.single()
-        assertEquals(112.0, requireNotNull(row.odometerAtArrival), 0.0)
+        val pickup = outcomes.mapNotNull { it.pickup }.single()
+        assertEquals(110.0, requireNotNull(row.odometerAtArrival), 0.0)
+        assertEquals(600_000L, requireNotNull(row.arrivedAt))
+        assertEquals(7.0, requireNotNull(row.milesToDropoff), 0.0)
+        assertNull(TimeConstants.sample(observationOf(row, pickup)))
     }
 
     @Test

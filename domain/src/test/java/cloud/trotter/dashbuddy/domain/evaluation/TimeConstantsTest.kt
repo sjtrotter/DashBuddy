@@ -80,16 +80,6 @@ class TimeConstantsTest {
         }
     }
 
-    @Test fun `1310 fold arrival and pickup odometers satisfy the transit distance gate`() {
-        val observation = row().copy(
-            milesToStore = 5.0,
-            milesToDropoff = 7.0,
-            odometerAtArrival = 112.0,
-            pickupOdometerAtConfirmation = 105.0,
-        )
-        assertNotNull(TimeConstants.sample(observation))
-    }
-
     @Test fun `trust gate and cumulative seed blend`() {
         assertTrue(TimeConstants.estimate(emptyList()).isEmpty())
         assertEquals(TimeConstantSeeds.DEFAULT, TimeConstants.blend(TimeConstantSeeds.DEFAULT, null))
