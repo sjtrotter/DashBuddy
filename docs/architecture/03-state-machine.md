@@ -295,14 +295,14 @@ when that retire's PROVENANCE (`armedFromFlow`, #596) says the task it retires a
   it live, but a replay (and any consumer counting raw effects) double-counts.
 - A **null** `armedFromFlow` is refused: unprovenanced evidence is not evidence (#745).
 
-**The #615 arrival gate is an ADDITIONAL condition** (round 4). Provenance says the dasher LEFT the
-task; it does not say the order was delivered. The retire's own T1 close already demands arrival
-(the original `isJobPhysicallyComplete` gate required `arrivedAt != null`) and absorption was walking
-straight past it — an Idle-armed retire on a drop the dasher was still NAVIGATING to was honored at
-the summary, minting a `DELIVERY_COMPLETED` with a null arrival and a #691 offer-pay estimate riding
-it. So the region's `activeTask` must also be an ARRIVED, un-unassigned DROPOFF. Note the difference
-from the rejected rule 2 below: there arrival was a SUBSTITUTE for a standing retire; here it is an
-extra condition on rule 1 — a watched retire AND evidence the dasher reached the doorstep.
+**Delivery evidence is an ADDITIONAL condition** (#615/#1101/#1315). T1 close, absorption and
+endSession share one standard — arrival OR a completion-steps tap the dasher did not navigate away
+from (#1315). The active task must be an EVIDENCED, un-unassigned DROPOFF. A gift sheet can supply
+the tap without an arrival stamp; a SESSION_END armed inside that drop's retire window now absorbs
+it and honors the completion once the retire matures, minting `DELIVERY_COMPLETED` just as T1 does.
+`completedInline` lets `isDeliveredEvidenced` read the committing retire consistently at each gate.
+Provenance still requires a watched retire: evidence is an extra condition on rule 1, never a
+substitute for the standing retire (the rejected rule 2 below).
 
 **The retire's DEADLINE is absorbed too, as a FLOOR** (round 5, `absorbedRetireDeadline`). Absorbing
 moved the evidence into another slot but was shortening the window it stood in: a summary arriving
@@ -591,24 +591,35 @@ placeholder-count==physical-drops premise desyncs on per-order placeholders + th
 TBD placeholder outstanding forever, defeating `isJobPhysicallyComplete` so the #596 T2 guard never
 fired and the next offer folded into the finished job (the job-61 class); #749 added a **per-customer
 coverage arm** (`JobCompleteness.kt`, evaluated only when the strict arm fails) that proves
-completion from the pickup side — when pickups map 1:1 to orders at distinct stores their hash set
-IS the job's customer set, so "every customer hash has a finished drop with delivery evidence" ⟺ complete,
+completion from the pickup side — when pickups map 1:1 to orders (one trip per order, including
+confirmed-store re-visits), their hash set IS the job's customer set, so "every customer hash has a finished drop with delivery evidence" ⟺ complete,
 placeholder count irrelevant. The D6 join-miss WARN is edge-gated once per taskId
 (`PlatformRegion.lastJoinMissWarnTaskId`).
 
 **Same-store add-ons (#1315).** Dedup incoming store hints against OPEN pickups only
-(`completedAt == null && unassignedAt == null`). A CONFIRMED pickup never absorbs a same-store
-add-on: that order is already in the car, so a revisit gets its own pickup placeholder. The #1304
-incremental dropoff count still subtracts the number of new pickup hints.
+(`confirmedAt == null && unassignedAt == null`). `Task.confirmedAt` records the pickup→dropoff
+sweep edge, including arrived, unassigned-free recent pickups of the job; pickup→pickup displacement
+alone leaves a pickup open for fold-in and resume. A CONFIRMED pickup never absorbs a same-store
+add-on: a revisit gets its own pickup placeholder. An open matching placeholder blocks resume
+of an earlier confirmed or abandoned pickup; navigation resolves onto the new placeholder.
+The #1304 incremental dropoff count subtracts
+only stores new to the route (deduplicated against ALL pickups), not same-store revisit placeholders.
 
 **JobCompleteness delivery evidence (#615/#1315).** A completed, un-unassigned drop needs either
-`arrivedAt` or the dasher's explicit complete-delivery-steps tap (`Task.completionStepsAt`). The
-2026-10-11 gift sheet missed arrival; the geofenced tap witnesses delivery so that completed job
-can close instead of swallowing later accepts. A grace stamp alone remains insufficient. The tap
-is set once from the click observation timestamp and mirrored through `reconcileJobTasks`; it
-never substitutes for arrival in dwell/mileage. Retire absorption (`absorbableRetire` / `endSession`)
-remains ARRIVED-only and fail-null (#615/#1101). The nullable default is additive to kotlinx JSON
-snapshots; no migration.
+`arrivedAt` or a complete-delivery-steps tap the dasher did not navigate away from afterwards
+(`Task.completionStepsAt`). The click's recognized screen rule is stored as identity data in
+`completionStepsScreen`: a later navigation frame of that same screen keeps the tap (the gift sheet's
+35_win re-render); a different navigation screen clears both fields. A null screen context clears
+on any navigation frame. ARRIVED, Idle and flowless geofence-warning frames keep the witness.
+A different customer's navigation creates a sibling drop without transferring the witness.
+A grace stamp alone remains insufficient. The tap uses the click observation timestamp and is
+mirrored through `reconcileJobTasks`; it never substitutes for arrival in dwell/mileage. T1 close,
+absorption and endSession use the same evidence standard, with retire provenance and maturity
+still required for session-end honoring.
+Residual: tap → back out → Idle with no further frame still closes on the grace, just like an
+ARRIVED-then-abandoned drop today (pre-existing #1101-class behavior). A delayed click still stamps
+whichever drop is active; the click's own `screenIs` gate bounds it to a drop-off surface.
+The nullable defaults are additive to kotlinx JSON snapshots; no migration.
 
 **Unassign-via-help** (`Flow.TaskUnassigned` = wire `task:unassigned`, #736) is an **inline
 (ungraced) abandon** of the active task: `abandonActiveTask` marks `Task.unassignedAt` and leaves

@@ -299,17 +299,13 @@ class DoorDashAddonStateTest {
             orders = AddonCardTree.parse().orders.take(1),
         )
         var state = liveJob(offer)
-        val region = state.regions.platforms.getValue(Platform.DoorDash)
-        val pickup = region.activeTask!!.copy(
-            arrivedAt = 4_000L, completedAt = if (confirmed) 5_000L else null,
-        )
-        val before = region.activeJob!!.copy(tasks = region.activeJob!!.tasks.map {
-            if (it.taskId == pickup.taskId) pickup else it
-        })
-        val drop = before.tasks.first { it.phase == TaskPhase.DROPOFF }
-        state = state.copy(regions = state.regions.copy(platforms = mapOf(
-            Platform.DoorDash to region.copy(activeJob = before, activeTask = drop, recentTasks = listOf(pickup)),
-        )))
+        state = machine.step(state, pickup(4_000L).copy(
+            flow = Flow.TaskPickupArrived,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.ARRIVED, storeName = "H-E-B"),
+        )).newState
+        if (confirmed) state = confirmPickup(state)
+        val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(if (confirmed) 5_000L else null, before.tasks.single { it.phase == TaskPhase.PICKUP }.confirmedAt)
         state = machine.step(state, screen(10_000L, offer)).newState
         state = machine.step(state, Observation.Click(
             timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
@@ -332,6 +328,47 @@ class DoorDashAddonStateTest {
             assertNull(pickups.single().completedAt)
         }
         assertEquals(1, added.count { it.phase == TaskPhase.DROPOFF })
+    }
+
+    private fun confirmPickup(state: AppState): AppState = machine.step(state, Observation.Screen(
+        timestamp = 5_000L, captureId = null, ruleId = "doordash.screen.dropoff_navigation", metadata = ReplayMetadata.EMPTY,
+        flow = Flow.TaskDropoffNavigation, modeHint = Mode.Online,
+        parsed = ParsedFields.TaskFields(phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION,
+            customerNameHash = "owned-customer", customerAddressHash = "owned-address"),
+    )).newState
+
+    @Test
+    fun `incremental three stops after confirmed A adds two drops and both revisit A and new B pickups`() {
+        val original = AddonCardTree.parse().let { it.copy(orders = it.orders.take(1)) }
+        var state = liveJob(original)
+        state = machine.step(state, pickup(4_000L).copy(
+            flow = Flow.TaskPickupArrived,
+            parsed = ParsedFields.TaskFields(phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.ARRIVED, storeName = "H-E-B"),
+        )).newState
+        state = confirmPickup(state)
+        val before = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(5_000L, before.tasks.single { it.phase == TaskPhase.PICKUP }.confirmedAt)
+        val offer = AddonCardTree.parse(AddonCardTree.card(
+            route = "+3 stops (2.9 mi) • +12 min", merchant = "H-E-B", secondMerchant = "Petsmart",
+        ))
+        assertEquals(OfferQuoteBasis.INCREMENTAL, offer.quoteBasis)
+        state = machine.step(state, screen(10_000L, offer)).newState
+        state = machine.step(state, Observation.Click(
+            timestamp = 11_000L, captureId = null, ruleId = "doordash.click.accept_offer", metadata = ReplayMetadata.EMPTY,
+            flow = null, modeHint = null, parsed = ParsedFields.ClickFields(intent = OfferIntent.ACCEPT),
+        )).newState
+        state = machine.step(state, Observation.Screen(
+            timestamp = 12_000L, captureId = null, ruleId = "doordash.screen.task_active", metadata = ReplayMetadata.EMPTY,
+            flow = Flow.TaskActive, modeHint = Mode.Online, parsed = ParsedFields.None,
+        )).newState
+        val job = state.regions.platforms.getValue(Platform.DoorDash).activeJob!!
+        assertEquals(before.jobId, job.jobId)
+        val added = job.tasks.filter { task -> before.tasks.none { it.taskId == task.taskId } }
+        assertEquals(2, added.count { it.phase == TaskPhase.DROPOFF })
+        val pickups = added.filter { it.phase == TaskPhase.PICKUP }
+        assertEquals(2, pickups.size)
+        assertEquals(setOf("H-E-B", "Petsmart"), pickups.map { it.expectedStoreHint }.toSet())
+        pickups.forEach { assertNull(it.confirmedAt); assertNull(it.arrivedAt) }
     }
 
     private fun assertAddonCard(card: FlowCardSnapshot.Offer) {

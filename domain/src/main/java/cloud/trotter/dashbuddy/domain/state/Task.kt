@@ -33,14 +33,25 @@ data class Task(
     val arrivedAt: Long? = null,
     /**
      * #1315 — the instant the dasher tapped the platform's complete-delivery control on this
-     * DROPOFF. Set once; a second delivery witness beside [arrivedAt], never a substitute for
+     * DROPOFF. Cleared by navigation away from the tapped screen on this drop; a second witness
+     * beside [arrivedAt], never a substitute for
      * [arrivedAt] in dwell/mileage folds. Default-null keeps old kotlinx snapshots compatible.
      */
     val completionStepsAt: Long? = null,
+    /**
+     * The recognized screen rule the complete-delivery control was tapped on — identity DATA
+     * compared for equality, never branched on by value; cleared with the witness.
+     */
+    val completionStepsScreen: String? = null,
     val odometerAtEntry: Double? = null,
     val odometerAtArrival: Double? = null,
     val startedAt: Long,
     val completedAt: Long? = null,
+    /**
+     * #1315 — the pickup→dropoff edge at which this PICKUP was confirmed, the stepper twin
+     * of the PICKUP_CONFIRMED sweep; null for an unconfirmed or displaced-only pickup.
+     */
+    val confirmedAt: Long? = null,
     /**
      * The moment the dasher **abandoned** this task by unassigning the order (#736). Set by
      * `PlatformRegionStepper.abandonActiveTask` when a `Flow.TaskUnassigned` frame lands; mutually

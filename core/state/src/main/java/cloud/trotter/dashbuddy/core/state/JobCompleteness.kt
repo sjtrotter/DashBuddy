@@ -24,9 +24,10 @@ import timber.log.Timber
  * accounted — its taskId appears in [recentTasks] with `completedAt != null`, or it IS [justRetired] —
  * with no unresolved customer-TBD placeholder outstanding, and at least one dropoff actually finished.
  * A zero-dropoff job never qualifies. Accounted additionally requires delivery evidence
- * (#615): arrival OR the explicit complete-delivery-steps tap (`completionStepsAt`, #1315). The
- * 2026-10-11 gift drop missed arrival but carried this geofenced tap; its open job swallowed every
- * later accept. A grace-stamped `completedAt` alone is still not delivery proof — a drop retired
+ * (#615): arrival OR a complete-delivery-steps tap the dasher did not navigate away from afterwards
+ * (`completionStepsAt`, #1315). A later navigation frame on the same drop clears that witness.
+ * Residual: tap → back out → Idle with no further frame still closes on the grace, just like an
+ * ARRIVED-then-abandoned drop today (pre-existing #1101-class behavior). A grace-stamped `completedAt` alone is still not delivery proof — a drop retired
  * EN ROUTE must never read as delivered. Retire absorption (`absorbableRetire` / `endSession`)
  * stays ARRIVAL-only and fail-null (#615/#1101); dwell/mileage still use only `arrivedAt`. An UNASSIGNED dropoff (#752) is never
  * "delivered": the cross-frame retro-mark stamps `unassignedAt` on grace-retired DROPOFFs, so the
@@ -39,10 +40,10 @@ import timber.log.Timber
  * one taskId, #498), so the extra TBD placeholder never appears finished → strict is false forever →
  * the #596 T2 guard never fires and the next offer folds into the finished job (the job-61 class).
  *
- * The missing per-order customer knowledge comes from the PICKUP side. When every order sits at a
- * distinct store, pickup placeholders map 1:1 to orders (`preCreatedPickups` is per distinct store,
- * `preCreatedDropoffs` per order — counts equal ⟺ all orders at distinct stores), so the pickups'
- * distinct hash set is EXACTLY the job's customer set; combined with the resume-collapse invariant
+ * The missing per-order customer knowledge comes from the PICKUP side. When pickup and dropoff
+ * counts equal, pickups map 1:1 to orders (one trip per order); their hash set IS the customer set.
+ * This includes a confirmed-store re-visit that mints another pickup at the same store, not only
+ * orders at distinct stores. Combined with the resume-collapse invariant
  * (at most one dropoff taskId per customer hash), "every customer hash has a finished drop with delivery evidence"
  * ⟺ "every physical drop is done" — placeholder count is then irrelevant. See [perCustomerCoverage].
  *
@@ -165,8 +166,8 @@ private fun perCustomerCoverage(
     val pickupIds = mirror.filter { it.phase == TaskPhase.PICKUP }.mapTo(HashSet()) { it.taskId }
     val dropoffIds = mirror.filter { it.phase == TaskPhase.DROPOFF }.mapTo(HashSet()) { it.taskId }
 
-    // Coverage gate: ≥1 pickup, and pickups map 1:1 to dropoffs — i.e. every order at a distinct
-    // store, so the pickups' hash set IS the job's customer set. A same-store multi-order stack
+    // Coverage gate: ≥1 pickup, and pickups map 1:1 to orders (one trip per order), including a
+    // confirmed-store re-visit; their hash set IS the customer set. A same-store multi-order stack
     // (|P_pick| < |P_drop|) or the unparsed-offer / GoPuff-bin-scan shape fails here → strict-only.
     if (pickupIds.isEmpty() || pickupIds.size != dropoffIds.size) return false
 
@@ -204,5 +205,5 @@ private fun perCustomerCoverage(
 }
 
 /** #615/#1315: a grace stamp needs a positive delivery witness; abandonment always excludes it. */
-private fun Task.isDeliveredEvidenced(): Boolean =
+internal fun Task.isDeliveredEvidenced(): Boolean =
     completedAt != null && unassignedAt == null && (arrivedAt != null || completionStepsAt != null)

@@ -67,6 +67,9 @@ class SkeletonCorpusGuardsTest : SkeletonCorpusTestBase() {
                 // #1127 dropoff_customer_unavailable fixtures (prism button ids carry a per-render UUID)
                 "PRIMARY_BUTTON_23ff862f-9605-4c18-9c83-0f8d5a615fd2",
                 "PRIMARY_BUTTON_904af26a-177a-408d-a440-c4a187ab8bc9",
+                // #1315: the gift_drop_open_job_2026_10_11 session's two prism-button clicks.
+                "PRIMARY_BUTTON_5e4a93b4-1c58-4a11-ab75-bac006f84776",
+                "PRIMARY_BUTTON_8699d5c1-6471-41bf-8d47-2137e8b51bb1",
                 "SECONDARY_BUTTON_23ff862f-9605-4c18-9c83-0f8d5a615fd2",
             ),
             rejected,

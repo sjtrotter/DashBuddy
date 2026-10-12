@@ -671,7 +671,7 @@
                           }
                          },
                          {
-                          "text": "<NAME>",
+                          "text": "[redacted]",
                           "id": "com.doordash.driverapp:id/gift_recipient_name",
                           "class": "android.widget.TextView",
                           "isEnabled": true,

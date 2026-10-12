@@ -394,12 +394,17 @@ class PlatformRegionStepper @Inject constructor() {
 
         // #1315: explicit completion-steps intent is a second delivery witness. The step wrapper's
         // reconcileJobTasks mirrors this copy into Job.tasks; arrival/dwell and flow stay untouched.
+        // Accepted residual: a delayed click stamps whichever drop is active. Its own screenIs gate
+        // bounds it to a drop-off surface; the stacked-drop guard prevents migration to a sibling.
+        // Navigation to a different screen on the same drop clears the witness (a refused or abandoned tap).
         val task = current.activeTask
         if (obs is Observation.Click && obs.platform == current.platform &&
             (obs.parsed as? ParsedFields.ClickFields)?.intent == TaskIntent.COMPLETE_DELIVERY &&
             task?.phase == TaskPhase.DROPOFF && task.completionStepsAt == null && task.completedAt == null
         ) {
-            current = current.copy(activeTask = task.copy(completionStepsAt = obs.timestamp))
+            current = current.copy(activeTask = task.copy(
+                completionStepsAt = obs.timestamp, completionStepsScreen = obs.screenRuleId,
+            ))
         }
 
         // Resolve what mode this observation implies
@@ -765,18 +770,13 @@ class PlatformRegionStepper @Inject constructor() {
      * - **`armedFromFlow == null`** — a pre-#596 snapshot's retire, or one whose provenance was never
      *   recorded. Unprovenanced evidence is not evidence: fail-null (#745).
      *
-     * **The #615 ARRIVAL gate applies too** (round 4). Provenance says the dasher LEFT the task; it
-     * does not say the order was delivered. The retire's own T1 job close already demands arrival —
-     * `isJobPhysicallyComplete` counts only a dropoff with `arrivedAt != null` — and absorption was
-     * walking straight past it: an Idle-armed retire on a drop the dasher was still NAVIGATING to
-     * (identity-bearing, `arrivedAt == null`) was honored at the summary, minting a
-     * `DELIVERY_COMPLETED` with a null arrival and a #691 offer-pay estimate riding it. So the
-     * active task must be an ARRIVED, un-unassigned DROPOFF.
-     *
-     * This is the arrival gate from the REJECTED rule 2, and the difference is the whole point:
-     * there it was a SUBSTITUTE for a standing retire (arrival ALONE authorizing a completion, which
-     * fabricates one for a drop cancelled through an uncaptured path); here it is an ADDITIONAL
-     * condition on rule 1. A watched retire AND evidence the dasher reached the doorstep.
+     * **Delivery evidence is an ADDITIONAL condition** (#615/#1101/#1315). T1 close, absorption
+     * and endSession share one standard — arrival OR a completion-steps tap the dasher did not
+     * navigate away from (#1315), on an un-unassigned DROPOFF. A gift sheet can supply the tap
+     * without arrival; SESSION_END inside its retire window must honor it once the window matures,
+     * just like T1. [completedInline] lets the shared [isDeliveredEvidenced] predicate see the retire
+     * as committed without mutating the task. Provenance still requires a watched retire; evidence
+     * alone never authorizes a completion (the rejected rule 2 below).
      *
      * **Rule 2 was considered and REJECTED** (round 2): absorbing at the AUTHORITATIVE summary
      * whenever an ARRIVED dropoff was still active would have covered the retire-less 09-05 shape,
@@ -786,12 +786,11 @@ class PlatformRegionStepper @Inject constructor() {
      */
     private fun PlatformRegion.absorbableRetire(): PendingDestructive? {
         val drop = activeTask ?: return null
-        if (drop.phase != TaskPhase.DROPOFF || drop.arrivedAt == null || drop.unassignedAt != null) {
-            return null
-        }
+        if (drop.phase != TaskPhase.DROPOFF) return null
         return pendingDestructive
             ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
             ?.takeIf { it.armedFromFlow != null && it.armedFromFlow !in UNABSORBABLE_RETIRE_FLOWS }
+            ?.takeIf { drop.completedInline(it.since).isDeliveredEvidenced() }
     }
 
     /**
@@ -1494,7 +1493,12 @@ class PlatformRegionStepper @Inject constructor() {
         // a force-stamp here is automatically refused a row.
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
         val matured = observedAt >= (pend?.absorbedRetireDeadline ?: Long.MIN_VALUE)
-        val honoredAt = pend?.absorbedRetireSince?.takeIf { matured }
+        // The same delivery evidence gate as T1 and absorption, including restored absorbed state.
+        val honoredAt = pend?.absorbedRetireSince?.takeIf { at ->
+            matured && region.activeTask?.let {
+                it.phase == TaskPhase.DROPOFF && it.completedInline(at).isDeliveredEvidenced()
+            } == true
+        }
         val completedTask = region.activeTask?.let {
             if (honoredAt != null) {
                 // Round 7: STATE the honor on the task (`Task.honoredRetireAt`) instead of leaving the
