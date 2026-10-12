@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -199,12 +200,13 @@ class BubbleViewModel @Inject constructor(
         val sessionId = session?.sessionId
         val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
         val earnings = when {
-            isNewSession -> null
+            isNewSession -> session.runningEarnings
             session != null -> session.runningEarnings ?: lastKnown
             else -> lastKnown
         }
         Pair(sessionId ?: lastSessionId, earnings)
     }
+        .drop(1)
         .map { it.second }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

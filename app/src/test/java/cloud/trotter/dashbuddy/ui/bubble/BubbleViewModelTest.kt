@@ -27,9 +27,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -304,6 +307,55 @@ class BubbleViewModelTest {
         advanceUntilIdle()
         assertEquals(7.25, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
         job.cancel()
+    }
+
+    @Test
+    fun `a new session immediately shows its own existing figure (#1041)`() = runTest {
+        stubNoDashes()
+        state.value = earningsState("session-1", 12.50)
+        val vm = viewModel()
+        val emissions = mutableListOf<Double?>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.sessionEarnings.collect { emissions.add(it) }
+        }
+        runCurrent()
+        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+        emissions.clear()
+
+        state.value = earningsState("session-2", 7.25)
+        runCurrent()
+        assertEquals(listOf(7.25), emissions)
+        assertEquals(Formats.money(7.25), sessionEarningsText(vm.sessionEarnings.value))
+        job.cancel()
+    }
+
+    @Test
+    fun `session earnings restart keeps the cached figure without a placeholder emission (#1041)`() = runTest {
+        stubNoDashes()
+        state.value = earningsState("session-1", 12.50)
+        val vm = viewModel()
+        val firstJob = launch { vm.sessionEarnings.collect {} }
+        runCurrent()
+        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+
+        firstJob.cancel()
+        runCurrent()
+        advanceTimeBy(6_000L)
+        runCurrent()
+        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+
+        // Eager collection catches even a transient null that StateFlow could otherwise conflate.
+        val emissions = mutableListOf<Double?>()
+        val restartedJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.sessionEarnings.collect { emissions.add(it) }
+        }
+        runCurrent()
+        assertEquals(listOf(12.50), emissions)
+
+        state.value = earningsState("session-1", 16.70)
+        runCurrent()
+        assertEquals(listOf(12.50, 16.70), emissions)
+        restartedJob.cancel()
     }
 
     @Test

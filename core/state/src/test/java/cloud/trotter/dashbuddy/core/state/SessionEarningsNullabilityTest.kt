@@ -101,6 +101,24 @@ class SessionEarningsNullabilityTest {
     }
 
     @Test
+    fun `zero read with no committed figure clears a positive park before the settle timer`() {
+        val parked = step(region(), screen(parsed = ParsedFields.IdleFields(sessionPay = 470.00)))
+        assertNull(parked.session?.runningEarnings)
+        assertEquals(470.00, parked.pendingSessionPay?.value ?: Double.NaN, 0.0001)
+
+        val contradicted = step(
+            parked,
+            screen(parsed = ParsedFields.IdleFields(sessionPay = 0.0), timestamp = t0 + 200L),
+        )
+        assertNull(contradicted.session?.runningEarnings)
+        assertNull(contradicted.pendingSessionPay)
+
+        val later = step(contradicted, wake(t0 + GraceConfig.SESSION_PAY_SETTLE_MS))
+        assertNull(later.session?.runningEarnings)
+        assertNull(later.pendingSessionPay)
+    }
+
+    @Test
     fun `zero wheel read leaves null and positive totals unchanged even after the window`() {
         for (earnings in listOf(null, 16.70)) {
             val read = step(region(earnings), screen(parsed = ParsedFields.IdleFields(sessionPay = 0.0)))

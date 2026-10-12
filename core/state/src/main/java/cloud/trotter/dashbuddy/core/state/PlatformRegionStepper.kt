@@ -1151,8 +1151,10 @@ class PlatformRegionStepper @Inject constructor() {
      *                        not Online and re-based on the transition back — see
      *                        [PendingSessionPay] for the canonical statement, [stepCore]'s expiry
      *                        block for the freeze and [applyModeTransition] for the re-base.
-     *  - read == 0.00 with no figure or a positive committed total → the LOAD PLACEHOLDER;
-     *                        ignore it entirely (#1041: absence stays absent)
+     *  - read == 0.00 with no figure → keep null and drop any park — a zero contradicts a
+     *                        parked figure (#1041).
+     *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER;
+     *                        ignore it entirely
      *                        (the same earnings-pill component renders `$0.00` for seconds before
      *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
      *                        and a dash running total never legitimately returns to zero mid-dash).
@@ -1203,7 +1205,7 @@ class PlatformRegionStepper @Inject constructor() {
         val running = session.runningEarnings
         return when {
             pay == 0.0 && (running ?: 0.0) > 0.0 -> region
-            pay == 0.0 && running == null -> region
+            pay == 0.0 && running == null -> region.copy(pendingSessionPay = null)
             running != null && centsEqual(pay, running) -> region.copy(pendingSessionPay = null)
             // The AGREEING arm (#1052 round 4): same value AND the same surface. The flow test is
             // what keeps the agreement honest — a read on ANOTHER surface that happens to state
