@@ -556,7 +556,7 @@ class EffectMapPayloadTest {
     // =========================================================================
 
     @Test
-    fun `DASH_START carries sessionId platform source startScreen`() {
+    fun `DASH_START carries sessionId platform source startScreen and logical start time`() {
         val regionPrev = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
         val regionNext = PlatformRegion(
             platform = Platform.DoorDash,
@@ -565,7 +565,7 @@ class EffectMapPayloadTest {
         )
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
         val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
-        val obs = screenObs(modeHint = Mode.Online, timestamp = 1000L)
+        val obs = screenObs(modeHint = Mode.Online, timestamp = 9000L)
 
         val logs = logEvents(prev, next, obs, AppEventType.DASH_START)
         assertEquals(1, logs.size)
@@ -574,6 +574,7 @@ class EffectMapPayloadTest {
         assertEquals("s-new", payload.sessionId)
         assertEquals("DoorDash", payload.platform)
         assertEquals(1000L, payload.startedAt)
+        assertEquals(1000L, logs.single().event.occurredAt)
         assertTrue(payload.source == "interaction" || payload.source == "recovery")
     }
 

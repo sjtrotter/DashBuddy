@@ -48,14 +48,7 @@ class TransitionPolicy @Inject constructor(
          */
         const val AUTHORITATIVE_GRACE_MS = GraceConfig.AUTHORITATIVE_GRACE_MS
 
-        /**
-         * Grace for a screen-implied resume out of [Mode.Paused] (#605). Must
-         * exceed the observed ~4.3s under-modal receipt-flap window with margin
-         * (DoorDash's pause sheet sits on the just-completed delivery summary,
-         * so frames flap paused ↔ online) yet stay short enough that a real
-         * resume's card/log lands promptly — the resume is not glance-critical,
-         * so a ≤8s lag after the dasher taps Resume is acceptable.
-         */
+        /** Grace for screen-implied Paused resumes and hint-only Offline starts near an end (#605/#1311). */
         const val PAUSE_RESUME_GRACE_MS = GraceConfig.PAUSE_RESUME_GRACE_MS
     }
 
@@ -67,9 +60,13 @@ class TransitionPolicy @Inject constructor(
     fun authoritativeGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).authoritativeGraceMs
 
-    /** Screen-implied resume-from-Paused grace for [platform] (#605/#438 item 6). */
+    /** Grace for Paused resumes and post-end hint-only Offline starts on [platform] (#605/#1311). */
     fun pauseResumeGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).pauseResumeGraceMs
+
+    /** Post-end window for gracing hint-only Online screens on [platform] (#1311). */
+    fun postEndHintGraceWindowMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).postEndHintGraceWindowMs
 
     /**
      * Safety buffer added to the platform's own reported pause countdown before the pause-safety

@@ -15,7 +15,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
  * **[sequenceId] is the authoritative fold/order key. [occurredAt] is NOT guaranteed to be
  * monotonic with it.**
  *
- * The lag has ONE concrete carrier, not a blanket "every graced commit lags" rule:
+ * The lag has concrete carriers, not a blanket "every graced commit lags" rule:
  * **`PICKUP_CONFIRMED`** mints its [occurredAt] from `Task.completedAt`
  * (`TaskEffects.kt` — `confirmedAt = task.completedAt ?: obs.timestamp`), and `completedAt` is
  * itself stamped at grace-**ARM** time (`pend.since` — the timestamp of the observation that
@@ -36,8 +36,9 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
  * the dash really end / the drop really complete" must read the PAYLOAD's domain timestamp,
  * not [occurredAt].
  *
- * `PlatformRegion.pendingModeResume` commits (#605) log nothing off a lagging stamp at all —
- * that grace never mints an event off its own armed time, so it's outside this invariant.
+ * **Graced `DASH_START`** (#1311) also lags: `ModeEffects.kt` stamps [occurredAt] from the new
+ * session's `startedAt`, the first hint instant held by `PlatformRegion.pendingModeResume.since`,
+ * while the row is appended only when the grace commits; [sequenceId] still orders the log.
  *
  * This is a **documented, accepted invariant** (#732 Option B — the dev decided NOT to
  * re-stamp `PICKUP_CONFIRMED`'s `occurredAt` to append time, because `Task.completedAt` is the

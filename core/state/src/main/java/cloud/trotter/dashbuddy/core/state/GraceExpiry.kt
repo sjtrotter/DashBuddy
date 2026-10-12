@@ -76,7 +76,7 @@ internal fun Observation.isWakeFor(type: TimeoutType, wakeId: Long?): Boolean =
 
 /**
  * Has a GRACE deadline lapsed as of [obs]? — used by both `pendingDestructive` and
- * `pendingModeResume`.
+ * `pendingModeResume` (Paused resumes and post-end Offline starts, subject to frame contradiction).
  *
  * Strictly past for an ordinary observation, or this pending's own wake whenever it arrives. See
  * the file KDoc for why those are the two halves.

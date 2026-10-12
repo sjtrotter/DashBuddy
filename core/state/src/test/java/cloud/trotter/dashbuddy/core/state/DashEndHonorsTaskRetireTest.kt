@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
@@ -536,29 +537,34 @@ class DashEndHonorsTaskRetireTest {
     // =========================================================================
 
     @Test
-    fun `a same-step end-A-plus-mint-B attributes the honored delivery to session A`() {
+    fun `ending A before a graced start of B attributes the honored delivery to session A`() {
         // The fielded shape behind round 2's finding 4: the app is killed / goes offline mid-job with
         // a retire standing, the offline arm absorbs it, and the NEXT dash's first Online frame lands
-        // past the deadline. On that one step the lazy expiry ends session A (honoring the retire and
-        // minting the delivery) and the mode arm then mints session B — so a `next`-first read put
-        // A's delivery, and A's running total, into B.
+        // past the deadline. The lazy expiry ends session A, honoring the retire and minting the
+        // delivery. The #1078 attribution fix is unchanged: the delivery and running total belong
+        // to A, as does DASH_STOP. #1311 moved B's mint from this hint-only frame to the later
+        // graced commit; same-step replacements also attribute DASH_STOP to A by session identity.
         val onDrop = onDropoff()
         val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
         val afterOffline = step(afterIdle, Flow.Idle, screen(Flow.Idle, idleAt + 1_000L, modeHint = Mode.Offline))
         val end = afterOffline.pendingDestructive!!
         assertEquals(idleAt, end.absorbedRetireSince)
 
-        // One frame, past the deadline, implying Online: ends A and starts B.
+        // One hint-only frame, past the end deadline: ends A and arms B's post-end grace.
         val nextDashFrame = screen(Flow.Idle, end.deadline + 1_000L, modeHint = Mode.Online)
         val afterNextDash = step(afterOffline, Flow.Idle, nextDashFrame)
 
-        assertEquals("session B was minted on the same step", true, afterNextDash.session != null)
-        assertNotEquals("…and it is NOT session A", "dash-A", afterNextDash.session?.sessionId)
+        assertNull(afterNextDash.session)
+        assertEquals(Mode.Offline, afterNextDash.mode)
+        val pending = afterNextDash.pendingModeResume
+        assertNotNull(pending)
+        assertEquals(nextDashFrame.timestamp, pending!!.since)
 
         val effects = effectMap.diff(
             state(afterOffline, Flow.Idle), state(afterNextDash, Flow.Idle), nextDashFrame,
         ).filterIsInstance<AppEffect.LogEvent>()
 
+        assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
         val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
         assertEquals(
             "the honored delivery is attributed to the dash it was earned in",
@@ -569,13 +575,29 @@ class DashEndHonorsTaskRetireTest {
             21.0, (completed.event.payload as DeliveryPayload).sessionEarningsAtCompletion!!, 0.0001,
         )
         assertEquals(
-            "B still starts on this step",
-            1, effects.count { it.event.type == AppEventType.DASH_START },
+            "B waits for the graced commit",
+            0, effects.count { it.event.type == AppEventType.DASH_START },
         )
-        // NOT asserted here: the `DASH_STOP` on this step is attributed to the freshly minted
-        // session B, because `ModeEffects` reads the NEXT region's session. That is a separate
-        // emitter and a pre-existing behaviour, untouched by #1078 — recorded rather than silently
-        // changed. The MONEY (the delivery and its running total) is what this fix moves.
+
+        val commitWake = Observation.Timeout(
+            timestamp = pending.deadline,
+            type = TimeoutType.MODE_RESUME_COMMIT,
+            targetPlatform = platform,
+            payload = ObservationPayload.GraceWake(pending.wakeId),
+        )
+        val afterCommit = step(afterNextDash, Flow.Idle, commitWake)
+        val sessionB = afterCommit.session
+        assertNotNull(sessionB)
+        assertEquals(Mode.Online, afterCommit.mode)
+        assertNull(afterCommit.pendingModeResume)
+        assertEquals(nextDashFrame.timestamp, sessionB!!.startedAt)
+        assertNotEquals("dash-A", sessionB.sessionId)
+        val commitEffects = effectMap.diff(
+            state(afterNextDash, Flow.Idle), state(afterCommit, Flow.Idle), commitWake,
+        ).filterIsInstance<AppEffect.LogEvent>()
+        val start = commitEffects.single { it.event.type == AppEventType.DASH_START }
+        assertEquals(sessionB.sessionId, start.event.sessionId)
+        assertEquals(nextDashFrame.timestamp, (start.event.payload as SessionStartPayload).startedAt)
     }
 
     // =========================================================================
@@ -632,6 +654,25 @@ class DashEndHonorsTaskRetireTest {
             "…and the tripwire stays silent — the delivery WAS recorded",
             0, mismatches(exitEffects).size + mismatches(teardownEffects).size,
         )
+    }
+
+    @Test
+    fun `PostTask exit on a session replacement keeps the completed task's session and earnings`() {
+        val before = step(onDropoff(), Flow.TaskDropoffArrived, receiptFrame(100_000L))
+        val completedTask = requireNotNull(before.activeTask).copy(completedAt = 110_000L)
+        val after = before.copy(
+            session = Session("dash-B", startedAt = 110_000L, runningEarnings = 5.0),
+            activeJob = null,
+            activeTask = null,
+            recentTasks = before.recentTasks + completedTask,
+        )
+        val effects = effectMap.diffDeliveryCompletion(
+            before, after, Flow.PostTask, Flow.TaskPickupNavigation,
+            screen(Flow.TaskPickupNavigation, 110_000L),
+        ).filterIsInstance<AppEffect.LogEvent>()
+        val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
+        assertEquals("dash-A", completed.event.sessionId)
+        assertEquals(21.0, (completed.event.payload as DeliveryPayload).sessionEarningsAtCompletion!!, 0.0001)
     }
 
     @Test
@@ -953,6 +994,7 @@ class DashEndHonorsTaskRetireTest {
             pickupFrame,
         ).filterIsInstance<AppEffect.LogEvent>()
 
+        assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
         val navStarted = effects.single { it.event.type == AppEventType.PICKUP_NAV_STARTED }
         assertEquals(
             "B's own pickup belongs to B — a NEW-task edge is not a close-step emitter",

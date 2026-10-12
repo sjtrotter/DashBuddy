@@ -35,6 +35,8 @@ import timber.log.Timber
  * (session-end AND task-retire share the one mechanism), but it is called immediately after
  * [diffMode] in [EffectMap.diffPlatformRegion] and is small enough that a fourth file would be
  * more indirection than the ~90 combined lines warrant.
+ * Graced `DASH_START` uses the session's `startedAt` as `occurredAt` (#732/#1311); sequenceId orders
+ * append operations even when this domain timestamp lags the committing observation.
  */
 internal fun EffectMap.diffMode(
     prev: PlatformRegion,
@@ -49,13 +51,16 @@ internal fun EffectMap.diffMode(
     // (maybe-transient) offline keeps the session alive, so a summary that
     // arrives after the idle/offline screen still attributes to it; a real
     // end (summary either ordering, grace expiry, or a fresh dash replacing
-    // the old one) flips this true.
-    val prevEnded = prevSession != null &&
-        (nextSession == null || nextSession.sessionId != prevSession.sessionId)
-    if (prev.mode == next.mode && !prevEnded) return emptyList()
+    // the old one) identifies the ended session.
+    val endedSession = prevSession?.takeIf {
+        nextSession == null || nextSession.sessionId != it.sessionId
+    }
+    val startedSession = nextSession?.takeIf { it.sessionId != prevSession?.sessionId }
+    if (prev.mode == next.mode && endedSession == null && startedSession == null) return emptyList()
 
     return buildList {
-        if (prevEnded) {
+        if (endedSession != null) {
+            val endedSessionId = endedSession.sessionId
             // A rule-defined MODE_TO_OFFLINE override (only on an actual mode
             // flip to offline) replaces the default finalize, as before.
             val offlineOverride =
@@ -85,11 +90,11 @@ internal fun EffectMap.diffMode(
                     val earnings = endParsed.totalEarnings?.let { Formats.money(it) }
                     add(
                         logEffect(
-                            sessionId,
+                            endedSessionId,
                             AppEventType.DASH_STOP,
                             obs.timestamp,
                             SessionStopPayload(
-                                sessionId = sessionId,
+                                sessionId = endedSessionId,
                                 endedAt = endedAt,
                                 source = SessionEndSource.SUMMARY_SCREEN,
                                 totalEarnings = endParsed.totalEarnings,
@@ -109,7 +114,7 @@ internal fun EffectMap.diffMode(
                         AppEffect.UpdateBubble(
                             earnings?.let { "Session Ended. Total: $it" } ?: "Session Ended.",
                             ChatPersona.Dispatcher,
-                            sessionId = sessionId,
+                            sessionId = endedSessionId,
                         )
                     )
                     // #606: no CaptureScreenshot here — the dash_summary
@@ -122,55 +127,61 @@ internal fun EffectMap.diffMode(
                 } else {
                     add(
                         logEffect(
-                            sessionId,
+                            endedSessionId,
                             AppEventType.DASH_STOP,
                             obs.timestamp,
                             SessionStopPayload(
-                                sessionId = sessionId,
+                                sessionId = endedSessionId,
                                 endedAt = endedAt,
                                 source = SessionEndSource.EARLY_OFFLINE,
                                 // #1030: nothing is parsed on this path — `Session.runningEarnings`
                                 // is a non-nullable `Double = 0.0`, so stamping it raw wrote a hard
                                 // `0.0` that reads downstream as "the platform reported $0". Absent
                                 // is the honest stamp. Rule owner: `RecordFolds.reportedEarningsOf`.
-                                totalEarnings = prevSession.runningEarnings.takeIf { it > 0.0 },
+                                totalEarnings = endedSession.runningEarnings.takeIf { it > 0.0 },
                                 platform = prev.platform.name, // #314 capture-gap: harden the log
                             ),
                         ),
                     )
                     // #438 B5: StopOdometer arbitrated at the cross-platform tier (see above).
                 }
-                // #867: the ENDED session (prevSession), not the diff-wide `sessionId` — on a
-                // dash-replaced-by-a-fresh-dash edge that local resolves to the NEW session.
-                add(AppEffect.EndSession(prev.platform.name, sessionId = prevSession.sessionId))
+                add(AppEffect.EndSession(prev.platform.name, sessionId = endedSessionId))
             }
         }
 
+        // Session identities can change even when both modes are Online. Finish A before starting B.
+        // Keep rule overrides scoped to their actual mode edge, as before.
+        val onlineOverride = if (prev.mode != Mode.Online && next.mode == Mode.Online) {
+            triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_ONLINE)
+        } else {
+            null
+        }
+        if (startedSession != null && onlineOverride == null) {
+            val payload = SessionStartPayload(
+                sessionId = startedSession.sessionId,
+                platform = next.platform.name,
+                startedAt = startedSession.startedAt,
+                // #715: this used to branch on `lastTransitionKind == Unexpected` to
+                // distinguish a crash-recovery start from a normal one, but that kind
+                // was unreachable (no ruleset ever declared `outcomes`) — the branch
+                // always evaluated to INTERACTION. Struck along with the rest of the
+                // dormant Expected/Unexpected classification machinery.
+                source = SessionStartSource.INTERACTION,
+                startScreen = "WaitingForOffer",
+            )
+            add(logEffect(startedSession.sessionId, AppEventType.DASH_START, startedSession.startedAt, payload))
+            // #438 B5: StartOdometer now emits from diffCrossPlatform on the
+            // activeSessionCount 0→1 crossing, so a SECOND concurrent session starting
+            // does NOT re-fire Start (which would zero the first's accrued miles). The
+            // per-session anchor rides StartSession (odometerRepository.startSessionTracking).
+            add(AppEffect.StartSession(startedSession.sessionId, next.platform.name))
+        }
+
         when {
-            // Session start: offline/paused → online
+            // Mode-only resume: offline/paused → online
             prev.mode != Mode.Online && next.mode == Mode.Online -> {
-                val modeOverride = triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_ONLINE)
-                if (modeOverride != null) {
-                    addAll(modeOverride)
-                } else if (nextSession != null && prevSession?.sessionId != nextSession.sessionId) {
-                    val payload = SessionStartPayload(
-                        sessionId = nextSession.sessionId,
-                        platform = next.platform.name,
-                        startedAt = nextSession.startedAt,
-                        // #715: this used to branch on `lastTransitionKind == Unexpected` to
-                        // distinguish a crash-recovery start from a normal one, but that kind
-                        // was unreachable (no ruleset ever declared `outcomes`) — the branch
-                        // always evaluated to INTERACTION. Struck along with the rest of the
-                        // dormant Expected/Unexpected classification machinery.
-                        source = SessionStartSource.INTERACTION,
-                        startScreen = "WaitingForOffer",
-                    )
-                    add(logEffect(nextSession.sessionId, AppEventType.DASH_START, obs.timestamp, payload))
-                    // #438 B5: StartOdometer now emits from diffCrossPlatform on the
-                    // activeSessionCount 0→1 crossing, so a SECOND concurrent session starting
-                    // does NOT re-fire Start (which would zero the first's accrued miles). The
-                    // per-session anchor rides StartSession (odometerRepository.startSessionTracking).
-                    add(AppEffect.StartSession(nextSession.sessionId, next.platform.name))
+                if (onlineOverride != null) {
+                    addAll(onlineOverride)
                 } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
                     // Grace resume — same session, no start effects needed
                     Timber.d("Session grace resume: ${nextSession.sessionId}")
@@ -187,7 +198,7 @@ internal fun EffectMap.diffMode(
             }
 
             // Going offline. Session finalize (and any MODE_TO_OFFLINE
-            // override) is handled by the `prevEnded` block above, which
+            // override) is handled by the `endedSession` block above, which
             // defers while a grace window keeps the session alive. Only the
             // pause-safety-timer cancel remains here.
             prev.mode != Mode.Offline && next.mode == Mode.Offline -> {
@@ -331,17 +342,8 @@ internal fun EffectMap.diffPauseSafetyTimer(
     obs = obs,
 )
 
-/**
- * Schedule/cancel the wake-up timer for a graced screen-implied resume out of
- * Paused (#605) — the [PlatformRegion.pendingModeResume] mirror of
- * [diffGraceTimer]. A SEPARATE [TimeoutType.MODE_RESUME_COMMIT] (not a shared
- * GRACE_COMMIT) because both graces belong to the SAME platform region, so even the
- * (type, platform) timer key (#438 item 1) would not separate them under a shared
- * GRACE_COMMIT — a resume-grace timer would cross-cancel a live destructive grace
- * timer. Arm (or a re-arm with a new deadline) schedules; a cancel (paused frame
- * within the window, or the resume committing) cancels. A commit lands in the
- * cancel branch too — harmless, the timer has already fired or no-ops.
- */
+/** Schedule the separate resume wake for Paused resumes or Offline starts; cancel on Paused/Offline
+ * evidence (including a contradicting frame at lapse) or a committed resume (#605/#1311). */
 internal fun EffectMap.diffModeResumeTimer(
     prev: PlatformRegion,
     next: PlatformRegion,
