@@ -74,16 +74,33 @@ class DropoffSheetRedactionParityTest {
     private fun screensFromDropoffSource(): Set<String> = DropoffRuleSource.screenRuleIds().toSet()
 
     @Test
-    fun `receipt and both live sheets declare the same item-note mask in generated assets (#935 r2)`() {
+    fun `receipt and both live sheets declare the same plain item-note mask in generated assets (#935 r3)`() {
         val entries = dropoffRedactEntries().toMap()
         val ruleIds = listOf("delivery_summary_collapsed", "dropoff_pre_arrival", "dropoff_pre_arrival_completion")
         val masks = ruleIds.map { id ->
             val notes = entries.getValue("doordash.screen.$id")
                 .filter { "order_item_instructions" in idSuffixesIn(it["find"]!!) }
             assertEquals("$id must declare exactly one item-note mask", 1, notes.size)
+            assertEquals("$id must plain-mask item notes", true,
+                notes.single()["plainMask"]?.jsonPrimitive?.booleanOrNull)
             notes.single().filterKeys { it != "comment" }
         }
-        masks.drop(1).forEach { assertEquals("same whole-node hashed mask on all three rules", masks.first(), it) }
+        masks.drop(1).forEach { assertEquals("same whole-node plain mask on all three rules", masks.first(), it) }
+    }
+
+    @Test
+    fun `item notes plain-mask whole before generic text matchers on all three rules (#935 r3)`() {
+        for (id in listOf("delivery_summary_collapsed", "dropoff_pre_arrival", "dropoff_pre_arrival_completion")) {
+            val rule = screens.ruleById("doordash.screen.$id")!!
+            // Customer-selected notes have no length floor; prefixes must not preserve or hash part of the note.
+            for (note in listOf("4417", "Apt/Suite: 4417", "Deliver to 4417", "Heading to 4417")) {
+                val tree = UiNode(children = listOf(
+                    tv(note, id = "com.doordash.driverapp:id/order_item_instructions"),
+                )).restoreParents()
+                assertEquals("$id: '$note' must plain-mask the whole node", "[redacted]",
+                    rule.redact.apply(tree).children.single().text)
+            }
+        }
     }
 
     @Test
@@ -109,7 +126,7 @@ class DropoffSheetRedactionParityTest {
         assertTrue("the incident fixture must carry merchant item names", names.isNotEmpty())
         val masked = preArrival.redact.apply(tree)
         val maskedNote = masked.findDescendantById("order_item_instructions")!!.text!!
-        assertTrue("the entire item note must hash-mask", WHOLE_MASK_HEX.matches(maskedNote))
+        assertEquals("the entire item note must plain-mask", "[redacted]", maskedNote)
         assertFalse("the synthetic note must not persist", serialize(masked).contains(note))
         assertEquals("merchant item names stay raw", names, itemNames(masked))
     }
