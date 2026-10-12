@@ -115,7 +115,7 @@ class PerOfferPayAttributionTest {
     private fun baseRegion(at: Long = 1_000L) = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Online,
-        session = Session("sess-1", startedAt = at, runningEarnings = 0.0),
+        session = Session("sess-1", startedAt = at, runningEarnings = null),
     )
 
     // ---- completion-side scaffolding (drives the REAL mints) ----

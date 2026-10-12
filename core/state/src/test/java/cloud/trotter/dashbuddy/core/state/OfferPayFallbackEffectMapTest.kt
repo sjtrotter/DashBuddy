@@ -368,7 +368,7 @@ class OfferPayFallbackEffectMapTest {
             val regionPrev = PlatformRegion(
                 platform = Platform.DoorDash,
                 mode = Mode.Online,
-                session = Session("s1", startedAt = 100L, runningEarnings = 0.0),
+                session = Session("s1", startedAt = 100L, runningEarnings = null),
                 activeJob = job(offerPay = null, tasks = listOf(d1)),
                 recentTasks = listOf(d1),
                 lastPostTaskFields = null,
@@ -393,7 +393,7 @@ class OfferPayFallbackEffectMapTest {
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
-            session = Session("s1", startedAt = 100L, runningEarnings = 0.0),
+            session = Session("s1", startedAt = 100L, runningEarnings = null),
             activeJob = job(offerPay = null, tasks = listOf(dropA)),
             recentTasks = listOf(dropA),
             lastPostTaskFields = null,
@@ -454,7 +454,7 @@ class OfferPayFallbackEffectMapTest {
         val region = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
-            session = Session("s1", startedAt = 100L, runningEarnings = 0.0),
+            session = Session("s1", startedAt = 100L, runningEarnings = null),
             activeJob = job(offerPay = 24.25, tasks = listOf(pickup)),
             recentTasks = emptyList(),
             lastPostTaskFields = null,

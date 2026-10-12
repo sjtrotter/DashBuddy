@@ -30,7 +30,16 @@ arrive — which is also why the park arms a `SESSION_PAY_SETTLE` wake timer
 (`EffectMap.diffSessionPaySettleTimer`, its own `TimeoutType` so the (type, platform) key can't
 cross-cancel the `GRACE_COMMIT`/`MODE_RESUME_COMMIT` graces sharing the region): on an unchanged wheel
 the timer is the ONLY observation that will ever come. The `PlatformRegion.pendingSessionPay` KDoc is
-the canonical statement of the rationale. The rule:
+the canonical statement of the rationale.
+
+**#1041 — absent earnings are nullable.** `Session.runningEarnings` and `accumulatedDeliveryPay`
+start null; the HUD renders the shared em dash until a real figure arrives. A first nonzero read
+must stand its settle window; the wheel's `$0.00` placeholder leaves null or a positive total alone.
+Receipts accumulate from null, and completion payloads preserve absent earnings. A stored `0.0`
+remains a read value (including old snapshots); early-offline stops still apply #1030's positive-only
+report rule.
+
+The rule:
 **(a) a park is owned by (FLOW, PLATFORM)** — `PendingSessionPay.flow` + `FlowRegion.activePlatform`;
 losing either DROPS it, since no other screen carries a running total and the wake timer would
 otherwise commit an unchallengeable figure (the platform half is load-bearing because `stepPlatforms`

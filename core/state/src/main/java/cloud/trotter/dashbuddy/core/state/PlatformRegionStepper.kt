@@ -964,8 +964,8 @@ class PlatformRegionStepper @Inject constructor() {
             }
             if (postFields != null && postFields.totalPay > 0 && r.ownsReceiptJob()) {
                 r.session?.let { session ->
-                    val accumulated = session.accumulatedDeliveryPay + postFields.totalPay
-                    val best = maxOf(session.runningEarnings, accumulated)
+                    val accumulated = (session.accumulatedDeliveryPay ?: 0.0) + postFields.totalPay
+                    val best = maxOf(session.runningEarnings ?: 0.0, accumulated)
                     r = r.copy(session = session.copy(
                         accumulatedDeliveryPay = accumulated,
                         runningEarnings = best,
@@ -1151,13 +1151,15 @@ class PlatformRegionStepper @Inject constructor() {
      *                        not Online and re-based on the transition back — see
      *                        [PendingSessionPay] for the canonical statement, [stepCore]'s expiry
      *                        block for the freeze and [applyModeTransition] for the re-base.
-     *  - read == 0.00 with a positive committed total → the LOAD PLACEHOLDER; ignore it entirely
+     *  - read == 0.00 with no figure or a positive committed total → the LOAD PLACEHOLDER;
+     *                        ignore it entirely (#1041: absence stays absent)
      *                        (the same earnings-pill component renders `$0.00` for seconds before
      *                        the figure loads — fielded 08-23 15:53:42 `$0.00` → `$61.80` at :48 —
      *                        and a dash running total never legitimately returns to zero mid-dash).
      *                        Deliberately NOT a general monotonic guard: a genuine downward
      *                        correction is out of scope, only the zero placeholder is refused.
-     *  - read == committed → the wheel is at rest; drop any park and change nothing.
+     *  - read == committed, non-null → the wheel is at rest; drop any park and change nothing.
+     *                        Null never agrees with a read; the first figure must settle (#1041).
      *  - read == parked, SAME surface → the same value again on the surface it was parked from;
      *                        keep the park AND its ORIGINAL deadline (an intervening screen and a
      *                        return must not extend the window), and CLEAR
@@ -1198,9 +1200,11 @@ class PlatformRegionStepper @Inject constructor() {
         policy: TransitionPolicy,
     ): PlatformRegion {
         val pend = region.pendingSessionPay
+        val running = session.runningEarnings
         return when {
-            pay == 0.0 && session.runningEarnings > 0.0 -> region
-            centsEqual(pay, session.runningEarnings) -> region.copy(pendingSessionPay = null)
+            pay == 0.0 && (running ?: 0.0) > 0.0 -> region
+            pay == 0.0 && running == null -> region
+            running != null && centsEqual(pay, running) -> region.copy(pendingSessionPay = null)
             // The AGREEING arm (#1052 round 4): same value AND the same surface. The flow test is
             // what keeps the agreement honest — a read on ANOTHER surface that happens to state
             // the same figure used to leave the park sitting on the surface it was first read

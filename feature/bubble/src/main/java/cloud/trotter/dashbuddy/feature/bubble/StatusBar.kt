@@ -71,7 +71,7 @@ fun StatusBadgeTitle(region: PlatformRegion?, flow: FlowRegion, platform: Platfo
 @Composable
 fun SessionMetricsActions(
     region: PlatformRegion?,
-    earnings: Double,
+    earnings: Double?,
     miles: Double,
     lastSession: SessionRecord?
 ) {
@@ -88,7 +88,7 @@ fun SessionMetricsActions(
 
     when {
         isActive -> {
-            displayEarnings = Formats.money(earnings)
+            displayEarnings = sessionEarningsText(earnings)
             displayMiles = miles
             dimmed = false
             captionRes = R.string.bubble_status_this_session
@@ -137,6 +137,9 @@ fun SessionMetricsActions(
         }
     }
 }
+
+/** Active-session money preserves the distinction between an absent figure and a read zero (#1041). */
+fun sessionEarningsText(earnings: Double?): String = earnings?.let { Formats.money(it) } ?: EMPTY_VALUE
 
 @Composable
 private fun statusBadge(region: PlatformRegion?, flow: Flow): Pair<String, Color> {

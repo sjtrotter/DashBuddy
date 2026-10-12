@@ -7,8 +7,10 @@ import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -18,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
+import cloud.trotter.dashbuddy.feature.bubble.sessionEarningsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -250,6 +253,78 @@ class BubbleViewModelTest {
     private fun stubNoDashes() {
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(emptyList()))
         whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+    }
+
+    private fun earningsState(id: String, earnings: Double? = null) = AppState(
+        regions = Regions(
+            flow = FlowRegion(activePlatform = Platform.DoorDash),
+            platforms = mapOf(
+                Platform.DoorDash to PlatformRegion(
+                    platform = Platform.DoorDash,
+                    mode = Mode.Online,
+                    session = Session(id, startedAt = 100L, runningEarnings = earnings),
+                ),
+            ),
+        ),
+    )
+
+    @Test
+    fun `never-parsed session earnings render the placeholder (#1041)`() = runTest {
+        stubNoDashes()
+        state.value = earningsState("session-1")
+        val vm = viewModel()
+        assertNull(vm.sessionEarnings.value)
+        val job = launch { vm.sessionEarnings.collect {} }
+        advanceUntilIdle()
+
+        assertNull(vm.sessionEarnings.value)
+        assertEquals(EMPTY_VALUE, sessionEarningsText(vm.sessionEarnings.value))
+
+        state.value = earningsState("session-1", 12.50)
+        advanceUntilIdle()
+        assertEquals(Formats.money(12.50), sessionEarningsText(vm.sessionEarnings.value))
+        job.cancel()
+    }
+
+    @Test
+    fun `a new session resets carried earnings to null (#1041)`() = runTest {
+        stubNoDashes()
+        state.value = earningsState("session-1", 12.50)
+        val vm = viewModel()
+        val job = launch { vm.sessionEarnings.collect {} }
+        advanceUntilIdle()
+        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+
+        state.value = earningsState("session-2")
+        advanceUntilIdle()
+        assertNull(vm.sessionEarnings.value)
+        assertEquals(EMPTY_VALUE, sessionEarningsText(vm.sessionEarnings.value))
+
+        state.value = earningsState("session-2", 7.25)
+        advanceUntilIdle()
+        assertEquals(7.25, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+        job.cancel()
+    }
+
+    @Test
+    fun `session earnings carry the last non-null figure including a read zero (#1041)`() = runTest {
+        stubNoDashes()
+        state.value = earningsState("session-1", 12.50)
+        val vm = viewModel()
+        val job = launch { vm.sessionEarnings.collect {} }
+        advanceUntilIdle()
+
+        state.value = earningsState("session-1")
+        advanceUntilIdle()
+        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+
+        state.value = earningsState("session-1", 0.0)
+        advanceUntilIdle()
+        assertEquals(Formats.money(0.0), sessionEarningsText(vm.sessionEarnings.value))
+        state.value = earningsState("session-1")
+        advanceUntilIdle()
+        assertEquals(0.0, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
+        job.cancel()
     }
 
     @Test

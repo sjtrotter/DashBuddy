@@ -23,6 +23,9 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 Five items the dev confirmed on 2026-10-07. Each full item appears once, with its original counter.
 
+- [active] 🆕 NEW — the HUD earnings reads "—" until the first parsed total of the dash, never "$0.00"; the first settled read replaces it (#1041)
+  - Confirmed: 0/2
+
 - [must-watch] **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
   tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars, minus any "DashBuddy recorded … more than
   was reported" line beneath it, sum to the Earned figure above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from

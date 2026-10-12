@@ -636,7 +636,7 @@ class EffectMapPayloadTest {
 
     /**
      * #1030: an early-offline stop with NOTHING parsed must stamp `totalEarnings = null`, not the
-     * `Session.runningEarnings` default of `0.0` — a hard `0.0` reads downstream as an authoritative
+     * old `Session.runningEarnings` default of `0.0` — a hard `0.0` reads downstream as an authoritative
      * "the platform reported $0" and zeroes the window's gross.
      */
     @Test
@@ -644,8 +644,8 @@ class EffectMapPayloadTest {
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
-            // The fielded shape: the money parses never fired, so runningEarnings is its 0.0 default.
-            session = Session("s1", startedAt = 1000L, runningEarnings = 0.0),
+            // The fielded shape: the money parses never fired, so runningEarnings is null (#1041).
+            session = Session("s1", startedAt = 1000L, runningEarnings = null),
         )
         val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
@@ -671,7 +671,7 @@ class EffectMapPayloadTest {
         val regionPrev = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
-            session = Session("s1", startedAt = 1000L, runningEarnings = 0.0),
+            session = Session("s1", startedAt = 1000L, runningEarnings = null),
         )
         val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))

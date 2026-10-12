@@ -151,8 +151,8 @@ class SessionPaySettleGateTest {
     )
 
     private fun region(
-        runningEarnings: Double = 0.0,
-        accumulatedDeliveryPay: Double = 0.0,
+        runningEarnings: Double? = null,
+        accumulatedDeliveryPay: Double? = null,
         pending: PendingSessionPay? = null,
         activeJob: Job? = null,
         closedJobReceipt: ClosedJobReceipt? = null,
@@ -231,7 +231,7 @@ class SessionPaySettleGateTest {
     @Test
     fun `a mid-spin read is replaced by the next read, and the deadline moves with it`() {
         val result = feed(region(), t0 to 470.00, (t0 + 200L) to 16.70)
-        assertEarnings(0.0, result, "nothing may commit inside the window")
+        assertNull("nothing may commit inside the window", result.session?.runningEarnings)
         assertPark(result, 16.70, t0 + 200L, t0 + 200L + settle)
     }
 
@@ -241,7 +241,7 @@ class SessionPaySettleGateTest {
         // same figure could hold the commit off forever.
         val result = feed(region(), t0 to 16.70, (t0 + 1_000L) to 16.70)
         assertPark(result, 16.70, t0, t0 + settle)
-        assertEarnings(0.0, result)
+        assertNull(result.session?.runningEarnings)
     }
 
     @Test
@@ -292,7 +292,7 @@ class SessionPaySettleGateTest {
     }
 
     @Test
-    fun `a zero read on a fresh dash is simply the figure at rest`() {
+    fun `a zero read agrees with a previously parsed zero`() {
         val result = feed(region(runningEarnings = 0.0), t0 to 0.0)
         assertNull(result.pendingSessionPay)
         assertEarnings(0.0, result)
@@ -344,7 +344,7 @@ class SessionPaySettleGateTest {
     fun `a wake timer BEFORE the deadline does nothing`() {
         val parked = feed(region(), t0 to 16.70)
         val result = step(parked, timeout(t0 + settle - 1L))
-        assertEarnings(0.0, result)
+        assertNull(result.session?.runningEarnings)
         assertPark(result, 16.70, t0, t0 + settle)
     }
 
@@ -801,11 +801,11 @@ class SessionPaySettleGateTest {
         // receipt's own `This offer` total ($24.39) — the review's second finding: refusing the wheel
         // while still accumulating the total would seed the new dash with $24.39 instead.
         val onCarriedOverReceipt = step(freshDash, receiptScreen(t0, sessionEarnings = 40.14, totalPay = 24.39))
-        assertEquals(
+        assertNull(
             "the receipt's total is subject to the same ownership test — nothing accumulates",
-            0.0, onCarriedOverReceipt.session!!.accumulatedDeliveryPay, 0.0001,
+            onCarriedOverReceipt.session?.accumulatedDeliveryPay,
         )
-        assertEarnings(0.0, onCarriedOverReceipt, "the total did not become the running figure either")
+        assertNull("the total did not become the running figure either", onCarriedOverReceipt.session?.runningEarnings)
         assertNull(
             "a receipt this session owns no job for is not a reading of this session's total",
             onCarriedOverReceipt.pendingSessionPay,
@@ -813,13 +813,12 @@ class SessionPaySettleGateTest {
 
         // And the wake that would have landed it: there is nothing to land.
         val later = step(onCarriedOverReceipt, timeout(t0 + settle + 1L))
-        assertEarnings(
-            0.0,
-            later,
-            "the new dash has earned nothing, and nothing may invent the previous dash's total",
+        assertNull(
+            "the new dash has no figure, and nothing may invent the previous dash's total",
+            later.session?.runningEarnings,
         )
         // The DASH_STOP half is already pinned by EffectMapPayloadTest's #1030 case: an
-        // early_offline stop stamps `runningEarnings.takeIf { it > 0.0 }`, so a 0.0 total here is a
+        // early_offline stop stamps `runningEarnings?.takeIf { it > 0.0 }`, so an absent total here is a
         // NULL `totalEarnings` in the payload — never a reported $40.14.
     }
 
@@ -827,7 +826,7 @@ class SessionPaySettleGateTest {
     fun `an owned receipt still accumulates its total (#1103 review — the gate widens nothing)`() {
         val openJob = region(activeJob = liveJob)
         val onReceipt = step(openJob, receiptScreen(t0, sessionEarnings = null, totalPay = 24.39))
-        assertEquals(24.39, onReceipt.session!!.accumulatedDeliveryPay, 0.0001)
+        assertEquals(24.39, onReceipt.session?.accumulatedDeliveryPay ?: Double.NaN, 0.0001)
         assertEarnings(24.39, onReceipt, "an owned receipt's total is this dash's money")
     }
 
