@@ -113,6 +113,12 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [active] **🆕 NEW — no 5-second ghost dash after End dash (#1311).** End a dash, dismiss the
+  summary, and let the dash-controls sheet briefly reappear before the idle map. The session list
+  and per-day stats must show only the ended dash, with no new zero-offer dash or start bubble.
+  A real re-dash still starts after sustained Online screens, anchored to the first hint; an offer
+  or task starts immediately. — Confirmed: 0/2
+
 - [active] **🆕 NEW — same-store second order gets its own pickup; a drop confirmed
   through the completion steps closes the job (#1315).** — Confirmed: 0/2
 

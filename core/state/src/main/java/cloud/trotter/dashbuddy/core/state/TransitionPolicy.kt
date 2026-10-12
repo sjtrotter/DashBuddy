@@ -67,9 +67,13 @@ class TransitionPolicy @Inject constructor(
     fun authoritativeGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).authoritativeGraceMs
 
-    /** Screen-implied resume-from-Paused grace for [platform] (#605/#438 item 6). */
+    /** Screen-implied resume debounce for [platform] (#605/#1311; both resume origins). */
     fun pauseResumeGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).pauseResumeGraceMs
+
+    /** Post-end window for gracing hint-only Online screens on [platform] (#1311). */
+    fun postEndHintGraceWindowMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).postEndHintGraceWindowMs
 
     /**
      * Safety buffer added to the platform's own reported pause countdown before the pause-safety

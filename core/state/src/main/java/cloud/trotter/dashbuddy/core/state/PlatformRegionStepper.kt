@@ -263,9 +263,9 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
-        // #605: lazy expiry of a graced screen-implied resume out of Paused. A
-        // sustained online past the deadline (no intervening paused frame cancelled
-        // it) commits the resume once — flip Paused→Online. Runs BEFORE the timeout
+        // #605/#1311: lazy expiry of a screen-implied resume from Paused or post-end Offline.
+        // Sustained online past the deadline (no confirming Paused/Offline frame cancelled
+        // it) commits the resume once. Runs BEFORE the timeout
         // branch so the MODE_RESUME_COMMIT wake timer (a non-flow observation) can
         // commit an overdue resume, exactly like the destructive lazy expiry above. (The
         // #1029 SESSION_PAY_SETTLE timer below is handled the same way — by lazy expiry, so
@@ -409,16 +409,19 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Resolve what mode this observation implies
         val impliedMode = policy.resolveMode(flowObs.flow, flowObs.modeHint)
+        val hintOnly = policy.resolveMode(flowObs.flow, null) == null
 
         val afterMode = when {
             // No mode signal
             impliedMode == null -> current.copy(lastObservedAt = obs.timestamp)
 
-            // Same mode — confirmed. A Paused-implying frame also CANCELS any armed
-            // resume grace (#605): the modal is still up, the online flap was noise.
+            // Same mode — confirmed. Paused/Offline cancels a pending resume (#605/#1311):
+            // the Online hint was noise.
             impliedMode == current.mode -> current.copy(
                 lastObservedAt = obs.timestamp,
-                pendingModeResume = if (impliedMode == Mode.Paused) null else current.pendingModeResume,
+                pendingModeResume = if (impliedMode == Mode.Paused || impliedMode == Mode.Offline) {
+                    null
+                } else current.pendingModeResume,
             )
 
             // Click — records user intent, does NOT drive mode
@@ -437,26 +440,16 @@ class PlatformRegionStepper @Inject constructor() {
             // and keeping the grace to the screen channel matches the observed defect.
             current.mode == Mode.Paused && impliedMode == Mode.Online &&
                 obs is Observation.Screen && flowObs.flow != Flow.OfferPresented -> {
-                val since = current.pendingModeResume?.since ?: obs.timestamp
-                val deadline = since + policy.pauseResumeGraceMs(current.platform)
-                // #1054 round 5: repeated online frames keep the ORIGINAL `since`, so the deadline
-                // does not move and the standing arm stays valid — mint only on a genuinely new
-                // pending, or the re-mint would cancel and re-arm on every frame of the flap.
-                val existing = current.pendingModeResume
-                if (existing != null && existing.deadline == deadline) {
-                    current.copy(lastObservedAt = obs.timestamp)
-                } else {
-                    val (withId, wakeId) = current.mintWakeId()
-                    withId.copy(
-                        lastObservedAt = obs.timestamp,
-                        pendingModeResume = PendingModeResume(
-                            since = since,
-                            deadline = deadline,
-                            wakeId = wakeId,
-                        ),
-                    )
-                }
+                armModeResume(current, obs, policy)
             }
+
+            // #1311: the dash-controls sheet can reappear just after a summary ended the dash.
+            // Only hints are provisional: a flow that itself implies Online still starts at once.
+            current.mode == Mode.Offline && impliedMode == Mode.Online &&
+                obs is Observation.Screen && current.session == null && hintOnly &&
+                current.lastSessionEndedAt?.let {
+                    obs.timestamp - it <= policy.postEndHintGraceWindowMs(current.platform)
+                } == true -> armModeResume(current, obs, policy)
 
             // Screen or Notification — authoritative, apply immediately
             else -> {
@@ -498,6 +491,7 @@ class PlatformRegionStepper @Inject constructor() {
         newMode: Mode,
         obs: Observation,
         policy: TransitionPolicy,
+        startedAt: Long = obs.timestamp,
     ): PlatformRegion {
         var region = prev.copy(
             mode = newMode,
@@ -526,7 +520,7 @@ class PlatformRegionStepper @Inject constructor() {
                     region = region.copy(
                         session = Session(
                             sessionId = mintId("session", region, obs),
-                            startedAt = obs.timestamp,
+                            startedAt = startedAt,
                         ),
                         mintCounter = region.mintCounter + 1,
                         // #1029: a running-total read parked before this dash existed
@@ -567,11 +561,6 @@ class PlatformRegionStepper @Inject constructor() {
             }
         }
 
-        // #605: any COMMITTED mode transition out of Paused resolves a graced
-        // screen-implied resume — clear the pending. Covers all three exits: a
-        // sustained-online commit (Paused→Online), an instant OfferPresented commit
-        // (Paused→Online), and the pause-safety timeout (Paused→Offline).
-        //
         // #1054 round 4: the pause-safety DEADLINE rides the same edge both ways — stamped from
         // the platform's reported countdown plus this platform's buffer, cleared on the way out —
         // and `EffectMap.diffPauseSafetyTimer` turns each into the arm/cancel that used to be
@@ -590,7 +579,13 @@ class PlatformRegionStepper @Inject constructor() {
             )
         }
         if (prev.mode == Mode.Paused && newMode != Mode.Paused) {
-            region = region.copy(pendingModeResume = null, pauseSafety = null)
+            region = region.copy(pauseSafety = null)
+        }
+
+        // Both resume origins resolve on a committed mode change, including authoritative flows
+        // that bypass the grace (#1311). A pending must never outlive that transition.
+        if (prev.mode != newMode) {
+            region = region.copy(pendingModeResume = null)
         }
 
         // #1052 round 3: coming back Online RE-BASES a frozen running-total park. A park is frozen
@@ -632,19 +627,36 @@ class PlatformRegionStepper @Inject constructor() {
         return region
     }
 
-    /**
-     * Commit a graced screen-implied resume out of [Mode.Paused] (#605) — the grace
-     * lapsed sustained-online (lazy expiry / `MODE_RESUME_COMMIT` wake timer) or an
-     * `OfferPresented` screen proved online. Mirrors [applyModeTransition]'s
-     * Paused→Online path (same-session grace-resume vs. fresh-session logic); that
-     * function also nulls [PendingModeResume] on any transition out of Paused.
-     */
+    /** One armer for Paused resumes (#605) and post-end hint-only starts (#1311). */
+    private fun armModeResume(
+        region: PlatformRegion,
+        obs: Observation,
+        policy: TransitionPolicy,
+    ): PlatformRegion {
+        val existing = region.pendingModeResume
+        val since = existing?.since ?: obs.timestamp
+        val deadline = since + policy.pauseResumeGraceMs(region.platform)
+        // #1054: keep both the original since and wake identity while the deadline stands.
+        if (existing != null && existing.deadline == deadline) {
+            return region.copy(lastObservedAt = obs.timestamp)
+        }
+        val (withId, wakeId) = region.mintWakeId()
+        return withId.copy(
+            lastObservedAt = obs.timestamp,
+            pendingModeResume = PendingModeResume(since = since, deadline = deadline, wakeId = wakeId),
+        )
+    }
+
+    /** Commit either resume origin; a new session starts at the first hint, not the wake (#1311). */
     private fun commitModeResume(
         region: PlatformRegion,
         obs: Observation,
         policy: TransitionPolicy,
     ): PlatformRegion =
-        applyModeTransition(region, Mode.Online, obs, policy)
+        applyModeTransition(
+            region, Mode.Online, obs, policy,
+            startedAt = region.pendingModeResume?.since ?: obs.timestamp,
+        )
 
     /**
      * When the app comes Online from Offline (e.g., launched mid-pickup),
@@ -1523,6 +1535,7 @@ class PlatformRegionStepper @Inject constructor() {
         // shared with [completeActiveJob], so the two can never fall out of step.
         return region.clearCachedReceipt().copy(
             session = null,
+            lastSessionEndedAt = if (region.session != null) timestamp else region.lastSessionEndedAt,
             activeJob = null,
             activeTask = null,
             recentTasks = recentTasks,

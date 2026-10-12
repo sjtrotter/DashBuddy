@@ -18,6 +18,11 @@ data class PlatformRegion(
     val platform: Platform,
     val mode: Mode = Mode.Offline,
     val session: Session? = null,
+    /**
+     * #1311 — `endedAt` of the most recently ended session on this platform; the anchor for
+     * the post-end hint grace. Survives the session reset; null for pre-#1311 snapshots.
+     */
+    val lastSessionEndedAt: Long? = null,
     val activeJob: Job? = null,
     val activeTask: Task? = null,
     val recentTasks: List<Task> = emptyList(),
@@ -94,19 +99,19 @@ data class PlatformRegion(
      */
     val lastAnnouncedPostTaskTaskId: String? = null,
     /**
-     * A graced screen-implied resume out of [Mode.Paused] (#605), provisional
-     * until committed. See [PendingModeResume]. Default-null so existing
-     * snapshots deserialize unchanged. Distinct from [pendingDestructive]
-     * because during the field flap that pending is BUSY holding the
+     * A graced screen-implied resume out of [Mode.Paused] (#605), or a hint-only Online
+     * screen shortly after a session end while Offline (#1311), provisional until committed.
+     * See [PendingModeResume]. Default-null so existing snapshots deserialize unchanged. Distinct
+     * from [pendingDestructive] because during the field flap that pending is BUSY holding the
      * just-completed delivery's `TASK_RETIRE` grace — the two slots cannot share.
      *
      * Cleared by a terminal session end and DROPPED wholesale by crash recovery
      * (`AppState.recoveryHygiene`, #1054 round 3). Its window is 8 s of UN-CONTRADICTED
-     * observation — a paused frame inside it cancels — so committing one after a restart would
-     * assert that dead process time was nobody contradicting it; and the commit is not inert, since
-     * `applyModeTransition(…, Online)` MINTS a session when there is none and `diffMode`'s
-     * Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` net. Dropping fails toward Paused, and
-     * the next Online-implying frame arms a fresh grace screen-driven, exactly as #605 intends.
+     * observation — a confirming Paused/Offline frame inside it cancels — so committing one after
+     * a restart would assert that dead process time was nobody contradicting it. The commit is not
+     * inert: `applyModeTransition(…, Online)` MINTS a session when there is none and `diffMode`'s
+     * Paused→Online arm CANCELS the `SESSION_PAUSED_SAFETY` net. Dropping preserves Paused/Offline, and
+     * the next Online-implying frame is evaluated afresh under #605/#1311.
      */
     val pendingModeResume: PendingModeResume? = null,
     /**
@@ -514,6 +519,10 @@ data class PendingReceiptReprice(
  * window unchallenged, with the ownership rules applying, before it may commit — and, since
  * round 4, only once a fresh readable read on its own surface has AGREED with it
  * ([unconfirmed]), because a window in which nothing was ever on screen challenges nothing.
+ *
+ * #1311 also uses this pending for a hint-only Online screen shortly after a session end:
+ * stay Offline, cancel on Offline, and on commit mint the session at [since]. Both origins
+ * share the arming helper, grace length, and wake identity. Recovery drops either origin.
  *
  * Plain data (kotlinx-serializable) so it survives crash-recovery replay;
  * resolution is driven by `obs.timestamp`, never a wall clock, keeping the

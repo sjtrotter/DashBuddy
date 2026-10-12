@@ -24,8 +24,13 @@ data class GraceConfig(
     val gracePeriodMs: Long = DEFAULT_GRACE_MS,
     /** Short grace for an authoritative-looking destructive signal (#431). */
     val authoritativeGraceMs: Long = AUTHORITATIVE_GRACE_MS,
-    /** Grace for a screen-implied resume out of Paused (#605). */
+    /** Debounce for screen-implied Paused resumes (#605) and post-end hint-only starts (#1311). */
     val pauseResumeGraceMs: Long = PAUSE_RESUME_GRACE_MS,
+    /**
+     * #1311: how long after a dash end a HINT-ONLY Online screen is graced instead of starting
+     * a dash immediately. The grace length itself reuses [pauseResumeGraceMs].
+     */
+    val postEndHintGraceWindowMs: Long = POST_END_HINT_GRACE_WINDOW_MS,
     /** Safety buffer added to a reported pause countdown before the offline timeout. */
     val pauseTimeoutBufferMs: Long = PAUSE_TIMEOUT_BUFFER_MS,
     /** Settle delay before the EXPAND_EARNINGS tap (waits on the dialog animation). */
@@ -91,6 +96,7 @@ data class GraceConfig(
         const val DEFAULT_GRACE_MS = 10_000L
         const val AUTHORITATIVE_GRACE_MS = 2_500L
         const val PAUSE_RESUME_GRACE_MS = 8_000L
+        const val POST_END_HINT_GRACE_WINDOW_MS = 60_000L
         const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
         const val EXPAND_SETTLE_MS = 500L
         const val SESSION_PAY_SETTLE_MS = 3_000L

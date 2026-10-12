@@ -256,6 +256,18 @@ carries `absorbedRetireSince` across recovery, pinned by `StateManagerV2Recovery
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the
 delivery receipt; a separate `pendingModeResume`/`MODE_RESUME_COMMIT` grace debounces a
 screen-implied Paused→Online *resume* so a pause-sheet-over-receipt can't flap `DASH_PAUSED` (#605).
+The Offline twin (#1311) graces a **HINT-ONLY** Online screen when no session remains and the most
+recent session ended within `GraceConfig.postEndHintGraceWindowMs` (60 s, per-platform). The anchor,
+`PlatformRegion.lastSessionEndedAt`, survives the session reset. Hint-only means the frame's flow
+alone implies no mode (`resolveMode(flow, null) == null`: null flow, Idle, TaskUnassigned); an offer,
+task flow, or PostTask remains authoritative and starts immediately. Both arms use the same arming
+helper and `pauseResumeGraceMs` (8 s), preserving the first hint's `since` and the standing wake ID.
+An Offline-implying frame cancels the Offline-origin pending, just as Paused cancels a paused resume.
+Sustained hints or the matching `MODE_RESUME_COMMIT` wake commit once; a newly minted session's
+`startedAt` and `DASH_START` payload use the first hint's `since`, not the commit observation's time.
+While pending there is no start event or session bubble. Recovery drops either origin and re-arms
+no resume timer (#1054); the next screen supplies fresh evidence.
+
 **The delivery-receipt window is receipt-SHAPE-keyed (#1033 layer 1):** a COLLAPSED receipt
 (`parsedPay == null`) arms `GraceConfig.receiptExpandGraceMs` (8 s, per-platform through
 `TransitionPolicy`) instead of the 2.5 s `authoritativeGraceMs`, because a collapsed receipt states a
