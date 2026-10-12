@@ -1,9 +1,12 @@
 package cloud.trotter.dashbuddy.core.pipeline.rules
 
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers
+import cloud.trotter.dashbuddy.core.pipeline.CustomerTextMarkers.IdentityKind
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.WHOLE_MASK_HEX
 import cloud.trotter.dashbuddy.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.hexIn
 import cloud.trotter.dashbuddy.domain.capture.schema.UiNodeSchema
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
+import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.test.util.TestResourceLoader
 import cloud.trotter.dashbuddy.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -26,32 +29,48 @@ class PickupArrivedRedactParityTest {
     }
 
     /**
-     * The rule's `customer_name` redact entries with their `comment` key dropped — comments survive
+     * The rule's redact entries for a suffix with their `comment` key dropped — comments survive
      * canonicalization into the generated asset, and a receipt on one copy must not read as drift.
      */
-    private fun customerNameEntries(rule: JsonObject): List<JsonElement> =
+    private fun nameIdEntries(rule: JsonObject, suffix: String): List<JsonElement> =
         rule["redact"]?.jsonArray.orEmpty().filter {
-            it.jsonObject["find"]?.jsonObject?.get("hasIdSuffix")?.jsonPrimitive?.content == "customer_name"
+            it.jsonObject["find"]?.jsonObject?.get("hasIdSuffix")?.jsonPrimitive?.content == suffix
         }.map { JsonObject(it.jsonObject.filterKeys { key -> key != "comment" }) }
 
-    private val reference by lazy {
-        val pickupArrival = screens.single {
-            it.getValue("id").jsonPrimitive.content == "doordash.screen.pickup_arrival"
+    private val nameSuffixes = CustomerTextMarkers.ID_MARKER_TABLE
+        .filter { it.kind == IdentityKind.NAME }.map { it.suffix }
+
+    private val references: Map<String, JsonElement> by lazy {
+        val referenceRuleIds = mapOf(
+            "customer_name" to "doordash.screen.pickup_arrival",
+            "order_cx_name" to "doordash.screen.pickup_order_picker",
+        )
+        nameSuffixes.associateWith { suffix ->
+            val referenceId = referenceRuleIds[suffix]
+                ?: error("NAME id '$suffix' needs an explicit redact reference rule mapping")
+            val rule = screens.single { it.getValue("id").jsonPrimitive.content == referenceId }
+            val entries = nameIdEntries(rule, suffix)
+            assertEquals("$referenceId must have exactly one $suffix redact reference", 1, entries.size)
+            entries.single()
         }
-        val entries = customerNameEntries(pickupArrival)
-        assertEquals("pickup_arrival must have exactly one customer_name redact reference", 1, entries.size)
-        entries.single()
     }
 
-    private val ruleIdsCarryingReference by lazy {
-        screens.filter { reference in customerNameEntries(it) }
+    private val ruleIdsCarryingReferences by lazy {
+        File(TestRulesetFactory.rulesDir).walkTopDown()
+            .filter { it.isFile && it.extension == "json" }
+            .sortedBy { it.path }
+            .flatMap { file ->
+                Json.parseToJsonElement(file.readText()).jsonObject["screens"]?.jsonArray.orEmpty()
+                    .asSequence().map { it.jsonObject }
+            }
+            .filter { rule -> references.all { (suffix, reference) -> reference in nameIdEntries(rule, suffix) } }
             .map { it.getValue("id").jsonPrimitive.content }.toSet()
     }
 
     private fun declaresArrival(ruleOrBranch: JsonObject): Boolean =
         ruleOrBranch["state"]?.jsonObject?.get("flow")?.jsonPrimitive?.content == "task:pickup:arrived"
 
-    /** #1309: every pickup-arrived rule must carry exactly the pickup card's customer-name redact entry. */
+    /** #1309: every DoorDash pickup-arrived rule must carry each NAME id's reference redact entry. */
     @Test
     fun `pickup arrived rules keep generated customer name redact parity`() {
         val arrivedRules = screens.filter { rule ->
@@ -66,21 +85,26 @@ class PickupArrivedRedactParityTest {
             "doordash.screen.pickup_wait_survey",
             "doordash.screen.pickup_picked_up",
             "doordash.screen.pickup_verify",
+            "doordash.screen.pickup_steps",
         )) {
             assertTrue("#1309 pickup-arrived coverage must include $id", id in arrivedIds)
         }
 
         for (rule in arrivedRules) {
             val id = rule.getValue("id").jsonPrimitive.content
-            val entries = customerNameEntries(rule)
-            assertEquals("$id must carry exactly one customer_name redact entry", 1, entries.size)
-            assertEquals("$id must structurally match pickup_arrival's redact entry", reference, entries.single())
+            for ((suffix, reference) in references) {
+                val entries = nameIdEntries(rule, suffix)
+                assertEquals("$id must carry exactly one $suffix redact entry", 1, entries.size)
+                assertEquals("$id must structurally match $suffix's reference redact entry", reference, entries.single())
+            }
         }
-        assertEquals("customerName", reference.jsonObject["normalize"]?.jsonPrimitive?.content)
-        assertFalse("the pickup card must retain the customer's hex", reference.jsonObject.containsKey("plainMask"))
+        for ((suffix, reference) in references) {
+            assertEquals("$suffix must normalize customer names", "customerName", reference.jsonObject["normalize"]?.jsonPrimitive?.content)
+            assertFalse("$suffix must retain the customer's hex", reference.jsonObject.containsKey("plainMask"))
+        }
     }
 
-    /** #1309: every committed customer_name frame must be claimed by a rule carrying the pickup card's redact. */
+    /** #1309: every claimed NAME-id frame must use a rule carrying all NAME reference entries, on any platform. */
     @Test
     fun `corpus customer name frames are claimed by rules carrying the reference redact`() {
         val base = File("src/test/resources/snapshots")
@@ -96,9 +120,9 @@ class PickupArrivedRedactParityTest {
             .filter { it.isFile && it.extension == "json" && it.name != "approved-parse-output.json" }
             .filterNot { it.parentFile == File(base, "UNKNOWN") } // the staging root's own files, never its committed negative/ child
             .sortedBy { it.path }
-        val coveredRuleIds = ruleIdsCarryingReference
+        val coveredRuleIds = ruleIdsCarryingReferences
         val violations = mutableListOf<String>()
-        var framesWithCustomerName = 0
+        var framesWithNameId = 0
 
         for (file in fixtures) {
             val path = file.relativeTo(base).invariantSeparatorsPath
@@ -116,32 +140,29 @@ class PickupArrivedRedactParityTest {
                 violations += "$path: loadNode failed: ${e.message}; cause: ${e.cause?.message}"
                 continue
             }
-            if (!carriesCustomerName(tree)) continue
-            framesWithCustomerName++
+            if (!carriesNameId(tree)) continue
+            framesWithNameId++
             try {
                 val ruleId = TestRulesetFactory.screenRuleset.matchFirst(tree)?.ruleId
                 val isNegative = file.absoluteFile.startsWith(negativeDir.absoluteFile)
                 when {
                     ruleId == null && isNegative -> Unit // the negative corpus must stay UNKNOWN; the backstop owns it
-                    ruleId == null -> violations += "$path: customer_name frame is unclaimed"
-                    ruleId.startsWith("uber.") ->
-                        violations += "$path: claimed by $ruleId; Uber customer_name coverage needs human review"
+                    ruleId == null -> violations += "$path: NAME-id frame is unclaimed"
                     ruleId !in coveredRuleIds ->
-                        violations += "$path: $ruleId does not carry the reference customer_name redact entry"
+                        violations += "$path: $ruleId does not carry all NAME-id reference redact entries"
                 }
             } catch (e: Exception) {
                 violations += "$path: matchFirst failed: ${e.message}"
             }
         }
-        if (framesWithCustomerName < 20) {
-            violations += "expected at least 20 customer_name frames, saw $framesWithCustomerName"
+        if (framesWithNameId < 20) {
+            violations += "expected at least 20 NAME-id frames, saw $framesWithNameId"
         }
         assertTrue("#1309 corpus violations:\n${violations.joinToString("\n")}", violations.isEmpty())
     }
 
-    private fun carriesCustomerName(node: UiNode): Boolean =
-        node.viewIdResourceName?.substringAfterLast('/') == "customer_name" ||
-            node.children.any { carriesCustomerName(it) }
+    private fun carriesNameId(node: UiNode): Boolean =
+        nameSuffixes.any { node.matchesId(it) } || node.children.any { carriesNameId(it) }
 
     private fun schemaIdOf(file: File): String? = runCatching {
         Json.parseToJsonElement(file.readText()).jsonObject["schemaId"]?.jsonPrimitive?.content
@@ -153,11 +174,11 @@ class PickupArrivedRedactParityTest {
     }
 
     /**
-     * #1309: the fielded confirm-pickup and split-label verify shapes must recognize and mask to the pickup card's hex.
+     * #1309: confirm-pickup, split-label verify and bin-scan shapes must recognize and mask to their reference hexes.
      * Merchant item names and options must survive, while the raw customer name must never serialize.
      */
     @Test
-    fun `picked up and verify frames mask customer names with pickup card hex and preserve items`() {
+    fun `picked up verify and bin scan frames mask customer names with reference hexes and preserve items`() {
         val name = "Marisol Q"
         val itemName = "Spicy Chicken Sandwich"
         val itemInstructions = "Size Choice: Large"
@@ -208,6 +229,41 @@ class PickupArrivedRedactParityTest {
                 redacted.findDescendantById("order_item_instructions")?.text,
             )
             assertFalse("$ruleId must not serialize the raw customer name", UiNodeSchema.serialize(redacted).contains(name))
+        }
+
+        val binScanNames = listOf(name, "Devin R")
+        val binScan = UiNode(children = listOf(
+            UiNode(text = "Pickup steps"),
+            UiNode(text = "Scan barcodes on 2 items"),
+            UiNode(text = "Complete pickup"),
+            idNode("order_cx_name", binScanNames[0]),
+            idNode("order_cx_name", binScanNames[1]),
+            idNode("order_item_name", itemName),
+        )).restoreParents()
+        val binScanRuleId = "doordash.screen.pickup_steps"
+        val binScanMatch = ruleset.matchFirst(binScan)
+        assertEquals("bin-scan synthetic frame must classify as pickup_steps", binScanRuleId, binScanMatch?.ruleId)
+        // The first (receipt-photo / confirm-pickup) branch is flowless: pin the bin-scan branch too.
+        assertEquals("bin-scan must select the arrived branch", Flow.TaskPickupArrived, binScanMatch?.flow)
+        val redacted = ruleset.ruleById(binScanRuleId)!!.redact.apply(binScan)
+        val maskedNames = redacted.children.filter { it.matchesId("order_cx_name") }.map { it.text.orEmpty() }
+        assertEquals("bin-scan must retain both customer nodes", binScanNames.size, maskedNames.size)
+        val orderPicker = ruleset.ruleById("doordash.screen.pickup_order_picker")!!
+        val hexes = binScanNames.zip(maskedNames).map { (rawName, maskedName) ->
+            assertTrue("bin-scan must mask the whole order_cx_name; got '$maskedName'", WHOLE_MASK_HEX.matches(maskedName))
+            val expectedHex = hexIn(
+                orderPicker.redact.apply(idNode("order_cx_name", rawName)).text!!,
+                "the order picker's order_cx_name",
+            )
+            val actualHex = hexIn(maskedName, "bin-scan order_cx_name")
+            assertEquals("bin-scan must use the order picker's hex", expectedHex, actualHex)
+            actualHex
+        }
+        assertEquals("different bin-scan customers must retain distinct hexes", binScanNames.size, hexes.toSet().size)
+        assertEquals("bin-scan must preserve the item name", itemName, redacted.findDescendantById("order_item_name")?.text)
+        val serialized = UiNodeSchema.serialize(redacted)
+        for (rawName in binScanNames) {
+            assertFalse("bin-scan must not serialize '$rawName'", serialized.contains(rawName))
         }
     }
 }

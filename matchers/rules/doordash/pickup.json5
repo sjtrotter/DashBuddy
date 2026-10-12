@@ -124,6 +124,12 @@
             "hasIdSuffix": "customer_name"
           },
           "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -374,13 +380,19 @@
       }
     },
     {
-      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
+      "comment": "#1309: carries the arrived-family NAME-id entries (a no-op where the card is absent).",
       "id": "doordash.screen.pickup_shopping",
       "priority": 72,
       "redact": [
         {
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -448,7 +460,7 @@
       }
     },
     {
-      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
+      "comment": "#1309: carries the arrived-family NAME-id entries (a no-op where the card is absent).",
       "id": "doordash.screen.pickup_verify_items",
       "priority": 76,
       "redact": [
@@ -464,6 +476,12 @@
         {
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -525,6 +543,12 @@
                 "hasTextMatchesRegex": "^\\s{0,8}[\\p{L}][\\p{L}'-]{0,20}(\\s{1,4}[\\p{L}][\\p{L}'-]{0,20}){0,3}\\s{1,4}[A-Z]\\.?\\s{0,8}$"
               }
             ]
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -855,6 +879,12 @@
             "hasIdSuffix": "customer_name"
           },
           "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -876,6 +906,12 @@
           "comment": "#910 V2 — the multi-order pickup list renders ONE row per order, each carrying a bare `customer_name` node (the fielded 07-28 frames carry three), and this rule shipped with no redact block, so every one reached the recognized envelope raw. The node has no in-node lead-in ('Order for' is a separate sibling on the single-order card), so `CustomerTextMarkers` is structurally blind to it — the same split-node shape #526 D6a documents for `pickup_arrival`, whose identical `customer_name` + `normalize: customerName` entry this mirrors so a customer's mask hex matches across surfaces and the persisted `customerNameHash`. Recognize-only rule: redact without parse is legal (the `pickup_select_issue` precedent) and the parse goldens are untouched. `merchant_name` stays raw (the merchant is driver-owned data, not PII); so do `num_items`/`header_text`/`description_text`, which are app chrome.",
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -936,6 +972,12 @@
         {
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -1423,13 +1465,19 @@
       }
     },
     {
-      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings. #1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
+      "comment": "#462 batch 1 — recognize-only interstitials/menus/surveys so they no longer fall to UNKNOWN. No state.flow (cannot perturb the machine) and no parse (no PII). Keyed on 2+ stable non-PII strings. #1309: carries the arrived-family NAME-id entries (a no-op where the card is absent). #1309 r2 — the bin-scan branch renders per-order `order_cx_name` nodes (fixture gopuff_bin_scan_steps), so the arrived-family NAME entries cover both ids.",
       "id": "doordash.screen.pickup_steps",
       "priority": 104,
       "redact": [
         {
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
@@ -1460,7 +1508,7 @@
           }
         },
         {
-          "comment": "#501 GoPuff (Drive) warehouse bin-scan steps — the batch's at-store pickup workflow ('Scan barcodes on N items' / 'Complete pickup'). The whole warehouse leg is otherwise all-UNKNOWN, so no PICKUP_ARRIVED ever fired; declaring task:pickup:arrived here mints one clean, obs.timestamp-anchored arrival. No parse → no customer PII read (the per-order order_cx_name names are ignored); the flow alone drives the arrival, and EffectMap's null→non-null arrivedAt idempotency prevents any double-mint.",
+          "comment": "#501 GoPuff (Drive) warehouse bin-scan steps — the batch's at-store pickup workflow ('Scan barcodes on N items' / 'Complete pickup'). The whole warehouse leg is otherwise all-UNKNOWN, so no PICKUP_ARRIVED ever fired; declaring task:pickup:arrived here mints one clean, obs.timestamp-anchored arrival. No parse → no customer PII read (the per-order order_cx_name names are ignored (ignored by the PARSE; the envelope masks them, #1309)); the flow alone drives the arrival, and EffectMap's null→non-null arrivedAt idempotency prevents any double-mint.",
           "state": {
             "flow": "task:pickup:arrived",
             "modeHint": "online"
@@ -1570,7 +1618,7 @@
     {
       "id": "doordash.screen.shopping_item",
       "priority": 75,
-      "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry. #1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent). #1309: the Customer-Notes plain entry ahead of it could claim a `customer_name` node that also carried that description; accepted — it still masks, no such render exists.",
+      "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry. #1309: carries the arrived-family NAME-id entries (a no-op where the card is absent). #1309: the Customer-Notes plain entry ahead of it could claim a `customer_name` node that also carried that description; accepted — it still masks, no such render exists.",
       "redact": [
         {
           "comment": "The container's fused contentDescription ('Customer Notes: <note>'). Matched by desc (the node has no id and no text), keepPrefix keeps the label half.",
@@ -1601,6 +1649,12 @@
             "hasIdSuffix": "customer_name"
           },
           "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
+          },
+          "normalize": "customerName"
         }
       ],
       "state": {
@@ -1620,13 +1674,19 @@
       ]
     },
     {
-      "comment": "#1309: carries the arrived-family `customer_name` entry (a no-op where the card is absent).",
+      "comment": "#1309: carries the arrived-family NAME-id entries (a no-op where the card is absent).",
       "id": "doordash.screen.shopping_checkout",
       "priority": 78,
       "redact": [
         {
           "find": {
             "hasIdSuffix": "customer_name"
+          },
+          "normalize": "customerName"
+        },
+        {
+          "find": {
+            "hasIdSuffix": "order_cx_name"
           },
           "normalize": "customerName"
         }
