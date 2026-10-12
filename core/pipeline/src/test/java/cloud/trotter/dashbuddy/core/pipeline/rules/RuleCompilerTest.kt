@@ -29,7 +29,7 @@ class RuleCompilerTest {
             """{"find":{"hasText":"incremental"},"read":"text"}""")) {
             val parse = """"parse":{"as":"offer","fields":{
                 "payAmount":{"literal":10.5},"distance":{"literal":1.5},
-                "timeToCompleteMinutes":{"literal":1},"quoteBasis":$spec
+                "timeToCompleteMinutes":{"literal":1},"quoteBasis":$spec,"offerScope":"add_on"
             }}"""
             for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
                 val rules = RuleCompiler.compileRules<UiNode>(
@@ -37,6 +37,57 @@ class RuleCompilerTest {
                     RuleContext.SCREEN,
                 )
                 assertEquals(if (spec == "\"total\"" || spec == "\"incremental\"") 1 else 0, rules.size)
+            }
+        }
+    }
+
+    @Test
+    fun `incremental quote requires add-on scope while total needs no scope`() {
+        for (objectForm in listOf(false, true)) {
+            fun literal(value: String) = if (objectForm) """{"literal":"$value"}""" else "\"$value\""
+            for ((basis, scope, count) in listOf(
+                Triple("incremental", null, 0), Triple("incremental", "standalone", 0),
+                Triple("incremental", "add_on", 1), Triple("total", null, 1),
+            )) {
+                val scopeField = scope?.let { ",\"offerScope\":${literal(it)}" } ?: ""
+                val parse = """"parse":{"as":"offer","fields":{
+                    "payAmount":{"literal":10.5},"distance":{"literal":1.5},
+                    "timeToCompleteMinutes":{"literal":1},"quoteBasis":${literal(basis)}$scopeField
+                }}"""
+                for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
+                    val rules = RuleCompiler.compileRules<UiNode>(
+                        parseJson("""[{"id":"test.screen.offer","priority":10,$body}]""").jsonArray,
+                        RuleContext.SCREEN,
+                    )
+                    assertEquals("$basis / $scope / object=$objectForm", count, rules.size)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `offerScope declaration is load validated in inherited and branch-local parses`() {
+        for (value in listOf("standalone", "add_on", "bogus")) {
+            val parse = """"parse":{"as":"offer","fields":{
+                "payAmount":{"literal":10.5},"distance":{"literal":1.5},
+                "timeToCompleteMinutes":{"literal":1},"offerScope":{"literal":"$value"}
+            }}"""
+            for (body in listOf("$parse,\"branches\":[{}]", "\"branches\":[{$parse}]")) {
+                // #1119 slice 1: a sensitive rule propagates the declaration error instead of isolating it.
+                val source = """[{"id":"test.sensitive.offer","priority":10,$body}]"""
+                if (value == "bogus") {
+                    val failure = try {
+                        RuleCompiler.compileRules<UiNode>(parseJson(source).jsonArray, RuleContext.SCREEN)
+                        null
+                    } catch (e: RuleCompileException) {
+                        e
+                    }
+                    assertTrue("invalid scope must fail loudly", failure?.message?.contains("offerScope") == true)
+                    assertTrue(failure?.message?.contains("bogus") == true)
+                } else {
+                    val rules = RuleCompiler.compileRules<UiNode>(parseJson(source).jsonArray, RuleContext.SCREEN)
+                    assertEquals(1, rules.size)
+                }
             }
         }
     }

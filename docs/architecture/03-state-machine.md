@@ -543,10 +543,29 @@ An INCREMENTAL accept in `appendAddOn` mints `stopCount − |new pickup hints|` 
 null (3+-digit route, or a pre-#1304 journal row) or out of 1..8 → 1), never `orders.size`, because the card lists the owned order too
 (#1304, fielded 2026-10-09 ×3).
 `quotedItemCount`/`offerUnitCount` are null for an INCREMENTAL accept.
-A job containing an increment has no complete blended net/rate/time. Incremental quotes never infer
+A job containing an increment has no complete blended net/rate/time. ADD_ON offers never infer
 click-less acceptance, including when return-flow context is absent; original-task return after a
 sheet or timeout preserves #1104/#1118. Marginal scoring, route recomputation and click-less add-on
 minting remain out of scope.
+
+**Offer scope (#1119 slice 1).** A parsed STANDALONE offer accepted over a live job that has not
+proven complete closes it through the whole-job abandon: un-arrived drops and unconfirmed pickups
+are unassigned; an ARRIVED (or complete-steps-witnessed) un-completed drop completes at the accept
+instant and is mint-qualified through `Task.staleCloseCompletedAt`; already-evidenced drops are
+untouched. That arrived drop's `completedAt` is the accept instant, an UPPER bound on the real delivery
+time; dwell/mileage folds read `arrivedAt` and are unaffected. Touched copies go to the tail of
+`recentTasks` so same-step cap eviction removes untouched history, and pre-step fallback recovers
+only copies that were already delivery-evidenced. The old active task is cleared, the job closes,
+and a fresh job mints. ADD_ON appends; an unparsed accept keeps the append path. The #596
+physically-complete check runs first, closing and minting even for the same offer hash; a re-accepted
+owned offer over a still-open job is then a no-op before the standalone close. A legacy serialized offer
+with absent scope derives it from the quote basis (incremental → ADD_ON, otherwise STANDALONE);
+fresh parses set it explicitly. At compile time, `quoteBasis: incremental` requires
+`offerScope: add_on`. Only DoorDash declares `add_on` today; Uber's add-on form is unlabelled and
+inert until #826 lands (see the rule's comment).
+Residual risk: a standalone card that really was a stack (never observed in 918 fielded offers)
+splits one job in two; an arrived drop is paid as a normal completion would be (the same
+exposure today's displacement stamp already carries); an un-arrived one is never paid.
 
 **Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
 tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,

@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
@@ -63,7 +64,8 @@ class DoorDashAddonStateTest {
         )
     }
     private fun liveJob(offer: ParsedOffer): AppState {
-        val original = offer.copy(offerHash = "original", quoteBasis = OfferQuoteBasis.TOTAL, timeToCompleteMinutes = 30L)
+        val original = offer.copy(offerHash = "original", quoteBasis = OfferQuoteBasis.TOTAL,
+            offerScope = OfferScope.STANDALONE, timeToCompleteMinutes = 30L)
         val presented = machine.step(initial(), screen(1_000L, original))
         val request = evaluationRequest(presented.effects)
         val state = machine.step(presented.newState, eval(2_000L, request)).newState

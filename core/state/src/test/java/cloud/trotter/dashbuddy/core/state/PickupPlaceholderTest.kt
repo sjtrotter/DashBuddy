@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -62,11 +63,12 @@ class PickupPlaceholderTest {
     // #438 B3: an accept-latched offer that has left presentation — an accepted-pending-consumption
     // survivor on the region's own pendingOffers, ready for the task edge to mint (was the pre-B3
     // `FlowRegion.pendingOffer` read by the accept edge).
-    private fun acceptedOffer(hash: String, stores: List<String>) = PendingOffer(
+    private fun acceptedOffer(hash: String, stores: List<String>, scope: OfferScope = OfferScope.STANDALONE) = PendingOffer(
         offerHash = hash,
         offerFields = ParsedFields.OfferFields(
             parsedOffer = ParsedOffer(
                 offerHash = hash,
+                offerScope = scope,
                 payAmount = 10.0,
                 distanceMiles = 5.0,
                 orders = stores.mapIndexed { i, s -> order(i, s) },
@@ -149,10 +151,10 @@ class PickupPlaceholderTest {
     @Test
     fun `add-on at a new store appends a pickup placeholder, a same-store add-on does not`() {
         val r1 = stepAccept(region(), acceptedOffer("o1", listOf("H-E-B")), pickupObs(1_000L, "H-E-B"))
-        val r2 = stepAccept(r1, acceptedOffer("o2", listOf("Wendy's")), pickupObs(2_000L, "Wendy's"))
+        val r2 = stepAccept(r1, acceptedOffer("o2", listOf("Wendy's"), OfferScope.ADD_ON), pickupObs(2_000L, "Wendy's"))
         assertEquals("a new-store add-on brings its own pickup placeholder", setOf("H-E-B", "Wendy's"), pickupHints(r2))
 
-        val r3 = stepAccept(r2, acceptedOffer("o3", listOf("H-E-B")), pickupObs(3_000L, "H-E-B"))
+        val r3 = stepAccept(r2, acceptedOffer("o3", listOf("H-E-B"), OfferScope.ADD_ON), pickupObs(3_000L, "H-E-B"))
         assertEquals("a same-store add-on folds in — no duplicate placeholder", setOf("H-E-B", "Wendy's"), pickupHints(r3))
         assertEquals(2, pickups(r3).count())
     }
@@ -164,7 +166,7 @@ class PickupPlaceholderTest {
         assertNull("bare fallback: active pickup has no hint", r1.activeTask?.expectedStoreHint)
         assertEquals("H-E-B", r1.activeTask?.storeName)
         // A same-store add-on folds in — deduped against the RESOLVED storeName, not just the hint.
-        val r2 = stepAccept(r1, acceptedOffer("o2", listOf("H-E-B")), pickupObs(2_000L, "H-E-B"))
+        val r2 = stepAccept(r1, acceptedOffer("o2", listOf("H-E-B"), OfferScope.ADD_ON), pickupObs(2_000L, "H-E-B"))
         assertEquals(
             "no duplicate H-E-B pickup placeholder from the same-store add-on",
             0, r2.activeJob!!.tasks.count { it.phase == TaskPhase.PICKUP && it.expectedStoreHint != null },

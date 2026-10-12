@@ -225,37 +225,51 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
 }
 
 /**
- * #1312: Commit the graced whole-job abandon at the marked idle frame's original instant.
- * Any task-flow frame cancels the abandon (the simple retire-grace rule, no task identity required);
- * offers preserve it and PostTask clears it for #596. Resolve every open pickup/dropoff into
- * recentTasks (the effect emitter's source), never into a completion.
- * Fresh lineage wins over the job mirror, including the task already abandoned by #736.
- * This step may overflow the recent-task cap: evict nothing until the close sweep has read older
- * delivered drops awaiting receipt-less completion. The next ordinary step applies the cap.
+ * #1312/#1119: close an abandoned or stale job at the evidence instant. Explicit unassignment
+ * abandons open drops; a standalone accept completes arrived drops through a stepper-owned mark.
+ * Active lineage wins over recent tasks, then the job mirror. Keep touched tasks uncapped until
+ * same-step task processing; the close emitter can recover evicted, already-evidenced pre-step tasks.
  */
-internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
+internal fun PlatformRegionStepper.abandonActiveJob(
+    region: PlatformRegion,
+    at: Long,
+    reason: String,
+    arrivedDropsComplete: Boolean,
+): PlatformRegion {
     val job = region.activeJob ?: return region
-    val tasks = (region.recentTasks.filter { it.jobId == job.jobId } + job.tasks)
+    val active = region.activeTask?.takeIf { it.jobId == job.jobId }
+    val tasks = (listOfNotNull(active) + region.recentTasks.filter { it.jobId == job.jobId } + job.tasks)
         .distinctBy { it.taskId }
-    // A dropoff stays open until delivery is evidenced; a pickup until confirmed. Displacement
-    // stamps alone prove neither. Keep any completedAt stamp intact when marking unassigned.
-    val newlyUnassigned = tasks.filter { task ->
-        task.unassignedAt == null && when (task.phase) {
-            TaskPhase.DROPOFF -> !task.isDeliveredEvidenced()
-            TaskPhase.PICKUP -> task.confirmedAt == null
+    val touched = tasks.mapNotNull { task ->
+        if (task.unassignedAt != null) return@mapNotNull null
+        when (task.phase) {
+            TaskPhase.DROPOFF -> when {
+                task.isDeliveredEvidenced() -> null
+                arrivedDropsComplete && task.completedAt == null &&
+                    (task.arrivedAt != null || task.completionStepsAt != null) ->
+                    task.completedInline(at).copy(staleCloseCompletedAt = at)
+                else -> task.copy(unassignedAt = at)
+            }
+            TaskPhase.PICKUP -> if (task.confirmedAt == null) task.copy(unassignedAt = at) else null
         }
-    }.map { it.copy(unassignedAt = at) }
-    val newlyUnassignedIds = newlyUnassigned.mapTo(HashSet()) { it.taskId }
-    val unassignedIds = tasks.filter { it.unassignedAt != null }.mapTo(HashSet()) { it.taskId } +
-        newlyUnassignedIds
+    }
+    val touchedIds = touched.mapTo(HashSet()) { it.taskId }
+    val unassignedIds = (tasks + touched).filter { it.unassignedAt != null }.mapTo(HashSet()) { it.taskId }
     val abandoned = reconcileJobTasks(region.copy(
         // Remove the stale placeholders before reconciliation's sticky-mirror preservation.
         activeJob = job.copy(tasks = job.tasks.filterNot { it.taskId in unassignedIds }),
-        recentTasks = region.recentTasks.filterNot { it.taskId in newlyUnassignedIds } + newlyUnassigned,
+        activeTask = if (active != null) null else region.activeTask,
+        // touched copies go to the TAIL so a same-step cap eviction removes untouched history, never a fresh mark;
+        // among them a stale-close COMPLETION sits last (Astra r3): if a job ever carried more than the cap's
+        // worth of open tasks, the cap would take an unassigned placeholder before a paid completion. A job holds
+        // a handful of tasks, so the cap is not expected to reach the touched set at all.
+        recentTasks = region.recentTasks.filterNot { it.taskId in touchedIds } +
+            touched.sortedBy { if (it.staleCloseCompletedAt != null) 1 else 0 },
     ))
     Timber.tag("StateMachine").w(
-        "#1312 unassign → idle: job %s abandoned, %d open task(s) marked unassigned",
-        job.jobId, newlyUnassigned.size,
+        "job %s abandoned (%s), %d open task(s) marked unassigned, %d arrived drop(s) completed",
+        job.jobId, reason, touched.count { it.unassignedAt != null },
+        touched.count { it.staleCloseCompletedAt != null },
     )
     return completeActiveJob(abandoned, at)
 }

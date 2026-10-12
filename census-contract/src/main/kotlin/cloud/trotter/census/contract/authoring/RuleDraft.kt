@@ -138,7 +138,12 @@ object RuleDraft {
             }
             val fields = linkedMapOf<String, JsonElement>()
             fields.putAll(taskConstants)
-            selections.constants.forEach { fields[it.name] = it.value }
+            selections.constants.forEach {
+                fields[it.name] = it.value
+                if (it.name == "quoteBasis" && it.value == JsonPrimitive("incremental")) {
+                    fields["offerScope"] = JsonPrimitive("add_on")
+                }
+            }
             for (ref in selections.redacts) {
                 predicate(ref, Role.REDACT)?.let { find ->
                     redacts += buildJsonObject { put("find", find); put("plainMask", true) }
@@ -486,6 +491,7 @@ object RuleDraft {
         "sessionType" -> Vocabulary.SESSION_TYPES
         "presentationIdentity" -> Vocabulary.PRESENTATION_IDENTITIES // #1069
         "quoteBasis" -> Vocabulary.QUOTE_BASES
+        "offerScope" -> Vocabulary.OFFER_SCOPES
         else -> null
     }
 

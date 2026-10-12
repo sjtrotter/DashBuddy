@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.replay
 import cloud.trotter.dashbuddy.domain.capture.ReplayMetadata
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.state.Flow
@@ -38,7 +39,8 @@ class AcceptMismatchReplayTest {
             timestamp = atMs, captureId = null, ruleId = "doordash.screen.offer_popup",
             metadata = ReplayMetadata.EMPTY, flow = Flow.OfferPresented, modeHint = Mode.Online,
             parsed = ParsedFields.OfferFields(
-                parsedOffer = ParsedOffer(offerHash = "synthetic-abandoned-A", payAmount = 28.50, distanceMiles = 5.0),
+                // #1119 slice 1: a mid-job offer that joins the live job is the ADD_ON card; a standalone card would close it.
+                parsedOffer = ParsedOffer(offerHash = "synthetic-abandoned-A", offerScope = OfferScope.ADD_ON, payAmount = 28.50, distanceMiles = 5.0),
             ),
             target = "offer_popup",
         ),

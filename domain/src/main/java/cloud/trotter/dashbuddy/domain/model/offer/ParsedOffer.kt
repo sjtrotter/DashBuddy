@@ -125,7 +125,17 @@ data class ParsedOffer(
 
     /** Incremental quotes retain raw figures but cannot use whole-offer scoring. */
     val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
+    val offerScope: OfferScope? = null,
 ) {
+    /**
+     * #1119 slice 1: a [ParsedOffer] serialized before the field existed decodes with
+     * `offerScope == null`; the lifecycle axis then falls back to the money axis (an incremental
+     * quote was always an add-on), so a recovery replay across the upgrade keeps the semantics
+     * the live run had. `ParsedFieldsFactory` always sets the field explicitly for a fresh parse.
+     */
+    val effectiveScope: OfferScope
+        get() = offerScope ?: if (quoteBasis == OfferQuoteBasis.INCREMENTAL) OfferScope.ADD_ON else OfferScope.STANDALONE
+
     /** #823: the ONE 'is a shopping offer' predicate — the evaluator's handling model and the accept mint read it. */
     val isShop: Boolean get() = orders.any { it.orderType.isShoppingOrder }
 

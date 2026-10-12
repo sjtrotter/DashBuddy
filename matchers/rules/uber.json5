@@ -250,6 +250,9 @@
                 "read": "text",
                 "transform": "parseDistance"
               },
+              // #1119 slice 1: the '+ N min' add-on form should declare `offerScope: add_on`
+              // (and arguably `quoteBasis: incremental`) once this rule is split into two branches;
+              // until then it defaults to standalone, which is inert while #826 keeps Uber accepts unreachable.
               // #827: parseMinutes reads the number bound to its own "min" token —
               // robust to the "+ 19 min" add-on lead-in (parseLeadingInt returned
               // null there because the leading token is "+") and structurally

@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
@@ -90,8 +91,9 @@ class GiftDropOpenJobReplayTest {
             Observation.Screen(timestamp = t, captureId = null, ruleId = "doordash.screen.synthetic",
                 metadata = ReplayMetadata.EMPTY, flow = flow, modeHint = Mode.Online, parsed = parsed), t,
         )
-        fun offer(hash: String) = ParsedFields.OfferFields(parsedOffer = ParsedOffer(
-            offerHash = hash, quoteBasis = OfferQuoteBasis.TOTAL, payAmount = 10.0,
+        // #1119 slice 1: the second offer joins the live job only as the ADD_ON card; a standalone card closes it.
+        fun offer(hash: String, scope: OfferScope = OfferScope.STANDALONE) = ParsedFields.OfferFields(parsedOffer = ParsedOffer(
+            offerHash = hash, quoteBasis = OfferQuoteBasis.TOTAL, offerScope = scope, payAmount = 10.0,
             orders = listOf(ParsedOrder(0, OrderType.PICKUP, "H-E-B", 1, false, emptySet())),
         ))
         fun pickup(sub: TaskSubFlow) = ParsedFields.TaskFields(
@@ -105,7 +107,7 @@ class GiftDropOpenJobReplayTest {
             raw(5_000L, Flow.TaskDropoffNavigation, ParsedFields.TaskFields(
                 phase = TaskPhase.DROPOFF, subFlow = TaskSubFlow.NAVIGATION, customerNameHash = "first-customer",
             )),
-            raw(6_000L, Flow.OfferPresented, offer("second")),
+            raw(6_000L, Flow.OfferPresented, offer("second", OfferScope.ADD_ON)),
             SessionReplay.syntheticOfferClick(OfferIntent.ACCEPT, 7_000L),
             raw(8_000L, Flow.TaskPickupNavigation, pickup(TaskSubFlow.NAVIGATION).copy(customerNameHash = "second-customer")),
         )

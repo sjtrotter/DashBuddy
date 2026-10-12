@@ -248,8 +248,8 @@ internal fun EffectMap.diffDeliveryCompletion(
         // completeness proof for an abandoned job. The amdt-#5 discriminator the mint loop already
         // uses (completed before this step, or retired under a TASK_RETIRE grace) is the SSOT for
         // "this completion is real", so the proof reads the same masked evidence: an unqualified
-        // completion is reverted to unfinished, which fails the arm toward absorption. Invariant: an
-        // endSession/abandon bail can never yield provenComplete.
+        // completion is reverted to unfinished, which fails the arm toward absorption. Invariant:
+        // an unqualified endSession/abandon bail cannot yield provenComplete.
         val closedJobProvenComplete = !estimateSuppressed && isJobPhysicallyComplete(
             closedJob,
             recentTasks = next.recentTasks.map { t ->
@@ -299,7 +299,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 emittedThisStep = emittedThisStep,
             ).describedBy(p.lastPostTaskCoverage),
         )
-        for (task in next.recentTasks) {
+        // #1119 r3: a pre-step copy is evidence only if it was already delivery-evidenced before this step;
+        // a displacement stamp alone never resurrects an evicted mark.
+        for (task in (next.recentTasks + p.recentTasks.filter { it.isDeliveredEvidenced() }).distinctBy { it.taskId }) {
             if (task.jobId != closedJob.jobId || task.phase != TaskPhase.DROPOFF) continue
             val completedAt = task.completedAt ?: continue
             // #736 belt: a dropoff the dasher UNASSIGNED must never mint a DELIVERY_COMPLETED. Once
@@ -467,7 +469,8 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * force-stamped, and the sweep minted anyway.
  *
  * So the discriminator is the stepper's own MARK, [Task.honoredRetireAt], written by `endSession`'s
- * honored branch and by nothing else. Round 6 first tried the stamp's VALUE (`completedAt ==
+ * honored branch, or [Task.staleCloseCompletedAt], written by the #1119 stale close. These are the
+ * two writers of stepper completion marks. Round 6 first tried the stamp's VALUE (`completedAt ==
  * absorbedRetireSince`) and that was wrong: a summary sharing the idle frame's timestamp makes
  * `pend.since == absorbedRetireSince`, so the immature teardown's force-stamp (`completedAt =
  * pend.since`) is numerically identical to an honored one and was minted — a timestamp is not
@@ -479,6 +482,8 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
  * A `TASK_RETIRE` pending is unaffected: its arm (b) is the ordinary inline retire, judged as before.
  */
 internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean {
+    // #1119: the stale close explicitly completed an arrived drop; the mark is its provenance.
+    if (task.staleCloseCompletedAt != null) return true
     if (p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }) return true
     if (!retirePending || p.activeTask?.taskId != task.taskId) return false
     val pend = p.pendingDestructive ?: return false
@@ -691,13 +696,16 @@ internal fun mintingDropoffTasks(
     emittedThisStep: Set<String>,
 ): List<Task> {
     if (jobId == null) return emptyList()
-    return (next.recentTasks + listOfNotNull(next.activeTask))
-        .filter { it.jobId == jobId && it.isAccountableDropoff }
+    // #1119 r3: a pre-step copy is evidence only if it was already delivery-evidenced before this step;
+    // a displacement stamp alone never resurrects an evicted mark.
+    return (next.recentTasks + listOfNotNull(next.activeTask) + p.recentTasks.filter { it.isDeliveredEvidenced() })
+        .filter { it.jobId == jobId }
         .distinctBy { it.taskId }
+        .filter { it.isAccountableDropoff }
         .filter { t ->
             val alreadyCompleted =
                 p.recentTasks.any { it.taskId == t.taskId && it.completedAt != null }
             val justRetiredUnderGrace = retirePending && p.activeTask?.taskId == t.taskId
-            alreadyCompleted || justRetiredUnderGrace || t.taskId in emittedThisStep
+            t.staleCloseCompletedAt != null || alreadyCompleted || justRetiredUnderGrace || t.taskId in emittedThisStep
         }
 }

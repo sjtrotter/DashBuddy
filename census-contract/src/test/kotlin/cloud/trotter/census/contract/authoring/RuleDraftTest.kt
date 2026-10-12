@@ -194,6 +194,10 @@ class RuleDraftTest {
             assertTrue(errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive(basis))))).none { "quoteBasis" in it })
         }
         assertTrue("invalid constant type for quoteBasis" in errors(offerShape.copy(constants = listOf(Constant("quoteBasis", JsonPrimitive("addon"))))))
+        for (scope in listOf("standalone", "add_on")) {
+            assertTrue(errors(offerShape.copy(constants = listOf(Constant("offerScope", JsonPrimitive(scope))))).none { "offerScope" in it })
+        }
+        assertTrue("invalid constant type for offerScope" in errors(offerShape.copy(constants = listOf(Constant("offerScope", JsonPrimitive("bogus"))))))
         assertEquals(listOf("hash field customerNameHash requires a node assignment"), errors(base.copy(
             screenClass = "task:dropoff:navigation", shape = "task", constants = listOf(Constant("customerNameHash", JsonPrimitive("plaintext"))),
         )))
@@ -493,6 +497,18 @@ class RuleDraftTest {
         val two = ok(base.copy(anchors = listOf(root, child)), node(children = listOf(node(id = "other"))))
         assertEquals(2, two.rule().getValue("require").jsonObject.getValue("all").jsonArray.size)
     }
+    @Test
+    fun `incremental offer draft declares the required add-on scope`() {
+        val result = ok(base.copy(screenClass = "offer:presented", shape = "offer", offerSurface = "card",
+            constants = listOf(Constant("quoteBasis", JsonPrimitive("incremental"))),
+            fields = listOf(FieldAssignment(root, "payAmount"), FieldAssignment(child, "distance"),
+                FieldAssignment(PathRef(listOf(1)), "timeToCompleteMinutes"))),
+            node(text = "$8.30", children = listOf(node(id = "distance", text = "3.0 mi"),
+                node(id = "minutes", text = "12"))))
+        assertEquals(JsonPrimitive("incremental"), result.fields()["quoteBasis"])
+        assertEquals(JsonPrimitive("add_on"), result.fields()["offerScope"])
+    }
+
     @Test
     fun `resource boundaries and compiler suffix semantics define peers`() {
         val boundary = node(id = "container", children = listOf(node(id = "bottom_navigation_container")))
