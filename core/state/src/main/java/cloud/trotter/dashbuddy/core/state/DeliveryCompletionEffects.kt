@@ -50,7 +50,9 @@ internal fun EffectMap.diffDeliveryCompletion(
         if (taskCompletedOverride != null) {
             addAll(taskCompletedOverride)
         } else {
-            val sessionId = next.session?.sessionId ?: p.session?.sessionId
+            // This exit completes the predecessor's task, including an end-A + start-B step.
+            val jobSession = closingSession(p, next)
+            val sessionId = jobSession?.sessionId
             // #1078 round 4: WHICH task this exit mints is [exitMintCandidate]'s answer, and this
             // block has no eligibility logic of its own left — the stepper records the very same
             // decision into `JobReceiptAnchors.exitMintedTaskIds`, so the durable record can never
@@ -174,7 +176,7 @@ internal fun EffectMap.diffDeliveryCompletion(
                     jobId = p.activeJob?.jobId,
                     completedAt = completedAtStamp,
                     postTaskFields = receiptForPayload,
-                    sessionEarnings = next.session?.runningEarnings ?: p.session?.runningEarnings,
+                    sessionEarnings = jobSession?.runningEarnings,
                     dropRealizedPay = dropShare,
                     offerPay = offerResult,
                     jobOfferHashes = p.activeJob?.parentOfferHashes ?: emptyList(),

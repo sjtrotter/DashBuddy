@@ -1667,9 +1667,12 @@ internal fun Flow.toTaskSubFlow(): TaskSubFlow? = when (this) {
 }
 
 private fun postEndAnchor(region: PlatformRegion): Long? =
-    region.lastSessionEndedAt ?: region.pendingDestructive?.takeIf {
-        it.kind == DestructiveKind.SESSION_END && it.authoritative
-    }?.since
+    listOfNotNull(
+        region.lastSessionEndedAt,
+        region.pendingDestructive?.takeIf {
+            it.kind == DestructiveKind.SESSION_END && it.authoritative
+        }?.since,
+    ).maxOrNull()
 
 private fun PlatformRegionStepper.withinPostEndWindow(
     region: PlatformRegion,

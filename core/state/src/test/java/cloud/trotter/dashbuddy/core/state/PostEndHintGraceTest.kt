@@ -137,10 +137,9 @@ class PostEndHintGraceTest {
     }
 
     @Test
-    fun `authoritative end after an ungraced Online hint restores Offline so later hints can start`() {
-        // The requested anchor prefers the previous completed end, even while another end stands.
-        val summary = ending(previousEnd = t0 - 120_000L)
-        val flash = machine.step(summary, screen(1_000L))
+    fun `authoritative end after an Online offer restores Offline so later hints can start`() {
+        val summary = ending()
+        val flash = machine.step(summary, screen(1_000L, Flow.OfferPresented))
         assertEquals(Mode.Online, flash.newState.region().mode)
         assertNotNull(flash.newState.region().session)
         assertNull(flash.newState.region().pendingModeResume)
@@ -158,6 +157,41 @@ class PostEndHintGraceTest {
         val resumed = machine.step(arm.newState, wake(pending.deadline, pending.wakeId))
         assertEquals(t0 + 4_000L, requireNotNull(resumed.newState.region().session).startedAt)
         assertEquals(1, starts(resumed.effects).size)
+    }
+
+    @Test
+    fun `current authoritative end takes precedence over an old completed end for hint grace`() {
+        val summary = ending(previousEnd = t0 - 120_000L)
+        val arm = machine.step(summary, screen(1_000L))
+        assertEquals(Mode.Offline, arm.newState.region().mode)
+        assertEquals(summary.region().session, arm.newState.region().session)
+        assertEquals(summary.region().pendingDestructive, arm.newState.region().pendingDestructive)
+        val pending = requireNotNull(arm.newState.region().pendingModeResume)
+        assertEquals(t0 + 1_000L, pending.since)
+        assertNoStart(arm.effects)
+
+        // No repeat hint is needed: the end wake must preserve the armed start for its own wake.
+        val end = requireNotNull(arm.newState.region().pendingDestructive)
+        val commit = machine.step(arm.newState, Observation.Timeout(
+            timestamp = end.deadline,
+            type = TimeoutType.GRACE_COMMIT,
+            targetPlatform = platform,
+            payload = ObservationPayload.GraceWake(end.wakeId),
+        ))
+        assertNull(commit.newState.region().session)
+        assertEquals(pending, commit.newState.region().pendingModeResume)
+        val start = machine.step(commit.newState, wake(pending.deadline, pending.wakeId))
+        assertEquals(pending.since, requireNotNull(start.newState.region().session).startedAt)
+        assertEquals(1, starts(start.effects).size)
+    }
+
+    @Test
+    fun `old completed end without a pending end permits an immediate hint start`() {
+        val result = machine.step(ended(t0 - 120_000L), screen(1_000L))
+        assertEquals(Mode.Online, result.newState.region().mode)
+        assertEquals(t0 + 1_000L, requireNotNull(result.newState.region().session).startedAt)
+        assertNull(result.newState.region().pendingModeResume)
+        assertEquals(1, starts(result.effects).size)
     }
 
     @Test

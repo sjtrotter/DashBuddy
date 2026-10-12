@@ -542,7 +542,8 @@ class DashEndHonorsTaskRetireTest {
         // a retire standing, the offline arm absorbs it, and the NEXT dash's first Online frame lands
         // past the deadline. The lazy expiry ends session A, honoring the retire and minting the
         // delivery. The #1078 attribution fix is unchanged: the delivery and running total belong
-        // to A. #1311 moved B's mint from this hint-only frame to the later graced commit.
+        // to A, as does DASH_STOP. #1311 moved B's mint from this hint-only frame to the later
+        // graced commit; same-step replacements also attribute DASH_STOP to A by session identity.
         val onDrop = onDropoff()
         val afterIdle = step(onDrop, Flow.TaskDropoffArrived, screen(Flow.Idle, idleAt))
         val afterOffline = step(afterIdle, Flow.Idle, screen(Flow.Idle, idleAt + 1_000L, modeHint = Mode.Offline))
@@ -563,6 +564,7 @@ class DashEndHonorsTaskRetireTest {
             state(afterOffline, Flow.Idle), state(afterNextDash, Flow.Idle), nextDashFrame,
         ).filterIsInstance<AppEffect.LogEvent>()
 
+        assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
         val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
         assertEquals(
             "the honored delivery is attributed to the dash it was earned in",
@@ -652,6 +654,25 @@ class DashEndHonorsTaskRetireTest {
             "…and the tripwire stays silent — the delivery WAS recorded",
             0, mismatches(exitEffects).size + mismatches(teardownEffects).size,
         )
+    }
+
+    @Test
+    fun `PostTask exit on a session replacement keeps the completed task's session and earnings`() {
+        val before = step(onDropoff(), Flow.TaskDropoffArrived, receiptFrame(100_000L))
+        val completedTask = requireNotNull(before.activeTask).copy(completedAt = 110_000L)
+        val after = before.copy(
+            session = Session("dash-B", startedAt = 110_000L, runningEarnings = 5.0),
+            activeJob = null,
+            activeTask = null,
+            recentTasks = before.recentTasks + completedTask,
+        )
+        val effects = effectMap.diffDeliveryCompletion(
+            before, after, Flow.PostTask, Flow.TaskPickupNavigation,
+            screen(Flow.TaskPickupNavigation, 110_000L),
+        ).filterIsInstance<AppEffect.LogEvent>()
+        val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
+        assertEquals("dash-A", completed.event.sessionId)
+        assertEquals(21.0, (completed.event.payload as DeliveryPayload).sessionEarningsAtCompletion!!, 0.0001)
     }
 
     @Test
@@ -973,6 +994,7 @@ class DashEndHonorsTaskRetireTest {
             pickupFrame,
         ).filterIsInstance<AppEffect.LogEvent>()
 
+        assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
         val navStarted = effects.single { it.event.type == AppEventType.PICKUP_NAV_STARTED }
         assertEquals(
             "B's own pickup belongs to B — a NEW-task edge is not a close-step emitter",
