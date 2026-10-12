@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.pipeline.Observation
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.IdleSurface
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.OfferSurface
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -42,6 +43,8 @@ internal data class InternalObsPayload(
     // lifecycle reads; a replay that dropped it would resolve the same offer differently from the
     // live run (DECLINED live, TIMEOUT replayed — a second contradictory closing row). Additive.
     val offerSurface: String? = null,
+    // #1312: preserve the no-orders witness on replay; old rows default to null.
+    val idleSurface: String? = null,
 )
 
 /**
@@ -127,7 +130,9 @@ class ObservationJournal @Inject constructor(
     }
 
     private fun internalPayloadOf(obs: Observation): InternalObsPayload? = when (obs) {
-        is Observation.Screen -> obs.offerSurface?.let { InternalObsPayload(offerSurface = it.wire) }
+        is Observation.Screen -> if (obs.offerSurface != null || obs.idleSurface != null) {
+            InternalObsPayload(offerSurface = obs.offerSurface?.wire, idleSurface = obs.idleSurface?.wire)
+        } else null
         is Observation.Timeout ->
             if (obs.targetPlatform != null || obs.payload != null) {
                 InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
@@ -169,6 +174,7 @@ class ObservationJournal @Inject constructor(
                 parsed = deserializeParsed(parsedJson),
                 target = ruleId?.substringAfterLast('.'),
                 offerSurface = payload?.offerSurface?.let(OfferSurface::fromWire),
+                idleSurface = payload?.idleSurface?.let(IdleSurface::fromWire),
             )
 
             "accessibility.click" -> Observation.Click(

@@ -31,6 +31,8 @@ data class GraceConfig(
      * a dash immediately. The grace length itself reuses [pauseResumeGraceMs].
      */
     val postEndHintGraceWindowMs: Long = POST_END_HINT_GRACE_WINDOW_MS,
+    /** Whole-job abandonment after a marked no-orders idle screen (#1312). */
+    val jobAbandonGraceMs: Long = JOB_ABANDON_GRACE_MS,
     /** Safety buffer added to a reported pause countdown before the offline timeout. */
     val pauseTimeoutBufferMs: Long = PAUSE_TIMEOUT_BUFFER_MS,
     /** Settle delay before the EXPAND_EARNINGS tap (waits on the dialog animation). */
@@ -93,6 +95,7 @@ data class GraceConfig(
     val countdownExpirySlackMs: Long = COUNTDOWN_EXPIRY_SLACK_MS,
 ) {
     companion object {
+        const val JOB_ABANDON_GRACE_MS = 5_000L
         const val DEFAULT_GRACE_MS = 10_000L
         const val AUTHORITATIVE_GRACE_MS = 2_500L
         const val PAUSE_RESUME_GRACE_MS = 8_000L

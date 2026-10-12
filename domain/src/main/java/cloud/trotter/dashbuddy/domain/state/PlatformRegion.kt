@@ -700,8 +700,9 @@ data class PendingDestructive(
      */
     val authoritative: Boolean = false,
     /**
-     * The [Flow] this pending was armed *toward* — the destination screen whose
-     * appearance armed the transition (#596). Recorded only for `TASK_RETIRE`:
+     * The [Flow] provenance of this pending. `JOB_ABANDON` records the preceding
+     * `TaskUnassigned` signal (#1312). For `TASK_RETIRE`, this is the destination screen whose
+     * appearance armed the transition (#596):
      * the idle/offer arm stamps the flow it left the task for (`Idle`,
      * `OfferPresented`), the receipt arm stamps `PostTask`. A physically-complete
      * job is allowed to close on a retire commit (#596 T1/T2) **only when this is
@@ -829,4 +830,7 @@ enum class DestructiveKind {
 
     /** Retire the active task — a task flow gave way to idle/offer mid-delivery. */
     TASK_RETIRE,
+
+    /** Abandon the open job after an unassign → marked no-orders idle grace (#1312). */
+    JOB_ABANDON,
 }

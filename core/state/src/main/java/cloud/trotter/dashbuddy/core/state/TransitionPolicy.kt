@@ -64,6 +64,10 @@ class TransitionPolicy @Inject constructor(
     fun pauseResumeGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).pauseResumeGraceMs
 
+    /** Whole-job abandonment grace on [platform] (#1312). */
+    fun jobAbandonGraceMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).jobAbandonGraceMs
+
     /** Post-end window for gracing hint-only Online screens on [platform] (#1311). */
     fun postEndHintGraceWindowMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).postEndHintGraceWindowMs

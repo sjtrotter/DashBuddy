@@ -263,7 +263,9 @@ carries `absorbedRetireSince` across recovery, pinned by `StateManagerV2Recovery
 
 **Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the
-delivery receipt; a separate `pendingModeResume`/`MODE_RESUME_COMMIT` grace debounces a
+delivery receipt, plus `JOB_ABANDON` after unassign → marked no-orders idle (#1312,
+`GraceConfig.jobAbandonGraceMs`, default 5 s per platform); a separate
+`pendingModeResume`/`MODE_RESUME_COMMIT` grace debounces a
 screen-implied Paused→Online *resume* so a pause-sheet-over-receipt can't flap `DASH_PAUSED` (#605).
 The Offline twin (#1311) graces a **HINT-ONLY** Online screen when no session remains and the most
 recent session ended within `GraceConfig.postEndHintGraceWindowMs` (60 s, per-platform). The anchor,
@@ -674,6 +676,54 @@ and the retro-mark shapes) + an "Unassigned: <store>" bubble. A misread self-hea
 same-order frame resumes the task (the resume copy sites clear `unassignedAt`) — but ONLY while the
 job stayed OPEN; after a single-order abandon the job closes and a later same-order frame mints a
 NEW jobId the resume lookup can't reach (documented residual).
+
+**#1312 — whole-job abandonment.** In the 10-09 session both orders ran on one task; the
+second unassign confirmation was recognized but swallowed by the retro-mark gate, Idle appeared
+5 seconds later, and the next accept was absorbed into the abandoned job. Confirmation wording
+is not scope evidence. The next flow-bearing frame must be the Finding-offers screen, rule-declared
+`state.idleSurface: no_orders` (`IdleSurface.NO_ORDERS`), with `flow: idle` and `modeHint: online`.
+Bare `Flow.Idle` is insufficient: `navigation_generic` is also idle, and a full-screen navigation
+frame between confirmation and a surviving order must keep the job. Offline idle screens cannot
+trigger this close either. A bare Looking-for-offers/progress render can flash while a sibling order
+survives, so the marker declares the screen's meaning rather than proving abandonment immediately.
+With no active task and an active job, the marked online screen after `TaskUnassigned` arms
+`pendingDestructive(kind = JOB_ABANDON, armedFromFlow = TaskUnassigned)` for
+`TransitionPolicy.jobAbandonGraceMs` (default 5 s, per platform). A live pending is preserved: the
+single slot must not discard another destructive decision's evidence or wake. The #1054 installer
+mints the wake ID and `ModeEffects.diffDeadlineTimer` schedules `GRACE_COMMIT` with `deadlineMs`.
+Any task-flow frame cancels (the simpler retire-grace rule, without checking task identity), restoring
+absorption; `OfferPresented` neither cancels nor commits, even past the deadline. `PostTask` clears
+the abandon so #596 owns closure. Those frame guards precede lazy expiry. The matching
+`GRACE_COMMIT` wake commits, as does any other non-task frame strictly past the deadline; a frame at
+the deadline does not. Commit calls `abandonActiveJob(region, pend.since)`, marking every still-OPEN
+task with `unassignedAt = pend.since` — the original marked idle instant, never the timer instant.
+Recovery uses the generic `recoveryHygiene` remaining-window rebase and `pendingDeadlineTimers`
+re-arm; the kind and original `since` survive, while the wake ID is fresh.
+Open per phase: a dropoff until `isDeliveredEvidenced()` (`completedAt != null`, `unassignedAt == null`,
+and arrival or `completionStepsAt` evidence), a pickup until CONFIRMED (`confirmedAt`, #1315).
+A drop displaced en route by a pickup switch has a `completedAt` stamp but no delivery evidence;
+it is abandoned too. A displaced pickup likewise stays open without confirmation (the fielded
+"Panera Bread" slot displaced by the "Panera - Corporate" relabel). Existing `completedAt` stamps
+are left intact, the #736 retro-mark precedent; the delivery sweep's `unassignedAt == null` filter
+prevents those stamps from minting completions.
+The tasks move into `recentTasks` with NO eviction on this step, even if the batch overflows the cap:
+the close sweep must still see older delivered drops awaiting receipt-less completion. The next
+ordinary capped task update trims the overflow. The non-unassigned job mirror is reconciled and
+`completeActiveJob` closes the job with its existing receipt bookkeeping. Each newly marked task
+emits one per-taskId `TASK_UNASSIGNED`, but the batch emits only one bubble (`Unassigned: N orders`
+counting newly marked DROPOFF placeholders, one per order; the existing store message for one order).
+No pickup confirmation, pay, or delivery row is fabricated for abandoned tasks; evidenced older deliveries remain eligible for their close sweep.
+The normal `diffJobClose` tripwire still runs. Its existing accounting counts explicit unassignments
+as resolved orders and keeps the two-accept floor for this in-session close, so the one-accept
+fixture emits no `JOB_ACCEPT_MISMATCH`; abandonment is not an "accepted 1 / accounted 0" mismatch
+under the current detector.
+Flow-less recognize-only frames leave R0's flow unchanged and preserve the edge. A sibling task
+frame or `OfferPresented` overlay between confirmation and Idle deliberately keeps the job for
+absorption; an interlude does not re-open this edge. `TaskUnassigned → PostTask → Idle` still closes
+through #596, without this abandonment sweep. Refusing the next add-on merely because the last
+lifecycle evidence was an unassign without physical progress was rejected: a legitimate add-on
+while a sibling survives would mint a fresh job and strand the sibling's placeholders. Absorption
+is the preferred failure direction; marked Idle supplies the graced terminal signal (#527).
 
 
 ## Arrival re-evaluation (#823 Phase 2)

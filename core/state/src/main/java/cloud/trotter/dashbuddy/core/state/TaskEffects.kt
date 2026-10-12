@@ -91,26 +91,25 @@ internal fun EffectMap.diffTask(
         }
 
         // #736: the dasher UNASSIGNED a task. Emit ONE TASK_UNASSIGNED (keyed per taskId for
-        // idempotency) + one "Unassigned: <store>" bubble. Two shapes the abandon can take:
+        // idempotency) + one bubble per abandon batch:
         //  1) INLINE abandon — the task was `prev.activeTask` and now sits in `next.recentTasks`
         //     marked `unassignedAt` (the stepper's same-frame abandon).
         //  2) CROSS-FRAME retro-mark — the task already retired on a PRIOR frame (a help-flow retire
         //     grace committed early), so it was already in `prev.recentTasks` with `unassignedAt` null,
         //     and the authoritative confirmation stamps `unassignedAt` on it in `next.recentTasks`.
-        // `unassignedAt` on a recentTask is only ever written by `abandonActiveTask`, so a
-        // null→non-null transition uniquely identifies the retro-marked task. The per-taskId key makes
-        // the two shapes idempotent with each other and across frames.
+        //  3) WHOLE-JOB abandon (#1312) — open job placeholders move into next.recentTasks together.
+        // Read all predecessor tasks, with fresh lineage winning over the job mirror; diff every
+        // null→non-null marker. The per-taskId key keeps all three shapes idempotent across frames.
         // The INFO stream stays PII-safe: storeName rides the payload (merchant data at rest), not a
         // raw-text log line; the bubble may name the store (bubbles are not the shareable log, P7).
-        val abandonedTask = prevTask?.let { p ->
-            next.recentTasks.lastOrNull { it.taskId == p.taskId && it.unassignedAt != null }
-        } ?: run {
-            val prevUnmarked = prev.recentTasks
-                .filter { it.unassignedAt == null }
-                .mapTo(HashSet()) { it.taskId }
-            next.recentTasks.lastOrNull { it.unassignedAt != null && it.taskId in prevUnmarked }
-        }
-        if (abandonedTask != null) {
+        val prevUnmarked = (listOfNotNull(prevTask) + prev.recentTasks + prev.activeJob?.tasks.orEmpty())
+            .distinctBy { it.taskId }
+            .filter { it.unassignedAt == null }
+            .mapTo(HashSet()) { it.taskId }
+        val abandonedTasks = next.recentTasks
+            .filter { it.unassignedAt != null && it.taskId in prevUnmarked }
+            .distinctBy { it.taskId }
+        for (abandonedTask in abandonedTasks) {
             val jobOfferHashes = (
                 prev.activeJob?.takeIf { it.jobId == abandonedTask.jobId }
                     ?: next.activeJob?.takeIf { it.jobId == abandonedTask.jobId }
@@ -122,11 +121,17 @@ internal fun EffectMap.diffTask(
                     effectKeyOverride = "log:${AppEventType.TASK_UNASSIGNED}:${abandonedTask.taskId}",
                 ),
             )
+        }
+        if (abandonedTasks.isNotEmpty()) {
+            // One DROPOFF placeholder per order; pickup tasks must not inflate the count (#1312).
+            val orderCount = abandonedTasks.count { it.phase == TaskPhase.DROPOFF }
+            val singleTask = abandonedTasks.first().takeIf { orderCount <= 1 }
             add(
                 AppEffect.UpdateBubble(
-                    "Unassigned: ${abandonedTask.storeName ?: UNKNOWN_STORE}",
+                    if (singleTask != null) "Unassigned: ${singleTask.storeName ?: UNKNOWN_STORE}"
+                    else "Unassigned: ${orderCount} orders",
                     ChatPersona.Navigator,
-                    dedupeScope = abandonedTask.taskId,
+                    dedupeScope = abandonedTasks.joinToString(",") { it.taskId },
                     sessionId = predecessorSessionId,
                 ),
             )

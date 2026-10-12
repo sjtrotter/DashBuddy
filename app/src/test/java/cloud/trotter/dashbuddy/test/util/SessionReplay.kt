@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.capture.ReplayMetadataProvider
 import cloud.trotter.dashbuddy.domain.model.accessibility.UiNode
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.pipeline.ObservationPayload
 import cloud.trotter.dashbuddy.domain.pipeline.TimeoutType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.ParsedFields
@@ -250,8 +251,7 @@ object SessionReplay {
             atMs = atMs,
         )
 
-    /** A `GRACE_COMMIT` timeout scoped to [platform], at [atMs] — must be strictly greater than the
-     *  armed retire-grace deadline so lazy expiry commits the dropoff completion. */
+    /** A `GRACE_COMMIT` wake scoped to [platform], at [atMs], carrying the current pending's identity. */
     fun graceCommit(atMs: Long, platform: Platform = Platform.DoorDash): TimeoutInput =
         TimeoutInput(TimeoutType.GRACE_COMMIT, platform, atMs)
 
@@ -303,6 +303,11 @@ object SessionReplay {
                     timestamp = input.atMs,
                     type = input.type,
                     targetPlatform = input.platform,
+                    payload = if (input.type == TimeoutType.GRACE_COMMIT) {
+                        state.regions.platforms[input.platform]?.pendingDestructive?.let {
+                            ObservationPayload.GraceWake(it.wakeId)
+                        }
+                    } else null,
                 )
                 is RawInput -> input.observation
             }

@@ -74,6 +74,10 @@ class RuleAuthoringVocabularyGuardTest {
         assertEquals(setOf("presentationIdentity", "quoteBasis"), StateMachineContract.PARSE_DECLARATION_LITERALS.keys)
         assertEquals(Mode.entries.map { it.wire }, Vocabulary.MODES)
         assertEquals(OfferSurface.entries.map { it.wire }, Vocabulary.OFFER_SURFACES)
+        assertEquals(StateMachineContract.IDLE_SURFACES, Vocabulary.IDLE_SURFACES.toSet())
+        assertEquals(Vocabulary.IDLE_SURFACES, definitions.getValue("stateBlock").jsonObject
+            .getValue("properties").jsonObject.getValue("idleSurface").jsonObject
+            .getValue("enum").jsonArray.map { it.jsonPrimitive.content })
         assertEquals(TaskPhase.entries.map { it.name }, Vocabulary.TASK_PHASES)
         assertEquals(TaskSubFlow.entries.map { it.name }, Vocabulary.TASK_SUB_FLOWS)
         assertEquals(Vocabulary.FLOWS + listOf("sensitive", "noise"), Vocabulary.SCREEN_CLASSES)

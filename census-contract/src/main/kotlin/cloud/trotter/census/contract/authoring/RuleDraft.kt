@@ -57,6 +57,7 @@ data class Selections(
     val redacts: List<PathRef> = emptyList(),
     val constants: List<Constant> = emptyList(),
     val comment: String? = null,
+    val idleSurface: String? = null,
 )
 
 sealed interface DraftResult {
@@ -172,6 +173,7 @@ object RuleDraft {
                     put("flow", selections.screenClass)
                     selections.modeHint?.let { put("modeHint", it) }
                     selections.offerSurface?.let { put("offerSurface", it) }
+                    selections.idleSurface?.let { put("idleSurface", it) }
                 })
                 if (binds.isNotEmpty()) put("bind", binds)
                 if (redacts.isNotEmpty()) put("redact", JsonArray(redacts))
@@ -287,6 +289,10 @@ object RuleDraft {
             if (selections.modeHint != null && selections.modeHint !in Vocabulary.MODES) errors += "unknown modeHint"
             if (selections.modeHint != null && selections.screenClass in listOf("sensitive", "noise")) {
                 errors += "modeHint is not allowed for class ${selections.screenClass}"
+            }
+            if (selections.idleSurface != null) {
+                if (selections.idleSurface !in Vocabulary.IDLE_SURFACES) errors += "unknown idleSurface"
+                if (selections.screenClass != "idle") errors += "idleSurface requires idle"
             }
             if (selections.offerSurface != null) {
                 if (selections.offerSurface !in Vocabulary.OFFER_SURFACES) errors += "unknown offerSurface"

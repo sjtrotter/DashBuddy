@@ -368,7 +368,9 @@ included `matchers` build (ADR-0009). `:core:pipeline:importMatchersRules` canon
 **generated** `assets/rules/<platform>.json` consumed by both the APK and the unit tests
 (`TestRulesetFactory`); there are **no committed** rule assets, so a JSON5 edit flows straight into
 recognition tests. Rule order within a file is inert (unique priorities per section). `RuleCompiler`
-compiles, `ObservationClassifier` matches.
+compiles, `ObservationClassifier` matches. `state.offerSurface` and `state.idleSurface` are
+load-validated rule data carried through branch overrides, classification, and the journal;
+`idleSurface: no_orders` requires `flow: idle` and is declared only by Finding-offers (#1312).
 Drafts generated from census captures are gated by `CensusDraftRoundTripTest` (compile alone →
 recognise the source frame → stay UNKNOWN on the negative corpus → compile merged).
 
@@ -539,7 +541,7 @@ countdown end (`countdownExpiresAt`, parsed on both card generations — also th
 `OFFER_EXPIRY` arm and the HUD bar; `presentedAt + countdown` fired early on a refreshing card) or arrives
 via the `OFFER_EXPIRY` timer); every accept arm and every
 observed tap outranks the sheet; a click-less accept is inferred only over a NON-task `returnFlow` (a
-click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface`;
+click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface` and `idleSurface`;
 inferred outcomes are named in the event description.
 
 **Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend; an explicit add-on accept mints `stopCount − new pickups` dropoffs, never one per listed row (#1304), floor 1.
@@ -571,7 +573,14 @@ set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFI
 hash join that could over-remove a sibling), by customer hash for a pickup-phase one; the cross-frame
 retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
 `Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
-`taskId`; a misread self-heals only while the job stayed open.
+`taskId`; a misread self-heals only while the job stayed open; a `task:unassigned` frame
+followed by the Finding-offers screen (`state.idleSurface: no_orders`) arms a 5 s per-platform
+`JOB_ABANDON` grace (task cancels, offer preserves, PostTask yields to #596; commit stamps the idle instant)
+when `modeHint` is online and no task is active. Bare Idle (including navigation) and offline frames do not.
+Open means no `isDeliveredEvidenced()` for a dropoff or no `confirmedAt` for a pickup; displacement
+stamps stay intact. The abandon step evicts nothing from `recentTasks`, preserving older delivered
+drops for the close sweep, and emits one bubble for the batch plus one unassign event per task.
+The job closes so the next accept mints fresh (#1312).
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 

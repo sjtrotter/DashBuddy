@@ -322,6 +322,11 @@
       "properties": {
         "flow": { "$ref": "#/$defs/flowEnum" },
         "modeHint": { "$ref": "#/$defs/modeEnum" },
+        "idleSurface": {
+          "type": "string",
+          "enum": ["no_orders"],
+          "description": "Rule-declared idle surface declares that this idle screen means the dasher holds no order (#1312). Requires resolved flow: idle. Vocabulary: StateMachineContract.IDLE_SURFACES."
+        },
         "offerSurface": {
           "type": "string",
           "enum": ["card", "decline_confirm"],

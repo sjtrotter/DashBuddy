@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -259,6 +260,24 @@ class ObservationJournalTest {
         advanceUntilIdle()
         val replayed = journal.tailAfter(0).single().observation as Observation.Screen
         assertEquals(cloud.trotter.dashbuddy.domain.state.OfferSurface.DECLINE_CONFIRM, replayed.offerSurface)
+    }
+
+    @Test
+    fun `a Screen's idleSurface survives the round-trip and old rows decode null`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        val obs = Observation.Screen(
+            timestamp = 8L, captureId = null, ruleId = "test.screen.idle",
+            metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
+            parsed = ParsedFields.None,
+            idleSurface = cloud.trotter.dashbuddy.domain.state.IdleSurface.NO_ORDERS,
+        )
+        with(journal) {
+            val row = obs.toEntity(state(8))
+            assertEquals(obs.idleSurface, (row.toObservation() as Observation.Screen).idleSurface)
+            assertNull((row.copy(payloadJson = null).toObservation() as Observation.Screen).idleSurface)
+            assertNull((row.copy(payloadJson = "{}").toObservation() as Observation.Screen).idleSurface)
+        }
     }
 
     @Test

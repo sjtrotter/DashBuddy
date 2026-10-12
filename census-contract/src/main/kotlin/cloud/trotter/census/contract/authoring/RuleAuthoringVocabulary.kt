@@ -45,6 +45,7 @@ object RuleAuthoringVocabulary {
     )
     val SCREEN_CLASSES: List<String> = FLOWS + listOf("sensitive", "noise")
     val MODES: List<String> = listOf("offline", "online", "paused")
+    val IDLE_SURFACES: List<String> = listOf("no_orders")
     val OFFER_SURFACES: List<String> = listOf("card", "decline_confirm")
     /** SessionType enum names are the parser wires (the owner has no separate wire property). */
     val SESSION_TYPES: List<String> = listOf("PerOffer", "ByTime")

@@ -248,6 +248,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     flow = branch.flow,
                     modeHint = branch.modeHint,
                     offerSurface = branch.offerSurface,
+                    idleSurface = branch.idleSurface,
                     fields = fieldsWithIntent,
                     effects = resolvedEffects,
                     targets = targets,

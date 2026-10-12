@@ -225,6 +225,42 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
 }
 
 /**
+ * #1312: Commit the graced whole-job abandon at the marked idle frame's original instant.
+ * Any task-flow frame cancels the abandon (the simple retire-grace rule, no task identity required);
+ * offers preserve it and PostTask clears it for #596. Resolve every open pickup/dropoff into
+ * recentTasks (the effect emitter's source), never into a completion.
+ * Fresh lineage wins over the job mirror, including the task already abandoned by #736.
+ * This step may overflow the recent-task cap: evict nothing until the close sweep has read older
+ * delivered drops awaiting receipt-less completion. The next ordinary step applies the cap.
+ */
+internal fun PlatformRegionStepper.abandonActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
+    val job = region.activeJob ?: return region
+    val tasks = (region.recentTasks.filter { it.jobId == job.jobId } + job.tasks)
+        .distinctBy { it.taskId }
+    // A dropoff stays open until delivery is evidenced; a pickup until confirmed. Displacement
+    // stamps alone prove neither. Keep any completedAt stamp intact when marking unassigned.
+    val newlyUnassigned = tasks.filter { task ->
+        task.unassignedAt == null && when (task.phase) {
+            TaskPhase.DROPOFF -> !task.isDeliveredEvidenced()
+            TaskPhase.PICKUP -> task.confirmedAt == null
+        }
+    }.map { it.copy(unassignedAt = at) }
+    val newlyUnassignedIds = newlyUnassigned.mapTo(HashSet()) { it.taskId }
+    val unassignedIds = tasks.filter { it.unassignedAt != null }.mapTo(HashSet()) { it.taskId } +
+        newlyUnassignedIds
+    val abandoned = reconcileJobTasks(region.copy(
+        // Remove the stale placeholders before reconciliation's sticky-mirror preservation.
+        activeJob = job.copy(tasks = job.tasks.filterNot { it.taskId in unassignedIds }),
+        recentTasks = region.recentTasks.filterNot { it.taskId in newlyUnassignedIds } + newlyUnassigned,
+    ))
+    Timber.tag("StateMachine").w(
+        "#1312 unassign → idle: job %s abandoned, %d open task(s) marked unassigned",
+        job.jobId, newlyUnassigned.size,
+    )
+    return completeActiveJob(abandoned, at)
+}
+
+/**
  * #736: abandon the active task because the dasher UNASSIGNED the order (a `task:unassigned`
  * frame). Distinct from [retireActiveTask]: an abandon marks the task with [Task.unassignedAt]
  * and **leaves [Task.completedAt] null**. The load-bearing defense against a fabricated
@@ -247,7 +283,7 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
  *    absorption (#596 class), never fabrication.
  * 3. If the job then owns no outstanding dropoff placeholder and no other open task → close it
  *    (single-order case: the job closes here, on the confirmation frame).
- * 4. A pending `TASK_RETIRE` is superseded (cleared); a pending `SESSION_END` is preserved;
+ * 4. A pending `TASK_RETIRE` is superseded (cleared); `SESSION_END` and `JOB_ABANDON` survive;
  *    `pendingModeResume` is untouched (#605 non-interaction — the sheet is Online).
  * 5. Idempotent, with the retro-mark EDGE-GATED (#752 review): the cross-frame retro-mark (step 1)
  *    only runs on the edge INTO `TaskUnassigned` (prev flow ≠ `TaskUnassigned`), so a SECOND
@@ -261,9 +297,9 @@ internal fun PlatformRegionStepper.abandonActiveTask(
     prevFlowVal: Flow,
 ): PlatformRegion {
     val abandoned = region.activeTask
-    // Step 4: the abandon supersedes a pending TASK_RETIRE; a SESSION_END is the graced-offline
-    // state and must survive.
-    val keptPending = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
+    // Step 4: supersede only TASK_RETIRE. A confirmation re-render must preserve the graced
+    // session end and the whole-job abandon (#1312); it is not surviving-task evidence.
+    val keptPending = region.pendingDestructive?.takeUnless { it.kind == DestructiveKind.TASK_RETIRE }
 
     // Cross-frame retro-mark (#736 review, widened by #752): when the active task is ALREADY gone —
     // the retire grace committed on a PRIOR frame (a help-flow offer/idle intrusion armed
@@ -293,8 +329,9 @@ internal fun PlatformRegionStepper.abandonActiveTask(
     // trade): a state-bearing interlude between two confirmation frames — most plausibly an
     // OfferPresented overlay over the confirmation — re-opens the gate, so the second frame can
     // re-run the retro walk onto a further task; symmetrically, a GENUINE second unassign whose
-    // frames are separated only by recognize-only screens is swallowed by the gate. Both are
-    // never-fielded multi-order shapes; fail direction stays absorption, never fabrication.
+    // frames are separated only by recognize-only screens is swallowed by the gate. The latter
+    // was fielded on 10-09 (#1312): a following Idle now closes the abandoned job; without that
+    // terminal evidence the fail direction stays absorption, never fabrication.
     val retroTarget: Task? = if (abandoned == null && prevFlowVal != Flow.TaskUnassigned) {
         region.activeJob?.let { job ->
             region.recentTasks

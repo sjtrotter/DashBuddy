@@ -1,0 +1,46 @@
+{
+ "captureId": "00000000-0000-4000-8000-000000000000",
+ "pipelineId": "accessibility.click",
+ "schemaId": "click_context.v1",
+ "timestamp": 1791566493903,
+ "platform": "doordash",
+ "ruleId": null,
+ "classificationName": "UNKNOWN",
+ "metadata": {
+  "engineVersion": 1,
+  "rulesetFormatVersion": 2,
+  "rulesetReleaseTag": "dev",
+  "pipelineVersions": {
+   "accessibility": 1,
+   "accessibility.window": 1,
+   "accessibility.click": 1,
+   "accessibility.long_click": 1,
+   "accessibility.scroll": 1,
+   "accessibility.focus": 1,
+   "notification": 1
+  },
+  "stateMachineApiVersion": "1.0",
+  "appVersion": "0.230.0+88dee351",
+  "deviceFingerprint": "vendor/device/device:16/BUILD.000000.000/1:user/release-keys",
+  "platformAppVersion": "8.101.8"
+ },
+ "payload": {
+  "node": {
+   "desc": "Help",
+   "tooltip": "Help",
+   "id": "com.doordash.driverapp:id/action_self_help",
+   "class": "android.widget.Button",
+   "isClickable": true,
+   "isEnabled": true,
+   "clickAction": true,
+   "focusable": true,
+   "bounds": {
+    "left": 973,
+    "top": 153,
+    "right": 1080,
+    "bottom": 260
+   }
+  },
+  "screenTarget": "pickup_arrival"
+ }
+}

@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] 🆕 NEW — unassigning the LAST order of a job (DoorDash returns to "Finding offers") closes the job: the next accepted offer shows as a new job in the drill-down, not as an add-on to the abandoned one (#1312) — Confirmed: 0/2
+
 - [active] 🆕 NEW — the HUD earnings reads "—" until the first parsed total of the dash, never "$0.00"; the first settled read replaces it (#1041). — Confirmed: 0/2
 
 Five items the dev confirmed on 2026-10-07. Each full item appears once, with its original counter.

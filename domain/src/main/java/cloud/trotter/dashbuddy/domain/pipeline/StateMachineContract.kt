@@ -22,6 +22,9 @@ object StateMachineContract {
 
     val SUPPORTED_FLOWS: Set<String> = Flow.entries.map { it.wire }.toSet()
     val SUPPORTED_MODES: Set<String> = Mode.entries.map { it.wire }.toSet()
+    /** `state.idleSurface` vocabulary (#1312). */
+    val IDLE_SURFACES: Set<String> = cloud.trotter.dashbuddy.domain.state.IdleSurface.entries.map { it.wire }.toSet()
+
     /** `state.offerSurface` vocabulary (#1104/#1114) — see [cloud.trotter.dashbuddy.domain.state.OfferSurface]. */
     val SUPPORTED_OFFER_SURFACES: Set<String> = cloud.trotter.dashbuddy.domain.state.OfferSurface.entries.map { it.wire }.toSet()
     /** #1069: the `presentationIdentity` parse-literal vocabulary — how an offer rule keys a presentation when it parses no `assignmentId`. */
