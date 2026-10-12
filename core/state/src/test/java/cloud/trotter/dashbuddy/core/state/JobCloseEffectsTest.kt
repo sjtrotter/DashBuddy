@@ -27,7 +27,7 @@ import org.junit.Test
  * mint-qualified, so `endSession`'s force-stamp cannot silence its own close.
  *
  * Round 2 SCOPES the lifted single-accept floor to the lost-drop shape — session ended ∧ no
- * qualified completed dropoff ∧ an ARRIVED dropoff in the job's lineage. The three negatives below
+ * qualified completed dropoff ∧ an arrived or tap-witnessed dropoff in the job's lineage. The three negatives below
  * (a coarse dropoff-less job, a pickup-only teardown, a receipt-backed no-arrival delivery) are the
  * neighbours that must stay at the floor of 2.
  */
@@ -185,6 +185,23 @@ class JobCloseEffectsTest {
         assertEquals("the stranded accept is visible at last (#1078/#1095)", 1, m.size)
         assertEquals(1, m.single().acceptedCount)
         assertEquals("an unqualified force-stamp is not a delivery", 0, m.single().accountedCount)
+        assertEquals(listOf("dash-A"), sessionIds(effects))
+    }
+
+    @Test
+    fun `a tap-witnessed arrival-less lost drop lifts the single-accept floor`() {
+        // The force-stamp is masked; the witness must lift the floor even without completedAt.
+        val active = Task("d1", "J1", TaskPhase.DROPOFF, customerNameHash = "c1",
+            startedAt = 100L, completionStepsAt = 4500L, completionStepsScreen = "test.gift")
+        val job = singleAcceptJob("J1").copy(tasks = listOf(active))
+        val prev = PlatformRegion(Platform.DoorDash, session = Session("dash-A", startedAt = 50L),
+            activeJob = job, activeTask = active)
+        val next = PlatformRegion(Platform.DoorDash,
+            recentTasks = listOf(active.copy(completedAt = 5000L)))
+        val effects = effectMap.diffJobClose(prev, next, obs())
+        val mismatch = mismatches(effects).single()
+        assertEquals(1, mismatch.acceptedCount)
+        assertEquals(0, mismatch.accountedCount)
         assertEquals(listOf("dash-A"), sessionIds(effects))
     }
 

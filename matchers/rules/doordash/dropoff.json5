@@ -1805,6 +1805,8 @@
     {
       "id": "doordash.screen.dropoff_geofence_warning",
       "priority": 84,
+      "comment": "#1315: this refusal of a complete-delivery tap is a different dropoff navigation screen; declaring its flow clears the tap witness through the stepper's navigated-away rule. Mode: like every other `task:dropoff:navigation` surface the flow implies Online under TransitionPolicy (the #605 debounced resume) — the dasher is on a delivery surface; this rule inherits the family's semantics rather than staying flowless (Astra r3 of PR #1321, adjudicated).",
+      "state": { "flow": "task:dropoff:navigation" },
       "redact": [
         {
           "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",
@@ -3862,8 +3864,9 @@
     },
     {
       "id": "doordash.click.complete_delivery_nav",
+      "comment": "#1315: the 8.101.8 arrival sheet carries the control; the gate names both screens.",
       "priority": 62,
-      "screenIs": "dropoff_navigation",
+      "screenIs": ["dropoff_navigation", "dropoff_pre_arrival"],
       "intent": "complete_delivery",
       "require": {
         "any": [

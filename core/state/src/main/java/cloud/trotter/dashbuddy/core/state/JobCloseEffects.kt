@@ -85,7 +85,9 @@ internal fun EffectMap.diffJobClose(
 
     // #1095 round 2: the lifted floor names the LOST-DROP shape, not every session end. Both legs
     // are lifecycle evidence — a completed drop in the qualified view (something was minted) and an
-    // ARRIVED drop anywhere in the job's lineage (the dasher physically stood at a doorstep).
+    // evidenced drop anywhere in the job's lineage (arrival or a completion-steps tap, #1315).
+    // This asks whether the dasher reached a doorstep, not whether delivery was committed:
+    // keep completedAt/unassignedAt out of this leg; the detector accounts for abandonment.
     //
     // Round 3: `nothingMinted` is derived from the SAME masked `evidence` list the detector reads,
     // never re-spelled, so the floor and the accounting can never disagree about what was minted.
@@ -93,7 +95,8 @@ internal fun EffectMap.diffJobClose(
         it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF && it.completedAt != null
     }
     val reachedADoorstep = (evidence + closingJob.tasks).any {
-        it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF && it.arrivedAt != null
+        it.jobId == closingJob.jobId && it.phase == TaskPhase.DROPOFF &&
+            (it.arrivedAt != null || it.completionStepsAt != null)
     }
     val lostDropShape = sessionEnded && nothingMinted && reachedADoorstep
 

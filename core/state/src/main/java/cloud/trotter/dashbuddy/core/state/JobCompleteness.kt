@@ -20,12 +20,16 @@ import timber.log.Timber
  *
  * Two arms, evaluated in order (short-circuit; the coverage arm runs ONLY when the strict arm fails):
  *
- * **1. Strict arm (#596/#615/#752, unchanged).** Complete ⇔ every DROPOFF placeholder the job owns is
+ * **1. Strict arm (#596/#615/#752/#1315).** Complete ⇔ every DROPOFF placeholder the job owns is
  * accounted — its taskId appears in [recentTasks] with `completedAt != null`, or it IS [justRetired] —
  * with no unresolved customer-TBD placeholder outstanding, and at least one dropoff actually finished.
- * A zero-dropoff job never qualifies. Accounted additionally requires ARRIVAL evidence
- * (`arrivedAt != null`, #615 review): a grace-stamped `completedAt` alone is not delivery proof — a
- * drop retired EN ROUTE must never read as delivered. An UNASSIGNED dropoff (#752) is never
+ * A zero-dropoff job never qualifies. Accounted additionally requires delivery evidence
+ * (#615): arrival OR a complete-delivery-steps tap the dasher did not navigate away from afterwards
+ * (`completionStepsAt`, #1315). A later navigation frame on the same drop clears that witness.
+ * Residual: tap → back out → Idle with no further frame still closes on the grace, just like an
+ * ARRIVED-then-abandoned drop today (pre-existing #1101-class behavior). A grace-stamped `completedAt` alone is still not delivery proof — a drop retired
+ * EN ROUTE must never read as delivered. Retire absorption (`absorbableRetire` / `endSession`)
+ * stays ARRIVAL-only and fail-null (#615/#1101); dwell/mileage still use only `arrivedAt`. An UNASSIGNED dropoff (#752) is never
  * "delivered": the cross-frame retro-mark stamps `unassignedAt` on grace-retired DROPOFFs, so the
  * `unassignedAt == null` filter here excludes them explicitly (fail direction stays absorption — a
  * genuinely delivered drop keeps `unassignedAt` null and still counts).
@@ -36,18 +40,18 @@ import timber.log.Timber
  * one taskId, #498), so the extra TBD placeholder never appears finished → strict is false forever →
  * the #596 T2 guard never fires and the next offer folds into the finished job (the job-61 class).
  *
- * The missing per-order customer knowledge comes from the PICKUP side. When every order sits at a
- * distinct store, pickup placeholders map 1:1 to orders (`preCreatedPickups` is per distinct store,
- * `preCreatedDropoffs` per order — counts equal ⟺ all orders at distinct stores), so the pickups'
- * distinct hash set is EXACTLY the job's customer set; combined with the resume-collapse invariant
- * (at most one dropoff taskId per customer hash), "every customer hash has a finished, arrived drop"
+ * The missing per-order customer knowledge comes from the PICKUP side. When pickup and dropoff
+ * counts equal, pickups map 1:1 to orders (one trip per order); their hash set IS the customer set.
+ * This includes a confirmed-store re-visit that mints another pickup at the same store, not only
+ * orders at distinct stores. Combined with the resume-collapse invariant
+ * (at most one dropoff taskId per customer hash), "every customer hash has a finished drop with delivery evidence"
  * ⟺ "every physical drop is done" — placeholder count is then irrelevant. See [perCustomerCoverage].
  *
  * Fail direction is absorption / fail-null everywhere: coverage unproven → strict arm only (today's
  * behavior — same-store multi-order jobs, hash-less GoPuff bin-scan pickups, the unparsed-offer
  * fallback all stay strict); pickup↔drop hash drift → stays open; a live mid-route drop → blocked.
- * The arm never manufactures a completion event — it only permits a close backed by ≥1 finished, ARRIVED
- * drop per known customer; all `DELIVERY_COMPLETED` mint guards stay at the effect belt.
+ * The arm never manufactures a completion event — it only permits a close backed by ≥1 finished drop with delivery evidence
+ * per known customer; all `DELIVERY_COMPLETED` mint guards stay at the effect belt.
  *
  * Pure: derives exclusively from `Task`/`Job`/`TaskPhase` structure and the machine's own resume
  * invariant — no platform literals, no rule vocabulary (P8). No clock (all times are stamped).
@@ -76,7 +80,7 @@ internal fun isJobPhysicallyComplete(
     recentTasks: List<Task>,
     justRetired: Task?,
 ): Boolean {
-    // ---- Strict arm (#596/#615/#752) — moved verbatim from PlatformRegionStepper ----
+    // ---- Strict arm (#596/#615/#752/#1315) ----
     // #752: an UNASSIGNED dropoff is never "delivered" even when a retire grace stamped its
     // `completedAt` (and, in the arrived-then-unassigned shape, its `arrivedAt`). The cross-frame
     // retro-mark now stamps `unassignedAt` on grace-retired DROPOFFs too, so this predicate — which
@@ -87,13 +91,13 @@ internal fun isJobPhysicallyComplete(
     val completedDropoffIds = recentTasks
         .filter {
             it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
+                it.isDeliveredEvidenced()
         }
         .mapTo(HashSet()) { it.taskId }
     val retiredDropoffId = justRetired
         ?.takeIf {
             it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
-                it.completedAt != null && it.arrivedAt != null && it.unassignedAt == null
+                it.isDeliveredEvidenced()
         }
         ?.taskId
 
@@ -135,7 +139,7 @@ internal fun isJobPhysicallyComplete(
  *  - `C` = union of observed hashes of all pickups (the job's customer set, since pickups map 1:1 to
  *    orders under the coverage gate);
  *  - `F` = hashes of FINISHED dropoffs — copies in [recentTasks] ∪ [justRetired] with
- *    `completedAt != null && arrivedAt != null` (#615 arrival gate);
+ *    `isDeliveredEvidenced()` (#615/#1315: completed, un-unassigned, arrival or completion tap);
  *  - `A` = ALL observed dropoff hashes (mirror ∪ recent ∪ retired — no activated drop outstanding).
  *
  * Complete ⇔ `|P_pick| ≥ 1 ∧ |P_pick| == |P_drop| ∧ every pickup hashed AND CONFIRMED ∧ C ⊆ F ∧
@@ -162,8 +166,8 @@ private fun perCustomerCoverage(
     val pickupIds = mirror.filter { it.phase == TaskPhase.PICKUP }.mapTo(HashSet()) { it.taskId }
     val dropoffIds = mirror.filter { it.phase == TaskPhase.DROPOFF }.mapTo(HashSet()) { it.taskId }
 
-    // Coverage gate: ≥1 pickup, and pickups map 1:1 to dropoffs — i.e. every order at a distinct
-    // store, so the pickups' hash set IS the job's customer set. A same-store multi-order stack
+    // Coverage gate: ≥1 pickup, and pickups map 1:1 to orders (one trip per order), including a
+    // confirmed-store re-visit; their hash set IS the customer set. A same-store multi-order stack
     // (|P_pick| < |P_drop|) or the unparsed-offer / GoPuff-bin-scan shape fails here → strict-only.
     if (pickupIds.isEmpty() || pickupIds.size != dropoffIds.size) return false
 
@@ -182,10 +186,10 @@ private fun perCustomerCoverage(
     // C = the job's customer set, from the pickups (1:1 with orders under the gate above).
     val customerHashes: Set<String> = pickupIds.flatMapTo(HashSet()) { observedHashes(it) }
 
-    // F = customers with a FINISHED, ARRIVED drop (#615 gate); mirror never proves finished.
+    // F = customers with a drop with delivery evidence (#615/#1315); mirror never proves finished.
     val finishedDropHashes: Set<String> = (jobRecent + listOfNotNull(retired))
         .asSequence()
-        .filter { it.phase == TaskPhase.DROPOFF && it.completedAt != null && it.arrivedAt != null }
+        .filter { it.phase == TaskPhase.DROPOFF && it.isDeliveredEvidenced() }
         .mapNotNull { it.customerNameHash }
         .toSet()
     if (finishedDropHashes.isEmpty()) return false // F ≠ ∅
@@ -199,3 +203,7 @@ private fun perCustomerCoverage(
     // C ⊆ F (every known customer delivered) ∧ A ⊆ F (no activated drop outstanding).
     return finishedDropHashes.containsAll(customerHashes) && finishedDropHashes.containsAll(observedDropHashes)
 }
+
+/** #615/#1315: a grace stamp needs a positive delivery witness; abandonment always excludes it. */
+internal fun Task.isDeliveredEvidenced(): Boolean =
+    completedAt != null && unassignedAt == null && (arrivedAt != null || completionStepsAt != null)

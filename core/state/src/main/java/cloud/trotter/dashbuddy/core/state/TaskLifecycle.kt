@@ -57,6 +57,11 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
 
         val currentTask = region.activeTask
         val jobId = region.activeJob?.jobId ?: return region
+        // #1315: grace may already have retired the pickup before this dropoff frame.
+        // Confirm its arrived lineage on every dropoff activation, even without a displacement.
+        val recentTasks = if (taskPhase == TaskPhase.DROPOFF) {
+            confirmJobPickups(region.recentTasks, jobId, obs.timestamp)
+        } else region.recentTasks
 
         // Phase/subflow change → new task or update.
         //
@@ -66,7 +71,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
         // its own taskId, its own odometer leg, and its own flow-card.
         //
         // Three signals combined for robustness: we must have already
-        // arrived at the previous store; the new screen must be a
+        // arrived at the previous store (or be returning to an unconfirmed visit); the new screen must be a
         // navigation/pre-arrival (subflow=NAVIGATION); and the parsed
         // storeName must be a different, non-Unknown name. Any single
         // signal alone is vulnerable to parser flakiness (notably the
@@ -76,20 +81,24 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
         val isStackedPickupTransition = currentTask != null &&
             currentTask.phase == TaskPhase.PICKUP &&
             taskPhase == TaskPhase.PICKUP &&
-            currentTask.arrivedAt != null &&
+            (currentTask.arrivedAt != null || region.recentTasks.any {
+                // #1315: A→B→A may return before arrival at B; preserve A's displaced identity.
+                it.jobId == jobId && it.phase == TaskPhase.PICKUP && it.confirmedAt == null &&
+                    it.storeName != null && it.storeName == taskFields?.storeName
+            }) &&
             taskSubFlow == TaskSubFlow.NAVIGATION &&
             taskFields?.storeName != null &&
             !taskFields.storeName.equals(UNKNOWN_STORE, ignoreCase = true) &&
             taskFields.storeName != currentTask.storeName
 
         // Stacked-dropoff transition: symmetric to the pickup case but keyed
-        // on customerAddressHash — arrived at one customer, now navigating to
+        // on customerAddressHash — arrived or tapped completion at one customer, now navigating to
         // a different one. Lets back-to-back dropoffs mint distinctly even if
         // no post:task is observed between them.
         val isStackedDropoffTransition = currentTask != null &&
             currentTask.phase == TaskPhase.DROPOFF &&
             taskPhase == TaskPhase.DROPOFF &&
-            currentTask.arrivedAt != null &&
+            (currentTask.arrivedAt != null || currentTask.completionStepsAt != null) &&
             taskSubFlow == TaskSubFlow.NAVIGATION &&
             // #565: a stacked transition means "arrived at customer A, now navigating to a
             // DIFFERENT customer B" — which is only possible if the active task ALREADY HAD a
@@ -116,6 +125,18 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             isStackedPickupTransition ||
             isStackedDropoffTransition
         ) {
+            // A pending retire's first signal remains the honest completion time (#431);
+            // confirmation records this edge's observation timestamp independently.
+            val retireSince = region.pendingDestructive
+                ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
+            val confirmsPickups = currentTask?.phase == TaskPhase.PICKUP && taskPhase == TaskPhase.DROPOFF
+            val displaced = currentTask?.copy(
+                completedAt = retireSince ?: obs.timestamp,
+                confirmedAt = if (confirmsPickups) obs.timestamp else currentTask.confirmedAt,
+            )
+            // Pickup→pickup only stamps completedAt, not confirmation.
+            val displacedRecent = recentTasks + listOfNotNull(displaced)
+
             // #503 slice 2/3b-2: returning to a prior subtask of this job (A→B→A, or back to a
             // store after an offer interlude that retired the task) RESUMES its identity instead
             // of re-minting. The single activeTask slot loses identity on every phase switch; the
@@ -125,27 +146,36 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             // dropoff addresses drift between frames, so an address key split one physical drop
             // into two). This runs even under a stacked-dropoff transition, so returning to an
             // earlier stacked drop routes to it instead of minting a duplicate. Pickup re-matches
-            // by store, but only when the platform did NOT signal a genuinely-new stacked pickup
-            // (two distinct orders at the same store must stay distinct — the same-store add-on
-            // "fold in, don't re-mint" of #499 is the !isStackedPickupTransition case).
+            // by store; a displaced but unconfirmed pickup can resume even across a stacked
+            // pickup transition (A→B→A mid-shop). Confirmation, not displacement, closes that visit.
+            // #1315: an open same-store placeholder means the earlier visit was confirmed or
+            // abandoned; skip resume entirely and resolve onto that placeholder below. An
+            // unconfirmed, un-abandoned visit folds the add-on without minting a placeholder,
+            // so A→B→A mid-shop still resumes its original identity.
             val resumable = when {
                 taskPhase == TaskPhase.DROPOFF && taskFields?.customerNameHash != null ->
                     region.recentTasks.lastOrNull {
                         it.jobId == jobId && it.phase == TaskPhase.DROPOFF &&
                             it.customerNameHash == taskFields.customerNameHash
                     }
-                taskPhase == TaskPhase.PICKUP && !isStackedPickupTransition ->
-                    region.recentTasks.lastOrNull {
+                taskPhase == TaskPhase.PICKUP -> {
+                    val openPickupForStore = pickupMatchingStoreHint(
+                        region.activeJob?.tasks.orEmpty().filter {
+                            it.phase == TaskPhase.PICKUP && it.storeName == null &&
+                                it.confirmedAt == null && it.unassignedAt == null
+                        },
+                        taskFields?.storeName,
+                    )
+                    if (openPickupForStore != null) null else region.recentTasks.lastOrNull {
                         it.jobId == jobId && it.phase == TaskPhase.PICKUP &&
-                            it.storeName != null && it.storeName == taskFields?.storeName
+                            it.storeName != null && it.storeName == taskFields?.storeName &&
+                            (it.confirmedAt == null || !isStackedPickupTransition)
                     }
+                }
                 else -> null
             }
 
             if (resumable != null) {
-                val retireSince = region.pendingDestructive
-                    ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-                val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
                 val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && resumable.arrivedAt == null
                 return region.copy(
                     activeTask = resumable.copy(
@@ -164,9 +194,8 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                         itemsShopped = taskFields?.itemsShopped ?: resumable.itemsShopped,
                         redCardTotal = taskFields?.redCardTotal ?: resumable.redCardTotal,
                         arrivedAt = if (justArrived) obs.timestamp else resumable.arrivedAt,
-                    ),
-                    recentTasks = (region.recentTasks.filterNot { it.taskId == resumable.taskId } +
-                        listOfNotNull(displaced)).takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
+                    ).clearWitnessIfNavigatedAway(obs, taskPhase, taskSubFlow),
+                    recentTasks = displacedRecent.filterNot { it.taskId == resumable.taskId }.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                     pendingDestructive = null,
                 )
             }
@@ -179,7 +208,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             //      reconcileDropoffStore uses), so a noisy/null store doesn't blind-bind in
             //      offset order,
             //   3. next open placeholder in offset order.
-            // "Open" = storeName not yet resolved, not completed, not the current/displaced task.
+            // "Open" = storeName not yet resolved, not completed/unassigned, not the current/displaced task.
             // A wrong bind can be repaired later without re-minting via the swap guard (D4a below).
             val expectedPickup = if (taskPhase == TaskPhase.PICKUP) {
                 val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
@@ -187,28 +216,18 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                     p.phase == TaskPhase.PICKUP &&
                         p.storeName == null &&
                         p.completedAt == null &&
+                        p.unassignedAt == null &&
                         p.taskId != currentTask?.taskId &&
                         p.taskId !in displacedIds
                 }
-                val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() }
-                val hintMatch = screenStore?.let { s ->
-                    openPickups.firstOrNull { it.expectedStoreHint?.equals(s, ignoreCase = true) == true }
-                }
-                val bestMatch = if (hintMatch == null && screenStore != null) {
-                    val best = StoreNameMatch.bestMatch(openPickups.mapNotNull { it.expectedStoreHint }, screenStore)
-                    best?.let { b -> openPickups.firstOrNull { it.expectedStoreHint == b } }
-                } else null
                 // #526 FIX3b: tier 3 (next-open) binds ONLY when there is exactly ONE open
                 // placeholder. With ≥2 open and no parsed/matched store, a blind first-open bind
                 // guesses the wrong order — fall through to a fresh mint (master behavior); a
                 // later frame carrying a real store can hint-match the right placeholder.
-                hintMatch ?: bestMatch ?: openPickups.singleOrNull()
+                pickupMatchingStoreHint(openPickups, taskFields?.storeName) ?: openPickups.singleOrNull()
             } else null
 
             if (expectedPickup != null) {
-                val retireSince = region.pendingDestructive
-                    ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-                val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
                 val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && expectedPickup.arrivedAt == null
                 return region.copy(
                     activeTask = expectedPickup.copy(
@@ -225,7 +244,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                         startedAt = obs.timestamp,
                         arrivedAt = if (justArrived) obs.timestamp else expectedPickup.arrivedAt,
                     ),
-                    recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
+                    recentTasks = displacedRecent.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                     pendingDestructive = null,
                 )
             }
@@ -247,9 +266,6 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             } else null
 
             if (expectedDropoff != null) {
-                val retireSince = region.pendingDestructive
-                    ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-                val displaced = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
                 val justArrived = taskSubFlow == TaskSubFlow.ARRIVED && expectedDropoff.arrivedAt == null
                 return region.copy(
                     activeTask = expectedDropoff.copy(
@@ -266,7 +282,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                         startedAt = obs.timestamp,
                         arrivedAt = if (justArrived) obs.timestamp else expectedDropoff.arrivedAt,
                     ),
-                    recentTasks = (region.recentTasks + listOfNotNull(displaced)).takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
+                    recentTasks = displacedRecent.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                     pendingDestructive = null,
                 )
             }
@@ -288,21 +304,10 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                 taskFields?.customerNameHash == null &&
                 taskFields?.customerAddressHash == null
             ) {
-                return region
+                return region.copy(recentTasks = recentTasks)
             }
 
-            // New task (different phase, no active task, or stacked-pickup transition).
-            // The displaced task commits inline; if a TASK_RETIRE grace was
-            // pending (receipt or idle already signalled its end, #431 pt 2)
-            // the honest completion time is that signal's appearance, not
-            // this new task's first frame.
-            val retireSince = region.pendingDestructive
-                ?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }?.since
-            val completedTask = currentTask?.copy(completedAt = retireSince ?: obs.timestamp)
-            val recentTasks = if (completedTask != null) {
-                (region.recentTasks + completedTask).takeLast(PlatformRegionStepper.MAX_RECENT_TASKS)
-            } else region.recentTasks
-
+            // Fresh mint shares the same displaced copy and confirmation sweep as resolution/resume.
             return region.copy(
                 activeTask = Task(
                     taskId = mintId("task", region, obs),
@@ -330,7 +335,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                     startedAt = obs.timestamp,
                     arrivedAt = if (taskSubFlow == TaskSubFlow.ARRIVED) obs.timestamp else null,
                 ),
-                recentTasks = recentTasks,
+                recentTasks = displacedRecent.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                 pendingDestructive = null,
                 mintCounter = region.mintCounter + 1,
             )
@@ -366,7 +371,8 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                 itemsShopped = taskFields?.itemsShopped ?: baseTask.itemsShopped,
                 redCardTotal = taskFields?.redCardTotal ?: baseTask.redCardTotal,
                 arrivedAt = if (justArrived) obs.timestamp else baseTask.arrivedAt,
-            ),
+            ).clearWitnessIfNavigatedAway(obs, taskPhase, taskSubFlow),
+            recentTasks = recentTasks,
             pendingDestructive = null,
         )
     }
@@ -489,4 +495,36 @@ internal fun requestArrivalEstimate(region: PlatformRegion, obs: Observation): P
         arrivalEstimateRequestedAt = obs.timestamp,
         arrivalEstimateObservedItems = observed,
     ))
+}
+
+/** Shared store-hint tiers for pickup resume eligibility and placeholder resolution (#1315). */
+private fun pickupMatchingStoreHint(pickups: List<Task>, storeName: String?): Task? {
+    val screenStore = storeName?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    pickups.firstOrNull { it.expectedStoreHint?.equals(screenStore, ignoreCase = true) == true }
+        ?.let { return it }
+    val best = StoreNameMatch.bestMatch(pickups.mapNotNull { it.expectedStoreHint }, screenStore)
+        ?: return null
+    return pickups.firstOrNull { it.expectedStoreHint == best }
+}
+
+/** #1315: state twin of the pickup-confirm sweep; preserve prior edges and exclude abandoned pickups. */
+private fun confirmJobPickups(recentTasks: List<Task>, jobId: String, at: Long): List<Task> =
+    recentTasks.map { task ->
+        if (task.jobId == jobId && task.phase == TaskPhase.PICKUP && task.arrivedAt != null &&
+            task.unassignedAt == null && task.confirmedAt == null
+        ) task.copy(confirmedAt = at) else task
+    }
+
+/** #1315: the same tapped screen keeps its witness; navigation elsewhere clears it, even on resume. */
+private fun Task.clearWitnessIfNavigatedAway(
+    obs: Observation.FlowObservation,
+    taskPhase: TaskPhase,
+    taskSubFlow: TaskSubFlow,
+): Task {
+    // Flowless observations inherit the acted flow, so require an observed navigation flow.
+    // Missing screen context (legacy snapshot / unprimed click) clears on any navigation frame.
+    val navigatedAway = taskPhase == TaskPhase.DROPOFF && taskSubFlow == TaskSubFlow.NAVIGATION &&
+        obs.flow == Flow.TaskDropoffNavigation && completionStepsAt != null &&
+        obs.ruleId != completionStepsScreen
+    return if (navigatedAway) copy(completionStepsAt = null, completionStepsScreen = null) else this
 }
