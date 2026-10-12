@@ -229,6 +229,31 @@ class StandaloneOfferClosesStaleJobTest {
     }
 
     @Test
+    fun `a stale-close completion outlives the cap when the touched set itself exceeds it`() {
+        // Astra r3: 21 touched tasks (an arrived active drop, 19 unconfirmed pickups, one placeholder) over a
+        // 20-cap. The completion must be the last tail copy so the same-step activation cap evicts an
+        // unassigned pickup, never the paid completion.
+        val before = initial()
+        val old = region(before)
+        val arrived = dropoff.copy(taskId = "old-arrived", customerNameHash = "arrived-customer", arrivedAt = 300L)
+        val openPickups = (1..19).map {
+            Task("open-pickup-$it", "old-job", TaskPhase.PICKUP, storeName = "Old Store", startedAt = 1L)
+        }
+        val job = requireNotNull(old.activeJob)
+        val crowded = old.copy(
+            recentTasks = openPickups, activeTask = arrived,
+            activeJob = job.copy(tasks = job.tasks + openPickups + arrived),
+        )
+        val result = machine.step(withRegion(before, crowded), frame)
+        val after = region(result.newState)
+        assertFresh(after)
+        assertEquals(PlatformRegionStepper.MAX_RECENT_TASKS, after.recentTasks.size)
+        val kept = after.recentTasks.single { it.taskId == arrived.taskId }
+        assertEquals(frame.timestamp, kept.staleCloseCompletedAt)
+        assertEquals(1, completedEffects(result.effects, arrived.taskId).size)
+    }
+
+    @Test
     fun `add-on offer over a live job appends`() {
         val parsed = offer.copy(offerScope = OfferScope.ADD_ON, quoteBasis = OfferQuoteBasis.INCREMENTAL, stopCount = 1)
         val result = machine.step(initial(parsed), frame)

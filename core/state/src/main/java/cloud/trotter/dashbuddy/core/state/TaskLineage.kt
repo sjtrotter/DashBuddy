@@ -259,8 +259,12 @@ internal fun PlatformRegionStepper.abandonActiveJob(
         // Remove the stale placeholders before reconciliation's sticky-mirror preservation.
         activeJob = job.copy(tasks = job.tasks.filterNot { it.taskId in unassignedIds }),
         activeTask = if (active != null) null else region.activeTask,
-        // touched copies go to the TAIL so a same-step cap eviction removes untouched history, never a fresh mark
-        recentTasks = region.recentTasks.filterNot { it.taskId in touchedIds } + touched,
+        // touched copies go to the TAIL so a same-step cap eviction removes untouched history, never a fresh mark;
+        // among them a stale-close COMPLETION sits last (Astra r3): if a job ever carried more than the cap's
+        // worth of open tasks, the cap would take an unassigned placeholder before a paid completion. A job holds
+        // a handful of tasks, so the cap is not expected to reach the touched set at all.
+        recentTasks = region.recentTasks.filterNot { it.taskId in touchedIds } +
+            touched.sortedBy { if (it.staleCloseCompletedAt != null) 1 else 0 },
     ))
     Timber.tag("StateMachine").w(
         "job %s abandoned (%s), %d open task(s) marked unassigned, %d arrived drop(s) completed",
