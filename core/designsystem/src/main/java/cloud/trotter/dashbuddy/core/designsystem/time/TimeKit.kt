@@ -5,8 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import java.time.Clock
 import java.util.Date
 
 /**
@@ -19,15 +21,28 @@ import java.util.Date
  * from every layer; only the Compose-bound helpers remain here.
  */
 
-/** 1-Hz tick, scoped to the calling composable. See CLAUDE.md ▸ Reactive UI Principles. */
+/**
+ * The clock every time-derived composable reads, through [rememberNow] (#1333).
+ * Production uses the system clock; a Compose test provides one it controls.
+ * Provide a stable instance: a new instance re-keys the ticker.
+ */
+val LocalNowProvider = staticCompositionLocalOf<Clock> { Clock.systemUTC() }
+
+/**
+ * 1-Hz tick, scoped to the calling composable. See CLAUDE.md ▸ Reactive UI Principles.
+ * Reads [LocalNowProvider]; a test advances its clock and the Compose test clock together.
+ */
 @Composable
-fun rememberNow(tickMs: Long = 1000L): State<Long> =
-    produceState(initialValue = System.currentTimeMillis()) {
+fun rememberNow(tickMs: Long = 1000L): State<Long> {
+    val clock = LocalNowProvider.current
+    return produceState(initialValue = clock.millis(), clock, tickMs) {
+        value = clock.millis()
         while (true) {
             delay(tickMs)
-            value = System.currentTimeMillis()
+            value = clock.millis()
         }
     }
+}
 
 /**
  * A remembered wall-clock formatter honoring the device's 12/24-hour setting

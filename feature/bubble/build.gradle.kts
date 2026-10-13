@@ -32,8 +32,8 @@ android {
         compose = true
     }
     testOptions {
-        // OfferGaugeBitmapTest is a Robolectric test (android.graphics Canvas/Bitmap); the
-        // compiled resources let Robolectric resolve a real manifest/Context.
+        // Robolectric hosts OfferGaugeBitmapTest (android.graphics Canvas/Bitmap) and Compose UI tests;
+        // compiled resources let it resolve a real manifest/Context.
         unitTests.isIncludeAndroidResources = true
     }
 }
@@ -60,4 +60,8 @@ dependencies {
     testImplementation(libs.junit)
     // OfferGaugeBitmapTest exercises the Canvas/Bitmap gauge draw under Robolectric.
     testImplementation(libs.robolectric)
+    // #1333: Compose UI tests under Robolectric (the HUD's reactivity rules are tested here).
+    testImplementation(libs.androidx.ui.test.junit4)
+    // Debug only: the Compose tests live in src/testDebug. :app's debug manifest keeps the host activity unexported.
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

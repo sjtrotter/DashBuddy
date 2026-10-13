@@ -964,8 +964,15 @@ something the user is looking at right now.
 
    ```kotlin
    @Composable
-   fun rememberNow(tickMs: Long = 1000L): State<Long> = produceState(System.currentTimeMillis()) {
-       while (true) { value = System.currentTimeMillis(); delay(tickMs) }
+   fun rememberNow(tickMs: Long = 1000L): State<Long> {
+       val clock = LocalNowProvider.current
+       return produceState(initialValue = clock.millis(), clock, tickMs) {
+           value = clock.millis()
+           while (true) {
+               delay(tickMs)
+               value = clock.millis()
+           }
+       }
    }
    ```
 
@@ -977,6 +984,13 @@ something the user is looking at right now.
 5. **Bubble HUD has the strictest reactivity bar.** If a value can change while the dasher is
    looking at it, it must re-render without a state transition. Treat any frozen-looking value as
    a defect, not a styling choice.
+6. **One clock, and tests own it.** A composable never reads `System.currentTimeMillis()`; it reads time
+   from `rememberNow()` (ticking values) or `LocalNowProvider.current` (a one-off read), both
+   `:core:designsystem`, a `java.time.Clock` that defaults to the system clock. Compose tests live in
+   `src/testDebug` (the test host activity is a debug dependency), provide a clock they control, set
+   `mainClock.autoAdvance = false`, move the clock and call `mainClock.advanceTimeBy(2_000)`: one tick of
+   1,000 ms rounds to whole frames and can miss the recomposition (see the `ComposeSmokeTest`s in
+   `:feature:bubble` and `:app`).
 
 When in doubt: would the dasher believe a stale value? If yes, it's reactive-broken.
 
@@ -1101,7 +1115,7 @@ Release DI, Android event delivery and screenshots are out of scope.
 - **DB:** Room 2.8.4 (KSP)
 - **Prefs:** DataStore Preferences 1.2.1
 - **Network:** Retrofit 3.0.0 + OkHttp 5.3.2
-- **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1
+- **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1, Compose UI test (`ui-test-junit4`, Robolectric)
 - **Logging:** Timber 5.0.1
 
 ## Git Workflow

@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.core.designsystem.component.AppStackBar
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindow
 import cloud.trotter.dashbuddy.domain.analytics.GapStats
 import cloud.trotter.dashbuddy.domain.analytics.HourComposition
@@ -212,10 +213,10 @@ private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
             return@AppCard
         }
 
-        // Device clock at render (a review surface — no ticker needed).
+        // Device clock at render (a review surface; no ticker needed).
         val labels = MileageTaxModel.from(
             miles = time.miles,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = LocalNowProvider.current.millis(),
             zone = ZoneId.systemDefault(),
             window = window,
         )
