@@ -1,6 +1,6 @@
 # ADR-0012: The Dasher's Ledger (Cash Tips, Expenses, Fuel Fill-Ups)
 
-**Status:** Accepted; to be built in #1333 slices 1 to 3 (nothing here exists in code yet)
+**Status:** Accepted; slice 1 (the data layer) built; slices 2 and 3 to come
 **Issue:** #1333
 **Date:** 2026-10-12
 **Builds on:** #314 (CQRS read model), #650 (corrections family),
@@ -12,7 +12,7 @@
 
 ## Context
 
-The new events, folds, tables, repository APIs, and preferences described here land in #1333 slice 1.
+The new events, folds, tables, repository APIs, and preferences described here landed in #1333 slice 1.
 The HUD consumes them in the later slices. This ADR records the 2026-10-12 design decisions.
 
 The dasher has nowhere to log expenses or fuel fills. A cash tip can be set only from the hub's
@@ -40,7 +40,9 @@ The three new `AppEventType` values belong to the "User corrections" group.
 | `DELIVERY_ADJUSTMENT` (cash tip, existing) | `targetEventSequenceId`, `sessionId`, `newCashTip` through `CorrectionRepository.adjustDelivery` |
 
 `LedgerRepository.logExpense`, `LedgerRepository.logFuel`, and `LedgerRepository.void` write
-through `appendUserEvent`. `BubbleViewModel` intents call repositories; composables do not write.
+through `appendUserEvent`. `appendUserEvent`, `logExpense`, and `logFuel` return the appended
+sequence id, the target of a later `void`; `void` returns Unit.
+`BubbleViewModel` intents call repositories; composables do not write.
 
 `BOOKKEEPING_EVENTS` gains all three new types. An odometer stamp on any of them never feeds
 odometer measurement, session mileage, or job mileage budgets.
@@ -48,8 +50,9 @@ odometer measurement, session mileage, or job mileage budgets.
 ### Categories
 
 `ExpenseCategory { FOOD, PARKING, SUPPLIES, OTHER }` lives in `:domain`.
-Room stores the enum name. An unknown stored name reads as `OTHER`, following the `MilesBasis`
-name-storage and unknown-value fallback pattern.
+Room stores the enum name. `ExpenseCategorySerializer` also encodes the payload category as its
+name and decodes with `ExpenseCategory.fromStorage`. Unknown names in Room or payload JSON read
+as `OTHER`, preserving the expense amount and note, following the `MilesBasis` fallback pattern.
 
 ### Read model
 
@@ -81,9 +84,12 @@ Room moves from version 19 to 20 by `AutoMigration`. Slice 1 includes the export
 a `MigrationTestHelper` case, and the `SchemaVersionGuardTest` migration chain.
 
 `CorrectionFolds.foldExpenseLogged`, `CorrectionFolds.foldFuelFillup`, and
-`CorrectionFolds.foldLedgerVoid` produce `Adjustment` decisions. `AnalyticsProjector` applies
-them by primary key in event order inside the batch transaction, like `applyDeliveryAdjustment`.
-The projected rows and watermark commit together.
+`CorrectionFolds.foldLedgerVoid` produce `ExpenseLoggedFold`, `FuelFillupFold`, and `LedgerVoidFold`
+through `FoldOutcome`. All three folds carry no session context, including on skipped payloads:
+returning context would mark the session touched and re-upsert its whole row from hydration.
+`AnalyticsProjector` collects them as `Adjustment` decisions and calls the `LedgerDao` extensions
+in `LedgerApply.kt` by primary key in event order inside the batch transaction, following the
+`SessionReportApply.kt` pattern. The projected rows and watermark commit together.
 
 `pricePerGallon` is derived at read time as the total divided by gallons. It is null when gallons
 is null or zero, and is never stored. `odometerMiles` comes from
@@ -97,10 +103,11 @@ payload field is the only odometer reading on a fill-up.
 
 The write history is append-only. No entry is edited in place or deleted by the user.
 Expense and fuel undo append `LEDGER_ENTRY_VOIDED(targetEventSequenceId)`.
-Its projection stamps the target row's `voidedAt` with the void event's timestamp.
+Its projection stamps the target row's `voidedAt` with the first void event's timestamp.
+One void per entry: the first wins; a repeat void changes zero rows and is a counted skip.
 The original event and the projected row remain.
 
-A void of a void, or of an unknown sequence id, is a counted skip.
+A void of a void, of an unknown sequence id, or of a later event is a counted skip.
 Its `WARN` carries the sequence id only, with no payload text.
 
 A cash-tip undo appends another `DELIVERY_ADJUSTMENT`. Its `newCashTip` is the value before
@@ -152,21 +159,25 @@ the row appears loses it.
 
 ### Kept
 
-`AnalyticsRepository.sessionNet(sessionId): Flow<SessionNet?>` reads the dash's projected rows.
+`LedgerRepository.sessionNet(sessionId): Flow<SessionNet?>` reads the dash's projected rows.
+It combines `sessionDetail` from its injected `AnalyticsRepository` with the two `LedgerDao`
+totals. `AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
 Its terms are the hub's per-dash net, read from `SessionDetail`: delivered net is the sum of
 `netProfit` over `SessionDetail.deliveries`, with a null net counting as zero exactly as the hub's
 per-dash net does (`COALESCE(SUM(netProfit), 0)` in `AnalyticsDao`), plus `SessionDetail.cashTips`
 and `SessionDetail.unattributedPay`. Keeping the hub's rule means the HUD and the hub never show two
 different nets for one dash.
 
-`SessionNet` carries the dash's non-voided expense total and non-voided fuel total as separate
-terms; `realExpenses` is their sum. `SessionNet.kept(countExpenses)` adds the three money terms and
-subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
+`SessionNet.expenses` carries the dash's non-voided expense total and `SessionNet.fuel` carries
+its non-voided fuel total; `SessionNet.realExpenses` is their sum. `SessionNet.kept(countExpenses)`
+adds the three money terms and subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
 `count_real_expenses_in_kept`, default off. Whether the fuel term belongs in that subtraction is
 open (see "Open before slice 3").
 
-The flow is null until the first delivery row folds. Projector lag is accepted and disclosed
-on the HUD. The disclosure states "after car cost, before tax; expenses not counted" or
+The flow is null when `sessionDetail` is null, or when there are no delivery rows and both
+`cashTips` and `unattributedPay` are zero. Expenses alone do not make it non-null.
+Projector lag is accepted and disclosed on the HUD. The disclosure states
+"after car cost, before tax; expenses not counted" or
 "expenses counted", according to the preference.
 
 ### Where this ADR updates design.md
@@ -245,7 +256,7 @@ already owned by `DELIVERY_ADJUSTMENT`. A reversing adjustment keeps one owner.
 ## Consequences
 
 Slice 1 builds the event types and payloads, codec support, pure folds, tables, DAO, and Room
-migration. It adds `LedgerRepository`, `AnalyticsRepository.sessionNet`, `SessionNet`,
+migration. It adds `LedgerRepository`, `LedgerRepository.sessionNet`, `SessionNet`,
 `OdometerRepository.totalMiles`, and the two preferences. Schema export and migration checks
 accompany the stored fields, along with the `PRIVACY.md` row.
 

@@ -65,9 +65,8 @@ class AppEventRepo @Inject constructor(
      * engine, so a bare insert is the correct — and complete — write. The analytics projector's
      * `maxSequenceId()` drain picks it up automatically.
      */
-    suspend fun appendUserEvent(event: AppEvent, metadataJson: String? = null) {
+    suspend fun appendUserEvent(event: AppEvent, metadataJson: String? = null): Long =
         dao.insert(event.toEntity(metadataJson))
-    }
 
     fun getAllEvents(): Flow<List<AppEvent>> =
         dao.getAllEvents().map { rows -> rows.map { it.toDomain() } }

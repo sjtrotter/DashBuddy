@@ -11,8 +11,11 @@ import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.dashbuddy.domain.analytics.ReceiptRepriceFold
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryFold
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseLoggedFold
+import cloud.trotter.dashbuddy.domain.analytics.FuelFillupFold
 import cloud.trotter.dashbuddy.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.dashbuddy.domain.analytics.LegStateCodec
+import cloud.trotter.dashbuddy.domain.analytics.LedgerVoidFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferOutcomeCorrectionFold
 import cloud.trotter.dashbuddy.domain.analytics.OfferReconcileFold
@@ -73,6 +76,8 @@ class AnalyticsProjector @Inject constructor(
     private val analyticsDao: AnalyticsDao,
     private val appPreferencesRepository: AppPreferencesRepository,
 ) {
+
+    private val ledgerDao = db.ledgerDao()
 
     /** #159 store-resolution runner (row adapter over the pure `StoreResolver` core), run inside the
      *  batch transaction against the job's committed rows. */
@@ -199,6 +204,9 @@ class AnalyticsProjector @Inject constructor(
             outcome.pickup?.let { pickups += it }
             outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.expenseLogged?.let { adjustments += Adjustment.ExpenseLogged(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.fuelFillup?.let { adjustments += Adjustment.FuelFillup(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.ledgerVoid?.let { adjustments += Adjustment.LedgerVoid(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.sessionReportCorrection?.let { adjustments += Adjustment.SessionReportCorrect(ev.sequenceId, ev.event.occurredAt, it) }
@@ -236,6 +244,9 @@ class AnalyticsProjector @Inject constructor(
             // refold replays this same ascending order and reproduces identical rows.
             adjustments.sortedBy { it.sequenceId }.forEach { adj ->
                 val skipped = when (adj) {
+                    is Adjustment.ExpenseLogged -> ledgerDao.applyExpenseLogged(adj.fold)
+                    is Adjustment.FuelFillup -> ledgerDao.applyFuelFillup(adj.fold)
+                    is Adjustment.LedgerVoid -> ledgerDao.applyLedgerVoid(adj.fold)
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
@@ -288,6 +299,21 @@ class AnalyticsProjector @Inject constructor(
         val sequenceId: Long
         /** The source event's own `occurredAt` — the driver-edit stamp (#1033 round 6). */
         val occurredAt: Long
+        data class ExpenseLogged(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ExpenseLoggedFold,
+        ) : Adjustment
+        data class FuelFillup(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: FuelFillupFold,
+        ) : Adjustment
+        data class LedgerVoid(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: LedgerVoidFold,
+        ) : Adjustment
         data class Pay(
             override val sequenceId: Long,
             override val occurredAt: Long,
@@ -778,6 +804,8 @@ class AnalyticsProjector @Inject constructor(
             state.projectorVersion, PROJECTOR_VERSION,
         )
         db.withTransaction {
+            ledgerDao.deleteAllExpenses()
+            ledgerDao.deleteAllFuel()
             analyticsDao.deleteAllDeliveries()
             analyticsDao.deleteAllSessions()
             analyticsDao.deleteAllOffers()
@@ -1040,6 +1068,7 @@ class AnalyticsProjector @Inject constructor(
         // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
         // 14: #1108 — per-job mileage budgets and session completion high-water allocation
         // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills readings surviving the bounded map)
+        // #1333: no PROJECTOR_VERSION bump; new ledger tables are empty for all existing history.
         private const val PROJECTOR_VERSION = 15
     }
 }

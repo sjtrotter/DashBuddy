@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.domain.model.event
 
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.payload.AppEventPayload
@@ -206,6 +210,25 @@ class AppEventCodecTest {
             val payload = SessionReportCorrectionPayload("483", op, value, "driver note")
             assertEquals(payload, roundTrip(AppEventType.SESSION_REPORT_CORRECTION, payload))
         }
+    }
+
+    @Test
+    fun `ledger payloads round trip with populated and null optional fields`() {
+        val cases = listOf(
+            AppEventType.EXPENSE_LOGGED to ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 12.0, "lunch"),
+            AppEventType.EXPENSE_LOGGED to ExpenseLoggedPayload(null, ExpenseCategory.OTHER, 1.0),
+            AppEventType.FUEL_FILLUP to FuelFillupPayload("S", 30.0, 10.0, 500.0),
+            AppEventType.FUEL_FILLUP to FuelFillupPayload(null, 30.0),
+            AppEventType.LEDGER_ENTRY_VOIDED to LedgerEntryVoidedPayload(42),
+        )
+        for ((type, payload) in cases) assertEquals(payload, roundTrip(type, payload))
+    }
+
+    @Test
+    fun `unknown expense category falls back to OTHER without losing amount or note`() {
+        val json = """{"sessionId":"S","category":"GEAR","amount":12.5,"note":"rain gear"}"""
+        val decoded = AppEventCodec.decodePayload(AppEventType.EXPENSE_LOGGED, json)
+        assertEquals(ExpenseLoggedPayload("S", ExpenseCategory.OTHER, 12.5, "rain gear"), decoded)
     }
 
 }

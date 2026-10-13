@@ -259,6 +259,9 @@ data class FoldOutcome(
      * applies it by-PK inside the batch transaction after the upserts.
      */
     val deliveryAdjustment: DeliveryAdjustmentFold? = null,
+    val expenseLogged: ExpenseLoggedFold? = null,
+    val fuelFillup: FuelFillupFold? = null,
+    val ledgerVoid: LedgerVoidFold? = null,
     /** A completed-pickup visit row (#159), from `PICKUP_CONFIRMED`. */
     val pickup: PickupFold? = null,
     /** A store-resolution trigger (#159) the orchestrator runs against the job's committed rows. */
@@ -426,6 +429,9 @@ object RecordFolds {
         AppEventType.DELIVERY_RECEIPT_REPRICE,
         AppEventType.PAY_ADJUSTMENT,
         AppEventType.DELIVERY_ADJUSTMENT,
+        AppEventType.EXPENSE_LOGGED,
+        AppEventType.FUEL_FILLUP,
+        AppEventType.LEDGER_ENTRY_VOIDED,
         AppEventType.MANUAL_DELIVERY,
         AppEventType.DELIVERY_SESSION_ASSIGN,
         AppEventType.OFFER_OUTCOME_CORRECTION,
@@ -489,6 +495,9 @@ object RecordFolds {
             AppEventType.PICKUP_CONFIRMED -> DeliveryFolds.foldPickupConfirmed(event, context)
             AppEventType.MANUAL_DELIVERY -> CorrectionFolds.foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
+            AppEventType.EXPENSE_LOGGED -> CorrectionFolds.foldExpenseLogged(event, context)
+            AppEventType.FUEL_FILLUP -> CorrectionFolds.foldFuelFillup(event, context)
+            AppEventType.LEDGER_ENTRY_VOIDED -> CorrectionFolds.foldLedgerVoid(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
             AppEventType.DELIVERY_RECEIPT_REPRICE -> CorrectionFolds.foldDeliveryReceiptReprice(event, context)
             AppEventType.SESSION_REPORT_CORRECTION -> CorrectionFolds.foldSessionReportCorrection(event, context)

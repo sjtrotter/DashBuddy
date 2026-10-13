@@ -5,6 +5,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayl
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
@@ -45,6 +48,9 @@ object AppEventCodec {
         is SessionStopPayload -> json.encodeToString(payload)
         is ManualDeliveryPayload -> json.encodeToString(payload)
         is PayAdjustmentPayload -> json.encodeToString(payload)
+        is ExpenseLoggedPayload -> json.encodeToString(payload)
+        is FuelFillupPayload -> json.encodeToString(payload)
+        is LedgerEntryVoidedPayload -> json.encodeToString(payload)
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
         is DeliveryReceiptRepricePayload -> json.encodeToString(payload)
         is SessionReportCorrectionPayload -> json.encodeToString(payload)
@@ -96,6 +102,12 @@ object AppEventCodec {
 
             AppEventType.PAY_ADJUSTMENT ->
                 json.decodeFromString<PayAdjustmentPayload>(payloadJson)
+
+            AppEventType.EXPENSE_LOGGED -> json.decodeFromString<ExpenseLoggedPayload>(payloadJson)
+
+            AppEventType.FUEL_FILLUP -> json.decodeFromString<FuelFillupPayload>(payloadJson)
+
+            AppEventType.LEDGER_ENTRY_VOIDED -> json.decodeFromString<LedgerEntryVoidedPayload>(payloadJson)
 
             AppEventType.DELIVERY_ADJUSTMENT ->
                 json.decodeFromString<DeliveryAdjustmentPayload>(payloadJson)
