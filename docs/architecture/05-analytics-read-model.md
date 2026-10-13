@@ -727,6 +727,39 @@ Day-one use: clear session 483's phantom $40.14 (`early_offline`, zero deliverie
 week drops from $646.34 to $606.20; Restore detected value brings the machine $40.14 back.
 
 
+### Ledger: expenses, fuel fill-ups, cash tips from the HUD (#1333, ADR-0012)
+Decided in [ADR-0012](../adr/ADR-0012-dasher-ledger.md); built in #1333 slice 1.
+
+`EXPENSE_LOGGED`, `FUEL_FILLUP`, and `LEDGER_ENTRY_VOIDED` join the user corrections.
+`LedgerRepository.logExpense` / `logFuel` / `void` append them through `appendUserEvent`.
+`CorrectionFolds.foldExpenseLogged` / `foldFuelFillup` / `foldLedgerVoid` produce `Adjustment`
+decisions applied by primary key inside the projector batch transaction, like `applyDeliveryAdjustment`.
+All three join `BOOKKEEPING_EVENTS`; their odometer stamps never feed mileage measurement.
+
+Room v19 to v20 adds `expense_records` and `fuel_records` by `AutoMigration`, with exported schema
+and migration checks. Each row uses its source `eventSequenceId` as primary key and carries nullable
+`sessionId` and `voidedAt`. Expenses hold category, amount, and optional note; fuel holds total,
+optional gallons, and optional cumulative `odometerMiles` from `OdometerRepository.totalMiles()`.
+Both carry `occurredAt`. `ExpenseCategory` names fall back to `OTHER` on unknown stored names.
+`pricePerGallon` is derived at read time, null for null or zero gallons, never stored.
+
+Undo appends `LEDGER_ENTRY_VOIDED(targetEventSequenceId)` and stamps the target's `voidedAt`.
+A void of a void or unknown target is a counted skip with a sequence-id-only `WARN`.
+Cash tips stay `DELIVERY_ADJUSTMENT` through `CorrectionRepository.adjustDelivery`; undo is a
+reversing adjustment with the previous `newCashTip`, or `0.0` when absent. Cash targets a delivery
+of the focused dash; the projector drops cash on null-session rows. Other off-dash entries use null.
+Commit writes at the tap; the 10 second undo window is UI state. An active-drop tip waits for its
+row, or is dropped with a `WARN` and a log line to the dasher if the dash ends first.
+
+`sessionNet(sessionId)` emits `SessionNet`: delivered net, cash tips, unattributed pay, and
+`realExpenses` (non-voided expenses plus fuel totals for the dash). `SessionNet.kept(countExpenses)`
+subtracts `realExpenses` only with `count_real_expenses_in_kept` on, default off.
+It stays null until the first delivery row folds; the HUD discloses projector lag.
+Fuel never changes the economy: no change to `UserEconomy.fuelCostPerMile`, the gas-price preference,
+`NetProfit`, or existing `frozen*` columns. Cost per mile between fills is a read-time figure only.
+No `PROJECTOR_VERSION` bump: these event types are absent from existing history, so the tables start
+empty. A later wipe rebuilds them from `app_events`.
+
 ## Per-platform time learning (#254)
 
 Room **18** adds seven nullable evidence columns: delivery `jobOfferCount`, `soleOfferHash`,
