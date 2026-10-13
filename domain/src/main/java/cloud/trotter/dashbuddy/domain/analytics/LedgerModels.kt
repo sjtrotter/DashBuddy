@@ -23,17 +23,21 @@ data class FuelRecord(
 }
 
 /**
- * #1333: the three money terms are exactly [SessionDetail]'s: deliveredPay using delivery net,
- * cashTips, and unattributedPay. [realExpenses] is the sum of non-voided expense amounts and
- * non-voided fuel totals for the dash. Expenses are deducted only when requested by the caller.
+ * #1333: the HUD's kept figure. [deliveredNet] is the sum of the dash's delivery `netProfit`
+ * with a null net as zero, the hub's per-dash net rule; [cashTips] and [unattributedPay] are
+ * `SessionDetail`'s. [expenses] and [fuel] are the dash's non-voided logged totals, kept apart
+ * because whether fuel belongs in [kept] is an open developer decision (ADR-0012).
  */
 data class SessionNet(
     val sessionId: String,
     val deliveredNet: Double,
     val cashTips: Double,
     val unattributedPay: Double,
-    val realExpenses: Double,
+    val expenses: Double,
+    val fuel: Double,
 ) {
+    val realExpenses: Double get() = expenses + fuel
+
     fun kept(countExpenses: Boolean): Double =
         deliveredNet + cashTips + unattributedPay - (if (countExpenses) realExpenses else 0.0)
 }

@@ -1,9 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
-import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
-import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
 import cloud.trotter.dashbuddy.core.database.analytics.PickupDwellTotalsRow
@@ -36,6 +35,7 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionEvent
+import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
@@ -842,7 +842,11 @@ class AnalyticsRepository @Inject constructor(
      * Expenses alone do not make the dash's kept figure available.
      */
     fun sessionNet(sessionId: String): Flow<SessionNet?> =
-        combine(sessionDetail(sessionId), ledgerDao.realExpensesForSession(sessionId)) { detail, realExpenses ->
+        combine(
+            sessionDetail(sessionId),
+            ledgerDao.expenseTotalForSession(sessionId),
+            ledgerDao.fuelTotalForSession(sessionId),
+        ) { detail, expenses, fuel ->
             if (detail == null || (detail.deliveries.isEmpty() && detail.cashTips == 0.0 && detail.unattributedPay == 0.0)) {
                 null
             } else {
@@ -851,7 +855,8 @@ class AnalyticsRepository @Inject constructor(
                     deliveredNet = detail.deliveries.sumOf { it.netProfit ?: 0.0 },
                     cashTips = detail.cashTips,
                     unattributedPay = detail.unattributedPay,
-                    realExpenses = realExpenses,
+                    expenses = expenses,
+                    fuel = fuel,
                 )
             }
         }

@@ -262,6 +262,8 @@ class AnalyticsSessionDetailTest {
             assertNull(withTimeout(5_000) { emissions.receive() })
             dao.upsertDelivery(delivery(1, "S", base).copy(netProfit = 6.0))
             val firstNet = withTimeout(5_000) { emissions.receive() }!!
+            assertEquals(5.0, firstNet.expenses, 0.0)
+            assertEquals(20.0, firstNet.fuel, 0.0)
             assertEquals(6.0, firstNet.kept(countExpenses = false), 0.0)
             assertEquals(-19.0, firstNet.kept(countExpenses = true), 0.0)
         } finally {
@@ -286,6 +288,8 @@ class AnalyticsSessionDetailTest {
         assertEquals(6.0, net.deliveredNet, 0.0)
         assertEquals(3.0, net.cashTips, 0.0)
         assertEquals(7.0, net.unattributedPay, 0.0)
+        assertEquals(2.0, net.expenses, 0.0)
+        assertEquals(4.0, net.fuel, 0.0)
         assertEquals(6.0, net.realExpenses, 0.0)
         assertEquals(16.0, net.kept(countExpenses = false), 0.0)
         assertEquals(10.0, net.kept(countExpenses = true), 0.0)

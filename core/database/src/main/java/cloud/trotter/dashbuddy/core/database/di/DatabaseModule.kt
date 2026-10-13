@@ -1,11 +1,11 @@
 package cloud.trotter.dashbuddy.core.database.di
 
-import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import android.content.Context
 import cloud.trotter.dashbuddy.core.database.analytics.TimeConstantDao
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.chat.ChatDao
 import cloud.trotter.dashbuddy.core.database.effects.EffectsFiredDao
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao

@@ -15,10 +15,10 @@ abstract class LedgerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun upsertFuel(row: FuelRecordEntity)
 
-    @Query("UPDATE expense_records SET voidedAt = :voidedAt WHERE eventSequenceId = :targetEventSequenceId")
+    @Query("UPDATE expense_records SET voidedAt = :voidedAt WHERE eventSequenceId = :targetEventSequenceId AND voidedAt IS NULL")
     abstract suspend fun voidExpense(targetEventSequenceId: Long, voidedAt: Long): Int
 
-    @Query("UPDATE fuel_records SET voidedAt = :voidedAt WHERE eventSequenceId = :targetEventSequenceId")
+    @Query("UPDATE fuel_records SET voidedAt = :voidedAt WHERE eventSequenceId = :targetEventSequenceId AND voidedAt IS NULL")
     abstract suspend fun voidFuel(targetEventSequenceId: Long, voidedAt: Long): Int
 
     @Transaction
@@ -38,12 +38,16 @@ abstract class LedgerDao {
     abstract fun fuelUnassigned(): Flow<List<FuelRecordEntity>>
 
     @Query("""
-        SELECT COALESCE((SELECT SUM(amount) FROM expense_records
-                         WHERE sessionId = :sessionId AND voidedAt IS NULL), 0)
-             + COALESCE((SELECT SUM(totalAmount) FROM fuel_records
-                         WHERE sessionId = :sessionId AND voidedAt IS NULL), 0)
+        SELECT COALESCE(SUM(amount), 0) FROM expense_records
+        WHERE sessionId = :sessionId AND voidedAt IS NULL
     """)
-    abstract fun realExpensesForSession(sessionId: String): Flow<Double>
+    abstract fun expenseTotalForSession(sessionId: String): Flow<Double>
+
+    @Query("""
+        SELECT COALESCE(SUM(totalAmount), 0) FROM fuel_records
+        WHERE sessionId = :sessionId AND voidedAt IS NULL
+    """)
+    abstract fun fuelTotalForSession(sessionId: String): Flow<Double>
 
     @Query("DELETE FROM expense_records")
     abstract suspend fun deleteAllExpenses()

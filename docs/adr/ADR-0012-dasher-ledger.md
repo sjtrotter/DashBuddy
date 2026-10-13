@@ -1,6 +1,6 @@
 # ADR-0012: The Dasher's Ledger (Cash Tips, Expenses, Fuel Fill-Ups)
 
-**Status:** Accepted; to be built in #1333 slices 1 to 3 (nothing here exists in code yet)
+**Status:** Accepted; slice 1 (the data layer) built; slices 2 and 3 to come
 **Issue:** #1333
 **Date:** 2026-10-12
 **Builds on:** #314 (CQRS read model), #650 (corrections family),
@@ -12,7 +12,7 @@
 
 ## Context
 
-The new events, folds, tables, repository APIs, and preferences described here land in #1333 slice 1.
+The new events, folds, tables, repository APIs, and preferences described here landed in #1333 slice 1.
 The HUD consumes them in the later slices. This ADR records the 2026-10-12 design decisions.
 
 The dasher has nowhere to log expenses or fuel fills. A cash tip can be set only from the hub's
@@ -98,7 +98,8 @@ payload field is the only odometer reading on a fill-up.
 
 The write history is append-only. No entry is edited in place or deleted by the user.
 Expense and fuel undo append `LEDGER_ENTRY_VOIDED(targetEventSequenceId)`.
-Its projection stamps the target row's `voidedAt` with the void event's timestamp.
+Its projection stamps the target row's `voidedAt` with the first void event's timestamp.
+One void per entry: the first wins; a repeat void changes zero rows and is a counted skip.
 The original event and the projected row remain.
 
 A void of a void, or of an unknown sequence id, is a counted skip.
@@ -160,9 +161,9 @@ per-dash net does (`COALESCE(SUM(netProfit), 0)` in `AnalyticsDao`), plus `Sessi
 and `SessionDetail.unattributedPay`. Keeping the hub's rule means the HUD and the hub never show two
 different nets for one dash.
 
-`SessionNet` carries the dash's non-voided expense total and non-voided fuel total as separate
-terms; `realExpenses` is their sum. `SessionNet.kept(countExpenses)` adds the three money terms and
-subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
+`SessionNet.expenses` carries the dash's non-voided expense total and `SessionNet.fuel` carries
+its non-voided fuel total; `SessionNet.realExpenses` is their sum. `SessionNet.kept(countExpenses)`
+adds the three money terms and subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
 `count_real_expenses_in_kept`, default off. Whether the fuel term belongs in that subtraction is
 open (see "Open before slice 3").
 

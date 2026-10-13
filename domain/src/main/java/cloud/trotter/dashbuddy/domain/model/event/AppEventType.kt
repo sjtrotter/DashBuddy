@@ -48,7 +48,7 @@ enum class AppEventType {
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
-    DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) widens
+    DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) — widens
                          // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
     /** #1333: A user-logged expense. */
     EXPENSE_LOGGED,

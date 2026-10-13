@@ -1,13 +1,13 @@
 package cloud.trotter.dashbuddy.domain.analytics
 
-import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
-import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
-import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliverySessionAssignPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PayAdjustmentPayload
@@ -72,8 +72,6 @@ internal object CorrectionFolds {
             ),
         )
     }
-
-
 
     /**
      * A driver-entered missed delivery (#650) → one `DeliveryFold` (payBasis [PayBasis.MANUAL]),

@@ -1,7 +1,8 @@
 package cloud.trotter.dashbuddy.domain.model.event.payload
 
-import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import kotlinx.serialization.Serializable
+
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -86,6 +87,23 @@ class OdometerRepositoryPerSessionTest {
                 monotonicMs = monotonicMs,
             )
         )
+    }
+
+    @Test
+    fun `totalMiles is null until persisted total loads then matches getCurrentMiles`() = runTest {
+        val persistedTotal = MutableSharedFlow<Double>()
+        val local: OdometerLocalDataSource = mock {
+            on { totalMetersFlow } doReturn persistedTotal
+            on { currentSessionIdFlow } doReturn flowOf(null)
+            on { sessionAnchorFlow(any()) } doReturn flowOf(null)
+        }
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = OdometerRepository(local, location, dispatcher)
+
+        assertNull(repo.totalMiles())
+        persistedTotal.emit(2_000.0)
+        assertTrue(repo.getCurrentMiles() > 0.0)
+        assertEquals(repo.getCurrentMiles(), repo.totalMiles()!!, 0.0)
     }
 
     @Test

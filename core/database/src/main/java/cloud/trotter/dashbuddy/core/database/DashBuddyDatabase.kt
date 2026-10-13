@@ -1,8 +1,5 @@
 package cloud.trotter.dashbuddy.core.database
 
-import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
-import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
-import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.analytics.TimeConstantDao
 import androidx.room.AutoMigration
 import androidx.room.Database
@@ -11,6 +8,9 @@ import androidx.room.TypeConverters
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.PickupRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity

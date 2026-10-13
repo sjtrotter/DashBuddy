@@ -15,7 +15,8 @@ class LedgerModelsTest {
 
     @Test
     fun `kept optionally subtracts real expenses`() {
-        val net = SessionNet("S", 20.0, 3.0, 2.0, 8.0)
+        val net = SessionNet("S", 20.0, 3.0, 2.0, expenses = 3.0, fuel = 5.0)
+        assertEquals(net.expenses + net.fuel, net.realExpenses, 0.0)
         assertEquals(25.0, net.kept(countExpenses = false), 0.0)
         assertEquals(17.0, net.kept(countExpenses = true), 0.0)
     }

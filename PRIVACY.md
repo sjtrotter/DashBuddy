@@ -188,8 +188,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   history can be restored on a new phone (§6).
 - Expenses and fuel fill-ups the dasher logs from the bubble are events in that log and rows in two
   read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the odometer total
-  at the fill, and an optional typed note. They stay on the device, are never sent anywhere, and the
-  note is never written to a log at INFO or above.
+  at the fill, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
+  log at INFO or above. The rows are in the database, so Android backup and device transfer include
+  them like the rest of the history (§6).
 - Preferences and consents are DataStore files on the device (`core/datastore`). General app/economy preferences
   are backed up; the two dedicated consent stores are excluded from backup and transfer so a new device re-asks.
   `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old

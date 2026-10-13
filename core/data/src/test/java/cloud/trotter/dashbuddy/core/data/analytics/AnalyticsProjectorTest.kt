@@ -2201,6 +2201,18 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `repeat expense void keeps the first timestamp and counts as a skip`() = runBlocking {
+        val expenseId = insert(AppEventType.EXPENSE_LOGGED, "S", 100, ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 5.0, null))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 200, LedgerEntryVoidedPayload(expenseId))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 300, LedgerEntryVoidedPayload(expenseId))
+
+        val stats = projector().catchUp()
+
+        assertEquals(200L, db.ledgerDao().expensesForSession("S").first().single().voidedAt)
+        assertEquals(1, stats.adjustmentSkips)
+    }
+
+    @Test
     fun `ledger entries and voids project in order and survive wipe and refold`() = runBlocking {
         val ledger = db.ledgerDao()
         val expenseId = insert(AppEventType.EXPENSE_LOGGED, "S", 100, ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 5.0, "lunch"))
@@ -2216,7 +2228,8 @@ class AnalyticsProjectorTest {
         assertEquals(300L, expenses.single().voidedAt)
         assertEquals(1, fuel.size)
         assertNull(fuel.single().voidedAt)
-        assertEquals(30.0, ledger.realExpensesForSession("S").first(), 0.0)
+        assertEquals(0.0, ledger.expenseTotalForSession("S").first(), 0.0)
+        assertEquals(30.0, ledger.fuelTotalForSession("S").first(), 0.0)
 
         // A stale projected row must disappear during the real version rebuild.
         ledger.upsertExpense(expenses.single().copy(eventSequenceId = 9999))
