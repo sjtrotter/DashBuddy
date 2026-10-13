@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.database
 
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.analytics.TimeConstantDao
 import androidx.room.AutoMigration
 import androidx.room.Database
@@ -32,6 +35,8 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         ObservationEntity::class,
         // Analytics read-model (#314) — purely additive; folded from app_events.
         DeliveryRecordEntity::class,
+        ExpenseRecordEntity::class,
+        FuelRecordEntity::class,
         SessionRecordEntity::class,
         OfferRecordEntity::class,
         AnalyticsProjectionStateEntity::class,
@@ -108,6 +113,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 16, to = 17),
         AutoMigration(from = 17, to = 18),
         AutoMigration(from = 18, to = 19), // #1108 machine mileage allocation basis
+        AutoMigration(from = 19, to = 20), // #1333 ledger tables
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -120,6 +126,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
     abstract fun effectsFiredDao(): EffectsFiredDao
     abstract fun observationDao(): ObservationDao
     abstract fun timeConstantDao(): TimeConstantDao
+    abstract fun ledgerDao(): LedgerDao
     abstract fun analyticsDao(): AnalyticsDao
 
     companion object {
@@ -136,7 +143,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 19
+        const val VERSION = 20
     }
 
 }

@@ -30,6 +30,8 @@ class AppPreferencesDataSource @Inject constructor(
         val ESTIMATED_MPG = floatPreferencesKey("estimated_mpg")
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
+        val COUNT_REAL_EXPENSES_IN_KEPT = booleanPreferencesKey("count_real_expenses_in_kept")
+        val HUD_PILL_SHOWS_EARNINGS = booleanPreferencesKey("hud_pill_shows_earnings")
         val ANALYTICS_SHOW_MORE = booleanPreferencesKey("analytics_show_more")
         val VEHICLE_LOOKUP_ALLOWED = booleanPreferencesKey("vehicle_lookup_allowed")
         val APP_THEME = stringPreferencesKey("app_theme")
@@ -109,6 +111,9 @@ class AppPreferencesDataSource @Inject constructor(
     val estimatedMpg: Flow<Float?> = ds.data.map { it[Keys.ESTIMATED_MPG] }
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
+    val countRealExpensesInKept: Flow<Boolean> = ds.data.map { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] ?: false }
+    val hudPillShowsEarnings: Flow<Boolean> = ds.data.map { it[Keys.HUD_PILL_SHOWS_EARNINGS] ?: true }
+
     val analyticsShowMore: Flow<Boolean> = ds.data.map { it[Keys.ANALYTICS_SHOW_MORE] ?: false }
     val vehicleLookupAllowed: Flow<Boolean> = ds.data.map { it[Keys.VEHICLE_LOOKUP_ALLOWED] ?: false }
     val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
@@ -220,6 +225,14 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun updateVehicleClass(type: String) {
         ds.edit { it[Keys.VEHICLE_CLASS] = type }
+    }
+
+    suspend fun setCountRealExpensesInKept(enabled: Boolean) {
+        ds.edit { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] = enabled }
+    }
+
+    suspend fun setHudPillShowsEarnings(enabled: Boolean) {
+        ds.edit { it[Keys.HUD_PILL_SHOWS_EARNINGS] = enabled }
     }
 
     suspend fun setAnalyticsShowMore(enabled: Boolean) {

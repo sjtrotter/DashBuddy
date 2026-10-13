@@ -61,7 +61,7 @@ class OffersTabReadsTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao, db.appEventDao())
+        repo = AnalyticsRepository(dao, db.appEventDao(), db.ledgerDao())
     }
 
     @After

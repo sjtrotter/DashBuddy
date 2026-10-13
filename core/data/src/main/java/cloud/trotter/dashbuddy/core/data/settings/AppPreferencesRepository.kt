@@ -29,6 +29,8 @@ class AppPreferencesRepository @Inject constructor(
     val estimatedMpg = dataSource.estimatedMpg
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
+    val countRealExpensesInKept = dataSource.countRealExpensesInKept
+    val hudPillShowsEarnings = dataSource.hudPillShowsEarnings
     val analyticsShowMore = dataSource.analyticsShowMore
     val vehicleLookupAllowed = dataSource.vehicleLookupAllowed
     val appTheme = dataSource.appTheme
@@ -238,6 +240,8 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
+    suspend fun setCountRealExpensesInKept(enabled: Boolean) = dataSource.setCountRealExpensesInKept(enabled)
+    suspend fun setHudPillShowsEarnings(enabled: Boolean) = dataSource.setHudPillShowsEarnings(enabled)
     suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.setAnalyticsShowMore(enabled)
     suspend fun setVehicleLookupAllowed(allowed: Boolean) = dataSource.setVehicleLookupAllowed(allowed)
     suspend fun setTheme(theme: String) = dataSource.setTheme(theme)

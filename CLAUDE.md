@@ -729,6 +729,8 @@ serialized completion high-water. Session/period/IRS/CSV totals stay span-anchor
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 
+ADR-0012 adds the append-only `EXPENSE_LOGGED`, `FUEL_FILLUP`, and `LEDGER_ENTRY_VOIDED` events, projected into `expense_records` and `fuel_records` (#1333).
+
 **Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
 leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +
 `PeriodBounds.of(window|period)` (#970; Monday weeks, fixed bounds for a paged window, selection persisted

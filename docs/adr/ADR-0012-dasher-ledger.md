@@ -81,7 +81,8 @@ Room moves from version 19 to 20 by `AutoMigration`. Slice 1 includes the export
 a `MigrationTestHelper` case, and the `SchemaVersionGuardTest` migration chain.
 
 `CorrectionFolds.foldExpenseLogged`, `CorrectionFolds.foldFuelFillup`, and
-`CorrectionFolds.foldLedgerVoid` produce `Adjustment` decisions. `AnalyticsProjector` applies
+`CorrectionFolds.foldLedgerVoid` produce `ExpenseLoggedFold`, `FuelFillupFold`, and `LedgerVoidFold`
+through `FoldOutcome`. `AnalyticsProjector` collects them as `Adjustment` decisions and applies
 them by primary key in event order inside the batch transaction, like `applyDeliveryAdjustment`.
 The projected rows and watermark commit together.
 
@@ -145,8 +146,10 @@ The unattributed term retains the existing report reconciliation.
 `SessionNet.kept(countExpenses)` adds the three money terms and subtracts `realExpenses` only
 when `countExpenses` is true. The HUD supplies `count_real_expenses_in_kept`, default off.
 
-The flow is null until the first delivery row folds. Projector lag is accepted and disclosed
-on the HUD. The disclosure states "after car cost, before tax; expenses not counted" or
+The flow is null when `sessionDetail` is null, or when there are no delivery rows and both
+`cashTips` and `unattributedPay` are zero. Expenses alone do not make it non-null.
+Projector lag is accepted and disclosed on the HUD. The disclosure states
+"after car cost, before tax; expenses not counted" or
 "expenses counted", according to the preference.
 
 ### Preferences

@@ -39,6 +39,9 @@ class OdometerRepository @Inject constructor(
      */
     private val _meters = MutableStateFlow(0.0)
 
+    /** The fill-up stamp (#1333); never a measurement anchor. */
+    fun totalMiles(): Double = _meters.value * 0.000621371
+
     /**
      * #438 B5: per-session start anchors (sessionId → odometer meters at session start). Replaces the
      * single global `_anchor`, so two concurrent sessions accrue miles independently and a second

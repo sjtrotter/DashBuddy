@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.event.payload
 
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import kotlinx.serialization.Serializable
-
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
@@ -557,3 +557,22 @@ data class SessionStopPayload(
      */
     val platform: String? = null,
 ) : AppEventPayload
+
+@Serializable
+data class ExpenseLoggedPayload(
+    val sessionId: String?,
+    val category: ExpenseCategory,
+    val amount: Double,
+    val note: String? = null,
+) : AppEventPayload
+
+@Serializable
+data class FuelFillupPayload(
+    val sessionId: String?,
+    val totalAmount: Double,
+    val gallons: Double? = null,
+    val odometerMiles: Double? = null,
+) : AppEventPayload
+
+@Serializable
+data class LedgerEntryVoidedPayload(val targetEventSequenceId: Long) : AppEventPayload

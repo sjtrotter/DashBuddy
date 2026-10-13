@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
@@ -7,6 +9,12 @@ import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
+import cloud.trotter.dashbuddy.domain.analytics.SessionNet
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -43,7 +51,7 @@ class AnalyticsSessionDetailTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao, db.appEventDao())
+        repo = AnalyticsRepository(dao, db.appEventDao(), db.ledgerDao())
     }
 
     @After
@@ -237,6 +245,56 @@ class AnalyticsSessionDetailTest {
         assertEquals(0.0, detail.unattributedPay, 1e-9)
         assertNull(detail.session.reportedEarnings)
         assertEquals(40.14, detail.session.machineReportedEarnings!!, 1e-9)
+    }
+
+    @Test
+    fun `session net is null for missing and expense only sessions then emits on first delivery`() = runBlocking {
+        assertNull(repo.sessionNet("S").first())
+        dao.upsertSession(session("S").copy(deliveries = 0, jobsCompleted = 0))
+        assertNull(repo.sessionNet("S").first())
+        db.ledgerDao().upsertExpense(ExpenseRecordEntity(10, "S", base, "FOOD", 5.0, null, null))
+        db.ledgerDao().upsertFuel(FuelRecordEntity(11, "S", base, 20.0, null, null, null))
+        val emissions = Channel<SessionNet?>(Channel.UNLIMITED)
+        val collector = launch {
+            repo.sessionNet("S").distinctUntilChanged().collect { emissions.send(it) }
+        }
+        try {
+            assertNull(withTimeout(5_000) { emissions.receive() })
+            dao.upsertDelivery(delivery(1, "S", base).copy(netProfit = 6.0))
+            val firstNet = withTimeout(5_000) { emissions.receive() }!!
+            assertEquals(6.0, firstNet.kept(countExpenses = false), 0.0)
+            assertEquals(-19.0, firstNet.kept(countExpenses = true), 0.0)
+        } finally {
+            collector.cancelAndJoin()
+            emissions.close()
+        }
+    }
+
+    @Test
+    fun `session net sums frozen net cash and unattributed minus only active session expenses`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 25.0))
+        dao.upsertDelivery(delivery(1, "S", base, realizedPay = 8.0, cashTip = 3.0).copy(netProfit = 6.0))
+        dao.upsertDelivery(delivery(2, "S", base + hour, realizedPay = 10.0))
+        val ledger = db.ledgerDao()
+        ledger.upsertExpense(ExpenseRecordEntity(10, "S", base, "FOOD", 2.0, null, null))
+        ledger.upsertFuel(FuelRecordEntity(11, "S", base, 4.0, 1.0, 100.0, null))
+        ledger.upsertExpense(ExpenseRecordEntity(12, "S", base, "PARKING", 50.0, null, base + 1))
+        ledger.upsertFuel(FuelRecordEntity(13, "S", base, 60.0, null, null, base + 1))
+        ledger.upsertExpense(ExpenseRecordEntity(14, null, base, "OTHER", 70.0, null, null))
+        ledger.upsertFuel(FuelRecordEntity(15, "OTHER", base, 80.0, null, null, null))
+        val net = repo.sessionNet("S").first()!!
+        assertEquals(6.0, net.deliveredNet, 0.0)
+        assertEquals(3.0, net.cashTips, 0.0)
+        assertEquals(7.0, net.unattributedPay, 0.0)
+        assertEquals(6.0, net.realExpenses, 0.0)
+        assertEquals(16.0, net.kept(countExpenses = false), 0.0)
+        assertEquals(10.0, net.kept(countExpenses = true), 0.0)
+    }
+
+    @Test
+    fun `session net can expose unattributed pay before a delivery exists`() = runBlocking {
+        dao.upsertSession(session("S", reportedEarnings = 12.0).copy(deliveries = 0))
+        assertEquals(12.0, repo.sessionNet("S").first()!!.kept(countExpenses = false), 0.0)
     }
 
 }

@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import androidx.room.Room
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
@@ -609,7 +613,7 @@ class AnalyticsProjectorTest {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()
 
-        val repo = AnalyticsRepository(analyticsDao, eventDao)
+        val repo = AnalyticsRepository(analyticsDao, eventDao, db.ledgerDao())
         assertEquals("before: reported 20 − captured 10", 10.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
 
         // The driver re-prices the captured delivery up to $15 (a mis-captured tip).
@@ -1762,7 +1766,7 @@ class AnalyticsProjectorTest {
         assertEquals(MilesBasis.UNKNOWN, overflow.toDomain().milesBasis)
         val known = analyticsDao.deliveryRecord(knownId)!!
         val expectedCost = known.realizedPay!! - known.netProfit!!
-        val reader = AnalyticsRepository(analyticsDao, eventDao)
+        val reader = AnalyticsRepository(analyticsDao, eventDao, db.ledgerDao())
         for (platform in listOf(null, Platform.DoorDash)) {
             val economics = reader.periodEconomics(AnalyticsPeriod.LIFETIME, platform = platform).first()
             assertEquals(22.0, economics.grossEarnings, 1e-9)
@@ -2194,6 +2198,41 @@ class AnalyticsProjectorTest {
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
         assertEquals(15, analyticsDao.getWatermark()!!.projectorVersion)
+    }
+
+    @Test
+    fun `ledger entries and voids project in order and survive wipe and refold`() = runBlocking {
+        val ledger = db.ledgerDao()
+        val expenseId = insert(AppEventType.EXPENSE_LOGGED, "S", 100, ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 5.0, "lunch"))
+        insert(AppEventType.FUEL_FILLUP, "S", 200, FuelFillupPayload("S", 30.0, 10.0, 500.0))
+        val voidId = insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 300, LedgerEntryVoidedPayload(expenseId))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 400, LedgerEntryVoidedPayload(9999))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 500, LedgerEntryVoidedPayload(voidId))
+        val stats = projector().catchUp()
+        assertEquals(2, stats.adjustmentSkips)
+        val expenses = ledger.expensesForSession("S").first()
+        val fuel = ledger.fuelForSession("S").first()
+        assertEquals(1, expenses.size)
+        assertEquals(300L, expenses.single().voidedAt)
+        assertEquals(1, fuel.size)
+        assertNull(fuel.single().voidedAt)
+        assertEquals(30.0, ledger.realExpensesForSession("S").first(), 0.0)
+
+        // A stale projected row must disappear during the real version rebuild.
+        ledger.upsertExpense(expenses.single().copy(eventSequenceId = 9999))
+        ledger.upsertFuel(fuel.single().copy(eventSequenceId = 9998))
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 5, projectorVersion = 99))
+        assertEquals(2, projector().catchUp().adjustmentSkips)
+        assertEquals(expenses, ledger.expensesForSession("S").first())
+        assertEquals(fuel, ledger.fuelForSession("S").first())
+
+        // Replaying across every event boundary must give the same result as one batch.
+        ledger.deleteAllExpenses()
+        ledger.deleteAllFuel()
+        analyticsDao.setWatermark(analyticsDao.getWatermark()!!.copy(watermarkSequenceId = 0))
+        while (projector().processBatch(1) != null) { /* drain */ }
+        assertEquals(expenses, ledger.expensesForSession("S").first())
+        assertEquals(fuel, ledger.fuelForSession("S").first())
     }
 
 }

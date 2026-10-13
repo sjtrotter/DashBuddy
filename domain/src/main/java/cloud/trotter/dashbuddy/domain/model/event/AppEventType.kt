@@ -48,8 +48,14 @@ enum class AppEventType {
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
     PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
-    DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) — widens
+    DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) widens
                          // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
+    /** #1333: A user-logged expense. */
+    EXPENSE_LOGGED,
+    /** #1333: A user-logged fuel fill-up. */
+    FUEL_FILLUP,
+    /** #1333: Voids an expense or fuel entry. */
+    LEDGER_ENTRY_VOIDED,
     SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays
     DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
                              // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays

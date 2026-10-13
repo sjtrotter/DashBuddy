@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.domain.analytics
 
+import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
@@ -22,6 +25,55 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectio
  * [advance].
  */
 internal object CorrectionFolds {
+
+    /** #1333: emits a ledger decision and leaves the session context untouched. */
+    fun foldExpenseLogged(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? ExpenseLoggedPayload
+            ?: return FoldOutcome(context = context, skip = "EXPENSE_LOGGED: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            expenseLogged = ExpenseLoggedFold(
+                eventSequenceId = event.sequenceId,
+                sessionId = p.sessionId,
+                occurredAt = event.event.occurredAt,
+                category = p.category,
+                amount = p.amount,
+                note = p.note,
+            ),
+        )
+    }
+
+    /** #1333: emits a ledger decision and leaves the session context untouched. */
+    fun foldFuelFillup(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? FuelFillupPayload
+            ?: return FoldOutcome(context = context, skip = "FUEL_FILLUP: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            fuelFillup = FuelFillupFold(
+                eventSequenceId = event.sequenceId,
+                sessionId = p.sessionId,
+                occurredAt = event.event.occurredAt,
+                totalAmount = p.totalAmount,
+                gallons = p.gallons,
+                odometerMiles = p.odometerMiles,
+            ),
+        )
+    }
+
+    /** #1333: emits a ledger decision and leaves the session context untouched. */
+    fun foldLedgerVoid(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? LedgerEntryVoidedPayload
+            ?: return FoldOutcome(context = context, skip = "LEDGER_ENTRY_VOIDED: missing/malformed payload")
+        return FoldOutcome(
+            context = context,
+            ledgerVoid = LedgerVoidFold(
+                targetEventSequenceId = p.targetEventSequenceId,
+                occurredAt = event.event.occurredAt,
+            ),
+        )
+    }
+
+
 
     /**
      * A driver-entered missed delivery (#650) → one `DeliveryFold` (payBasis [PayBasis.MANUAL]),
