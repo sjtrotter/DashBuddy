@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
-import cloud.trotter.dashbuddy.core.designsystem.time.NowProvider
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
 import org.junit.Rule
@@ -15,6 +14,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -24,12 +27,9 @@ class ComposeSmokeTest {
 
     @Test
     fun `stat tile renders its label and value`() {
-        val clock = TestNow(T0)
         compose.setContent {
             DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) {
-                    AppStatTile(label = "Earned", value = "$54.60")
-                }
+                AppStatTile(label = "Earned", value = "$54.60")
             }
         }
 
@@ -39,7 +39,7 @@ class ComposeSmokeTest {
 
     @Test
     fun `awaiting card ticks with the provided clock`() {
-        val clock = TestNow(T0 + 5_000)
+        val clock = MutableClock(T0 + 5_000)
         compose.mainClock.autoAdvance = false
         compose.setContent {
             DashBuddyTheme {
@@ -62,15 +62,19 @@ class ComposeSmokeTest {
         compose.onNodeWithText("5s").assertExists()
 
         clock.millis = T0 + 65_000
-        // Past the next tick: the ticker's first delay starts a frame after composition.
+        // A 1,000 ms advance rounds to whole frames and can miss the recomposition that shows the new value;
+        // 2,000 ms leaves headroom.
         compose.mainClock.advanceTimeBy(2_000)
 
         compose.onNodeWithText("1m 5s").assertExists()
         compose.onNodeWithText("5s").assertDoesNotExist()
     }
 
-    private class TestNow(var millis: Long) : NowProvider {
-        override fun nowMillis() = millis
+    private class MutableClock(var millis: Long) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+        override fun withZone(zone: ZoneId): Clock = this
+        override fun instant(): Instant = Instant.ofEpochMilli(millis)
+        override fun millis(): Long = millis
     }
 
     private companion object {

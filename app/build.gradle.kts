@@ -250,8 +250,8 @@ dependencies {
     testImplementation(libs.okhttp)
     testImplementation(libs.robolectric)
     // #1333: Compose UI tests under Robolectric (the HUD's reactivity rules are tested here).
-    testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.ui.test.junit4)
+    // Debug only: the Compose tests live in src/testDebug. :app's debug manifest keeps the host activity unexported.
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))

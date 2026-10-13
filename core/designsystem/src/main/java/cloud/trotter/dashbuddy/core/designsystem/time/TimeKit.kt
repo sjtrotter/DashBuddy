@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import java.time.Clock
 import java.util.Date
 
 /**
@@ -20,13 +21,12 @@ import java.util.Date
  * from every layer; only the Compose-bound helpers remain here.
  */
 
-/** The wall clock the ticker reads (#1333). Production uses the system clock; a Compose test provides its own. */
-fun interface NowProvider {
-    fun nowMillis(): Long
-}
-
-/** The ticker's clock. Every composable that shows a time reads it through [rememberNow], never the system clock directly. */
-val LocalNowProvider = staticCompositionLocalOf<NowProvider> { NowProvider { System.currentTimeMillis() } }
+/**
+ * The clock every time-derived composable reads, through [rememberNow] (#1333).
+ * Production uses the system clock; a Compose test provides one it controls.
+ * Provide a stable instance: a new instance re-keys the ticker.
+ */
+val LocalNowProvider = staticCompositionLocalOf<Clock> { Clock.systemUTC() }
 
 /**
  * 1-Hz tick, scoped to the calling composable. See CLAUDE.md ▸ Reactive UI Principles.
@@ -35,10 +35,11 @@ val LocalNowProvider = staticCompositionLocalOf<NowProvider> { NowProvider { Sys
 @Composable
 fun rememberNow(tickMs: Long = 1000L): State<Long> {
     val clock = LocalNowProvider.current
-    return produceState(initialValue = clock.nowMillis(), clock, tickMs) {
+    return produceState(initialValue = clock.millis(), clock, tickMs) {
+        value = clock.millis()
         while (true) {
             delay(tickMs)
-            value = clock.nowMillis()
+            value = clock.millis()
         }
     }
 }

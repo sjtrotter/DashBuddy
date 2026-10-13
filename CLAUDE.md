@@ -966,10 +966,11 @@ something the user is looking at right now.
    @Composable
    fun rememberNow(tickMs: Long = 1000L): State<Long> {
        val clock = LocalNowProvider.current
-       return produceState(initialValue = clock.nowMillis(), clock, tickMs) {
+       return produceState(initialValue = clock.millis(), clock, tickMs) {
+           value = clock.millis()
            while (true) {
                delay(tickMs)
-               value = clock.nowMillis()
+               value = clock.millis()
            }
        }
    }
@@ -983,11 +984,13 @@ something the user is looking at right now.
 5. **Bubble HUD has the strictest reactivity bar.** If a value can change while the dasher is
    looking at it, it must re-render without a state transition. Treat any frozen-looking value as
    a defect, not a styling choice.
-6. **One clock, and tests own it.** A composable never reads `System.currentTimeMillis()`; time comes
-   from `rememberNow()`, which reads `LocalNowProvider` (`:core:designsystem`). A Compose test provides a
-   `NowProvider` it controls, sets `mainClock.autoAdvance = false`, moves its clock and calls
-   `mainClock.advanceTimeBy(2_000)` to tick: the ticker's first `delay` starts a frame after composition, so
-   advancing exactly one tick lands short (see the `ComposeSmokeTest`s in `:feature:bubble` and `:app`).
+6. **One clock, and tests own it.** A composable never reads `System.currentTimeMillis()`; it reads time
+   from `rememberNow()` (ticking values) or `LocalNowProvider.current` (a one-off read), both
+   `:core:designsystem`, a `java.time.Clock` that defaults to the system clock. Compose tests live in
+   `src/testDebug` (the test host activity is a debug dependency), provide a clock they control, set
+   `mainClock.autoAdvance = false`, move the clock and call `mainClock.advanceTimeBy(2_000)`: one tick of
+   1,000 ms rounds to whole frames and can miss the recomposition (see the `ComposeSmokeTest`s in
+   `:feature:bubble` and `:app`).
 
 When in doubt: would the dasher believe a stale value? If yes, it's reactive-broken.
 
