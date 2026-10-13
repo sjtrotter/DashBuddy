@@ -1,6 +1,6 @@
 # ADR-0012: The Dasher's Ledger (Cash Tips, Expenses, Fuel Fill-Ups)
 
-**Status:** Accepted; built in #1333 slices 1 to 3
+**Status:** Accepted; to be built in #1333 slices 1 to 3 (nothing here exists in code yet)
 **Issue:** #1333
 **Date:** 2026-10-12
 **Builds on:** #314 (CQRS read model), #650 (corrections family),
@@ -88,8 +88,11 @@ The projected rows and watermark commit together.
 
 `pricePerGallon` is derived at read time as the total divided by gallons. It is null when gallons
 is null or zero, and is never stored. `odometerMiles` comes from
-`OdometerRepository.totalMiles(): Double`, the odometer's cumulative total at the fill.
-Keeping that total lets a later reader compute realized cost per mile between two fills.
+`OdometerRepository.totalMiles(): Double?`, DashBuddy's own GPS odometer total at the fill, null
+until the persisted total has loaded. That odometer runs only while a dash is tracked, so it is not
+the car's odometer: a cost per mile between two fills built on it covers dash miles only, and a
+reader must say so. User events carry no event metadata (`appendUserEvent` passes none), so the
+payload field is the only odometer reading on a fill-up.
 
 ### Undo is a second event
 
@@ -103,9 +106,15 @@ Its `WARN` carries the sequence id only, with no payload text.
 
 A cash-tip undo appends another `DELIVERY_ADJUSTMENT`. Its `newCashTip` is the value before
 the tip, or `0.0` when there was none. `DELIVERY_ADJUSTMENT` remains the owner of delivery cash.
+Two parts of this are open for the developer before slice 3 (see "Open before slice 3").
 
 A write happens on the tap that commits. The 10 second undo window is UI state: the committed
-sequence id and time. It survives a mode switch and ends with the activity.
+sequence id and time. It survives a mode switch and ends with the activity. One window is open
+at a time: a new commit closes the previous one, so only the newest entry can be undone. The value
+a cash-tip undo restores is captured at commit time as the newest value the ViewModel knows for that
+row: its own last committed tip for the row if the projector has not folded it yet, else the row's
+`cashTip`. Undoing an older tip after a newer one is never possible, so an undo cannot bring back a
+tip the dasher already replaced.
 A held write is lost on process death; an appended event survives it.
 The pending active-drop tip below is the exception because its target row does not yet exist.
 
@@ -117,8 +126,11 @@ It is a log the dasher reads. Realized cost per mile between fills is a read-tim
 
 ### Session attribution and cash
 
-The HUD stamps the focused dash's `sessionId` on every entry. An off-dash entry carries null
-and shows under "(No session)" in the hub. Cash tips target only delivery rows of the focused
+The HUD stamps the focused dash's `sessionId` on every entry. An off-dash expense or fill-up
+carries null. The hub does not render ledger rows yet (see Consequences). The HUD's log reads a dash's events
+(`getEventsForSession`, which matches on the session id), so an off-dash entry is stored but shown
+nowhere until a later slice adds a read over null-session ledger rows.
+Cash tips target only delivery rows of the focused
 dash. The resolver refuses a null-session row because the projector drops its cash adjustment.
 
 `TipTargetResolver.resolve` uses `JUST_COMPLETED_WINDOW_MS = 90_000`:
@@ -132,25 +144,61 @@ shows the dash's deliveries, newest first, with store, time, and pay. Resting us
 
 For an active drop whose row has not folded, `BubbleViewModel` holds a pending tip keyed by
 `taskId`. It writes the adjustment when `deliveriesForSession` emits that task's row.
-If the dash ends first, it drops the pending tip with a `WARN` and a log line to the dasher,
-such as "Tip $5 for Store A could not be attached".
+A dash's last drop can fold after the dash ends (an absorbed retire completes at the end), so
+the end alone does not drop the tip. The tip is dropped when the task is unassigned, or when no row
+for that `taskId` appears within a bound after the dash ends (slice 3 sets the bound and tests it),
+with a `WARN` carrying ids only and a log line to the dasher, such as
+"Tip $5 for Store A could not be attached". The pending tip lives in memory; a process death before
+the row appears loses it.
 
 ### Kept
 
 `AnalyticsRepository.sessionNet(sessionId): Flow<SessionNet?>` reads the dash's projected rows.
-It uses the three money terms of `SessionDetail`: delivered net, cash tips, and unattributed pay.
-Delivered net is the sum of `DeliveryRecord.netProfit`; cash stays outside delivery pay and net.
-The unattributed term retains the existing report reconciliation.
+Its terms are the hub's per-dash net, read from `SessionDetail`: delivered net is the sum of
+`netProfit` over `SessionDetail.deliveries`, with a null net counting as zero exactly as the hub's
+per-dash net does (`COALESCE(SUM(netProfit), 0)` in `AnalyticsDao`), plus `SessionDetail.cashTips`
+and `SessionDetail.unattributedPay`. Keeping the hub's rule means the HUD and the hub never show two
+different nets for one dash.
 
-`realExpenses` is the sum of non-voided expense amounts and non-voided fuel totals for that dash.
-`SessionNet.kept(countExpenses)` adds the three money terms and subtracts `realExpenses` only
-when `countExpenses` is true. The HUD supplies `count_real_expenses_in_kept`, default off.
+`SessionNet` carries the dash's non-voided expense total and non-voided fuel total as separate
+terms; `realExpenses` is their sum. `SessionNet.kept(countExpenses)` adds the three money terms and
+subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
+`count_real_expenses_in_kept`, default off. Whether the fuel term belongs in that subtraction is
+open (see "Open before slice 3").
 
 The flow is null when `sessionDetail` is null, or when there are no delivery rows and both
 `cashTips` and `unattributedPay` are zero. Expenses alone do not make it non-null.
 Projector lag is accepted and disclosed on the HUD. The disclosure states
 "after car cost, before tax; expenses not counted" or
 "expenses counted", according to the preference.
+
+### Where this ADR updates design.md
+
+The S0 review changed two rules in `design.md`, which is updated to match: `totalMiles()` returns
+`Double?` (null until the persisted total loads, so a fill logged at process start never stores 0),
+and the pending active-drop tip outlives the dash end until its row appears or a bound passes.
+
+### Open before slice 3 (developer decisions)
+
+These come from the S0 review and change existing semantics or the design, so the developer decides.
+Slice 1 does not depend on them; slice 3 does not start until they are answered.
+
+1. A cash tip blocks the receipt re-price. `applyDeliveryAdjustment` stamps `driverAdjustedAt` on a
+   cash-only edit, and `applyReceiptReprice` refuses any row with that stamp. A tip logged within
+   90 s of the drop, before a collapsed receipt is expanded, leaves the delivery on its offer-pay
+   estimate for good, and undoing the tip does not clear the stamp. Options: a cash-only edit stops
+   stamping `driverAdjustedAt` (the re-price never touches `cashTip`), or cash tips get their own event.
+2. A cash-tip undo cannot restore "no cash tip". A null `newCashTip` means unchanged, so the undo
+   writes `0.0`. The drill-down already hides a zero cash line, but the projector's unassign guard
+   (`row.cashTip != null` in `AnalyticsProjector`) then refuses to move that delivery out of its dash.
+   Options: the guard and readers treat `0.0` as no cash, the payload gains an explicit clear, or the
+   same own-event option as item 1.
+3. Fuel may be counted twice in kept. Delivered net already subtracts the frozen cost per mile,
+   which includes an estimated fuel cost, so subtracting fill-up totals as well charges fuel twice
+   when the preference is on, and charges a whole tank to the dash it was logged on. Options: kept
+   subtracts expenses only (fuel stays a log), or it subtracts fills and adds back the dash's frozen
+   fuel estimate.
+4. The day's dollar goal for the kept-deduction headline (design.md section 2.3).
 
 ### Preferences
 
@@ -171,7 +219,9 @@ The weekly plan stays in DataStore because nothing in the event log can rebuild 
 ## Privacy
 
 Amounts, category, gallons, an odometer total, and an optional free-text note typed by the dasher
-stay on the device. Nothing here is sent anywhere.
+stay on the device. DashBuddy sends none of it anywhere. The rows live in the Room database,
+which Android backup and device transfer include like the rest of the history (`PRIVACY.md` §6), so
+a typed note goes wherever the dasher's backup goes.
 The note is never written to a log at `INFO` or above. A decode failure logs the exception class
 only, following #1134; the exception message can contain the payload and note.
 
@@ -202,8 +252,7 @@ migration. It adds `LedgerRepository`, `AnalyticsRepository.sessionNet`, `Sessio
 `OdometerRepository.totalMiles`, and the two preferences. Schema export and migration checks
 accompany the stored fields, along with the `PRIVACY.md` row.
 
-The hub's money bar does not show expenses yet. Adding them there needs a later decision.
+The hub does not render expense or fuel rows yet, on a dash or off one, and its money bar does
+not include them. Adding them there needs a later decision.
 
-Before slice 3, the developer confirms which value is the day's dollar goal for the headline
-when kept deducts expenses. The design uses the existing strategy target if one exists;
-without one, the setting appears without a goal headline.
+Slice 3 waits for the answers to "Open before slice 3".
