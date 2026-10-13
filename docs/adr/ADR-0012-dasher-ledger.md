@@ -126,7 +126,9 @@ It is a log the dasher reads. Realized cost per mile between fills is a read-tim
 ### Session attribution and cash
 
 The HUD stamps the focused dash's `sessionId` on every entry. An off-dash expense or fill-up
-carries null. The hub does not render ledger rows yet (see Consequences); the HUD's log shows them.
+carries null. The hub does not render ledger rows yet (see Consequences). The HUD's log reads a dash's events
+(`getEventsForSession`, which matches on the session id), so an off-dash entry is stored but shown
+nowhere until a later slice adds a read over null-session ledger rows.
 Cash tips target only delivery rows of the focused
 dash. The resolver refuses a null-session row because the projector drops its cash adjustment.
 
@@ -167,6 +169,12 @@ The flow is null until the first delivery row folds. Projector lag is accepted a
 on the HUD. The disclosure states "after car cost, before tax; expenses not counted" or
 "expenses counted", according to the preference.
 
+### Where this ADR updates design.md
+
+The S0 review changed two rules in `design.md`, which is updated to match: `totalMiles()` returns
+`Double?` (null until the persisted total loads, so a fill logged at process start never stores 0),
+and the pending active-drop tip outlives the dash end until its row appears or a bound passes.
+
 ### Open before slice 3 (developer decisions)
 
 These come from the S0 review and change existing semantics or the design, so the developer decides.
@@ -178,9 +186,10 @@ Slice 1 does not depend on them; slice 3 does not start until they are answered.
    estimate for good, and undoing the tip does not clear the stamp. Options: a cash-only edit stops
    stamping `driverAdjustedAt` (the re-price never touches `cashTip`), or cash tips get their own event.
 2. A cash-tip undo cannot restore "no cash tip". A null `newCashTip` means unchanged, so the undo
-   writes `0.0`; the row stays cash-bearing, which blocks unassigning it from its dash and shows a
-   `$0.00` cash line. Options: readers treat `0.0` as no cash, the payload gains an explicit clear,
-   or the same own-event option as item 1.
+   writes `0.0`. The drill-down already hides a zero cash line, but the projector's unassign guard
+   (`row.cashTip != null` in `AnalyticsProjector`) then refuses to move that delivery out of its dash.
+   Options: the guard and readers treat `0.0` as no cash, the payload gains an explicit clear, or the
+   same own-event option as item 1.
 3. Fuel may be counted twice in kept. Delivered net already subtracts the frozen cost per mile,
    which includes an estimated fuel cost, so subtracting fill-up totals as well charges fuel twice
    when the preference is on, and charges a whole tank to the dash it was logged on. Options: kept
