@@ -40,8 +40,7 @@ class CorrectionFoldsTest {
         assertEquals(FuelFillupFold(42, null, 30, 30.0, 10.0, 500.0), fuel.fuelFillup)
         assertEquals(LedgerVoidFold(12, 30), void.ledgerVoid)
         for (result in listOf(expense, fuel, void)) {
-            assertEquals(context, result.context)
-            assertEquals(2.0, result.context!!.legState.sessionMeasured, 0.0)
+            assertNull(result.context)
             assertNull(result.delivery)
             assertNull(result.skip)
         }
@@ -57,7 +56,7 @@ class CorrectionFoldsTest {
         for ((type, payload) in cases) {
             val result = fold(type, payload)
             assertNotNull(result.skip)
-            assertEquals(context, result.context)
+            assertNull(result.context)
             assertNull(result.expenseLogged)
             assertNull(result.fuelFillup)
             assertNull(result.ledgerVoid)

@@ -729,8 +729,7 @@ serialized completion high-water. Session/period/IRS/CSV totals stay span-anchor
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 
-ADR-0012 adds the append-only `EXPENSE_LOGGED`, `FUEL_FILLUP`, and `LEDGER_ENTRY_VOIDED` events, projected into `expense_records` and `fuel_records` (#1333); one void per entry (first wins);
-`SessionNet` keeps expenses and fuel as separate terms.
+ADR-0012 adds the append-only `EXPENSE_LOGGED`, `FUEL_FILLUP`, and `LEDGER_ENTRY_VOIDED` events, projected into `expense_records` and `fuel_records` through `LedgerApply.kt` (#1333); folds carry no session context, so bookkeeping cannot re-upsert a session row; `appendUserEvent`, `LedgerRepository.logExpense`, and `logFuel` return the sequence id for a later `void` (Unit); one void per entry (first wins); `ExpenseCategorySerializer` maps unknown payload categories to `OTHER` without dropping the expense; `LedgerRepository.sessionNet` reads `AnalyticsRepository.sessionDetail` and keeps expenses and fuel as separate terms.
 
 **Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
 leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +

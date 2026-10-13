@@ -224,4 +224,11 @@ class AppEventCodecTest {
         for ((type, payload) in cases) assertEquals(payload, roundTrip(type, payload))
     }
 
+    @Test
+    fun `unknown expense category falls back to OTHER without losing amount or note`() {
+        val json = """{"sessionId":"S","category":"GEAR","amount":12.5,"note":"rain gear"}"""
+        val decoded = AppEventCodec.decodePayload(AppEventType.EXPENSE_LOGGED, json)
+        assertEquals(ExpenseLoggedPayload("S", ExpenseCategory.OTHER, 12.5, "rain gear"), decoded)
+    }
+
 }

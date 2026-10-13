@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
+import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
@@ -12,6 +13,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.whenever
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
@@ -21,12 +24,15 @@ import org.mockito.kotlin.verifyNoInteractions
 
 class LedgerRepositoryTest {
     private val events: AppEventRepo = mock()
-    private val repo = LedgerRepository(events, mock())
+    private val repo = LedgerRepository(events, mock(), mock())
 
     @Test
     fun `each ledger write appends exactly one typed event without metadata`() = runTest {
-        repo.logExpense("S", ExpenseCategory.PARKING, 4.5, "meter", 100)
-        repo.logFuel(null, 30.0, 10.0, 500.0, 200)
+        whenever(events.appendUserEvent(any(), isNull())).thenReturn(41L, 42L, 43L)
+        val expenseId = repo.logExpense("S", ExpenseCategory.PARKING, 4.5, "meter", 100)
+        val fuelId = repo.logFuel(null, 30.0, 10.0, 500.0, 200)
+        assertEquals(41L, expenseId)
+        assertEquals(42L, fuelId)
         repo.void(42, 300)
         val captor = argumentCaptor<AppEvent>()
         verify(events, times(3)).appendUserEvent(captor.capture(), isNull())
@@ -69,4 +75,15 @@ class LedgerRepositoryTest {
         assertEquals(FuelFillupPayload("S", 30.0), captor.firstValue.payload)
         assertEquals(FuelFillupPayload("S", 30.0, 10.0, 0.0), captor.secondValue.payload)
     }
+    @Test
+    fun `expense and fuel return the sequence ids assigned by the DAO`() = runTest {
+        val dao: AppEventDao = mock()
+        whenever(dao.insert(any())).thenReturn(101L, 205L)
+        val appEvents = AppEventRepo(mock(), dao, mock())
+        val ledger = LedgerRepository(appEvents, mock(), mock())
+
+        assertEquals(101L, ledger.logExpense("S", ExpenseCategory.FOOD, 5.0, "lunch", 100))
+        assertEquals(205L, ledger.logFuel("S", 30.0, null, null, 200))
+    }
+
 }

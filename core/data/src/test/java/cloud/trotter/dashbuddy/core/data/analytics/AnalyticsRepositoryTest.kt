@@ -44,7 +44,7 @@ class AnalyticsRepositoryTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao, db.appEventDao(), db.ledgerDao())
+        repo = AnalyticsRepository(dao, db.appEventDao())
     }
 
     @After

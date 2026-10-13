@@ -613,7 +613,7 @@ class AnalyticsProjectorTest {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()
 
-        val repo = AnalyticsRepository(analyticsDao, eventDao, db.ledgerDao())
+        val repo = AnalyticsRepository(analyticsDao, eventDao)
         assertEquals("before: reported 20 − captured 10", 10.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
 
         // The driver re-prices the captured delivery up to $15 (a mis-captured tip).
@@ -1766,7 +1766,7 @@ class AnalyticsProjectorTest {
         assertEquals(MilesBasis.UNKNOWN, overflow.toDomain().milesBasis)
         val known = analyticsDao.deliveryRecord(knownId)!!
         val expectedCost = known.realizedPay!! - known.netProfit!!
-        val reader = AnalyticsRepository(analyticsDao, eventDao, db.ledgerDao())
+        val reader = AnalyticsRepository(analyticsDao, eventDao)
         for (platform in listOf(null, Platform.DoorDash)) {
             val economics = reader.periodEconomics(AnalyticsPeriod.LIFETIME, platform = platform).first()
             assertEquals(22.0, economics.grossEarnings, 1e-9)
@@ -2246,6 +2246,94 @@ class AnalyticsProjectorTest {
         while (projector().processBatch(1) != null) { /* drain */ }
         assertEquals(expenses, ledger.expensesForSession("S").first())
         assertEquals(fuel, ledger.fuelForSession("S").first())
+    }
+
+    @Test
+    fun `session tagged expense in its own batch preserves every session column`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+        val session = analyticsDao.sessionRecord("S1")!!
+        // Valid JSON with whitespace detects a hydration and re-encode even if the values agree.
+        analyticsDao.upsertSession(session.copy(legStateJson = "  ${session.legStateJson}  "))
+        val before = analyticsDao.sessionRecord("S1")!!
+        val expenseId = insert(
+            AppEventType.EXPENSE_LOGGED, "S1", 5_000,
+            ExpenseLoggedPayload("S1", ExpenseCategory.PARKING, 4.5, "meter"),
+        )
+
+        val stats = projector().processBatch(limit = 1)!!
+
+        assertEquals(0, stats.adjustmentSkips)
+        assertEquals(0, stats.sessions)
+        assertEquals(before, analyticsDao.sessionRecord("S1"))
+        val expense = db.ledgerDao().expensesForSession("S1").first().single()
+        assertEquals(expenseId, expense.eventSequenceId)
+        assertEquals(4.5, expense.amount, 0.0)
+        assertEquals("meter", expense.note)
+    }
+
+    @Test
+    fun `fuel void stamps the fuel row and removes its amount from the active total`() = runBlocking {
+        val fuelId = insert(AppEventType.FUEL_FILLUP, "S", 100, FuelFillupPayload("S", 30.0, 10.0, 500.0))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 200, LedgerEntryVoidedPayload(fuelId))
+
+        assertEquals(0, projector().catchUp().adjustmentSkips)
+        val ledger = db.ledgerDao()
+        val fuel = ledger.fuelForSession("S").first().single()
+        assertEquals(fuelId, fuel.eventSequenceId)
+        assertEquals(200L, fuel.voidedAt)
+        assertEquals(0.0, ledger.fuelTotalForSession("S").first(), 0.0)
+    }
+
+    @Test
+    fun `forward ledger void is a counted skip and the later expense remains active`() = runBlocking {
+        val targetId = 2L
+        val voidId = insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 100, LedgerEntryVoidedPayload(targetId))
+        val expenseId = insert(
+            AppEventType.EXPENSE_LOGGED, "S", 200,
+            ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 5.0, null),
+        )
+        assertTrue(targetId > voidId)
+        assertEquals(targetId, expenseId)
+
+        // Both decisions are in the same batch, so this guards their apply order.
+        assertEquals(1, projector().catchUp().adjustmentSkips)
+        val ledger = db.ledgerDao()
+        val expected = ledger.expensesForSession("S").first().single()
+        assertNull(expected.voidedAt)
+        assertEquals(5.0, ledger.expenseTotalForSession("S").first(), 0.0)
+
+        ledger.deleteAllExpenses()
+        analyticsDao.setWatermark(analyticsDao.getWatermark()!!.copy(watermarkSequenceId = 0))
+        assertEquals(1, projector().processBatch(limit = 1)!!.adjustmentSkips)
+        assertEquals(0, projector().processBatch(limit = 1)!!.adjustmentSkips)
+        assertEquals(expected, ledger.expensesForSession("S").first().single())
+    }
+
+    @Test
+    fun `unassigned ledger reads return only null session rows`() = runBlocking {
+        val expenseIds = mutableListOf<Long>()
+        val fuelIds = mutableListOf<Long>()
+        for (sessionId in listOf("S", null, "OTHER", null)) {
+            val expenseId = insert(
+                AppEventType.EXPENSE_LOGGED, sessionId, 100,
+                ExpenseLoggedPayload(sessionId, ExpenseCategory.OTHER, 5.0, null),
+            )
+            val fuelId = insert(AppEventType.FUEL_FILLUP, sessionId, 200, FuelFillupPayload(sessionId, 30.0))
+            if (sessionId == null) {
+                expenseIds += expenseId
+                fuelIds += fuelId
+            }
+        }
+        projector().catchUp()
+
+        val ledger = db.ledgerDao()
+        val expenses = ledger.expensesUnassigned().first()
+        val fuel = ledger.fuelUnassigned().first()
+        assertEquals(expenseIds, expenses.map { it.eventSequenceId })
+        assertEquals(fuelIds, fuel.map { it.eventSequenceId })
+        assertTrue(expenses.all { it.sessionId == null })
+        assertTrue(fuel.all { it.sessionId == null })
     }
 
 }

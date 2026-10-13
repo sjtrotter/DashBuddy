@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
-import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.OutcomeCountRow
 import cloud.trotter.dashbuddy.core.database.analytics.PickupDwellTotalsRow
@@ -35,7 +34,6 @@ import cloud.trotter.dashbuddy.domain.analytics.PeriodTotals
 import cloud.trotter.dashbuddy.domain.analytics.PlatformEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.analytics.SessionEvent
-import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionSpan
 import cloud.trotter.dashbuddy.domain.analytics.StoreReportCard
@@ -87,7 +85,6 @@ class AnalyticsRepository @Inject constructor(
     // source-of-truth log) to enumerate a job's accepted offers — a DAO read, no economy dependency,
     // so the "net is the frozen stored value" posture above is preserved.
     private val appEventDao: AppEventDao,
-    private val ledgerDao: LedgerDao,
 ) {
 
     /**
@@ -834,31 +831,6 @@ class AnalyticsRepository @Inject constructor(
             analyticsDao.deliveriesForSession(sessionId),
         ) { session, deliveries ->
             session?.let { SessionDetail(it.toDomain(), deliveries.map { row -> row.toDomain() }) }
-        }
-
-    /**
-     * #1333: the HUD's "kept" source; projector lag is accepted and disclosed on the surface.
-     * Null without a session or any money term: no deliveries, cash tips, or unattributed pay.
-     * Expenses alone do not make the dash's kept figure available.
-     */
-    fun sessionNet(sessionId: String): Flow<SessionNet?> =
-        combine(
-            sessionDetail(sessionId),
-            ledgerDao.expenseTotalForSession(sessionId),
-            ledgerDao.fuelTotalForSession(sessionId),
-        ) { detail, expenses, fuel ->
-            if (detail == null || (detail.deliveries.isEmpty() && detail.cashTips == 0.0 && detail.unattributedPay == 0.0)) {
-                null
-            } else {
-                SessionNet(
-                    sessionId = sessionId,
-                    deliveredNet = detail.deliveries.sumOf { it.netProfit ?: 0.0 },
-                    cashTips = detail.cashTips,
-                    unattributedPay = detail.unattributedPay,
-                    expenses = expenses,
-                    fuel = fuel,
-                )
-            }
         }
 
     /**

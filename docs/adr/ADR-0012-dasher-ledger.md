@@ -40,7 +40,9 @@ The three new `AppEventType` values belong to the "User corrections" group.
 | `DELIVERY_ADJUSTMENT` (cash tip, existing) | `targetEventSequenceId`, `sessionId`, `newCashTip` through `CorrectionRepository.adjustDelivery` |
 
 `LedgerRepository.logExpense`, `LedgerRepository.logFuel`, and `LedgerRepository.void` write
-through `appendUserEvent`. `BubbleViewModel` intents call repositories; composables do not write.
+through `appendUserEvent`. `appendUserEvent`, `logExpense`, and `logFuel` return the appended
+sequence id, the target of a later `void`; `void` returns Unit.
+`BubbleViewModel` intents call repositories; composables do not write.
 
 `BOOKKEEPING_EVENTS` gains all three new types. An odometer stamp on any of them never feeds
 odometer measurement, session mileage, or job mileage budgets.
@@ -48,8 +50,9 @@ odometer measurement, session mileage, or job mileage budgets.
 ### Categories
 
 `ExpenseCategory { FOOD, PARKING, SUPPLIES, OTHER }` lives in `:domain`.
-Room stores the enum name. An unknown stored name reads as `OTHER`, following the `MilesBasis`
-name-storage and unknown-value fallback pattern.
+Room stores the enum name. `ExpenseCategorySerializer` also encodes the payload category as its
+name and decodes with `ExpenseCategory.fromStorage`. Unknown names in Room or payload JSON read
+as `OTHER`, preserving the expense amount and note, following the `MilesBasis` fallback pattern.
 
 ### Read model
 
@@ -82,9 +85,11 @@ a `MigrationTestHelper` case, and the `SchemaVersionGuardTest` migration chain.
 
 `CorrectionFolds.foldExpenseLogged`, `CorrectionFolds.foldFuelFillup`, and
 `CorrectionFolds.foldLedgerVoid` produce `ExpenseLoggedFold`, `FuelFillupFold`, and `LedgerVoidFold`
-through `FoldOutcome`. `AnalyticsProjector` collects them as `Adjustment` decisions and applies
-them by primary key in event order inside the batch transaction, like `applyDeliveryAdjustment`.
-The projected rows and watermark commit together.
+through `FoldOutcome`. All three folds carry no session context, including on skipped payloads:
+returning context would mark the session touched and re-upsert its whole row from hydration.
+`AnalyticsProjector` collects them as `Adjustment` decisions and calls the `LedgerDao` extensions
+in `LedgerApply.kt` by primary key in event order inside the batch transaction, following the
+`SessionReportApply.kt` pattern. The projected rows and watermark commit together.
 
 `pricePerGallon` is derived at read time as the total divided by gallons. It is null when gallons
 is null or zero, and is never stored. `odometerMiles` comes from
@@ -102,7 +107,7 @@ Its projection stamps the target row's `voidedAt` with the first void event's ti
 One void per entry: the first wins; a repeat void changes zero rows and is a counted skip.
 The original event and the projected row remain.
 
-A void of a void, or of an unknown sequence id, is a counted skip.
+A void of a void, of an unknown sequence id, or of a later event is a counted skip.
 Its `WARN` carries the sequence id only, with no payload text.
 
 A cash-tip undo appends another `DELIVERY_ADJUSTMENT`. Its `newCashTip` is the value before
@@ -154,7 +159,9 @@ the row appears loses it.
 
 ### Kept
 
-`AnalyticsRepository.sessionNet(sessionId): Flow<SessionNet?>` reads the dash's projected rows.
+`LedgerRepository.sessionNet(sessionId): Flow<SessionNet?>` reads the dash's projected rows.
+It combines `sessionDetail` from its injected `AnalyticsRepository` with the two `LedgerDao`
+totals. `AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
 Its terms are the hub's per-dash net, read from `SessionDetail`: delivered net is the sum of
 `netProfit` over `SessionDetail.deliveries`, with a null net counting as zero exactly as the hub's
 per-dash net does (`COALESCE(SUM(netProfit), 0)` in `AnalyticsDao`), plus `SessionDetail.cashTips`
@@ -249,7 +256,7 @@ already owned by `DELIVERY_ADJUSTMENT`. A reversing adjustment keeps one owner.
 ## Consequences
 
 Slice 1 builds the event types and payloads, codec support, pure folds, tables, DAO, and Room
-migration. It adds `LedgerRepository`, `AnalyticsRepository.sessionNet`, `SessionNet`,
+migration. It adds `LedgerRepository`, `LedgerRepository.sessionNet`, `SessionNet`,
 `OdometerRepository.totalMiles`, and the two preferences. Schema export and migration checks
 accompany the stored fields, along with the `PRIVACY.md` row.
 

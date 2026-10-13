@@ -26,12 +26,15 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportCorrectio
  */
 internal object CorrectionFolds {
 
-    /** #1333: emits a ledger decision and leaves the session context untouched. */
-    fun foldExpenseLogged(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+    /**
+     * #1333: bookkeeping only; emits a ledger decision with no session context.
+     * Returning context would mark the session `touched` and re-upsert its whole row from a hydration round-trip.
+     */
+    fun foldExpenseLogged(event: SequencedAppEvent, @Suppress("UNUSED_PARAMETER") context: SessionFoldContext?): FoldOutcome {
         val p = event.event.payload as? ExpenseLoggedPayload
-            ?: return FoldOutcome(context = context, skip = "EXPENSE_LOGGED: missing/malformed payload")
+            ?: return FoldOutcome(context = null, skip = "EXPENSE_LOGGED: missing/malformed payload")
         return FoldOutcome(
-            context = context,
+            context = null,
             expenseLogged = ExpenseLoggedFold(
                 eventSequenceId = event.sequenceId,
                 sessionId = p.sessionId,
@@ -43,12 +46,15 @@ internal object CorrectionFolds {
         )
     }
 
-    /** #1333: emits a ledger decision and leaves the session context untouched. */
-    fun foldFuelFillup(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+    /**
+     * #1333: bookkeeping only; emits a ledger decision with no session context.
+     * Returning context would mark the session `touched` and re-upsert its whole row from a hydration round-trip.
+     */
+    fun foldFuelFillup(event: SequencedAppEvent, @Suppress("UNUSED_PARAMETER") context: SessionFoldContext?): FoldOutcome {
         val p = event.event.payload as? FuelFillupPayload
-            ?: return FoldOutcome(context = context, skip = "FUEL_FILLUP: missing/malformed payload")
+            ?: return FoldOutcome(context = null, skip = "FUEL_FILLUP: missing/malformed payload")
         return FoldOutcome(
-            context = context,
+            context = null,
             fuelFillup = FuelFillupFold(
                 eventSequenceId = event.sequenceId,
                 sessionId = p.sessionId,
@@ -60,12 +66,15 @@ internal object CorrectionFolds {
         )
     }
 
-    /** #1333: emits a ledger decision and leaves the session context untouched. */
-    fun foldLedgerVoid(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+    /**
+     * #1333: bookkeeping only; emits a ledger decision with no session context.
+     * Returning context would mark the session `touched` and re-upsert its whole row from a hydration round-trip.
+     */
+    fun foldLedgerVoid(event: SequencedAppEvent, @Suppress("UNUSED_PARAMETER") context: SessionFoldContext?): FoldOutcome {
         val p = event.event.payload as? LedgerEntryVoidedPayload
-            ?: return FoldOutcome(context = context, skip = "LEDGER_ENTRY_VOIDED: missing/malformed payload")
+            ?: return FoldOutcome(context = null, skip = "LEDGER_ENTRY_VOIDED: missing/malformed payload")
         return FoldOutcome(
-            context = context,
+            context = null,
             ledgerVoid = LedgerVoidFold(
                 targetEventSequenceId = p.targetEventSequenceId,
                 occurredAt = event.event.occurredAt,

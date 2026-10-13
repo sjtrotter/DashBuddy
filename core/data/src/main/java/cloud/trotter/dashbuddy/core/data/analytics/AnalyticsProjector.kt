@@ -6,8 +6,6 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.database.DashBuddyDatabase
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsProjectionStateEntity
-import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
-import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryAdjustmentFold
@@ -246,9 +244,9 @@ class AnalyticsProjector @Inject constructor(
             // refold replays this same ascending order and reproduces identical rows.
             adjustments.sortedBy { it.sequenceId }.forEach { adj ->
                 val skipped = when (adj) {
-                    is Adjustment.ExpenseLogged -> applyExpenseLogged(adj.fold)
-                    is Adjustment.FuelFillup -> applyFuelFillup(adj.fold)
-                    is Adjustment.LedgerVoid -> applyLedgerVoid(adj.fold)
+                    is Adjustment.ExpenseLogged -> ledgerDao.applyExpenseLogged(adj.fold)
+                    is Adjustment.FuelFillup -> ledgerDao.applyFuelFillup(adj.fold)
+                    is Adjustment.LedgerVoid -> ledgerDao.applyLedgerVoid(adj.fold)
                     is Adjustment.Pay -> applyPayAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
                     is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
@@ -356,28 +354,6 @@ class AnalyticsProjector @Inject constructor(
     /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
      *  in-transaction apply (M1). */
     private data class ResolutionTask(val sequenceId: Long, val resolution: StoreResolution)
-
-    private suspend fun applyExpenseLogged(fold: ExpenseLoggedFold): Boolean {
-        ledgerDao.upsertExpense(ExpenseRecordEntity(
-            fold.eventSequenceId, fold.sessionId, fold.occurredAt, fold.category.name,
-            fold.amount, fold.note, voidedAt = null,
-        ))
-        return false
-    }
-
-    private suspend fun applyFuelFillup(fold: FuelFillupFold): Boolean {
-        ledgerDao.upsertFuel(FuelRecordEntity(
-            fold.eventSequenceId, fold.sessionId, fold.occurredAt, fold.totalAmount,
-            fold.gallons, fold.odometerMiles, voidedAt = null,
-        ))
-        return false
-    }
-
-    private suspend fun applyLedgerVoid(fold: LedgerVoidFold): Boolean {
-        val skipped = ledgerDao.voidEntry(fold.targetEventSequenceId, fold.occurredAt) == 0
-        if (skipped) Timber.tag(TAG).w("LEDGER_ENTRY_VOIDED: target row %d not found", fold.targetEventSequenceId)
-        return skipped
-    }
 
     /**
      * Apply one legacy PAY_ADJUSTMENT re-price by-PK. Returns true iff the target row was missing (a
