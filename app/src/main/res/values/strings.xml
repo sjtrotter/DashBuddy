@@ -72,8 +72,6 @@
          longer exists. -->
 
     <!-- bubble/BubbleScreen.kt -->
-    <string name="bubble_screen_chat_history_title">Chat history</string>
-    <string name="bubble_screen_content_desc_close_chat">Close chat</string>
     <!-- bubble HUD content strings (ChatViews / ModeCards / StatusBar / FlowCardItem) moved to :feature:bubble (#96) -->
 
     <!-- setup/wizard/components/WizardBottomBar.kt -->

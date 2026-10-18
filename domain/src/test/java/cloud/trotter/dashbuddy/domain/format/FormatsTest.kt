@@ -27,6 +27,27 @@ class FormatsTest {
     }
 
     @Test
+    fun `money parts split dollars and cents`() {
+        Locale.setDefault(Locale.US)
+        assertEquals(MoneyParts("", "$", "71", ".20"), Formats.moneyParts(71.20))
+    }
+
+    @Test
+    fun `negative money parts keep the sign before the symbol`() {
+        Locale.setDefault(Locale.US)
+        assertEquals(MoneyParts("-", "$", "71", ".20"), Formats.moneyParts(-71.20))
+        assertEquals("", Formats.moneyParts(-0.004).sign)
+    }
+
+    @Test
+    fun `money parts follow the locale decimal separator`() {
+        Locale.setDefault(Locale.GERMANY)
+        val parts = Formats.moneyParts(71.20)
+        assertEquals(",20", parts.fraction)
+        assertEquals(Formats.money(71.20), parts.sign + parts.symbol + parts.whole + parts.fraction)
+    }
+
+    @Test
     fun `US locale formats with dot decimals and comma grouping`() {
         Locale.setDefault(Locale.US)
         assertEquals("$7.50", Formats.money(7.5))

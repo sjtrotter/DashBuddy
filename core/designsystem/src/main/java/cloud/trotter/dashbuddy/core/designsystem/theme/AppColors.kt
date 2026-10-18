@@ -43,6 +43,9 @@ data class AppColors(
     val stOfferBg: Color,
     val stPickup: Color,
     val stPickupBg: Color,
+    val stDropoff: Color,
+    val stDropoffBg: Color,
+    val rest: Color,
     val isDark: Boolean,
 )
 
@@ -74,6 +77,9 @@ fun darkAppColors(): AppColors = AppColors(
     stOfferBg = Color(0x295B9DFF),    // 16%
     stPickup = Color(0xFFB78BFF),
     stPickupBg = Color(0x29B78BFF),
+    stDropoff = Color(0xFF6A6CFF),
+    stDropoffBg = Color(0x296A6CFF),
+    rest = Color(0xFF5E6B78),
     isDark = true,
 )
 
@@ -105,6 +111,9 @@ fun lightAppColors(): AppColors = AppColors(
     stOfferBg = Color(0x1F2F6FE0),
     stPickup = Color(0xFF7A4EE0),
     stPickupBg = Color(0x1F7A4EE0),
+    stDropoff = Color(0xFF4B4DD9),
+    stDropoffBg = Color(0x1F4B4DD9),
+    rest = Color(0xFF8593A0),
     isDark = false,
 )
 

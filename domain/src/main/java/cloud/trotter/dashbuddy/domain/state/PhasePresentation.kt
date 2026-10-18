@@ -23,6 +23,9 @@ enum class PhaseColor {
 
     /** stPickup — the pickup/dropoff (purple) family. */
     PICKUP,
+
+    /** stDropoff — the delivery family. */
+    DROPOFF,
 }
 
 /**
@@ -48,6 +51,7 @@ data class PhasePresentation(
     val longColor: PhaseColor,
     val shortLabel: String,
     val shortColor: PhaseColor,
+    val stripColor: PhaseColor,
 )
 
 /**
@@ -62,30 +66,37 @@ val Flow.presentation: PhasePresentation
         Flow.Idle -> PhasePresentation(
             longLabel = "WAITING", longColor = PhaseColor.GOOD,
             shortLabel = "AWAIT", shortColor = PhaseColor.NEUTRAL,
+            stripColor = PhaseColor.GOOD,
         )
         Flow.OfferPresented -> PhasePresentation(
             longLabel = "OFFER", longColor = PhaseColor.OFFER,
             shortLabel = "OFFER", shortColor = PhaseColor.OFFER,
+            stripColor = PhaseColor.OFFER,
         )
         Flow.TaskPickupNavigation -> PhasePresentation(
             longLabel = "PICKUP", longColor = PhaseColor.GOOD,
             shortLabel = "PICKUP", shortColor = PhaseColor.PICKUP,
+            stripColor = PhaseColor.PICKUP,
         )
         Flow.TaskPickupArrived -> PhasePresentation(
             longLabel = "AT STORE", longColor = PhaseColor.GOOD,
             shortLabel = "PICKUP", shortColor = PhaseColor.PICKUP,
+            stripColor = PhaseColor.PICKUP,
         )
         Flow.TaskDropoffNavigation -> PhasePresentation(
             longLabel = "DELIVERING", longColor = PhaseColor.GOOD,
             shortLabel = "DROPOFF", shortColor = PhaseColor.PICKUP,
+            stripColor = PhaseColor.DROPOFF,
         )
         Flow.TaskDropoffArrived -> PhasePresentation(
             longLabel = "AT DOOR", longColor = PhaseColor.GOOD,
             shortLabel = "DROPOFF", shortColor = PhaseColor.PICKUP,
+            stripColor = PhaseColor.DROPOFF,
         )
         Flow.PostTask -> PhasePresentation(
             longLabel = "DELIVERED", longColor = PhaseColor.GOOD,
             shortLabel = "PAID", shortColor = PhaseColor.GOOD,
+            stripColor = PhaseColor.DROPOFF,
         )
         // #736: a transient teardown after the dasher unassigned the order — presented as the
         // Idle-equivalent (neutral "waiting/await"); the machine closes the job on this frame and
@@ -93,15 +104,18 @@ val Flow.presentation: PhasePresentation
         Flow.TaskUnassigned -> PhasePresentation(
             longLabel = "WAITING", longColor = PhaseColor.GOOD,
             shortLabel = "AWAIT", shortColor = PhaseColor.NEUTRAL,
+            stripColor = PhaseColor.GOOD,
         )
         // #762 D2: a coarse in-job surface (leg unknown) — honest "active job" badge; no leg claimed.
         Flow.TaskActive -> PhasePresentation(
             longLabel = "ON JOB", longColor = PhaseColor.GOOD,
             shortLabel = "ON JOB", shortColor = PhaseColor.GOOD,
+            stripColor = PhaseColor.PICKUP,
         )
         Flow.SessionEnded -> PhasePresentation(
             longLabel = "DONE", longColor = PhaseColor.NEUTRAL,
             shortLabel = "DONE", shortColor = PhaseColor.NEUTRAL,
+            stripColor = PhaseColor.NEUTRAL,
         )
     }
 

@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
+import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
@@ -20,7 +24,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
-import cloud.trotter.dashbuddy.feature.bubble.sessionEarningsText
+import cloud.trotter.dashbuddy.feature.bubble.hud.sessionEarningsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +69,9 @@ class BubbleViewModelTest {
     private val appEventRepo: AppEventRepo = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
     private val fuelPriceRepository: FuelPriceRepository = mock()
+    private val ledgerRepository: LedgerRepository = mock()
+    private val goalFlow = MutableStateFlow<Double?>(null)
+    private val todayFlow = MutableStateFlow(PeriodEconomics.EMPTY)
     private val analyticsRepository: AnalyticsRepository = mock()
     private val devSettingsRepository: DevSettingsRepository = mock()
 
@@ -85,6 +92,10 @@ class BubbleViewModelTest {
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
+        whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
+        whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
+        whenever(ledgerRepository.sessionNet(any())).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(3.50f))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(true))
@@ -102,8 +113,72 @@ class BubbleViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
+        ledgerRepository = ledgerRepository,
         devSettingsRepository = devSettingsRepository,
     )
+
+    @Test
+    fun `sessionNet follows the displayed session`() = runTest {
+        val last = session("last", 10.0, 1)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(last)))
+        val lastNet = SessionNet("last", 8.0, 0.0, 0.0, 0.0, 20.0)
+        val ddNet = lastNet.copy(sessionId = "session-dd", deliveredNet = 18.0)
+        val uberFlow = MutableStateFlow(lastNet.copy(sessionId = "session-uber", deliveredNet = 28.0))
+        whenever(ledgerRepository.sessionNet("last")).thenReturn(flowOf(lastNet))
+        whenever(ledgerRepository.sessionNet("session-dd")).thenReturn(flowOf(ddNet))
+        whenever(ledgerRepository.sessionNet("session-uber")).thenReturn(uberFlow)
+        // The event log points somewhere else: the resting net must use recentSessions instead.
+        whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf("different-chat-session"))
+        val vm = viewModel()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.sessionNet.collect {} }
+        runCurrent()
+        assertEquals(lastNet, vm.sessionNet.value)
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        runCurrent()
+        assertEquals(ddNet, vm.sessionNet.value)
+        vm.selectPlatform(Platform.Uber)
+        runCurrent()
+        assertEquals(uberFlow.value, vm.sessionNet.value)
+        uberFlow.value = uberFlow.value.copy(cashTips = 5.0)
+        runCurrent()
+        assertEquals(uberFlow.value, vm.sessionNet.value)
+        state.value = AppState()
+        runCurrent()
+        assertEquals(lastNet, vm.sessionNet.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `dailyGoal follows the preference`() = runTest {
+        stubNoDashes()
+        val vm = viewModel()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dailyGoal.collect {} }
+        runCurrent()
+        assertNull(vm.dailyGoal.value)
+        goalFlow.value = 150.0
+        runCurrent()
+        assertEquals(150.0, vm.dailyGoal.value!!, 0.0)
+        goalFlow.value = null
+        runCurrent()
+        assertNull(vm.dailyGoal.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `todayProfit reads today's period net`() = runTest {
+        stubNoDashes()
+        val vm = viewModel()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.todayProfit.collect {} }
+        runCurrent()
+        todayFlow.value = PeriodEconomics.EMPTY.copy(netProfit = 71.2, grossEarnings = 99.0)
+        runCurrent()
+        assertEquals(71.2, vm.todayProfit.value!!, 0.0)
+        todayFlow.value = todayFlow.value.copy(netProfit = 82.5)
+        runCurrent()
+        assertEquals(82.5, vm.todayProfit.value!!, 0.0)
+        verify(analyticsRepository).periodEconomics(AnalyticsPeriod.TODAY)
+        job.cancel()
+    }
 
     private fun session(
         id: String,

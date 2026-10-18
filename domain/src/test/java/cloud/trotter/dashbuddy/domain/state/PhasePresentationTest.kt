@@ -14,6 +14,20 @@ import org.junit.Test
 class PhasePresentationTest {
 
     @Test
+    fun `strip uses the phase color including a separate dropoff family`() {
+        val expected = mapOf(
+            Flow.Idle to PhaseColor.GOOD, Flow.TaskUnassigned to PhaseColor.GOOD,
+            Flow.OfferPresented to PhaseColor.OFFER,
+            Flow.TaskPickupNavigation to PhaseColor.PICKUP, Flow.TaskPickupArrived to PhaseColor.PICKUP,
+            Flow.TaskActive to PhaseColor.PICKUP,
+            Flow.TaskDropoffNavigation to PhaseColor.DROPOFF, Flow.TaskDropoffArrived to PhaseColor.DROPOFF,
+            Flow.PostTask to PhaseColor.DROPOFF, Flow.SessionEnded to PhaseColor.NEUTRAL,
+        )
+        assertEquals(Flow.entries.toSet(), expected.keys)
+        expected.forEach { (flow, color) -> assertEquals(flow.name, color, flow.presentation.stripColor) }
+    }
+
+    @Test
     fun `long-form status-badge labels and colors match the legacy statusBadge table`() {
         // The exact (label, color) pairs statusBadge() returned for each online flow phase.
         val expected = mapOf(

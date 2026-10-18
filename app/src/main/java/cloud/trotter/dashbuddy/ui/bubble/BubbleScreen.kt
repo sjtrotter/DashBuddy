@@ -3,161 +3,99 @@ package cloud.trotter.dashbuddy.ui.bubble
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import cloud.trotter.dashbuddy.R
-import cloud.trotter.dashbuddy.feature.bubble.ChatHeaderTitle
-import cloud.trotter.dashbuddy.feature.bubble.DashboardView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.FullChatView
-import cloud.trotter.dashbuddy.feature.bubble.SessionMetricsActions
-import cloud.trotter.dashbuddy.feature.bubble.StatusBadgeTitle
+import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
+import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BubbleScreen(
-    viewModel: BubbleViewModel = hiltViewModel()
-) {
+fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val appState by viewModel.appState.collectAsStateWithLifecycle()
-    val focusedPlatform by viewModel.focusedPlatform.collectAsStateWithLifecycle()
-    val focusedRegion by viewModel.focusedRegion.collectAsStateWithLifecycle()
-    val sessionMiles by viewModel.sessionMiles.collectAsStateWithLifecycle()
-    val sessionEarnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
+    val platform by viewModel.focusedPlatform.collectAsStateWithLifecycle()
+    val region by viewModel.focusedRegion.collectAsStateWithLifecycle()
+    val miles by viewModel.sessionMiles.collectAsStateWithLifecycle()
+    val earnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
+    val net by viewModel.sessionNet.collectAsStateWithLifecycle()
+    val countExpenses by viewModel.countExpensesInKept.collectAsStateWithLifecycle()
+    val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
+    val todayProfit by viewModel.todayProfit.collectAsStateWithLifecycle()
     val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
-    val isGasPriceAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
-    val isGasPriceRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
+    val gasAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
+    val gasRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
-    // #867 multi-app: which dash the surface is scoped to, and the switcher that re-scopes it.
-    val switchablePlatforms by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
-    val displayedPlatformLabel by viewModel.displayedPlatformLabel.collectAsStateWithLifecycle()
-    var showFullChat by remember { mutableStateOf(false) }
-
-    // Collapse the bubble to its head after the user acts on an offer.
+    val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
+    var logOpen by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel, context) {
         viewModel.collapse.collect { context.findActivity()?.finish() }
     }
-
-    // Transient "couldn't refresh" flash for the gas quick-edit (#722) — a one-shot signal, not
-    // a toast (the worker's WARN already logs the reason, #692 levels). Composable-owned local
-    // state is appropriate here: it's a self-clearing visual flash, not a fact the dasher could be
-    // misled by if lost to a config change.
-    var showGasPriceRefreshError by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
+    var gasError by remember { mutableStateOf(false) }
+    LaunchedEffect(viewModel) {
         viewModel.gasPriceRefreshFailed.collect {
-            showGasPriceRefreshError = true
+            gasError = true
             delay(3_000)
-            showGasPriceRefreshError = false
+            gasError = false
         }
     }
-
-    // Vehicle just-in-time action (#693): deep-link into the main app's economy/vehicle settings.
-    val onOpenVehicleSettings: () -> Unit = {
-        context.startActivity(MainActivity.routeIntent(context, Screen.EconomySettings.route))
+    val flow = appState.regions.flow.flow
+    val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
+    val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
+        net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas) {
+        HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
+            net, countExpenses, goal, todayProfit, cards.stack.active != null, logOpen, gas)
     }
-
-    val flow = appState.regions.flow
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (showFullChat) {
-                        // #867: the chat is per-session, so while two dashes are live the header
-                        // names whose chat this is (null label ⇒ nothing to disambiguate).
-                        ChatHeaderTitle(
-                            title = stringResource(R.string.bubble_screen_chat_history_title),
-                            platformLabel = displayedPlatformLabel,
-                        )
-                    } else {
-                        StatusBadgeTitle(
-                            region = focusedRegion,
-                            flow = flow,
-                            platform = focusedPlatform,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                actions = {
-                    if (showFullChat) {
-                        IconButton(onClick = { showFullChat = false }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.bubble_screen_content_desc_close_chat),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    } else {
-                        SessionMetricsActions(
-                            region = focusedRegion,
-                            earnings = sessionEarnings,
-                            miles = sessionMiles,
-                            lastSession = lastSession
-                        )
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            if (showFullChat) {
-                FullChatView(messages)
-            } else {
-                DashboardView(
-                    cardStack = cards.stack,
-                    region = focusedRegion,
-                    messages = messages,
-                    lastSession = lastSession,
-                    focusedPlatform = focusedPlatform,
-                    cardPlatformLabels = cards.platformLabels,
-                    switchablePlatforms = switchablePlatforms,
-                    onSelectPlatform = viewModel::selectPlatform,
-                    gasPrice = gasPrice,
-                    isGasPriceAuto = isGasPriceAuto,
-                    isGasPriceRefreshing = isGasPriceRefreshing,
-                    showGasPriceRefreshError = showGasPriceRefreshError,
-                    onSetGasPrice = viewModel::setGasPrice,
-                    onRefreshGasPrice = viewModel::refreshGasPrice,
-                    onResumeAutoGasPrice = viewModel::resumeAutoGasPrice,
-                    onOpenVehicleSettings = onOpenVehicleSettings,
-                    onOpenChat = { showFullChat = true },
-                    onAccept = { viewModel.acceptOffer() },
-                    onDecline = { viewModel.declineOffer() },
-                )
+    val ribbon = remember(cards.stack, region?.session?.startedAt) {
+        region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
+    }
+    HudScreen(
+        state = state,
+        ribbon = ribbon,
+        // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
+        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
+        onSelectPlatform = viewModel::selectPlatform,
+        onSetGasPrice = viewModel::setGasPrice,
+        onRefreshGasPrice = { viewModel.refreshGasPrice() },
+        onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
+        onDockClick = { kind ->
+            when (kind) {
+                DockKind.LOG -> logOpen = !logOpen
+                DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
+                DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Disabled until S3's sheets.
             }
-        }
-    }
+        },
+        stateCard = {
+            cards.stack.active?.let { active ->
+                FlowCardItem(active, isActive = true, expanded = true, onToggleExpand = {},
+                    platformLabel = cards.platformLabels[active.id])
+            }
+        },
+        offer = {
+            cards.stack.active?.let { active ->
+                FlowCardItem(active, isActive = true, expanded = true, onToggleExpand = {},
+                    platformLabel = cards.platformLabels[active.id],
+                    onAccept = { viewModel.acceptOffer() }, onDecline = { viewModel.declineOffer() })
+            }
+        },
+        log = { FullChatView(messages) },
+    )
 }
 
-/** Unwrap a Compose [LocalContext] (often a ContextThemeWrapper) to the hosting Activity. */
+/** Unwrap a Compose context to the hosting Activity. */
 private fun Context.findActivity(): Activity? {
     var ctx: Context = this
     while (ctx is ContextWrapper) {

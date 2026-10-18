@@ -31,6 +31,7 @@ class AppPreferencesDataSource @Inject constructor(
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
         val COUNT_REAL_EXPENSES_IN_KEPT = booleanPreferencesKey("count_real_expenses_in_kept")
+        val DAILY_KEPT_GOAL_DOLLARS = doublePreferencesKey("daily_kept_goal_dollars")
         val HUD_PILL_SHOWS_EARNINGS = booleanPreferencesKey("hud_pill_shows_earnings")
         val ANALYTICS_SHOW_MORE = booleanPreferencesKey("analytics_show_more")
         val VEHICLE_LOOKUP_ALLOWED = booleanPreferencesKey("vehicle_lookup_allowed")
@@ -112,6 +113,7 @@ class AppPreferencesDataSource @Inject constructor(
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
     val countRealExpensesInKept: Flow<Boolean> = ds.data.map { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] ?: false }
+    val dailyKeptGoalDollars: Flow<Double?> = ds.data.map { it[Keys.DAILY_KEPT_GOAL_DOLLARS] }
     val hudPillShowsEarnings: Flow<Boolean> = ds.data.map { it[Keys.HUD_PILL_SHOWS_EARNINGS] ?: true }
 
     val analyticsShowMore: Flow<Boolean> = ds.data.map { it[Keys.ANALYTICS_SHOW_MORE] ?: false }
@@ -229,6 +231,13 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun setCountRealExpensesInKept(enabled: Boolean) {
         ds.edit { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] = enabled }
+    }
+
+    suspend fun setDailyKeptGoalDollars(value: Double?) {
+        ds.edit {
+            if (value == null) it.remove(Keys.DAILY_KEPT_GOAL_DOLLARS)
+            else it[Keys.DAILY_KEPT_GOAL_DOLLARS] = value
+        }
     }
 
     suspend fun setHudPillShowsEarnings(enabled: Boolean) {

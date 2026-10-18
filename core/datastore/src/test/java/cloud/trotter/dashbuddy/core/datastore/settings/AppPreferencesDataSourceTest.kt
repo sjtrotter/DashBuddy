@@ -42,6 +42,16 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
+    fun `daily kept goal round trips and clears to null`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "daily-goal.preferences_pb")
+        assertNull(source.dailyKeptGoalDollars.first())
+        source.setDailyKeptGoalDollars(150.25)
+        assertEquals(150.25, source.dailyKeptGoalDollars.first()!!, 0.0)
+        source.setDailyKeptGoalDollars(null)
+        assertNull(source.dailyKeptGoalDollars.first())
+    }
+
+    @Test
     fun `analytics show more defaults false and round trips`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "analytics-more.preferences_pb")
         assertEquals(false, source.analyticsShowMore.first())

@@ -196,6 +196,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old
   Screen-events keys from `app_prefs` without copying them: restored app preferences must never restore consent.
   An empty dedicated store re-asks once after this upgrade as well as on a new phone.
+- Your daily profit goal, in dollars, if you set one. Stays on the device.
 - Debug builds may keep capture envelopes for rule development under the app's files; release builds bind a no-op
   capture bus (`NoOpCaptureBus`) and keep none. Captures and census files are excluded from Android backup and
   device transfer (`app/src/main/res/xml/backup_rules.xml`).

@@ -1,22 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- bubble/BubbleDashboardView.kt -->
-    <string name="bubble_screen_waiting_for_activity">Waiting for dash activity</string>
-
     <!-- bubble/ChatViews.kt -->
     <string name="bubble_chat_no_messages_yet">No messages yet</string>
     <string name="bubble_chat_content_desc_open_chat">Open chat</string>
 
-    <!-- bubble/ModeCards.kt -->
-    <string name="bubble_mode_idle_last_session_label">Last dash</string>
-    <string name="bubble_mode_idle_miles_label">Miles</string>
-    <string name="bubble_mode_idle_duration_label">Duration</string>
-    <string name="bubble_mode_idle_acceptance_label">Acceptance</string>
-    <string name="bubble_mode_idle_deliveries_label">Deliveries</string>
-    <string name="bubble_mode_idle_no_session">No dashes yet</string>
-    <!-- %1$s is a duration, e.g. "12m" -->
-    <string name="bubble_mode_idle_ended_ago">ended %1$s ago</string>
+    <!-- bubble/hud/GasQuickEdit.kt -->
     <string name="bubble_mode_idle_gas_content_desc">Gas price</string>
     <string name="bubble_mode_idle_gas_decrease">Lower gas price</string>
     <string name="bubble_mode_idle_gas_increase">Raise gas price</string>
@@ -26,11 +15,6 @@
     <string name="bubble_mode_idle_gas_take_control">Set gas price manually</string>
     <string name="bubble_mode_idle_gas_resume_auto">Resume auto</string>
     <string name="bubble_mode_idle_gas_refresh_error">Couldn\'t refresh</string>
-    <string name="bubble_mode_idle_vehicle_action">Vehicle</string>
-
-    <!-- bubble/StatusBar.kt -->
-    <string name="bubble_status_this_session">THIS DASH</string>
-    <string name="bubble_status_last_session">LAST DASH</string>
 
     <!-- bubble/cards/FlowCardItem.kt -->
     <string name="flow_card_content_desc_collapse">Collapse</string>
@@ -92,4 +76,40 @@
     <string name="flow_card_addon_pay">+%1$s pay</string>
     <string name="flow_card_addon_distance">+%1$s mi</string>
     <string name="flow_card_addon_minutes">+%1$d min</string>
+
+    <!-- HUD foundations -->
+    <string name="hud_top_earned">Earned</string>
+    <string name="hud_top_online">Online</string>
+    <string name="hud_top_miles">Miles</string>
+    <string name="hud_unit_hr">hr</string>
+    <string name="hud_unit_min">min</string>
+    <string name="hud_hero_profit">Profit</string>
+    <string name="hud_goal_set">Set goal</string>
+    <string name="hud_goal_to_go">to go</string>
+    <string name="hud_goal_click_label">Edit goal</string>
+    <string name="hud_goal_cd_progress">%1$s to go</string>
+    <string name="hud_goal_cd_met">Goal met</string>
+    <string name="hud_dock_cash_tip">Cash tip</string>
+    <string name="hud_dock_expense">Expense</string>
+    <string name="hud_dock_log">Log</string>
+    <string name="hud_dock_settings">Settings</string>
+    <string name="hud_rest_last_dash">Last dash</string>
+    <string name="hud_rest_ended">ended</string>
+    <string name="hud_rest_ago">%1$s ago</string>
+    <string name="hud_rest_profit_hr">profit/hr</string>
+    <string name="hud_rest_accepted">%1$d of %2$d</string>
+    <string name="hud_rest_accepted_label">accepted</string>
+    <string name="hud_rest_span_to">to</string>
+    <string name="hud_first_run_title">No dash yet</string>
+    <string name="hud_first_run_body">A dash starts when the delivery app goes online.</string>
+    <string name="hud_gas_label">Gas</string>
+    <string name="hud_gas_per_gal">/gal</string>
+    <string name="hud_gas_auto">Auto</string>
+    <string name="hud_gas_manual">Manual</string>
+    <string name="hud_gas_click_label">Edit gas price</string>
+    <string name="hud_ribbon_cd">Dash %1$s, %2$s</string>
+    <plurals name="hud_deliveries">
+        <item quantity="one">delivery</item>
+        <item quantity="other">deliveries</item>
+    </plurals>
 </resources>

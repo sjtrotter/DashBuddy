@@ -2,6 +2,9 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
@@ -56,6 +59,7 @@ class BubbleViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val fuelPriceRepository: FuelPriceRepository,
     analyticsRepository: AnalyticsRepository,
+    ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
 ) : ViewModel() {
 
@@ -293,6 +297,25 @@ class BubbleViewModel @Inject constructor(
     // Cross-platform by construction (P8): whichever platform dashed last, labeled by its own chip.
     val lastSession = analyticsRepository.recentSessions(1)
         .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** The displayed dash's ledger, with the durable last dash as the resting fallback. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val sessionNet: StateFlow<SessionNet?> = combine(focusedRegion, lastSession) { region, last ->
+        region?.session?.sessionId ?: last?.sessionId
+    }.distinctUntilChanged().flatMapLatest { id ->
+        if (id == null) flowOf(null) else ledgerRepository.sessionNet(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val countExpensesInKept = appPreferencesRepository.countRealExpensesInKept
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyKeptGoalDollars
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // S3 adds date-ranged logged expenses so the goal also follows the deduction setting.
+    val todayProfit: StateFlow<Double?> = analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)
+        .map { it.netProfit }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Gas price for the idle-card quick edit (#693) — read straight off the economy SSOT the settings
