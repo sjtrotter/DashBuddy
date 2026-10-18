@@ -104,7 +104,20 @@ Dated field reports continue below; checklist policy is in CHECKLIST §0.
   badge. Without the `+$` node the badge is harmless: 3 recognized `offer_popup` envelopes carry `Very busy`.
 - 10-18 08:36: the second offer of the run (`b8c16588`) got two heads-up Decline taps; the DoorDash confirm sheet appeared
   after each and the card came back between them. It resolved `OFFER_TIMEOUT` on `waiting_for_offer` 17 s after the last
-  sheet sighting. Open question for the dev: were those declines backed out on purpose while ending the dash?
+  sheet sighting. **Dev answer (10-18):** the first decline was backed out on purpose to read what the acceptance rate
+  would fall to; the dev then flipped the sheet's "Pause offers from this store" switch and declined after that. So this
+  is a real decline recorded as a timeout. The trace: offer presented 08:36:24 with a countdown ending about 08:37:05;
+  second Decline tap 08:36:47.6; confirm sheet recognized 08:36:48.2 in its own window (1106, `BottomSheetModal`); the
+  sheet window lost active status at 08:36:51.5 and a `side_nav_drawer` frame was admitted, so the classifier's last
+  screen target moved off the sheet; a 33 %-area type-2 window sat in front from 08:36:56 to 08:37:02 (the pause flow,
+  likely); the final tap at 08:37:03.7 classified `UNKNOWN click` (not captured, so its label is unknown); the exit frame
+  landed 08:37:05.3. Two rules refused the decline, each on its own: the exit was 17.1 s after the last sheet sighting
+  (`declineSheetWindowMs` 15 s), and it landed at the card's own countdown end, which `EffectMap` reads as ran out.
+  Hypotheses: (a) the pause-store switch changes the sheet (or opens a second sheet) so the sheet sighting is not
+  refreshed while the dasher is still on the decline path; (b) a final `Decline offer` tap near the countdown end cannot
+  be told from an expiry without the click envelope, and that click fell UNKNOWN because `screenIs` no longer held the
+  sheet. Would need a capture of the sheet after the switch is flipped, and the click envelope of the final tap, to
+  confirm either. Related: #1104 (click-vs-window race), #1119 (accept-as-timeout, the mirror case).
 - 7 `PICKUP_NAV_STARTED` rows since 09-20 carry `storeName: "Unknown"` one frame before the real name (10-16 13:20:26,
   10-18 07:57:45 in this pull). Row-inert; noted for the event log's readability.
 
