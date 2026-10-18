@@ -68,4 +68,9 @@ class GoalPillMapperTest {
     fun `profit within a cent of the goal is met`() {
         assertEquals(GoalPillState.Met, GoalPillMapper.map(100.0, 99.999))
     }
+
+    @Test
+    fun `a negative half cent rounds away from zero like the money formatter`() {
+        assertEquals(Formats.money0(2.0), (GoalPillMapper.map(1.0, -0.005) as GoalPillState.InProgress).remaining)
+    }
 }

@@ -57,4 +57,13 @@ class RibbonLayoutTest {
         assertEquals(1.5f, rects[0].right - rects[0].left, 0.001f)
         org.junit.Assert.assertTrue(rects[1].left >= rects[0].right)
     }
+
+    @Test
+    fun `two slivers at the lane end never overpaint and never exceed the lane`() {
+        val rects = layout(model(listOf(RibbonSegment(RibbonKind.PICKUP, 990, 995), RibbonSegment(RibbonKind.WAIT, 995, null))), now = 1000).rects
+        rects.zipWithNext().forEach { (a, b) -> org.junit.Assert.assertTrue(b.left >= a.right) }
+        rects.forEach { org.junit.Assert.assertTrue(it.right <= 100f + 0.001f) }
+        // The lane's edge wins over the floor: the first sliver keeps what room is left, never crosses endX.
+        org.junit.Assert.assertTrue(rects.first().right - rects.first().left > 0f)
+    }
 }

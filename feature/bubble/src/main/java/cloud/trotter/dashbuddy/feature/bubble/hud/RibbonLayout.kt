@@ -12,8 +12,9 @@ object RibbonLayout {
         // Each segment starts no earlier than the previous one ends, so a segment widened to the
         // floor is never overpainted by its neighbour; the shift accumulates along the lane.
         var cursor = 0f
-        val rects = model.segments.filter { it.startAt < now }.map { segment ->
-            val left = maxOf(x(segment.startAt), cursor).coerceAtMost((endX - minSegPx).coerceAtLeast(0f))
+        val rects = model.segments.filter { it.startAt < now }.mapNotNull { segment ->
+            val left = maxOf(x(segment.startAt), cursor)
+            if (left >= endX) return@mapNotNull null // no lane left; the knob already marks now
             val right = maxOf(x(segment.endAt ?: now), left + minSegPx).coerceAtMost(endX)
             cursor = right
             RibbonRect(segment.kind, left, right, segment.endAt == null)

@@ -109,4 +109,16 @@ class RibbonMapperTest {
         assertEquals(listOf(RibbonSegment(RibbonKind.WAIT, 100, 200), RibbonSegment(RibbonKind.PICKUP, 200, 400),
             RibbonSegment(RibbonKind.WAIT, 400, 600)), segments)
     }
+
+    @Test
+    fun `an active wait overlapping a completed wait is one open wait`() {
+        val model = RibbonMapper.map(CardStack.of(listOf(await(50, 200)), await(150, null, "live")), 100)
+        assertEquals(listOf(RibbonSegment(RibbonKind.WAIT, 100, null)), model.segments)
+    }
+
+    @Test
+    fun `an open job absorbs a job card that starts after it`() {
+        val model = RibbonMapper.map(CardStack.of(listOf(delivery(200, 300)), pickup(100, null)), 100)
+        assertEquals(listOf(RibbonSegment(RibbonKind.PICKUP, 100, null)), model.segments)
+    }
 }

@@ -2,10 +2,9 @@
 <resources>
 
     <!-- bubble/ChatViews.kt -->
-    <string name="bubble_chat_no_messages_yet">No messages yet</string>
 
     <!-- bubble/hud/HudHead.kt -->
-    <string name="hud_head_paused">%1$s, paused</string>
+    <string name="hud_head_paused">paused</string>
 
     <!-- bubble/hud/GasQuickEdit.kt -->
     <string name="bubble_mode_idle_gas_content_desc">Gas price</string>

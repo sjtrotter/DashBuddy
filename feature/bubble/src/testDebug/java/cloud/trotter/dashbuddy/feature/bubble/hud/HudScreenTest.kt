@@ -223,7 +223,8 @@ class HudScreenTest {
 
     @Test fun `paused dash says so in the head`() {
         show({ state(flow = Flow.Idle, paused = true) })
-        compose.onNodeWithText("DoorDash, paused").assertIsDisplayed()
+        compose.onNodeWithText("paused").assertIsDisplayed()
+        compose.onNodeWithText("DoorDash").assertIsDisplayed()
         compose.onNodeWithTag("hud.ribbon").assertIsDisplayed()
     }
 

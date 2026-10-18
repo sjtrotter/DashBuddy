@@ -14,6 +14,8 @@ object RibbonMapper {
         for (card in cards) {
             val kind = card.kind()
             if (kind == RibbonKind.WAIT) continue
+            // An open job (the active card) runs to now and absorbs any job card that starts after it.
+            if (jobs.isNotEmpty() && jobs.last().endAt == null) continue
             val start = maxOf(dashStartedAt, card.phaseStartedAt, jobs.lastOrNull()?.endAt ?: dashStartedAt)
             val end = endOf(card)
             if (end != null && end <= start) continue
@@ -42,10 +44,18 @@ object RibbonMapper {
         val merged = mutableListOf<RibbonSegment>()
         for (segment in (jobs + waits).sortedWith(compareBy({ it.startAt }, { it.endAt ?: Long.MAX_VALUE }))) {
             val previous = merged.lastOrNull()
-            if (previous != null && previous.endAt != null && previous.endAt > segment.startAt) continue
-            if (previous != null && previous.kind == segment.kind && previous.endAt == segment.startAt) {
-                merged[merged.lastIndex] = previous.copy(endAt = segment.endAt)
-            } else merged += segment
+            if (previous == null) { merged += segment; continue }
+            if (previous.endAt == null) continue // an open segment runs to now and absorbs the rest
+            if (previous.kind == segment.kind && previous.endAt >= segment.startAt) {
+                // Same kind, touching or overlapping: one segment, open if either side is open.
+                val end = if (segment.endAt == null) null else maxOf(previous.endAt, segment.endAt)
+                merged[merged.lastIndex] = previous.copy(endAt = end)
+                continue
+            }
+            // Different kinds never overlap after the cut; clip defensively rather than drop.
+            val start = maxOf(segment.startAt, previous.endAt)
+            if (segment.endAt != null && segment.endAt <= start) continue
+            merged += segment.copy(startAt = start)
         }
         val marks = cards.filterIsInstance<FlowCardSnapshot.Offer>()
             .filter { it.outcome != null && it.phaseStartedAt >= dashStartedAt }
