@@ -13,32 +13,27 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 class DockMapperTest {
     @Test
     fun `live dock is cash tip expense log`() {
-        val items = DockMapper.map(HudMode.LIVE, false).items
+        val items = DockMapper.map(HudMode.LIVE).items
         assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.LOG), items.map { it.kind })
         assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL), items.map { it.state })
         for (mode in HudMode.entries) {
-            DockMapper.map(mode, false).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
+            DockMapper.map(mode).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
                 .forEach { assertEquals(DockItemState.DISABLED, it.state) }
         }
     }
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(DockKind.entries, DockMapper.map(HudMode.RESTING, false).items.map { it.kind })
-    }
-
-    @Test
-    fun `first run disables cash tip`() {
-        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.RESTING, true).items.first().state)
+        assertEquals(DockKind.entries, DockMapper.map(HudMode.RESTING).items.map { it.kind })
     }
 
     @Test
     fun `offer hides the dock`() {
-        assertTrue(DockMapper.map(HudMode.OFFER, false).items.isEmpty())
+        assertTrue(DockMapper.map(HudMode.OFFER).items.isEmpty())
     }
 
     @Test
     fun `log mode lights the log block`() {
-        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LOG, false).items.single { it.kind == DockKind.LOG }.state)
+        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LOG).items.single { it.kind == DockKind.LOG }.state)
     }
 }

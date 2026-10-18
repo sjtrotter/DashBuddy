@@ -50,4 +50,11 @@ class RibbonLayoutTest {
     fun `now equal to start draws nothing and does not divide by zero`() {
         assertEquals(RibbonGeometry(emptyList(), emptyList(), null), layout(model(tail = RibbonKind.WAIT), 0))
     }
+
+    @Test
+    fun `a widened short segment is not overpainted by the next`() {
+        val rects = layout(model(listOf(RibbonSegment(RibbonKind.PICKUP, 1, 2), RibbonSegment(RibbonKind.WAIT, 2, 5000)))).rects
+        assertEquals(1.5f, rects[0].right - rects[0].left, 0.001f)
+        org.junit.Assert.assertTrue(rects[1].left >= rects[0].right)
+    }
 }

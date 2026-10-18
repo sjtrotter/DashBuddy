@@ -94,4 +94,19 @@ class RibbonMapperTest {
         assertEquals(2, model.segments.size)
         assertEquals(RibbonSegment(RibbonKind.DROPOFF, 200, null), model.segments.last())
     }
+
+    @Test
+    fun `an add-on offer decided mid-pickup does not cut the pickup`() {
+        val active = pickup(100, null)
+        val model = RibbonMapper.map(CardStack.of(listOf(offer(AppEventType.OFFER_ACCEPTED, 500)), active), 100)
+        assertEquals(listOf(RibbonSegment(RibbonKind.PICKUP, 100, null)), model.segments)
+        assertEquals(listOf(OfferMark(500, true)), model.marks)
+    }
+
+    @Test
+    fun `a wait is cut around a job it overlaps`() {
+        val segments = map(await(100, 600), pickup(200, 400)).segments
+        assertEquals(listOf(RibbonSegment(RibbonKind.WAIT, 100, 200), RibbonSegment(RibbonKind.PICKUP, 200, 400),
+            RibbonSegment(RibbonKind.WAIT, 400, 600)), segments)
+    }
 }

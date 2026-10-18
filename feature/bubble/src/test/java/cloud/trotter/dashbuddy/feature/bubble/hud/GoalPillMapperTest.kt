@@ -23,8 +23,13 @@ class GoalPillMapperTest {
     }
 
     @Test
-    fun `no profit today gives the full goal to go and zero progress`() {
-        assertEquals(GoalPillState.InProgress(Formats.money0(150.0), 0f), GoalPillMapper.map(150.0, null))
+    fun `no profit figure yet shows the em dash and zero progress`() {
+        assertEquals(GoalPillState.InProgress(cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE, 0f), GoalPillMapper.map(150.0, null))
+    }
+
+    @Test
+    fun `zero profit today gives the full goal to go and zero progress`() {
+        assertEquals(GoalPillState.InProgress(Formats.money0(150.0), 0f), GoalPillMapper.map(150.0, 0.0))
     }
 
     @Test
@@ -51,5 +56,16 @@ class GoalPillMapperTest {
     @Test
     fun `a loss today clamps progress at zero`() {
         assertEquals(GoalPillState.InProgress(Formats.money0(170.0), 0f), GoalPillMapper.map(150.0, -20.0))
+    }
+
+    @Test
+    fun `cents in the goal and the profit do not overstate the remainder`() {
+        // 100.01 - 63.01 is 37.000000000000014 in doubles; a plain ceil would say 38.
+        assertEquals(Formats.money0(37.0), (GoalPillMapper.map(100.01, 63.01) as GoalPillState.InProgress).remaining)
+    }
+
+    @Test
+    fun `profit within a cent of the goal is met`() {
+        assertEquals(GoalPillState.Met, GoalPillMapper.map(100.0, 99.999))
     }
 }

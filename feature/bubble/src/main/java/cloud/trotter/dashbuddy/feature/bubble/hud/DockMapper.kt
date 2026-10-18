@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 object DockMapper {
-    fun map(mode: HudMode, firstRun: Boolean): DockModel {
+    fun map(mode: HudMode): DockModel {
         if (mode == HudMode.OFFER) return DockModel(emptyList())
         return DockModel(DockKind.entries.filter { it != DockKind.SETTINGS || mode == HudMode.RESTING }
             .map { kind ->

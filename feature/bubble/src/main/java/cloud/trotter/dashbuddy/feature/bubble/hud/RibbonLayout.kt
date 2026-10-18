@@ -9,10 +9,14 @@ object RibbonLayout {
         val endX = (widthPx - knobInsetPx).coerceAtLeast(0f)
         fun x(at: Long) = (endX * ((at - model.startAt).toDouble() / (now - model.startAt)))
             .toFloat().coerceIn(0f, endX)
+        // Each segment starts no earlier than the previous one ends, so a segment widened to the
+        // floor is never overpainted by its neighbour; the shift accumulates along the lane.
+        var cursor = 0f
         val rects = model.segments.filter { it.startAt < now }.map { segment ->
-            val right = x(segment.endAt ?: now)
-            val left = x(segment.startAt).coerceAtMost((endX - minSegPx).coerceAtLeast(0f))
-            RibbonRect(segment.kind, left, maxOf(right, left + minSegPx).coerceAtMost(endX), segment.endAt == null)
+            val left = maxOf(x(segment.startAt), cursor).coerceAtMost((endX - minSegPx).coerceAtLeast(0f))
+            val right = maxOf(x(segment.endAt ?: now), left + minSegPx).coerceAtMost(endX)
+            cursor = right
+            RibbonRect(segment.kind, left, right, segment.endAt == null)
         }
         // Pack forwards, then shift the group back from the right edge if necessary. When
         // the lane is full the available width determines the largest possible equal gap.

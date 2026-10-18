@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.presentation
@@ -12,11 +13,12 @@ object HudStateMapper {
         region: PlatformRegion?, flow: Flow, platform: Platform?, switchable: List<Platform>,
         earnings: Double?, miles: Double, lastSession: SessionRecord?, net: SessionNet?,
         countExpenses: Boolean, goal: Double?, todayProfit: Double?, hasActiveCard: Boolean,
-        logOpen: Boolean, gas: GasRowModel,
+        hasOfferCard: Boolean, logOpen: Boolean, gas: GasRowModel,
     ): HudUiState {
-        val mode = HudModeResolver.resolve(flow, region?.mode, hasActiveCard, logOpen)
+        val mode = HudModeResolver.resolve(flow, region?.mode, region?.session != null, hasActiveCard, hasOfferCard, logOpen)
         val firstRun = region?.session == null && lastSession == null
         val atRest = mode == HudMode.RESTING
+        val paused = !atRest && region?.mode == Mode.Paused
         val profit = net?.kept(countExpenses)
         val top = when {
             atRest && lastSession != null -> TopRowMapper.resting(lastSession)
@@ -31,12 +33,12 @@ object HudStateMapper {
         }
         // Resting wins in the base mode resolver, but its enabled Log block must still
         // open the chat. Keep the resting identity and four-block dock while the log is open.
-        val dock = DockMapper.map(mode, firstRun).let { model ->
+        val dock = DockMapper.map(mode).let { model ->
             if (!logOpen) model else model.copy(items = model.items.map { item ->
                 if (item.kind == DockKind.LOG) item.copy(state = DockItemState.LIT) else item
             })
         }
-        return HudUiState(mode, flow.presentation.stripColor,
+        return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
             HeroModel(profit, GoalPillMapper.map(goal, todayProfit)), dock,
             resting, firstRun, gas, logOpen)

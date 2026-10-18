@@ -28,9 +28,9 @@ fun HudScreen(
     log: @Composable () -> Unit = {},
 ) {
     Box(modifier.fillMaxSize().background(AppTheme.colors.bg)) {
-        PhaseStrip(state.stripColor, state.mode == HudMode.RESTING)
+        PhaseStrip(state.stripColor, state.mode == HudMode.RESTING || state.paused)
         Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp, bottom = 12.dp)) {
-            HudHead(state.platform, state.switchable, onSelectPlatform)
+            HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
             if (state.mode == HudMode.OFFER) {
                 Box(Modifier.fillMaxWidth().weight(1f).testTag("hud.slot.offer")) { offer() }
             } else {

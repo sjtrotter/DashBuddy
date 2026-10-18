@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.FullChatView
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.ui.main.MainActivity
@@ -57,7 +58,8 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
         net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
-            net, countExpenses, goal, todayProfit, cards.stack.active != null, logOpen, gas)
+            net, countExpenses, goal, todayProfit, cards.stack.active != null,
+            cards.stack.active is FlowCardSnapshot.Offer, logOpen, gas)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }

@@ -17,7 +17,7 @@ class HudStateMapperTest {
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
-        countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest,
+        countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = false, gas = GasRowModel(3.5f, true),
     )
 

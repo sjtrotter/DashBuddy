@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 
 data class HudUiState(
     val mode: HudMode,
+    val paused: Boolean,
     val stripColor: PhaseColor,
     val platform: Platform?,
     val switchable: List<Platform>,

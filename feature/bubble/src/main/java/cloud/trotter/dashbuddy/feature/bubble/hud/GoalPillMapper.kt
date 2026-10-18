@@ -1,13 +1,18 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.domain.format.Formats
-import kotlin.math.ceil
+import kotlin.math.roundToLong
 
 object GoalPillMapper {
     fun map(goal: Double?, todayProfit: Double?): GoalPillState {
         if (goal == null || !(goal > 0)) return GoalPillState.NoGoal
-        val profit = todayProfit ?: 0.0
-        if (profit >= goal) return GoalPillState.Met
-        return GoalPillState.InProgress(Formats.money0(ceil(goal - profit)), (profit / goal).toFloat().coerceIn(0f, 1f))
+        if (todayProfit == null) return GoalPillState.InProgress(EMPTY_VALUE, 0f)
+        val profit = todayProfit
+        // Whole cents: 100.01 - 63.01 in doubles is 37.000000000000014, and a ceil of that is 38.
+        val remainingCents = (goal * 100).roundToLong() - (profit * 100).roundToLong()
+        if (remainingCents <= 0) return GoalPillState.Met
+        val wholeDollars = (remainingCents + 99) / 100
+        return GoalPillState.InProgress(Formats.money0(wholeDollars.toDouble()), (profit / goal).toFloat().coerceIn(0f, 1f))
     }
 }

@@ -21,7 +21,7 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
 fun DashRibbon(model: RibbonModel) {
-    val now by rememberNow()
+    val now by rememberNow(tickMs = 30_000L)
     val time = rememberTimeFormatter()
     val start = time(model.startAt)
     val hm = HoursMinutes.of(now - model.startAt)

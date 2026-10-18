@@ -169,10 +169,10 @@ and `SessionDetail.unattributedPay`. Keeping the hub's rule means the HUD and th
 different nets for one dash.
 
 `SessionNet.expenses` carries the dash's non-voided expense total and `SessionNet.fuel` carries
-its non-voided fuel total; `SessionNet.realExpenses` is their sum. `SessionNet.kept(countExpenses)`
-adds the three money terms and subtracts `realExpenses` only when `countExpenses` is true. The HUD supplies
-`count_real_expenses_in_kept`, default off. Whether the fuel term belongs in that subtraction is
-open (see "Open before slice 3").
+its non-voided fuel total, kept apart. `SessionNet.kept(countExpenses)` adds the three money terms
+and subtracts `expenses` only when `countExpenses` is true; `fuel` never enters kept (decided
+2026-10-12, item 3 below; implemented in slice S2a). The HUD supplies `count_real_expenses_in_kept`,
+default off.
 
 The flow is null when `sessionDetail` is null, or when there are no delivery rows and both
 `cashTips` and `unattributedPay` are zero. Expenses alone do not make it non-null.
@@ -203,9 +203,9 @@ Slice 1 does not depend on them; slice 3 does not start until they are answered.
    same own-event option as item 1.
 3. Fuel may be counted twice in kept. Delivered net already subtracts the frozen cost per mile,
    which includes an estimated fuel cost, so subtracting fill-up totals as well charges fuel twice
-   when the preference is on, and charges a whole tank to the dash it was logged on. Options: kept
-   subtracts expenses only (fuel stays a log), or it subtracts fills and adds back the dash's frozen
-   fuel estimate.
+   when the preference is on, and charges a whole tank to the dash it was logged on.
+   **Decided 2026-10-12: kept subtracts expenses only; a fill-up stays a log.** Shipped in S2a
+   (`SessionNet.kept`, `realExpenses` removed).
 4. The day's dollar goal for the kept-deduction headline (design.md section 2.3).
 
 ### Preferences

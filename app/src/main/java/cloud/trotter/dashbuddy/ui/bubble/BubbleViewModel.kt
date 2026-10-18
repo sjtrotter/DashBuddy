@@ -262,7 +262,8 @@ class BubbleViewModel @Inject constructor(
      * Bubble HUD flow-card stack (#257) + its per-card platform badges (#867). Completed cards are
      * folded from the AppEvent log scoped to the displayed session(s); the live card is built from
      * current [appState]. A new dash clears the stack via DASH_START's fold logic, so the user can
-     * review the previous dash's cards until they go Online again.
+     * review the previous dash's cards until they go Online again (since #1333 S2a the HUD shows only
+     * the active card; the completed stack feeds the dash ribbon and, from S2d, the log).
      *
      * The live card is dropped when the display is pinned away from the platform whose frame we
      * last saw — the live card is derived from the global `FlowRegion`, which only ever describes

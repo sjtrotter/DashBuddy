@@ -47,16 +47,16 @@ class HudScreenTest {
     )
 
     private fun state(
-        flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false,
+        flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
         profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
-            Platform.DoorDash, Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
+            Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
         flow = flow, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
         net = profit?.let { SessionNet("live", it, 0.0, 0.0, 0.0, 0.0) },
         countExpenses = false, goal = goal, todayProfit = today,
-        hasActiveCard = !resting && !first, logOpen = logOpen, gas = GasRowModel(3.5f, true),
+        hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true),
     )
 
     private fun show(model: @Composable () -> HudUiState = { state() }, onDock: (DockKind) -> Unit = {}) {
@@ -151,6 +151,7 @@ class HudScreenTest {
     @Test fun `offer mode shows the offer slot and hides the chrome below the head`() {
         show({ state(flow = Flow.OfferPresented) })
         compose.onNodeWithTag("hud.slot.offer").assertIsDisplayed()
+        compose.onNodeWithText("Offer slot").assertIsDisplayed()
         listOf("hud.top.earned", "hud.top.online", "hud.top.miles", "hud.hero", "hud.goal", "hud.ribbon")
             .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
         DockKind.entries.forEach { compose.onNodeWithTag("hud.dock.$it").assertDoesNotExist() }
@@ -218,6 +219,12 @@ class HudScreenTest {
         compose.runOnIdle { resting = true }
         settle()
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
+    }
+
+    @Test fun `paused dash says so in the head`() {
+        show({ state(flow = Flow.Idle, paused = true) })
+        compose.onNodeWithText("DoorDash, paused").assertIsDisplayed()
+        compose.onNodeWithTag("hud.ribbon").assertIsDisplayed()
     }
 
     private class MutableClock(var millis: Long) : Clock() {
