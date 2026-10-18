@@ -2,6 +2,9 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
+import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
+import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
@@ -56,6 +59,7 @@ class BubbleViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val fuelPriceRepository: FuelPriceRepository,
     analyticsRepository: AnalyticsRepository,
+    ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
 ) : ViewModel() {
 
@@ -258,7 +262,8 @@ class BubbleViewModel @Inject constructor(
      * Bubble HUD flow-card stack (#257) + its per-card platform badges (#867). Completed cards are
      * folded from the AppEvent log scoped to the displayed session(s); the live card is built from
      * current [appState]. A new dash clears the stack via DASH_START's fold logic, so the user can
-     * review the previous dash's cards until they go Online again.
+     * review the previous dash's cards until they go Online again (since #1333 S2a the HUD shows only
+     * the active card; the completed stack feeds the dash ribbon and, from S2d, the log).
      *
      * The live card is dropped when the display is pinned away from the platform whose frame we
      * last saw — the live card is derived from the global `FlowRegion`, which only ever describes
@@ -293,6 +298,25 @@ class BubbleViewModel @Inject constructor(
     // Cross-platform by construction (P8): whichever platform dashed last, labeled by its own chip.
     val lastSession = analyticsRepository.recentSessions(1)
         .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** The displayed dash's ledger, with the durable last dash as the resting fallback. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val sessionNet: StateFlow<SessionNet?> = combine(focusedRegion, lastSession) { region, last ->
+        region?.session?.sessionId ?: last?.sessionId
+    }.distinctUntilChanged().flatMapLatest { id ->
+        if (id == null) flowOf(null) else ledgerRepository.sessionNet(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val countExpensesInKept = appPreferencesRepository.countRealExpensesInKept
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyKeptGoalDollars
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // S3 adds date-ranged logged expenses so the goal also follows the deduction setting.
+    val todayProfit: StateFlow<Double?> = analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)
+        .map { it.netProfit }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Gas price for the idle-card quick edit (#693) — read straight off the economy SSOT the settings

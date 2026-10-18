@@ -16,6 +16,7 @@ fun PhaseColor.color(c: AppColors): Color = when (this) {
     PhaseColor.NEUTRAL -> c.neutral
     PhaseColor.OFFER -> c.stOffer
     PhaseColor.PICKUP -> c.stPickup
+    PhaseColor.DROPOFF -> c.stDropoff
 }
 
 /** The `*Bg` (tinted background) variant of a [PhaseColor] family. */
@@ -24,4 +25,5 @@ fun PhaseColor.phaseBg(c: AppColors): Color = when (this) {
     PhaseColor.NEUTRAL -> c.neutralBg
     PhaseColor.OFFER -> c.stOfferBg
     PhaseColor.PICKUP -> c.stPickupBg
+    PhaseColor.DROPOFF -> c.stDropoffBg
 }

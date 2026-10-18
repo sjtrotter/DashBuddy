@@ -769,8 +769,8 @@ combines `sessionDetail` from its injected `AnalyticsRepository` with both total
 the hub's per-dash net terms (delivered net with a null net as zero, cash tips, unattributed pay),
 `SessionNet.expenses`, and `SessionNet.fuel`.
 `AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
-`SessionNet.realExpenses` is expenses plus fuel. `SessionNet.kept(countExpenses)`
-subtracts `realExpenses` only with `count_real_expenses_in_kept` on, default off.
+`SessionNet.kept(countExpenses)` subtracts `expenses` only, with `count_real_expenses_in_kept`
+on (default off); `fuel` never enters kept (ADR-0012 open item 3, decided 2026-10-12, shipped in #1333 S2a).
 It is null when `sessionDetail` is null, or when there are no delivery rows and both `cashTips`
 and `unattributedPay` are zero. Expenses alone do not make it non-null; the HUD discloses projector lag.
 Fuel never changes the economy: no change to `UserEconomy.fuelCostPerMile`, the gas-price preference,

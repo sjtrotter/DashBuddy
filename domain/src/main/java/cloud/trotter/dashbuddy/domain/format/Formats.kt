@@ -1,7 +1,10 @@
 package cloud.trotter.dashbuddy.domain.format
 
+import java.text.DecimalFormatSymbols
 import java.util.Locale
 import kotlin.math.abs
+
+data class MoneyParts(val sign: String, val symbol: String, val whole: String, val fraction: String)
 
 /**
  * Locale policy for every formatted number in DashBuddy (#358, #456):
@@ -40,11 +43,32 @@ object Formats {
     /** "$7.50" — standard money. A negative renders `-$65.94` (see [signedMoney]). */
     fun money(amount: Double): String = signedMoney(amount, decimals = 2)
 
+    /** Split the canonical money text; fraction includes the locale decimal separator. */
+    fun moneyParts(amount: Double): MoneyParts {
+        val text = money(amount)
+        val sign = if (text.startsWith("-")) "-" else ""
+        val magnitude = text.removePrefix(sign).removePrefix("$")
+        val separator = DecimalFormatSymbols.getInstance(locale).decimalSeparator
+        val split = magnitude.indexOf(separator)
+        return MoneyParts(sign, "$", if (split < 0) magnitude else magnitude.substring(0, split),
+            if (split < 0) "" else magnitude.substring(split))
+    }
+
     /** "$23" — whole-dollar money (heroes, $/hr). A negative renders `-$23` (see [signedMoney]). */
     fun money0(amount: Double): String = signedMoney(amount, decimals = 0)
 
     /** "$0.165" — per-mile cost precision. A negative renders `-$0.165` (see [signedMoney]). */
     fun money3(amount: Double): String = signedMoney(amount, decimals = 3)
+
+    /**
+     * Whole signed cents, rounded exactly as [money] renders them: through the same `%.2f` on the
+     * magnitude, so a figure that money shows as `-$1.01` is `-101` here, never `-100`. Arithmetic
+     * on money (a remainder to a goal, a split) goes through this, never through `* 100` on a double.
+     */
+    fun cents(amount: Double): Long {
+        val magnitude = String.format(Locale.ROOT, "%.2f", abs(amount)).replace(".", "").toLong()
+        return if (amount < 0.0) -magnitude else magnitude
+    }
 
     /**
      * The one money renderer (#1034): `$` first, then the magnitude, with a `-` **before** the

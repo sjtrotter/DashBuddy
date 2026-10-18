@@ -133,10 +133,15 @@ over the shared `DashboardRow` vocabulary, pure data-in/lambdas-out over `:domai
 `:core:designsystem`; Home's review rows are the hub's own `reviewTexts`/`ReviewList` reused from
 `:app` as a composable slot, so flag thresholds/copy keep ONE owner, and `DashboardScreen`/
 `DashboardViewModel`/`DashboardUiState` stay in `:app`); and `:feature:bubble` (#96/#867 — the HUD's
-presentational content: `formatters/*`, `cards/*`, the view renderers, and `session/*` (the pure
-`BubbleSessionResolver` — follow-active + manual switcher / pinned / merged — plus the stateless
-`PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`, `BubbleScreen`
-(nav host), `BubbleManager` and `BubbleViewModel` stay in `:app`, which consumes the moved renderers
+presentational content: the #1333 `hud/*` package (S2a: `HudScreen` with its live / offer / log / resting modes and
+three composable slots, the fixed chrome — phase strip, head, top row, Profit hero, the static goal pill, dock,
+dash ribbon — and the resting + first-run cards, each a pure data-in/lambdas-out composable over a pure mapper:
+`HudStateMapper`, `HudModeResolver`, `TopRowMapper`, `GoalPillMapper`, `DockMapper`, `RibbonMapper`/`RibbonLayout`;
+the kept figure is `SessionNet.kept`, which subtracts logged expenses only and never fuel), `formatters/*`,
+`cards/*`, and `session/*` (the pure `BubbleSessionResolver` — follow-active + manual switcher / pinned / merged —
+plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`,
+`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`), `BubbleManager` and
+`BubbleViewModel` (`sessionNet`, `dailyGoal`, `todayProfit`) stay in `:app`, which consumes the moved renderers
 as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytics/*`) is a separate
 sibling surface, left for a future extraction.
 

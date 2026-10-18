@@ -128,7 +128,7 @@ class SessionNetTest {
             assertEquals(5.0, firstNet.expenses, 0.0)
             assertEquals(20.0, firstNet.fuel, 0.0)
             assertEquals(6.0, firstNet.kept(countExpenses = false), 0.0)
-            assertEquals(-19.0, firstNet.kept(countExpenses = true), 0.0)
+            assertEquals(1.0, firstNet.kept(countExpenses = true), 0.0)
         } finally {
             collector.cancelAndJoin()
             emissions.close()
@@ -136,7 +136,7 @@ class SessionNetTest {
     }
 
     @Test
-    fun `session net sums frozen net cash and unattributed minus only active session expenses`() = runBlocking {
+    fun `kept subtracts logged expenses and never fuel`() = runBlocking {
         dao.upsertSession(session("S", reportedEarnings = 25.0))
         dao.upsertDelivery(delivery(1, "S", base, realizedPay = 8.0, cashTip = 3.0).copy(netProfit = 6.0))
         dao.upsertDelivery(delivery(2, "S", base + hour, realizedPay = 10.0))
@@ -153,9 +153,8 @@ class SessionNetTest {
         assertEquals(7.0, net.unattributedPay, 0.0)
         assertEquals(2.0, net.expenses, 0.0)
         assertEquals(4.0, net.fuel, 0.0)
-        assertEquals(6.0, net.realExpenses, 0.0)
         assertEquals(16.0, net.kept(countExpenses = false), 0.0)
-        assertEquals(10.0, net.kept(countExpenses = true), 0.0)
+        assertEquals(14.0, net.kept(countExpenses = true), 0.0)
     }
 
     @Test

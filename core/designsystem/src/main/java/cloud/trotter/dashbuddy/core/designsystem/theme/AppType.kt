@@ -11,6 +11,9 @@ import androidx.compose.ui.unit.sp
 
 /** Glanceability-tuned type scale (px → sp): hero 30 · xl 22 · lg 18 · md 15 · sm 13 · xs 11 · micro 10. */
 object AppTypeScale {
+    val display = 60.sp
+    val heroUnit = 28.sp
+    val state = 48.sp
     val hero = 30.sp
     val xl = 22.sp
     val lg = 18.sp
@@ -27,6 +30,9 @@ object AppTypeScale {
  */
 @Immutable
 data class AppTextStyles(
+    val displayNum: TextStyle,
+    val heroUnitNum: TextStyle,
+    val stateNum: TextStyle,
     val heroNum: TextStyle,
     val xlNum: TextStyle,
     val lgNum: TextStyle,
@@ -46,6 +52,9 @@ private fun num(size: TextUnit, weight: FontWeight = FontWeight.Bold, ls: Double
     )
 
 fun dashTextStyles(): AppTextStyles = AppTextStyles(
+    displayNum = num(AppTypeScale.display, FontWeight.SemiBold, -0.025),
+    heroUnitNum = num(AppTypeScale.heroUnit, FontWeight.Medium),
+    stateNum = num(AppTypeScale.state, FontWeight.SemiBold),
     heroNum = num(AppTypeScale.hero, FontWeight.Bold, -0.02),
     xlNum = num(AppTypeScale.xl),
     lgNum = num(AppTypeScale.lg),
@@ -73,6 +82,9 @@ private fun TextStyle.scaledByGlance(glance: Float): TextStyle =
  * the main app window (which never passes `glance`) is unaffected.
  */
 fun AppTextStyles.scaledByGlance(glance: Float): AppTextStyles = if (glance == 1f) this else copy(
+    displayNum = displayNum.scaledByGlance(glance),
+    heroUnitNum = heroUnitNum.scaledByGlance(glance),
+    stateNum = stateNum.scaledByGlance(glance),
     heroNum = heroNum.scaledByGlance(glance),
     xlNum = xlNum.scaledByGlance(glance),
     lgNum = lgNum.scaledByGlance(glance),
