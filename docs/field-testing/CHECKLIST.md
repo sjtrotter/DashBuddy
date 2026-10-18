@@ -22,7 +22,9 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
 - [active] 🆕 NEW — unassigning the LAST order of a job (DoorDash returns to "Finding offers") closes the job: the next accepted offer shows as a new job in the drill-down, not as an add-on to the abandoned one (#1312) — Confirmed: 0/2
+  - desk 10-18 (pull of 10-14 to 10-18, build `09c70dba`): not exercised; no `TASK_UNASSIGNED` in the window.
 - [active] 🆕 NEW — accepting an ORDINARY offer card while the app still shows a job open closes that job and starts a new one: the drill-down shows two jobs, the old one's un-arrived drops read "unassigned" and an arrived drop reads completed at the accept time; accepting an "Add to route" card still joins the running job (#1119 slice 1, PR #1334) — Confirmed: 0/2
+  - desk 10-18: not exercised; every accept in the pull came after the previous job closed.
 
 - [active] 🆕 NEW — the HUD earnings reads "—" until the first parsed total of the dash, never "$0.00"; the first settled read replaces it (#1041). — Confirmed: 0/2
 
@@ -49,7 +51,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
   carries a `message_input` node or an `android.widget.EditText` node with readable `text` — the field
   reads `[redacted]` — and `app.log` shows `Capture backstop: UNKNOWN click node carried customer PII (… input=edittext-class)` (or `input=editable`);
   a recognized `chat_conversation` envelope masks the box through its rule entry.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 10-18, build `09c70dba`, DoorDash 8.102.6: 25 recognized `chat_conversation` envelopes carry `message_input` as `[redacted]`; the two UNKNOWN click envelopes on the box (10-14 15:11, 10-17 17:11) read `[redacted]`; `app.log` 10-17 17:16:12 shows `Capture backstop: UNKNOWN click node carried customer PII (... input=editable ...)`. No readable EditText text anywhere in the pull.)
   Why proposed: Pledge: typed chat text must never persist raw in recognized or UNKNOWN captures.
   Triage source: first-line blame 2026-10-05 (`8d8855c9e`, original README L82).
 
@@ -96,6 +98,11 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
       Adjacent positive holds: 14 `dropoff_pre_arrival` envelopes grade correctly.
     - desk 09-29: NOT EXERCISED — 0 `alcohol_dropoff_ic_scan`, 0 `dropoff_workflow_sheet`. Adjacent positive: 11
       `dropoff_pre_arrival` grade correctly.
+    - desk 10-18 (8.102.6): leak A EXERCISED on three alcohol drops: the arrival card was claimed as `dropoff_pre_arrival`
+      10 times, but 3 header-less scrolled frames (10-16 14:31:13, 14:31:35, 14:31:36) fell to UNKNOWN, so check 1 does not
+      pass. Those 3 frames carry no name or address (instruction body `[redacted]`; order number and item list raw, as on
+      the recognized frames). The workflow sheet rendered once (10-14 14:26:16) and was recognized; 27 recognized
+      `dropoff_pre_arrival` envelopes grade correctly. Counter unchanged.
   Why proposed: Redaction: dropoff addresses and door codes must remain masked across the two sheet shapes.
   Triage source: first-line blame 2026-09-05 (`054433e69`, original README L716).
 
@@ -113,25 +120,28 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
   3. The `bindShortfall{…}` census in `PipelineStats` is unchanged from the previous pull.
   Confirm-decline automation stays DENIED by the dev's choice — it is not a validation target here.
   - Issue: #1149. Confirmed: 1/2 (desk 2026-10-05: 13 expands, 12 clean, 1 stale abort while an offer card covered the receipt — the designed outcome)
+    - desk 10-18: criterion 1 holds (7 of 7 `expand_earnings` taps land with `Single verified candidate` on the first settled frame, no `Could not find any live node`); 29 heads-up Decline taps resolve cleanly. Criterion 2 broke once: the only heads-up ACCEPT in the pull (10-16 10:21:09) logged `Semantic re-find for accept_offer ... inconclusive (1 hit(s), incomplete) — aborting to manual`; the dasher accepted by hand 5 s later. The tap fired while the bubble activity was being torn down. Counter unchanged.
   Why proposed: Live tap gate: receipt expansion must resolve the owning control and refuse stale or ambiguous targets.
   Triage source: first-line blame 2026-09-29 (`6becba8f8`, original README L300).
 
 ## §2 Active
 
 - [active] 🆕 NEW — after a GPS dash, the delivery drill-down's rows carry an arrival odometer and Settings → learned time constants report learned constants once ≥10 eligible single-order deliveries exist (#1310) — Confirmed: 0/2
+  - desk 10-18: data half holds: after the v15 refold, 269 of 281 `delivery_records` rows carry `odometerAtArrival` (13 of the 15 new drops; the 2 without are the drops with no `DELIVERY_ARRIVED`). The Settings half needs dev eyes.
 
 - [active] 🆕 NEW — a 2-drop job's rows never exceed its odometer span and never show negative minutes (#1108)
 
 - [active] **🆕 NEW — a live drop-off sheet never shows as a receipt (#935).** Check that no
   `delivery_summary_collapsed` capture carries the customer card (`drop_off_bottom_sheet_container`
   or `complete_delivery_steps_button`). Every real receipt must still be recognized, and
-  `expand_earnings` must still fire. — Confirmed: 0/2
+  `expand_earnings` must still fire. — Confirmed: 1/2 (desk 10-18, 8.102.6: 11 `delivery_summary_collapsed` envelopes, none carries `drop_off_bottom_sheet_container` or `complete_delivery_steps_button`; 7 of 7 receipts expanded through `expand_earnings`; the 6 UNKNOWN receipt frames are mid-spin digit wheels.)
 
 - [active] **🆕 NEW — no 5-second ghost dash after End dash (#1311).** End a dash, dismiss the
   summary, and let the dash-controls sheet briefly reappear before the idle map. The session list
   and per-day stats must show only the ended dash, with no new zero-offer dash or start bubble.
   A real re-dash still starts after sustained Online screens, anchored to the first hint; an offer
   or task starts immediately. — Confirmed: 0/2
+  - desk 10-18: the re-dash half was witnessed once: on 10-17 the dash ended on its summary at 18:21:45, a hint-only Online frame at 18:22:24 committed through `MODE_RESUME_COMMIT` at 18:22:32 as a dash started at 18:22:24, and six offers followed, so it was a real re-dash. No zero-offer ghost dash appears in the window. The ghost scenario itself (the dash-controls sheet re-shown after the summary) was not identified. Counter unchanged.
 
 - [active] **🆕 NEW — same-store second order gets its own pickup; a drop confirmed
   through the completion steps closes the job (#1315).** — Confirmed: 0/2
@@ -198,7 +208,7 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
   offers back to back, `app_events` holds TWO `OFFER_RECEIVED` rows with two `offerHash`es, the first
   offer's outcome reads DECLINED/TIMEOUT on its own row (never 'enriched' into the second), and the
   bubble spoke both. — KNOWN one-time effect: an offer restored from a pre-#1069 snapshot (install mid-dash / crash-recovery across the upgrade) keeps its old store key, so its next re-render logs one spurious `OFFER_TIMEOUT "Replaced by new offer"` + re-speak — not a regression.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 10-18: 10-16 16:11 to 16:14, eight H-E-B offers back to back, eight `offerHash`es, each with its own `OFFER_DECLINED` or `OFFER_ACCEPTED` row, eight `Tts: speaking` lines.)
   Triage source: first-line blame 2026-10-05 (`5ae8d68ea`, original README L72).
 
 - [active] **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
@@ -207,14 +217,14 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
   removed (deleteIntent)` (dragging the chathead to the X does NOT — that is #1226). Use the sequence to
   assess whether a vanished bubble was dismissed, torn down, had `canBubble=false`, or the process died
   (an abrupt end without destroy is a clue, not proof).
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 10-18: `shareable.log` carries 13 session start/end pairs, 140 `bubble post requested ... canBubble=true` / `returned` pairs, activity create/start/stop/destroy, and one `bubble notification removed (deleteIntent)` at 10-16 10:21:09.)
   Triage source: first-line blame 2026-10-05 (`6b8540319`, original README L96).
 
 - [active] **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
   "Arrived at store" and wait, the pull's `pickup_records` dwell for that stop should reflect the real
   wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the
   "Stay in your car / Merchant notified of your arrival" screen.
-  - Confirmed: 0/2
+  - Confirmed: 1/2 (desk 10-18 on `09c70dba`, post-#1306, DoorDash 8.102.6: two restaurant pickups, 10-14 14:36 dwell 1.69 min and 10-16 10:23 dwell 3.23 min; `PICKUP_ARRIVED` lands within 1 s of the first at-store frame each time.)
   - desk 10-11: REFUTED on 8.101.8 (0.01-min dwells, the card had none of the anchors) → #1306 anchors branch 1 on the at-store CARD (not a survey line); re-arm: on a post-#1306 build, restaurant dwell > 0 and `PICKUP_ARRIVED` lands on the first at-store frame (whichever survey copy it shows).
   Triage source: first-line blame 2026-10-05 (`5894e98e5`, original README L104).
 
@@ -386,6 +396,9 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
       1 fell to UNKNOWN. Every card lists the already-owned order beside the new one (whole route) — so on a
       post-#1302 build watch that an explicit add-on Accept adds ONE dropoff, not one per listed row (open
       follow-up). The drawer give-up is ANY-of the delta signatures since the 10-11 follow-ups PR.
+    - desk 10-18: UNEXERCISED (no `+N stop` text). A side effect of the branch-1 delta reject was found: the "Very busy"
+      boost badge renders a standalone `+$1.50` node on an ordinary TOTAL card, which matches the reject's `^\+\$...$`
+      pattern, so a complete card falls to UNKNOWN (10-17 15:40:13 and 17:00:35). The 15:40 offer was never recorded.
   Triage source: first-line blame 2026-09-26 (`e087c3e4a`, original README L357).
 
 - [active] **🆕 NEW — confirm-pickup sheet masks the customer (#1309).**
@@ -477,6 +490,12 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
     - desk 09-27: NOT EXERCISED — no refused or returned delivery; Σ realizedPay = reportedEarnings to the cent.
     - desk 09-29: NOT EXERCISED — no refused/returned delivery; Σ realizedPay = reported to the cent on all 7 summary
       sessions ($241.59).
+    - desk 10-18: EXERCISED and the money reaches the report. 10-16 session 1034: an alcohol drop that could not be handed
+      over became a return (`Can't hand order to customer`, then `Return to store`, `Total return pay: $16.68`). The original
+      drop folded at $33.35 (offer pay) and the return leg folded as its own row at $16.68 (`RECEIPT_TOTAL`, from its own
+      receipt); Σ = $50.03 = the dash summary. The shape is still unmodelled: the return was minted as a NEW job with a
+      null store, no offer and a `DELIVERY_NAV_STARTED` to the store, so the dash counts 2 deliveries for 1 delivery plus 1
+      return, and the 10 frames of the return sheet stay UNKNOWN (all masked).
   Triage source: first-line blame 2026-09-15 (`5e1bf3416`, original README L391).
 
 - [active] **🆕 NEW — a stacked job's two drops must not be charged the same miles twice (#1108).** **Desk:** per
@@ -627,6 +646,12 @@ Ordered by first-line blame date; source order breaks ties. The five §1 proposa
     - desk 09-29: the deliberate fast/slow repro is not identifiable in the pull. 42/42 declines inferred from the
       confirm sheet (1.55–10.59 s); the 2 lost declines are the flow-less `on_dash_map` dwell (20.46 s; 15.12 s ending
       in a replace), not the tap race. 0/2.
+    - desk 10-18: deliberate repro not identifiable. 34 `OFFER_DECLINED`, 3 `OFFER_TIMEOUT`. One timeout carries the
+      bug's signature and needs the dev's account: 10-18 08:36:24 offer `b8c16588`, two heads-up Decline taps (08:36:26,
+      08:36:47), the confirm sheet admitted after each (08:36:28, 08:36:48), the card back between them, then
+      `waiting_for_offer` at 08:37:05 resolved `OFFER_TIMEOUT` (17 s after the last sighting, past the 15 s window). The
+      other two: 10-18 08:36:11 (the `OFFER_EXPIRY` timer, 3 s after a sheet sighting) and 10-17 18:37:03, a real accept
+      (#1119 class).
   Triage source: first-line blame 2026-09-13 (`bd4c8a71b`, original README L527).
 
 - [active] **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
