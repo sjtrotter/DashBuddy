@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
@@ -17,10 +18,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 import java.util.Locale
 import org.junit.Before
 import org.junit.After
@@ -48,7 +45,7 @@ class HudScreenTest {
 
     private fun state(
         flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
-        profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false,
+        profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false, cashTipCue: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
             Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
@@ -56,7 +53,7 @@ class HudScreenTest {
         earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
         net = profit?.let { SessionNet("live", it, 0.0, 0.0, 0.0, 0.0) },
         countExpenses = false, goal = goal, todayProfit = today,
-        hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true),
+        hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cashTipCue,
     )
 
     private fun show(model: @Composable () -> HudUiState = { state() }, onDock: (DockKind) -> Unit = {}) {
@@ -228,11 +225,16 @@ class HudScreenTest {
         compose.onNodeWithTag("hud.ribbon").assertIsDisplayed()
     }
 
-    private class MutableClock(var millis: Long) : Clock() {
-        override fun getZone(): ZoneId = ZoneOffset.UTC
-        override fun withZone(zone: ZoneId): Clock = this
-        override fun instant(): Instant = Instant.ofEpochMilli(millis)
-        override fun millis(): Long = millis
+    @Test fun `door state accents the cash tip block`() {
+        val door = StateCardModel.DropoffArrived(JobFacts("Store", null, null, null), T0)
+        var clicked: DockKind? = null
+        show({ state(flow = Flow.TaskDropoffArrived, cashTipCue = door.cuesCashTip) }, { clicked = it })
+        compose.onNodeWithTag("hud.dock.CASH_TIP").assertIsEnabled()
+            .assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Suggested"))
+            .performClick()
+        settle()
+        assertEquals(DockKind.CASH_TIP, clicked)
     }
+
     private companion object { const val T0 = 1_700_000_000_000L }
 }

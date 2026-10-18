@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.pay.displayLabel
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.feature.bubble.hud.moneyOrEmpty
 
 // ---------------------------------------------------------------------------
 // PostTask — receipt-style summary + body (#943 split of FlowCardItem.kt —
@@ -25,8 +26,8 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
 internal fun postTaskSummary(snap: FlowCardSnapshot.PostTask): String {
-    val store = snap.storeName?.let { "$it · " } ?: ""
-    return store + Formats.money(snap.totalPay)
+    val store = snap.storeName?.let { "$it " } ?: ""
+    return store + moneyOrEmpty(snap.totalPay)
 }
 
 /**
@@ -40,7 +41,7 @@ internal fun PostTaskBody(snap: FlowCardSnapshot.PostTask) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        HeroBig(Formats.money(snap.totalPay))
+        HeroBig(moneyOrEmpty(snap.totalPay))
         Caption(stringResource(R.string.flow_card_post_task_delivery_total))
         snap.parsedPay?.let { pay ->
             Column(

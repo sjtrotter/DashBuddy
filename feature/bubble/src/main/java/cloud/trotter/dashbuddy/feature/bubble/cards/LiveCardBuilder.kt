@@ -85,7 +85,7 @@ object LiveCardBuilder {
                     jobId = activeTask?.jobId ?: region.activeJob?.jobId ?: "unknown",
                     taskId = activeTask?.taskId,
                     storeName = activeTask?.storeName,
-                    totalPay = pt?.totalPay ?: 0.0,
+                    totalPay = pt?.totalPay,
                     parsedPay = pt?.parsedPay,
                     sessionEarningsAtCompletion = pt?.sessionEarnings,
                 )
