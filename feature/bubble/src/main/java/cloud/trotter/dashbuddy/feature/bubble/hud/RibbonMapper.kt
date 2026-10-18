@@ -15,6 +15,9 @@ object RibbonMapper {
             val kind = card.kind()
             if (kind == RibbonKind.WAIT) continue
             // An open job (the active card) runs to now and absorbs any job card that starts after it.
+            // The ribbon is one dash's picture; only the dev-only MERGED two-dash view can put another
+            // dash's completed job after the live card's start, and that job is not drawn here (accepted
+            // in PR #1345 round 3 rather than splitting the live job around a foreign one).
             if (jobs.isNotEmpty() && jobs.last().endAt == null) continue
             val start = maxOf(dashStartedAt, card.phaseStartedAt, jobs.lastOrNull()?.endAt ?: dashStartedAt)
             val end = endOf(card)

@@ -197,4 +197,13 @@ class FormatsTest {
         Locale.setDefault(Locale.GERMANY)
         assertEquals("66,7%", Formats.percent(2.0 / 3.0, decimals = 1))
     }
+
+    @Test
+    fun `cents agrees with money on half cents and float noise`() {
+        for (v in listOf(-1.005, -0.005, 0.005, 1.005, 2.675, 100.01, 63.01, 0.0, -0.0, 19.999, -19.995)) {
+            val rendered = Formats.money(v)
+            val fromMoney = rendered.replace("$", "").replace(".", "").toLong()
+            org.junit.Assert.assertEquals("money renders $rendered for $v", fromMoney, Formats.cents(v))
+        }
+    }
 }

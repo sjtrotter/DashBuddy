@@ -73,4 +73,10 @@ class GoalPillMapperTest {
     fun `a negative half cent rounds away from zero like the money formatter`() {
         assertEquals(Formats.money0(2.0), (GoalPillMapper.map(1.0, -0.005) as GoalPillState.InProgress).remaining)
     }
+
+    @Test
+    fun `a loss just under a cent and a half rounds as money renders it`() {
+        // money(-1.005) renders -$1.01, so $1 goal less that loss is $2.01, which is $3 to go.
+        assertEquals(Formats.money0(3.0), (GoalPillMapper.map(1.0, -1.005) as GoalPillState.InProgress).remaining)
+    }
 }

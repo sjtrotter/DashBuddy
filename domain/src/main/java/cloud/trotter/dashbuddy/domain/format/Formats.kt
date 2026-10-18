@@ -61,6 +61,16 @@ object Formats {
     fun money3(amount: Double): String = signedMoney(amount, decimals = 3)
 
     /**
+     * Whole signed cents, rounded exactly as [money] renders them: through the same `%.2f` on the
+     * magnitude, so a figure that money shows as `-$1.01` is `-101` here, never `-100`. Arithmetic
+     * on money (a remainder to a goal, a split) goes through this, never through `* 100` on a double.
+     */
+    fun cents(amount: Double): Long {
+        val magnitude = String.format(Locale.ROOT, "%.2f", abs(amount)).replace(".", "").toLong()
+        return if (amount < 0.0) -magnitude else magnitude
+    }
+
+    /**
      * The one money renderer (#1034): `$` first, then the magnitude, with a `-` **before** the
      * symbol when the value is negative.
      *
