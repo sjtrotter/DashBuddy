@@ -118,6 +118,23 @@ Dated field reports continue below; checklist policy is in CHECKLIST §0.
   be told from an expiry without the click envelope, and that click fell UNKNOWN because `screenIs` no longer held the
   sheet. Would need a capture of the sheet after the switch is flipped, and the click envelope of the final tap, to
   confirm either. Related: #1104 (click-vs-window race), #1119 (accept-as-timeout, the mirror case).
+- **Why the pause flow (and, the dev reports, the offer card's shopping list) never lands in UNKNOWN (desk check
+  10-18).** From 08:36:52 to 08:37:01 the pipeline took a tree snapshot of the main window every few hundred ms
+  (98 to 100 nodes) and admitted none of them: no `Captured screen` line, so the frame gate dropped each as a duplicate
+  of the last admitted screen, `side_nav_drawer` (08:36:51.58). The drawer rule's anchors are the
+  `side_nav_content_container` id plus the words ratings, promos, preferences, and those nodes sit in the main
+  activity's tree whether the drawer is open or closed: every `offer_popup` (41/41), `idle_map` (31/31),
+  `waiting_for_offer` (26/26) and `on_dash_map` (4/4) capture in this pull satisfies the drawer rule's `require`. So
+  the drawer rule (priority 200) is a catch-basin for any main-window frame no higher rule claims, and the frame gate
+  then dedupes everything after it by identity. Of the 82 `side_nav_drawer` captures in the pull, only 23 show an
+  open drawer (its container inset to top 120 / right 641 and the scrim container clickable); 54 are closed-drawer
+  frames of something else (one is the offer card mid-dismissal, carrying `Decline`). Hypotheses: (a) the same
+  mechanism hides the shopping list opened from a Compose offer card, with `offer_popup` as the claiming rule (the
+  card's anchors stay in the tree under the list sheet, so the identity never changes); a capture is needed to
+  confirm. (b) An open-drawer discriminator exists in the tree (the scrim's click action, the inset bounds), but it
+  also appears in frames higher rules win (idle_map 9, ratings 7, offer_popup 4), so tightening the drawer rule is a
+  design choice, not a one-liner. (c) The deeper shape is structural: identity dedup on a recognized target hides
+  every novel surface rendered in the same window as a matched rule's anchors, and the census only ever sees UNKNOWN.
 - 7 `PICKUP_NAV_STARTED` rows since 09-20 carry `storeName: "Unknown"` one frame before the real name (10-16 13:20:26,
   10-18 07:57:45 in this pull). Row-inert; noted for the event log's readability.
 
