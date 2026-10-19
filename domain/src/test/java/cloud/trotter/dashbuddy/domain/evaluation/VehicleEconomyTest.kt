@@ -93,8 +93,11 @@ class VehicleEconomyTest {
             includeDepreciation = false, purchasePrice = 25_000.0, totalLifetimeMi = 180_000.0,
             insuranceDeltaPerMonth = 0.0,
             userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PURCHASE_PRICE, EconomyField.INSURANCE_DELTA))
+        assertEquals(original.copy(wear = original.wear.copy(tireSetCost = 720.0),
+            fixed = original.fixed.copy(purchasePrice = 25_000.0, insuranceDeltaPerMonth = 0.0)), EconomyFieldGroups.updateProfile(original, draft))
         assertEquals(original.copy(wear = original.wear.copy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0),
-            fixed = FixedCosts(false, 25_000.0, 180_000.0, 0.0)), EconomyFieldGroups.updateProfile(original, draft))
+            fixed = original.fixed.copy(purchasePrice = 25_000.0, insuranceDeltaPerMonth = 0.0)),
+            EconomyFieldGroups.updateProfile(original, draft.copy(userSetFields = draft.userSetFields + EconomyField.TIRE_LIFETIME)))
         assertEquals(original, EconomyFieldGroups.updateProfile(original, UserEconomy(userSetFields = setOf(EconomyField.PHONE_PLAN_TOTAL))))
     }
 
@@ -108,7 +111,7 @@ class VehicleEconomyTest {
         val draft = UserEconomy(chainCost = 70.0, chainLifeMi = 4_000.0, batteryCost = 600.0, batteryLifeMi = 20_000.0,
             userSetFields = setOf(EconomyField.CHAIN_COST, EconomyField.BATTERY_COST))
         val result = EconomyFieldGroups.updateProfile(EBike(), draft)
-        assertEquals(WearProfile(chainCost = 70.0, chainLifeMi = 4_000.0, batteryCost = 600.0, batteryLifeMi = 20_000.0), result.wear)
+        assertEquals(WearProfile(chainCost = 70.0, batteryCost = 600.0), result.wear)
     }
 
     @Test fun `a zero mpg falls back to the class default`() {

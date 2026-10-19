@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.feature.setup.wizard
 
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.toVehicleProfile
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
@@ -527,6 +528,29 @@ class WizardViewModelTest {
         assertEquals(950.0, saved.firstValue.wear.tireSetCost)
         assertEquals(false, saved.firstValue.fixed.includeDepreciation)
         assertEquals(35.0, saved.firstValue.fixed.insuranceDeltaPerMonth)
+    }
+
+    @Test
+    fun `a half-set pair keeps the other half following the preset across a class change`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val active = Vehicle("active", "Migrated sedan", 1L, GasCar(GasCarClass.SEDAN,
+            wear = WearProfile(tireSetCost = 900.0)))
+        whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(active), active.id, true)))
+        val shared = cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy()
+        whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy.from(
+            cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs.from(active.profile, shared), shared)))
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+
+        vm.updateVehicleClass(VehicleClass.SUV)
+
+        val state = vm.state.value
+        assertNull(state.toVehicleProfile().wear.tireLifetimeMi)
+        assertEquals(900.0, state.toVehicleProfile().wear.tireSetCost)
+        assertEquals(VehiclePresets.cars.getValue(GasCarClass.SUV).wear.tireLifetimeMi!!,
+            state.toUserEconomy().tireLifetimeMi, 0.0)
     }
 
     @Test
