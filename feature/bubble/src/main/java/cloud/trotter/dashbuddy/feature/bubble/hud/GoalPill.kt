@@ -84,7 +84,7 @@ fun GoalPill(
     val description = when (state) {
         GoalPillState.NoGoal -> stringResource(R.string.hud_goal_set)
         GoalPillState.Met -> stringResource(R.string.hud_goal_cd_met)
-        is GoalPillState.InProgress -> stringResource(R.string.hud_goal_cd_progress, state.remaining)
+        is GoalPillState.InProgress -> stringResource(R.string.hud_goal_to_go, state.remaining)
     }
     val clickLabel = stringResource(R.string.hud_goal_click_label)
     val expanded = text != null && text != GoalPillState.Met
@@ -114,7 +114,7 @@ fun GoalPill(
                         style = MaterialTheme.typography.labelMedium, color = c.text2)
                     is GoalPillState.InProgress -> Column {
                         Text(text.remaining, style = if (compact) AppTheme.num.mdNum else AppTheme.num.lgNum, color = c.text)
-                        Text(stringResource(R.string.hud_goal_to_go), style = MaterialTheme.typography.labelSmall, color = c.text2)
+                        Text(stringResource(R.string.hud_goal_to_go_label), style = MaterialTheme.typography.labelSmall, color = c.text2)
                     }
                 }
             }

@@ -36,9 +36,9 @@
     <string name="hud_unit_min">min</string>
     <string name="hud_hero_profit">Profit</string>
     <string name="hud_goal_set">Set goal</string>
-    <string name="hud_goal_to_go">to go</string>
+    <string name="hud_goal_to_go_label">to go</string>
     <string name="hud_goal_click_label">Edit goal</string>
-    <string name="hud_goal_cd_progress">%1$s to go</string>
+    <string name="hud_goal_to_go">%1$s to go</string>
     <string name="hud_goal_cd_met">Goal met</string>
     <string name="hud_dock_cash_tip">Cash tip</string>
     <string name="hud_dock_expense">Expense</string>
@@ -241,4 +241,12 @@
     <string name="vehicle_type_scooter">Scooter or moped</string>
     <string name="vehicle_type_e_bike">E-bike</string>
     <string name="vehicle_type_bicycle">Bicycle</string>
+    <!-- S3c: daily goal sheet (13b). -->
+    <string name="hud_goal_title">Daily goal</string>
+    <string name="hud_goal_clear">No goal</string>
+    <string name="hud_goal_minus">Decrease goal</string>
+    <string name="hud_goal_plus">Increase goal</string>
+    <string name="hud_goal_profit_today">Profit today %1$s</string>
+    <string name="hud_goal_met">Met</string>
+    <string name="hud_goal_failed">Not saved. Try again.</string>
 </resources>
