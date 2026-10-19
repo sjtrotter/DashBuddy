@@ -188,8 +188,6 @@
     <string name="hud_odometer_active">Active</string>
     <string name="hud_odometer_remove_vehicle">Remove %1$s</string>
     <string name="hud_odometer_add_vehicle">Add vehicle</string>
-    <string name="hud_odometer_vehicle_name">Vehicle name</string>
-    <string name="hud_odometer_add_named">Add %1$s</string>
     <string name="hud_odometer_no_vehicle">No vehicle. Add one to log its odometer.</string>
     <string name="hud_odometer_last">Last %1$s mi, %2$s</string>
     <string name="hud_odometer_first">First reading for %1$s</string>

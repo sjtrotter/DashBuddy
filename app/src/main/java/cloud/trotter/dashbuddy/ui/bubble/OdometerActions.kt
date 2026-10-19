@@ -69,11 +69,6 @@ internal class OdometerActions(
             true
         }
     }
-    fun add(name: String) = write(WriteKind.VEHICLE) {
-        garage.addVehicle(name, clock.millis())
-        changed.emit(VehicleChange.ADDED)
-        true
-    }
     fun select(id: String) = write(WriteKind.VEHICLE) {
         // A refused select (a stale row) changes nothing: not a vehicle change, not a success.
         val written = garage.selectVehicle(id)

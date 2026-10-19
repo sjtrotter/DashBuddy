@@ -78,16 +78,15 @@ class OdometerSheetTest {
     }
 
     private var saved = 0
-    private var added: String? = null
     private var addOpened = false
-    private var visible by mutableStateOf(true)
     private fun show(hostModifier: Modifier = Modifier.width(352.dp).height(350.dp)) {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Column(hostModifier) {
-                        if (visible) OdometerSheet(model, { model = model.copy(vehicleName = it) },
-                            {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {}, {})
+                        OdometerSheet(model, onDigit = {}, onBackspace = {}, onSave = { saved++ },
+                            onSwitchVehicle = {}, onSelectVehicle = {}, onShowAddVehicle = { addOpened = true },
+                            onBack = {}, onRetireVehicle = {})
                     }
                 }
             }
@@ -132,36 +131,28 @@ class OdometerSheetTest {
         compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.identityName)) }; settle()
         compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
     }
-    @Test fun `add is disabled while the garage is unreadable`() {
-        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
-            page = OdometerPage.ADD_VEHICLE, vehicleName = "Civic", writeFailed = OdometerWriteFailure.UNREADABLE)
-        show()
-        compose.onNodeWithTag("vehicle.name").assertIsNotEnabled()
-        compose.onNodeWithTag("vehicle.save").assertIsNotEnabled().performClick()
-        assertNull(added)
-        compose.runOnIdle { model = model.copy(writeFailed = OdometerWriteFailure.NONE) }; settle()
-        compose.onNodeWithTag("vehicle.name").assertIsEnabled()
-        compose.onNodeWithTag("vehicle.save").assertIsEnabled().performClick()
-        assertEquals("Civic", added)
-    }
+
     @Test fun `point key disabled`() {
         show()
         compose.onNodeWithTag("keypad.point").assertIsNotEnabled()
         compose.onNodeWithTag("keypad.backspace").assertIsEnabled()
     }
-    @Test fun `no vehicle shows add vehicle form`() {
-        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle, page = OdometerPage.ADD_VEHICLE)
-        show()
-        compose.onNodeWithTag("vehicle.name").assertIsDisplayed()
-        compose.onNodeWithTag("odometer.save").assertDoesNotExist()
-    }
+
     @Test fun `an unreadable garage says so`() {
         model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
-            page = OdometerPage.ADD_VEHICLE, writeFailed = OdometerWriteFailure.UNREADABLE)
+            page = OdometerPage.VEHICLES, writeFailed = OdometerWriteFailure.UNREADABLE)
         show()
         compose.onNodeWithText("Saved vehicles could not be read.").assertIsDisplayed()
         compose.onNodeWithText("Could not save. Try again.").assertDoesNotExist()
     }
+    @Test fun `switcher Add vehicle invokes the navigation callback`() {
+        model = model.copy(page = OdometerPage.VEHICLES)
+        show()
+        compose.onNodeWithTag("vehicle.add").performClick()
+        assertTrue(addOpened)
+        compose.onNodeWithTag("vehicle.civic").assertIsDisplayed()
+    }
+
     @Test fun `fewer than tracked shows add vehicle link`() {
         model = model.copy(check = OdometerCheck.FewerThanTracked(12, 57.0, clock.millis))
         show()
@@ -200,27 +191,6 @@ class OdometerSheetTest {
         compose.onNodeWithText("Last 52,388 mi, ${formatShortDate(since)}").assertIsDisplayed()
         compose.runOnIdle { model = model.copy(readingMiles = 52_400, check = OdometerCheck.Ok(12, since)) }; settle()
         compose.onNodeWithText("+12 mi since ${formatShortDate(since)}").assertIsDisplayed()
-    }
-    @Test fun `add vehicle invokes callback with trimmed name`() {
-        model = model.copy(page = OdometerPage.ADD_VEHICLE)
-        show()
-        compose.onNodeWithTag("vehicle.name").performTextInput("  Civic  "); settle()
-        compose.onNodeWithText("Add Civic").assertExists()
-        compose.onNodeWithTag("vehicle.save").performClick()
-        assertEquals("Civic", added)
-    }
-
-    @Test fun `the vehicle name draft survives the sheet leaving composition`() {
-        model = model.copy(page = OdometerPage.ADD_VEHICLE)
-        show()
-        compose.onNodeWithTag("vehicle.name").performTextInput("Civic"); settle()
-        assertEquals("Civic", model.vehicleName)
-        compose.runOnIdle { visible = false }; settle()
-        compose.onNodeWithTag("vehicle.name").assertDoesNotExist()
-        compose.runOnIdle { visible = true }; settle()
-        compose.onNodeWithTag("vehicle.name").assertTextContains("Civic")
-        compose.onNodeWithTag("vehicle.save").performClick()
-        assertEquals("Civic", added)
     }
 
 }

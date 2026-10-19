@@ -19,6 +19,7 @@ internal class OdometerHud(
     private val viewModel: BubbleViewModel,
     private val entry: OdometerEntryState,
     private val closeLog: () -> Unit,
+    private val onAddVehicle: () -> Unit,
 ) {
     val open: Boolean get() = entry.open
 
@@ -27,6 +28,10 @@ internal class OdometerHud(
         if (!viewModel.odometerLoaded.value) return
         closeLog()
         val garage = viewModel.garage.value
+        if (garage?.unretired?.isEmpty() == true) {
+            onAddVehicle()
+            return
+        }
         if (entry.show(activeVehicle = garage?.active != null, anyVehicles = garage?.unretired?.isNotEmpty() == true)) {
             viewModel.reopenOdometer()
         }
@@ -56,7 +61,6 @@ internal class OdometerHud(
         LaunchedEffect(viewModel, entry) {
             viewModel.odometerVehicleChanged.collect { change ->
                 when (change) {
-                    VehicleChange.ADDED -> entry.vehicleAdded()
                     VehicleChange.SWITCHED -> entry.vehicleSwitched()
                     is VehicleChange.RETIRED -> {
                         val garage = viewModel.garageSnapshot()
@@ -85,18 +89,16 @@ internal class OdometerHud(
         Column(Modifier.fillMaxSize()) {
             OdometerSheet(OdometerSheetModel(vehicle, garage?.unretired.orEmpty(), entry.reading, last, check, entry.page, saving,
                 writeFailed = if (garage?.readable == false) OdometerWriteFailure.UNREADABLE else writeFailed,
-                vehicleName = entry.vehicleName, gpsLoaded = gpsTotal != null),
-                onVehicleNameChange = { entry.vehicleName = it },
+                gpsLoaded = gpsTotal != null),
                 onDigit = entry::digit, onBackspace = entry::backspace,
                 onSave = { entry.reading?.let(viewModel::saveOdometerReading) },
-                onAddVehicle = viewModel::addVehicle,
                 onSwitchVehicle = { entry.page = OdometerPage.VEHICLES },
                 onSelectVehicle = { id ->
                     if (id == vehicle?.id) {
                         if (entry.switcherFromRow) entry.vehicleSwitched() else entry.page = OdometerPage.READING
                     } else viewModel.selectVehicle(id)
                 },
-                onShowAddVehicle = { entry.showAddVehicle() }, onBack = ::back,
+                onShowAddVehicle = onAddVehicle, onBack = ::back,
                 onRetireVehicle = viewModel::retireVehicle)
         }
     }
@@ -150,9 +152,13 @@ internal class OdometerHud(
 }
 
 @Composable
-internal fun rememberOdometerHud(viewModel: BubbleViewModel, closeLog: () -> Unit): OdometerHud {
+internal fun rememberOdometerHud(
+    viewModel: BubbleViewModel,
+    closeLog: () -> Unit,
+    onAddVehicle: () -> Unit,
+): OdometerHud {
     val entry = rememberOdometerEntryState()
-    val hud = remember(viewModel, entry) { OdometerHud(viewModel, entry, closeLog) }
+    val hud = remember(viewModel, entry, closeLog, onAddVehicle) { OdometerHud(viewModel, entry, closeLog, onAddVehicle) }
     hud.ObserveEntry()
     return hud
 }
