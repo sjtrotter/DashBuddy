@@ -5,9 +5,9 @@ import org.junit.Test
 
 class MileageReconciliationTest {
     private fun reading(at: Long, miles: Int, gps: Double?, id: String = "civic") =
-        VehicleOdometerReading(id, LastOdometerReading(miles, gps, at))
+        VehicleOdometerReading(id, LastOdometerReading(miles, gps, at * 60_000))
     private val pair = listOf(reading(90, 52_329, 100.0), reading(210, 52_388, 157.3))
-    private fun compare(rows: List<VehicleOdometerReading> = pair) = MileageReconciliation.between(rows, "civic", 100, 200)
+    private fun compare(rows: List<VehicleOdometerReading> = pair) = MileageReconciliation.between(rows, "civic", 100 * 60_000L, 200 * 60_000L)
     @Test fun `pair brackets the dash`() {
         val result = compare(pair + reading(80, 52_000, 0.0) + reading(220, 55_000, 500.0))!!
         assertEquals(59, result.carMiles)
@@ -40,4 +40,23 @@ class MileageReconciliationTest {
     @Test fun `exact boundary readings bracket the dash`() {
         assertEquals(59, compare(listOf(reading(100, 52_329, 100.0), reading(200, 52_388, 157.3)))!!.carMiles)
     }
+    @Test fun `a reading in the first ten minutes brackets the start`() {
+        assertEquals(59, compare(listOf(reading(108, 52_329, 100.0), pair[1]))!!.carMiles)
+        assertEquals(59, compare(listOf(reading(110, 52_329, 100.0), pair[1]))!!.carMiles)
+    }
+    @Test fun `a reading past the window does not`() {
+        assertNull(compare(listOf(reading(111, 52_329, 100.0), pair[1])))
+    }
+    @Test fun `the nearest start reading wins`() {
+        val rows = listOf(reading(98, 52_329, 100.0), reading(108, 52_350, 120.0), pair[1])
+        assertEquals(59, compare(rows)!!.carMiles)
+        assertEquals(57.3, compare(rows)!!.trackedMiles, 0.00001)
+        // A closer reading after the start wins; an equal distance goes to the earlier.
+        assertEquals(38, compare(listOf(reading(91, 52_329, 100.0), rows[1], pair[1]))!!.carMiles)
+        assertEquals(59, compare(listOf(rows[0], reading(102, 52_350, 120.0), pair[1]))!!.carMiles)
+    }
+    @Test fun `a lower end reading is null`() {
+        assertNull(compare(listOf(pair[0], reading(210, 52_270, 157.3))))
+    }
+
 }

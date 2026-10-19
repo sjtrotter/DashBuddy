@@ -17,14 +17,15 @@ class RecordFoldsOdometerTest {
     }
     @Test fun `folds to nothing with a session context present`() {
         val result = RecordFolds.foldEvent(event("dash"), context, 0.4)
-        assertEquals(FoldOutcome(context = context), result)
-        assertSame(context, result.context)
+        assertEquals(FoldOutcome(), result)
+        assertNull(result.context)
+        assertNull(result.skip)
     }
     @Test fun `is a bookkeeping event`() {
         // An alien metadata stamp must bypass measureSession even for a session-attributed event.
         val result = RecordFolds.foldEvent(event("dash"), context, 0.4)
-        assertEquals(2.0, result.context!!.lastOdometer!!, 0.0)
-        assertEquals(110L, result.context.lastEventAt)
+        assertEquals(FoldOutcome(), result)
+        assertNull(result.context)
         assertNull(result.skip)
     }
 }

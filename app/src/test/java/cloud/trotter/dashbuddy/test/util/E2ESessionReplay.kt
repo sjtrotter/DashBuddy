@@ -166,9 +166,7 @@ class E2ESessionReplay(
     val projector: AnalyticsProjector
 
     // ── Preferences (real data sources + repositories over memory stores) ──────────────────────
-    val appPreferences = AppPreferencesRepository(AppPreferencesDataSource(durable?.app ?: ReplayEdges.MemoryPreferences()),
-        cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository(
-            cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource(ReplayEdges.MemoryPreferences())))
+    val appPreferences = AppPreferencesRepository(AppPreferencesDataSource(durable?.app ?: ReplayEdges.MemoryPreferences()))
     val strategy = StrategyRepository(
         StrategyDataSource(durable?.strategy ?: ReplayEdges.MemoryPreferences()), appPreferences, dispatcher,
         TimeConstantRepository(db.timeConstantDao()),

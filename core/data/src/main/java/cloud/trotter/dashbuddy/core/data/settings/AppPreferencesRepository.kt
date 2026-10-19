@@ -1,7 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
-import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -19,7 +18,6 @@ import javax.inject.Singleton
 @Singleton
 class AppPreferencesRepository @Inject constructor(
     private val dataSource: AppPreferencesDataSource,
-    private val garageRepository: GarageRepository,
 ) {
     // ============================================================================================
     // STREAMS
@@ -399,7 +397,6 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun clearPreferences() {
         Timber.tag(TAG).w("Clearing App Preferences")
         dataSource.clear()
-        garageRepository.clear()
     }
 
     private companion object {

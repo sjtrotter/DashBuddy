@@ -8,6 +8,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
@@ -37,9 +38,16 @@ class OdometerNoticeTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     @Test fun `save notice expires at ten seconds without Undo`() {
         val notice = OdometerNoticeModel(52_388, clock.millis)
+        assertFalse(notice.visibleAt(notice.shownAt - 1))
+        assertTrue(notice.visibleAt(notice.shownAt))
+        assertTrue(notice.visibleAt(notice.shownAt + 9_999))
+        assertFalse(notice.visibleAt(notice.shownAt + 10_000))
         compose.setContent {
             DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) { OdometerNotice(notice) }
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    val now by rememberNow()
+                    if (notice.visibleAt(now)) OdometerNotice(notice)
+                }
             }
         }
         settle()

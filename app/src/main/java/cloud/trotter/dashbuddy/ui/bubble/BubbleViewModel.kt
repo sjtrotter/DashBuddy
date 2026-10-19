@@ -81,19 +81,20 @@ class BubbleViewModel @Inject constructor(
     clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
 
-    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, odometerRepository, clock)
+    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
     val vehicles = garageRepository.vehicles.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val activeVehicle = garageRepository.activeVehicle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val lastReading = combine(activeVehicle, odometerReadings) { vehicle, readings ->
-        readings.filter { it.vehicleId == vehicle?.id }.maxByOrNull { it.reading.occurredAt }?.reading
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val lastReading = activeVehicle.flatMapLatest { vehicle ->
+        vehicle?.let { odometerReadingRepository.lastReading(it.id) } ?: flowOf(null)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-    val gpsTotalMiles = odometerActions.gpsTotalMiles
+    val gpsTotalMiles = odometerRepository.totalMilesFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerSaving = odometerActions.saving
     val odometerWriteFailed = odometerActions.failed
     val odometerNotice = odometerActions.notice
-    fun refreshOdometer() = odometerActions.refresh()
+    fun reopenOdometer() = odometerActions.reopen()
     fun saveOdometerReading(miles: Int) { activeVehicle.value?.let { odometerActions.save(it.id, miles) } }
     fun addVehicle(name: String) = odometerActions.add(name)
     fun selectVehicle(id: String) = odometerActions.select(id)

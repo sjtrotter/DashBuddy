@@ -38,14 +38,20 @@ class OdometerRepository @Inject constructor(
      * the per-session anchor bookkeeping below changed.
      */
     private val _meters = MutableStateFlow(0.0)
-    @Volatile private var totalLoaded = false
+    private val totalLoaded = MutableStateFlow(false)
 
     /**
      * #1333: the fill-up stamp. DashBuddy's GPS odometer total (it runs only while a dash is
      * tracked, so it is not the car's odometer); null until the persisted total loads.
      * Never a measurement anchor.
      */
-    fun totalMiles(): Double? = if (totalLoaded) getCurrentMiles() else null
+    fun totalMiles(): Double? = readTotalMiles(_meters.value, totalLoaded.value)
+
+    val totalMilesFlow: Flow<Double?> = combine(_meters, totalLoaded, ::readTotalMiles)
+
+    // Both the live sheet and save-time stamp use this loaded gate and conversion.
+    private fun readTotalMiles(meters: Double, loaded: Boolean): Double? =
+        if (loaded) meters * metersToMiles else null
 
     /**
      * #438 B5: per-session start anchors (sessionId → odometer meters at session start). Replaces the
@@ -99,7 +105,7 @@ class OdometerRepository @Inject constructor(
         // single source of truth after startup; saves flow one-way to disk.
         scope.launch {
             _meters.value = odometerLocalDataSource.totalMetersFlow.first()
-            totalLoaded = true
+            totalLoaded.value = true
             // #438 B5: restore the current session's anchor so HUD miles survive a crash.
             val currentId = odometerLocalDataSource.currentSessionIdFlow.first()
             if (currentId != null) {

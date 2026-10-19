@@ -56,14 +56,14 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val savedNotice by viewModel.odometerNotice.collectAsStateWithLifecycle()
     val now by rememberNow()
     val entry = rememberOdometerEntryState()
-    val notice = savedNotice?.takeIf { now - it.savedAt in 0L until 10_000L }
+    val notice = savedNotice?.takeIf { it.visibleAt(now) }
     var acknowledgedNoticeAt by rememberSaveable { mutableStateOf<Long?>(null) }
     var seenVehicleId by rememberSaveable { mutableStateOf(vehicle?.id) }
     LaunchedEffect(savedNotice) {
         savedNotice?.let { saved ->
-            if (saved.savedAt != acknowledgedNoticeAt) {
+            if (saved.shownAt != acknowledgedNoticeAt) {
                 entry.open = false
-                acknowledgedNoticeAt = saved.savedAt
+                acknowledgedNoticeAt = saved.shownAt
             }
         }
     }
@@ -84,7 +84,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     var logOpen by rememberSaveable { mutableStateOf(false) }
     val openOdometer = {
         logOpen = false
-        viewModel.refreshOdometer()
+        viewModel.reopenOdometer()
         entry.show(vehicle != null)
     }
     val sheetBack = { entry.back(vehicle != null) }
@@ -138,7 +138,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
                     onSelectVehicle = { id ->
                         if (id == vehicle?.id) entry.page = OdometerPage.READING else viewModel.selectVehicle(id)
                     },
-                    onShowAddVehicle = { entry.page = OdometerPage.ADD_VEHICLE }, onBack = sheetBack)
+                    onShowAddVehicle = { entry.showAddVehicle() }, onBack = sheetBack)
             },
             undo = noticeContent,
             restingFooter = {

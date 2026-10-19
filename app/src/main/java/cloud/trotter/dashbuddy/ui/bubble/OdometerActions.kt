@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
-import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel
@@ -17,24 +16,22 @@ internal class OdometerActions(
     private val scope: CoroutineScope,
     private val garage: GarageRepository,
     private val readings: OdometerReadingRepository,
-    private val odometer: OdometerRepository,
     private val clock: Clock,
 ) {
     private val busy = MutableStateFlow(false)
     val saving = busy.asStateFlow()
     private val failure = MutableStateFlow(false)
     val failed = failure.asStateFlow()
-    private val gps = MutableStateFlow<Double?>(null)
-    val gpsTotalMiles = gps.asStateFlow()
     private val saved = MutableStateFlow<OdometerNoticeModel?>(null)
     val notice = saved.asStateFlow()
 
-    fun refresh() { gps.value = odometer.totalMiles(); failure.value = false }
-    fun save(vehicleId: String, miles: Int) = write {
-        refresh()
+    fun reopen() { failure.value = false }
+    fun save(vehicleId: String, miles: Int) {
         val at = clock.millis()
-        readings.record(vehicleId, miles, at)
-        saved.value = OdometerNoticeModel(miles, at)
+        write {
+            readings.record(vehicleId, miles, at)
+            saved.value = OdometerNoticeModel(miles, clock.millis())
+        }
     }
     fun add(name: String) = write { garage.addVehicle(name, clock.millis()) }
     fun select(id: String) = write { garage.selectVehicle(id) }

@@ -38,4 +38,23 @@ class GarageRepositoryTest {
         }
         assertEquals(2, repo.vehicles.first().size)
     }
+    @Test fun `an unreadable garage refuses to add`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("corrupt.preferences_pb") }))
+        val raw = """[{"id":"good","name":"Civic","createdAt":0},{"id":"bad","name":" ","createdAt":0}]"""
+        source.save(raw, "good")
+        val before = source.stored.first()
+        val repo = GarageRepository(source)
+        assertTrue(repo.vehicles.first().isEmpty())
+        assertNull(repo.activeVehicle.first())
+        val error = runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull()
+        assertTrue(error is IllegalStateException)
+        assertEquals("vehicles unreadable", error?.message)
+        assertEquals(before, source.stored.first())
+        val selectError = runCatching { repo.selectVehicle("good") }.exceptionOrNull()
+        assertTrue(selectError is IllegalStateException)
+        assertEquals("vehicles unreadable", selectError?.message)
+        assertEquals(before, source.stored.first())
+    }
+
 }

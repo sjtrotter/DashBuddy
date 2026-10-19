@@ -43,7 +43,7 @@ fun ColumnScope.OdometerSheet(
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
             OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.saving, onBack, onAddVehicle)
-            OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, onSelectVehicle, onShowAddVehicle, onBack)
+            OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack)
             OdometerPage.READING -> {
                 Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

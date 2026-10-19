@@ -37,12 +37,12 @@ class VehicleSwitcherTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val vehicles = listOf(Vehicle("civic", "Civic", 0), Vehicle("truck", "Truck", 0))
     private var active by mutableStateOf("civic")
-    private fun show() {
+    private fun show(saving: Boolean = false) {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Box(Modifier.width(352.dp).height(350.dp)) {
-                        VehicleSwitcher(vehicles, active, { active = it }, {}, {})
+                        VehicleSwitcher(vehicles, active, saving, { active = it }, {}, {})
                     }
                 }
             }
@@ -66,6 +66,14 @@ class VehicleSwitcherTest {
         assertEquals("truck", active)
         compose.onNodeWithTag("vehicle.truck").assertIsSelected()
         compose.onNodeWithTag("vehicle.civic").assertIsNotSelected()
+    }
+
+    @Test fun `rows and add are disabled while saving`() {
+        show(saving = true)
+        vehicles.forEach { compose.onNodeWithTag("vehicle.${it.id}").assertIsNotEnabled() }
+        compose.onNodeWithTag("vehicle.add").assertIsNotEnabled()
+        compose.onNodeWithTag("vehicle.truck").performClick(); settle()
+        assertEquals("civic", active)
     }
 
 }

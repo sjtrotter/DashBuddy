@@ -125,6 +125,7 @@ class BubbleViewModelTest {
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(odometerRepository.totalMilesFlow).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
         whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)

@@ -60,6 +60,7 @@ class BubbleGoalMarkTest {
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow<EvaluationConfig?>(null))
         whenever(events.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(odometer.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(odometer.totalMilesFlow).thenReturn(flowOf(null))
         whenever(dev.bubbleSessionMode).thenReturn(flowOf(BubbleSessionMode.Default))
         whenever(preferences.glanceMode).thenReturn(flowOf(false))
         whenever(preferences.odometerPrompts).thenReturn(flowOf(true))

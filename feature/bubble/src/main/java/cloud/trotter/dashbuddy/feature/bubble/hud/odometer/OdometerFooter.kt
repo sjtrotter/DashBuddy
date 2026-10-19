@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.ReconciledMileage
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -39,7 +40,7 @@ fun OdometerPrompt(enabled: Boolean, startedAt: Long?, endedAt: Long?, last: Las
     val now by rememberNow()
     val show = enabled && when {
         endedAt != null -> last == null || last.occurredAt < endedAt
-        startedAt != null -> now >= startedAt && now - startedAt < 600_000 && (last == null || last.occurredAt < startedAt)
+        startedAt != null -> now >= startedAt && now - startedAt < MileageReconciliation.START_WINDOW_MS && (last == null || last.occurredAt < startedAt)
         else -> false
     }
     if (show) TextButton(onClick = onOpen) { Text(stringResource(R.string.hud_odometer_prompt)) }
@@ -47,9 +48,6 @@ fun OdometerPrompt(enabled: Boolean, startedAt: Long?, endedAt: Long?, last: Las
 
 @Composable
 fun OdometerNotice(model: OdometerNoticeModel) {
-    val now by rememberNow()
-    if (now - model.savedAt in 0L until 10_000L) {
-        Text(stringResource(R.string.hud_odometer_saved, Formats.commaInt(model.readingMiles)),
-            color = AppTheme.colors.text, style = MaterialTheme.typography.bodyMedium)
-    }
+    Text(stringResource(R.string.hud_odometer_saved, Formats.commaInt(model.readingMiles)),
+        color = AppTheme.colors.text, style = MaterialTheme.typography.bodyMedium)
 }

@@ -19,17 +19,17 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, onSelect: (String) -> Unit, onAdd: () -> Unit, onBack: () -> Unit) {
+fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean, onSelect: (String) -> Unit, onAdd: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         OdometerTitle(stringResource(R.string.hud_odometer_vehicles), onBack)
         vehicles.forEach { vehicle ->
             Row(Modifier.fillMaxWidth().testTag("vehicle.${vehicle.id}").semantics { selected = vehicle.id == activeId }
-                .clickable(role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp)) {
+                .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp)) {
                 Text(vehicle.name, Modifier.weight(1f), color = AppTheme.colors.text)
                 if (vehicle.id == activeId) Text(stringResource(R.string.hud_odometer_active), color = AppTheme.colors.accent)
             }
         }
-        TextButton(onClick = onAdd, modifier = Modifier.testTag("vehicle.add")) {
+        TextButton(onClick = onAdd, enabled = !saving, modifier = Modifier.testTag("vehicle.add")) {
             Text(stringResource(R.string.hud_odometer_add_vehicle))
         }
     }
