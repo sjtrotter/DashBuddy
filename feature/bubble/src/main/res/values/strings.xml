@@ -217,5 +217,6 @@
     <string name="hud_cash_tip_failed">Cash tip not saved. Try again.</string>
     <string name="hud_undo_line">%1$s %2$s, %3$s</string>
     <string name="hud_undo_action">Undo</string>
+    <string name="hud_undo_failed">Undo failed, tap to retry</string>
     <string name="hud_cash_tip_pending">Cash tip %1$s pending</string>
 </resources>

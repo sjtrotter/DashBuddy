@@ -11,10 +11,14 @@ data class UndoStripModel(
     val token: Long,
     /** Feature string resource for what was logged; later sheets supply their own label. */
     val whatLabel: Int = R.string.hud_cash_tip_title,
+    val busy: Boolean = false,
+    val failed: Boolean = false,
 ) {
+    fun visible(now: Long): Boolean = busy || failed || now < deadline
+
     companion object { const val WINDOW_MS = 10_000L }
 }
 
 /** One rule shared by the host and its tests. */
 fun cashTipUndoWins(strip: UndoStripModel?, odometerToken: Long?, now: Long): Boolean =
-    strip != null && now < strip.deadline && (odometerToken == null || strip.token > odometerToken)
+    strip != null && strip.visible(now) && (odometerToken == null || strip.token > odometerToken)

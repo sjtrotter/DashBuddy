@@ -45,6 +45,38 @@ class UndoStripTest {
         compose.onNodeWithText("Undo").assertIsNotEnabled()
         assertEquals(1, taps)
     }
+    @Test fun `a failed undo keeps the strip and retries`() {
+        var model by mutableStateOf(UndoStripModel(700, "Panera Bread", 71, clock.millis + 10_000, 1))
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    if (undoStripVisible(model)) UndoStrip(model) {
+                        taps++
+                        model = model.copy(busy = true, failed = false)
+                    }
+                }
+            }
+        }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithText("Undo").assertIsNotEnabled()
+        compose.runOnIdle {
+            model = model.copy(busy = false, failed = true)
+            clock.millis += 10_001
+        }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("Undo failed, tap to retry").assertIsDisplayed()
+        compose.onNodeWithText("Undo").assertIsEnabled().performClick()
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
+        assertEquals(2, taps)
+        assertTrue(cashTipUndoWins(model, null, clock.millis))
+        // Another failed append also leaves an enabled retry.
+        compose.runOnIdle { model = model.copy(busy = false, failed = true) }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithText("Undo failed, tap to retry").assertIsDisplayed()
+        compose.onNodeWithText("Undo").assertIsEnabled()
+    }
     @Test fun `drain follows Compose frames and host hides exactly at deadline`() {
         show()
         val initial = progress()

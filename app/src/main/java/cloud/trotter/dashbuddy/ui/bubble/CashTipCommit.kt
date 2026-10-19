@@ -8,7 +8,7 @@ internal data class CashTipCommit(
     val deliveryId: Long,
     val sessionId: String?,
     val taskId: String,
-    val previousCashTip: Double,
-    val expectedCashTip: Double,
+    val previousCashTipCents: Long,
+    val expectedCashTipCents: Long,
     val entryId: Long,
 )

@@ -60,10 +60,10 @@ internal class CashTipHud(
         val failed by actions.failed.collectAsStateWithLifecycle()
         val pending by actions.pending.collectAsStateWithLifecycle()
         // Use the last confirmed value during projection lag, including removal validation.
-        val displayRows = rows.map { row -> pending[row.eventSequenceId]?.let { row.copy(cashTip = it.expectedCashTip) } ?: row }
+        val pendingCents = pending.values.associate { it.deliveryId to it.expectedCashTipCents }
         Column(Modifier.fillMaxSize()) {
-            CashTipSheet(CashTipSheetModel(displayRows, entry.selectedDeliveryId, entry.totalCents, entry.sign,
-                entry.page, entry.otherAmount, busy, failed),
+            CashTipSheet(CashTipSheetModel(rows, entry.selectedDeliveryId, entry.totalCents, entry.sign,
+                entry.page, entry.otherAmount, busy, failed, pendingCents),
                 onSelectDelivery = entry::select, onExpand = { entry.page = CashTipPage.EXPANDED },
                 onBack = ::back, onSign = { entry.sign = it }, onAmount = entry::add,
                 onOther = entry::other, onDigit = entry::digit, onPoint = entry::point,
@@ -98,9 +98,9 @@ internal class CashTipHud(
     }
 
     @Composable
-    fun Pending(taskId: String?): Double? {
+    fun Pending(taskId: String?): Long? {
         val pending by viewModel.cashTipActions.pending.collectAsStateWithLifecycle()
-        return pending.values.find { it.sessionId == sessionId && it.taskId == taskId }?.expectedCashTip
+        return pending.values.find { it.sessionId == sessionId && it.taskId == taskId }?.strip?.amountCents
     }
 }
 

@@ -7,6 +7,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
 import java.time.Clock
+import kotlin.math.roundToLong
 
 /** One append per confirmed tap. A projection lag never loses an earlier committed tip. */
 internal class CashTipActions(
@@ -22,55 +23,70 @@ internal class CashTipActions(
     val committed: SharedFlow<CashTipCommit> = events.asSharedFlow()
     private val undoState = MutableStateFlow<CashTipCommit?>(null)
     val undo = undoState.asStateFlow()
-    // Kept past the undo deadline until the projection acknowledges each target value.
+    // Keyed by the durable append id; only the latest expectation for each delivery stands.
+    // Kept past the undo deadline until the projection acknowledges that target value.
     private val pendingState = MutableStateFlow<Map<Long, CashTipCommit>>(emptyMap())
     val pending = pendingState.asStateFlow()
 
-    fun reopen() { failure.value = false }
+    fun reopen() { if (undoState.value?.strip?.failed != true) failure.value = false }
     @OptIn(ExperimentalCoroutinesApi::class)
     fun committedHandled() { events.resetReplayCache() }
 
-    fun previous(row: DeliveryRecord): Double = pendingState.value[row.eventSequenceId]?.expectedCashTip ?: row.cashTip ?: 0.0
+    fun previous(row: DeliveryRecord): Long = pendingState.value.values
+        .find { it.deliveryId == row.eventSequenceId }?.expectedCashTipCents
+        ?: ((row.cashTip ?: 0.0) * 100).roundToLong()
 
     fun commit(row: DeliveryRecord, enteredCents: Long, entryId: Long = 0) {
         if (writing.value || enteredCents == 0L || row.sessionId == null) return
         val previous = previous(row)
-        val next = previous + enteredCents / 100.0
-        if (!next.isFinite() || next < 0.0) return
+        val next = try { Math.addExact(previous, enteredCents) } catch (_: ArithmeticException) { return }
+        if (next < 0L) return
         write {
-            val sequenceId = corrections.adjustDelivery(row.eventSequenceId, row.sessionId, newCashTip = next)
+            val sequenceId = corrections.adjustDelivery(row.eventSequenceId, row.sessionId, newCashTip = next / 100.0)
             val model = CashTipCommit(UndoStripModel(enteredCents, row.storeName, sequenceId,
                 clock.millis() + UndoStripModel.WINDOW_MS, HudNoticeOrder.next()), row.eventSequenceId,
                 row.sessionId, row.taskId, previous, next, entryId)
-            pendingState.value = pendingState.value + (row.eventSequenceId to model)
+            expect(model)
             undoState.value = model
             events.emit(model)
         }
     }
 
     fun undo(model: CashTipCommit) {
-        if (writing.value || undoState.value != model || clock.millis() >= model.strip.deadline) return
-        // Consume synchronously: a double tap cannot append two reversals.
-        undoState.value = null
-        write {
-            val sequenceId = corrections.adjustDelivery(model.deliveryId, model.sessionId, newCashTip = model.previousCashTip)
-            pendingState.value = pendingState.value + (model.deliveryId to model.copy(
-                strip = model.strip.copy(committedSequenceId = sequenceId), expectedCashTip = model.previousCashTip))
+        if (writing.value || undoState.value != model || (!model.strip.failed && clock.millis() >= model.strip.deadline)) return
+        // Mark busy synchronously: a double tap cannot append two reversals. Retain for retry.
+        undoState.value = model.copy(strip = model.strip.copy(busy = true, failed = false))
+        write(onFailure = {
+            // Re-arm the strip even when a retry fails before Compose observes the busy state.
+            undoState.value = model.copy(strip = model.strip.copy(busy = false, failed = true,
+                token = HudNoticeOrder.next()))
+        }) {
+            val sequenceId = corrections.adjustDelivery(model.deliveryId, model.sessionId,
+                newCashTip = model.previousCashTipCents / 100.0)
+            expect(model.copy(strip = model.strip.copy(committedSequenceId = sequenceId,
+                amountCents = -model.strip.amountCents, busy = false, failed = false),
+                expectedCashTipCents = model.previousCashTipCents))
+            undoState.value = null
         }
     }
 
     fun undoExpired(model: CashTipCommit) {
-        if (undoState.value == model) undoState.value = null
+        if (undoState.value == model && !model.strip.busy && !model.strip.failed) undoState.value = null
     }
 
     fun projected(rows: List<DeliveryRecord>) {
         pendingState.value = pendingState.value.filterValues { pending ->
             val row = rows.find { it.eventSequenceId == pending.deliveryId }
-            row == null || kotlin.math.abs((row.cashTip ?: 0.0) - pending.expectedCashTip) >= 0.005
+            row == null || ((row.cashTip ?: 0.0) * 100).roundToLong() != pending.expectedCashTipCents
         }
     }
 
-    private fun write(action: suspend () -> Unit) {
+    private fun expect(model: CashTipCommit) {
+        pendingState.value = pendingState.value.filterValues { it.deliveryId != model.deliveryId } +
+            (model.strip.committedSequenceId to model)
+    }
+
+    private fun write(onFailure: () -> Unit = {}, action: suspend () -> Unit) {
         writing.value = true
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
@@ -80,6 +96,7 @@ internal class CashTipActions(
                 throw cancelled
             } catch (error: Exception) {
                 failure.value = true
+                onFailure()
                 Timber.tag("CashTip").w("%s", error.javaClass.simpleName)
             } finally { writing.value = false }
         }

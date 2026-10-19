@@ -7,6 +7,8 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipSheetModel
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipSign
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
@@ -43,16 +45,19 @@ class CashTipActionsTest {
         assertEquals(71L, model.strip.committedSequenceId)
         assertEquals(10_100L, model.strip.deadline)
         assertEquals(700L, model.strip.amountCents)
+        assertEquals(900L, model.expectedCashTipCents)
         assertEquals(12L, model.entryId)
         assertFalse(actions.failed.value)
     }
-    @Test fun `undo restores previous cash and consumes double tap synchronously`() = runTest {
+    @Test fun `undo restores previous cash and suppresses double tap synchronously`() = runTest {
         val actions = actions(backgroundScope)
         actions.commit(row(2.0), 700); runCurrent()
         val model = actions.undo.value!!
+        doSuspendableAnswer { delay(1); 72L }.whenever(events).appendUserEvent(any(), anyOrNull())
         actions.undo(model); actions.undo(model)
+        assertTrue(actions.undo.value!!.strip.busy)
+        advanceTimeBy(1); runCurrent()
         assertNull(actions.undo.value)
-        runCurrent()
         assertEquals(listOf(9.0, 2.0), adjustments().map { it.newCashTip })
     }
     @Test fun `undo without previous cash writes zero`() = runTest {
@@ -106,7 +111,7 @@ class CashTipActionsTest {
         val actions = actions(backgroundScope)
         actions.commit(row(), 500); runCurrent()
         actions.projected(listOf(row()))
-        assertEquals(5.0, actions.previous(row()), 0.0)
+        assertEquals(500L, actions.previous(row()))
         actions.commit(row(), 200); runCurrent()
         assertEquals(listOf(5.0, 7.0), adjustments().map { it.newCashTip })
         actions.projected(listOf(row(5.0)))
@@ -128,29 +133,102 @@ class CashTipActionsTest {
         assertFalse(actions.busy.value)
         assertNotNull(actions.undo.value)
     }
-    @Test fun `failed undo clears strip at once and reports failure`() = runTest {
-        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71).thenThrow(IllegalStateException())
+    @Test fun `a failed undo keeps the strip and retries`() = runTest {
+        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71)
+            .thenThrow(IllegalStateException()).thenReturn(72)
         val actions = actions(backgroundScope)
         actions.commit(row(), 700); runCurrent()
         actions.committedHandled()
         actions.undo(actions.undo.value!!); runCurrent()
-        assertNull(actions.undo.value)
+        val failedUndo = actions.undo.value!!
+        assertTrue(failedUndo.strip.failed)
+        assertFalse(failedUndo.strip.busy)
         assertTrue(actions.failed.value)
         assertTrue(actions.committed.replayCache.isEmpty())
+        assertEquals(700L, actions.previous(row()))
+        actions.reopen()
+        assertTrue(actions.failed.value)
+        assertSame(failedUndo, actions.undo.value)
+        actions.undoExpired(failedUndo)
+        assertSame(failedUndo, actions.undo.value)
+        actions.undo(failedUndo); actions.undo(failedUndo); runCurrent()
+        assertNull(actions.undo.value)
+        assertFalse(actions.failed.value)
+        assertEquals(listOf(7.0, 0.0, 0.0), adjustments().map { it.newCashTip })
+        assertEquals(setOf(72L), actions.pending.value.keys)
+        assertEquals(0L, actions.previous(row()))
     }
-    @Test fun `existing cash value is preserved rather than rounded on append`() = runTest {
+    @Test fun `existing cash is rounded to cents before append and undo`() = runTest {
         val actions = actions(backgroundScope)
-        actions.commit(row(2.345), 700); runCurrent()
-        assertEquals(9.345, adjustments().single().newCashTip!!, 0.000001)
+        actions.commit(row(2.346), 700); runCurrent()
+        assertEquals(9.35, adjustments().single().newCashTip!!, 0.0)
         actions.undo(actions.undo.value!!); runCurrent()
-        assertEquals(2.345, adjustments().last().newCashTip!!, 0.0)
+        assertEquals(2.35, adjustments().last().newCashTip!!, 0.0)
+        actions.projected(listOf(row(2.35000000001)))
+        assertTrue(actions.pending.value.isEmpty())
+    }
+    @Test fun `another undo failure re-arms retry even after the original deadline`() = runTest {
+        var now = 100L
+        val tickingClock = object : Clock() {
+            override fun getZone() = ZoneOffset.UTC
+            override fun withZone(zone: java.time.ZoneId): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(now)
+        }
+        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71)
+            .thenThrow(IllegalStateException()).thenThrow(IllegalStateException()).thenReturn(72)
+        val actions = CashTipActions(backgroundScope, CorrectionRepository(events), tickingClock)
+        actions.commit(row(), 700); runCurrent()
+        actions.undo(actions.undo.value!!); runCurrent()
+        val firstFailure = actions.undo.value!!
+        now = firstFailure.strip.deadline + 1
+        actions.undo(firstFailure); runCurrent()
+        val secondFailure = actions.undo.value!!
+        assertTrue(secondFailure.strip.failed)
+        assertNotEquals(firstFailure.strip, secondFailure.strip)
+        actions.undo(secondFailure); runCurrent()
+        assertNull(actions.undo.value)
+        assertFalse(actions.failed.value)
+        assertEquals(0.0, adjustments().last().newCashTip!!, 0.0)
+    }
+    @Test fun `undo before the first fold keeps the reversal pending until the row shows it`() = runTest {
+        val actions = actions(backgroundScope)
+        actions.commit(row(), 500); runCurrent()
+        val loggedSequence = actions.undo.value!!.strip.committedSequenceId
+        actions.undo(actions.undo.value!!); runCurrent()
+        val reversal = actions.pending.value.values.single()
+        assertNotEquals(loggedSequence, reversal.strip.committedSequenceId)
+        assertEquals(setOf(reversal.strip.committedSequenceId), actions.pending.value.keys)
+        actions.projected(listOf(row(5.0)))
+        assertEquals(0L, actions.previous(row(5.0)))
+        assertEquals(reversal, actions.pending.value.values.single())
+        actions.projected(listOf(row(0.0)))
+        assertTrue(actions.pending.value.isEmpty())
+        actions.commit(row(0.0), 200); runCurrent()
+        assertEquals(listOf(5.0, 0.0, 2.0), adjustments().map { it.newCashTip })
+    }
+    @Test fun `ten and seventy cents remove as eighty cents`() = runTest {
+        val actions = actions(backgroundScope)
+        actions.commit(row(), 10); runCurrent()
+        actions.commit(row(), 70); runCurrent()
+        assertEquals(80L, actions.previous(row()))
+        assertEquals(0.80, adjustments().last().newCashTip!!, 0.0)
+        val model = CashTipSheetModel(listOf(row(0.10 + 0.70)), 9L, totalCents = 80,
+            sign = CashTipSign.MINUS)
+        assertTrue(model.canCommit)
+        assertTrue(model.copy(deliveries = listOf(row()), pendingCashTipCents = mapOf(9L to 80L)).canCommit)
+        assertFalse(model.copy(totalCents = 81).canCommit)
+        actions.commit(row(), -80); runCurrent()
+        assertEquals(0.0, adjustments().last().newCashTip!!, 0.0)
+        actions.projected(listOf(row(0.0)))
+        actions.commit(row(2.0), 80); runCurrent()
+        assertEquals(2.80, adjustments().last().newCashTip!!, 0.0)
     }
     @Test fun `a missing row does not clear pending and another target cannot acknowledge it`() = runTest {
         val actions = actions(backgroundScope)
         actions.commit(row(), 700); runCurrent()
         actions.projected(emptyList())
         actions.projected(listOf(row(7.0).copy(eventSequenceId = 10)))
-        assertEquals(7.0, actions.pending.value[9L]!!.expectedCashTip, 0.0)
+        assertEquals(700L, actions.pending.value.values.single().expectedCashTipCents)
     }
     @Test fun `failure logs only the exception class under CashTip`() = runTest {
         val tree = cloud.trotter.dashbuddy.test.util.RecordingTree()
@@ -189,7 +267,7 @@ class CashTipActionsTest {
         assertSame(second, actions.undo.value)
         actions.undoExpired(second)
         assertNull(actions.undo.value)
-        assertEquals(7.0, actions.pending.value[9L]!!.expectedCashTip, 0.0)
+        assertEquals(700L, actions.pending.value.values.single().expectedCashTipCents)
     }
 
 }

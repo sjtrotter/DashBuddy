@@ -52,6 +52,13 @@ class CashTipEntryStateTest {
         assertEquals(335L, entry.totalCents)
         assertEquals(CashTipPage.COMPACT, entry.page)
     }
+    @Test fun `ten and seventy cents accumulate as eighty cents`() {
+        val entry = entry()
+        entry.show(9)
+        entry.other(); entry.point(); entry.digit(1); entry.digit(0); entry.doneOther()
+        entry.other(); entry.point(); entry.digit(7); entry.digit(0); entry.doneOther()
+        assertEquals(80L, entry.totalCents)
+    }
     @Test fun `point first and backspace work without a system keyboard`() {
         val entry = entry()
         entry.show(null); entry.other(); entry.point(); entry.digit(7); entry.digit(5); entry.backspace(); entry.digit(0)

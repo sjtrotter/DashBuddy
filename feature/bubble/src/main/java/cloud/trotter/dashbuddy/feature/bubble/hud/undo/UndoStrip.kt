@@ -19,9 +19,9 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
 fun undoStripVisible(model: UndoStripModel?): Boolean {
-    if (model == null || LocalNowProvider.current.millis() >= model.deadline) return false
+    if (model == null || !model.visible(LocalNowProvider.current.millis())) return false
     val now by rememberNow(50)
-    return now < model.deadline
+    return model.visible(now)
 }
 
 /** A deadline from the host, with a smooth drain driven only by Compose frames. */
@@ -40,14 +40,15 @@ fun UndoStrip(model: UndoStripModel, onUndo: () -> Unit) {
             }
         }
     }
-    if (now >= model.deadline) return
+    if (!model.visible(now)) return
     Box(Modifier.fillMaxWidth().height(48.dp).testTag("undo.strip")) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.hud_undo_line, stringResource(model.whatLabel), Formats.money(model.amountCents / 100.0),
-                model.where ?: stringResource(R.string.hud_cash_tip_delivery)),
+            Text(if (model.failed) stringResource(R.string.hud_undo_failed) else
+                stringResource(R.string.hud_undo_line, stringResource(model.whatLabel), Formats.money(model.amountCents / 100.0),
+                    model.where ?: stringResource(R.string.hud_cash_tip_delivery)),
                 Modifier.weight(1f), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            TextButton(onClick = { if (!tapped) { tapped = true; onUndo() } }, enabled = !tapped) {
+            TextButton(onClick = { if (!tapped && !model.busy) { tapped = true; onUndo() } }, enabled = !tapped && !model.busy) {
                 Text(stringResource(R.string.hud_undo_action))
             }
         }
