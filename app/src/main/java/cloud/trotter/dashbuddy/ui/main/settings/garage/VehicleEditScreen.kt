@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
+import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.feature.setup.wizard.cards.VehicleCard
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 
@@ -22,8 +25,10 @@ import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hiltViewModel()) {
     val name by viewModel.name.collectAsStateWithLifecycle()
     val draft by viewModel.draft.state.collectAsStateWithLifecycle()
+    val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val failure by viewModel.failure.collectAsStateWithLifecycle()
+    val enabled = loaded && !busy && failure != GarageWriteFailure.UNREADABLE && failure != GarageWriteFailure.GONE
     Scaffold(topBar = {
         TopAppBar(title = {
             Text(stringResource(if (viewModel.isEditing) R.string.vehicle_edit_title else R.string.vehicle_edit_add_title))
@@ -34,18 +39,33 @@ fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hilt
         })
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            OutlinedTextField(value = name, onValueChange = viewModel::setName,
+            OutlinedTextField(value = name, onValueChange = { viewModel.setName(it.cappedVehicleName()) },
                 label = { Text(stringResource(R.string.vehicle_edit_name)) },
-                supportingText = { Text(stringResource(R.string.vehicle_edit_name_hint)) },
-                singleLine = true, enabled = !busy && failure != GarageWriteFailure.UNREADABLE,
+                supportingText = {
+                    val count = name.codePointCount(0, name.length)
+                    Text(stringResource(if (count >= Vehicle.MAX_NAME_CODE_POINTS - 5) {
+                        R.string.vehicle_edit_name_counter
+                    } else R.string.vehicle_edit_name_hint, count, Vehicle.MAX_NAME_CODE_POINTS))
+                },
+                singleLine = true, enabled = enabled,
                 modifier = Modifier.fillMaxWidth())
             VehicleCard(step = WizardStep.VEHICLE, draft = draft, actions = viewModel.draft,
-                onAllowVehicleLookup = viewModel::allowLookup, showStepHeader = false, scrollable = false)
+                onAllowVehicleLookup = viewModel::allowLookup, showStepHeader = false, scrollable = false,
+                enabled = enabled, typeNote = {
+                    if (viewModel.resetsCosts(draft.profile.vehicleType)) {
+                        Text(stringResource(R.string.vehicle_edit_type_resets_costs),
+                            style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.text2)
+                    }
+                })
             GarageFailure(failure)
-            Button(onClick = { viewModel.save(onDone) }, enabled = !busy && failure != GarageWriteFailure.UNREADABLE,
+            Button(onClick = { viewModel.save(onDone) }, enabled = enabled,
                 modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.vehicle_edit_save))
             }
         }
     }
 }
+
+/** Bound pasted text without splitting a supplementary Unicode character. */
+internal fun String.cappedVehicleName(): String = substring(0,
+    offsetByCodePoints(0, minOf(codePointCount(0, length), Vehicle.MAX_NAME_CODE_POINTS)))

@@ -123,8 +123,8 @@ class GarageRepositoryTest {
 
     @Test fun `seedFrom leaves vehicles alone when none is active`() = runTest {
         val repo = garage(backgroundScope)
-        val live = repo.addVehicle("Parked", 1L)
-        val retired = repo.addVehicle("Retired", 2L)
+        val live = repo.addVehicle("Parked", 1L, activate = false)
+        val retired = repo.addVehicle("Retired", 2L, activate = false)
         repo.retire(retired.id, 3L)
         val before = repo.garage.first()
         assertEquals(SeedOutcome.NO_ACTIVE_VEHICLE, repo.seedFrom(LegacyProfile(make = "Honda").toTyped(), 4L))
@@ -176,27 +176,27 @@ class GarageRepositoryTest {
         assertEquals(old.id, result.vehicles.last().id)
     }
 
-    @Test fun `unselected live garage gets a new active car for settings`() = runTest {
+    @Test fun `retiring active promotes the survivor for subsequent settings edits`() = runTest {
         val repo = garage(backgroundScope)
         val first = repo.addVehicle("First", 1)
         val second = repo.addVehicle("Second", 2)
         assertTrue(repo.retire(second.id, 3))
-        assertNull(repo.garage.first().active)
+        assertEquals(first, repo.garage.first().active)
         assertTrue(repo.updateOrCreateActiveProfile(4) { it.withGas(mpg = 99.0) })
         val result = repo.garage.first()
-        assertEquals(3, result.vehicles.size)
+        assertEquals(2, result.vehicles.size)
+        assertEquals(first.id, result.activeId)
         assertEquals(99.0, result.active!!.profile.gasMpg)
-        assertEquals(first, result.vehicles.first { it.id == first.id })
         assertEquals(3L, result.vehicles.first { it.id == second.id }.retiredAt)
     }
 
-    @Test fun `retiring active clears selection and keeps record ordered last`() = runTest {
+    @Test fun `retiring active promotes survivor and keeps record ordered last`() = runTest {
         val repo = garage(backgroundScope)
         val first = repo.addVehicle("First", 1)
         val second = repo.addVehicle("Second", 2)
         assertTrue(repo.retire(second.id, 3))
-        assertNull(repo.garage.first().active)
-        assertNull(repo.garage.first().activeId)
+        assertEquals(first, repo.garage.first().active)
+        assertEquals(first.id, repo.garage.first().activeId)
         assertEquals(listOf(first.id, second.id), repo.garage.first().vehicles.map { it.id })
         assertFalse(repo.selectVehicle(second.id))
         assertFalse(repo.retire(second.id, 4))
@@ -205,6 +205,98 @@ class GarageRepositoryTest {
         assertTrue(repo.garage.first().unretired.isEmpty())
         assertNull(repo.garage.first().active)
     }
+    @Test fun `retiring active chooses newest live creation rather than list order`() = runTest {
+        val repo = garage(backgroundScope)
+        val newest = repo.addVehicle("Newest live", 30)
+        val retired = repo.addVehicle("Retired", 40)
+        val older = repo.addVehicle("Older", 20)
+        val active = repo.addVehicle("Active", 10)
+        assertTrue(repo.retire(retired.id, 50))
+        assertEquals(active.id, repo.garage.first().activeId)
+        assertTrue(repo.retire(active.id, 60))
+        assertEquals(newest.id, repo.garage.first().activeId)
+        assertTrue(repo.retire(newest.id, 70))
+        assertEquals(older.id, repo.garage.first().activeId)
+        assertTrue(repo.retire(older.id, 80))
+        assertNull(repo.garage.first().activeId)
+    }
+
+    @Test fun `add without activation preserves active id`() = runTest {
+        val repo = garage(backgroundScope)
+        val active = repo.addVehicle("Active", 1)
+        val parked = repo.addVehicle("Parked", 2, ElectricCar(), activate = false)
+        assertEquals(listOf(active, parked), repo.garage.first().vehicles)
+        assertEquals(active.id, repo.garage.first().activeId)
+    }
+
+    @Test fun `updateVehicle commits name and profile once and refuses invalid or stale edits`() = runTest {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                writes++
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        val target = repo.addVehicle("Original", 1)
+        val active = repo.addVehicle("Active", 2)
+        val profile = ElectricCar(kwhPer100Mi = 28.0)
+        assertTrue(repo.updateVehicle(target.id, "  Edited  ", profile))
+        assertEquals(3, store.writes)
+        val edited = repo.garage.first()
+        assertEquals(target.copy(name = "Edited", profile = profile), edited.vehicles.first())
+        assertEquals(active, edited.active)
+        listOf(" ", "😀".repeat(31)).forEach { invalid ->
+            assertTrue(runCatching { repo.updateVehicle(target.id, invalid, Bicycle()) }
+                .exceptionOrNull() is IllegalArgumentException)
+        }
+        assertFalse(repo.updateVehicle("missing", "New", Bicycle()))
+        assertEquals(3, store.writes)
+        assertEquals(edited, repo.garage.first())
+        assertTrue(repo.updateVehicle(target.id, "😀".repeat(30), profile))
+        assertTrue(repo.updateVehicle(target.id, null, profile))
+        assertNull(repo.garage.first().vehicles.first().name)
+        repo.retire(target.id, 3)
+        val retired = repo.garage.first()
+        val writes = store.writes
+        assertFalse(repo.updateVehicle(target.id, "New", Bicycle()))
+        assertEquals(writes, store.writes)
+        assertEquals(retired, repo.garage.first())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun `updateVehicle holds the lock through its single commit`() = runTest {
+        val saving = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                if (++writes == 2) {
+                    saving.complete(Unit)
+                    resume.await()
+                }
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        val vehicle = repo.addVehicle("Original", 1)
+        val edit = async { repo.updateVehicle(vehicle.id, "Edited", ElectricCar()) }
+        saving.await()
+        val retire = async { repo.retire(vehicle.id, 2) }
+        runCurrent()
+        assertFalse(retire.isCompleted)
+        assertEquals(vehicle, repo.garage.first().active)
+        assertEquals(2, store.writes)
+        resume.complete(Unit)
+        assertTrue(edit.await())
+        assertTrue(retire.await())
+        assertEquals(3, store.writes)
+        assertEquals(vehicle.copy(name = "Edited", profile = ElectricCar(), retiredAt = 2),
+            repo.garage.first().vehicles.single())
+    }
+
     @Test fun `adding makes it active`() = runTest {
         val repo = garage(backgroundScope)
         val civic = repo.addVehicle("Civic", 100)
@@ -270,13 +362,14 @@ class GarageRepositoryTest {
         assertEquals(beforeRetired, repo.garage.first())
     }
 
-    @Test fun `rename refuses unreadable vehicles without a write`() = runTest {
+    @Test fun `rename and updateVehicle refuse unreadable vehicles without a write`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("rename-corrupt.preferences_pb") }))
         source.save("invalid json", "one")
         val repo = GarageRepository(source)
         val before = source.stored.first()
         assertTrue(runCatching { repo.rename("one", "Name") }.exceptionOrNull() is VehiclesUnreadableException)
+        assertTrue(runCatching { repo.updateVehicle("one", "Name", Bicycle()) }.exceptionOrNull() is VehiclesUnreadableException)
         assertEquals(before, source.stored.first())
     }
 

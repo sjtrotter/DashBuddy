@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -94,7 +95,7 @@ fun EconomySettingsScreen(
                     Text(stringResource(R.string.economy_settings_vehicle_label), style = MaterialTheme.typography.labelMedium)
                     Text(activeVehicle?.let { vehicle ->
                         val type = stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
-                        stringResource(R.string.economy_settings_vehicle_description, vehicle.identityName ?: type, type)
+                        stringResource(R.string.economy_settings_vehicle_description, vehicle.displayName(), type)
                     } ?: stringResource(R.string.economy_settings_vehicle_empty))
                 }
                 TextButton(onClick = onOpenGarage) { Text(stringResource(R.string.economy_settings_vehicle_garage)) }

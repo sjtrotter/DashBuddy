@@ -67,7 +67,7 @@ class WizardViewModelTest {
 
     private suspend fun stubRepositories() {
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
-        whenever(garageRepository.addVehicle(isNull(), any(), any())).thenReturn(Vehicle("new-id", null, 1L))
+        whenever(garageRepository.addVehicle(isNull(), any(), any(), any())).thenReturn(Vehicle("new-id", null, 1L))
         whenever(garageRepository.updateProfile(any(), any<VehicleProfile>())).thenReturn(true)
         whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(false))
@@ -458,7 +458,7 @@ class WizardViewModelTest {
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val saved = argumentCaptor<VehicleProfile>()
-        verify(garageRepository).addVehicle(isNull(), any(), saved.capture())
+        verify(garageRepository).addVehicle(isNull(), any(), saved.capture(), any())
         assertTrue(saved.firstValue is ElectricCar)
         assertEquals(25.53, (saved.firstValue as ElectricCar).kwhPer100Mi!!, 0.01)
         assertEquals("2024", saved.firstValue.year)
@@ -723,7 +723,7 @@ class WizardViewModelTest {
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val scooter = argumentCaptor<VehicleProfile>()
-        verify(garageRepository).addVehicle(isNull(), any(), scooter.capture())
+        verify(garageRepository).addVehicle(isNull(), any(), scooter.capture(), any())
         assertTrue(scooter.firstValue is ScooterMoped)
         assertEquals(Powertrain.ELECTRIC, (scooter.firstValue as ScooterMoped).powertrain)
         assertEquals(2.5, (scooter.firstValue as ScooterMoped).kwhPer100Mi)
@@ -733,7 +733,7 @@ class WizardViewModelTest {
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val bicycle = argumentCaptor<VehicleProfile>()
-        verify(garageRepository).addVehicle(isNull(), any(), bicycle.capture())
+        verify(garageRepository).addVehicle(isNull(), any(), bicycle.capture(), any())
         assertTrue(bicycle.firstValue is Bicycle)
         assertNull(bicycle.firstValue.gasMpg)
     }
@@ -774,7 +774,7 @@ class WizardViewModelTest {
         assertEquals(VehicleClass.SUV, saved.legacyClass)
         assertEquals(28.0, saved.gasMpg!!, 0.0)
         assertEquals(FuelType.PREMIUM, saved.gasFuel)
-        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
+        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any(), any())
     }
 
     @Test
@@ -847,7 +847,7 @@ class WizardViewModelTest {
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
-        verify(garageRepository).addVehicle(isNull(), any(), any())
+        verify(garageRepository).addVehicle(isNull(), any(), any(), any())
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
     }
 
@@ -870,7 +870,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         val profile = argumentCaptor<VehicleProfile>()
-        verify(garageRepository).addVehicle(isNull(), any(), profile.capture())
+        verify(garageRepository).addVehicle(isNull(), any(), profile.capture(), any())
         assertEquals(VehicleClass.SUV, profile.firstValue.legacyClass)
         assertEquals(28.0, profile.firstValue.gasMpg)
         assertEquals(720.0, profile.firstValue.wear.tireSetCost)
@@ -898,7 +898,7 @@ class WizardViewModelTest {
 
         verify(garageRepository).updateProfile(eq(second.id), any<VehicleProfile>())
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(eq(first.id), any<VehicleProfile>())
-        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
+        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any(), any())
         verify(appStateRepository).setFirstRunComplete()
     }
 
@@ -917,7 +917,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         assertEquals(true, completed)
-        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
+        verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any(), any())
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appPreferencesRepository).mirrorUserSetEconomy(any())
         verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any())
@@ -953,7 +953,7 @@ class WizardViewModelTest {
     fun `a failed vehicle creation still finishes but cancellation propagates`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
-        whenever(garageRepository.addVehicle(isNull(), any(), any()))
+        whenever(garageRepository.addVehicle(isNull(), any(), any(), any()))
             .thenThrow(VehiclesUnreadableException())
         val viewModel = WizardViewModel(
             strategyRepository, appPreferencesRepository, appStateRepository,
@@ -967,7 +967,7 @@ class WizardViewModelTest {
         verify(appStateRepository).setFirstRunComplete()
         viewModel.vehicleSaveFailureHandled()
         clearInvocations(appPreferencesRepository, appStateRepository)
-        whenever(garageRepository.addVehicle(isNull(), any(), any()))
+        whenever(garageRepository.addVehicle(isNull(), any(), any(), any()))
             .thenThrow(CancellationException("cancelled"))
         viewModel.saveAndFinish { completions++ }
         testScheduler.advanceUntilIdle()

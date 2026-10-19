@@ -41,9 +41,8 @@ class VehicleEditViewModelTest {
         lookupAllowed: Boolean = false,
     ): VehicleEditViewModel {
         whenever(garage.garage).thenReturn(flowOf(stored))
-        whenever(garage.addVehicle(anyOrNull(), any(), any())).thenReturn(Vehicle("new", null, 1234))
-        whenever(garage.updateProfile(any(), any<VehicleProfile>())).thenReturn(true)
-        whenever(garage.rename(any(), anyOrNull())).thenReturn(true)
+        whenever(garage.addVehicle(anyOrNull(), any(), any(), any())).thenReturn(Vehicle("new", null, 1234))
+        whenever(garage.updateVehicle(any(), anyOrNull(), any())).thenReturn(true)
         whenever(preferences.userEconomy).thenReturn(flowOf(economy))
         whenever(preferences.vehicleLookupAllowed).thenReturn(flowOf(lookupAllowed))
         whenever(lookup.getYears()).thenReturn(listOf("2020", "2021"))
@@ -106,11 +105,8 @@ class VehicleEditViewModelTest {
         vm.draft.updateEstimatedMpg(39f)
         vm.save {}
         runCurrent()
-        inOrder(garage) {
-            verify(garage).updateProfile("target", profile.copy(mpg = 39.0))
-            verify(garage).rename("target", "Renamed")
-        }
-        verify(garage, never()).addVehicle(anyOrNull(), any(), any())
+        verify(garage).updateVehicle("target", "Renamed", profile.copy(mpg = 39.0))
+        verify(garage, never()).addVehicle(anyOrNull(), any(), any(), any())
         verifyNoInteractions(preferences)
     }
 
@@ -140,8 +136,7 @@ class VehicleEditViewModelTest {
         vm.save { done++ }
         runCurrent()
         verify(garage, times(1)).addVehicle(null, 1234, ElectricCar())
-        verify(garage).updateProfile("new", ElectricCar())
-        verify(garage).rename("new", null)
+        verify(garage).updateVehicle("new", null, ElectricCar())
         assertEquals(1, done)
         assertEquals(GarageWriteFailure.NONE, vm.failure.value)
     }
@@ -160,7 +155,7 @@ class VehicleEditViewModelTest {
         verifyNoMoreInteractions(preferences)
     }
 
-    @Test fun `unknown or retired id and unreadable garage disable save`() = runTest {
+    @Test fun `unknown or retired id reports gone at load while unreadable remains distinct`() = runTest {
         val retired = Vehicle("retired", "Retired", 1, retiredAt = 2)
         listOf(
             "missing" to Garage(emptyList(), null, true),
@@ -169,7 +164,8 @@ class VehicleEditViewModelTest {
         ).forEach { (id, stored) ->
             val vm = model(id, stored)
             runCurrent()
-            assertEquals(GarageWriteFailure.UNREADABLE, vm.failure.value)
+            assertEquals(if (stored.readable) GarageWriteFailure.GONE else GarageWriteFailure.UNREADABLE, vm.failure.value)
+            assertFalse(vm.loaded.value)
             clearInvocations(garage)
             vm.save { fail("Unreadable editor must not complete") }
             runCurrent()
@@ -215,7 +211,7 @@ class VehicleEditViewModelTest {
         vm.draft.updateVehicleType(VehicleType.EV)
         vm.draft.updateConsumption(26.0)
         val release = CompletableDeferred<Vehicle>()
-        whenever(garage.addVehicle(anyOrNull(), any(), any())).doSuspendableAnswer { release.await() }
+        whenever(garage.addVehicle(anyOrNull(), any(), any(), any())).doSuspendableAnswer { release.await() }
         var done = false
         vm.save { done = true }
         vm.save { done = true }
@@ -234,33 +230,141 @@ class VehicleEditViewModelTest {
     @Test fun `unreadable write keeps editor open`() = runTest {
         val vm = model()
         runCurrent()
-        whenever(garage.addVehicle(anyOrNull(), any(), any())).thenThrow(VehiclesUnreadableException())
+        whenever(garage.addVehicle(anyOrNull(), any(), any(), any())).thenThrow(VehiclesUnreadableException())
         vm.save { fail("Failed save must not complete") }
         runCurrent()
         assertEquals(GarageWriteFailure.UNREADABLE, vm.failure.value)
     }
 
-    @Test fun `overlong rename is rejected before profile write`() = runTest {
+    @Test fun `overlong input is refused without a failed save`() = runTest {
         val vehicle = Vehicle("one", "Original", 1)
         val vm = model("one", Garage(listOf(vehicle), "one", true))
         runCurrent()
-        clearInvocations(garage)
-        vm.setName("😀".repeat(Vehicle.MAX_NAME_CODE_POINTS + 1))
-        vm.draft.updateEstimatedMpg(40f)
-        vm.save { fail("Invalid name must not complete") }
+        vm.setName("😀".repeat(40))
+        assertEquals("Original", vm.name.value)
+        vm.save {}
         runCurrent()
-        assertEquals(GarageWriteFailure.RETRY, vm.failure.value)
-        verifyNoInteractions(garage)
+        verify(garage).updateVehicle("one", "Original", vehicle.profile)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
     }
 
-    @Test fun `refused profile update does not rename or close editor`() = runTest {
+    @Test fun `40 code point paste is capped and saves`() = runTest {
+        val vm = model()
+        runCurrent()
+        vm.setName("😀".repeat(40).cappedVehicleName())
+        assertEquals("😀".repeat(Vehicle.MAX_NAME_CODE_POINTS), vm.name.value)
+        var done = false
+        vm.save { done = true }
+        runCurrent()
+        verify(garage).addVehicle(vm.name.value, 1234, GasCar(), true)
+        assertTrue(done)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+    }
+
+    @Test fun `refused vehicle update reports gone and keeps editor open`() = runTest {
         val vehicle = Vehicle("one", null, 1)
         val vm = model("one", Garage(listOf(vehicle), "one", true))
         runCurrent()
-        whenever(garage.updateProfile(eq("one"), any<VehicleProfile>())).thenReturn(false)
+        whenever(garage.updateVehicle(eq("one"), anyOrNull(), any())).thenReturn(false)
         vm.save { fail("Refused save must not complete") }
         runCurrent()
+        assertEquals(GarageWriteFailure.GONE, vm.failure.value)
+        assertFalse(vm.busy.value)
         verify(garage, never()).rename(any(), anyOrNull())
-        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+        verify(garage, never()).updateProfile(any(), any<VehicleProfile>())
+    }
+
+    @Test fun `EV edit returning to stored type preserves tuned costs and fuel`() = runTest {
+        val profile = ElectricCar(kwhPer100Mi = 27.0,
+            wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
+        val vehicle = Vehicle("ev", "Electric", 1, profile)
+        val vm = model("ev", Garage(listOf(vehicle), "ev", true))
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        assertTrue(vm.resetsCosts(VehicleType.BICYCLE))
+        vm.draft.updateVehicleType(VehicleType.EV)
+        vm.draft.updateConsumption(29.0)
+        assertFalse(vm.resetsCosts(VehicleType.EV))
+        vm.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).updateVehicle(eq("ev"), eq("Electric"), saved.capture())
+        assertEquals(profile.copy(kwhPer100Mi = 29.0), saved.firstValue)
+        assertEquals(profile.gasFuel, saved.firstValue.gasFuel)
+    }
+
+    @Test fun `gas edit returning to stored type preserves tuned costs and fuel grade`() = runTest {
+        val profile = GasCar(fuelType = FuelType.PREMIUM,
+            wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
+        val vehicle = Vehicle("gas", null, 1, profile)
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true))
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        vm.draft.updateVehicleType(VehicleType.CAR)
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null, profile)
+    }
+
+    @Test fun `type change saves presets instead of stored costs`() = runTest {
+        val profile = GasCar(fuelType = FuelType.PREMIUM,
+            wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
+        val vehicle = Vehicle("gas", null, 1, profile)
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true))
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        assertTrue(vm.resetsCosts(VehicleType.BICYCLE))
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null, Bicycle())
+    }
+
+    private suspend fun TestScope.lookUpDiesel(vm: VehicleEditViewModel) {
+        whenever(lookup.getMakes("2020")).thenReturn(listOf("Ford"))
+        whenever(lookup.getModels("2020", "Ford")).thenReturn(listOf("Truck"))
+        whenever(lookup.getVehicleOptions("2020", "Ford", "Truck"))
+            .thenReturn(listOf(VehicleOption("diesel", "Diesel trim")))
+        whenever(lookup.getVehicleDetails("diesel")).thenReturn(VehicleDetails(28f, FuelType.DIESEL))
+        vm.draft.onYearSelected("2020")
+        runCurrent()
+        vm.draft.onMakeSelected("Ford")
+        runCurrent()
+        vm.draft.onModelSelected("Truck")
+        runCurrent()
+        vm.draft.onTrimSelected("Diesel trim")
+        runCurrent()
+    }
+
+    @Test fun `looked up diesel trim saves diesel over stored fuel`() = runTest {
+        val vehicle = Vehicle("gas", null, 1, GasCar(fuelType = FuelType.PREMIUM))
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true), lookupAllowed = true)
+        runCurrent()
+        lookUpDiesel(vm)
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null,
+            GasCar(year = "2020", make = "Ford", model = "Truck", mpg = 28.0, fuelType = FuelType.DIESEL))
+    }
+
+    @Test fun `changing identity after lookup does not save the old fuel grade`() = runTest {
+        val vm = model(lookupAllowed = true)
+        runCurrent()
+        lookUpDiesel(vm)
+        whenever(lookup.getMakes("2021")).thenReturn(emptyList())
+        vm.draft.onYearSelected("2021")
+        vm.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).addVehicle(isNull(), eq(1234L), saved.capture(), eq(true))
+        assertEquals(FuelType.REGULAR, saved.firstValue.gasFuel)
+    }
+
+    @Test fun `add with an active vehicle keeps the selection`() = runTest {
+        val vehicle = Vehicle("active", null, 1)
+        val vm = model(stored = Garage(listOf(vehicle), "active", true))
+        runCurrent()
+        vm.save {}
+        runCurrent()
+        verify(garage).addVehicle(null, 1234, GasCar(), activate = false)
     }
 }

@@ -22,6 +22,7 @@ import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,9 +66,9 @@ fun GarageList(
             if (garage != null && !unreadable) {
                 if (garage.unretired.isEmpty()) item { Text(stringResource(R.string.garage_empty)) }
                 items(garage.unretired, key = { it.id }) { vehicle ->
-                    val name = vehicle.identityName ?: stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
+                    val name = vehicle.displayName()
                     val type = stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
-                    val identity = if (vehicle.profile.hasCarIdentity) {
+                    val identity = if (vehicle.name != null && vehicle.profile.hasCarIdentity) {
                         listOfNotNull(vehicle.profile.year, vehicle.profile.make, vehicle.profile.model)
                             .filter { it.isNotBlank() }.joinToString(" ")
                     } else ""
@@ -93,12 +94,13 @@ fun GarageList(
             }
             item { GarageFailure(if (unreadable) GarageWriteFailure.UNREADABLE else failure) }
         }
+        Text(stringResource(R.string.garage_active_hint), style = MaterialTheme.typography.bodySmall)
         Button(onClick = onAdd, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.garage_add))
         }
     }
     garage?.unretired?.firstOrNull { it.id == retiringId }?.let { vehicle ->
-        val name = vehicle.identityName ?: stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
+        val name = vehicle.displayName()
         AlertDialog(
             onDismissRequest = { retiringId = null },
             text = { Text(stringResource(R.string.garage_retire_confirmation, name)) },
@@ -120,6 +122,7 @@ internal fun GarageFailure(failure: GarageWriteFailure) {
         GarageWriteFailure.NONE -> return
         GarageWriteFailure.RETRY -> R.string.garage_save_failed
         GarageWriteFailure.UNREADABLE -> R.string.garage_vehicles_unreadable
+        GarageWriteFailure.GONE -> R.string.garage_vehicle_gone
     }
     Text(stringResource(message), color = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(vertical = 8.dp))

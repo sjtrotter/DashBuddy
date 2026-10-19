@@ -39,10 +39,13 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         emit(Garage(emptyList(), null, readable = false))
     }
 
-    suspend fun addVehicle(name: String?, now: Long, profile: VehicleProfile = GasCar()): Vehicle = mutex.withLock {
+    suspend fun addVehicle(
+        name: String?, now: Long, profile: VehicleProfile = GasCar(), activate: Boolean = true,
+    ): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name?.trim(), now, profile)
-        val list = vehiclesForWrite() + vehicle
-        saveForWrite(list, vehicle.id)
+        val saved = savedForWrite()
+        val list = (readVehicles(saved.json) ?: throw VehiclesUnreadableException()) + vehicle
+        saveForWrite(list, if (activate) vehicle.id else saved.activeId)
         vehicle
     }
 
@@ -88,6 +91,19 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     suspend fun updateProfile(id: String, profile: VehicleProfile): Boolean =
         updateProfile(id) { profile }
 
+    /** Identity and energy edits commit together; Vehicle validates the name before any write. */
+    suspend fun updateVehicle(id: String, name: String?, profile: VehicleProfile): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
+        if (index < 0) return@withLock false
+        val edited = list[index].copy(name = name?.trim(), profile = profile)
+        val updated = list.toMutableList()
+        updated[index] = edited
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     /** Settings edits own one active profile even before the first named garage entry exists. */
     suspend fun updateOrCreateActiveProfile(
         now: Long,
@@ -128,8 +144,9 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         if (index < 0) return@withLock false
         val updated = list.toMutableList()
         updated[index] = updated[index].copy(retiredAt = now)
-        val nextActive = if (saved.activeId == id) null
-            else saved.activeId
+        val nextActive = if (saved.activeId == id) {
+            updated.filter { it.retiredAt == null }.maxByOrNull { it.createdAt }?.id
+        } else saved.activeId
         saveForWrite(updated, nextActive)
         true
     }

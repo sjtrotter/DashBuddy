@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
 import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
@@ -123,7 +124,7 @@ fun SettingsHomeScreen(
                         garage?.readable == false -> stringResource(R.string.settings_home_item_garage_unreadable)
                         else -> garage?.active?.let { vehicle ->
                             val type = stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
-                            stringResource(R.string.settings_home_item_garage_subtitle, vehicle.identityName ?: type, type)
+                            stringResource(R.string.settings_home_item_garage_subtitle, vehicle.displayName(), type)
                         } ?: stringResource(R.string.settings_home_item_garage_empty)
                     },
                     onClick = { onNavigate(Screen.Garage.route) },
