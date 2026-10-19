@@ -31,6 +31,8 @@ internal class OdometerActions(
 ) {
     private val busy = MutableStateFlow(false)
     val saving = busy.asStateFlow()
+    private enum class WriteKind { READING, VEHICLE }
+    private var failureKind: WriteKind? = null
     private val failure = MutableStateFlow(OdometerWriteFailure.NONE)
     val failed = failure.asStateFlow()
     private val saved = MutableStateFlow<OdometerNoticeModel?>(null)
@@ -45,7 +47,10 @@ internal class OdometerActions(
         private val noticeTokens = AtomicLong()
     }
 
-    fun reopen() { failure.value = OdometerWriteFailure.NONE }
+    fun reopen() {
+        failure.value = OdometerWriteFailure.NONE
+        failureKind = null
+    }
     /** A late collector sees the one pending completion once. */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun saveHandled() { completed.resetReplayCache() }
@@ -54,8 +59,7 @@ internal class OdometerActions(
     fun vehicleChangeHandled() { changed.resetReplayCache() }
 
     fun save(vehicleId: String, miles: Int) {
-        write {
-            failure.value = OdometerWriteFailure.NONE
+        write(WriteKind.READING) {
             readings.record(vehicleId, miles)
             completed.emit(Unit)
             val model = OdometerNoticeModel(miles, noticeTokens.incrementAndGet())
@@ -66,17 +70,21 @@ internal class OdometerActions(
             }
         }
     }
-    fun add(name: String) = write {
+    fun add(name: String) = write(WriteKind.VEHICLE) {
         garage.addVehicle(name, clock.millis())
         changed.emit(VehicleChange.ADDED)
     }
-    fun select(id: String) = write {
+    fun select(id: String) = write(WriteKind.VEHICLE) {
         // A refused select (a stale row) changes nothing, so it is not a vehicle change.
         if (garage.selectVehicle(id)) changed.emit(VehicleChange.SWITCHED)
     }
 
-    private fun write(action: suspend () -> Unit) {
+    private fun write(kind: WriteKind, action: suspend () -> Unit) {
         if (busy.value) return
+        if (failureKind == kind) {
+            failure.value = OdometerWriteFailure.NONE
+            failureKind = null
+        }
         busy.value = true
         scope.launch {
             try {
@@ -85,6 +93,7 @@ internal class OdometerActions(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                failureKind = kind
                 failure.value = if (error is VehiclesUnreadableException) OdometerWriteFailure.UNREADABLE else OdometerWriteFailure.RETRY
                 // Exception messages can contain the user's vehicle name.
                 Timber.tag("Odometer").w("Could not save odometer data (%s)", error.javaClass.simpleName)

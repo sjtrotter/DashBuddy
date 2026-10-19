@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.displayCutout
@@ -40,8 +41,15 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
-    var logOpen by rememberSaveable { mutableStateOf(false) }
-    val odometer = rememberOdometerHud(viewModel, region, closeLog = { logOpen = false })
+    val logOpenState = rememberSaveable { mutableStateOf(false) }
+    var logOpen by logOpenState
+    val closeLog = remember(logOpenState) { { logOpenState.value = false } }
+    val odometer = rememberOdometerHud(viewModel, closeLog)
+    val odometerSheet: @Composable ColumnScope.() -> Unit = remember(odometer) { { odometer.Sheet() } }
+    val odometerUndo: @Composable () -> Unit = remember(odometer) { { odometer.Undo() } }
+    val odometerUndoVisible: @Composable () -> Boolean = remember(odometer) { { odometer.UndoVisible() } }
+    val odometerFooter: @Composable () -> Unit = remember(odometer) { { odometer.RestingFooter() } }
+    val odometerWaitingFoot: @Composable () -> Unit = remember(odometer) { { odometer.WaitingFoot() } }
     BackHandler(enabled = logOpen) { logOpen = false }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -80,10 +88,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             ribbon = ribbon,
             onGoalCelebrated = viewModel::goalCelebrated,
             sheetOpen = odometer.open,
-            onSheetDismiss = odometer.back,
-            sheet = { odometer.sheet() },
-            undo = odometer.undo,
-            restingFooter = odometer.restingFooter,
+            onSheetDismiss = odometer::back,
+            sheet = odometerSheet,
+            undo = odometerUndo,
+            undoVisible = odometerUndoVisible,
+            restingFooter = odometerFooter,
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             onSelectPlatform = viewModel::selectPlatform,
@@ -100,7 +109,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
                 }
             },
             stateCard = {
-                StateCard(model, state.hero.profit, waitingFoot = odometer.waitingFoot)
+                StateCard(model, state.hero.profit, waitingFoot = odometerWaitingFoot)
             },
             offer = {
                 pendingOffer?.let { pending ->

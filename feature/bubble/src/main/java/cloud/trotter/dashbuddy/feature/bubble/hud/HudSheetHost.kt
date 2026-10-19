@@ -58,8 +58,8 @@ private fun SheetFrame(modifier: Modifier, sheet: @Composable ColumnScope.() -> 
 
 /** S3 supplies the strip; this reserves its place without introducing an undo action. */
 @Composable
-internal fun UndoSlot(mode: HudMode, undo: (@Composable () -> Unit)?) {
-    if (mode == HudMode.LIVE || (mode == HudMode.RESTING && undo != null)) {
+internal fun UndoSlot(mode: HudMode, undo: (@Composable () -> Unit)?, visible: @Composable () -> Boolean = { undo != null }) {
+    if (mode == HudMode.LIVE || (mode == HudMode.RESTING && visible())) {
         Box(Modifier.fillMaxWidth().height(48.dp).testTag("hud.slot.undo"), contentAlignment = Alignment.Center) {
             undo?.invoke()
         }

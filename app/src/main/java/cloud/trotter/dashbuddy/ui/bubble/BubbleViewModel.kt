@@ -84,15 +84,15 @@ class BubbleViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
-    private val garage: StateFlow<Garage?> = garageRepository.garage
+    val garage: StateFlow<Garage?> = garageRepository.garage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val vehicles = garage.map { it?.vehicles.orEmpty() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val activeVehicle = garage.map { it?.active }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val garageLoaded: StateFlow<Boolean> = garage.map { it != null }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val garageUnreadable: StateFlow<Boolean> = garage.map { it?.readable == false }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val lastReading = combine(odometerReadings, activeVehicle) { list, vehicle ->
-        vehicle?.let { VehicleOdometerReading.latestFor(list, it.id) }
+    val odometerReadings: StateFlow<List<VehicleOdometerReading>?> = odometerReadingRepository.readings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val odometerLoaded: StateFlow<Boolean> = combine(garage, odometerReadings) { garage, readings ->
+        garage != null && readings != null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val lastReading = combine(odometerReadings, garage) { list, garage ->
+        if (list == null) null else garage?.active?.let { VehicleOdometerReading.latestFor(list, it.id) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val gpsTotalMiles = odometerRepository.totalMilesFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -104,7 +104,7 @@ class BubbleViewModel @Inject constructor(
     fun odometerSaveHandled() = odometerActions.saveHandled()
     fun odometerVehicleChangeHandled() = odometerActions.vehicleChangeHandled()
     fun reopenOdometer() = odometerActions.reopen()
-    fun saveOdometerReading(miles: Int) { activeVehicle.value?.let { odometerActions.save(it.id, miles) } }
+    fun saveOdometerReading(miles: Int) { garage.value?.active?.let { odometerActions.save(it.id, miles) } }
     fun addVehicle(name: String) = odometerActions.add(name)
     fun selectVehicle(id: String) = odometerActions.select(id)
 

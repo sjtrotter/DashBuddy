@@ -37,7 +37,7 @@ class OdometerSheetTest {
     @After fun cleanup() { Locale.setDefault(originalLocale) }
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val car = Vehicle("civic", "Civic", 0)
-    private var model by mutableStateOf(OdometerSheetModel(car, listOf(car), 52_388, null, OdometerCheck.First("Civic")))
+    private var model by mutableStateOf(OdometerSheetModel(car, listOf(car), 52_388, null, OdometerCheck.First("Civic"), gpsLoaded = true))
     private var saved = 0
     private var added: String? = null
     private var addOpened = false
@@ -70,6 +70,27 @@ class OdometerSheetTest {
         show()
         compose.onNodeWithTag("odometer.save").assertIsNotEnabled()
         assertEquals(0, saved)
+    }
+    @Test fun `save waits for the gps total`() {
+        model = model.copy(gpsLoaded = false)
+        show()
+        compose.onNodeWithTag("odometer.save").assertIsNotEnabled().performClick()
+        assertEquals(0, saved)
+        compose.runOnIdle { model = model.copy(gpsLoaded = true) }; settle()
+        compose.onNodeWithTag("odometer.save").assertIsEnabled().performClick()
+        assertEquals(1, saved)
+    }
+    @Test fun `add is disabled while the garage is unreadable`() {
+        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
+            page = OdometerPage.ADD_VEHICLE, vehicleName = "Civic", writeFailed = OdometerWriteFailure.UNREADABLE)
+        show()
+        compose.onNodeWithTag("vehicle.name").assertIsNotEnabled()
+        compose.onNodeWithTag("vehicle.save").assertIsNotEnabled().performClick()
+        assertNull(added)
+        compose.runOnIdle { model = model.copy(writeFailed = OdometerWriteFailure.NONE) }; settle()
+        compose.onNodeWithTag("vehicle.name").assertIsEnabled()
+        compose.onNodeWithTag("vehicle.save").assertIsEnabled().performClick()
+        assertEquals("Civic", added)
     }
     @Test fun `point key disabled`() {
         show()

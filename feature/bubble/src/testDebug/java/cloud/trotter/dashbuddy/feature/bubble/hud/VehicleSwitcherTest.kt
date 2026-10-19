@@ -81,7 +81,7 @@ class VehicleSwitcherTest {
         compose.setContent {
             DashBuddyTheme {
                 Box(Modifier.width(352.dp).height(350.dp)) {
-                    AddVehicleForm(name, { name = it }, false, {}, {})
+                    AddVehicleForm(name, { name = it }, enabled = true, {}, {})
                 }
             }
         }

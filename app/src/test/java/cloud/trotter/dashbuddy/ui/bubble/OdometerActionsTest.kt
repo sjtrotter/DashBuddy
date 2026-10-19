@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
@@ -198,6 +199,48 @@ class OdometerActionsTest {
         doSuspendableAnswer { 1L }.whenever(readings).record(any(), any())
         actions.save("civic", 52_388)
         runCurrent()
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+    }
+
+    @Test fun `a successful add clears an add failure`() = runTest {
+        whenever(garage.addVehicle(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
+            .thenReturn(Vehicle("civic", "Civic", 100))
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.add("Civic")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.add("Civic")
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        runCurrent()
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        assertEquals(listOf(VehicleChange.ADDED), actions.vehicleChanged.replayCache)
+    }
+
+    @Test fun `a successful select clears a select failure`() = runTest {
+        whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
+            .thenReturn(true)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.select("civic")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.select("civic")
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        runCurrent()
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        assertEquals(listOf(VehicleChange.SWITCHED), actions.vehicleChanged.replayCache)
+    }
+
+    @Test fun `a reading save keeps a vehicle failure visible`() = runTest {
+        whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.select("civic")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.save("civic", 52_388)
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        assertNotNull(actions.notice.value)
+        actions.reopen()
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
     }
 

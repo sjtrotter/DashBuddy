@@ -36,6 +36,7 @@ fun HudScreen(
     stateCard: @Composable () -> Unit = {},
     offer: @Composable () -> Unit = {},
     log: @Composable () -> Unit = {},
+    undoVisible: @Composable () -> Boolean = { undo != null },
 ) {
     val tier = FontScaleTier.of(LocalDensity.current.fontScale, LocalGlance.current)
     CompositionLocalProvider(LocalHudTier provides tier) {
@@ -65,7 +66,7 @@ fun HudScreen(
                                 }
                             }
                             if (!showingLog && state.mode != HudMode.RESTING && ribbon != null) DashRibbon(ribbon)
-                            if (!showingLog) UndoSlot(state.mode, undo)
+                            if (!showingLog) UndoSlot(state.mode, undo, undoVisible)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (!showingLog) HudSheetHost(sheetOpen, onSheetDismiss, Modifier.fillMaxSize(), sheet)

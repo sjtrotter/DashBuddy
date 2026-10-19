@@ -44,7 +44,8 @@ fun ColumnScope.OdometerSheet(
     val page = model.page
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
-            OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange, model.saving, onBack, onAddVehicle)
+            OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange,
+                enabled = !model.saving && model.writeFailed != OdometerWriteFailure.UNREADABLE, onBack, onAddVehicle)
             OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack)
             OdometerPage.READING -> {
                 Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -75,7 +76,7 @@ fun ColumnScope.OdometerSheet(
                     }
                     Keypad(onDigit, null, onBackspace)
                 }
-                Button(onClick = onSave, enabled = model.vehicle != null && (model.readingMiles ?: 0) in 1..OdometerReadingLimit.MAX_MILES && !model.saving,
+                Button(onClick = onSave, enabled = model.vehicle != null && model.gpsLoaded && (model.readingMiles ?: 0) in 1..OdometerReadingLimit.MAX_MILES && !model.saving,
                     modifier = Modifier.fillMaxWidth().testTag("odometer.save")) {
                     Text(if (model.readingMiles == null) stringResource(R.string.hud_odometer_save_empty)
                         else stringResource(R.string.hud_odometer_save, Formats.commaInt(model.readingMiles)))

@@ -1,8 +1,11 @@
 package cloud.trotter.dashbuddy.core.data.vehicle
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -11,6 +14,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import timber.log.Timber
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
 
 class GarageRepositoryTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -85,6 +90,54 @@ class GarageRepositoryTest {
             Timber.uproot(tree)
         }
     }
+    @Test fun `a corrupt store reads as unreadable and refuses writes`() = runTest {
+        var writes = 0
+        // VehicleDataSource stays final: a fake DataStore makes its stored flow fail on collection.
+        val store = object : DataStore<Preferences> {
+            override val data = flow<Preferences> { throw IOException("private vehicle data") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                writes++
+                error("A corrupt store must never be updated")
+            }
+        }
+        val source = VehicleDataSource(store)
+        val warnings = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority == 5 && tag == "Garage") warnings += message
+            }
+        }
+        Timber.plant(tree)
+        try {
+            repeat(2) { index ->
+                val repo = GarageRepository(source)
+                repeat(2) {
+                    assertEquals(Garage(emptyList(), null, readable = false), repo.garage.first())
+                }
+                assertTrue(runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull() is VehiclesUnreadableException)
+                assertTrue(runCatching { repo.selectVehicle("civic") }.exceptionOrNull() is VehiclesUnreadableException)
+                assertEquals(index + 1, warnings.size)
+            }
+            assertEquals(listOf("IOException", "IOException"), warnings)
+            assertEquals(0, writes)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test fun `store cancellation is propagated on reads and writes`() = runTest {
+        val cancelled = CancellationException("cancelled")
+        val store = object : DataStore<Preferences> {
+            override val data = flow<Preferences> { throw cancelled }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("A cancelled read must never write")
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        assertSame(cancelled, runCatching { repo.garage.first() }.exceptionOrNull())
+        assertSame(cancelled, runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull())
+        assertSame(cancelled, runCatching { repo.selectVehicle("civic") }.exceptionOrNull())
+    }
+
     @Test fun `an unreadable garage refuses to add`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("corrupt.preferences_pb") }))

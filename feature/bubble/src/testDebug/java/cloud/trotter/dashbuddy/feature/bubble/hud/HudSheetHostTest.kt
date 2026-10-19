@@ -118,6 +118,24 @@ class HudSheetHostTest {
         compose.runOnIdle { mode = HudMode.RESTING }; settle()
         compose.onNodeWithTag("hud.slot.undo").assertDoesNotExist()
     }
+    @Test fun `a stable undo slot follows notice visibility at rest`() {
+        var noticeVisible by mutableStateOf(false)
+        compose.setContent {
+            DashBuddyTheme {
+                val content: @Composable () -> Unit = remember { { Text("Saved reading") } }
+                val visible: @Composable () -> Boolean = remember { { noticeVisible } }
+                Column { UndoSlot(HudMode.RESTING, content, visible) }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.slot.undo").assertDoesNotExist()
+        compose.runOnIdle { noticeVisible = true }; settle()
+        compose.onNodeWithTag("hud.slot.undo").assertHeightIsEqualTo(48.dp)
+        compose.onNodeWithText("Saved reading").assertIsDisplayed()
+        compose.runOnIdle { noticeVisible = false }; settle()
+        compose.onNodeWithTag("hud.slot.undo").assertDoesNotExist()
+    }
+
     @Test fun sheetMotion_usesFrameClockAndDismissesAfterExit() {
         show(reduced = false)
         compose.runOnIdle { open = true }; settle()

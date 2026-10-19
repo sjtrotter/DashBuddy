@@ -18,6 +18,7 @@ data class OdometerSheetModel(
     val saving: Boolean = false,
     val writeFailed: OdometerWriteFailure = OdometerWriteFailure.NONE,
     val vehicleName: String = "",
+    val gpsLoaded: Boolean = false,
 )
 
 data class OdometerNoticeModel(
