@@ -15,7 +15,7 @@ import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?, foot: @Composable () -> Unit = {}) {
+internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?) {
     StateLine(stringResource(R.string.hud_state_waiting), R.string.hud_state_since, model.since)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
@@ -59,5 +59,4 @@ internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?, foot: @Co
             }
         }
     }
-    foot()
 }

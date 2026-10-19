@@ -20,6 +20,9 @@ import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import timber.log.Timber
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #772 / Principle-7: the two "Chat" INFO milestones in [BubbleManager.postMessage] /
@@ -46,7 +49,8 @@ class BubbleManagerChatLogTest {
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
         val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
-        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings)
+        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
     }
 
     @Test
@@ -62,7 +66,8 @@ class BubbleManagerChatLogTest {
         whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings)
+        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
         val evaluation = cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation(
             action = cloud.trotter.dashbuddy.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
             qualityLevel = cloud.trotter.dashbuddy.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,

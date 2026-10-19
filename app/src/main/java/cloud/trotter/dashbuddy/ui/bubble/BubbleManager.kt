@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +71,7 @@ class BubbleManager @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val garageRepository: GarageRepository,
     private val odometerReadingRepository: OdometerReadingRepository,
+    private val clock: Clock,
 ) {
 
     companion object {
@@ -176,21 +178,22 @@ class BubbleManager @Inject constructor(
             "session start platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
         )
         val verb = sessionVerb(platformName)
-        val now = System.currentTimeMillis()
+        // One Clock rule: cue comparisons share the injected clock used to stamp readings.
+        val now = clock.millis()
         val started = enqueueMessage(
             context.getString(R.string.bubble_chat_session_started, verb),
             ChatPersona.Dispatcher, expand = false, sessionId = sessionId,
         )
         scope.launch {
-            // Keep the two history lines in order as well as the notifications.
+            // Keep the cue notification after the persisted session-start line.
             started.join()
             val enabled = appPreferencesRepository.odometerPrompts.first()
             val vehicle = garageRepository.garage.first().active
             val readings = odometerReadingRepository.readings.first()
             val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
             if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
-                postMessage(context.getString(R.string.bubble_chat_odometer_cue),
-                    ChatPersona.Dispatcher, sessionId = sessionId)
+                showNotification(context.getString(R.string.bubble_chat_odometer_cue),
+                    ChatPersona.Dispatcher, expand = false)
             }
         }
     }

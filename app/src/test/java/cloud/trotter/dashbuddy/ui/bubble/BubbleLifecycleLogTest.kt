@@ -41,6 +41,9 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import timber.log.Timber
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /** #916: shareable lifecycle diagnostics preserve notification behavior and exclude chat PII. */
 @RunWith(RobolectricTestRunner::class)
@@ -66,7 +69,8 @@ class BubbleLifecycleLogTest {
         whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy { stateManager }, preferences, garage, readings)
+        manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy { stateManager }, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
         Timber.plant(tree)
     }
 

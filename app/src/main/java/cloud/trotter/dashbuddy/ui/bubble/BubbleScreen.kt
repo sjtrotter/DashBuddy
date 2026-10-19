@@ -46,7 +46,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
     val odometer = rememberOdometerHud(viewModel, closeLog)
-    val odometerCue = odometer.Cue()
+    val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
     val odometerSheet: @Composable ColumnScope.() -> Unit = remember(odometer) { { odometer.Sheet() } }
     val odometerUndo: @Composable () -> Unit = remember(odometer) { { odometer.Undo() } }
     val odometerUndoVisible: @Composable () -> Boolean = remember(odometer) { { odometer.UndoVisible() } }

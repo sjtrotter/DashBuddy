@@ -26,7 +26,10 @@ internal class OdometerHud(
     fun openSheet() {
         if (!viewModel.odometerLoaded.value) return
         closeLog()
-        if (entry.show(viewModel.garage.value?.active != null)) viewModel.reopenOdometer()
+        val garage = viewModel.garage.value
+        if (entry.show(activeVehicle = garage?.active != null, anyVehicles = !garage?.vehicles.isNullOrEmpty())) {
+            viewModel.reopenOdometer()
+        }
     }
 
     /** Back inside the sheet: one page up, or closed from the reading page. */
@@ -51,6 +54,7 @@ internal class OdometerHud(
         }
     }
 
+    /** Reading validation ticks once a minute for day-granular thresholds and the open span bound. */
     @Composable
     fun Sheet() {
         val garage by viewModel.garage.collectAsStateWithLifecycle()
@@ -61,7 +65,7 @@ internal class OdometerHud(
         val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
         val last = viewModel.lastReading.collectAsStateWithLifecycle().value
         val check = if (entry.page == OdometerPage.READING) {
-            val now by rememberNow()
+            val now by rememberNow(60_000)
             val otherVehicleReadSince = last != null && vehicle != null && readings?.let {
                 !VehicleOdometerReading.singleVehicleSpan(it, vehicle.id, last.occurredAt, now)
             } == true
@@ -111,13 +115,10 @@ internal class OdometerHud(
     }
 
     @Composable
-    fun Cue(): Boolean {
+    fun Cue(startedAt: Long?, endedAt: Long?): Boolean {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
         val lastReading by viewModel.lastReading.collectAsStateWithLifecycle()
         val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()
-        val region by viewModel.focusedRegion.collectAsStateWithLifecycle()
-        val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
-        val startedAt = region?.session?.startedAt
         // Resting needs no clock. Drop the live ticker as soon as the start window closes.
         val now = if (loaded && prompts && startedAt != null) {
             val snapshot = LocalNowProvider.current.millis()
@@ -126,7 +127,7 @@ internal class OdometerHud(
                 tick
             } else snapshot
         } else 0L
-        return OdometerCue.shows(prompts, startedAt, lastSession?.endedAt,
+        return OdometerCue.shows(prompts, startedAt, endedAt,
             lastReading.takeIf { loaded }, loaded, now)
     }
 }

@@ -22,12 +22,16 @@ internal class OdometerEntryState(
     val reading: Int? get() = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).value
     fun digit(digit: Int) { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).digit(digit).digits }
     fun backspace() { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).backspace().digits }
-    fun show(hasVehicle: Boolean): Boolean {
+    fun show(activeVehicle: Boolean, anyVehicles: Boolean): Boolean {
         if (open) return false
         addVehicleFrom = OdometerPage.VEHICLES
         digits = ""
         vehicleName = ""
-        page = if (hasVehicle) OdometerPage.READING else OdometerPage.ADD_VEHICLE
+        page = when {
+            activeVehicle -> OdometerPage.READING
+            anyVehicles -> OdometerPage.VEHICLES
+            else -> OdometerPage.ADD_VEHICLE
+        }
         open = true
         return true
     }

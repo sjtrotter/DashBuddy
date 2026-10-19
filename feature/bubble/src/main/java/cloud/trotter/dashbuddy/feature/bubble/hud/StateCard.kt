@@ -19,11 +19,11 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun StateCard(model: StateCardModel?, kept: Double?, waitingFoot: @Composable () -> Unit = {}) {
+fun StateCard(model: StateCardModel?, kept: Double?) {
     if (model == null) return
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp)) {
         when (model) {
-            is StateCardModel.Waiting -> WaitingCard(model, kept, waitingFoot)
+            is StateCardModel.Waiting -> WaitingCard(model, kept)
             is StateCardModel.TaskCard -> TaskCard(model)
             is StateCardModel.Shopping -> ShoppingCard(model)
             is StateCardModel.Receipt -> ReceiptCard(model)

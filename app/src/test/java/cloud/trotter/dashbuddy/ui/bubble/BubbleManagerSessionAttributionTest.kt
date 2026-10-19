@@ -30,6 +30,9 @@ import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verifyBlocking
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #867 (write-side): a chat line must be filed to the session it CAME FROM, not to whichever
@@ -85,7 +88,8 @@ class BubbleManagerSessionAttributionTest {
         val state = MutableStateFlow(stateWithDoorDashActive())
         whenever(stateManager.state).thenReturn(state)
         val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
-        val manager = BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings)
+        val manager = BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
         // The derived flow is Eagerly-started on an IO scope; await it so the fallback assertions
         // race nothing (an un-emitted flow would read null, not the DoorDash session).
         runBlocking { withTimeout(5_000) { manager.activeSessionId.first { it != null } } }
