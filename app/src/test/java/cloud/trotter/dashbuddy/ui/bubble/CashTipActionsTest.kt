@@ -110,13 +110,13 @@ class CashTipActionsTest {
     @Test fun `projection lag retains committed value for another tip`() = runTest {
         val actions = actions(backgroundScope)
         actions.commit(row(), 500); runCurrent()
-        actions.projected(listOf(row()))
+        actions.acknowledgeThrough(0)
         assertEquals(500L, actions.previous(row()))
         actions.commit(row(), 200); runCurrent()
         assertEquals(listOf(5.0, 7.0), adjustments().map { it.newCashTip })
-        actions.projected(listOf(row(5.0)))
+        actions.acknowledgeThrough(1)
         assertTrue(actions.pending.value.isNotEmpty())
-        actions.projected(listOf(row(7.0)))
+        actions.acknowledgeThrough(2)
         assertTrue(actions.pending.value.isEmpty())
         assertNotNull(actions.undo.value)
     }
@@ -164,8 +164,6 @@ class CashTipActionsTest {
         assertEquals(9.35, adjustments().single().newCashTip!!, 0.0)
         actions.undo(actions.undo.value!!); runCurrent()
         assertEquals(2.35, adjustments().last().newCashTip!!, 0.0)
-        actions.projected(listOf(row(2.35000000001)))
-        assertTrue(actions.pending.value.isEmpty())
     }
     @Test fun `another undo failure re-arms retry even after the original deadline`() = runTest {
         var now = 100L
@@ -190,21 +188,37 @@ class CashTipActionsTest {
         assertFalse(actions.failed.value)
         assertEquals(0.0, adjustments().last().newCashTip!!, 0.0)
     }
-    @Test fun `undo before the first fold keeps the reversal pending until the row shows it`() = runTest {
+    @Test fun `add undo add writes two dollars`() = runTest {
+        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(10, 11, 12)
         val actions = actions(backgroundScope)
         actions.commit(row(), 500); runCurrent()
-        val loggedSequence = actions.undo.value!!.strip.committedSequenceId
+        assertEquals(setOf(10L), actions.pending.value.keys)
+        assertEquals(500L, actions.previous(row()))
         actions.undo(actions.undo.value!!); runCurrent()
         val reversal = actions.pending.value.values.single()
-        assertNotEquals(loggedSequence, reversal.strip.committedSequenceId)
-        assertEquals(setOf(reversal.strip.committedSequenceId), actions.pending.value.keys)
-        actions.projected(listOf(row(5.0)))
+        assertEquals(setOf(11L), actions.pending.value.keys)
+        // Even the old pre-add zero row cannot acknowledge the reversal.
+        assertEquals(0L, actions.previous(row()))
+        actions.acknowledgeThrough(10)
         assertEquals(0L, actions.previous(row(5.0)))
         assertEquals(reversal, actions.pending.value.values.single())
-        actions.projected(listOf(row(0.0)))
-        assertTrue(actions.pending.value.isEmpty())
-        actions.commit(row(0.0), 200); runCurrent()
+        actions.commit(row(5.0), 200); runCurrent()
         assertEquals(listOf(5.0, 0.0, 2.0), adjustments().map { it.newCashTip })
+        actions.acknowledgeThrough(11)
+        assertEquals(setOf(12L), actions.pending.value.keys)
+        assertEquals(200L, actions.previous(row(5.0)))
+        actions.acknowledgeThrough(12)
+        assertTrue(actions.pending.value.isEmpty())
+    }
+    @Test fun `the undo clears at its watermark before another add`() = runTest {
+        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(10, 11)
+        val actions = actions(backgroundScope)
+        actions.commit(row(), 500); runCurrent()
+        actions.undo(actions.undo.value!!); runCurrent()
+        actions.acknowledgeThrough(10)
+        assertEquals(setOf(11L), actions.pending.value.keys)
+        actions.acknowledgeThrough(11)
+        assertTrue(actions.pending.value.isEmpty())
     }
     @Test fun `ten and seventy cents remove as eighty cents`() = runTest {
         val actions = actions(backgroundScope)
@@ -219,16 +233,29 @@ class CashTipActionsTest {
         assertFalse(model.copy(totalCents = 81).canCommit)
         actions.commit(row(), -80); runCurrent()
         assertEquals(0.0, adjustments().last().newCashTip!!, 0.0)
-        actions.projected(listOf(row(0.0)))
+        actions.acknowledgeThrough(appended.get())
         actions.commit(row(2.0), 80); runCurrent()
         assertEquals(2.80, adjustments().last().newCashTip!!, 0.0)
     }
-    @Test fun `a missing row does not clear pending and another target cannot acknowledge it`() = runTest {
+    @Test fun `a watermark short of the commit leaves the entry pending`() = runTest {
+        whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71)
         val actions = actions(backgroundScope)
         actions.commit(row(), 700); runCurrent()
-        actions.projected(emptyList())
-        actions.projected(listOf(row(7.0).copy(eventSequenceId = 10)))
+        actions.acknowledgeThrough(70)
+        assertEquals(setOf(71L), actions.pending.value.keys)
         assertEquals(700L, actions.pending.value.values.single().expectedCashTipCents)
+        assertEquals(700L, actions.previous(row(2.0)))
+        actions.acknowledgeThrough(71)
+        assertTrue(actions.pending.value.isEmpty())
+        assertEquals(200L, actions.previous(row(2.0)))
+    }
+    @Test fun `the foot shows the logged amount with a prior tip`() = runTest {
+        val actions = actions(backgroundScope)
+        actions.commit(row(2.0), 700); runCurrent()
+        val pending = actions.pending.value.values.single()
+        assertEquals(900L, pending.expectedCashTipCents)
+        assertEquals(700L, CashTipPending.footAmountCents(pending))
+        assertNull(CashTipPending.footAmountCents(null))
     }
     @Test fun `failure logs only the exception class under CashTip`() = runTest {
         val tree = cloud.trotter.dashbuddy.test.util.RecordingTree()

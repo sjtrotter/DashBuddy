@@ -42,7 +42,11 @@ internal class CashTipHud(
                         compareBy<DeliveryRecord> { it.completedAt }.thenBy { it.eventSequenceId })?.eventSequenceId
                 }
                 rows = deliveries
-                viewModel.cashTipActions.projected(deliveries)
+            }
+        }
+        LaunchedEffect(viewModel) {
+            viewModel.projectionWatermark.collect { watermark ->
+                watermark?.let(viewModel.cashTipActions::acknowledgeThrough)
             }
         }
         LaunchedEffect(viewModel, entry) {
@@ -100,7 +104,8 @@ internal class CashTipHud(
     @Composable
     fun Pending(taskId: String?): Long? {
         val pending by viewModel.cashTipActions.pending.collectAsStateWithLifecycle()
-        return pending.values.find { it.sessionId == sessionId && it.taskId == taskId }?.strip?.amountCents
+        return CashTipPending.footAmountCents(
+            pending.values.find { it.sessionId == sessionId && it.taskId == taskId })
     }
 }
 

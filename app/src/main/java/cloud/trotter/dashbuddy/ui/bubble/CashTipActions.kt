@@ -24,7 +24,7 @@ internal class CashTipActions(
     private val undoState = MutableStateFlow<CashTipCommit?>(null)
     val undo = undoState.asStateFlow()
     // Keyed by the durable append id; only the latest expectation for each delivery stands.
-    // Kept past the undo deadline until the projection acknowledges that target value.
+    // Kept past the undo deadline until the projector folds that append's sequence.
     private val pendingState = MutableStateFlow<Map<Long, CashTipCommit>>(emptyMap())
     val pending = pendingState.asStateFlow()
 
@@ -74,10 +74,9 @@ internal class CashTipActions(
         if (undoState.value == model && !model.strip.busy && !model.strip.failed) undoState.value = null
     }
 
-    fun projected(rows: List<DeliveryRecord>) {
+    fun acknowledgeThrough(watermarkSequenceId: Long) {
         pendingState.value = pendingState.value.filterValues { pending ->
-            val row = rows.find { it.eventSequenceId == pending.deliveryId }
-            row == null || ((row.cashTip ?: 0.0) * 100).roundToLong() != pending.expectedCashTipCents
+            pending.strip.committedSequenceId > watermarkSequenceId
         }
     }
 

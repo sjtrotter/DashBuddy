@@ -86,6 +86,7 @@ class BubbleViewModel @Inject constructor(
 ) : ViewModel() {
 
     internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, clock)
+    internal val projectionWatermark get() = analyticsRepository.projectionWatermark
     internal fun cashTipDeliveries(sessionId: String) = combine(
         analyticsRepository.deliveriesForSession(sessionId), currentLocalDateFlow(now = clock::millis),
     ) { deliveries, today ->

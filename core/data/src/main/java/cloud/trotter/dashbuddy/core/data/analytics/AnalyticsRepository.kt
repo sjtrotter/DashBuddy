@@ -86,6 +86,8 @@ class AnalyticsRepository @Inject constructor(
     // so the "net is the frozen stored value" posture above is preserved.
     private val appEventDao: AppEventDao,
 ) {
+    val projectionWatermark: Flow<Long?>
+        get() = analyticsDao.watermark().map { it?.watermarkSequenceId }
 
     /**
      * Frozen-net economics for [period]. `platform == null` ⇒ cross-platform; a
