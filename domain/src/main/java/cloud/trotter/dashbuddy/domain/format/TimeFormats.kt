@@ -38,6 +38,13 @@ fun formatDuration(millis: Long): String {
     }
 }
 
+/** Elapsed clock duration: m:ss below an hour, h:mm:ss from an hour. Negatives floor to zero. */
+fun formatClockDuration(ms: Long): String {
+    val seconds = ms.coerceAtLeast(0) / 1_000
+    return if (seconds < 3_600) String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
+    else String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3_600, seconds / 60 % 60, seconds % 60)
+}
+
 /**
  * "m:ss" countdown for deadline heroes. Negatives format as their absolute
  * magnitude — the caller renders the ahead/late label and color.

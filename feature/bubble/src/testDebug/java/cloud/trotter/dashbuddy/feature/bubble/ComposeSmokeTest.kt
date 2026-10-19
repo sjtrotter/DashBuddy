@@ -14,10 +14,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -69,14 +65,6 @@ class ComposeSmokeTest {
         compose.onNodeWithText("1m 5s").assertExists()
         compose.onNodeWithText("5s").assertDoesNotExist()
     }
-
-    private class MutableClock(var millis: Long) : Clock() {
-        override fun getZone(): ZoneId = ZoneOffset.UTC
-        override fun withZone(zone: ZoneId): Clock = this
-        override fun instant(): Instant = Instant.ofEpochMilli(millis)
-        override fun millis(): Long = millis
-    }
-
     private companion object {
         const val T0 = 1_700_000_000_000L
     }

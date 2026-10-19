@@ -246,7 +246,7 @@ sealed class FlowCardSnapshot {
         val jobId: String,
         val taskId: String? = null,
         val storeName: String? = null,
-        val totalPay: Double = 0.0,
+        val totalPay: Double? = null,
         val parsedPay: ParsedPay? = null,
         val sessionEarningsAtCompletion: Double? = null,
     ) : FlowCardSnapshot() {

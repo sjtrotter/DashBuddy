@@ -13,7 +13,7 @@ object HudStateMapper {
         region: PlatformRegion?, flow: Flow, platform: Platform?, switchable: List<Platform>,
         earnings: Double?, miles: Double, lastSession: SessionRecord?, net: SessionNet?,
         countExpenses: Boolean, goal: Double?, todayProfit: Double?, hasActiveCard: Boolean,
-        hasOfferCard: Boolean, logOpen: Boolean, gas: GasRowModel,
+        hasOfferCard: Boolean, logOpen: Boolean, gas: GasRowModel, cashTipCue: Boolean = false,
     ): HudUiState {
         val mode = HudModeResolver.resolve(flow, region?.mode, region?.session != null, hasActiveCard, hasOfferCard, logOpen)
         val firstRun = region?.session == null && lastSession == null
@@ -28,12 +28,12 @@ object HudStateMapper {
         val resting = lastSession?.let { last ->
             val span = last.endedAt?.minus(last.startedAt)
             RestingModel(last.startedAt, last.endedAt,
-                moneyOrEmpty(if (span != null && span > 0) profit?.div(span / 3_600_000.0) else null),
+                moneyOrEmpty(profitPerHour(profit, span)),
                 last.deliveries, last.offersAccepted, last.offersReceived)
         }
         // Resting wins in the base mode resolver, but its enabled Log block must still
         // open the chat. Keep the resting identity and four-block dock while the log is open.
-        val dock = DockMapper.map(mode).let { model ->
+        val dock = DockMapper.map(mode, firstRun, cashTipCue).let { model ->
             if (!logOpen) model else model.copy(items = model.items.map { item ->
                 if (item.kind == DockKind.LOG) item.copy(state = DockItemState.LIT) else item
             })

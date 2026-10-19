@@ -65,4 +65,18 @@ class TimeFormatsTest {
             formatClockTime(millis, ZoneId.of("UTC"), Locale.UK),
         )
     }
+    @Test fun `clock duration under an hour is minutes and seconds`() {
+        assertEquals("0:00", formatClockDuration(-1))
+        assertEquals("0:00", formatClockDuration(0))
+        assertEquals("3:59", formatClockDuration(239_999))
+        assertEquals("59:59", formatClockDuration(3_599_999))
+        Locale.setDefault(Locale.forLanguageTag("ar-EG"))
+        assertEquals("3:59", formatClockDuration(239_999))
+    }
+    @Test fun `clock duration from an hour shows hours`() {
+        assertEquals("1:00:00", formatClockDuration(3_600_000))
+        assertEquals("1:04:12", formatClockDuration(3_852_999))
+        assertEquals("12:01:02", formatClockDuration(43_262_000))
+    }
+
 }

@@ -36,4 +36,23 @@ class DockMapperTest {
     fun `log mode lights the log block`() {
         assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LOG).items.single { it.kind == DockKind.LOG }.state)
     }
+    @Test fun `door and receipt accent the cash tip`() {
+        val facts = JobFacts("Store", null, null, null)
+        val cards = listOf(StateCardModel.DropoffArrived(facts, 1_000),
+            StateCardModel.Receipt("Store", 1_000, emptyList(), null, null))
+        cards.forEach { card ->
+            val items = DockMapper.map(HudMode.LIVE, firstRun = false, cashTipCue = card.cuesCashTip).items
+            assertEquals(DockItemState.ACCENT, items.single { it.kind == DockKind.CASH_TIP }.state)
+            assertEquals(DockItemState.DISABLED, items.single { it.kind == DockKind.EXPENSE }.state)
+        }
+    }
+    @Test fun `first run disables cash tip even with the cue`() {
+        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.RESTING, firstRun = true, cashTipCue = true)
+            .items.single { it.kind == DockKind.CASH_TIP }.state)
+    }
+    @Test fun `offer hides the dock regardless of the cue`() {
+        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = false, cashTipCue = true).items.isEmpty())
+        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = true, cashTipCue = true).items.isEmpty())
+    }
+
 }

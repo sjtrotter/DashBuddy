@@ -230,7 +230,7 @@ class FlowCardMapperTest {
         assertEquals(4000L, delivery.phaseEndedAt)
 
         val postTask = cards[4] as FlowCardSnapshot.PostTask
-        assertEquals(7.50, postTask.totalPay, 0.001)
+        assertEquals(7.50, postTask.totalPay!!, 0.001)
         assertNotNull(postTask.parsedPay)
         assertEquals(47.50, postTask.sessionEarningsAtCompletion!!, 0.001)
         assertEquals(4000L, postTask.phaseStartedAt)
@@ -288,7 +288,7 @@ class FlowCardMapperTest {
         assertNull("arrivedAt stays null for no-arrival deliveries", delivery.arrivedAt)
 
         val postTask = cards[4] as FlowCardSnapshot.PostTask
-        assertEquals(7.50, postTask.totalPay, 0.001)
+        assertEquals(7.50, postTask.totalPay!!, 0.001)
         assertEquals(4500L, postTask.phaseEndedAt)
     }
 

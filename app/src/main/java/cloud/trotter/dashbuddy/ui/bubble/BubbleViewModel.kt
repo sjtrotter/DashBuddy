@@ -269,6 +269,10 @@ class BubbleViewModel @Inject constructor(
      * last saw — the live card is derived from the global `FlowRegion`, which only ever describes
      * that platform (see [BubbleSessionPresentation.showLiveCard]).
      */
+    /** Whether the live card (and the global flow it comes from) belongs to the displayed platform. */
+    val liveCardShown: StateFlow<Boolean> = presentation.map { it.showLiveCard }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val cards = combine(
         stateManager.state,
         foldedCards,

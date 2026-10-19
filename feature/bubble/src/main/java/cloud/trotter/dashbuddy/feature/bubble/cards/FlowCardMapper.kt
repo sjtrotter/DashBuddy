@@ -324,7 +324,7 @@ object FlowCardMapper {
                             jobId = payload.jobId,
                             taskId = payload.taskId,
                             storeName = payload.storeName,
-                            totalPay = payload.totalPay ?: 0.0,
+                            totalPay = payload.totalPay,
                             parsedPay = payload.parsedPay,
                             sessionEarningsAtCompletion = payload.sessionEarningsAtCompletion,
                         )

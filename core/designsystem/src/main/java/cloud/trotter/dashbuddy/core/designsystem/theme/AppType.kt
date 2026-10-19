@@ -14,6 +14,7 @@ object AppTypeScale {
     val display = 60.sp
     val heroUnit = 28.sp
     val state = 48.sp
+    val stateBig = 56.sp
     val hero = 30.sp
     val xl = 22.sp
     val lg = 18.sp
@@ -33,6 +34,7 @@ data class AppTextStyles(
     val displayNum: TextStyle,
     val heroUnitNum: TextStyle,
     val stateNum: TextStyle,
+    val stateBigNum: TextStyle,
     val heroNum: TextStyle,
     val xlNum: TextStyle,
     val lgNum: TextStyle,
@@ -55,6 +57,7 @@ fun dashTextStyles(): AppTextStyles = AppTextStyles(
     displayNum = num(AppTypeScale.display, FontWeight.SemiBold, -0.025),
     heroUnitNum = num(AppTypeScale.heroUnit, FontWeight.Medium),
     stateNum = num(AppTypeScale.state, FontWeight.SemiBold),
+    stateBigNum = num(AppTypeScale.stateBig, FontWeight.SemiBold, -0.018),
     heroNum = num(AppTypeScale.hero, FontWeight.Bold, -0.02),
     xlNum = num(AppTypeScale.xl),
     lgNum = num(AppTypeScale.lg),
@@ -85,6 +88,7 @@ fun AppTextStyles.scaledByGlance(glance: Float): AppTextStyles = if (glance == 1
     displayNum = displayNum.scaledByGlance(glance),
     heroUnitNum = heroUnitNum.scaledByGlance(glance),
     stateNum = stateNum.scaledByGlance(glance),
+    stateBigNum = stateBigNum.scaledByGlance(glance),
     heroNum = heroNum.scaledByGlance(glance),
     xlNum = xlNum.scaledByGlance(glance),
     lgNum = lgNum.scaledByGlance(glance),

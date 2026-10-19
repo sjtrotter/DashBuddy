@@ -12,13 +12,13 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
-        count: Boolean = false, last: SessionRecord? = lastDash()) = HudStateMapper.map(
+        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
         countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
-        logOpen = false, gas = GasRowModel(3.5f, true),
+        logOpen = false, gas = GasRowModel(3.5f, true), cashTipCue = cue,
     )
 
     @Test
@@ -63,4 +63,19 @@ class HudStateMapperTest {
         assertNull(state.platform)
         assertEquals(TopRowMapper.firstRun(), state.top)
     }
+    @Test fun `cash tip cue reaches the dock`() {
+        assertEquals(DockItemState.ACCENT, map(cue = true).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertEquals(DockItemState.DISABLED, map(cue = false).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertEquals(DockItemState.DISABLED, map(rest = true, last = null, cue = true)
+            .dock.items.single { it.kind == DockKind.CASH_TIP }.state)
+    }
+    @Test fun `profit per hour preserves unknowns and real zero`() {
+        assertNull(profitPerHour(null, 3_600_000))
+        assertNull(profitPerHour(10.0, null))
+        assertNull(profitPerHour(10.0, 0))
+        assertNull(profitPerHour(10.0, -1))
+        assertEquals(0.0, profitPerHour(0.0, 3_600_000)!!, 0.0)
+        assertEquals(20.0, profitPerHour(10.0, 1_800_000)!!, 0.0)
+    }
+
 }

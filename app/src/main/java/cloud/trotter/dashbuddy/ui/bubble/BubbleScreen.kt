@@ -54,12 +54,16 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         }
     }
     val flow = appState.regions.flow.flow
+    val liveCardShown by viewModel.liveCardShown.collectAsStateWithLifecycle()
+    val model = remember(flow, cards.stack, region, lastSession, liveCardShown) {
+        StateCardMapper.map(flow, region?.mode, cards.stack.active, cards.stack, region, lastSession, flowOwned = liveCardShown)
+    }
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas) {
+        net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas, model) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
-            cards.stack.active is FlowCardSnapshot.Offer, logOpen, gas)
+            cards.stack.active is FlowCardSnapshot.Offer, logOpen, gas, cashTipCue = model?.cuesCashTip == true)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
@@ -77,14 +81,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             when (kind) {
                 DockKind.LOG -> logOpen = !logOpen
                 DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
-                DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Disabled until S3's sheets.
+                DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
             }
         },
         stateCard = {
-            cards.stack.active?.let { active ->
-                FlowCardItem(active, isActive = true, expanded = true, onToggleExpand = {},
-                    platformLabel = cards.platformLabels[active.id])
-            }
+            StateCard(model, state.hero.profit)
         },
         offer = {
             cards.stack.active?.let { active ->

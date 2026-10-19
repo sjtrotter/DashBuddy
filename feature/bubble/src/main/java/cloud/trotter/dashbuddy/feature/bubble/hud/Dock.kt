@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -28,6 +29,7 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 @Composable
 fun Dock(model: DockModel, onClick: (DockKind) -> Unit) {
     val c = AppTheme.colors
+    val suggested = stringResource(R.string.hud_dock_cd_suggested)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         model.items.forEach { item ->
             val ink = when (item.state) {
@@ -48,7 +50,10 @@ fun Dock(model: DockModel, onClick: (DockKind) -> Unit) {
                 DockKind.SETTINGS -> R.string.hud_dock_settings to Icons.Outlined.Settings
             }
             Column(Modifier.weight(1f).height(64.dp).testTag("hud.dock.${item.kind}")
-                .semantics { selected = item.state == DockItemState.LIT }
+                .semantics {
+                    selected = item.state == DockItemState.LIT
+                    if (item.state == DockItemState.ACCENT) stateDescription = suggested
+                }
                 .clip(RoundedCornerShape(16.dp)).background(background)
                 .clickable(enabled = item.state != DockItemState.DISABLED, role = Role.Button) { onClick(item.kind) },
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {

@@ -113,4 +113,38 @@
         <item quantity="one">delivery</item>
         <item quantity="other">deliveries</item>
     </plurals>
+
+    <!-- S2b state cards -->
+    <string name="hud_state_waiting">Waiting</string>
+    <string name="hud_state_since">since</string>
+    <string name="hud_state_due">due</string>
+    <string name="hud_state_delivered">delivered</string>
+    <string name="hud_state_min_left">min left</string>
+    <string name="hud_state_en_route">en route</string>
+    <string name="hud_state_min_en_route">min en route</string>
+    <string name="hud_state_at_store">at store</string>
+    <string name="hud_state_min_at_store">min at store</string>
+    <string name="hud_state_at_door">at door</string>
+    <string name="hud_state_min_at_door">min at door</string>
+    <string name="hud_state_min_late">min late</string>
+    <string name="hud_state_accepted_at">accepted</string>
+    <string name="hud_state_picked_up">picked up</string>
+    <string name="hud_state_arrived">arrived</string>
+    <string name="hud_state_job">job</string>
+    <string name="hud_state_mi">mi</string>
+    <string name="hud_state_profit_hr">Profit/hr</string>
+    <string name="hud_state_no_offer">No offer yet</string>
+    <string name="hud_state_last_offer">Last offer</string>
+    <string name="hud_state_outcome_accepted">accepted</string>
+    <string name="hud_state_outcome_declined">declined</string>
+    <string name="hud_state_outcome_expired">expired</string>
+    <string name="hud_state_of_total">of %1$d</string>
+    <string name="hud_state_shopped">shopped</string>
+    <string name="hud_state_items_min">items/min</string>
+    <string name="hud_state_tip">Tip</string>
+    <string name="hud_state_total">Delivery total</string>
+    <string name="hud_track_cd_due">Due %1$s</string>
+    <string name="hud_track_cd_late">Due %1$s, %2$d min late</string>
+    <string name="hud_track_cd_open">No deadline</string>
+    <string name="hud_dock_cd_suggested">Suggested</string>
 </resources>
