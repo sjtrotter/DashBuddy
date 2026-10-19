@@ -17,9 +17,10 @@ class AddOnStopsReplayTest {
         val machine = StateMachine(FlowRegionStepper(), PlatformRegionStepper(),
             CrossPlatformRegionStepper(), TransitionPolicy(), EffectMap())
         data class Case(val stops: Int?, val drops: Int, val hint: String = "Old", val resolved: String? = null,
-            val listed: String = "Old")
-        for ((stops, drops, hint, resolved, listed) in listOf(Case(3, 2), Case(null, 1),
-            Case(3, 2, hint = "Chick-fil-A", resolved = "Chick Fil A", listed = " chick fil a "))) {
+            val listed: String = "Old", val pickups: Int = 1)
+        for ((stops, drops, hint, resolved, listed, pickups) in listOf(Case(3, 2), Case(null, 1),
+            Case(3, 2, hint = "Chick-fil-A", resolved = "Chick Fil A", listed = " chick fil a "),
+            Case(3, 1, hint = " Old ", resolved = " Old ", pickups = 2))) {
             val parsed = ParsedOffer("addon", quoteBasis = OfferQuoteBasis.INCREMENTAL,
                 offerScope = OfferScope.ADD_ON, payAmount = 7.0, distanceMiles = 2.1, stopCount = stops,
                 orders = listOf(listed, "New").mapIndexed { i, store ->
@@ -48,7 +49,8 @@ class AddOnStopsReplayTest {
             assertEquals("job", job.jobId)
             assertEquals(drops, job.tasks.count { it.phase == TaskPhase.DROPOFF && it.mintedByOfferHash == "addon" })
             assertEquals(1, job.tasks.count { it.phase == TaskPhase.PICKUP && it.expectedStoreHint == "New" })
-            assertEquals(10L + drops + 1, region.mintCounter)
+            assertEquals(pickups, job.tasks.count { it.phase == TaskPhase.PICKUP } - old.tasks.count { it.phase == TaskPhase.PICKUP })
+            assertEquals(10L + drops + pickups, region.mintCounter)
             assertEquals(listOf("before", "addon"), job.acceptedOffers.map { it.offerHash })
         }
     }

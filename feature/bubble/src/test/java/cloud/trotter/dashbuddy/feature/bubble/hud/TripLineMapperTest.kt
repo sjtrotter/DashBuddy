@@ -72,14 +72,24 @@ class TripLineMapperTest {
         assertTrue(nodes.last().added)
     }
     @Test fun `added stores use the job's resolved store names`() {
-        val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
+        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept().copy(storeHints = listOf("Chick-fil-A"))),
+            tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
             it.copy(expectedStoreHint = "Chick-fil-A", storeName = "Chick Fil A") else it })
         val offer = OfferFixtures.addon().copy(stopCount = 3,
-            orders = listOf(OfferFixtures.order(" chick fil a "), OfferFixtures.order("New", 3)))
+            orders = listOf(OfferFixtures.order("chick fil a"), OfferFixtures.order("New", 3)))
         val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
         assertEquals(1, nodes.count { it.icon == TrackIcon.STORE })
         assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
         assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
+    }
+    @Test fun `padded owned store keeps the historical added stop counts`() {
+        val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
+            it.copy(expectedStoreHint = " Old ", storeName = " Old ") else it })
+        val offer = OfferFixtures.addon().copy(stopCount = 3,
+            orders = listOf(OfferFixtures.order("Old"), OfferFixtures.order("New", 3)))
+        val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
+        assertEquals(2, nodes.count { it.icon == TrackIcon.STORE })
+        assertEquals(1, nodes.count { it.icon == TrackIcon.HOUSE })
     }
 
 }

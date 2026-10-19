@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
 import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 
@@ -37,7 +38,9 @@ object OfferCardMapper {
         val before = job?.let(CombinedOffer::quote)
         val summed = job?.let { CombinedOffer.build(it, o) }
         if (job != null && before != null && summed != null && config != null &&
-            before.units == o.itemCountIsUnits) {
+            before.units == o.itemCountIsUnits && CombinedOffer.newOrders(job, o).all {
+                it.countUnit == if (before.units) CountUnit.UNITS else CountUnit.ITEMS
+            }) {
             val resolvedConfig = config.forPlatform(p.platform)
             val previousOffer = before.beforeOffer(o.offerHash)
             val previous = evaluate(previousOffer, resolvedConfig)

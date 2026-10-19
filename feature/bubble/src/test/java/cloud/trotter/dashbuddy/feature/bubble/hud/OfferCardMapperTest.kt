@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.*
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.*
+import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.state.*
 import org.junit.After
 import org.junit.Before
@@ -193,6 +194,16 @@ class OfferCardMapperTest {
             assertTrue(m is OfferCardModel.AddOnRaw)
             assertEquals(7.0, m.head.pay!!, 0.0)
         }
+    }
+    @Test fun `a new order in units on an items quote falls back`() {
+        val offer = addon.copy(itemCount = 16, itemCountIsUnits = false, orders = listOf(
+            f.order(), f.order("New", 4).copy(countUnit = CountUnit.UNITS)))
+        val m = OfferCardMapper.map(f.pending(offer), job, completed, f.config) { _, _ ->
+            error("Mixed denominations must not be evaluated as a combined offer")
+        }
+        assertTrue(m is OfferCardModel.AddOnRaw)
+        assertEquals(7.0, m.head.pay!!, 0.0)
+        assertEquals(DeltaTiles(12, 2.1, 2, 16), (m as OfferCardModel.AddOnRaw).tiles)
     }
 
 }

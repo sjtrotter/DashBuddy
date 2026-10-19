@@ -48,9 +48,19 @@ class CombinedOfferTest {
     @Test fun `owned orders are subtracted case insensitively as a multiset`() {
         val a = OfferFixtures.accept().copy(storeHints = listOf("Store", "STORE"), quotedItemCount = 24)
         val repeated = addon.copy(orders = listOf(
-            OfferFixtures.order(" store "), OfferFixtures.order("STORE"), OfferFixtures.order("Store", 3)))
-        val combined = CombinedOffer.build(job.copy(acceptedOffers = listOf(a),
-            tasks = job.tasks + job.tasks.first().copy(taskId = "pickup2")), repeated)!!
+            OfferFixtures.order("store"), OfferFixtures.order("STORE"), OfferFixtures.order("Store", 3)))
+        val combined = CombinedOffer.build(job.copy(acceptedOffers = listOf(a)), repeated)!!
+        assertEquals(3, combined.orders.size)
+        assertEquals(27, combined.itemCount)
+    }
+    @Test fun `two owned orders at one store are both subtracted`() {
+        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept(),
+            OfferFixtures.accept().copy(offerHash = "second")))
+        val offer = addon.copy(itemCount = 27, orders = listOf(
+            OfferFixtures.order(), OfferFixtures.order(), OfferFixtures.order("New", 3)))
+        val combined = CombinedOffer.build(owned, offer)!!
+        assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
+        assertEquals(listOf("Store", "Store", "New"), combined.orders.map { it.storeName })
         assertEquals(3, combined.orders.size)
         assertEquals(27, combined.itemCount)
     }
@@ -108,7 +118,7 @@ class CombinedOfferTest {
         val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept().copy(storeHints = listOf("Chick-fil-A"))),
             tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
                 it.copy(expectedStoreHint = "Chick-fil-A", storeName = "Chick Fil A") else it })
-        val offer = addon.copy(orders = listOf(OfferFixtures.order(" chick fil a "), OfferFixtures.order("New", 3)))
+        val offer = addon.copy(orders = listOf(OfferFixtures.order("chick fil a"), OfferFixtures.order("New", 3)))
         assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
         assertEquals(15, CombinedOffer.build(owned, offer)!!.itemCount)
     }

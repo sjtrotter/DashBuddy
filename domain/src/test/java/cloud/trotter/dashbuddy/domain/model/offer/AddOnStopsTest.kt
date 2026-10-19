@@ -14,14 +14,23 @@ class AddOnStopsTest {
     @Test fun `above the maximum is one`() {
         assertEquals(1, AddOnStops.addedDropoffs(AddOnStops.MAX_ADDON_STOPS + 1, 1))
     }
-    @Test fun `new stores key on trimmed lowercase names`() {
+    @Test fun `normalisation lowercases and does not trim`() {
+        assertEquals(" old ", storeKey(" OLD "))
         val owned = ownedStoreKeys(listOf(Task(
             "pickup", "job", TaskPhase.PICKUP,
-            expectedStoreHint = " Chick-fil-A ", storeName = "Chick Fil A", startedAt = 0)))
-        val offer = ParsedOffer("addon", orders = listOf(" chick fil a ", "CHICK-FIL-A", " New ", "NEW", " ")
+            expectedStoreHint = " OLD ", storeName = " Old ", startedAt = 0)))
+        assertEquals(listOf(" old "), owned)
+        assertEquals(listOf("Old", "New"), newStores(owned, listOf("Old", "New")))
+        assertEquals(listOf(" New ", "New"), newStores(emptyList(), listOf(" New ", " NEW ", "New")))
+    }
+    @Test fun `new stores key on lowercased names`() {
+        val owned = ownedStoreKeys(listOf(Task(
+            "pickup", "job", TaskPhase.PICKUP,
+            expectedStoreHint = "Chick-fil-A", storeName = "Chick Fil A", startedAt = 0)))
+        val offer = ParsedOffer("addon", orders = listOf("chick fil a", "CHICK-FIL-A", "New", "NEW", "")
             .mapIndexed { i, store -> ParsedOrder(
                 i, OrderType.PICKUP, store, 1, false, emptySet()) })
         assertEquals(listOf("New"), newStores(owned, offer))
-        assertEquals(listOf("New"), newStores(listOf(" CHICK FIL A ", "CHICK-FIL-A"), offer))
+        assertEquals(listOf("New"), newStores(listOf("CHICK FIL A", "CHICK-FIL-A"), offer))
     }
 }
