@@ -17,19 +17,27 @@ fun ownedStoreKeys(tasks: Collection<Task>): List<String> = tasks
     .filter { it.isNotEmpty() }
 
 /** First-seen store names new to the route (never one entry per order). */
-fun newStores(ownedKeys: Collection<String>, storeNames: Collection<String>): List<String> {
-    val owned = ownedKeys.map(::storeKey).toSet()
-    return storeNames.filter { it.isNotEmpty() }
-        .distinctBy(::storeKey).filter { storeKey(it) !in owned }
-}
+fun newStores(ownedKeys: Collection<String>, storeNames: Collection<String>): List<String> =
+    AddOnStops.newStores(ownedKeys, storeNames)
 
 fun newStores(ownedKeys: Collection<String>, offer: ParsedOffer): List<String> =
-    newStores(ownedKeys, offer.orders.map { it.storeName })
+    AddOnStops.newStores(ownedKeys, offer)
 
 /** The route's added stops include both new stores and dropoffs. One add-on always adds a drop. */
 object AddOnStops {
     // Untrusted card text outside a real route's range is treated as unparsed.
     const val MAX_ADDON_STOPS = 8
+
+    /** First-seen names after the caller has prepared incoming hints. */
+    fun newStores(ownedKeys: Collection<String>, storeNames: Collection<String>): List<String> {
+        val owned = ownedKeys.map(::storeKey).toSet()
+        return storeNames.filter { it.isNotEmpty() }
+            .distinctBy(::storeKey).filter { storeKey(it) !in owned }
+    }
+
+    /** Mirror appendAddOn's incoming hint trimming; owned pickup keys retain their original padding. */
+    fun newStores(ownedKeys: Collection<String>, offer: ParsedOffer): List<String> =
+        newStores(ownedKeys, offer.orders.map { it.storeName.trim() })
 
     fun addedDropoffs(stopCount: Int?, newStores: Int): Int =
         stopCount?.takeIf { it in 1..MAX_ADDON_STOPS }

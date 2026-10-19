@@ -205,5 +205,21 @@ class OfferCardMapperTest {
         assertEquals(7.0, m.head.pay!!, 0.0)
         assertEquals(DeltaTiles(12, 2.1, 2, 16), (m as OfferCardModel.AddOnRaw).tiles)
     }
+    @Test fun `a count free pickup never trips the unit guard`() {
+        val owned = job.copy(acceptedOffers = listOf(f.accept().copy(offerUnitCount = 12)))
+        val offer = addon.copy(itemCount = 12, itemCountIsUnits = true, orders = listOf(
+            f.order().copy(countUnit = CountUnit.UNITS), f.order("New", 1, shop = false)))
+        val evaluated = mutableListOf<ParsedOffer>()
+        val model = OfferCardMapper.map(f.pending(offer), owned, completed, f.config) { o, c ->
+            evaluated += o
+            OfferEvaluator().evaluate(o, c)
+        }
+        assertTrue(model is OfferCardModel.Combined)
+        assertEquals(listOf(12, 12), evaluated.map { it.itemCount })
+        assertTrue(evaluated.all { it.itemCountIsUnits })
+        val item = (model as OfferCardModel.Combined).gauges.single { it.kind == GaugeKind.ITEM }
+        assertEquals("12", item.denominatorText)
+        assertEquals("+0", item.deltaText)
+    }
 
 }

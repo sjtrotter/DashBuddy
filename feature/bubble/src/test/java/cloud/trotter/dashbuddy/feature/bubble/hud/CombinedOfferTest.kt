@@ -45,24 +45,31 @@ class CombinedOfferTest {
         assertEquals(listOf("Store", "New"), combined.orders.map { it.storeName })
         assertEquals(listOf(0, 1), combined.orders.map { it.orderIndex })
     }
-    @Test fun `owned orders are subtracted case insensitively as a multiset`() {
-        val a = OfferFixtures.accept().copy(storeHints = listOf("Store", "STORE"), quotedItemCount = 24)
-        val repeated = addon.copy(orders = listOf(
-            OfferFixtures.order("store"), OfferFixtures.order("STORE"), OfferFixtures.order("Store", 3)))
-        val combined = CombinedOffer.build(job.copy(acceptedOffers = listOf(a)), repeated)!!
-        assertEquals(3, combined.orders.size)
-        assertEquals(27, combined.itemCount)
+    @Test fun `new orders are the listed orders at stores the state machine calls new`() {
+        // Ownership comes from pickup tasks, even when accepted hints differ or repeat.
+        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept().copy(
+            storeHints = listOf("New", "New"))))
+        val offer = addon.copy(orders = listOf(
+            OfferFixtures.order(" Store "), OfferFixtures.order("New", 3),
+            OfferFixtures.order("STORE"), OfferFixtures.order("NEW", 2)))
+        val expectedStores = AddOnStops.newStores(ownedStoreKeys(owned.tasks), offer)
+        assertEquals(listOf("New"), expectedStores)
+        assertEquals(listOf(offer.orders[1], offer.orders[3]), CombinedOffer.newOrders(owned, offer))
+        assertEquals(17, CombinedOffer.build(owned, offer)!!.itemCount)
     }
-    @Test fun `two owned orders at one store are both subtracted`() {
-        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept(),
-            OfferFixtures.accept().copy(offerHash = "second")))
-        val offer = addon.copy(itemCount = 27, orders = listOf(
-            OfferFixtures.order(), OfferFixtures.order(), OfferFixtures.order("New", 3)))
-        val combined = CombinedOffer.build(owned, offer)!!
-        assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
-        assertEquals(listOf("Store", "Store", "New"), combined.orders.map { it.storeName })
-        assertEquals(3, combined.orders.size)
-        assertEquals(27, combined.itemCount)
+    @Test fun `a second order at an owned store is not counted as new`() {
+        val same = addon.copy(orders = listOf(OfferFixtures.order("STORE"), OfferFixtures.order("store", 3)))
+        assertTrue(CombinedOffer.newOrders(job, same).isEmpty())
+        val combined = CombinedOffer.build(job, same)!!
+        assertEquals(listOf("Store"), combined.orders.map { it.storeName })
+        assertEquals(12, combined.itemCount)
+        assertTrue(CombinedOffer.newOrders(job, same.copy(orders = same.orders.take(1))).isEmpty())
+    }
+    @Test fun `listing order is kept`() {
+        val offer = addon.copy(orders = listOf(OfferFixtures.order("Z", 2),
+            OfferFixtures.order("Store"), OfferFixtures.order(" A ", 3), OfferFixtures.order("z", 4)))
+        assertEquals(listOf(offer.orders[0], offer.orders[2], offer.orders[3]), CombinedOffer.newOrders(job, offer))
+        assertEquals(listOf("Store", "Z", " A ", "z"), CombinedOffer.build(job, offer)!!.orders.map { it.storeName })
     }
     @Test fun `without owned pickups all add on orders are new`() {
         val a = OfferFixtures.accept().copy(storeHints = emptyList())
@@ -71,22 +78,10 @@ class CombinedOfferTest {
         assertEquals(listOf("Store", "New"), combined.orders.map { it.storeName })
         assertEquals(27, combined.itemCount)
     }
-    @Test fun `a fully subtracted listing is a same store add on and keeps its orders as new`() {
-        // The add-on's pay and miles are deltas, so a listing that only matches the owned store still adds a stop.
-        val combined = CombinedOffer.build(job, addon.copy(orders = listOf(OfferFixtures.order("STORE", 3))))!!
-        assertEquals(listOf("Store", "STORE"), combined.orders.map { it.storeName })
-        assertEquals(15, combined.itemCount)
-    }
     @Test fun `adding a plain pickup to a shop adds no items`() {
         val combined = CombinedOffer.build(job, addon.copy(orders = listOf(OfferFixtures.order("New", 1, shop = false))))!!
         assertEquals(2, combined.orders.size)
         assertEquals(12, combined.itemCount)
-    }
-    @Test fun `same store add on keeps one new order`() {
-        val same = addon.copy(orders = listOf(OfferFixtures.order("STORE"), OfferFixtures.order("store", 3)))
-        val combined = CombinedOffer.build(job, same)!!
-        assertEquals(2, combined.orders.size)
-        assertEquals(15, combined.itemCount)
     }
     @Test fun `combined offer is a total standalone quote`() {
         val combined = CombinedOffer.build(job, addon)!!
@@ -114,11 +109,11 @@ class CombinedOfferTest {
         assertEquals(listOf(OrderType.SHOP_FOR_ITEMS, OrderType.PICKUP), before.orders.map { it.orderType })
         assertNull(before.timeToCompleteMinutes)
     }
-    @Test fun `new orders use the job's resolved store names`() {
-        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept().copy(storeHints = listOf("Chick-fil-A"))),
+    @Test fun `an alias resolved name is owned`() {
+        val owned = job.copy(acceptedOffers = listOf(OfferFixtures.accept().copy(storeHints = listOf("Chick Fil A"))),
             tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
-                it.copy(expectedStoreHint = "Chick-fil-A", storeName = "Chick Fil A") else it })
-        val offer = addon.copy(orders = listOf(OfferFixtures.order("chick fil a"), OfferFixtures.order("New", 3)))
+                it.copy(expectedStoreHint = "Chick Fil A", storeName = "Chick-fil-A") else it })
+        val offer = addon.copy(orders = listOf(OfferFixtures.order("Chick-fil-A"), OfferFixtures.order("New", 3)))
         assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
         assertEquals(15, CombinedOffer.build(owned, offer)!!.itemCount)
     }

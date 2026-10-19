@@ -33,4 +33,11 @@ class AddOnStopsTest {
         assertEquals(listOf("New"), newStores(owned, offer))
         assertEquals(listOf("New"), newStores(listOf("CHICK FIL A", "CHICK-FIL-A"), offer))
     }
+    @Test fun `offer hints are trimmed while owned keys keep their padding`() {
+        val offer = ParsedOffer("addon", orders = listOf(" Old ", " New ", "NEW", " ")
+            .mapIndexed { i, store -> ParsedOrder(i, OrderType.PICKUP, store, 1, false, emptySet()) })
+        assertEquals(listOf("New"), AddOnStops.newStores(listOf("old"), offer))
+        assertEquals(listOf("Old", "New"), AddOnStops.newStores(listOf(" old "), offer))
+        assertEquals(AddOnStops.newStores(listOf("old"), offer), newStores(listOf("old"), offer))
+    }
 }

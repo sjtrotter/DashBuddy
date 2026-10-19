@@ -1,14 +1,15 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.domain.model.offer.AddOnStops
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
 import cloud.trotter.dashbuddy.domain.model.offer.storeKey
 import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.state.Job
-import cloud.trotter.dashbuddy.domain.state.TaskPhase
 
 /** Accept-time economics, independent of arrival corrections and today's economy. */
 data class JobQuote(val pay: Double, val net: Double, val minutes: Double, val miles: Double,
@@ -41,24 +42,13 @@ object CombinedOffer {
     }
 
     /**
-     * Whole-route listings include owned orders. Each accepted hint owns one order, with its pickup's
-     * resolved name as an alias; several orders can share one pickup without losing their multiplicity.
-     * An add-on whose every listed order matches an owned store (a second order at the same store) still
-     * ADDS a stop: its pay and miles are deltas, so the listing is taken whole rather than emptied.
+     * Listed orders at stores the state machine calls new, in listing order.
+     * A second order at an owned store is not counted as new, matching the state machine:
+     * #1304 mints dropoffs by stop count, never per listed row.
      */
     internal fun newOrders(job: Job, offer: ParsedOffer): List<ParsedOrder> {
-        val pickups = job.tasks.filter { it.phase == TaskPhase.PICKUP }
-        val owned = job.acceptedOffers.flatMap { it.storeHints }.map { hint ->
-            val key = storeKey(hint)
-            setOf(key) + pickups.filter { it.expectedStoreHint?.let(::storeKey) == key }
-                .mapNotNull { it.storeName?.let(::storeKey) }
-        }.toMutableList()
-        val remaining = offer.orders.filter { order ->
-            val key = storeKey(order.storeName)
-            val at = owned.indexOfFirst { key in it }
-            if (at < 0) true else { owned.removeAt(at); false }
-        }
-        return if (remaining.isEmpty() && offer.orders.isNotEmpty()) offer.orders else remaining
+        val newStores = AddOnStops.newStores(ownedStoreKeys(job.tasks), offer).map(::storeKey).toSet()
+        return offer.orders.filter { storeKey(it.storeName.trim()) in newStores }
     }
 
     /** Temporary evaluator input only. Never pass this synthetic identity to an action or writer. */

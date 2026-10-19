@@ -38,7 +38,8 @@ object OfferCardMapper {
         val before = job?.let(CombinedOffer::quote)
         val summed = job?.let { CombinedOffer.build(it, o) }
         if (job != null && before != null && summed != null && config != null &&
-            before.units == o.itemCountIsUnits && CombinedOffer.newOrders(job, o).all {
+            before.units == o.itemCountIsUnits && CombinedOffer.newOrders(job, o)
+                .filter { it.orderType.isShoppingOrder && it.itemCount > 0 }.all {
                 it.countUnit == if (before.units) CountUnit.UNITS else CountUnit.ITEMS
             }) {
             val resolvedConfig = config.forPlatform(p.platform)

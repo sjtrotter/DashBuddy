@@ -3,7 +3,11 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 import org.junit.Assert.*
 import org.junit.Test
 
+import cloud.trotter.dashbuddy.domain.model.offer.AddOnStops
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.offer.newStores
+import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
+import cloud.trotter.dashbuddy.domain.model.offer.storeKey
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 
 class TripLineMapperTest {
@@ -39,6 +43,26 @@ class TripLineMapperTest {
     }
     @Test fun `added drops are stop count minus new stores`() {
         assertEquals(2, added(OfferFixtures.addon().copy(stopCount = 3)).count { it.icon == TrackIcon.HOUSE })
+    }
+    @Test fun `added nodes match the state machine's new stores and drop count`() {
+        val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
+            it.copy(expectedStoreHint = "Old", storeName = "Old") else it })
+        val offer = OfferFixtures.addon().copy(stopCount = 3,
+            orders = listOf(OfferFixtures.order(" Old "), OfferFixtures.order("New", 3)))
+        // appendAddOn prepares LISTED hints with distinctStoreHints: trim, remove blanks, dedupe.
+        val hints = offer.orders.map { it.storeName.trim() }.filter { it.isNotEmpty() }.distinctBy(::storeKey)
+        val stateStores = newStores(ownedStoreKeys(owned.tasks), hints)
+        val stateDrops = AddOnStops.addedDropoffs(offer.stopCount, stateStores.size)
+        assertEquals(listOf("New"), stateStores)
+        assertEquals(2, stateDrops)
+        assertEquals(stateStores, AddOnStops.newStores(ownedStoreKeys(owned.tasks), offer))
+        val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
+        assertEquals(1, nodes.count { it.icon == TrackIcon.STORE })
+        assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
+        assertEquals(stateStores.size, nodes.count { it.icon == TrackIcon.STORE })
+        assertEquals(stateDrops, nodes.count { it.icon == TrackIcon.HOUSE })
+        assertEquals(listOf(offer.orders[1]), CombinedOffer.newOrders(owned, offer))
+        assertEquals(15, CombinedOffer.build(owned, offer)!!.itemCount)
     }
     @Test fun `unparsed stop count adds one house`() {
         assertEquals(1, added(OfferFixtures.addon().copy(stopCount = null)).count { it.icon == TrackIcon.HOUSE })

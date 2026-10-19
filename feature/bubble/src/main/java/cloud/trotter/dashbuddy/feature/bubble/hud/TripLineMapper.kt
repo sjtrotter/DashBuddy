@@ -2,7 +2,6 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import cloud.trotter.dashbuddy.domain.model.offer.AddOnStops
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
-import cloud.trotter.dashbuddy.domain.model.offer.newStores
 import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
 import cloud.trotter.dashbuddy.domain.model.offer.storeKey
 import cloud.trotter.dashbuddy.domain.state.Job
@@ -15,7 +14,7 @@ object TripLineMapper {
 
     fun withAddOn(job: Job, o: ParsedOffer): TripLineModel {
         val pickups = job.tasks.filter { it.phase == TaskPhase.PICKUP }
-        val addedStores = newStores(ownedStoreKeys(job.tasks), o)
+        val addedStores = AddOnStops.newStores(ownedStoreKeys(job.tasks), o)
         val oldStores = pickups.size.coerceAtLeast(1)
         val drops = job.tasks.count { it.phase == TaskPhase.DROPOFF }.coerceAtLeast(1)
         return capped(listOf(TripNode(TrackIcon.NAV_PIN)) +
