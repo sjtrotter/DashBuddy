@@ -11,8 +11,8 @@ import cloud.trotter.dashbuddy.domain.model.cards.*
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
-    private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
-        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
+    private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0),
+        last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
         odometerLoaded: Boolean = true, odometerCue: Boolean = false,
         goal: Double? = null, today: Double? = null, goalSheetOpen: Boolean = false,
         editedGoalKey: String? = null) = HudStateMapper.map(
@@ -20,7 +20,7 @@ class HudStateMapperTest {
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
-        countExpenses = count, goal = goal, todayProfit = today, hasActiveCard = !rest, hasOfferCard = false,
+        goal = goal, todayProfit = today, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
         odometerLoaded = odometerLoaded, odometerCue = odometerCue,
         goalDay = java.time.LocalDate.of(2026, 10, 18), mark = MarkRead.Loaded(null),
@@ -81,13 +81,8 @@ class HudStateMapperTest {
     }
 
     @Test
-    fun `count expenses preference reaches kept`() {
-        assertEquals(60.0, map(count = true).hero.profit!!, 0.0)
-    }
-
-    @Test
     fun `resting profit per hour is kept over online hours`() {
-        assertEquals(Formats.money(30.0), map(rest = true, count = true).resting!!.profitPerHour)
+        assertEquals(Formats.money(33.5), map(rest = true).resting!!.profitPerHour)
     }
 
     @Test

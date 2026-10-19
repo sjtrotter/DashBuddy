@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
@@ -18,6 +21,7 @@ import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.LogData
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
@@ -64,6 +68,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -90,6 +95,7 @@ import org.mockito.kotlin.whenever
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.ZoneId
 
 /**
  * #693 — the bubble's post-dash idle surface reads the analytics read-model, not an in-memory
@@ -118,6 +124,7 @@ class BubbleViewModelTest {
     private val devSettingsRepository: DevSettingsRepository = mock()
 
     private val dispatcher = StandardTestDispatcher()
+    private val clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC)
 
     /** The state the VM reads; tests mutate it to drive multi-app scenarios (#867). */
     private val state = MutableStateFlow(AppState())
@@ -138,10 +145,11 @@ class BubbleViewModelTest {
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
         whenever(odometerRepository.totalMilesFlow).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
-        whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
         whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
         whenever(ledgerRepository.sessionNet(any())).thenReturn(flowOf(null))
+        whenever(ledgerRepository.expensesUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
+        whenever(ledgerRepository.fuelUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(3.50f))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(true))
@@ -161,7 +169,12 @@ class BubbleViewModelTest {
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
         return repo
     }
-    private fun viewModel(garageRepository: GarageRepository = garage(), readingRepository: OdometerReadingRepository = readings()) = BubbleViewModel(
+    private fun viewModel(
+        garageRepository: GarageRepository = garage(),
+        readingRepository: OdometerReadingRepository = readings(),
+        ledger: LedgerRepository = ledgerRepository,
+        testClock: Clock = clock,
+    ) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
@@ -172,10 +185,10 @@ class BubbleViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
-        ledgerRepository = ledgerRepository,
+        ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
-        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
+        clock = testClock,
     )
 
     @Test
@@ -360,6 +373,96 @@ class BubbleViewModelTest {
     }
 
     @Test
+    fun `logData uses the live dash start day across midnight and at rest`() = runTest {
+        checkUnassignedLog(hasDash = true, live = true)
+    }
+
+    @Test
+    fun `logData at rest shows yesterday beside yesterday's dash and excludes today's fee`() = runTest {
+        checkUnassignedLog(hasDash = true, live = false)
+    }
+
+    @Test
+    fun `logData with no dash uses today and rolls over at local midnight`() = runTest {
+        checkUnassignedLog(hasDash = false, live = false)
+    }
+
+    private suspend fun TestScope.checkUnassignedLog(hasDash: Boolean, live: Boolean) {
+        stubNoDashes()
+        val zone = ZoneId.systemDefault()
+        val date = java.time.LocalDate.of(2026, 10, 18)
+        val midnight = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val initialNow = if (live || !hasDash) midnight - 5 * 60_000L else midnight + 30 * 60_000L
+        val tickingClock = object : Clock() {
+            override fun getZone() = zone
+            override fun withZone(zone: ZoneId): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(initialNow + testScheduler.currentTime)
+        }
+        val start = midnight - 60 * 60_000L
+        val expense = ExpenseRecordEntity(20, null, midnight - 10 * 60_000L, "FOOD", 11.4, null, null)
+        val fillup = FuelRecordEntity(30, null, expense.occurredAt, 31.9, 10.0, null, null)
+        val expenses = MutableStateFlow(listOf(expense))
+        val fuel = MutableStateFlow(listOf(fillup))
+        val dao: LedgerDao = mock()
+        whenever(dao.expensesUnassignedBetween(any(), any())).thenAnswer { call ->
+            val from = call.getArgument<Long>(0)
+            val until = call.getArgument<Long>(1)
+            expenses.map { rows -> rows.filter { it.occurredAt >= from && it.occurredAt < until } }
+        }
+        whenever(dao.fuelUnassignedBetween(any(), any())).thenAnswer { call ->
+            val from = call.getArgument<Long>(0)
+            val until = call.getArgument<Long>(1)
+            fuel.map { rows -> rows.filter { it.occurredAt >= from && it.occurredAt < until } }
+        }
+        whenever(dao.expensesForSession(any())).thenReturn(flowOf(emptyList()))
+        whenever(dao.fuelForSession(any())).thenReturn(flowOf(emptyList()))
+        whenever(analyticsRepository.sessionDetail(any())).thenReturn(flowOf(null))
+        if (hasDash) {
+            whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf("session-dd"))
+            whenever(appEventRepo.getEventsForSession("session-dd")).thenReturn(
+                // A late/recovered event timestamp must not replace the payload's actual start day.
+                flowOf(listOf(AppEvent(
+                    AppEventType.DASH_START, midnight + 1, "session-dd",
+                    SessionStartPayload("session-dd", Platform.DoorDash.wire, start, "recovery", "test"),
+                ))),
+            )
+        }
+        if (live) state.value = earningsState("session-dd", startedAt = start)
+        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao, analyticsRepository), testClock = tickingClock)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
+        runCurrent()
+        assertEquals(listOf(20L), vm.logData.value.expenses.map { it.eventSequenceId })
+        assertEquals(listOf(30L), vm.logData.value.fuel.map { it.eventSequenceId })
+
+        // A 00:20 fee belongs to the next day, even beside a dash still live from yesterday.
+        if (live || !hasDash) advanceTimeBy(35 * 60_000L)
+        expenses.value += expense.copy(eventSequenceId = 21, occurredAt = midnight + 20 * 60_000L)
+        fuel.value += fillup.copy(eventSequenceId = 31, occurredAt = midnight + 20 * 60_000L)
+        runCurrent()
+        val expenseId = if (hasDash) 20L else 21L
+        val fuelId = if (hasDash) 30L else 31L
+        assertEquals(listOf(expenseId), vm.logData.value.expenses.map { it.eventSequenceId })
+        assertEquals(listOf(fuelId), vm.logData.value.fuel.map { it.eventSequenceId })
+
+        expenses.value = expenses.value.map { it.copy(voidedAt = tickingClock.millis()) }
+        fuel.value = fuel.value.map { it.copy(voidedAt = tickingClock.millis()) }
+        runCurrent()
+        assertEquals(tickingClock.millis(), vm.logData.value.expenses.single().voidedAt)
+        assertEquals(tickingClock.millis(), vm.logData.value.fuel.single().voidedAt)
+        if (live) {
+            state.value = AppState()
+            runCurrent()
+            assertEquals(20L, vm.logData.value.expenses.single().eventSequenceId)
+            assertEquals(30L, vm.logData.value.fuel.single().eventSequenceId)
+            // Starting a new dash switches the unassigned window to its own day.
+            state.value = earningsState("next-dash", startedAt = midnight + 25 * 60_000L)
+            runCurrent()
+            assertEquals(21L, vm.logData.value.expenses.single().eventSequenceId)
+            assertEquals(31L, vm.logData.value.fuel.single().eventSequenceId)
+        }
+    }
+
+    @Test
     fun `log data and cards share one events read per session`() = runTest {
         stubNoDashes()
         modeFlow.value = BubbleSessionMode.MERGED
@@ -395,7 +498,7 @@ class BubbleViewModelTest {
     fun `sessionNet follows the displayed session`() = runTest {
         val last = session("last", 10.0, 1)
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(last)))
-        val lastNet = SessionNet("last", 8.0, 0.0, 0.0, 0.0, 20.0)
+        val lastNet = SessionNet("last", 8.0, 0.0, 0.0)
         val ddNet = lastNet.copy(sessionId = "session-dd", deliveredNet = 18.0)
         val uberFlow = MutableStateFlow(lastNet.copy(sessionId = "session-uber", deliveredNet = 28.0))
         whenever(ledgerRepository.sessionNet("last")).thenReturn(flowOf(lastNet))
@@ -436,6 +539,15 @@ class BubbleViewModelTest {
         runCurrent()
         assertNull(vm.dailyGoal.value)
         job.cancel()
+    }
+
+    @Test
+    fun `goal day follows the injected fixed clock`() = runTest {
+        stubNoDashes()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalDay.collect {} }
+        runCurrent()
+        assertEquals(clock.instant().atZone(ZoneId.systemDefault()).toLocalDate(), vm.goalDay.value!!.date)
     }
 
     @Test
@@ -607,14 +719,14 @@ class BubbleViewModelTest {
         whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
     }
 
-    private fun earningsState(id: String, earnings: Double? = null) = AppState(
+    private fun earningsState(id: String, earnings: Double? = null, startedAt: Long = 100L) = AppState(
         regions = Regions(
             flow = FlowRegion(activePlatform = Platform.DoorDash),
             platforms = mapOf(
                 Platform.DoorDash to PlatformRegion(
                     platform = Platform.DoorDash,
                     mode = Mode.Online,
-                    session = Session(id, startedAt = 100L, runningEarnings = earnings),
+                    session = Session(id, startedAt = startedAt, runningEarnings = earnings),
                 ),
             ),
         ),

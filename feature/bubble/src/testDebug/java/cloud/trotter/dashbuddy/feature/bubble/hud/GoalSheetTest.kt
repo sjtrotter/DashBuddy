@@ -135,7 +135,7 @@ class GoalSheetTest {
                             region = PlatformRegion(Platform.DoorDash, Mode.Online, Session("live", 1_000)),
                             flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
                             earnings = 100.0, miles = 42.5, lastSession = null, net = null,
-                            countExpenses = false, goal = 150.0, todayProfit = 71.2,
+                            goal = 150.0, todayProfit = 71.2,
                             hasActiveCard = true, hasOfferCard = false, logOpen = false,
                             gas = GasRowModel(3.5f, true), odometerLoaded = true, goalSheetOpen = true)
                         HudScreen(state, null, {}, sheetOpen = true,

@@ -14,13 +14,6 @@ class LedgerModelsTest {
     }
 
     @Test
-    fun `kept subtracts logged expenses and never fuel`() {
-        val net = SessionNet("S", 20.0, 3.0, 2.0, expenses = 3.0, fuel = 5.0)
-        assertEquals(25.0, net.kept(countExpenses = false), 0.0)
-        assertEquals(22.0, net.kept(countExpenses = true), 0.0)
-    }
-
-    @Test
     fun `expense categories fall back to OTHER for missing and unknown names`() {
         assertEquals(ExpenseCategory.OTHER, ExpenseCategory.fromStorage("bogus"))
         assertEquals(ExpenseCategory.OTHER, ExpenseCategory.fromStorage(null))

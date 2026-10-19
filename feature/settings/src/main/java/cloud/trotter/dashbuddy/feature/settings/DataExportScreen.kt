@@ -31,7 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.settings.R
 
 /**
- * Free-tier CSV data export (#319). One folder pick → three CSVs (deliveries, sessions, summary)
+ * Free-tier CSV data export (#319). One folder pick → five CSVs (deliveries, sessions, summary, expenses, fuel)
  * written into it. All-time export (v1); a date-range picker is a follow-up. Driver-owned data out,
  * no network, no storage permission (Storage Access Framework grants the chosen folder only).
  */

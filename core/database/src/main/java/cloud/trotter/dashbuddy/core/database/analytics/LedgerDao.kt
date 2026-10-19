@@ -31,23 +31,11 @@ abstract class LedgerDao {
     @Query("SELECT * FROM fuel_records WHERE sessionId = :sessionId ORDER BY occurredAt, eventSequenceId")
     abstract fun fuelForSession(sessionId: String): Flow<List<FuelRecordEntity>>
 
-    @Query("SELECT * FROM expense_records WHERE sessionId IS NULL ORDER BY occurredAt, eventSequenceId")
-    abstract fun expensesUnassigned(): Flow<List<ExpenseRecordEntity>>
+    @Query("SELECT * FROM expense_records WHERE sessionId IS NULL AND occurredAt >= :start AND occurredAt < :end ORDER BY occurredAt, eventSequenceId")
+    abstract fun expensesUnassignedBetween(start: Long, end: Long): Flow<List<ExpenseRecordEntity>>
 
-    @Query("SELECT * FROM fuel_records WHERE sessionId IS NULL ORDER BY occurredAt, eventSequenceId")
-    abstract fun fuelUnassigned(): Flow<List<FuelRecordEntity>>
-
-    @Query("""
-        SELECT COALESCE(SUM(amount), 0) FROM expense_records
-        WHERE sessionId = :sessionId AND voidedAt IS NULL
-    """)
-    abstract fun expenseTotalForSession(sessionId: String): Flow<Double>
-
-    @Query("""
-        SELECT COALESCE(SUM(totalAmount), 0) FROM fuel_records
-        WHERE sessionId = :sessionId AND voidedAt IS NULL
-    """)
-    abstract fun fuelTotalForSession(sessionId: String): Flow<Double>
+    @Query("SELECT * FROM fuel_records WHERE sessionId IS NULL AND occurredAt >= :start AND occurredAt < :end ORDER BY occurredAt, eventSequenceId")
+    abstract fun fuelUnassignedBetween(start: Long, end: Long): Flow<List<FuelRecordEntity>>
 
     /**
      * Distinct notes, ordered by each note's newest surviving occurrence (time, then sequence id of
@@ -64,6 +52,13 @@ abstract class LedgerDao {
         ORDER BY occurredAt DESC, eventSequenceId DESC LIMIT :limit
     """)
     abstract fun recentNotes(category: String, limit: Int): Flow<List<String>>
+
+    /** All projected rows, including voids, for the export trail. */
+    @Query("SELECT * FROM expense_records ORDER BY occurredAt, eventSequenceId")
+    abstract suspend fun allExpenses(): List<ExpenseRecordEntity>
+
+    @Query("SELECT * FROM fuel_records ORDER BY occurredAt, eventSequenceId")
+    abstract suspend fun allFuel(): List<FuelRecordEntity>
 
     @Query("DELETE FROM expense_records")
     abstract suspend fun deleteAllExpenses()

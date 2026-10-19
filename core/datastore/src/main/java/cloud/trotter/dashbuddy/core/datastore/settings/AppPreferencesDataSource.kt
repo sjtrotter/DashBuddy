@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The legacy count_real_expenses_in_kept key is no longer read; DataStore ignores it. */
 @Singleton
 class AppPreferencesDataSource @Inject constructor(
     @param:AppPreferences private val ds: DataStore<Preferences>
@@ -34,7 +35,6 @@ class AppPreferencesDataSource @Inject constructor(
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
         val ODOMETER_PROMPTS = booleanPreferencesKey("odometer_prompts")
-        val COUNT_REAL_EXPENSES_IN_KEPT = booleanPreferencesKey("count_real_expenses_in_kept")
         val DAILY_KEPT_GOAL_DOLLARS = doublePreferencesKey("daily_kept_goal_dollars")
         val HUD_PILL_SHOWS_EARNINGS = booleanPreferencesKey("hud_pill_shows_earnings")
         val ANALYTICS_SHOW_MORE = booleanPreferencesKey("analytics_show_more")
@@ -166,7 +166,6 @@ class AppPreferencesDataSource @Inject constructor(
     val electricityPricePerKwh: Flow<Double?> = ds.data.map { it[Keys.ELECTRICITY_PRICE_PER_KWH] }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
     val odometerPrompts: Flow<Boolean> = ds.data.map { it[Keys.ODOMETER_PROMPTS] ?: true }
-    val countRealExpensesInKept: Flow<Boolean> = ds.data.map { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] ?: false }
     val dailyKeptGoalDollars: Flow<Double?> = ds.data.map { it[Keys.DAILY_KEPT_GOAL_DOLLARS] }
     val hudPillShowsEarnings: Flow<Boolean> = ds.data.map { it[Keys.HUD_PILL_SHOWS_EARNINGS] ?: true }
 
@@ -292,10 +291,6 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun setOdometerPrompts(enabled: Boolean) {
         ds.edit { it[Keys.ODOMETER_PROMPTS] = enabled }
-    }
-
-    suspend fun setCountRealExpensesInKept(enabled: Boolean) {
-        ds.edit { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] = enabled }
     }
 
     suspend fun setDailyKeptGoalDollars(value: Double?) {

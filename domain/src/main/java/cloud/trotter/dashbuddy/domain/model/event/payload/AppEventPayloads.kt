@@ -573,6 +573,7 @@ data class FuelFillupPayload(
     val sessionId: String?,
     val totalAmount: Double,
     val gallons: Double? = null,
+    /** The app's GPS lifetime total at the fill-up, not a typed car odometer reading. */
     val odometerMiles: Double? = null,
 ) : AppEventPayload
 

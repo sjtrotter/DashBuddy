@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
-import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
 import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
@@ -12,8 +12,9 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,6 +81,18 @@ class LedgerRepository @Inject constructor(
         )
     }
 
+    /**
+     * Every projected expense row, oldest first, including voids and stored attribution, for CSV
+     * export. Domain records: a feature module never sees an entity.
+     */
+    suspend fun allExpenses(): List<ExpenseRecord> = ledgerDao.allExpenses().map { it.toDomain() }
+
+    /**
+     * Every projected fuel row, oldest first, including voids and stored attribution, for CSV
+     * export. Domain records: a feature module never sees an entity.
+     */
+    suspend fun allFuel(): List<FuelRecord> = ledgerDao.allFuel().map { it.toDomain() }
+
     fun recentLabels(category: ExpenseCategory, limit: Int = 6): Flow<List<String>> =
         ledgerDao.recentNotes(category.name, limit)
 
@@ -89,17 +102,31 @@ class LedgerRepository @Inject constructor(
     fun fuelForSession(sessionId: String): Flow<List<FuelRecord>> =
         ledgerDao.fuelForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
 
+    /** Unassigned ledger rows beside a dash of this local day, including voids. */
+    fun expensesUnassignedOn(date: LocalDate, zone: ZoneId): Flow<List<ExpenseRecord>> {
+        val bounds = dayBounds(date, zone)
+        return ledgerDao.expensesUnassignedBetween(bounds.start, bounds.end)
+            .map { rows -> rows.map { it.toDomain() } }
+    }
+
+    fun fuelUnassignedOn(date: LocalDate, zone: ZoneId): Flow<List<FuelRecord>> {
+        val bounds = dayBounds(date, zone)
+        return ledgerDao.fuelUnassignedBetween(bounds.start, bounds.end)
+            .map { rows -> rows.map { it.toDomain() } }
+    }
+
+    private fun dayBounds(date: LocalDate, zone: ZoneId) = PeriodBounds.Bounds(
+        date.atStartOfDay(zone).toInstant().toEpochMilli(),
+        date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
+    )
+
     /**
      * #1333: the HUD's "kept" source; projector lag is accepted and disclosed on the surface.
      * Null without a session or any money term: no deliveries, cash tips, or unattributed pay.
      * Expenses alone do not make the dash's kept figure available.
      */
     fun sessionNet(sessionId: String): Flow<SessionNet?> =
-        combine(
-            analyticsRepository.sessionDetail(sessionId),
-            ledgerDao.expenseTotalForSession(sessionId),
-            ledgerDao.fuelTotalForSession(sessionId),
-        ) { detail, expenses, fuel ->
+        analyticsRepository.sessionDetail(sessionId).map { detail ->
             if (detail == null || (detail.deliveries.isEmpty() && detail.cashTips == 0.0 && detail.unattributedPay == 0.0)) {
                 null
             } else {
@@ -108,8 +135,6 @@ class LedgerRepository @Inject constructor(
                     deliveredNet = detail.deliveries.sumOf { it.netProfit ?: 0.0 },
                     cashTips = detail.cashTips,
                     unattributedPay = detail.unattributedPay,
-                    expenses = expenses,
-                    fuel = fuel,
                 )
             }
         }

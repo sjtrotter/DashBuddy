@@ -125,10 +125,7 @@ class SessionNetTest {
             assertNull(withTimeout(5_000) { emissions.receive() })
             dao.upsertDelivery(delivery(1, "S", base).copy(netProfit = 6.0))
             val firstNet = withTimeout(5_000) { emissions.receive() }!!
-            assertEquals(5.0, firstNet.expenses, 0.0)
-            assertEquals(20.0, firstNet.fuel, 0.0)
-            assertEquals(6.0, firstNet.kept(countExpenses = false), 0.0)
-            assertEquals(1.0, firstNet.kept(countExpenses = true), 0.0)
+            assertEquals(6.0, firstNet.kept(), 0.0)
         } finally {
             collector.cancelAndJoin()
             emissions.close()
@@ -136,7 +133,7 @@ class SessionNetTest {
     }
 
     @Test
-    fun `kept subtracts logged expenses and never fuel`() = runBlocking {
+    fun `session net earnings ignore active voided and unassigned ledger rows`() = runBlocking {
         dao.upsertSession(session("S", reportedEarnings = 25.0))
         dao.upsertDelivery(delivery(1, "S", base, realizedPay = 8.0, cashTip = 3.0).copy(netProfit = 6.0))
         dao.upsertDelivery(delivery(2, "S", base + hour, realizedPay = 10.0))
@@ -151,15 +148,12 @@ class SessionNetTest {
         assertEquals(6.0, net.deliveredNet, 0.0)
         assertEquals(3.0, net.cashTips, 0.0)
         assertEquals(7.0, net.unattributedPay, 0.0)
-        assertEquals(2.0, net.expenses, 0.0)
-        assertEquals(4.0, net.fuel, 0.0)
-        assertEquals(16.0, net.kept(countExpenses = false), 0.0)
-        assertEquals(14.0, net.kept(countExpenses = true), 0.0)
+        assertEquals(16.0, net.kept(), 0.0)
     }
 
     @Test
     fun `session net can expose unattributed pay before a delivery exists`() = runBlocking {
         dao.upsertSession(session("S", reportedEarnings = 12.0).copy(deliveries = 0))
-        assertEquals(12.0, repo.sessionNet("S").first()!!.kept(countExpenses = false), 0.0)
+        assertEquals(12.0, repo.sessionNet("S").first()!!.kept(), 0.0)
     }
 }

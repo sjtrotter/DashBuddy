@@ -42,4 +42,44 @@ class LedgerDaoTest {
         row(11, 110, "wash")
         assertEquals(listOf("wash", "oil"), dao.recentNotes("CAR_CARE", 6).first())
     }
+    @Test fun `export reads every projected row in occurrence order with stored attribution and voids`() = runBlocking {
+        val dao = db.ledgerDao()
+        assertTrue(dao.allExpenses().isEmpty())
+        assertTrue(dao.allFuel().isEmpty())
+        val expenses = listOf(
+            ExpenseRecordEntity(1, "old-dash", 10, "PARKING", 4.0, "meter", 30),
+            ExpenseRecordEntity(2, null, 20, "FOOD", 5.0, null, null),
+        )
+        val fuel = listOf(
+            FuelRecordEntity(3, null, 10, 30.0, null, null, 30),
+            FuelRecordEntity(4, "old-dash", 20, 40.0, 10.0, 100.0, null),
+        )
+        expenses.reversed().forEach { dao.upsertExpense(it) }
+        fuel.reversed().forEach { dao.upsertFuel(it) }
+        assertEquals(expenses, dao.allExpenses())
+        assertEquals(fuel, dao.allFuel())
+    }
+
+    @Test fun `unassigned queries include start exclude end and retain voids in occurrence order`() = runBlocking {
+        val dao = db.ledgerDao()
+        val times = listOf(99L, 100L, 199L, 200L)
+        times.reversed().forEach { at ->
+            dao.upsertExpense(ExpenseRecordEntity(at, null, at, "PARKING", 4.0, null, if (at == 199L) 210 else null))
+            dao.upsertFuel(FuelRecordEntity(at, null, at, 30.0, 10.0, null, if (at == 199L) 210 else null))
+        }
+        dao.upsertExpense(ExpenseRecordEntity(300, "dash", 150, "FOOD", 5.0, null, null))
+        dao.upsertFuel(FuelRecordEntity(300, "dash", 150, 40.0, 10.0, null, null))
+        // Same timestamp is ordered by sequence id, independent of insertion order.
+        dao.upsertExpense(ExpenseRecordEntity(1, null, 100, "FOOD", 5.0, null, null))
+        dao.upsertFuel(FuelRecordEntity(1, null, 100, 40.0, 10.0, null, null))
+        val expenses = dao.expensesUnassignedBetween(100, 200).first()
+        val fuel = dao.fuelUnassignedBetween(100, 200).first()
+        assertEquals(listOf(1L, 100L, 199L), expenses.map { it.eventSequenceId })
+        assertEquals(listOf(1L, 100L, 199L), fuel.map { it.eventSequenceId })
+        assertEquals(210L, expenses.last().voidedAt)
+        assertEquals(210L, fuel.last().voidedAt)
+        assertTrue(dao.expensesUnassignedBetween(200, 200).first().isEmpty())
+        assertTrue(dao.fuelUnassignedBetween(200, 200).first().isEmpty())
+    }
+
 }

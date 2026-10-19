@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
@@ -11,9 +13,9 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * Formats the durable analytics read-model into the free-tier CSV export (#319) — three files a
+ * Formats the durable analytics read-model into the free-tier CSV export (#319) — five files a
  * driver can hand to a spreadsheet or a tax preparer. Pure: entity lists in, CSV strings out. No
- * Android, no IO, no network — the SAF write edge lives in `:app`. Unit-tested directly.
+ * Android, no IO, no network — the SAF write edge lives in `:feature:settings`. Unit-tested directly.
  *
  * **Row-level RAW export, bucketing-free.** Unlike the period read-model (session-anchored buckets,
  * #655), this ships the underlying rows as-is: a delivery row keys off its own `completedAt`, a
@@ -27,7 +29,7 @@ import java.time.ZoneId
  * even the hashes stay home. No network path; SAF needs no permission.
  *
  * **Untrusted-text posture:** store names (and the `?: wire` platform fallback) originate in
- * third-party UI, so every text-typed cell routes through [Csv.textField], which neutralizes
+ * third-party UI; labels are user text. Every text-typed cell routes through [Csv.textField], which neutralizes
  * spreadsheet formula injection (a leading `=`/`+`/`-`/`@`/TAB/CR gets a `'` force-text prefix)
  * on top of RFC-4180 quoting. Numeric/timestamp cells come from the [Csv] numeric emitters —
  * program-generated `[-0-9.T:]` strings, safe by construction, left bare so `-2.50` stays
@@ -38,21 +40,33 @@ import java.time.ZoneId
  */
 object CsvExporter {
 
-    /** The three CSV documents written side-by-side into the chosen directory. */
+    /** The five CSV documents written side-by-side into the chosen directory. */
     data class Bundle(
         val deliveriesCsv: String,
         val sessionsCsv: String,
         val summaryCsv: String,
+        val expensesCsv: String,
+        val fuelCsv: String,
     )
 
     const val DELIVERIES_FILENAME = "deliveries.csv"
     const val SESSIONS_FILENAME = "sessions.csv"
     const val SUMMARY_FILENAME = "summary.csv"
+    const val EXPENSES_FILENAME = "expenses.csv"
+    const val FUEL_FILENAME = "fuel.csv"
 
     private val DELIVERY_HEADER = listOf(
         "date", "time", "platform", "store", "gross_pay", "tip", "base_pay", "cash_tip",
         "miles", "miles_to_store", "miles_to_dropoff", "minutes", "frozen_cost_per_mile",
         "net_profit", "pay_basis", "cost_basis",
+    )
+
+    private val EXPENSE_HEADER = listOf(
+        "date", "time", "category", "label", "amount", "dash_id", "voided",
+    )
+
+    private val FUEL_HEADER = listOf(
+        "date", "time", "total", "gallons", "price_per_gallon", "tracked_miles", "dash_id", "voided",
     )
 
     private val SESSION_HEADER = listOf(
@@ -62,7 +76,7 @@ object CsvExporter {
     )
 
     /**
-     * Build all three CSVs. [deliveries]/[sessions] are the raw rows (any order; sorted here for a
+     * Build all five CSVs. [deliveries]/[sessions]/[expenses]/[fuel] are the raw rows (any order; sorted here for a
      * stable, chronological export). [zone] is the device's local zone (passed in so this stays
      * pure/testable); [generatedAtMillis] stamps the summary's export time.
      */
@@ -71,10 +85,14 @@ object CsvExporter {
         sessions: List<SessionRecordEntity>,
         zone: ZoneId,
         generatedAtMillis: Long,
+        expenses: List<ExpenseRecord> = emptyList(),
+        fuel: List<FuelRecord> = emptyList(),
     ): Bundle = Bundle(
         deliveriesCsv = deliveriesCsv(deliveries.sortedBy { it.completedAt }, zone),
         sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone),
-        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis),
+        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel),
+        expensesCsv = expensesCsv(expenses.sortedBy { it.occurredAt }, zone),
+        fuelCsv = fuelCsv(fuel.sortedBy { it.occurredAt }, zone),
     )
 
     private fun platformName(wire: String): String = Platform.fromWire(wire)?.displayName ?: wire
@@ -145,6 +163,37 @@ object CsvExporter {
         return sb.toString()
     }
 
+    private fun expensesCsv(rows: List<ExpenseRecord>, zone: ZoneId): String = buildString {
+        append(Csv.row(EXPENSE_HEADER.map { Csv.textField(it) })).append('\n')
+        for (r in rows) {
+            append(Csv.row(listOf(
+                Csv.isoDate(r.occurredAt, zone),
+                Csv.isoTime(r.occurredAt, zone),
+                Csv.textField(r.category.name),
+                Csv.textField(r.note),
+                Csv.money(r.amount),
+                Csv.textField(r.sessionId),
+                Csv.textField((r.voidedAt != null).toString()),
+            ))).append('\n')
+        }
+    }
+
+    private fun fuelCsv(rows: List<FuelRecord>, zone: ZoneId): String = buildString {
+        append(Csv.row(FUEL_HEADER.map { Csv.textField(it) })).append('\n')
+        for (r in rows) {
+            append(Csv.row(listOf(
+                Csv.isoDate(r.occurredAt, zone),
+                Csv.isoTime(r.occurredAt, zone),
+                Csv.money(r.totalAmount),
+                Csv.decimal(r.gallons, digits = 3),
+                Csv.money(r.pricePerGallon, digits = 3),
+                Csv.decimal(r.odometerMiles),
+                Csv.textField(r.sessionId),
+                Csv.textField((r.voidedAt != null).toString()),
+            ))).append('\n')
+        }
+    }
+
     /** The local tax year a record falls in, derived from its epoch millis in the export [zone]. */
     private fun taxYearOf(epochMillis: Long, zone: ZoneId): Int =
         Instant.ofEpochMilli(epochMillis).atZone(zone).year
@@ -166,6 +215,8 @@ object CsvExporter {
         sessions: List<SessionRecordEntity>,
         zone: ZoneId,
         generatedAtMillis: Long,
+        expenses: List<ExpenseRecord>,
+        fuel: List<FuelRecord>,
     ): String {
         // Deductible miles grouped by the session's own local tax year (ascending).
         val milesByYear: Map<Int, Double> = sessions
@@ -209,6 +260,8 @@ object CsvExporter {
         line("total_recorded_without_report", Csv.money(recordedWithoutReport))
         line("total_realized_delivery_pay", Csv.money(totalRealized))
         line("total_cash_tips", Csv.money(totalCashTips))
+        line("expenses_total", Csv.money(expenses.filter { it.voidedAt == null }.sumOf { it.amount }))
+        line("fuel_total", Csv.money(fuel.filter { it.voidedAt == null }.sumOf { it.totalAmount }))
         return sb.toString()
     }
 }
