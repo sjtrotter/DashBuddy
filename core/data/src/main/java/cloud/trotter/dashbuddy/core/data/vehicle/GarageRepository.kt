@@ -33,14 +33,16 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         vehicle
     }
 
-    suspend fun selectVehicle(id: String) = mutex.withLock {
+    /** True when the active vehicle was written; false for an unknown id (a stale switcher row), which changes nothing. */
+    suspend fun selectVehicle(id: String): Boolean = mutex.withLock {
         val list = VehicleStorage.decode(dataSource.stored.first().json)
             ?: throw VehiclesUnreadableException()
         if (list.none { it.id == id }) {
             Timber.tag("Garage").w("Ignored a select for an unknown vehicle id")
-            return@withLock
+            return@withLock false
         }
         dataSource.save(VehicleStorage.encode(list), id)
+        true
     }
 
     private fun readVehicles(raw: String?): List<Vehicle> = VehicleStorage.decode(raw) { error ->

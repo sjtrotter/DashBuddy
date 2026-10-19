@@ -30,7 +30,8 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OdometerActionsTest {
-    private val garage: GarageRepository = mock()
+    // A select succeeds unless a test says otherwise (a refused select is the stale-row case).
+    private val garage: GarageRepository = mock { on { selectVehicle(any()) } doReturn true }
     private val readings: OdometerReadingRepository = mock()
     private val clock = Clock.fixed(Instant.ofEpochMilli(100), ZoneOffset.UTC)
 

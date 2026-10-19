@@ -71,8 +71,8 @@ internal class OdometerActions(
         changed.emit(VehicleChange.ADDED)
     }
     fun select(id: String) = write {
-        garage.selectVehicle(id)
-        changed.emit(VehicleChange.SWITCHED)
+        // A refused select (a stale row) changes nothing, so it is not a vehicle change.
+        if (garage.selectVehicle(id)) changed.emit(VehicleChange.SWITCHED)
     }
 
     private fun write(action: suspend () -> Unit) {
