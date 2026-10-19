@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.ui.main.settings
 
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
@@ -30,7 +33,12 @@ import kotlinx.coroutines.launch
 class EconomySettingsViewModel @Inject constructor(
     private val repo: AppPreferencesRepository,
     strategyRepository: StrategyRepository,
+    garageRepository: GarageRepository,
 ) : ViewModel() {
+
+    val activeVehicle: StateFlow<Vehicle?> = garageRepository.garage.map { it.active }.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), null,
+    )
 
     val userEconomy = repo.userEconomy.stateIn(
         viewModelScope,

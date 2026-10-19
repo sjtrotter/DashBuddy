@@ -23,6 +23,9 @@ data class Garage(val vehicles: List<Vehicle>, val activeId: String?, val readab
 
 enum class SeedOutcome { ADDED, ATTACHED, NO_ACTIVE_VEHICLE }
 
+/** Evaluated under the garage lock: a caller never decides activation from a stale read. */
+enum class ActivateOn { ALWAYS, IF_NONE_ACTIVE, NEVER }
+
 class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 
 @Singleton
@@ -39,10 +42,18 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         emit(Garage(emptyList(), null, readable = false))
     }
 
-    suspend fun addVehicle(name: String?, now: Long, profile: VehicleProfile = GasCar()): Vehicle = mutex.withLock {
+    suspend fun addVehicle(
+        name: String?, now: Long, profile: VehicleProfile = GasCar(), activateOn: ActivateOn = ActivateOn.ALWAYS,
+    ): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name?.trim(), now, profile)
-        val list = vehiclesForWrite() + vehicle
-        saveForWrite(list, vehicle.id)
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val activate = when (activateOn) {
+            ActivateOn.ALWAYS -> true
+            ActivateOn.IF_NONE_ACTIVE -> list.none { it.id == saved.activeId && it.retiredAt == null }
+            ActivateOn.NEVER -> false
+        }
+        saveForWrite(list + vehicle, if (activate) vehicle.id else saved.activeId)
         vehicle
     }
 
@@ -88,6 +99,19 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     suspend fun updateProfile(id: String, profile: VehicleProfile): Boolean =
         updateProfile(id) { profile }
 
+    /** Identity and energy edits commit together; Vehicle validates the name before any write. */
+    suspend fun updateVehicle(id: String, name: String?, profile: VehicleProfile): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
+        if (index < 0) return@withLock false
+        val edited = list[index].copy(name = name?.trim(), profile = profile)
+        val updated = list.toMutableList()
+        updated[index] = edited
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     /** Settings edits own one active profile even before the first named garage entry exists. */
     suspend fun updateOrCreateActiveProfile(
         now: Long,
@@ -107,6 +131,20 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
+    /** Like addVehicle, Vehicle validates the trimmed name's code-point limit before any write. */
+    suspend fun rename(id: String, name: String?): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
+        if (index < 0) return@withLock false
+        val renamed = list[index].copy(name = name?.trim())
+        if (renamed == list[index]) return@withLock true
+        val updated = list.toMutableList()
+        updated[index] = renamed
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     suspend fun retire(id: String, now: Long): Boolean = mutex.withLock {
         val saved = savedForWrite()
         val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
@@ -114,8 +152,9 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         if (index < 0) return@withLock false
         val updated = list.toMutableList()
         updated[index] = updated[index].copy(retiredAt = now)
-        val nextActive = if (saved.activeId == id) null
-            else saved.activeId
+        val nextActive = if (saved.activeId == id) {
+            updated.filter { it.retiredAt == null }.maxByOrNull { it.createdAt }?.id
+        } else saved.activeId
         saveForWrite(updated, nextActive)
         true
     }

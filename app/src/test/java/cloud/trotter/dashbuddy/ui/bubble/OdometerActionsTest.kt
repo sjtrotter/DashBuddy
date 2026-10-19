@@ -182,7 +182,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a failed add emits nothing`() = runTest {
-        whenever(garage.addVehicle(any(), any(), any())).thenThrow(VehiclesUnreadableException())
+        whenever(garage.addVehicle(any(), any(), any(), any())).thenThrow(VehiclesUnreadableException())
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         val changes = mutableListOf<VehicleChange>()
         backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
@@ -237,7 +237,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a successful add clears an add failure`() = runTest {
-        whenever(garage.addVehicle(any(), any(), any())).thenThrow(IllegalStateException("storage unavailable"))
+        whenever(garage.addVehicle(any(), any(), any(), any())).thenThrow(IllegalStateException("storage unavailable"))
             .thenReturn(Vehicle("civic", "Civic", 100))
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         actions.add("Civic")
@@ -424,7 +424,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `an unreadable garage is its own failure`() = runTest {
-        whenever(garage.addVehicle(any(), any(), any())).thenThrow(VehiclesUnreadableException())
+        whenever(garage.addVehicle(any(), any(), any(), any())).thenThrow(VehiclesUnreadableException())
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         actions.add("Civic")
         runCurrent()

@@ -29,6 +29,8 @@ import cloud.trotter.dashbuddy.ui.main.playbook.PlaybookScreen
 import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
+import cloud.trotter.dashbuddy.ui.main.settings.garage.GarageScreen
+import cloud.trotter.dashbuddy.ui.main.settings.garage.VehicleEditScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.feature.settings.DataExportScreen
@@ -231,8 +233,25 @@ class MainActivity : ComponentActivity() {
                         // 3b. Personal Economy (operating costs, #145)
                         composable(Screen.EconomySettings.route) {
                             EconomySettingsScreen(
-                                onBack = { navController.popBackStack() }
+                                onBack = { navController.popBackStack() },
+                                onOpenGarage = { navController.navigate(Screen.Garage.route) },
                             )
+                        }
+
+                        composable(Screen.Garage.route) {
+                            GarageScreen(
+                                onBack = { navController.popBackStack() },
+                                onAdd = { navController.navigate(Screen.VehicleAdd.route) },
+                                onEdit = { id -> navController.navigate(Screen.VehicleEdit.route(id)) },
+                            )
+                        }
+                        composable(Screen.VehicleAdd.route) {
+                            VehicleEditScreen(onDone = { navController.popBackStack() })
+                        }
+                        composable(Screen.VehicleEdit.route,
+                            arguments = listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType }),
+                        ) {
+                            VehicleEditScreen(onDone = { navController.popBackStack() })
                         }
 
                         // 4. General Settings

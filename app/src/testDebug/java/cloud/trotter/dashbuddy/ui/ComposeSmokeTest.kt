@@ -6,6 +6,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.ui.main.settings.garage.GarageList
+import cloud.trotter.dashbuddy.ui.main.settings.garage.GarageWriteFailure
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -79,6 +89,38 @@ class ComposeSmokeTest {
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithText("Started dashing").assertIsDisplayed()
+    }
+
+    @Test
+    fun `garage shows vehicles active selection and retire confirmation`() {
+        var retired: String? = null
+        var edited: String? = null
+        var selected: String? = null
+        compose.setContent {
+            DashBuddyTheme {
+                GarageList(
+                    garage = Garage(listOf(Vehicle("civic", "Civic", 1), Vehicle("truck", "Truck", 2)), "civic", true),
+                    busy = false, failure = GarageWriteFailure.NONE,
+                    onSelect = { selected = it }, onRetire = { retired = it }, onEdit = { edited = it }, onAdd = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Civic").assertIsDisplayed()
+        compose.onNodeWithText("Truck").assertIsDisplayed()
+        compose.onAllNodes(isSelectable())[0].assertIsSelected()
+        compose.onAllNodes(isSelectable())[1].assertIsNotSelected().performClick()
+        assertEquals("truck", selected)
+        compose.onNodeWithText("Civic").performClick()
+        assertEquals("civic", edited)
+        assertEquals("truck", selected)
+        compose.onNodeWithContentDescription("Retire Civic").performClick()
+        compose.onNodeWithText("Retire Civic? Its readings stay.").assertIsDisplayed()
+        assertEquals(null, retired)
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Retire Civic? Its readings stay.").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Retire Civic").performClick()
+        compose.onNodeWithText("Retire").performClick()
+        assertEquals("civic", retired)
     }
 
     private class MutableClock(var millis: Long) : Clock() {

@@ -60,6 +60,10 @@ fun VehicleCard(
     draft: VehicleDraftState,
     actions: VehicleDraftActions,
     onAllowVehicleLookup: () -> Unit,
+    showStepHeader: Boolean = true,
+    scrollable: Boolean = true,
+    enabled: Boolean = true,
+    typeNote: @Composable () -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -72,34 +76,37 @@ fun VehicleCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        WizardCardHeader(step, draft.vehicleClass)
-
-        Spacer(modifier = Modifier.height(24.dp))
+        if (showStepHeader) {
+            WizardCardHeader(step, draft.vehicleClass)
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VehicleType.entries.forEach { type ->
-                FilterChip(selected = draft.profile.vehicleType == type,
+                FilterChip(enabled = enabled, selected = draft.profile.vehicleType == type,
                     onClick = { actions.updateVehicleType(type) }, label = { Text(stringResource(vehicleTypeLabel(type))) })
             }
         }
+        typeNote()
         if (draft.profile is ScooterMoped) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Powertrain.entries.forEach { power ->
-                    FilterChip(selected = draft.profile.powertrain == power, onClick = { actions.updatePowertrain(power) },
+                    FilterChip(enabled = enabled, selected = draft.profile.powertrain == power, onClick = { actions.updatePowertrain(power) },
                         label = { Text(stringResource(if (power == Powertrain.GAS) R.string.vehicle_power_gas else R.string.vehicle_power_electric)) })
                 }
             }
         }
         if (EconomyField.KWH_PER_100_MI in fields || EconomyField.WH_PER_MILE in fields) {
             VehicleNumberInput(
+                enabled = enabled,
                 label = stringResource(if (EconomyField.WH_PER_MILE in fields) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi),
                 value = if (draft.profile is EBike) draft.whPerMile else draft.kwhPer100Mi, onChange = actions::updateConsumption,
             )
-            VehicleNumberInput(label = stringResource(R.string.vehicle_electricity_price),
+            VehicleNumberInput(enabled = enabled, label = stringResource(R.string.vehicle_electricity_price),
                 value = draft.electricityPricePerKwh, onChange = actions::updateElectricityPrice)
         }
 
@@ -125,57 +132,61 @@ fun VehicleCard(
                         text = stringResource(R.string.wizard_vehicle_lookup_prompt),
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    OutlinedButton(onClick = onAllowVehicleLookup) {
+                    OutlinedButton(enabled = enabled, onClick = onAllowVehicleLookup) {
                         Text(stringResource(R.string.wizard_vehicle_lookup_allow))
                     }
                 } else {
-                    VehicleDropdown(
-                        label = stringResource(R.string.wizard_vehicle_card_year_label),
-                        value = draft.year,
-                        options = draft.availableYears,
-                        onValueChanged = actions::onYearSelected
-                    )
+                    // Close an open lookup menu when the form becomes inert.
+                    key(enabled) {
+                        VehicleDropdown(
+                            label = stringResource(R.string.wizard_vehicle_card_year_label),
+                            value = draft.year,
+                            options = draft.availableYears,
+                            onValueChanged = actions::onYearSelected,
+                            enabled = enabled
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    VehicleDropdown(
-                        label = stringResource(R.string.wizard_vehicle_card_make_label),
-                        value = draft.make,
-                        options = draft.availableMakes,
-                        onValueChanged = actions::onMakeSelected,
-                        enabled = draft.year.isNotBlank() && draft.availableMakes.isNotEmpty()
-                    )
+                        VehicleDropdown(
+                            label = stringResource(R.string.wizard_vehicle_card_make_label),
+                            value = draft.make,
+                            options = draft.availableMakes,
+                            onValueChanged = actions::onMakeSelected,
+                            enabled = enabled && draft.year.isNotBlank() && draft.availableMakes.isNotEmpty()
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Hide Model dropdown if they clicked Not Listed for Make
-                    AnimatedVisibility(visible = draft.make.isNotBlank() && draft.make != VEHICLE_NOT_LISTED) {
-                        Column {
-                            VehicleDropdown(
-                                label = stringResource(R.string.wizard_vehicle_card_model_label),
-                                value = draft.model,
-                                options = draft.availableModels,
-                                onValueChanged = actions::onModelSelected,
-                                enabled = draft.availableModels.isNotEmpty()
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Hide Trim dropdown if they clicked Not Listed for Model
-                            AnimatedVisibility(visible = draft.model.isNotBlank() && draft.model != VEHICLE_NOT_LISTED) {
+                        // Hide Model dropdown if they clicked Not Listed for Make
+                        AnimatedVisibility(visible = draft.make.isNotBlank() && draft.make != VEHICLE_NOT_LISTED) {
+                            Column {
                                 VehicleDropdown(
-                                    label = stringResource(R.string.wizard_vehicle_card_trim_label),
-                                    value = draft.trim,
-                                    options = draft.trimNames,
-                                    onValueChanged = actions::onTrimSelected,
-                                    enabled = draft.availableTrims.isNotEmpty()
+                                    label = stringResource(R.string.wizard_vehicle_card_model_label),
+                                    value = draft.model,
+                                    options = draft.availableModels,
+                                    onValueChanged = actions::onModelSelected,
+                                    enabled = enabled && draft.availableModels.isNotEmpty()
                                 )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Hide Trim dropdown if they clicked Not Listed for Model
+                                AnimatedVisibility(visible = draft.model.isNotBlank() && draft.model != VEHICLE_NOT_LISTED) {
+                                    VehicleDropdown(
+                                        label = stringResource(R.string.wizard_vehicle_card_trim_label),
+                                        value = draft.trim,
+                                        options = draft.trimNames,
+                                        onValueChanged = actions::onTrimSelected,
+                                        enabled = enabled && draft.availableTrims.isNotEmpty()
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 if (!showMpgEntry) {
-                    TextButton(onClick = actions::onManualMpgEntry) {
+                    TextButton(enabled = enabled, onClick = actions::onManualMpgEntry) {
                         Text(stringResource(R.string.wizard_vehicle_manual_entry))
                     }
                 }
@@ -191,6 +202,7 @@ fun VehicleCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 OutlinedButton(
+                    enabled = enabled,
                     onClick = {
                         val query = listOfNotNull(
                             draft.year.takeIf { it.isNotBlank() },
@@ -235,6 +247,7 @@ fun VehicleCard(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Slider(
+                        enabled = enabled,
                         value = draft.mpg,
                         onValueChange = actions::updateEstimatedMpg,
                         valueRange = 8f..120f,
@@ -269,11 +282,11 @@ fun VehicleCard(
  * Keep both in sync; a shared UI module is the follow-up if this boundary changes.
  */
 @Composable
-private fun VehicleNumberInput(label: String, value: Double, onChange: (Double) -> Unit) {
+private fun VehicleNumberInput(label: String, value: Double, onChange: (Double) -> Unit, enabled: Boolean) {
     var focused by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf(value.toString().removeSuffix(".0")) }
     LaunchedEffect(value, focused) { if (!focused) text = value.toString().removeSuffix(".0") }
-    OutlinedTextField(value = text, onValueChange = { input ->
+    OutlinedTextField(enabled = enabled, value = text, onValueChange = { input ->
         text = input
         input.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let(onChange)
     }, label = { Text(label) }, singleLine = true,
