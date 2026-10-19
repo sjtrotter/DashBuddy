@@ -6,6 +6,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
@@ -31,28 +36,39 @@ fun HudSheetHost(
     sheetOpen: Boolean,
     onSheetDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onOutsideDismiss: () -> Unit = onSheetDismiss,
     sheet: @Composable ColumnScope.() -> Unit = {},
 ) {
     LocalHudSheetBackHandler.current(sheetOpen, onSheetDismiss)
     if (rememberReducedMotion()) {
-        if (sheetOpen) SheetFrame(modifier, sheet)
+        if (sheetOpen) SheetFrame(modifier, compact, onOutsideDismiss, sheet)
     } else {
         AnimatedVisibility(sheetOpen, modifier.clipToBounds(),
             enter = slideInVertically(tween(400, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) { it },
             exit = slideOutVertically(tween(200, easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f))) { it }) {
-            SheetFrame(Modifier.fillMaxSize(), sheet)
+            SheetFrame(Modifier.fillMaxSize(), compact, onOutsideDismiss, sheet)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SheetFrame(modifier: Modifier, sheet: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxSize().testTag("hud.sheet")
-        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-        .background(AppTheme.colors.surface2), horizontalAlignment = Alignment.CenterHorizontally) {
-        BottomSheetDefaults.DragHandle(modifier = Modifier.testTag("hud.sheet.handle"))
-        sheet()
+private fun SheetFrame(modifier: Modifier, compact: Boolean, onOutsideDismiss: () -> Unit,
+    sheet: @Composable ColumnScope.() -> Unit) {
+    Box(modifier.fillMaxSize()) {
+        if (compact) Box(Modifier.fillMaxSize().testTag("hud.sheet.outside")
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = onOutsideDismiss))
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxHeight())
+            .testTag("hud.sheet").clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(if (compact) AppTheme.colors.surface else AppTheme.colors.surface2)
+            .then(if (compact) Modifier.pointerInput(Unit) { detectTapGestures {} } else Modifier),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            if (!compact) BottomSheetDefaults.DragHandle(modifier = Modifier.testTag("hud.sheet.handle"))
+            sheet()
+        }
     }
 }
 

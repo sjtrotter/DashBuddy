@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.MoneyEntry
 
 @Stable
 internal class CashTipEntryState(
@@ -46,16 +47,11 @@ internal class CashTipEntryState(
             else (totalCents - cents).coerceAtLeast(0)
     }
     fun other() { otherAmount = ""; page = CashTipPage.OTHER_AMOUNT }
-    fun digit(n: Int) {
-        require(n in 0..9)
-        if (otherAmount.substringBefore('.').length >= 6 && '.' !in otherAmount) return
-        if ('.' in otherAmount && otherAmount.substringAfter('.').length >= 2) return
-        otherAmount = if (otherAmount == "0") n.toString() else otherAmount + n
-    }
-    fun point() { if ('.' !in otherAmount) otherAmount = otherAmount.ifEmpty { "0" } + "." }
-    fun backspace() { otherAmount = otherAmount.dropLast(1) }
+    fun digit(n: Int) { otherAmount = MoneyEntry(otherAmount).digit(n).digits }
+    fun point() { otherAmount = MoneyEntry(otherAmount).point().digits }
+    fun backspace() { otherAmount = MoneyEntry(otherAmount).backspace().digits }
     fun doneOther() {
-        val cents = otherAmount.toBigDecimalOrNull()?.movePointRight(2)?.toLong() ?: 0L
+        val cents = MoneyEntry(otherAmount).cents
         add(cents)
         page = CashTipPage.COMPACT
     }

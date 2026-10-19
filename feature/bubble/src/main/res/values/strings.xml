@@ -220,4 +220,13 @@
     <string name="hud_undo_action">Undo</string>
     <string name="hud_undo_failed">Undo failed, tap to retry</string>
     <string name="hud_cash_tip_pending">Cash tip %1$s pending</string>
+    <string name="hud_log_cat_car_care">Car care</string>
+    <string name="hud_expense_gas">Gas</string>
+    <string name="hud_expense_log">Log %1$s %2$s</string>
+    <string name="hud_expense_failed">Not logged. Try again.</string>
+    <string name="hud_expense_new_label">New label</string>
+    <string name="hud_expense_label">Label</string>
+    <string name="hud_expense_total">Total</string>
+    <string name="hud_expense_gallons">Gallons</string>
+    <string name="hud_undo_without_where">%1$s %2$s</string>
 </resources>

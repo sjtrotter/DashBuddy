@@ -1,5 +1,11 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.expense.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -315,7 +321,7 @@ internal class HudScreenTest : HudScreenFixture() {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     HudScreen(state(), null, {}, undo = {
-                        if (cloud.trotter.dashbuddy.feature.bubble.hud.undo.cashTipUndoWins(strip, notice.token, clock.millis))
+                        if (undoBandContent(notice.token, strip.token.takeIf { strip.visible(clock.millis) }, null) == UndoBandContent.CASH_TIP)
                             cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStrip(strip) {}
                         else cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNotice(notice)
                     })
@@ -329,6 +335,67 @@ internal class HudScreenTest : HudScreenFixture() {
         settle()
         compose.onNodeWithText("Odometer saved, 52,388 mi").assertIsDisplayed()
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
+    }
+
+    @Test fun `compact expense subcard rests above dock with HUD visible behind it`() {
+        var open by mutableStateOf(true)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state(), null, {}, sheetOpen = open, sheetCompact = true,
+                            onSheetDismiss = { open = false }, sheet = { ExpenseSubcard {} },
+                            stateCard = { Text("Waiting behind subcard") })
+                    }
+                }
+            }
+        }
+        settle()
+        val sheet = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
+        val dock = compose.onNodeWithTag("hud.dock").getBoundsInRoot()
+        val body = compose.onNodeWithTag("hud.body").getBoundsInRoot()
+        assertEquals(dock.top, sheet.bottom)
+        org.junit.Assert.assertTrue(sheet.top > body.top)
+        assertEquals(176.dp, sheet.height)
+        compose.onNodeWithTag("hud.hero").assertIsDisplayed()
+        compose.onNodeWithText("Waiting behind subcard").assertIsDisplayed()
+        compose.onNodeWithTag("hud.sheet.outside.header").performClick()
+        settle()
+        compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+    }
+
+    @Test fun `undo band selects newest of three and falls back when expense expires`() {
+        val tip = UndoStripModel(700, "Panera Bread", 71, T0 + 20_000, 2)
+        var expense by mutableStateOf(UndoStripModel(4200, null, 72, T0 + 10_000, 3,
+            whatLabel = cloud.trotter.dashbuddy.feature.bubble.R.string.hud_expense_gas, whereFallback = null))
+        var notice by mutableStateOf(cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel(52_388, 1))
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    HudScreen(state(), null, {}, undo = {
+                        val tipVisible = undoStripVisible(tip)
+                        val expenseVisible = undoStripVisible(expense)
+                        when (undoBandContent(notice.token, tip.token.takeIf { tipVisible }, expense.token.takeIf { expenseVisible })) {
+                            UndoBandContent.CASH_TIP -> UndoStrip(tip) {}
+                            UndoBandContent.EXPENSE -> UndoStrip(expense) {}
+                            UndoBandContent.ODOMETER -> cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNotice(notice)
+                            null -> Unit
+                        }
+                    })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText("Gas $42.00").assertIsDisplayed()
+        compose.onNodeWithText("Delivery", substring = true).assertDoesNotExist()
+        compose.runOnIdle { notice = notice.copy(token = 4) }; settle()
+        compose.onNodeWithText("Odometer saved, 52,388 mi").assertIsDisplayed()
+        compose.runOnIdle { expense = expense.copy(token = 5) }; settle()
+        compose.onNodeWithText("Gas $42.00").assertIsDisplayed()
+        compose.runOnIdle { notice = notice.copy(token = 1); clock.millis += 10_000 }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(10_000)
+        compose.onNodeWithText("Cash tip $7.00, Panera Bread").assertIsDisplayed()
+        compose.onNodeWithText("Gas $42.00").assertDoesNotExist()
     }
 
 }

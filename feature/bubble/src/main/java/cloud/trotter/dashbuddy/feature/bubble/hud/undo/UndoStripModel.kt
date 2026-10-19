@@ -13,12 +13,16 @@ data class UndoStripModel(
     val whatLabel: Int = R.string.hud_cash_tip_title,
     val busy: Boolean = false,
     val failed: Boolean = false,
+    val whereFallback: Int? = R.string.hud_cash_tip_delivery,
 ) {
     fun visible(now: Long): Boolean = busy || failed || now < deadline
 
     companion object { const val WINDOW_MS = 10_000L }
 }
 
-/** One rule shared by the host and its tests. */
-fun cashTipUndoWins(strip: UndoStripModel?, odometerToken: Long?, now: Long): Boolean =
-    strip != null && strip.visible(now) && (odometerToken == null || strip.token > odometerToken)
+/** One newest-wins decision across all three sources. Invisible strips cannot win. */
+enum class UndoBandContent { ODOMETER, CASH_TIP, EXPENSE }
+fun undoBandContent(odometerToken: Long?, cashTipToken: Long?, expenseToken: Long?): UndoBandContent? =
+    listOfNotNull(odometerToken?.let { UndoBandContent.ODOMETER to it },
+        cashTipToken?.let { UndoBandContent.CASH_TIP to it },
+        expenseToken?.let { UndoBandContent.EXPENSE to it }).maxByOrNull { it.second }?.first

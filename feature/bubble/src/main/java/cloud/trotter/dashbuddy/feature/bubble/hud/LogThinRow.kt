@@ -36,6 +36,7 @@ internal fun LogThinRow(item: LogItem) {
                     is ExpenseRow -> {
                         val category = stringResource(when (item.category) {
                             ExpenseCategory.FOOD -> R.string.hud_log_cat_food
+                            ExpenseCategory.CAR_CARE -> R.string.hud_log_cat_car_care
                             ExpenseCategory.PARKING -> R.string.hud_log_cat_parking
                             ExpenseCategory.SUPPLIES -> R.string.hud_log_cat_supplies
                             ExpenseCategory.OTHER -> R.string.hud_log_cat_other

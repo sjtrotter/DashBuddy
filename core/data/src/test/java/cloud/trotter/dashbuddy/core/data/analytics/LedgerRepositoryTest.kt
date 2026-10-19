@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -86,4 +89,17 @@ class LedgerRepositoryTest {
         assertEquals(205L, ledger.logFuel("S", 30.0, null, null, 200))
     }
 
+    @Test fun `recent labels use the category name and default six from the projection`() = runTest {
+        val dao: LedgerDao = mock()
+        val notes = MutableStateFlow(listOf("wipers", "wash"))
+        whenever(dao.recentNotes("CAR_CARE", 6)).thenReturn(notes)
+        whenever(dao.recentNotes("CAR_CARE", 2)).thenReturn(notes)
+        val ledger = LedgerRepository(events, dao, mock())
+        assertEquals(listOf("wipers", "wash"), ledger.recentLabels(ExpenseCategory.CAR_CARE).first())
+        notes.value = listOf("wash")
+        assertEquals(listOf("wash"), ledger.recentLabels(ExpenseCategory.CAR_CARE, 2).first())
+        verify(dao).recentNotes("CAR_CARE", 6)
+        verify(dao).recentNotes("CAR_CARE", 2)
+        verifyNoInteractions(events)
+    }
 }

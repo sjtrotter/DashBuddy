@@ -25,5 +25,6 @@ class LedgerModelsTest {
         assertEquals(ExpenseCategory.OTHER, ExpenseCategory.fromStorage("bogus"))
         assertEquals(ExpenseCategory.OTHER, ExpenseCategory.fromStorage(null))
         assertEquals(ExpenseCategory.FOOD, ExpenseCategory.fromStorage("FOOD"))
+        assertEquals(ExpenseCategory.CAR_CARE, ExpenseCategory.fromStorage("CAR_CARE"))
     }
 }

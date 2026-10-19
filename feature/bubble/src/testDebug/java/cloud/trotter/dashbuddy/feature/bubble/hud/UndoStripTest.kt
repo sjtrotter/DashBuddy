@@ -70,7 +70,7 @@ class UndoStripTest {
         compose.onNodeWithText("Undo").assertIsEnabled().performClick()
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
         assertEquals(2, taps)
-        assertTrue(cashTipUndoWins(model, null, clock.millis))
+        assertEquals(UndoBandContent.CASH_TIP, undoBandContent(null, model.token.takeIf { model.visible(clock.millis) }, null))
         // Another failed append also leaves an enabled retry.
         compose.runOnIdle { model = model.copy(busy = false, failed = true) }
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
@@ -91,5 +91,14 @@ class UndoStripTest {
         compose.runOnIdle { clock.millis += 200 }
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(200)
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
+    }
+    @Test fun `expense label uses the existing where slot without a delivery fallback`() {
+        val model = UndoStripModel(1840, "wipers", 72, clock.millis + 10_000, 2,
+            whatLabel = cloud.trotter.dashbuddy.feature.bubble.R.string.hud_log_cat_car_care, whereFallback = null)
+        compose.setContent {
+            DashBuddyTheme { CompositionLocalProvider(LocalNowProvider provides clock) { UndoStrip(model) {} } }
+        }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithText("Car care $18.40, wipers").assertIsDisplayed()
     }
 }
