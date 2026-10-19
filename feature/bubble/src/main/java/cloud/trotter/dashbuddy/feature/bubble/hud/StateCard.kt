@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.glanceSp
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -51,7 +52,7 @@ internal fun StateFigure(headline: Headline, label: Int? = null, big: Boolean = 
     val figureStyle = if (big) AppTheme.num.stateBigNum else AppTheme.num.stateNum
     Row(Modifier.testTag("state.figure"), verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(headlineText(headline), color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = figureStyle.fontSize * if (big) (58f / 56f) else (52f / 48f)),
+        Text(headlineText(headline), color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = glanceSp(if (big) 58 else 52)),
             modifier = Modifier.alignByBaseline())
         label?.let {
             Text(stringResource(it), color = AppTheme.colors.text2, style = AppTheme.num.stateUnit,
@@ -76,12 +77,12 @@ internal fun JobColumn(facts: JobFacts) {
 
 @Composable
 internal fun StateLabel(text: String, color: Color = AppTheme.colors.text3, size: Int = 14) {
-    Text(text, color = color, style = AppTheme.num.cardLabel.copy(fontSize = AppTheme.num.cardLabel.fontSize * (size / 14f)))
+    Text(text, color = color, style = AppTheme.num.cardLabel.copy(fontSize = glanceSp(size)))
 }
 
 @Composable
 internal fun StateNumber(text: String, color: Color = AppTheme.colors.text2, size: Int = 15) {
-    Text(text, color = color, style = AppTheme.num.cardNum.copy(fontSize = AppTheme.num.cardNum.fontSize * (size / 15f)))
+    Text(text, color = color, style = AppTheme.num.cardNum.copy(fontSize = glanceSp(size)))
 }
 
 @Composable

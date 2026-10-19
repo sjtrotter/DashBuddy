@@ -13,8 +13,8 @@ sealed interface MarkRead {
 }
 
 object GoalCelebrationResolver {
-    fun resolve(goal: GoalPillState, mode: HudMode, day: LocalDate?, goalDollars: Double?, mark: MarkRead): String? {
-        if (goal != GoalPillState.Met || mode == HudMode.OFFER || mode == HudMode.LOG ||
+    fun resolve(goal: GoalPillState, mode: HudMode, day: LocalDate?, goalDollars: Double?, mark: MarkRead, logOpen: Boolean = false): String? {
+        if (logOpen || goal != GoalPillState.Met || mode == HudMode.OFFER || mode == HudMode.LOG ||
             day == null || goalDollars == null || mark !is MarkRead.Loaded) return null
         return GoalMetMark.key(day, goalDollars).takeUnless { it == mark.key }
     }

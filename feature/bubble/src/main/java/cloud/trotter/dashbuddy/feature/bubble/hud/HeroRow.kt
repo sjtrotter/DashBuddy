@@ -37,6 +37,6 @@ fun HeroRow(model: HeroModel, onGoalCelebrated: (String) -> Unit = {}, onGoalCli
             }
             Text(stringResource(R.string.hud_hero_profit), style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.text2)
         }
-        GoalPill(model.goal, celebrateKey = model.celebrateKey, onCelebrated = onGoalCelebrated, onClick = onGoalClick)
+        GoalPill(model.goal, celebrateKey = model.celebrateKey, onCelebrated = onGoalCelebrated, onClick = onGoalClick, markLoading = model.markLoading)
     }
 }

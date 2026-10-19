@@ -28,10 +28,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 internal val GoalMetPhaseKey = SemanticsPropertyKey<GoalMetPhase>("GoalMetPhase")
+internal val GoalMetFrameKey = SemanticsPropertyKey<GoalMetFrame>("GoalMetFrame")
 private data class GoalRun(val key: String, val previous: GoalPillState.InProgress?)
 
 @Composable
@@ -41,6 +43,7 @@ fun GoalPill(
     celebrateKey: String? = null,
     onCelebrated: (String) -> Unit = {},
     onClick: (() -> Unit)? = null,
+    markLoading: Boolean = false,
 ) {
     val c = AppTheme.colors
     val met = state == GoalPillState.Met
@@ -48,12 +51,14 @@ fun GoalPill(
     var previous by remember { mutableStateOf<GoalPillState.InProgress?>(null) }
     var latched by remember { mutableStateOf<GoalRun?>(null) }
     var consumed by remember { mutableStateOf<String?>(null) }
-    SideEffect { if (state is GoalPillState.InProgress) previous = state }
+    SideEffect {
+        if (state is GoalPillState.InProgress && state.remaining != EMPTY_VALUE) previous = state
+    }
     // A persisted mark may land during the run. Retain the run independently of celebrateKey.
     val running = if (!met || compact) null else {
         celebrateKey?.takeIf { it != consumed }?.let { GoalRun(it, previous) } ?: latched
     }
-    val elapsed = remember(running?.key) { Animatable(if (running?.previous == null) 300f else 0f) }
+    val elapsed = remember(running?.key) { Animatable(if (running?.previous == null) GoalMetSequence.COLLAPSE_MS.toFloat() else 0f) }
     val celebrated by rememberUpdatedState(onCelebrated)
     LaunchedEffect(running?.key) {
         if (running == null) {
@@ -62,14 +67,19 @@ fun GoalPill(
             latched = running
             consumed = running.key
             celebrated(running.key) // Persist before the first animated frame, including reduced motion.
-            if (!reduced) elapsed.animateTo(1200f,
-                tween(1200 - elapsed.value.toInt(), easing = LinearEasing))
+            if (!reduced) elapsed.animateTo(GoalMetSequence.DURATION_MS.toFloat(),
+                tween(GoalMetSequence.DURATION_MS - elapsed.value.toInt(), easing = LinearEasing))
         }
     }
-    val frame = if (met) GoalMetSequence.frameAt(
-        if (running == null || reduced) 1200 else elapsed.value.toLong(),
-        running?.previous?.progress ?: 1f,
-    ) else null
+    val frame = when {
+        !met -> null
+        running == null && markLoading -> GoalMetFrame(
+            GoalMetPhase.CLOSE, 0f, 1f, previous?.progress ?: 1f, 0f, GoalIcon.OUTLINED_FLAG)
+        else -> GoalMetSequence.frameAt(
+            if (running == null || reduced) GoalMetSequence.DURATION_MS.toLong() else elapsed.value.toLong(),
+            running?.previous?.progress ?: 1f,
+        )
+    }
     val text = if (met) running?.previous?.takeIf { frame?.textAlpha != 0f } else state
     val description = when (state) {
         GoalPillState.NoGoal -> stringResource(R.string.hud_goal_set)
@@ -82,7 +92,10 @@ fun GoalPill(
     Row(Modifier.testTag("hud.goal").semantics {
         contentDescription = description
         if (met) liveRegion = LiveRegionMode.Polite
-        frame?.let { this[GoalMetPhaseKey] = it.phase }
+        frame?.let {
+            this[GoalMetPhaseKey] = it.phase
+            this[GoalMetFrameKey] = it
+        }
     }.then(if (onClick != null) Modifier.clickable(onClickLabel = clickLabel, role = Role.Button, onClick = onClick) else Modifier)
         .height(if (compact) 44.dp else 56.dp)
         .background(c.surface2, RoundedCornerShape(28.dp))

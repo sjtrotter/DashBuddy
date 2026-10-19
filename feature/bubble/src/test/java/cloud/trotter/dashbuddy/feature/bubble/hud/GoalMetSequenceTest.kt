@@ -6,6 +6,19 @@ import org.junit.Test
 class GoalMetSequenceTest {
     private fun frame(ms: Long) = GoalMetSequence.frameAt(ms, .8f)
     @Test fun phases_sumTo1200ms() { assertEquals(1200, GoalMetSequence.DURATION_MS) }
+    @Test fun `boundaries follow the constants`() {
+        val phases = listOf(GoalMetPhase.COLLAPSE, GoalMetPhase.CLOSE, GoalMetPhase.CHECK, GoalMetPhase.SETTLE)
+        val durations = listOf(GoalMetSequence.COLLAPSE_MS, GoalMetSequence.CLOSE_MS,
+            GoalMetSequence.CHECK_MS, GoalMetSequence.SETTLE_MS)
+        var boundary = 0L
+        phases.zip(durations).forEachIndexed { index, (phase, duration) ->
+            assertEquals(phase, frame(boundary).phase)
+            boundary += duration
+            assertEquals(phase, frame(boundary - 1).phase)
+            assertEquals(phases.getOrElse(index + 1) { GoalMetPhase.DONE }, frame(boundary).phase)
+        }
+        assertEquals(GoalMetSequence.DURATION_MS.toLong(), boundary)
+    }
     @Test fun frameAtZero_isFullPillWithText() {
         assertEquals(GoalMetPhase.COLLAPSE, frame(0).phase)
         assertEquals(1f, frame(0).textAlpha, 0f)

@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import androidx.lifecycle.ViewModelStore
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
@@ -10,13 +11,19 @@ import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.core.datastore.appstate.AppStateDataSource
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.state.AppState
+import cloud.trotter.dashbuddy.feature.bubble.hud.GoalCelebrationResolver
+import cloud.trotter.dashbuddy.feature.bubble.hud.GoalMetMark
+import cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillState
+import cloud.trotter.dashbuddy.feature.bubble.hud.HudMode
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
+import java.time.LocalDate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -61,11 +68,11 @@ class BubbleGoalMarkTest {
         whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))
     }
     @After fun cleanup() { Dispatchers.resetMain() }
-    private fun model() = BubbleViewModel(
+    private fun model(repository: AppStateRepository = appState) = BubbleViewModel(
         chatRepository = mock<ChatRepository>(), odometerRepository = odometer, stateManager = state,
         appEventRepo = events, appPreferencesRepository = preferences, fuelPriceRepository = mock<FuelPriceRepository>(),
         analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
-        devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = appState,
+        devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
     )
     @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {
         val vm = model()
@@ -76,24 +83,45 @@ class BubbleGoalMarkTest {
         assertEquals(MarkRead.Loaded(null), vm.goalMark.value)
         read.cancel()
     }
-    @Test fun goalCelebrated_pendingBeatsOldPersistedMarkBeforeWriteFinishes() = runTest(dispatcher) {
+    @Test fun `a new view model after collapse sees the pending mark`() = runTest(dispatcher) {
         val releaseWrite = CompletableDeferred<Unit>()
-        // Suspending the repository write models slow DataStore I/O.
-        doSuspendableAnswer { releaseWrite.await() }.whenever(appState).setGoalMetMark(any())
-        marks.emit("yesterday|7900")
-        val vm = model()
-        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalMark.collect {} }
+        val persisted = MutableStateFlow<String?>("2026-10-17|7900")
+        val source: AppStateDataSource = mock()
+        whenever(source.goalMetMark).thenReturn(persisted)
+        doSuspendableAnswer {
+            releaseWrite.await()
+            persisted.value = "2026-10-18|7900"
+        }.whenever(source).setGoalMetMark(any())
+        // One real singleton repository, with a scope that outlives both activity ViewModels.
+        val repository = AppStateRepository(source, backgroundScope)
+        val day = LocalDate.of(2026, 10, 18)
+        val key = GoalMetMark.key(day, 79.0)
+        val first = model(repository)
+        val activity = ViewModelStore().apply { put("bubble", first) }
+        val firstRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { first.goalMark.collect {} }
         runCurrent()
-        vm.goalCelebrated("today|7900"); runCurrent()
-        assertEquals(MarkRead.Loaded("today|7900"), vm.goalMark.value)
-        vm.goalCelebrated("today|7900"); runCurrent()
-        verify(appState, times(1)).setGoalMetMark("today|7900")
-        marks.emit("yesterday|8000"); runCurrent()
-        assertEquals(MarkRead.Loaded("today|7900"), vm.goalMark.value)
-        releaseWrite.complete(Unit); runCurrent()
-        marks.emit("today|7900"); runCurrent()
-        assertEquals(MarkRead.Loaded("today|7900"), vm.goalMark.value)
-        read.cancel()
+        first.goalCelebrated(key)
+        runCurrent()
+        assertEquals(MarkRead.Loaded(key), first.goalMark.value)
+        firstRead.cancel()
+        activity.clear() // BubbleScreen collapses and finishes its Activity.
+        val second = model(repository)
+        val resolved = mutableListOf<String?>()
+        val secondRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            second.goalMark.collect { mark ->
+                resolved += GoalCelebrationResolver.resolve(GoalPillState.Met, HudMode.LIVE, day, 79.0, mark)
+            }
+        }
+        runCurrent()
+        assertEquals("2026-10-17|7900", persisted.value)
+        assertEquals(MarkRead.Loaded(key), second.goalMark.value)
+        assertTrue(resolved.isNotEmpty())
+        assertTrue(resolved.all { it == null })
+        releaseWrite.complete(Unit)
+        runCurrent()
+        assertEquals(key, persisted.value) // The first Activity's destruction did not cancel the write.
+        assertTrue(resolved.all { it == null })
+        secondRead.cancel()
     }
     @Test fun goalMark_recreatedViewModelUsesDurableMark() = runTest(dispatcher) {
         marks.emit("2026-10-18|7900")

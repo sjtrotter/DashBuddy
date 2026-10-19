@@ -19,7 +19,10 @@ object GoalMetSequence {
     const val CLOSE_MS = 400
     const val CHECK_MS = 400
     const val SETTLE_MS = 100
-    const val DURATION_MS = COLLAPSE_MS + CLOSE_MS + CHECK_MS + SETTLE_MS
+    private const val CLOSE_START_MS = COLLAPSE_MS
+    private const val CHECK_START_MS = CLOSE_START_MS + CLOSE_MS
+    private const val SETTLE_START_MS = CHECK_START_MS + CHECK_MS
+    const val DURATION_MS = SETTLE_START_MS + SETTLE_MS
 
     fun frameAt(elapsedMs: Long, startProgress: Float): GoalMetFrame {
         val elapsed = elapsedMs.coerceAtLeast(0)
@@ -27,13 +30,13 @@ object GoalMetSequence {
         fun eased(startMs: Int, duration: Int) = FastOutSlowInEasing.transform(
             ((elapsed - startMs).toFloat() / duration).coerceIn(0f, 1f))
         return when {
-            elapsed < 300 -> eased(0, COLLAPSE_MS).let {
+            elapsed < CLOSE_START_MS -> eased(0, COLLAPSE_MS).let {
                 GoalMetFrame(GoalMetPhase.COLLAPSE, 1f - it, it, start, 0f, GoalIcon.OUTLINED_FLAG)
             }
-            elapsed < 700 -> eased(300, CLOSE_MS).let {
+            elapsed < CHECK_START_MS -> eased(CLOSE_START_MS, CLOSE_MS).let {
                 GoalMetFrame(GoalMetPhase.CLOSE, 0f, 1f, start + (1f - start) * it, it, GoalIcon.OUTLINED_FLAG)
             }
-            elapsed < 1100 -> GoalMetFrame(GoalMetPhase.CHECK, 0f, 1f, 1f, 1f, GoalIcon.CHECK)
+            elapsed < SETTLE_START_MS -> GoalMetFrame(GoalMetPhase.CHECK, 0f, 1f, 1f, 1f, GoalIcon.CHECK)
             elapsed < DURATION_MS -> GoalMetFrame(GoalMetPhase.SETTLE, 0f, 1f, 1f, 1f, GoalIcon.FILLED_FLAG)
             else -> GoalMetFrame(GoalMetPhase.DONE, 0f, 1f, 1f, 1f, GoalIcon.FILLED_FLAG)
         }

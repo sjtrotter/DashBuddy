@@ -125,6 +125,14 @@ class HudSheetHostTest {
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
         compose.runOnIdle { open = false }; settle()
+        // At a mid-exit frame the visible bounds must remain inside the body, above the dock.
+        compose.onNodeWithTag("hud.sheet").assertExists()
+        val frame = compose.onNodeWithTag("hud.body").getBoundsInRoot()
+        val exiting = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
+        assertTrue(exiting.top > frame.top)
+        assertTrue(exiting.top >= frame.top && exiting.bottom <= frame.bottom)
+        assertTrue(exiting.left >= frame.left && exiting.right <= frame.right)
+        assertTrue(exiting.bottom <= compose.onNodeWithTag("hud.dock").getBoundsInRoot().top)
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
     }

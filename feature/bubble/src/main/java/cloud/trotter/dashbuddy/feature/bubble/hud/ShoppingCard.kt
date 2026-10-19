@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.glanceSp
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -31,7 +32,7 @@ internal fun ShoppingCard(model: StateCardModel.Shopping) {
             Text(model.shopped.toString(), style = AppTheme.num.stateNum, color = AppTheme.colors.text,
                 modifier = Modifier.alignByBaseline())
             Text(stringResource(R.string.hud_state_of_total, model.total), color = AppTheme.colors.text2,
-                style = AppTheme.num.cardNum.copy(fontSize = AppTheme.num.cardNum.fontSize * (26f / 15f)), modifier = Modifier.alignByBaseline())
+                style = AppTheme.num.cardNum.copy(fontSize = glanceSp(26)), modifier = Modifier.alignByBaseline())
             Text(stringResource(R.string.hud_state_shopped), color = AppTheme.colors.text2,
                 style = AppTheme.num.stateUnit, modifier = Modifier.alignByBaseline())
         }

@@ -356,25 +356,19 @@ class BubbleViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // S3 adds date-ranged logged expenses so the goal also follows the deduction setting.
+    /** Deduplicate wakeups; each new day subscribes with fresh bounds and pairs its own total. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow().flatMapLatest { date ->
+    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow().distinctUntilChanged().flatMapLatest { date ->
         analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY).map { GoalDay(date, it.netProfit) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val todayProfit: StateFlow<Double?> = goalDay.map { it?.profit }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val pendingMark = MutableStateFlow<String?>(null)
-    val goalMark: StateFlow<MarkRead> = combine(appStateRepository.goalMetMark, pendingMark) { persisted, pending ->
-        // Pending wins over an older persisted mark until the write lands.
-        MarkRead.Loaded(pending ?: persisted)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MarkRead.Loading)
+    val goalMark: StateFlow<MarkRead> = appStateRepository.goalMetMark.map { MarkRead.Loaded(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MarkRead.Loading)
 
-    fun goalCelebrated(key: String) {
-        if (pendingMark.value == key) return
-        pendingMark.value = key
-        viewModelScope.launch { appStateRepository.setGoalMetMark(key) }
-    }
+    fun goalCelebrated(key: String) = appStateRepository.setGoalMetMark(key)
 
     // Gas price for the idle-card quick edit (#693) — read straight off the economy SSOT the settings
     // screen owns; the write path (setGasPrice) flips auto OFF so the daily EIA worker won't clobber it.

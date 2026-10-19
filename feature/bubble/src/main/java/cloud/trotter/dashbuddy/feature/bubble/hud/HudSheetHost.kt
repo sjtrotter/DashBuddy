@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
@@ -36,7 +37,7 @@ fun HudSheetHost(
     if (rememberReducedMotion()) {
         if (sheetOpen) SheetFrame(modifier, sheet)
     } else {
-        AnimatedVisibility(sheetOpen, modifier,
+        AnimatedVisibility(sheetOpen, modifier.clipToBounds(),
             enter = slideInVertically(tween(400, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) { it },
             exit = slideOutVertically(tween(200, easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f))) { it }) {
             SheetFrame(Modifier.fillMaxSize(), sheet)

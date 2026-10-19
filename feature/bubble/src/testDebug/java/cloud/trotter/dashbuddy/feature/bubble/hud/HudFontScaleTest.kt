@@ -5,6 +5,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.unit.width
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
@@ -82,6 +84,37 @@ class HudFontScaleTest {
         val layouts = mutableListOf<TextLayoutResult>()
         value("hud.hero.compact", "71").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(30f, layouts.single().layoutInput.style.fontSize.value, .001f)
+    }
+    @Test
+    @Config(sdk = [35], qualifiers = "w390dp-h900dp")
+    fun `top row figures fit at font scale 2_0 in the bubble width`() {
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, 2f),
+                LocalHudTier provides FontScaleTier.of(2f, 1f)) {
+                DashBuddyTheme {
+                    Box(Modifier.width(390.dp).padding(start = 22.dp, end = 16.dp)) {
+                        TopRow(TopRowModel("$100.00", OnlineSpan.Fixed((12 * 60 + 41) * 60_000L), "142.6", false))
+                    }
+                }
+            }
+        }
+        settle()
+        listOf("hud.top.earned" to "$100.00", "hud.top.online" to "12 hr 41 min", "hud.top.miles" to "142.6")
+            .forEach { (tag, figure) ->
+                val slot = compose.onNodeWithTag(tag).getBoundsInRoot()
+                assertEquals(352f / 3f, slot.width.value, 1f)
+                val node = value(tag, figure)
+                assertEquals(figure, node.fetchSemanticsNode().config[SemanticsProperties.Text].single().text)
+                val bounds = node.getBoundsInRoot()
+                assertTrue(figure, bounds.width <= slot.width)
+                assertTrue(figure, bounds.left >= slot.left && bounds.right <= slot.right)
+                val layouts = mutableListOf<TextLayoutResult>()
+                node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertFalse(figure, layouts.single().hasVisualOverflow)
+                assertEquals(figure, layouts.single().layoutInput.text.text)
+                assertEquals(1, layouts.single().lineCount)
+            }
     }
     @Test fun glance112_scalesCardText() {
         show()

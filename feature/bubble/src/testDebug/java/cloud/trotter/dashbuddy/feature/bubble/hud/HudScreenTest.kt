@@ -28,12 +28,12 @@ import org.junit.After
 internal class HudScreenTest : HudScreenFixture() {
     @Test fun `online ticks once a minute under the test clock`() {
         show()
-        value("hud.top.online", "40").assertExists()
+        value("hud.top.online", "2 hr 40 min").assertExists()
         tick(20_000)
-        value("hud.top.online", "40").assertExists()
+        value("hud.top.online", "2 hr 40 min").assertExists()
         tick(15_000)
-        value("hud.top.online", "41").assertExists()
-        value("hud.top.online", "40").assertDoesNotExist()
+        value("hud.top.online", "2 hr 41 min").assertExists()
+        value("hud.top.online", "2 hr 40 min").assertDoesNotExist()
     }
 
     @Test fun `top row keeps its slots across live states`() {
@@ -46,7 +46,7 @@ internal class HudScreenTest : HudScreenFixture() {
             settle()
             assertEquals(bounds, tags.map { compose.onNodeWithTag(it).getBoundsInRoot() })
             value("hud.top.earned", "$100.00").assertExists()
-            value("hud.top.online", "40").assertExists()
+            value("hud.top.online", "2 hr 40 min").assertExists()
             value("hud.top.miles", "42.5").assertExists()
         }
     }
@@ -130,7 +130,7 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithText("Last dash").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
         value("hud.top.earned", "$100.00").assertExists()
-        value("hud.top.online", "2").assertExists()
+        value("hud.top.online", "2 hr 0 min").assertExists()
         value("hud.top.miles", "42.5").assertExists()
         DockKind.entries.filter { it != DockKind.NOW }.forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()

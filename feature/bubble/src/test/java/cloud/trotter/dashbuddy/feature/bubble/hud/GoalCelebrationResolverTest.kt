@@ -7,8 +7,8 @@ import org.junit.Test
 class GoalCelebrationResolverTest {
     private val day = LocalDate.of(2026, 10, 18)
     private fun resolve(mark: MarkRead = MarkRead.Loaded(null), mode: HudMode = HudMode.LIVE,
-        goal: GoalPillState = GoalPillState.Met, date: LocalDate? = day, dollars: Double = 79.0) =
-        GoalCelebrationResolver.resolve(goal, mode, date, dollars, mark)
+        goal: GoalPillState = GoalPillState.Met, date: LocalDate? = day, dollars: Double = 79.0, logOpen: Boolean = false) =
+        GoalCelebrationResolver.resolve(goal, mode, date, dollars, mark, logOpen)
     @Test fun met_markUnset_returnsKey() { assertEquals("2026-10-18|7900", resolve()) }
     @Test fun met_markEqualsKey_returnsNull() { assertNull(resolve(MarkRead.Loaded("2026-10-18|7900"))) }
     @Test fun met_markFromYesterday_returnsKey() { assertNotNull(resolve(MarkRead.Loaded("2026-10-17|7900"))) }
@@ -24,5 +24,6 @@ class GoalCelebrationResolverTest {
     @Test fun key_sameForGoalsRoundingToSameCent() {
         assertEquals(GoalMetMark.key(day, 79.121), GoalMetMark.key(day, 79.124))
     }
+    @Test fun logOpen_returnsNull() { assertNull(resolve(logOpen = true)) }
     @Test fun logMode_returnsNull() { assertNull(resolve(mode = HudMode.LOG)) }
 }

@@ -30,6 +30,6 @@ fun CompactHeroRow(model: HeroModel, onGoalClick: (() -> Unit)? = null) {
             Text(stringResource(R.string.hud_hero_profit), style = MaterialTheme.typography.labelMedium,
                 color = AppTheme.colors.text2, modifier = Modifier.padding(start = 8.dp).alignByBaseline())
         }
-        GoalPill(model.goal, compact = true, onClick = onGoalClick)
+        GoalPill(model.goal, compact = true, onClick = onGoalClick, markLoading = model.markLoading)
     }
 }

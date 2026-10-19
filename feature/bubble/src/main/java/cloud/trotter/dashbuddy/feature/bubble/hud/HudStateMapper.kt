@@ -36,10 +36,10 @@ object HudStateMapper {
         }
         val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen)
         val goalState = GoalPillMapper.map(goal, todayProfit)
-        val celebration = if (logOpen) null else GoalCelebrationResolver.resolve(goalState, mode, goalDay, goal, mark)
+        val celebration = GoalCelebrationResolver.resolve(goalState, mode, goalDay, goal, mark, logOpen)
         return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
-            HeroModel(profit, goalState, celebration), dock,
+            HeroModel(profit, goalState, celebration, markLoading = mark == MarkRead.Loading), dock,
             resting, firstRun, gas, logOpen)
     }
 }

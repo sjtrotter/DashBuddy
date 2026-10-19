@@ -5,9 +5,11 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
+import java.time.LocalDate
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -23,6 +25,7 @@ class GoalPillSequenceTest {
     private val clock = MutableClock(1_700_000_000_000L)
     private var state by mutableStateOf<GoalPillState>(GoalPillState.InProgress("$1", .9f))
     private var key by mutableStateOf<String?>(null)
+    private var mark by mutableStateOf<MarkRead>(MarkRead.Loaded(null))
     private val marks = mutableListOf<String>()
     private var taps = 0
 
@@ -31,7 +34,7 @@ class GoalPillSequenceTest {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides reduced) {
-                    GoalPill(state, celebrateKey = key, onCelebrated = { marks += it }, onClick = { taps++ })
+                    GoalPill(state, celebrateKey = key, onCelebrated = { marks += it }, onClick = { taps++ }, markLoading = mark == MarkRead.Loading)
                 }
             }
         }
@@ -103,6 +106,48 @@ class GoalPillSequenceTest {
             compose.onAllNodesWithContentDescription("Goal met").assertCountEquals(1)
         }
         assertEquals(listOf("Goal met"), description)
+    }
+    @Test fun `a loading placeholder does not start the sequence at collapse`() {
+        val day: LocalDate? = null
+        state = GoalPillMapper.map(79.0, day?.let { 80.0 })
+        show()
+        compose.onNodeWithText(EMPTY_VALUE).assertExists()
+        compose.runOnIdle {
+            state = GoalPillMapper.map(79.0, 80.0)
+            mark = MarkRead.Loaded(null)
+            key = GoalCelebrationResolver.resolve(state, HudMode.LIVE, LocalDate.of(2026, 10, 18), 79.0, mark)
+        }
+        settle()
+        phase(GoalMetPhase.CLOSE)
+        compose.onNodeWithText(EMPTY_VALUE).assertDoesNotExist()
+        compose.onNodeWithText("to go").assertDoesNotExist()
+        val frame = compose.onNodeWithTag("hud.goal").fetchSemanticsNode().config[GoalMetFrameKey]
+        assertEquals(0f, frame.textAlpha, 0f)
+        assertEquals(1f, frame.arcSweep, 0f)
+        assertEquals(1, marks.size)
+    }
+    @Test fun `loading mark shows the outlined state not the filled flag`() {
+        state = GoalPillState.Met
+        mark = MarkRead.Loading
+        show()
+        fun outlined(progress: Float) {
+            compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetFrameKey,
+                GoalMetFrame(GoalMetPhase.CLOSE, 0f, 1f, progress, 0f, GoalIcon.OUTLINED_FLAG)))
+        }
+        outlined(1f)
+        compose.mainClock.advanceTimeBy(GoalMetSequence.DURATION_MS.toLong() * 2)
+        outlined(1f)
+        assertTrue(marks.isEmpty())
+        compose.runOnIdle { mark = MarkRead.Loaded(null); key = "today|7900" }; settle()
+        phase(GoalMetPhase.CLOSE)
+        compose.mainClock.advanceTimeBy(GoalMetSequence.DURATION_MS.toLong())
+        phase(GoalMetPhase.DONE)
+    }
+    @Test fun loadingMark_preservesLastKnownProgress() {
+        show()
+        compose.runOnIdle { state = GoalPillState.Met; mark = MarkRead.Loading }; settle()
+        compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetFrameKey,
+            GoalMetFrame(GoalMetPhase.CLOSE, 0f, 1f, .9f, 0f, GoalIcon.OUTLINED_FLAG)))
     }
     @Test fun openedAlreadyMet_startsAtClose() {
         state = GoalPillState.Met; key = "today|7900"
