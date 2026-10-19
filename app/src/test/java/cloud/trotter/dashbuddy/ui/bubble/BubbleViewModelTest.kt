@@ -3,6 +3,9 @@ package cloud.trotter.dashbuddy.ui.bubble
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
+import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -153,11 +156,11 @@ class BubbleViewModelTest {
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
         return repo
     }
-    private fun viewModel(garageRepository: GarageRepository = garage()) = BubbleViewModel(
+    private fun viewModel(garageRepository: GarageRepository = garage(), readingRepository: OdometerReadingRepository = readings()) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
-        garageRepository = garageRepository, odometerReadingRepository = readings(),
+        garageRepository = garageRepository, odometerReadingRepository = readingRepository,
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,
@@ -185,6 +188,37 @@ class BubbleViewModelTest {
         runCurrent()
         assertEquals(listOf(civic), vm.vehicles.value)
         assertEquals(civic, vm.activeVehicle.value)
+        assertEquals(1, collections)
+    }
+
+    @Test
+    fun `the last reading switches with the vehicle in the same frame`() = runTest(dispatcher) {
+        stubNoDashes()
+        val civic = Vehicle("civic", "Civic", 0)
+        val truck = Vehicle("truck", "Truck", 0)
+        val cars = listOf(civic, truck)
+        val garageUpdates = MutableStateFlow(Garage(cars, civic.id))
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(garageUpdates)
+        val civicReading = LastOdometerReading(52_388, 123.5, 100)
+        val truckReading = LastOdometerReading(90_000, 223.5, 200)
+        val readings: OdometerReadingRepository = mock()
+        var collections = 0
+        whenever(readings.readings).thenReturn(flowOf(listOf(
+            VehicleOdometerReading(civic.id, civicReading, 1),
+            VehicleOdometerReading(truck.id, truckReading, 2),
+        )).onStart { collections++ })
+        val vm = viewModel(garage, readings)
+        val emissions = mutableListOf<LastOdometerReading?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect { emissions += it } }
+        runCurrent()
+        assertEquals(civicReading, emissions.last())
+        emissions.clear()
+        garageUpdates.value = Garage(cars, truck.id)
+        runCurrent()
+        assertEquals(truck, vm.activeVehicle.value)
+        assertEquals(listOf(truckReading), emissions)
+        assertEquals(truckReading, vm.lastReading.value)
         assertEquals(1, collections)
     }
 

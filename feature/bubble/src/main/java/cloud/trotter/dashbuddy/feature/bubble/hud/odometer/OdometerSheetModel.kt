@@ -4,6 +4,8 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.*
 
 enum class OdometerPage { READING, VEHICLES, ADD_VEHICLE }
 
+enum class OdometerWriteFailure { NONE, RETRY, UNREADABLE }
+
 data class OdometerSheetModel(
     val vehicle: Vehicle?,
     val vehicles: List<Vehicle>,
@@ -12,11 +14,11 @@ data class OdometerSheetModel(
     val check: OdometerCheck,
     val page: OdometerPage = OdometerPage.READING,
     val saving: Boolean = false,
-    val writeFailed: Boolean = false,
+    val writeFailed: OdometerWriteFailure = OdometerWriteFailure.NONE,
 )
 
 data class OdometerNoticeModel(
     val readingMiles: Int,
-    /** Identity for the sheet's one-time close, never compared with a ticker. */
-    val shownAt: Long,
+    /** Unique save identity for the sheet's one-time close and notice timer. */
+    val token: Long,
 )

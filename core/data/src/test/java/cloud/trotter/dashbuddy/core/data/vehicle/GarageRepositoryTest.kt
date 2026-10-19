@@ -45,11 +45,11 @@ class GarageRepositoryTest {
         assertTrue(repo.vehicles.first().isEmpty())
         assertNull(repo.activeVehicle.first())
         val error = runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull()
-        assertTrue(error is IllegalStateException)
+        assertTrue(error is VehiclesUnreadableException)
         assertEquals("vehicles unreadable", error?.message)
         assertEquals(before, source.stored.first())
         val selectError = runCatching { repo.selectVehicle("good") }.exceptionOrNull()
-        assertTrue(selectError is IllegalStateException)
+        assertTrue(selectError is VehiclesUnreadableException)
         assertEquals("vehicles unreadable", selectError?.message)
         assertEquals(before, source.stored.first())
     }

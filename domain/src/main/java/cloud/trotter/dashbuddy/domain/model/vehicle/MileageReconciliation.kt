@@ -7,8 +7,8 @@ data class ReconciledMileage(val carMiles: Int, val trackedMiles: Double, val si
 
 object MileageReconciliation {
     fun latest(readings: List<VehicleOdometerReading>, vehicleId: String): ReconciledMileage? {
-        val pair = readings.filter { it.vehicleId == vehicleId }.map { it.reading }
-            .sortedByDescending { it.occurredAt }.take(2)
+        val pair = readings.filter { it.vehicleId == vehicleId }
+            .sortedWith(VehicleOdometerReading.NEWEST_FIRST).take(2).map { it.reading }
         if (pair.size < 2) return null
         val (later, earlier) = pair
         val tracked = (later.gpsTotalMiles ?: return null) - (earlier.gpsTotalMiles ?: return null)

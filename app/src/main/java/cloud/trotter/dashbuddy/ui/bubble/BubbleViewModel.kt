@@ -27,6 +27,7 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.domain.state.Platform
@@ -88,9 +89,8 @@ class BubbleViewModel @Inject constructor(
     val vehicles = garage.map { it.vehicles }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val activeVehicle = garage.map { it.active }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val lastReading = activeVehicle.flatMapLatest { vehicle ->
-        vehicle?.let { odometerReadingRepository.lastReading(it.id) } ?: flowOf(null)
+    val lastReading = combine(odometerReadings, activeVehicle) { list, vehicle ->
+        vehicle?.let { VehicleOdometerReading.latestFor(list, it.id) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val gpsTotalMiles = odometerRepository.totalMilesFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

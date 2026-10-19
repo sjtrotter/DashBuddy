@@ -195,8 +195,8 @@ identity export. Vehicle/default resets preserve these learned preferences.
   an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id.
   A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
-  The pair of readings around a dash is compared on the device to the app's own GPS mileage;
-  car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
+  The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
+  over the same span; car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
   and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
   include both, like the rest of the history and preferences (§6).
 - The `odometer_prompts` app preference stores whether the waiting and resting cards show a

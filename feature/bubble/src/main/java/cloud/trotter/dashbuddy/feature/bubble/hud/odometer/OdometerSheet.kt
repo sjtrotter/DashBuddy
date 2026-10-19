@@ -40,7 +40,7 @@ fun ColumnScope.OdometerSheet(
     onShowAddVehicle: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val page = if (model.vehicle == null) OdometerPage.ADD_VEHICLE else model.page
+    val page = model.page
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
             OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.saving, onBack, onAddVehicle)
@@ -81,7 +81,11 @@ fun ColumnScope.OdometerSheet(
                 }
             }
         }
-        if (model.writeFailed) Text(stringResource(R.string.hud_odometer_write_failed), color = AppTheme.colors.warn)
+        when (model.writeFailed) {
+            OdometerWriteFailure.NONE -> Unit
+            OdometerWriteFailure.RETRY -> Text(stringResource(R.string.hud_odometer_write_failed), color = AppTheme.colors.warn)
+            OdometerWriteFailure.UNREADABLE -> Text(stringResource(R.string.hud_odometer_vehicles_unreadable), color = AppTheme.colors.warn)
+        }
     }
 }
 

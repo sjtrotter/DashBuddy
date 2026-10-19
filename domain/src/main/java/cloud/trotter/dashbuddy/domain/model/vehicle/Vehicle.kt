@@ -17,4 +17,17 @@ data class LastOdometerReading(
     val occurredAt: Long,
 )
 
-data class VehicleOdometerReading(val vehicleId: String, val reading: LastOdometerReading)
+data class VehicleOdometerReading(
+    val vehicleId: String,
+    val reading: LastOdometerReading,
+    val sequenceId: Long,
+) {
+    companion object {
+        val NEWEST_FIRST: Comparator<VehicleOdometerReading> =
+            compareByDescending<VehicleOdometerReading> { it.reading.occurredAt }
+                .thenByDescending { it.sequenceId }
+
+        fun latestFor(readings: List<VehicleOdometerReading>, vehicleId: String): LastOdometerReading? =
+            readings.filter { it.vehicleId == vehicleId }.minWithOrNull(NEWEST_FIRST)?.reading
+    }
+}

@@ -80,6 +80,10 @@ class AppEventRepo @Inject constructor(
     fun getEventsByType(type: AppEventType): Flow<List<AppEvent>> =
         dao.getEventsByType(type).map { rows -> rows.map { it.toDomain() } }
 
+    /** Events with durable append identities for consumers that must break timestamp ties. */
+    fun getSequencedEventsByType(type: AppEventType): Flow<List<SequencedAppEvent>> =
+        dao.getEventsByType(type).map { rows -> rows.map { it.toSequenced() } }
+
     fun getEventsInTimeRange(startTime: Long, endTime: Long): Flow<List<AppEvent>> =
         dao.getEventsInTimeRange(startTime, endTime).map { rows -> rows.map { it.toDomain() } }
 

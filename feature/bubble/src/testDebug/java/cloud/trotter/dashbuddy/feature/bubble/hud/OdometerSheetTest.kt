@@ -68,10 +68,17 @@ class OdometerSheetTest {
         compose.onNodeWithTag("keypad.backspace").assertIsEnabled()
     }
     @Test fun `no vehicle shows add vehicle form`() {
-        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle)
+        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle, page = OdometerPage.ADD_VEHICLE)
         show()
         compose.onNodeWithTag("vehicle.name").assertIsDisplayed()
         compose.onNodeWithTag("odometer.save").assertDoesNotExist()
+    }
+    @Test fun `an unreadable garage says so`() {
+        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
+            page = OdometerPage.ADD_VEHICLE, writeFailed = OdometerWriteFailure.UNREADABLE)
+        show()
+        compose.onNodeWithText("Saved vehicles could not be read.").assertIsDisplayed()
+        compose.onNodeWithText("Could not save. Try again.").assertDoesNotExist()
     }
     @Test fun `fewer than tracked shows add vehicle link`() {
         model = model.copy(check = OdometerCheck.FewerThanTracked(12, 84.0, clock.millis))

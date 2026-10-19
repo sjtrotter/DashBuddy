@@ -17,6 +17,8 @@ data class Garage(val vehicles: List<Vehicle>, val activeId: String?) {
     val active: Vehicle? get() = vehicles.firstOrNull { it.id == activeId }
 }
 
+class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
+
 @Singleton
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
@@ -27,14 +29,14 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name.trim(), now)
         val list = (VehicleStorage.decode(dataSource.stored.first().json)
-            ?: throw IllegalStateException("vehicles unreadable")) + vehicle
+            ?: throw VehiclesUnreadableException()) + vehicle
         dataSource.save(VehicleStorage.encode(list), vehicle.id)
         vehicle
     }
 
     suspend fun selectVehicle(id: String) = mutex.withLock {
         val list = VehicleStorage.decode(dataSource.stored.first().json)
-            ?: throw IllegalStateException("vehicles unreadable")
+            ?: throw VehiclesUnreadableException()
         require(list.any { it.id == id })
         dataSource.save(VehicleStorage.encode(list), id)
     }
