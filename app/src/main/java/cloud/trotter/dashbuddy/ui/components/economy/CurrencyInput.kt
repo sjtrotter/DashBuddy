@@ -33,11 +33,12 @@ fun CurrencyInput(
     onValueChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
     suffix: String? = null,
+    showCurrencySymbol: Boolean = true,
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(editableAmount(value)) }
-    LaunchedEffect(value, isFocused) {
-        if (!isFocused) text = editableAmount(value)
+    var text by remember { mutableStateOf(if (showCurrencySymbol) editableAmount(value) else value.toString()) }
+    LaunchedEffect(value, isFocused, showCurrencySymbol) {
+        if (!isFocused) text = if (showCurrencySymbol) editableAmount(value) else value.toString()
     }
 
     OutlinedTextField(
@@ -47,7 +48,7 @@ fun CurrencyInput(
             input.toDoubleOrNull()?.let(onValueChange)
         },
         label = { Text(label) },
-        prefix = { Text("$") },
+        prefix = if (showCurrencySymbol) ({ Text("$") }) else null,
         suffix = suffix?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
@@ -103,3 +104,7 @@ fun IntegerInput(
 // owner for every money field in the module.
 internal fun editableAmount(value: Double): String =
     if (value == 0.0) "0" else String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+
+@Composable
+fun DecimalInput(label: String, value: Double, onValueChange: (Double) -> Unit) =
+    CurrencyInput(label, value, { if (it.isFinite() && it >= 0) onValueChange(it) }, showCurrencySymbol = false)

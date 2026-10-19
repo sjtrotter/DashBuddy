@@ -825,4 +825,10 @@
         <item quantity="one">%1$d more minute.</item>
         <item quantity="other">%1$d more minutes.</item>
     </plurals>
+    <string name="vehicle_wh_per_mile">Wh per mile</string>
+    <string name="vehicle_kwh_per_100_mi">kWh per 100 miles</string>
+    <string name="vehicle_electricity_price">Electricity ($/kWh)</string>
+    <string name="vehicle_chain">Chain</string>
+    <string name="vehicle_battery">Battery replacement</string>
+    <string name="vehicle_belt">Belt</string>
 </resources>

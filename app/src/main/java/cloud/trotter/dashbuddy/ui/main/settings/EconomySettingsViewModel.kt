@@ -53,7 +53,7 @@ class EconomySettingsViewModel @Inject constructor(
                 val resolved = config.forPlatform(platform).userEconomy
                 TimeConstantsPlatformUiState(
                     platform = platform,
-                    automatic = TimeConstants.blend(TimeConstantSeeds.seedFor(platform), config.timeConstants[platform]),
+                    automatic = TimeConstants.blend(config.travelSeedFor(platform), config.learnedTimeFor(platform)),
                     effective = TimeConstantPair(resolved.effectiveAvgMinutesPerMile, resolved.effectiveBasePickupMinutes),
                     sampleCount = resolved.timeConstantSampleCount,
                 )
@@ -78,6 +78,12 @@ class EconomySettingsViewModel @Inject constructor(
     fun setFuelType(fuelType: FuelType) = viewModelScope.launch {
         repo.updateFuelType(fuelType)
     }
+
+    fun setChain(cost: Double, life: Double) = viewModelScope.launch { repo.updateChain(cost, life) }
+    fun setBattery(cost: Double, life: Double) = viewModelScope.launch { repo.updateBattery(cost, life) }
+    fun setBelt(cost: Double, life: Double) = viewModelScope.launch { repo.updateBelt(cost, life) }
+    fun setConsumption(value: Double) = viewModelScope.launch { repo.updateConsumption(value) }
+    fun setElectricityPrice(value: Double) = viewModelScope.launch { repo.updateElectricityPrice(value) }
 
     fun setTires(setCost: Double, lifetimeMi: Double) = viewModelScope.launch {
         repo.updateTireCost(setCost, lifetimeMi)

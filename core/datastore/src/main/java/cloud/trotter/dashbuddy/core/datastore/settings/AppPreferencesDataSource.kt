@@ -15,7 +15,7 @@ import cloud.trotter.dashbuddy.core.datastore.di.AppPreferences
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -92,6 +92,7 @@ class AppPreferencesDataSource @Inject constructor(
         // same class of key as theme / glance mode — not machine state the state machine owns.
         // Granularity is the `WindowGranularity` enum NAME; the offset applies to the relative
         // granularities (0 = the current window) and the two epoch-day keys carry a CUSTOM range.
+        val ELECTRICITY_PRICE_PER_KWH = doublePreferencesKey("electricity_price_per_kwh")
         val ANALYTICS_WINDOW_GRANULARITY = stringPreferencesKey("analytics_window_granularity")
         val ANALYTICS_WINDOW_OFFSET = intPreferencesKey("analytics_window_offset")
         val ANALYTICS_WINDOW_START_DAY = longPreferencesKey("analytics_window_start_epoch_day")
@@ -112,7 +113,13 @@ class AppPreferencesDataSource @Inject constructor(
         val make = prefs[Keys.VEHICLE_MAKE]
         val model = prefs[Keys.VEHICLE_MODEL]
         val mpg = prefs[Keys.ESTIMATED_MPG]?.toDouble()?.takeIf { it > 0 }
-        if (listOf(year, make, model).all { it.isNullOrBlank() } && mpg == null) {
+        val hasCost = listOf(Keys.TIRE_SET_COST, Keys.TIRE_LIFETIME_MI, Keys.OIL_COST, Keys.OIL_INTERVAL_MI,
+            Keys.BRAKES_COST, Keys.BRAKES_INTERVAL_MI, Keys.FLUIDS_COST, Keys.FLUIDS_INTERVAL_MI,
+            Keys.MISC_YEARLY, Keys.MISC_YEARLY_MI, Keys.PURCHASE_PRICE, Keys.TOTAL_LIFETIME_MI,
+            Keys.INSURANCE_DELTA_PER_MONTH, Keys.REGISTRATION_DELTA_PER_YEAR, Keys.EXPECTED_ANNUAL_MI)
+            .any { prefs[it] != null } || prefs[Keys.INCLUDE_DEPRECIATION] != null
+        if (listOf(year, make, model).all { it.isNullOrBlank() } && mpg == null && prefs[Keys.VEHICLE_CLASS] == null &&
+            prefs[Keys.VEHICLE_TYPE] == null && prefs[Keys.FUEL_TYPE] == null && !hasCost) {
             null
         } else {
             val className = prefs[Keys.VEHICLE_CLASS] ?: when (prefs[Keys.VEHICLE_TYPE]) {
@@ -120,7 +127,7 @@ class AppPreferencesDataSource @Inject constructor(
                 "E_BIKE" -> "E_BIKE"
                 else -> null
             }
-            VehicleProfile(
+            LegacyProfile(
                 year = year?.takeIf { it.isNotBlank() },
                 make = make?.takeIf { it.isNotBlank() },
                 model = model?.takeIf { it.isNotBlank() },
@@ -143,7 +150,7 @@ class AppPreferencesDataSource @Inject constructor(
                 insuranceDeltaPerMonth = prefs[Keys.INSURANCE_DELTA_PER_MONTH],
                 registrationDeltaPerYear = prefs[Keys.REGISTRATION_DELTA_PER_YEAR],
                 expectedAnnualMiles = prefs[Keys.EXPECTED_ANNUAL_MI],
-            )
+            ).toTyped()
         }
     }
 
@@ -156,6 +163,7 @@ class AppPreferencesDataSource @Inject constructor(
     val vehicleTrim: Flow<String?> = ds.data.map { it[Keys.VEHICLE_TRIM] }
     val estimatedMpg: Flow<Float?> = ds.data.map { it[Keys.ESTIMATED_MPG] }
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
+    val electricityPricePerKwh: Flow<Double?> = ds.data.map { it[Keys.ELECTRICITY_PRICE_PER_KWH] }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
     val odometerPrompts: Flow<Boolean> = ds.data.map { it[Keys.ODOMETER_PROMPTS] ?: true }
     val countRealExpensesInKept: Flow<Boolean> = ds.data.map { it[Keys.COUNT_REAL_EXPENSES_IN_KEPT] ?: false }
@@ -375,6 +383,11 @@ class AppPreferencesDataSource @Inject constructor(
     // Each write atomically marks the affected EconomyField(s) as user-set so the UI
     // can show a "(default)" badge on still-default fields.
 
+    suspend fun updateElectricityPrice(value: Double) {
+        require(value.isFinite() && value >= 0)
+        ds.edit { it[Keys.ELECTRICITY_PRICE_PER_KWH] = value; it.markUserSet(EconomyField.ELECTRICITY_PRICE) }
+    }
+
     suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
         ds.edit {
             it[Keys.TIRE_SET_COST] = setCost
@@ -499,6 +512,7 @@ class AppPreferencesDataSource @Inject constructor(
     suspend fun resetEconomyDefaults() {
         ds.edit {
             it.remove(Keys.USER_SET_ECONOMY_FIELDS)
+            it.remove(Keys.ELECTRICITY_PRICE_PER_KWH)
             it.remove(Keys.TIRE_SET_COST); it.remove(Keys.TIRE_LIFETIME_MI)
             it.remove(Keys.OIL_COST); it.remove(Keys.OIL_INTERVAL_MI)
             it.remove(Keys.BRAKES_COST); it.remove(Keys.BRAKES_INTERVAL_MI)

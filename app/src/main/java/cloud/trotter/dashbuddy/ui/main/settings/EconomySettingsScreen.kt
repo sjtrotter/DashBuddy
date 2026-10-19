@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyTimeConstantsSection
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
@@ -82,13 +84,13 @@ fun EconomySettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            VehicleClassPicker(
+            if (EconomyField.VEHICLE_CLASS in EconomyFieldGroups.fieldsFor(eco.vehicleProfile)) VehicleClassPicker(
                 selected = eco.vehicleClass,
                 onClassChange = viewModel::setVehicleClass,
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            VehicleEconomyInputs(
+            if (EconomyField.VEHICLE_MPG in EconomyFieldGroups.fieldsFor(eco.vehicleProfile)) VehicleEconomyInputs(
                 mpg = eco.vehicleMpg,
                 fuelType = fuelType,
                 onMpgChange = viewModel::setMpg,
@@ -108,6 +110,8 @@ fun EconomySettingsScreen(
                 onRegistrationChange = viewModel::setRegistration,
                 onPhoneChange = viewModel::setPhone,
                 onExpectedAnnualMilesChange = viewModel::setExpectedAnnualMiles,
+                onChainChange = viewModel::setChain, onBatteryChange = viewModel::setBattery, onBeltChange = viewModel::setBelt,
+                onConsumptionChange = viewModel::setConsumption, onElectricityPriceChange = viewModel::setElectricityPrice,
             )
 
             Spacer(modifier = Modifier.height(16.dp))

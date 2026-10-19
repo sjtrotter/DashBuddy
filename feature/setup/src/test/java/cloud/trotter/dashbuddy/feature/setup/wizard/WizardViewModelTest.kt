@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.setup.wizard
 
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
@@ -8,7 +9,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
@@ -26,6 +27,8 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Test
@@ -438,7 +441,7 @@ class WizardViewModelTest {
 
         economy.complete(UserEconomy())
         testScheduler.advanceUntilIdle()
-        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
+        FuelType.entries.filter { it != FuelType.ELECTRICITY }.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
         verifyNoMoreInteractions(gasPriceRepository)
     }
 
@@ -475,7 +478,7 @@ class WizardViewModelTest {
         auto.complete(true)
         testScheduler.advanceUntilIdle()
         assertEquals(true, viewModel.state.value.isGasPriceAuto)
-        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
+        FuelType.entries.filter { it != FuelType.ELECTRICITY }.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
         verifyNoMoreInteractions(gasPriceRepository)
     }
 
@@ -496,8 +499,63 @@ class WizardViewModelTest {
         viewModel.toggleAutoGasPrice(true)
         testScheduler.advanceUntilIdle()
         assertEquals(true, viewModel.state.value.isGasPriceAuto)
-        FuelType.entries.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
+        FuelType.entries.filter { it != FuelType.ELECTRICITY }.forEach { verify(gasPriceRepository).fetchGasPriceOnly(it) }
         verifyNoMoreInteractions(gasPriceRepository)
+    }
+
+    @Test
+    fun `tapping the selected type keeps every typed override`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val active = Vehicle("active", "Tuned car", 1L, GasCar(GasCarClass.SUV, mpg = 28.0,
+            wear = WearProfile(tireSetCost = 950.0), fixed = FixedCosts(false, insuranceDeltaPerMonth = 35.0)))
+        whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(active), active.id, true)))
+        val shared = cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy()
+        whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy.from(
+            cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs.from(active.profile, shared), shared)))
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+        val before = vm.state.value
+        vm.updateVehicleType(VehicleType.CAR)
+        assertEquals(before, vm.state.value)
+        vm.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garageRepository).updateProfile(eq(active.id), saved.capture())
+        assertEquals(28.0, saved.firstValue.gasMpg)
+        assertEquals(950.0, saved.firstValue.wear.tireSetCost)
+        assertEquals(false, saved.firstValue.fixed.includeDepreciation)
+        assertEquals(35.0, saved.firstValue.fixed.insuranceDeltaPerMonth)
+    }
+
+    @Test
+    fun `wizard saves electric scooter and bicycle without sentinel MPG`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+        vm.updateVehicleType(VehicleType.SCOOTER)
+        vm.updatePowertrain(Powertrain.ELECTRIC)
+        vm.updateConsumption(2.5)
+        vm.updateElectricityPrice(.22)
+        vm.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+        val scooter = argumentCaptor<VehicleProfile>()
+        verify(garageRepository).addVehicle(isNull(), any(), scooter.capture())
+        assertTrue(scooter.firstValue is ScooterMoped)
+        assertEquals(Powertrain.ELECTRIC, (scooter.firstValue as ScooterMoped).powertrain)
+        assertEquals(2.5, (scooter.firstValue as ScooterMoped).kwhPer100Mi)
+        assertEquals(.0055, vm.state.value.toUserEconomy().fuelCostPerMile, 1e-12)
+        clearInvocations(garageRepository)
+        vm.updateVehicleType(VehicleType.BICYCLE)
+        vm.saveAndFinish { }
+        testScheduler.advanceUntilIdle()
+        val bicycle = argumentCaptor<VehicleProfile>()
+        verify(garageRepository).addVehicle(isNull(), any(), bicycle.capture())
+        assertTrue(bicycle.firstValue is Bicycle)
+        assertNull(bicycle.firstValue.gasMpg)
     }
 
     @Test
@@ -508,10 +566,10 @@ class WizardViewModelTest {
             id = "active-id",
             name = "My car",
             createdAt = 1L,
-            profile = VehicleProfile(
+            profile = LegacyProfile(
                 year = "2021", make = "Honda", model = "Civic",
                 mpg = 31.0, vehicleClass = VehicleClass.SEDAN, fuelType = FuelType.REGULAR,
-            ),
+            ).toTyped(),
         )
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(active), active.id, true)))
         val viewModel = WizardViewModel(
@@ -533,9 +591,9 @@ class WizardViewModelTest {
         assertEquals("2021", saved.year)
         assertEquals("Honda", saved.make)
         assertEquals("Civic", saved.model)
-        assertEquals(VehicleClass.SUV, saved.vehicleClass)
-        assertEquals(28.0, saved.mpg!!, 0.0)
-        assertEquals(FuelType.PREMIUM, saved.fuelType)
+        assertEquals(VehicleClass.SUV, saved.legacyClass)
+        assertEquals(28.0, saved.gasMpg!!, 0.0)
+        assertEquals(FuelType.PREMIUM, saved.gasFuel)
         verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
     }
 
@@ -543,8 +601,8 @@ class WizardViewModelTest {
     fun `a switch during the save does not retarget it`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
-        val first = Vehicle("first-id", "First", 1L, VehicleProfile(make = "Honda", mpg = 31.0))
-        val second = Vehicle("second-id", "Second", 2L, VehicleProfile(make = "Toyota", mpg = 50.0))
+        val first = Vehicle("first-id", "First", 1L, LegacyProfile(make = "Honda", mpg = 31.0).toTyped())
+        val second = Vehicle("second-id", "Second", 2L, LegacyProfile(make = "Toyota", mpg = 50.0).toTyped())
         val garage = MutableStateFlow(Garage(listOf(first, second), first.id, true))
         whenever(garageRepository.garage).thenReturn(garage)
         val saving = CompletableDeferred<Unit>()
@@ -578,11 +636,11 @@ class WizardViewModelTest {
         assertEquals(true, completed)
         val saved = garage.value.vehicles.first { it.id == first.id }.profile
         assertEquals("Honda", saved.make)
-        assertEquals(VehicleClass.SUV, saved.vehicleClass)
-        assertEquals(28.0, saved.mpg)
-        assertEquals(FuelType.PREMIUM, saved.fuelType)
-        assertEquals(720.0, saved.tireSetCost)
-        assertEquals(viewModel.state.value.tireLifetimeMi, saved.tireLifetimeMi)
+        assertEquals(VehicleClass.SUV, saved.legacyClass)
+        assertEquals(28.0, saved.gasMpg)
+        assertEquals(FuelType.PREMIUM, saved.gasFuel)
+        assertEquals(720.0, saved.wear.tireSetCost)
+        assertEquals(viewModel.state.value.tireLifetimeMi, saved.wear.tireLifetimeMi)
         assertEquals(second, garage.value.vehicles.first { it.id == second.id })
         assertEquals(second.id, garage.value.activeId)
         verify(garageRepository).updateProfile(eq(first.id), any<VehicleProfile>())
@@ -633,10 +691,10 @@ class WizardViewModelTest {
 
         val profile = argumentCaptor<VehicleProfile>()
         verify(garageRepository).addVehicle(isNull(), any(), profile.capture())
-        assertEquals(VehicleClass.SUV, profile.firstValue.vehicleClass)
-        assertEquals(28.0, profile.firstValue.mpg)
-        assertEquals(720.0, profile.firstValue.tireSetCost)
-        assertEquals(48_000.0, profile.firstValue.tireLifetimeMi)
+        assertEquals(VehicleClass.SUV, profile.firstValue.legacyClass)
+        assertEquals(28.0, profile.firstValue.gasMpg)
+        assertEquals(720.0, profile.firstValue.wear.tireSetCost)
+        assertEquals(48_000.0, profile.firstValue.wear.tireLifetimeMi)
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appStateRepository).setFirstRunComplete()
     }
@@ -742,7 +800,7 @@ class WizardViewModelTest {
     fun `an active profile with zero mpg uses the economy fallback`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
-        val active = Vehicle("active", null, 1L, VehicleProfile(mpg = 0.0))
+        val active = Vehicle("active", null, 1L, LegacyProfile(mpg = 0.0).toTyped())
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(active), active.id, true)))
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy(vehicleMpg = 32.0)))
         val viewModel = WizardViewModel(

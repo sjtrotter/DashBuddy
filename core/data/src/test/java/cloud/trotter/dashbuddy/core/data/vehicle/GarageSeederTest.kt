@@ -5,7 +5,7 @@ import cloud.trotter.dashbuddy.core.datastore.appstate.AppStateDataSource
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -38,14 +38,14 @@ class GarageSeederTest {
         val car = garage.garage.first().active!!
         assertNull(car.name)
         assertEquals("2021 Honda Civic", car.displayName)
-        assertEquals(VehicleClass.COMPACT, car.profile.vehicleClass)
-        assertEquals(31.0, car.profile.mpg)
-        assertEquals(650.0, car.profile.tireSetCost)
+        assertEquals(VehicleClass.COMPACT, car.profile.legacyClass)
+        assertEquals(31.0, car.profile.gasMpg)
+        assertEquals(650.0, car.profile.wear.tireSetCost)
         prefs.updateEconomySettings("2025", "Toyota", "Prius", "LE", 55f, false, 3.80f)
         seeder.seed()
         assertEquals(listOf(car.id), garage.garage.first().vehicles.map { it.id })
         assertEquals("Honda", garage.garage.first().active!!.profile.make)
-        assertEquals(31.0, garage.garage.first().active!!.profile.mpg)
+        assertEquals(31.0, garage.garage.first().active!!.profile.gasMpg)
     }
 
     @Test fun `existing named car receives saved identity without losing profile`() = runTest {
@@ -56,7 +56,7 @@ class GarageSeederTest {
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("named-garage.preferences_pb") })))
         val car = garage.addVehicle("My Civic", 1,
-            VehicleProfile(tireSetCost = 900.0))
+            LegacyProfile(tireSetCost = 900.0).toTyped())
         prefs.updateEconomySettings("2018", "Honda", "Civic", "LX", 29f, false, 3.50f)
         prefs.updateTireCost(600.0, 35_000.0)
         GarageSeeder(garage, prefs, state).seed()
@@ -64,9 +64,34 @@ class GarageSeederTest {
         assertEquals(car.id, result.id)
         assertEquals("My Civic", result.name)
         assertEquals("Honda", result.profile.make)
-        assertEquals(900.0, result.profile.tireSetCost)
-        assertEquals(35_000.0, result.profile.tireLifetimeMi)
+        assertEquals(900.0, result.profile.wear.tireSetCost)
+        assertEquals(35_000.0, result.profile.wear.tireLifetimeMi)
         assertEquals(1, garage.garage.first().vehicles.size)
+    }
+
+    @Test fun `class or fuel alone imports a vehicle without identity or MPG`() = runTest {
+        for (variant in listOf("class", "fuel", "ev")) {
+            val prefs = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+                produceFile = { tmp.newFile("$variant-prefs.preferences_pb") }))
+            val state = AppStateDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+                produceFile = { tmp.newFile("$variant-state.preferences_pb") }))
+            val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+                produceFile = { tmp.newFile("$variant-garage.preferences_pb") })))
+            when (variant) {
+                "class" -> prefs.updateVehicleClass(VehicleClass.COMPACT.name)
+                "ev" -> prefs.updateVehicleClass(VehicleClass.EV.name)
+                else -> prefs.updateFuelType(FuelType.DIESEL.name)
+            }
+            GarageSeeder(garage, prefs, state).seed()
+            val car = garage.garage.first().active!!
+            assertNull(car.profile.year)
+            assertNull(car.profile.gasMpg)
+            if (variant == "ev") assertTrue(car.profile is ElectricCar)
+            else assertTrue(car.profile is GasCar)
+            assertEquals(if (variant == "class") VehicleClass.COMPACT else if (variant == "ev") VehicleClass.EV else VehicleClass.SEDAN,
+                car.profile.legacyClass)
+            assertTrue(state.garageSeeded.first())
+        }
     }
 
     @Test fun `no saved identity marks import done without creating a car`() = runTest {
@@ -148,7 +173,7 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("zero-garage.preferences_pb") })))
         prefs.updateEconomySettings("2021", "Honda", "Civic", "", 0f, false, 3.80f)
         GarageSeeder(garage, prefs, state).seed()
-        assertNull(garage.garage.first().active!!.profile.mpg)
+        assertNull(garage.garage.first().active!!.profile.gasMpg)
         assertTrue(state.garageSeeded.first())
         prefs.updateEconomySettings("", "", "", "", 0f, false, 3.80f)
         assertNull(prefs.legacyVehicleProfile.first())

@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.datastore.di.StrategyPreferences
 import cloud.trotter.dashbuddy.core.datastore.strategy.dto.ScoringRuleDto
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedTimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
+import cloud.trotter.dashbuddy.domain.evaluation.VehicleTimeKey
 import cloud.trotter.dashbuddy.domain.evaluation.ItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedItemsPerUnitRatio
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedShopRate
@@ -193,12 +194,12 @@ class StrategyDataSource @Inject constructor(
         )
     }
 
-    private fun timePaceKey(platform: Platform) =
-        doublePreferencesKey("learned_minutes_per_mile:${platform.wire}")
-    private fun timeOverheadKey(platform: Platform) =
-        doublePreferencesKey("learned_stop_overhead_minutes:${platform.wire}")
-    private fun timeCountKey(platform: Platform) =
-        intPreferencesKey("time_constant_sample_count:${platform.wire}")
+    private fun timePaceKey(platform: Platform, vehicleId: String? = null) =
+        doublePreferencesKey("learned_minutes_per_mile:${platform.wire}${vehicleId?.let { ":$it" }.orEmpty()}")
+    private fun timeOverheadKey(platform: Platform, vehicleId: String? = null) =
+        doublePreferencesKey("learned_stop_overhead_minutes:${platform.wire}${vehicleId?.let { ":$it" }.orEmpty()}")
+    private fun timeCountKey(platform: Platform, vehicleId: String? = null) =
+        intPreferencesKey("time_constant_sample_count:${platform.wire}${vehicleId?.let { ":$it" }.orEmpty()}")
 
     /** Raw medians and lifetime counts only. Reject partial/corrupt tuples as a whole. */
     val learnedTimeConstants: Flow<Map<Platform, LearnedTimeConstants>> = ds.data.map { prefs ->
@@ -222,12 +223,47 @@ class StrategyDataSource @Inject constructor(
         })
         ds.edit { prefs ->
             val prefixes = listOf("learned_minutes_per_mile:", "learned_stop_overhead_minutes:", "time_constant_sample_count:")
-            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) } }
+            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) && !key.name.removePrefix(it).contains(':') } }
                 .forEach { prefs.remove(it) }
             values.forEach { (platform, learned) ->
                 prefs[timePaceKey(platform)] = learned.median.minutesPerMile
                 prefs[timeOverheadKey(platform)] = learned.median.stopOverheadMinutes
                 prefs[timeCountKey(platform)] = learned.sampleCount
+            }
+        }
+    }
+
+    /** Scoped tuples can only be written from evidence with a known vehicle, never from legacy medians. */
+    val learnedVehicleTimeConstants: Flow<Map<VehicleTimeKey, LearnedTimeConstants>> = ds.data.map { prefs ->
+        val raw = prefs.asMap().mapKeys { it.key.name }
+        raw.keys.mapNotNull { name ->
+            val prefix = "learned_minutes_per_mile:"
+            if (!name.startsWith(prefix)) return@mapNotNull null
+            val suffix = name.removePrefix(prefix).split(':', limit = 2)
+            if (suffix.size != 2 || suffix[1].isBlank()) return@mapNotNull null
+            val platform = Platform.fromWire(suffix[0])?.takeUnless { it == Platform.Unknown } ?: return@mapNotNull null
+            val vehicleId = suffix[1]
+            val pace = raw[name] as? Double
+            val overhead = raw[timeOverheadKey(platform, vehicleId).name] as? Double
+            val count = raw[timeCountKey(platform, vehicleId).name] as? Int
+            if (pace == null || !pace.isFinite() || pace <= 0 || overhead == null || !overhead.isFinite() ||
+                overhead < 0 || count == null || count <= 0) null
+            else VehicleTimeKey(platform, vehicleId) to LearnedTimeConstants(TimeConstantPair(pace, overhead), count)
+        }.toMap()
+    }
+
+    suspend fun replaceVehicleTimeConstants(values: Map<VehicleTimeKey, LearnedTimeConstants>) {
+        require(values.all { (key, learned) -> key.vehicleId.isNotBlank() && key.platform != Platform.Unknown &&
+            learned.sampleCount > 0 && learned.median.minutesPerMile.isFinite() && learned.median.minutesPerMile > 0 &&
+            learned.median.stopOverheadMinutes.isFinite() && learned.median.stopOverheadMinutes >= 0 })
+        ds.edit { prefs ->
+            val prefixes = listOf("learned_minutes_per_mile:", "learned_stop_overhead_minutes:", "time_constant_sample_count:")
+            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) && key.name.removePrefix(it).contains(':') } }
+                .forEach { prefs.remove(it) }
+            values.forEach { (key, learned) ->
+                prefs[timePaceKey(key.platform, key.vehicleId)] = learned.median.minutesPerMile
+                prefs[timeOverheadKey(key.platform, key.vehicleId)] = learned.median.stopOverheadMinutes
+                prefs[timeCountKey(key.platform, key.vehicleId)] = learned.sampleCount
             }
         }
     }

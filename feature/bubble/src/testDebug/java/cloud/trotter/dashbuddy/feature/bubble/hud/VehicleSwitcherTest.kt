@@ -96,7 +96,7 @@ class VehicleSwitcherTest {
     }
 
     @Test fun `identity supplies the row name when no name was typed`() {
-        vehicles = listOf(Vehicle("wizard", null, 0, profile = VehicleProfile(year = "2020", make = "Chevrolet", model = "Malibu")))
+        vehicles = listOf(Vehicle("wizard", null, 0, profile = LegacyProfile(year = "2020", make = "Chevrolet", model = "Malibu").toTyped()))
         show()
         compose.onNodeWithText("2020 Chevrolet Malibu").assertIsDisplayed()
         compose.onNodeWithContentDescription("Remove 2020 Chevrolet Malibu").assertExists()
