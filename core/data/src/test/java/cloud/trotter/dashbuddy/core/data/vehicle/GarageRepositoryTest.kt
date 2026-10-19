@@ -25,7 +25,7 @@ class GarageRepositoryTest {
         assertTrue(repo.garage.first().readable)
         assertEquals(200L, truck.createdAt)
         assertNotEquals(civic.id, truck.id)
-        repo.selectVehicle(civic.id)
+        assertTrue(repo.selectVehicle(civic.id))
         assertEquals(civic, repo.garage.first().active)
     }
     @Test fun `name trimmed and bounded`() = runTest {
