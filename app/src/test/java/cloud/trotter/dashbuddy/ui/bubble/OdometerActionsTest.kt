@@ -118,6 +118,24 @@ class OdometerActionsTest {
         assertEquals(listOf(VehicleChange.ADDED), changes)
     }
 
+    @Test fun `a refused select emits nothing`() = runTest {
+        // A stale switcher row: the repository refuses the id, so nothing changed and no event may fire or replay.
+        whenever(garage.selectVehicle("stale")).thenReturn(false)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val changes = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
+        runCurrent()
+        actions.select("stale")
+        runCurrent()
+        verify(garage).selectVehicle("stale")
+        assertEquals(emptyList<VehicleChange>(), changes)
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        val late = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { late += it } }
+        runCurrent()
+        assertEquals(emptyList<VehicleChange>(), late)
+    }
+
     @Test fun `a selected vehicle emits SWITCHED once`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         val changes = mutableListOf<VehicleChange>()

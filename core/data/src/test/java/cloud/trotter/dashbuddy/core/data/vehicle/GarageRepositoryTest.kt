@@ -43,7 +43,7 @@ class GarageRepositoryTest {
         val repo = GarageRepository(source)
         repo.addVehicle("Civic", 100)
         val before = source.stored.first()
-        repo.selectVehicle("missing")
+        assertFalse(repo.selectVehicle("missing"))
         assertEquals(before, source.stored.first())
     }
 
