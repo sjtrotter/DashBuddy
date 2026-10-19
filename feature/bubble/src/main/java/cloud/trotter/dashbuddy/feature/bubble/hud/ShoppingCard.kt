@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -18,12 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.format.formatClockDuration
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-internal fun ShoppingCard(model: StateCardModel.Shopping, now: Long) {
+internal fun ShoppingCard(model: StateCardModel.Shopping) {
+    val now by rememberNow()
     StateLine(model.facts.store, R.string.hud_state_due, model.facts.deadlineAt)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
@@ -42,11 +44,7 @@ internal fun ShoppingCard(model: StateCardModel.Shopping, now: Long) {
     val dwell = StateHeadline.parked(model.arrivedAt, model.facts.deadlineAt, now)
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            StateNumber(when (dwell) {
-                is Headline.Clock -> formatClockDuration(dwell.ms)
-                is Headline.Minutes -> dwell.n.toString()
-                Headline.Unknown -> cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
-            })
+            StateNumber(headlineText(dwell))
             StateLabel(stringResource(if (late == null) R.string.hud_state_at_store else R.string.hud_state_min_at_store))
         }
         if (late != null) LateFoot(late)

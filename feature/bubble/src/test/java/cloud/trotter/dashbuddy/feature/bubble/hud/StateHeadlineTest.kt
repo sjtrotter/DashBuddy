@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -35,8 +36,15 @@ class StateHeadlineTest {
         assertEquals(Headline.Minutes(23), StateHeadline.moving(0, 1_320_000, 1_439_999))
         assertEquals(Headline.Minutes(22), StateHeadline.moving(0, 1_320_000, 1_320_000))
     }
-    @Test fun `navigation without a deadline is unknown`() {
-        assertEquals(Headline.Unknown, StateHeadline.moving(0, null, 500_000))
+    @Test fun `navigation without a deadline is the elapsed clock`() {
+        assertEquals(Headline.Clock(252_000), StateHeadline.moving(10_000, null, 262_000))
+        assertEquals(Headline.Clock(0), StateHeadline.moving(100_000, null, 90_000))
+    }
+    @Test fun `headline text renders clock minutes and unknown`() {
+        assertEquals("4:12", headlineText(Headline.Clock(252_000)))
+        assertEquals("1:04:12", headlineText(Headline.Clock(3_852_000)))
+        assertEquals("23", headlineText(Headline.Minutes(23)))
+        assertEquals(EMPTY_VALUE, headlineText(Headline.Unknown))
     }
     @Test fun `waiting is a clock from the anchor`() {
         assertEquals(Headline.Clock(252_000), StateHeadline.waiting(10_000, 262_000))

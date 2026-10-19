@@ -18,17 +18,22 @@ class WaitingAnchorTest {
 
     @Test fun `dash start anchors the wait`() { assertEquals(1_000L, anchor()) }
     @Test fun `a completed job moves the anchor`() {
-        assertEquals(5_000L, anchor(cards = listOf(receipt(5_000))))
+        // The fold's receipt counts once the region knows the job (its task may not carry completedAt yet).
+        assertEquals(5_000L, anchor(listOf(Task("drop", "job", TaskPhase.DROPOFF, startedAt = 2_000)), listOf(receipt(5_000))))
         assertEquals(6_000L, anchor(listOf(drop()), listOf(receipt(6_000))))
     }
-    @Test fun `a declined offer does not move the anchor`() {
+    @Test fun `a declined offer still does not move the anchor`() {
         assertEquals(1_000L, anchor(cards = listOf(offer(AppEventType.OFFER_DECLINED))))
     }
     @Test fun `a timed out offer does not move the anchor`() {
         assertEquals(1_000L, anchor(cards = listOf(offer(AppEventType.OFFER_TIMEOUT))))
     }
-    @Test fun `an unassigned dropoff does not move the anchor`() {
-        assertEquals(1_000L, anchor(listOf(drop().copy(unassignedAt = 4_000))))
+    @Test fun `an unassigned job moves the anchor to the unassign time`() {
+        listOf(TaskPhase.PICKUP, TaskPhase.DROPOFF).forEach { phase ->
+            assertEquals(4_000L, anchor(listOf(drop().copy(phase = phase, unassignedAt = 4_000))))
+            assertEquals(1_000L, anchor(listOf(drop().copy(phase = phase, unassignedAt = 500))))
+        }
+        assertEquals(6_000L, anchor(listOf(drop(), drop().copy(jobId = "unassigned", unassignedAt = 6_000))))
     }
     @Test fun `completions before the dash start are ignored`() {
         assertEquals(1_000L, anchor(listOf(drop(500)), listOf(receipt(900))))
@@ -43,5 +48,12 @@ class WaitingAnchorTest {
     @Test fun `a resume time moves the anchor`() {
         assertEquals(7_000L, anchor(listOf(drop()), resume = 7_000))
         assertEquals(5_000L, anchor(listOf(drop()), resume = 500))
+    }
+
+    @Test fun `another dash's receipt does not move the anchor`() {
+        // A merged stack carries the other dash's receipts; only a receipt for a job this region's tasks know counts.
+        val own = Task("drop", "job", TaskPhase.DROPOFF, startedAt = 2_000)
+        assertEquals(1_000L, anchor(tasks = listOf(own), cards = listOf(FlowCardSnapshot.PostTask(3_000, 9_000, "other-job"))))
+        assertEquals(9_000L, anchor(tasks = listOf(own), cards = listOf(receipt(9_000))))
     }
 }

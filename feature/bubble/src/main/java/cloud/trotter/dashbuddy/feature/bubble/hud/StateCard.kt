@@ -14,36 +14,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
-import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.format.formatClockDuration
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun StateCard(model: StateCardModel?, kept: Double?, sessionStartedAt: Long?) {
+fun StateCard(model: StateCardModel?, kept: Double?) {
     if (model == null) return
-    val now by rememberNow()
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp)) {
         when (model) {
-            is StateCardModel.Waiting -> WaitingCard(model, kept, sessionStartedAt, now)
-            is StateCardModel.TaskCard -> TaskCard(model, now)
-            is StateCardModel.Shopping -> ShoppingCard(model, now)
+            is StateCardModel.Waiting -> WaitingCard(model, kept)
+            is StateCardModel.TaskCard -> TaskCard(model)
+            is StateCardModel.Shopping -> ShoppingCard(model)
             is StateCardModel.Receipt -> ReceiptCard(model)
         }
     }
 }
 
 @Composable
-internal fun StateLine(store: String, label: Int, at: Long?) {
+internal fun StateLine(store: String, label: Int?, at: Long?) {
     val c = AppTheme.colors
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(store, Modifier.weight(1f), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
             fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            StateLabel(stringResource(label))
-            StateNumber(at?.let(rememberTimeFormatter()) ?: EMPTY_VALUE, c.text2, size = 16)
+        if (label != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                StateLabel(stringResource(label))
+                StateNumber(at?.let(rememberTimeFormatter()) ?: EMPTY_VALUE, c.text2, size = 16)
+            }
         }
     }
 }
@@ -53,11 +52,7 @@ internal fun StateFigure(headline: Headline, label: Int? = null, big: Boolean = 
     val figureStyle = if (big) AppTheme.num.stateBigNum else AppTheme.num.stateNum
     Row(Modifier.testTag("state.figure"), verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(when (headline) {
-            is Headline.Clock -> formatClockDuration(headline.ms)
-            is Headline.Minutes -> headline.n.toString()
-            Headline.Unknown -> EMPTY_VALUE
-        }, color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = figureStyle.fontSize * if (big) (58f / 56f) else (52f / 48f)),
+        Text(headlineText(headline), color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = figureStyle.fontSize * if (big) (58f / 56f) else (52f / 48f)),
             modifier = Modifier.alignByBaseline())
         label?.let {
             Text(stringResource(it), color = AppTheme.colors.text2, fontSize = 16.sp, fontWeight = FontWeight.Medium,

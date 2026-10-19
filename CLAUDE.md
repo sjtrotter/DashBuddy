@@ -137,6 +137,7 @@ presentational content: the #1333 `hud/*` package (S2a: `HudScreen` with its liv
 three composable slots, the fixed chrome — phase strip, head, top row, Profit hero, the static goal pill, dock,
 dash ribbon — and the resting + first-run cards, each a pure data-in/lambdas-out composable over a pure mapper:
 `HudStateMapper`, `HudModeResolver`, `TopRowMapper`, `GoalPillMapper`, `DockMapper`, `RibbonMapper`/`RibbonLayout`;
+S2b: the state card family (`StateCardMapper` picks waiting / pickup navigating, arrived, shopping / dropoff navigating, at the door / receipt from the active card first, the flow second; `TrackMapper` per design §11 with the late rule; `StateHeadline`, `WaitingAnchor`, `ShopPace`); `PostTask.totalPay` is nullable (an unparsed receipt total is the em dash, never `$0.00`);
 the kept figure is `SessionNet.kept`, which subtracts logged expenses only and never fuel), `formatters/*`,
 `cards/*`, and `session/*` (the pure `BubbleSessionResolver` — follow-active + manual switcher / pinned / merged —
 plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`,

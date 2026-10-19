@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -10,15 +11,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?, sessionStartedAt: Long?, now: Long) {
+internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?) {
+    val now by rememberNow()
     StateLine(stringResource(R.string.hud_state_waiting), R.string.hud_state_since, model.since)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
         StateFigure(StateHeadline.waiting(model.since, now))
-        profitPerHour(kept, (model.sessionStartedAt ?: sessionStartedAt)?.let { now - it })?.let {
+        profitPerHour(kept, model.sessionStartedAt?.let { now - it })?.let {
             Column(horizontalAlignment = Alignment.End) {
                 StateNumber(moneyOrEmpty(it), AppTheme.colors.text, size = 18)
                 StateLabel(stringResource(R.string.hud_state_profit_hr))

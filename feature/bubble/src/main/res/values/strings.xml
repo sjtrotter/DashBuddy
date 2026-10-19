@@ -120,6 +120,7 @@
     <string name="hud_state_due">due</string>
     <string name="hud_state_delivered">delivered</string>
     <string name="hud_state_min_left">min left</string>
+    <string name="hud_state_en_route">en route</string>
     <string name="hud_state_min_en_route">min en route</string>
     <string name="hud_state_at_store">at store</string>
     <string name="hud_state_min_at_store">min at store</string>

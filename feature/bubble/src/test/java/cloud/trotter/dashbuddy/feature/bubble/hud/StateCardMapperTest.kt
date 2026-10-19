@@ -35,6 +35,11 @@ class StateCardMapperTest {
         assertEquals(1_000L, waiting().since)
         assertEquals(1_000L, waiting().sessionStartedAt)
     }
+    @Test fun `awaiting card keeps waiting while the flow moves first`() {
+        val active = FlowCardSnapshot.Awaiting("awaiting", 1_000)
+        Flow.entries.forEach { assertEquals(waiting(), map(it, active)) }
+        assertNull(map(Flow.Idle, active, Mode.Paused))
+    }
     @Test fun `task unassigned gives waiting`() {
         assertTrue(map(Flow.TaskUnassigned) is StateCardModel.Waiting)
     }
@@ -42,7 +47,10 @@ class StateCardMapperTest {
         assertNull(map(mode = Mode.Paused))
         assertNull(map(Flow.TaskDropoffArrived, drop.copy(arrivedAt = 200_000), Mode.Paused))
     }
-    @Test fun `offer presented gives no card`() { assertNull(map(Flow.OfferPresented)) }
+    @Test fun `offer presented gives no card`() {
+        assertNull(map(Flow.OfferPresented))
+        Flow.entries.forEach { assertNull(map(it, offer("active", null, null))) }
+    }
     @Test fun `session ended gives no card`() { assertNull(map(Flow.SessionEnded)) }
     @Test fun `pickup navigation anchors at the task start`() {
         val m = map(Flow.TaskPickupNavigation, pickup) as StateCardModel.PickupNav
@@ -74,7 +82,19 @@ class StateCardMapperTest {
         assertTrue(map(Flow.TaskPickupArrived, pickup) is StateCardModel.PickupNav)
         assertTrue(map(Flow.TaskDropoffArrived, drop) is StateCardModel.DropoffNav)
         assertNull(map(Flow.TaskPickupArrived))
-        assertNull(map(Flow.TaskDropoffArrived, pickup))
+        assertTrue(map(Flow.TaskDropoffArrived, pickup) is StateCardModel.PickupNav)
+    }
+    @Test fun `card from the previous frame still renders while the flow moves first`() {
+        val card = map(Flow.TaskDropoffArrived, pickup.copy(arrivedAt = 20_000))
+        assertTrue(card is StateCardModel.PickupArrived)
+        assertEquals(20_000L, (card as StateCardModel.PickupArrived).leg.anchorAt)
+        assertTrue(map(Flow.TaskPickupNavigation, pickup.copy(arrivedAt = 20_000)) is StateCardModel.PickupArrived)
+        assertTrue(map(Flow.TaskPickupArrived, drop.copy(arrivedAt = 30_000)) is StateCardModel.DropoffArrived)
+        assertTrue(map(Flow.TaskDropoffNavigation, drop.copy(arrivedAt = 30_000)) is StateCardModel.DropoffArrived)
+    }
+    @Test fun `post task card renders the receipt whatever the flow says`() {
+        val expected = map(Flow.PostTask, receipt)
+        Flow.entries.forEach { assertEquals("flow=$it", expected, map(it, receipt)) }
     }
     @Test fun `dropoff navigation anchors at the dropoff start`() {
         val m = map(Flow.TaskDropoffNavigation, drop) as StateCardModel.DropoffNav
@@ -120,7 +140,7 @@ class StateCardMapperTest {
     }
     @Test fun `task active without a leg gives no card`() {
         assertNull(map(Flow.TaskActive))
-        assertNull(map(Flow.TaskActive, receipt))
+        assertTrue(map(Flow.TaskActive, receipt) is StateCardModel.Receipt)
     }
     @Test fun `navigation and waiting never cue cash tip`() {
         assertFalse(waiting().cuesCashTip)
@@ -165,4 +185,12 @@ class StateCardMapperTest {
         assertEquals(0.0, zero.total!!, 0.0)
     }
 
+    @Test fun `pinned away from the flow's platform shows the region's own waiting`() {
+        val card = StateCardMapper.map(Flow.TaskPickupArrived, Mode.Online, null, CardStack.Empty, region, lastDash(), flowOwned = false)
+        org.junit.Assert.assertTrue(card is StateCardModel.Waiting)
+    }
+    @Test fun `pinned away while the region has its own task shows no card`() {
+        val busy = region.copy(activeTask = cloud.trotter.dashbuddy.domain.state.Task("t", "j", cloud.trotter.dashbuddy.domain.state.TaskPhase.PICKUP, startedAt = 2_000))
+        org.junit.Assert.assertNull(StateCardMapper.map(Flow.Idle, Mode.Online, null, CardStack.Empty, busy, lastDash(), flowOwned = false))
+    }
 }

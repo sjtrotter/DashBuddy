@@ -42,7 +42,7 @@ class StateCardTest {
     private fun show(model: StateCardModel, kept: Double? = null) {
         compose.setContent {
             DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model, kept, T0) }
+                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model, kept) }
             }
         }
         settle()
@@ -117,6 +117,17 @@ class StateCardTest {
         tick(T0 + 180_000)
         figure("1").assertExists()
     }
+    @Test fun `navigation without a deadline shows elapsed en route and no due`() {
+        clock.millis = T0 + 252_000
+        show(StateCardModel.DropoffNav(facts.copy(deadlineAt = null), T0))
+        figure("4:12").assertExists()
+        figure("en route").assertExists()
+        compose.onNodeWithText("due").assertDoesNotExist()
+        compose.onNodeWithText("min left").assertDoesNotExist()
+        compose.onNodeWithTag("state.track").assert(hasContentDescription("No deadline"))
+        tick(T0 + 253_000)
+        figure("4:13").assertExists()
+    }
     @Test fun `waiting ticks and shows the tally and last offer`() {
         show(StateCardModel.Waiting(T0, T0, 5, 5, 10, LastOffer(4.25, LastOfferOutcome.DECLINED)), 20.0)
         figure("3:59").assertExists()
@@ -170,6 +181,15 @@ class StateCardTest {
         compose.onNodeWithText("cash", substring = true, ignoreCase = true).assertDoesNotExist()
         compose.onNodeWithText("Add", substring = true).assertDoesNotExist()
     }
+    @Test fun `receipt renders without a clock`() {
+        compose.setContent {
+            DashBuddyTheme { ReceiptCard(StateCardModel.Receipt("Store", T0, emptyList(), 6.1, 10.6)) }
+        }
+        settle()
+        compose.onNodeWithText("Delivery total").assertExists()
+        compose.onNodeWithText("$10.60").assertExists()
+        compose.onNodeWithTag("state.figure").assertDoesNotExist()
+    }
     @Test fun `receipt with no total shows the em dash`() {
         show(receipt(null))
         compose.onNodeWithText(EMPTY_VALUE).assertExists()
@@ -199,7 +219,7 @@ class StateCardTest {
         val model = mutableStateOf<StateCardModel>(StateCardModel.PickupNav(facts, T0))
         compose.setContent {
             DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model.value, null, T0) }
+                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model.value, null) }
             }
         }
         settle()
@@ -210,4 +230,11 @@ class StateCardTest {
         figure("min at store").assertExists()
     }
     private companion object { const val T0 = 1_700_000_000_000L }
+
+    @Test fun `arriving after the deadline keeps the anchor pin clear of the stopwatch`() {
+        show(StateCardModel.PickupArrived(JobFacts("Store", T0 - 10 * 60_000, 7.9, 5.4), T0 - 5 * 60_000))
+        val anchor = compose.onNodeWithTag("track.pin.anchor", useUnmergedTree = true).getBoundsInRoot()
+        val mark = compose.onNodeWithTag("track.pin.mark", useUnmergedTree = true).getBoundsInRoot()
+        org.junit.Assert.assertTrue("mark ${'$'}mark overlaps anchor ${'$'}anchor", mark.left >= anchor.right)
+    }
 }

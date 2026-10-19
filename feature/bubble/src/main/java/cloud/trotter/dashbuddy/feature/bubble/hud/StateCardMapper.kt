@@ -13,26 +13,24 @@ import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 object StateCardMapper {
     fun map(
         flow: Flow, mode: Mode?, active: FlowCardSnapshot?, stack: CardStack,
-        region: PlatformRegion?, session: SessionRecord?,
+        region: PlatformRegion?, session: SessionRecord?, flowOwned: Boolean = true,
     ): StateCardModel? {
         if (mode == Mode.Paused) return null
-        return when (flow) {
-            Flow.Idle, Flow.TaskUnassigned -> if (mode == Mode.Online) waiting(stack, region, session) else null
-            Flow.TaskPickupNavigation, Flow.TaskPickupArrived -> (active as? FlowCardSnapshot.Pickup)
-                ?.let { pickup(it, flow == Flow.TaskPickupArrived) }
-            Flow.TaskDropoffNavigation, Flow.TaskDropoffArrived -> (active as? FlowCardSnapshot.Delivery)
-                ?.let { delivery(it, flow == Flow.TaskDropoffArrived) }
-            Flow.TaskActive -> when (active) {
-                is FlowCardSnapshot.Pickup -> pickup(active, active.arrivedAt != null)
-                is FlowCardSnapshot.Delivery -> delivery(active, active.arrivedAt != null)
-                else -> null
-            }
-            Flow.PostTask -> (active as? FlowCardSnapshot.PostTask)?.let {
-                StateCardModel.Receipt(it.storeName ?: UNKNOWN_STORE, it.phaseStartedAt,
-                    it.parsedPay?.appPayComponents?.map { line -> ReceiptLine(line.displayLabel, line.amount) }.orEmpty(),
-                    it.parsedPay?.totalTip, it.totalPay)
-            }
-            else -> null
+        // The global flow describes the platform whose frame was last seen. When the display is pinned
+        // to another platform (its live card suppressed), only that region's own state may speak.
+        if (!flowOwned) return if (mode == Mode.Online && region?.activeTask == null) waiting(stack, region, session) else null
+        // Independently collected flows can move before the card snapshot at a phase edge.
+        return when (active) {
+            is FlowCardSnapshot.Awaiting -> if (mode == Mode.Online) waiting(stack, region, session) else null
+            is FlowCardSnapshot.Pickup -> pickup(active, active.arrivedAt != null || flow == Flow.TaskPickupArrived)
+            is FlowCardSnapshot.Delivery -> delivery(active, active.arrivedAt != null || flow == Flow.TaskDropoffArrived)
+            is FlowCardSnapshot.PostTask -> StateCardModel.Receipt(
+                active.storeName ?: UNKNOWN_STORE, active.phaseStartedAt,
+                active.parsedPay?.appPayComponents?.map { ReceiptLine(it.displayLabel, it.amount) }.orEmpty(),
+                active.parsedPay?.totalTip, active.totalPay)
+            is FlowCardSnapshot.Offer -> null
+            null -> if ((flow == Flow.Idle || flow == Flow.TaskUnassigned) && mode == Mode.Online)
+                waiting(stack, region, session) else null
         }
     }
 

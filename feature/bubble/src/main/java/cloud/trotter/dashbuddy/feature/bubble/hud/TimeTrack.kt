@@ -30,9 +30,10 @@ import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-internal fun TimeTrack(model: TrackModel, deadlineAt: Long?, lateMinutes: Int?, phase: Color) {
+internal fun TimeTrack(model: TrackModel, lateMinutes: Int?, phase: Color) {
     val c = AppTheme.colors
     val time = rememberTimeFormatter()
+    val deadlineAt = model.markAt ?: model.endAt
     val description = when {
         deadlineAt == null -> stringResource(R.string.hud_track_cd_open)
         lateMinutes != null -> stringResource(R.string.hud_track_cd_late, time(deadlineAt), lateMinutes)
@@ -62,9 +63,13 @@ internal fun TimeTrack(model: TrackModel, deadlineAt: Long?, lateMinutes: Int?, 
             }
         }
         val travel = (maxWidth - 24.dp).coerceAtLeast(0.dp)
-        TrackPin(model.anchorIcon, phase, Modifier.offset(x = 0.dp))
+        TrackPin(model.anchorIcon, phase, Modifier.offset(x = 0.dp).testTag("track.pin.anchor"))
         model.endIcon?.let { TrackPin(it, phase, Modifier.offset(x = travel)) }
-        model.markFraction?.let { TrackPin(TrackIcon.STOPWATCH, c.warn, Modifier.offset(x = travel * it)) }
+        model.markFraction?.let {
+            // Arrived after the deadline: the mark would sit on the anchor; keep one pin width clear of it.
+            val x = maxOf(travel * it, minOf(24.dp, travel))
+            TrackPin(TrackIcon.STOPWATCH, c.warn, Modifier.offset(x = x).testTag("track.pin.mark"))
+        }
     }
 }
 

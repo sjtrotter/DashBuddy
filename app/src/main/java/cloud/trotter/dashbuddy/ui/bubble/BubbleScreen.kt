@@ -54,8 +54,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         }
     }
     val flow = appState.regions.flow.flow
-    val model = remember(flow, region?.mode, cards.stack.active, cards.stack, region, lastSession) {
-        StateCardMapper.map(flow, region?.mode, cards.stack.active, cards.stack, region, lastSession)
+    val liveCardShown by viewModel.liveCardShown.collectAsStateWithLifecycle()
+    val model = remember(flow, cards.stack, region, lastSession, liveCardShown) {
+        StateCardMapper.map(flow, region?.mode, cards.stack.active, cards.stack, region, lastSession, flowOwned = liveCardShown)
     }
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
@@ -84,7 +85,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             }
         },
         stateCard = {
-            StateCard(model, state.hero.profit, region?.session?.startedAt)
+            StateCard(model, state.hero.profit)
         },
         offer = {
             cards.stack.active?.let { active ->
