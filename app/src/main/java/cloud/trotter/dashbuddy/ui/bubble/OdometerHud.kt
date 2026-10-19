@@ -35,8 +35,7 @@ internal class OdometerHud(
     fun openVehicles() {
         if (!viewModel.odometerLoaded.value) return
         closeLog()
-        val garage = viewModel.garage.value
-        if (entry.showVehicles(garage?.unretired?.isNotEmpty() == true)) {
+        if (entry.showVehicles()) {
             viewModel.reopenOdometer()
         }
     }
@@ -93,7 +92,9 @@ internal class OdometerHud(
                 onAddVehicle = viewModel::addVehicle,
                 onSwitchVehicle = { entry.page = OdometerPage.VEHICLES },
                 onSelectVehicle = { id ->
-                    if (id == vehicle?.id) entry.page = OdometerPage.READING else viewModel.selectVehicle(id)
+                    if (id == vehicle?.id) {
+                        if (entry.switcherFromRow) entry.vehicleSwitched() else entry.page = OdometerPage.READING
+                    } else viewModel.selectVehicle(id)
                 },
                 onShowAddVehicle = { entry.showAddVehicle() }, onBack = ::back,
                 onRetireVehicle = viewModel::retireVehicle)

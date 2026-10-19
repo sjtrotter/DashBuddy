@@ -4,6 +4,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
@@ -91,6 +94,96 @@ class BubbleScreenTest {
             }
         }
         settle()
+    }
+
+    @Test fun `row swap follows loaded readings and available vehicle alternatives`() {
+        val civic = Vehicle("civic", "Civic", 0)
+        val bike = Vehicle("bike", "Bike", 1)
+        val garage = MutableStateFlow<Garage?>(Garage(listOf(civic, bike), civic.id, readable = true))
+        val loaded = MutableStateFlow(false)
+        val vm = model()
+        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
+        whenever(vm.garage).thenReturn(garage)
+        whenever(vm.odometerLoaded).thenReturn(loaded)
+        show(vm)
+        compose.onNodeWithTag("hud.vehicle.row").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.runOnIdle { loaded.value = true }; settle()
+        compose.onNodeWithTag("hud.vehicle.swap").assertIsDisplayed()
+        compose.runOnIdle { garage.value = Garage(listOf(civic), civic.id, readable = true) }; settle()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.runOnIdle {
+            garage.value = Garage(listOf(civic, bike.copy(retiredAt = 2)), civic.id, readable = true)
+        }; settle()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.runOnIdle { garage.value = Garage(listOf(civic), null, readable = true) }; settle()
+        compose.onNodeWithText("No vehicle").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.swap").assertIsDisplayed()
+        compose.runOnIdle { loaded.value = false }; settle()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.runOnIdle {
+            loaded.value = true
+            garage.value = Garage(emptyList(), null, readable = true)
+        }; settle()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+    }
+
+    /** The sheet host covers the row while a sheet is open, so the swap can only follow a CLOSED sheet;
+     *  the route step keeps the host from re-showing that earlier sheet's content. */
+    @Test fun `row swap after another sheet was last open shows the switcher, and Back leaves all closed`() {
+        val civic = Vehicle("civic", "Civic", 0)
+        val vm = model()
+        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
+        whenever(vm.lastSession).thenReturn(MutableStateFlow(SessionRecord(
+            "dash", Platform.DoorDash, clock.millis() - 3_600_000, clock.millis() - 60_000,
+            reportedEarnings = 20.0, reportedDurationMillis = null, miles = 5.0,
+            deliveries = 1, jobsCompleted = 1, offersReceived = 1, offersAccepted = 1, offersDeclined = 0, offersTimeout = 0,
+        )))
+        whenever(vm.garage).thenReturn(MutableStateFlow(
+            Garage(listOf(civic, Vehicle("bike", "Bike", 1)), civic.id, readable = true)))
+        whenever(vm.todayProfit).thenReturn(MutableStateFlow(20.0))
+        show(vm)
+        for (tag in listOf("hud.dock.CASH_TIP", "hud.dock.EXPENSE", "hud.goal")) {
+            compose.onNodeWithTag(tag).performClick(); settle()
+            compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }; settle()
+            compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+            compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
+            compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("vehicle.bike").assertIsDisplayed()
+            compose.onNodeWithTag("goal.sheet").assertDoesNotExist()
+            compose.onNodeWithTag("expense.tile.car_care").assertDoesNotExist()
+            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }; settle()
+            compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+        }
+    }
+
+    @Test fun `row selection closes for both the active vehicle and a completed switch`() {
+        val civic = Vehicle("civic", "Civic", 0)
+        val vm = model()
+        val changes = MutableSharedFlow<VehicleChange>(extraBufferCapacity = 1)
+        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
+        whenever(vm.garage).thenReturn(MutableStateFlow(
+            Garage(listOf(civic, Vehicle("bike", "Bike", 1)), civic.id, readable = true)))
+        whenever(vm.odometerVehicleChanged).thenReturn(changes)
+        show(vm)
+        compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("vehicle.civic").performClick(); settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+        verify(vm, never()).selectVehicle(any())
+        compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("vehicle.bike").performClick(); settle()
+        verify(vm).selectVehicle("bike")
+        compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(changes.tryEmit(VehicleChange.SWITCHED)) }; settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
     }
 
     @Test fun `typed expense chip reopens the actual entry field prefilled`() {

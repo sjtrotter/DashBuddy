@@ -19,13 +19,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.displayName
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.vehicleTypeLabel
 
 @Composable
 fun VehicleRow(model: VehicleRowModel, onSwap: () -> Unit, onAdd: () -> Unit) {
     val colors = AppTheme.colors
     Row(
-        Modifier.fillMaxWidth().height(44.dp).testTag("hud.vehicle.row")
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).testTag("hud.vehicle.row")
             .background(colors.surface, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -38,18 +41,19 @@ fun VehicleRow(model: VehicleRowModel, onSwap: () -> Unit, onAdd: () -> Unit) {
         } else {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(model.name ?: stringResource(R.string.hud_vehicle_none),
+                Text(model.vehicle?.displayName() ?: stringResource(R.string.hud_vehicle_none),
                     modifier = Modifier.weight(1f, fill = false),
-                    color = if (model.name == null) colors.text2 else colors.text,
+                    color = if (model.vehicle == null) colors.text2 else colors.text,
                     style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                model.typeLabel?.let {
-                    Text(it, color = colors.text3, style = MaterialTheme.typography.labelSmall,
+                model.vehicle?.let { vehicle ->
+                    Text(stringResource(vehicleTypeLabel(vehicle.profile.vehicleType)), color = colors.text3,
+                        style = MaterialTheme.typography.labelSmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (model.canSwap) {
                 IconButton(onClick = onSwap, modifier = Modifier.size(40.dp).testTag("hud.vehicle.swap")) {
-                    Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_vehicle_switch), tint = colors.accent)
+                    Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_odometer_switch), tint = colors.accent)
                 }
             }
             TextButton(onClick = onAdd, modifier = Modifier.testTag("hud.vehicle.add")) {

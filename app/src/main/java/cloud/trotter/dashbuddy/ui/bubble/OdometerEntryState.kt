@@ -13,17 +13,21 @@ internal class OdometerEntryState(
     private val digitsState: MutableState<String>,
     private val addVehicleFromState: MutableState<OdometerPage> = mutableStateOf(OdometerPage.VEHICLES),
     private val vehicleNameState: MutableState<String> = mutableStateOf(""),
+    private val switcherFromRowState: MutableState<Boolean> = mutableStateOf(false),
 ) {
     var open by openState
     var page by pageState
     private var digits by digitsState
     private var addVehicleFrom by addVehicleFromState
     var vehicleName by vehicleNameState
+    var switcherFromRow by switcherFromRowState
+        private set
     val reading: Int? get() = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).value
     fun digit(digit: Int) { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).digit(digit).digits }
     fun backspace() { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).backspace().digits }
     fun show(activeVehicle: Boolean, anyVehicles: Boolean): Boolean {
         if (open) return false
+        switcherFromRow = false
         addVehicleFrom = OdometerPage.VEHICLES
         digits = ""
         vehicleName = ""
@@ -35,12 +39,13 @@ internal class OdometerEntryState(
         open = true
         return true
     }
-    fun showVehicles(anyVehicles: Boolean): Boolean {
+    fun showVehicles(): Boolean {
         if (open) return false
         addVehicleFrom = OdometerPage.VEHICLES
         digits = ""
         vehicleName = ""
-        page = if (anyVehicles) OdometerPage.VEHICLES else OdometerPage.ADD_VEHICLE
+        switcherFromRow = true
+        page = OdometerPage.VEHICLES
         open = true
         return true
     }
@@ -55,7 +60,7 @@ internal class OdometerEntryState(
     }
     fun vehicleSwitched() {
         digits = ""
-        page = OdometerPage.READING
+        if (switcherFromRow) open = false else page = OdometerPage.READING
     }
     /** Retirement keeps the entered digits, including when the last car is removed. */
     fun vehicleRetired(wasActive: Boolean, activeVehicle: Boolean, anyVehicles: Boolean) {
@@ -69,6 +74,7 @@ internal class OdometerEntryState(
     }
     fun back(hasVehicle: Boolean) {
         when {
+            page == OdometerPage.VEHICLES && switcherFromRow -> open = false
             !hasVehicle || page == OdometerPage.READING -> open = false
             page == OdometerPage.ADD_VEHICLE -> page = addVehicleFrom
             else -> page = OdometerPage.READING
@@ -83,5 +89,6 @@ internal fun rememberOdometerEntryState(): OdometerEntryState {
     val digits = rememberSaveable { mutableStateOf("") }
     val addVehicleFrom = rememberSaveable { mutableStateOf(OdometerPage.VEHICLES) }
     val vehicleName = rememberSaveable { mutableStateOf("") }
-    return remember { OdometerEntryState(open, page, digits, addVehicleFrom, vehicleName) }
+    val switcherFromRow = rememberSaveable { mutableStateOf(false) }
+    return remember { OdometerEntryState(open, page, digits, addVehicleFrom, vehicleName, switcherFromRow) }
 }

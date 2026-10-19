@@ -1,15 +1,13 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud.vehicle
 
-data class VehicleRowModel(val name: String?, val typeLabel: String?, val canSwap: Boolean, val unreadable: Boolean)
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 
-/**
- * The app adapts its data-layer Garage: the active vehicle's display name (resolved by the one owner,
- * `Vehicle.displayName()` in `:app`; null = no active vehicle) and its localized type label.
- */
+data class VehicleRowModel(val vehicle: Vehicle?, val canSwap: Boolean, val unreadable: Boolean)
+
+/** The app adapts its data-layer Garage; the feature owns the vehicle's display copy. */
 data class VehicleRowInput(
-    val activeName: String?,
-    val typeLabel: String?,
-    val anyVehicles: Boolean,
+    val active: Vehicle?,
+    val switchable: Boolean,
     val readable: Boolean,
 )
 
@@ -17,11 +15,10 @@ object VehicleRowMapper {
     /** null garage = still loading → no row. */
     fun map(garage: VehicleRowInput?): VehicleRowModel? = when {
         garage == null -> null
-        !garage.readable -> VehicleRowModel(null, null, canSwap = false, unreadable = true)
+        !garage.readable -> VehicleRowModel(null, canSwap = false, unreadable = true)
         else -> VehicleRowModel(
-            garage.activeName,
-            garage.typeLabel.takeIf { garage.activeName != null },
-            canSwap = garage.anyVehicles,
+            garage.active,
+            canSwap = garage.switchable,
             unreadable = false,
         )
     }

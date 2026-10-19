@@ -37,7 +37,6 @@ class OdometerHudTest {
     @Test fun `loaded switcher closes the log and reopens only once`() {
         val vm: BubbleViewModel = mock()
         whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
-        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, readable = true)))
         val entry = OdometerEntryState(mutableStateOf(false), mutableStateOf(OdometerPage.READING), mutableStateOf(""))
         var closes = 0
         val hud = OdometerHud(vm, entry) { closes++ }
@@ -51,21 +50,6 @@ class OdometerHudTest {
         hud.openVehicles()
         assertEquals(5, entry.reading)
         verify(vm, times(1)).reopenOdometer()
-    }
-
-    @Test fun `empty or retired only garage opens add vehicle`() {
-        for (vehicles in listOf(emptyList(), listOf(civic.copy(retiredAt = 1)))) {
-            val vm: BubbleViewModel = mock()
-            whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
-            whenever(vm.garage).thenReturn(MutableStateFlow(Garage(vehicles, civic.id, readable = true)))
-            val entry = OdometerEntryState(mutableStateOf(false), mutableStateOf(OdometerPage.READING), mutableStateOf(""))
-            val hud = OdometerHud(vm, entry) {}
-
-            hud.openVehicles()
-
-            assertTrue(hud.open)
-            assertEquals(OdometerPage.ADD_VEHICLE, entry.page)
-            verify(vm).reopenOdometer()
-        }
+        verify(vm, never()).garage
     }
 }

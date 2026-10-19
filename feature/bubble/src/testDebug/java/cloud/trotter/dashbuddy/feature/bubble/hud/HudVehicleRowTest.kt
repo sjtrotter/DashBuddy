@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowModel
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -17,7 +18,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 internal class HudVehicleRowTest : HudScreenFixture() {
-    private val car = VehicleRowModel("Civic", "Car", canSwap = true, unreadable = false)
+    private val car = VehicleRowModel(Vehicle("civic", "Civic", 0), canSwap = true, unreadable = false)
 
     @Test fun `resting vehicle shows its name and type and routes swap and add`() {
         var swaps = 0
@@ -40,6 +41,22 @@ internal class HudVehicleRowTest : HudScreenFixture() {
         assertEquals(1, adds)
     }
 
+    @Test fun `vehicle name follows custom name identity and localized type`() {
+        val profile = GasCar(year = "2020", make = "Honda", model = "Civic")
+        var vehicle by mutableStateOf(Vehicle("car", "Commute", 0, profile))
+        show({ state(resting = true).copy(vehicle = car.copy(vehicle = vehicle, canSwap = false)) })
+        settle()
+        compose.onNodeWithText("Commute").assertIsDisplayed()
+        compose.onNodeWithText("Car").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.runOnIdle { vehicle = vehicle.copy(name = null) }
+        settle()
+        compose.onNodeWithText("2020 Honda Civic").assertIsDisplayed()
+        compose.runOnIdle { vehicle = Vehicle("bike", null, 0, Bicycle()) }
+        settle()
+        compose.onAllNodesWithText("Bicycle").assertCountEquals(2)
+    }
+
     @Test fun `loading garage has no resting vehicle row`() {
         show({ state(resting = true) })
         settle()
@@ -54,7 +71,7 @@ internal class HudVehicleRowTest : HudScreenFixture() {
     }
 
     @Test fun `no vehicle offers add without swap`() {
-        show({ state(resting = true).copy(vehicle = VehicleRowModel(null, null, false, false)) })
+        show({ state(resting = true).copy(vehicle = VehicleRowModel(null, false, false)) })
         settle()
         compose.onNodeWithText("No vehicle").assertIsDisplayed()
         compose.onNodeWithTag("hud.vehicle.add").assertIsDisplayed()
@@ -62,7 +79,7 @@ internal class HudVehicleRowTest : HudScreenFixture() {
     }
 
     @Test fun `unreadable garage shows the shared warning without actions`() {
-        show({ state(resting = true).copy(vehicle = VehicleRowModel(null, null, false, true)) })
+        show({ state(resting = true).copy(vehicle = VehicleRowModel(null, false, true)) })
         settle()
         compose.onNodeWithText("Saved vehicles could not be read.").assertIsDisplayed()
         compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
