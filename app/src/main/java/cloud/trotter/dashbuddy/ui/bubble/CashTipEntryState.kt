@@ -1,0 +1,79 @@
+package cloud.trotter.dashbuddy.ui.bubble
+
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.*
+
+@Stable
+internal class CashTipEntryState(
+    private val openState: MutableState<Boolean>,
+    private val pageState: MutableState<CashTipPage>,
+    private val selectedState: MutableState<Long?>,
+    private val totalState: MutableState<Long>,
+    private val signState: MutableState<CashTipSign>,
+    private val otherState: MutableState<String>,
+    private val dashState: MutableState<String?> = mutableStateOf(null),
+    private val entryIdState: MutableState<Long> = mutableStateOf(0L),
+) {
+    var entryId by entryIdState
+        private set
+    var dashId by dashState
+        private set
+    var open by openState
+    var page by pageState
+    var selectedDeliveryId by selectedState
+    var totalCents by totalState
+        private set
+    var sign by signState
+    var otherAmount by otherState
+        private set
+
+    fun show(latestId: Long?, dashId: String? = null) {
+        if (open) return
+        entryId++
+        this.dashId = dashId
+        page = CashTipPage.COMPACT
+        selectedDeliveryId = latestId
+        totalCents = 0
+        sign = CashTipSign.PLUS
+        otherAmount = ""
+        open = true
+    }
+    fun select(id: Long) { selectedDeliveryId = id; page = CashTipPage.COMPACT }
+    fun add(cents: Long) {
+        require(cents >= 0)
+        totalCents = if (sign == CashTipSign.PLUS) totalCents + cents.coerceAtMost(MAX_CENTS - totalCents)
+            else (totalCents - cents).coerceAtLeast(0)
+    }
+    fun other() { otherAmount = ""; page = CashTipPage.OTHER_AMOUNT }
+    fun digit(n: Int) {
+        require(n in 0..9)
+        if (otherAmount.substringBefore('.').length >= 6 && '.' !in otherAmount) return
+        if ('.' in otherAmount && otherAmount.substringAfter('.').length >= 2) return
+        otherAmount = if (otherAmount == "0") n.toString() else otherAmount + n
+    }
+    fun point() { if ('.' !in otherAmount) otherAmount = otherAmount.ifEmpty { "0" } + "." }
+    fun backspace() { otherAmount = otherAmount.dropLast(1) }
+    fun doneOther() {
+        val cents = otherAmount.toBigDecimalOrNull()?.movePointRight(2)?.toLong() ?: 0L
+        add(cents)
+        page = CashTipPage.COMPACT
+    }
+    fun back() {
+        if (page == CashTipPage.COMPACT) open = false else page = CashTipPage.COMPACT
+    }
+    companion object { const val MAX_CENTS = 99_999_999L }
+}
+
+@Composable
+internal fun rememberCashTipEntryState(): CashTipEntryState {
+    val open = rememberSaveable { mutableStateOf(false) }
+    val page = rememberSaveable { mutableStateOf(CashTipPage.COMPACT) }
+    val selected = rememberSaveable { mutableStateOf<Long?>(null) }
+    val total = rememberSaveable { mutableStateOf(0L) }
+    val sign = rememberSaveable { mutableStateOf(CashTipSign.PLUS) }
+    val other = rememberSaveable { mutableStateOf("") }
+    val dash = rememberSaveable { mutableStateOf<String?>(null) }
+    val entryId = rememberSaveable { mutableStateOf(0L) }
+    return remember { CashTipEntryState(open, page, selected, total, sign, other, dash, entryId) }
+}

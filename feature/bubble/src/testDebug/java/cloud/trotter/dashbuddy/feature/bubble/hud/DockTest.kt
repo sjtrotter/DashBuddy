@@ -53,4 +53,19 @@ class DockTest {
         compose.onNodeWithTag("hud.dock.SETTINGS").assertIsDisplayed()
     }
 
+    @Test fun `cash tip is reachable live and at rest`() {
+        compose.setContent {
+            DashBuddyTheme { Box(Modifier.width(352.dp)) {
+                Dock(DockMapper.map(mode, odometerLoaded = true)) { picked = it }
+            } }
+        }
+        settle()
+        compose.onNodeWithTag("hud.dock.CASH_TIP").assertIsEnabled().performClick()
+        assertEquals(DockKind.CASH_TIP, picked)
+        compose.runOnIdle { mode = HudMode.RESTING; picked = null }
+        settle()
+        compose.onNodeWithTag("hud.dock.CASH_TIP").assertIsEnabled().performClick()
+        assertEquals(DockKind.CASH_TIP, picked)
+    }
+
 }

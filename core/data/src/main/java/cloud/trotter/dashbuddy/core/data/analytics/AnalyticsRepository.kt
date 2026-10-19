@@ -86,6 +86,8 @@ class AnalyticsRepository @Inject constructor(
     // so the "net is the frozen stored value" posture above is preserved.
     private val appEventDao: AppEventDao,
 ) {
+    val projectionWatermark: Flow<Long?>
+        get() = analyticsDao.watermark().map { it?.watermarkSequenceId }
 
     /**
      * Frozen-net economics for [period]. `platform == null` ⇒ cross-platform; a
@@ -682,6 +684,10 @@ class AnalyticsRepository @Inject constructor(
     /** Every delivery in a session, completion order (future #650 drill-down). */
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecord>> =
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
+
+    /** A fresh, single-row read on each call, independent of any UI's collected snapshot. */
+    suspend fun deliveryById(eventSequenceId: Long): DeliveryRecord? =
+        analyticsDao.deliveryRecord(eventSequenceId)?.toDomain()
 
     /**
      * The orphan "(No session)" deliveries for [period], newest first (#660 piece 2) — the categorize

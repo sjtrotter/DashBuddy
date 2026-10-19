@@ -20,6 +20,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 
 /**
  * #705 F4d — the write-side [CorrectionRepository] `require` boundaries (previously ZERO coverage).
@@ -79,6 +80,8 @@ class CorrectionRepositoryTest {
 
     @Test
     fun `adjustDelivery accepts a note-only edit and a finite positive pay edit`() = runTest {
+        // adjustDelivery returns the appended sequence id (#1333 S3a); the mock must answer one.
+        whenever(appEventRepo.appendUserEvent(any(), anyOrNull())).thenReturn(7L)
         repo.adjustDelivery(targetEventSequenceId = 1L, sessionId = "S1", note = "just a note")
         repo.adjust(newPay = 12.0, newTip = 0.0, newCashTip = 0.0, newMiles = 0.0)
         verify(appEventRepo, times(2)).appendUserEvent(any(), anyOrNull())

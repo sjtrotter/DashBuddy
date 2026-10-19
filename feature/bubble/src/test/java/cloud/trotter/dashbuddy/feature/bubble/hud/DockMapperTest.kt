@@ -43,16 +43,16 @@ class DockMapperTest {
     fun `live dock is cash tip expense odometer log`() {
         val items = DockMapper.map(HudMode.LIVE, odometerLoaded = true).items
         assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG), items.map { it.kind })
-        assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
+        assertEquals(listOf(DockItemState.NORMAL, DockItemState.DISABLED, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
         for (mode in HudMode.entries) {
             DockMapper.map(mode, odometerLoaded = true).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
-                .forEach { assertEquals(DockItemState.DISABLED, it.state) }
+                .forEach { assertEquals(if (it.kind == DockKind.CASH_TIP) DockItemState.NORMAL else DockItemState.DISABLED, it.state) }
         }
     }
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
+        assertEquals(listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
     }
 
     @Test
@@ -88,6 +88,15 @@ class DockMapperTest {
             assertFalse(DockMapper.map(mode, logShown = false, odometerLoaded = true).items.any { it.kind == DockKind.NOW })
         }
         assertFalse(DockMapper.map(HudMode.LIVE, logShown = true, odometerLoaded = true).items.any { it.kind == DockKind.LOG })
+    }
+
+    @Test fun `resting cash tip opens the last dash and keeps its pending cue`() {
+        assertEquals(DockItemState.NORMAL, DockMapper.map(HudMode.RESTING, odometerLoaded = true)
+            .items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertEquals(DockItemState.ACCENT, DockMapper.map(HudMode.RESTING, cashTipCue = true, odometerLoaded = true)
+            .items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertFalse(DockMapper.map(HudMode.RESTING, firstRun = true, odometerLoaded = true)
+            .items.any { it.kind == DockKind.CASH_TIP })
     }
 
 }

@@ -132,7 +132,7 @@ internal class HudScreenTest : HudScreenFixture() {
         value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2 hr 0 min").assertExists()
         value("hud.top.miles", "42.5").assertExists()
-        listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
+        listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
         org.junit.Assert.assertTrue(state(resting = true).top.dimmed)
     }
@@ -284,4 +284,51 @@ internal class HudScreenTest : HudScreenFixture() {
         assertEquals(1, calls.size)
     }
     private companion object { const val T0 = 1_700_000_000_000L }
+    @Test fun `cash tip strip occupies the undo band live and at rest`() {
+        var resting by mutableStateOf(false)
+        val strip = cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel(
+            700, "Panera Bread", 71, T0 + 10_000, 2)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    HudScreen(state(resting = resting), null, {},
+                        undo = { cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStrip(strip) {} },
+                        undoVisible = { cloud.trotter.dashbuddy.feature.bubble.hud.undo.undoStripVisible(strip) })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText("Cash tip $7.00, Panera Bread").assertIsDisplayed()
+        compose.runOnIdle { resting = true }
+        settle()
+        compose.onNodeWithText("Cash tip $7.00, Panera Bread").assertIsDisplayed()
+        compose.runOnIdle { clock.millis += 10_000 }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(10_000)
+        compose.onNodeWithTag("undo.strip").assertDoesNotExist()
+    }
+
+    @Test fun `the newer notice wins the shared undo slot`() {
+        val strip = cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel(
+            700, "Panera Bread", 71, T0 + 10_000, 2)
+        var notice by mutableStateOf(cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel(52_388, 1))
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    HudScreen(state(), null, {}, undo = {
+                        if (cloud.trotter.dashbuddy.feature.bubble.hud.undo.cashTipUndoWins(strip, notice.token, clock.millis))
+                            cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStrip(strip) {}
+                        else cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNotice(notice)
+                    })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("undo.strip").assertIsDisplayed()
+        compose.onNodeWithText("Odometer saved, 52,388 mi").assertDoesNotExist()
+        compose.runOnIdle { notice = notice.copy(token = 3) }
+        settle()
+        compose.onNodeWithText("Odometer saved, 52,388 mi").assertIsDisplayed()
+        compose.onNodeWithTag("undo.strip").assertDoesNotExist()
+    }
+
 }
