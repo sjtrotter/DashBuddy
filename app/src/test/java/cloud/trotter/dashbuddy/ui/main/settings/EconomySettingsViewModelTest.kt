@@ -8,7 +8,7 @@ import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,8 +46,8 @@ class EconomySettingsViewModelTest {
             scope = backgroundScope,
             produceFile = { tmp.newFile("app.preferences_pb") },
         )), garage)
-        val inactive = garage.addVehicle("Old car", 1L, VehicleProfile(vehicleClass = VehicleClass.COMPACT))
-        val active = garage.addVehicle("Current car", 2L, VehicleProfile(vehicleClass = VehicleClass.SEDAN))
+        val inactive = garage.addVehicle("Old car", 1L, LegacyProfile(vehicleClass = VehicleClass.COMPACT).toTyped())
+        val active = garage.addVehicle("Current car", 2L, LegacyProfile(vehicleClass = VehicleClass.SEDAN).toTyped())
         val strategy: StrategyRepository = mock()
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
         val viewModel = EconomySettingsViewModel(preferences, strategy)
@@ -69,25 +69,25 @@ class EconomySettingsViewModelTest {
 
         val vehicles = garage.garage.first().vehicles
         val saved = vehicles.first { it.id == active.id }.profile
-        assertEquals(VehicleClass.SUV, saved.vehicleClass)
-        assertEquals(27.5, saved.mpg)
-        assertEquals(FuelType.DIESEL, saved.fuelType)
-        assertEquals(720.0, saved.tireSetCost)
-        assertEquals(48_000.0, saved.tireLifetimeMi)
-        assertEquals(85.0, saved.oilCost)
-        assertEquals(7_500.0, saved.oilIntervalMi)
-        assertEquals(600.0, saved.brakesCost)
-        assertEquals(50_000.0, saved.brakesIntervalMi)
-        assertEquals(125.0, saved.fluidsCost)
-        assertEquals(30_000.0, saved.fluidsIntervalMi)
-        assertEquals(800.0, saved.miscYearly)
-        assertEquals(12_000.0, saved.miscYearlyMi)
-        assertEquals(true, saved.includeDepreciation)
-        assertEquals(28_000.0, saved.purchasePrice)
-        assertEquals(180_000.0, saved.totalLifetimeMi)
-        assertEquals(75.0, saved.insuranceDeltaPerMonth)
-        assertEquals(120.0, saved.registrationDeltaPerYear)
-        assertEquals(15_000.0, saved.expectedAnnualMiles)
+        assertEquals(VehicleClass.SUV, saved.legacyClass)
+        assertEquals(27.5, saved.gasMpg)
+        assertEquals(FuelType.DIESEL, saved.gasFuel)
+        assertEquals(720.0, saved.wear.tireSetCost)
+        assertEquals(48_000.0, saved.wear.tireLifetimeMi)
+        assertEquals(85.0, saved.wear.oilCost)
+        assertEquals(7_500.0, saved.wear.oilIntervalMi)
+        assertEquals(600.0, saved.wear.brakesCost)
+        assertEquals(50_000.0, saved.wear.brakesIntervalMi)
+        assertEquals(125.0, saved.wear.fluidsCost)
+        assertEquals(30_000.0, saved.wear.fluidsIntervalMi)
+        assertEquals(800.0, saved.wear.miscYearly)
+        assertEquals(12_000.0, saved.wear.miscYearlyMi)
+        assertEquals(true, saved.fixed.includeDepreciation)
+        assertEquals(28_000.0, saved.fixed.purchasePrice)
+        assertEquals(180_000.0, saved.fixed.totalLifetimeMi)
+        assertEquals(75.0, saved.fixed.insuranceDeltaPerMonth)
+        assertEquals(120.0, saved.fixed.registrationDeltaPerYear)
+        assertEquals(15_000.0, saved.fixed.expectedAnnualMiles)
         assertEquals(inactive.profile, vehicles.first { it.id == inactive.id }.profile)
         assertEquals(80.0, preferences.userEconomy.first().phonePlanTotal, 0.0)
     }

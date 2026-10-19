@@ -133,6 +133,13 @@ fun WizardScreen(
                         VehicleCard(
                             step = currentStep,
                             vehicleClass = state.vehicleClass,
+                            profile = state.vehicleProfile,
+                            consumption = if (state.vehicleProfile is cloud.trotter.dashbuddy.domain.model.vehicle.EBike) state.whPerMile else state.kwhPer100Mi,
+                            electricityPrice = state.electricityPricePerKwh,
+                            onVehicleTypeSelected = viewModel::updateVehicleType,
+                            onPowertrainSelected = viewModel::updatePowertrain,
+                            onConsumptionChanged = viewModel::updateConsumption,
+                            onElectricityPriceChanged = viewModel::updateElectricityPrice,
                             vehicleLookupAllowed = state.vehicleLookupAllowed,
                             manualMpgEntry = state.manualMpgEntry,
                             year = state.vehicleYear,
@@ -144,7 +151,6 @@ fun WizardScreen(
                             availableMakes = availableMakes,
                             availableModels = availableModels,
                             availableTrims = availableTrimNames,
-                            onTypeSelected = viewModel::updateVehicleClass,
                             onAllowVehicleLookup = viewModel::allowVehicleLookup,
                             onManualMpgEntry = viewModel::onManualMpgEntry,
                             onYearSelected = viewModel::onYearSelected,
@@ -181,6 +187,11 @@ fun WizardScreen(
                             onPhoneChange = viewModel::updatePhonePlan,
                             onExpectedAnnualMilesChange = viewModel::updateExpectedAnnualMiles,
                             onTimeConstantsChange = viewModel::updateTimeConstants,
+                            onChainChange = viewModel::updateChain,
+                            onBatteryChange = viewModel::updateBattery,
+                            onBeltChange = viewModel::updateBelt,
+                            onConsumptionChange = viewModel::updateConsumption,
+                            onElectricityPriceChange = viewModel::updateElectricityPrice,
                         )
                     }
 

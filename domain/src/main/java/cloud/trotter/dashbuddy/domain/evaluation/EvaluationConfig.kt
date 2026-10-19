@@ -41,7 +41,11 @@ data class EvaluationConfig(
      */
     val itemsPerUnitRatios: Map<Platform, LearnedItemsPerUnitRatio> = emptyMap(),
     val timeConstants: Map<Platform, LearnedTimeConstants> = emptyMap(),
+
 ) {
+    fun travelSeedFor(platform: Platform): TimeConstantPair = userEconomy.vehicleInputs?.travel
+        ?.let { TimeConstantPair(it.minutesPerMile, it.basePickupMinutes) } ?: TimeConstantSeeds.seedFor(platform)
+
     /**
      * #588: resolve THIS offer's [platform]'s learned pace + seed into [userEconomy], producing the
      * config the evaluator scores against. Keeps [OfferEvaluator.evaluate] and
@@ -58,7 +62,7 @@ data class EvaluationConfig(
         val learned = shopRates[platform]
         val learnedRatio = itemsPerUnitRatios[platform]
         val time = timeConstants[platform]
-        val seed = TimeConstantSeeds.seedFor(platform)
+        val seed = travelSeedFor(platform)
         return copy(
             userEconomy = userEconomy.copy(
                 learnedMinutesPerMile = time?.median?.minutesPerMile,

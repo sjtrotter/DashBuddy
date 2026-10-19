@@ -12,14 +12,17 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.ReconciledMileage
 import cloud.trotter.dashbuddy.feature.bubble.R
 import kotlin.math.abs
 
 @Composable
-fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliation: ReconciledMileage?, onOpen: () -> Unit) {
+fun OdometerFooter(vehicle: Vehicle?, last: LastOdometerReading?, reconciliation: ReconciledMileage?, onOpen: () -> Unit) {
     if (last == null) return
+    val vehicleName = vehicle?.let { it.identityName ?: stringResource(vehicleTypeLabel(it.profile.vehicleType)) }
     Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 4.dp)) {
         Text(stringResource(R.string.hud_odometer_footer, vehicleName ?: EMPTY_VALUE,
             Formats.commaInt(last.readingMiles), formatShortDate(last.occurredAt)),

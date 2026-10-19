@@ -3,7 +3,7 @@ package cloud.trotter.dashbuddy.core.data.vehicle
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleStorage
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -39,7 +39,7 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         emit(Garage(emptyList(), null, readable = false))
     }
 
-    suspend fun addVehicle(name: String?, now: Long, profile: VehicleProfile = VehicleProfile()): Vehicle = mutex.withLock {
+    suspend fun addVehicle(name: String?, now: Long, profile: VehicleProfile = GasCar()): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name?.trim(), now, profile)
         val list = vehiclesForWrite() + vehicle
         saveForWrite(list, vehicle.id)
@@ -102,7 +102,7 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
             saveForWrite(updated, saved.activeId)
             return@withLock true
         }
-        val vehicle = Vehicle(UUID.randomUUID().toString(), null, now, transform(VehicleProfile()))
+        val vehicle = Vehicle(UUID.randomUUID().toString(), null, now, transform(GasCar()))
         saveForWrite(list + vehicle, vehicle.id)
         true
     }
@@ -157,15 +157,18 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         }
     }
 
-    private fun mergeSeed(current: VehicleProfile, saved: VehicleProfile): VehicleProfile = current.copy(
-        year = current.year ?: saved.year,
-        make = current.make ?: saved.make,
-        model = current.model ?: saved.model,
-        mpg = current.mpg ?: saved.mpg,
-        vehicleClass = if (current.vehicleClass == cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass.SEDAN)
-            saved.vehicleClass else current.vehicleClass,
-        fuelType = if (current.fuelType == cloud.trotter.dashbuddy.domain.model.vehicle.FuelType.REGULAR)
-            saved.fuelType else current.fuelType,
+    private fun mergeSeed(current: VehicleProfile, saved: VehicleProfile): VehicleProfile {
+        val target = if (current is GasCar && current.vehicleClass == GasCarClass.SEDAN) {
+            if (saved is GasCar) current.copy(vehicleClass = saved.vehicleClass)
+            else saved.withIdentity(current.year, current.make, current.model)
+        } else current
+        return target.withIdentity(current.year ?: saved.year, current.make ?: saved.make, current.model ?: saved.model)
+            .withGas(mpg = current.gasMpg ?: saved.gasMpg,
+                fuelType = current.gasFuel?.takeUnless { it == FuelType.REGULAR } ?: saved.gasFuel ?: FuelType.REGULAR)
+            .withCosts(mergeWear(current.wear, saved.wear), mergeFixed(current.fixed, saved.fixed))
+    }
+
+    private fun mergeWear(current: WearProfile, saved: WearProfile) = WearProfile(
         tireSetCost = current.tireSetCost ?: saved.tireSetCost,
         tireLifetimeMi = current.tireLifetimeMi ?: saved.tireLifetimeMi,
         oilCost = current.oilCost ?: saved.oilCost,
@@ -174,8 +177,17 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         brakesIntervalMi = current.brakesIntervalMi ?: saved.brakesIntervalMi,
         fluidsCost = current.fluidsCost ?: saved.fluidsCost,
         fluidsIntervalMi = current.fluidsIntervalMi ?: saved.fluidsIntervalMi,
+        chainCost = current.chainCost ?: saved.chainCost,
+        chainLifeMi = current.chainLifeMi ?: saved.chainLifeMi,
+        batteryCost = current.batteryCost ?: saved.batteryCost,
+        batteryLifeMi = current.batteryLifeMi ?: saved.batteryLifeMi,
+        beltCost = current.beltCost ?: saved.beltCost,
+        beltLifeMi = current.beltLifeMi ?: saved.beltLifeMi,
         miscYearly = current.miscYearly ?: saved.miscYearly,
         miscYearlyMi = current.miscYearlyMi ?: saved.miscYearlyMi,
+    )
+
+    private fun mergeFixed(current: FixedCosts, saved: FixedCosts) = FixedCosts(
         includeDepreciation = current.includeDepreciation ?: saved.includeDepreciation,
         purchasePrice = current.purchasePrice ?: saved.purchasePrice,
         totalLifetimeMi = current.totalLifetimeMi ?: saved.totalLifetimeMi,

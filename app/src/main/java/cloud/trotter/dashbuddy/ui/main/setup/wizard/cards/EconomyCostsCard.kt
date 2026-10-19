@@ -16,6 +16,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
@@ -49,6 +51,11 @@ fun EconomyCostsCard(
     onPhoneChange: (Double, Int, Double) -> Unit,
     onExpectedAnnualMilesChange: (Double) -> Unit,
     onTimeConstantsChange: (Double, Double) -> Unit,
+    onChainChange: (Double, Double) -> Unit,
+    onBatteryChange: (Double, Double) -> Unit,
+    onBeltChange: (Double, Double) -> Unit,
+    onConsumptionChange: (Double) -> Unit,
+    onElectricityPriceChange: (Double) -> Unit,
 ) {
     // Build a live UserEconomy from current state so the editor can show
     // $/mi summaries without going through the repository.
@@ -70,7 +77,7 @@ fun EconomyCostsCard(
             WizardCardHeader(step = WizardStep.ECONOMY_COSTS)
 
             Spacer(modifier = Modifier.height(12.dp))
-            VehicleClassPicker(
+            if (EconomyField.VEHICLE_CLASS in EconomyFieldGroups.fieldsFor(state.vehicleProfile)) VehicleClassPicker(
                 selected = state.vehicleClass,
                 onClassChange = onClassChange,
             )
@@ -88,6 +95,8 @@ fun EconomyCostsCard(
                 onRegistrationChange = onRegistrationChange,
                 onPhoneChange = onPhoneChange,
                 onExpectedAnnualMilesChange = onExpectedAnnualMilesChange,
+                onChainChange = onChainChange, onBatteryChange = onBatteryChange, onBeltChange = onBeltChange,
+                onConsumptionChange = onConsumptionChange, onElectricityPriceChange = onElectricityPriceChange,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
