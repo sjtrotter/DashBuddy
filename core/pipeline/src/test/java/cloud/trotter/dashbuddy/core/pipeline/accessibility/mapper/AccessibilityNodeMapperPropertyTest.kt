@@ -256,7 +256,7 @@ class AccessibilityNodeMapperPropertyTest {
     // ---- Property: any generated tree stays within every cap, never throws ------
 
     @Test
-    fun `property - generated trees stay within depth-node-text caps, bound IPC, never throw`() = runTest(timeout = PropSeeds.runTestTimeout) {
+    fun `property - generated trees stay within depth-node-text caps, bound IPC, never throw`() = runTest {
         checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { case ->
             val mapped = case.root.toUiNode()   // must not throw
             assertWithinCaps(mapped)

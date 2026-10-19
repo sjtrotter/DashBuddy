@@ -65,6 +65,14 @@ subprojects {
         providers.systemProperty("dashbuddy.propExplore").orNull
             ?.let { explore ->
                 systemProperty("dashbuddy.propExplore", explore)
+                // Exploration also raises `runTest`'s body budget (default 60 s) for every
+                // property at once: coroutines-test reads this property in the forked worker.
+                // It is a COMPLETION check, not an interrupt — a CPU-bound checkAll body has no
+                // suspension point, so a hung property is bounded only by the job's
+                // timeout-minutes. Every nightly from 2026-09-30 (the #1147 node-field widening,
+                // ~12 more reads per node) to 10-19 died here on the tree-mapper property at 10×
+                // samples (1m34s against 1m), not on the mapper.
+                systemProperty("kotlinx.coroutines.test.default_timeout", "20m")
                 // Match PropSeeds' opt-in semantics. Include every checkAll owner, not
                 // just *PropertyTest; keep this list in sync when adding properties.
                 if (explore.isNotEmpty() && explore.lowercase() !in listOf("false", "0")) {

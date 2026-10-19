@@ -20,6 +20,8 @@ on:
 jobs:
   prop-explore:
     runs-on: ubuntu-latest
+    # A hung property is bounded here, not by runTest (see build.gradle.kts).
+    timeout-minutes: 120
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -47,7 +49,9 @@ jobs:
         run: chmod +x gradlew
 
       - name: Explore (unseeded, 10x samples)
-        run: ./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
+        # --continue: one red property must never hide the other module's half of the suite
+        # (09-30 → 10-19 the :app properties never ran because :core:pipeline failed first).
+        run: ./gradlew --continue :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
 
       - name: Surface failing-property reports
         # A red exploration run's value IS the seed in the kotest failure output — put the

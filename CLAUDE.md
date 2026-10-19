@@ -77,9 +77,9 @@ trusted installs; server #1157).
 # The flag also filters to all checkAll-owning classes (including their fixed regressions).
 # Every property pins a seed by default so PR CI is deterministic; this flag is the
 # exploration path — run it off the PR path (nightly/manual), and when it finds
-# something, paste the reported seed into that property's pinned SEED const. A property whose
-# 10x run can exceed runTest's 60 s default passes `runTest(timeout = PropSeeds.runTestTimeout)`
-# (20 min under exploration, the default on the PR path).
+# something, paste the reported seed into that property's pinned SEED const. The flag also
+# raises runTest's 60 s body budget to 20 min for every property (build.gradle.kts forwards
+# kotlinx.coroutines.test.default_timeout); the nightly job's timeout-minutes bounds a hang.
 ./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
 
 # Run instrumented tests (requires connected device/emulator)
