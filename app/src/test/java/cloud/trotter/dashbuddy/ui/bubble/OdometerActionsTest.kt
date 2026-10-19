@@ -3,7 +3,11 @@ package cloud.trotter.dashbuddy.ui.bubble
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -50,6 +54,27 @@ class OdometerActionsTest {
         actions.save("civic", 52_388)
         runCurrent()
         verify(readings, times(1)).record("civic", 52_388, 100)
+    }
+
+    @Test fun `a cancelled scope still completes the write`() = runTest {
+        val recorded = mutableListOf<Triple<String, Int, Long>>()
+        doSuspendableAnswer { call ->
+            delay(1_000)
+            recorded += Triple(call.getArgument<String>(0), call.getArgument<Int>(1), call.getArgument<Long>(2))
+            1L
+        }.whenever(readings).record(any(), any(), any())
+        val scope = CoroutineScope(coroutineContext + Job())
+        val actions = OdometerActions(scope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        assertTrue(actions.saving.value)
+        assertTrue(recorded.isEmpty())
+        scope.cancel()
+        advanceUntilIdle()
+        assertEquals(listOf(Triple("civic", 52_388, 100L)), recorded)
+        assertEquals(OdometerNoticeModel(52_388, 100), actions.notice.value)
+        assertFalse(actions.saving.value)
+        assertFalse(actions.failed.value)
     }
 
     @Test fun `vehicle actions use the garage without writing a reading`() = runTest {

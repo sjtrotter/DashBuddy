@@ -24,9 +24,5 @@ class VehicleDataSourceTest {
         source.stored.first()
         source.save("list", "civic")
         assertEquals(listOf(VehicleDataSource.StoredVehicles(null, null), VehicleDataSource.StoredVehicles("list", "civic")), emissions.await())
-        assertEquals("list", source.vehiclesJson.first())
-        assertEquals("civic", source.activeVehicleId.first())
-        source.clear()
-        assertEquals(VehicleDataSource.StoredVehicles(null, null), source.stored.first())
     }
 }

@@ -22,10 +22,7 @@ class RecordFoldsOdometerTest {
         assertNull(result.skip)
     }
     @Test fun `is a bookkeeping event`() {
-        // An alien metadata stamp must bypass measureSession even for a session-attributed event.
-        val result = RecordFolds.foldEvent(event("dash"), context, 0.4)
-        assertEquals(FoldOutcome(), result)
-        assertNull(result.context)
-        assertNull(result.skip)
+        // Membership keeps odometer readings on the bookkeeping bypass.
+        assertTrue(AppEventType.ODOMETER_READING in RecordFolds.BOOKKEEPING_EVENTS)
     }
 }

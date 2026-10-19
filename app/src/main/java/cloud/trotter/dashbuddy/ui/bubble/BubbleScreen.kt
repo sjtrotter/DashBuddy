@@ -54,9 +54,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val saving by viewModel.odometerSaving.collectAsStateWithLifecycle()
     val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
     val savedNotice by viewModel.odometerNotice.collectAsStateWithLifecycle()
-    val now by rememberNow()
+    val nowState = rememberNow()
     val entry = rememberOdometerEntryState()
-    val notice = savedNotice?.takeIf { it.visibleAt(now) }
+    val notice by remember(savedNotice) { derivedStateOf { savedNotice?.takeIf { it.visibleAt(nowState.value) } } }
     var acknowledgedNoticeAt by rememberSaveable { mutableStateOf<Long?>(null) }
     var seenVehicleId by rememberSaveable { mutableStateOf(vehicle?.id) }
     LaunchedEffect(savedNotice) {
@@ -88,7 +88,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         entry.show(vehicle != null)
     }
     val sheetBack = { entry.back(vehicle != null) }
-    val noticeContent: (@Composable () -> Unit)? = if (notice == null) null else ({ OdometerNotice(notice) })
+    val noticeContent: (@Composable () -> Unit)? = notice?.let { visible -> { OdometerNotice(visible) } }
     BackHandler(enabled = logOpen) { logOpen = false }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -129,6 +129,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             sheetOpen = entry.open,
             onSheetDismiss = sheetBack,
             sheet = {
+                val now by rememberNow()
                 val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, lastReading, gpsTotal, now))
                 OdometerSheet(OdometerSheetModel(vehicle, vehicles, entry.reading, lastReading, check, entry.page, saving, writeFailed),
                     onDigit = entry::digit, onBackspace = entry::backspace,

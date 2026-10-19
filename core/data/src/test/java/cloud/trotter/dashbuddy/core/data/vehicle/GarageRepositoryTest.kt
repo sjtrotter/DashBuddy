@@ -25,9 +25,6 @@ class GarageRepositoryTest {
         assertNotEquals(civic.id, truck.id)
         repo.selectVehicle(civic.id)
         assertEquals(civic, repo.activeVehicle.first())
-        repo.clear()
-        assertTrue(repo.vehicles.first().isEmpty())
-        assertNull(repo.activeVehicle.first())
     }
     @Test fun `name trimmed and bounded`() = runTest {
         val repo = garage(backgroundScope)

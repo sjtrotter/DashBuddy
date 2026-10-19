@@ -5,9 +5,11 @@ import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.Clock
 
@@ -42,7 +44,8 @@ internal class OdometerActions(
         failure.value = false
         scope.launch {
             try {
-                action()
+                // A confirmed tap must land; the write is a single bounded insert.
+                withContext(NonCancellable) { action() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {

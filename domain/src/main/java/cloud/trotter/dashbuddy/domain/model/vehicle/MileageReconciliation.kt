@@ -16,7 +16,7 @@ object MileageReconciliation {
     ): ReconciledMileage? {
         if (endedAt < startedAt) return null
         val car = readings.filter { it.vehicleId == vehicleId }.map { it.reading }
-        val start = car.filter { it.occurredAt <= startedAt || it.occurredAt - startedAt <= START_WINDOW_MS }
+        val start = car.filter { it.occurredAt < endedAt && it.occurredAt - startedAt <= START_WINDOW_MS }
             .minWithOrNull(compareBy<LastOdometerReading> { kotlin.math.abs(it.occurredAt - startedAt) }
                 .thenBy { it.occurredAt }) ?: return null
         val end = car.filter { it.occurredAt >= endedAt }.minByOrNull { it.occurredAt } ?: return null

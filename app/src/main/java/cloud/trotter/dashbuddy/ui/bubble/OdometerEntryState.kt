@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.WholeNumberEntry
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerPage
 
@@ -16,9 +17,9 @@ internal class OdometerEntryState(
     var page by pageState
     private var digits by digitsState
     private var addVehicleFrom by addVehicleFromState
-    val reading: Int? get() = WholeNumberEntry(digits).value
-    fun digit(digit: Int) { digits = WholeNumberEntry(digits).digit(digit).digits }
-    fun backspace() { digits = WholeNumberEntry(digits).backspace().digits }
+    val reading: Int? get() = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).value
+    fun digit(digit: Int) { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).digit(digit).digits }
+    fun backspace() { digits = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).backspace().digits }
     fun show(hasVehicle: Boolean) {
         if (open) return
         addVehicleFrom = OdometerPage.VEHICLES

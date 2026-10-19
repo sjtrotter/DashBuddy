@@ -23,6 +23,7 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.Keypad
 
@@ -73,7 +74,7 @@ fun ColumnScope.OdometerSheet(
                     }
                     Keypad(onDigit, null, onBackspace)
                 }
-                Button(onClick = onSave, enabled = (model.readingMiles ?: 0) in 1..999_999 && !model.saving,
+                Button(onClick = onSave, enabled = (model.readingMiles ?: 0) in 1..OdometerReadingLimit.MAX_MILES && !model.saving,
                     modifier = Modifier.fillMaxWidth().testTag("odometer.save")) {
                     Text(if (model.readingMiles == null) stringResource(R.string.hud_odometer_save_empty)
                         else stringResource(R.string.hud_odometer_save, Formats.commaInt(model.readingMiles)))

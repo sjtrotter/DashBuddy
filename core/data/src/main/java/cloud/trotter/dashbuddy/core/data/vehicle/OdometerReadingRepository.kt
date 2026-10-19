@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -29,7 +30,7 @@ class OdometerReadingRepository @Inject constructor(
 
     suspend fun record(vehicleId: String, readingMiles: Int, occurredAt: Long): Long {
         require(vehicleId.isNotBlank())
-        require(readingMiles in 1..999_999)
+        require(readingMiles in 1..OdometerReadingLimit.MAX_MILES)
         return appEventRepo.appendUserEvent(
             AppEvent(AppEventType.ODOMETER_READING, occurredAt, sessionId = null,
                 payload = OdometerReadingPayload(vehicleId, readingMiles, odometer.totalMiles())),

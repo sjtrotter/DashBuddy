@@ -425,7 +425,7 @@ object RecordFolds {
      * the session or a job budget. Field corrections carry no odometer stamp today;
      * their handlers retain their own liveness advances.
      */
-    private val BOOKKEEPING_EVENTS = setOf(
+    internal val BOOKKEEPING_EVENTS = setOf(
         AppEventType.DELIVERY_RECEIPT_REPRICE,
         AppEventType.PAY_ADJUSTMENT,
         AppEventType.DELIVERY_ADJUSTMENT,

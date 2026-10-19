@@ -16,7 +16,7 @@ data class OdometerSheetModel(
 )
 
 data class OdometerNoticeModel(val readingMiles: Int, val shownAt: Long) {
-    fun visibleAt(now: Long): Boolean = now - shownAt in 0L until VISIBLE_MS
+    fun visibleAt(now: Long): Boolean = now - shownAt < VISIBLE_MS
 
     companion object {
         const val VISIBLE_MS = 10_000L

@@ -16,9 +16,11 @@ import javax.inject.Singleton
 @Singleton
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
-    val vehicles = dataSource.stored.map { readVehicles(it.json) }
-    val activeVehicle = dataSource.stored.map { saved ->
-        readVehicles(saved.json).firstOrNull { it.id == saved.activeId }
+    private data class Garage(val vehicles: List<Vehicle>, val activeId: String?)
+    private val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
+    val vehicles = garage.map { it.vehicles }
+    val activeVehicle = garage.map { g ->
+        g.vehicles.firstOrNull { it.id == g.activeId }
     }
 
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
@@ -35,8 +37,6 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         require(list.any { it.id == id })
         dataSource.save(VehicleStorage.encode(list), id)
     }
-
-    suspend fun clear() = mutex.withLock { dataSource.clear() }
 
     private fun readVehicles(raw: String?): List<Vehicle> = VehicleStorage.decode(raw) { error ->
         if (warnedUnreadable.compareAndSet(false, true)) {

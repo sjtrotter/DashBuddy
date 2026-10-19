@@ -20,8 +20,6 @@ class VehicleDataSource @Inject constructor(
     }
     // Consumers needing both use the same DataStore snapshot, never two independently emitted keys.
     val stored = ds.data.map { StoredVehicles(it[Keys.VEHICLES], it[Keys.ACTIVE]) }
-    val vehiclesJson = stored.map { it.json }
-    val activeVehicleId = stored.map { it.activeId }
 
     suspend fun save(json: String, activeId: String?) {
         ds.edit {
@@ -29,5 +27,4 @@ class VehicleDataSource @Inject constructor(
             if (activeId == null) it.remove(Keys.ACTIVE) else it[Keys.ACTIVE] = activeId
         }
     }
-    suspend fun clear() { ds.edit { it.clear() } }
 }

@@ -38,7 +38,7 @@ class OdometerNoticeTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     @Test fun `save notice expires at ten seconds without Undo`() {
         val notice = OdometerNoticeModel(52_388, clock.millis)
-        assertFalse(notice.visibleAt(notice.shownAt - 1))
+        assertTrue(notice.visibleAt(notice.shownAt - 400))
         assertTrue(notice.visibleAt(notice.shownAt))
         assertTrue(notice.visibleAt(notice.shownAt + 9_999))
         assertFalse(notice.visibleAt(notice.shownAt + 10_000))

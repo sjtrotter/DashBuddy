@@ -55,6 +55,14 @@ class MileageReconciliationTest {
         assertEquals(38, compare(listOf(reading(91, 52_329, 100.0), rows[1], pair[1]))!!.carMiles)
         assertEquals(59, compare(listOf(rows[0], reading(102, 52_350, 120.0), pair[1]))!!.carMiles)
     }
+    @Test fun `a short dash never reuses its end reading as the start`() {
+        val result = MileageReconciliation.between(
+            listOf(reading(70, 52_329, 100.0), reading(107, 52_388, 157.3)),
+            "civic", 100 * 60_000L, 105 * 60_000L,
+        )!!
+        assertEquals(59, result.carMiles)
+        assertEquals(57.3, result.trackedMiles, 0.00001)
+    }
     @Test fun `a lower end reading is null`() {
         assertNull(compare(listOf(pair[0], reading(210, 52_270, 157.3))))
     }
