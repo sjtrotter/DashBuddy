@@ -210,7 +210,8 @@ class OdometerActionsTest {
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         actions.add("Civic")
-        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        // The retry is an attempt, not a success: the failure stands until the write lands.
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         runCurrent()
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
         assertEquals(listOf(VehicleChange.ADDED), actions.vehicleChanged.replayCache)
@@ -224,10 +225,24 @@ class OdometerActionsTest {
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         actions.select("civic")
-        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         runCurrent()
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
         assertEquals(listOf(VehicleChange.SWITCHED), actions.vehicleChanged.replayCache)
+    }
+
+    @Test fun `a refused select keeps a vehicle failure`() = runTest {
+        whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
+        whenever(garage.selectVehicle("stale")).thenReturn(false)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.select("civic")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.select("stale")
+        runCurrent()
+        // Nothing was written, so nothing was corrected: the failure stands.
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        assertEquals(emptyList<VehicleChange>(), actions.vehicleChanged.replayCache)
     }
 
     @Test fun `a reading save keeps a vehicle failure visible`() = runTest {

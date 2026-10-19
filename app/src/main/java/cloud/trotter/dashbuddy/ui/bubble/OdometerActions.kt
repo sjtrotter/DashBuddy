@@ -68,28 +68,36 @@ internal class OdometerActions(
                 delay(NOTICE_MS)
                 if (saved.value?.token == model.token) saved.value = null
             }
+            true
         }
     }
     fun add(name: String) = write(WriteKind.VEHICLE) {
         garage.addVehicle(name, clock.millis())
         changed.emit(VehicleChange.ADDED)
+        true
     }
     fun select(id: String) = write(WriteKind.VEHICLE) {
-        // A refused select (a stale row) changes nothing, so it is not a vehicle change.
-        if (garage.selectVehicle(id)) changed.emit(VehicleChange.SWITCHED)
+        // A refused select (a stale row) changes nothing: not a vehicle change, not a success.
+        val written = garage.selectVehicle(id)
+        if (written) changed.emit(VehicleChange.SWITCHED)
+        written
     }
 
-    private fun write(kind: WriteKind, action: suspend () -> Unit) {
+    /**
+     * The failure shown follows the last COMPLETED write of its kind: a confirmed success of the same
+     * kind clears it, an attempt never does (a refused select writes nothing and leaves it standing).
+     */
+    private fun write(kind: WriteKind, action: suspend () -> Boolean) {
         if (busy.value) return
-        if (failureKind == kind) {
-            failure.value = OdometerWriteFailure.NONE
-            failureKind = null
-        }
         busy.value = true
         scope.launch {
             try {
                 // A confirmed tap must land; the write is a single bounded insert.
-                withContext(NonCancellable) { action() }
+                val wrote = withContext(NonCancellable) { action() }
+                if (wrote && failureKind == kind) {
+                    failure.value = OdometerWriteFailure.NONE
+                    failureKind = null
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
