@@ -16,12 +16,13 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
 internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?) {
-    val now by rememberNow()
     StateLine(stringResource(R.string.hud_state_waiting), R.string.hud_state_since, model.since)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
-        StateFigure(StateHeadline.waiting(model.since, now))
-        profitPerHour(kept, model.sessionStartedAt?.let { now - it })?.let {
+        // The clock is read only when there is a time to draw: an anchorless card stays static.
+        val now = if (model.since != null || (kept != null && model.sessionStartedAt != null)) rememberNow().value else null
+        StateFigure(StateHeadline.waiting(model.since, now ?: 0L))
+        profitPerHour(kept, if (now != null) model.sessionStartedAt?.let { now - it } else null)?.let {
             Column(horizontalAlignment = Alignment.End) {
                 StateNumber(moneyOrEmpty(it), AppTheme.colors.text, size = 18)
                 StateLabel(stringResource(R.string.hud_state_profit_hr))

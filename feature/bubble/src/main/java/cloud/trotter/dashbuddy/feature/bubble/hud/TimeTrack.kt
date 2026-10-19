@@ -65,10 +65,10 @@ internal fun TimeTrack(model: TrackModel, lateMinutes: Int?, phase: Color) {
         val travel = (maxWidth - 24.dp).coerceAtLeast(0.dp)
         TrackPin(model.anchorIcon, phase, Modifier.offset(x = 0.dp).testTag("track.pin.anchor"))
         model.endIcon?.let { TrackPin(it, phase, Modifier.offset(x = travel)) }
-        model.markFraction?.let {
-            // Arrived after the deadline: the mark would sit on the anchor; keep one pin width clear of it.
-            val x = maxOf(travel * it, minOf(24.dp, travel))
-            TrackPin(TrackIcon.STOPWATCH, c.warn, Modifier.offset(x = x).testTag("track.pin.mark"))
+        // Arrived after the deadline: the mark would sit on the anchor; keep one pin width clear of it.
+        // A track too narrow for two pins draws no mark at all; the warn overrun still reads late.
+        model.markFraction?.takeIf { travel >= 24.dp }?.let {
+            TrackPin(TrackIcon.STOPWATCH, c.warn, Modifier.offset(x = maxOf(travel * it, 24.dp)).testTag("track.pin.mark"))
         }
     }
 }
