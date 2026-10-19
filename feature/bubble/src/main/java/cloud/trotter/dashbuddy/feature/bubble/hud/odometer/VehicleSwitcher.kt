@@ -41,18 +41,3 @@ fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean,
         }
     }
 }
-
-@Composable
-internal fun AddVehicleForm(name: String, onNameChange: (String) -> Unit, enabled: Boolean, onBack: () -> Unit, onAdd: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()) {
-        OdometerTitle(stringResource(R.string.hud_odometer_add_vehicle), onBack)
-        OutlinedTextField(name, { if (it.codePointCount(0, it.length) <= Vehicle.MAX_NAME_CODE_POINTS) onNameChange(it) }, singleLine = true, enabled = enabled,
-            label = { Text(stringResource(R.string.hud_odometer_vehicle_name)) },
-            modifier = Modifier.fillMaxWidth().testTag("vehicle.name"))
-        Button(onClick = { onAdd(name.trim()) }, enabled = name.trim().isNotEmpty() && enabled,
-            modifier = Modifier.fillMaxWidth().testTag("vehicle.save")) {
-            Text(if (name.isBlank()) stringResource(R.string.hud_odometer_add_vehicle)
-                else stringResource(R.string.hud_odometer_add_named, name.trim()))
-        }
-    }
-}
