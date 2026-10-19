@@ -4,6 +4,9 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.*
 
 enum class OdometerPage { READING, VEHICLES, ADD_VEHICLE }
 
+/** Mirrors :app's GarageWriteFailure vocabulary; this feature cannot depend on :app.
+ * The editor additionally uses GONE for stale vehicle links.
+ */
 enum class OdometerWriteFailure { NONE, RETRY, UNREADABLE }
 
 data class OdometerSheetModel(

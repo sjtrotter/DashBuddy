@@ -90,6 +90,7 @@ class BubbleViewModel @Inject constructor(
 ) : ViewModel() {
 
     internal val expenseActions = ExpenseActions(viewModelScope, ledgerRepository, clock)
+    internal val goalActions = GoalActions(viewModelScope, appPreferencesRepository)
     internal fun recentLabels(category: cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory) =
         ledgerRepository.recentLabels(category)
     /** The one expense owner rule: the active dash, else none. */

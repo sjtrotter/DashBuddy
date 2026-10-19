@@ -18,6 +18,7 @@ object HudStateMapper {
         hasOfferCard: Boolean, logOpen: Boolean, gas: GasRowModel, cashTipCue: Boolean = false,
         goalDay: LocalDate? = null, mark: MarkRead = MarkRead.Loading,
         odometerLoaded: Boolean, odometerCue: Boolean = false, expenseCue: Boolean = false,
+        goalSheetOpen: Boolean = false, editedGoalKey: String? = null,
     ): HudUiState {
         val mode = HudModeResolver.resolve(flow, region?.mode, region?.session != null, hasActiveCard, hasOfferCard, logOpen)
         val firstRun = region?.session == null && lastSession == null
@@ -38,7 +39,7 @@ object HudStateMapper {
         val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen,
             odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue)
         val goalState = GoalPillMapper.map(goal, todayProfit)
-        val celebration = GoalCelebrationResolver.resolve(goalState, mode, goalDay, goal, mark, logOpen)
+        val celebration = GoalCelebrationResolver.resolve(goalState, mode, goalDay, goal, mark, logOpen, goalSheetOpen, editedGoalKey)
         return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
             HeroModel(profit, goalState, celebration, markLoading = mark == MarkRead.Loading), dock,

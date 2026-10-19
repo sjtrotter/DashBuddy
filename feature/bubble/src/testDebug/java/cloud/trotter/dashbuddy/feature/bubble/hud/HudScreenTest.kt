@@ -1,7 +1,12 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.*
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.feature.bubble.hud.expense.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.goal.*
+import androidx.compose.ui.platform.testTag
+import org.junit.Assert.assertTrue
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -338,6 +343,39 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
     }
 
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun `live cash tip sheet reaches the body bottom and the dock with no gap`() {
+        var undoShown by mutableStateOf(false)
+        val delivery = DeliveryRecord(71, "live", Platform.DoorDash, "job", "task", "Panera Bread",
+            T0, 8.0, "OFFER_PAY", 6.0, null, null, null, null, cashTip = 10.0)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state(), null, {}, sheetOpen = true, sheet = {
+                            CashTipSheet(CashTipSheetModel(listOf(delivery), 71, totalCents = 700),
+                                onSelectDelivery = {}, onExpand = {}, onBack = {}, onSign = {}, onAmount = {},
+                                onOther = {}, onDigit = {}, onPoint = {}, onBackspace = {}, onDoneOther = {}, onCommit = {})
+                        }, undo = {
+                            if (undoShown) UndoStrip(UndoStripModel(700, "Panera Bread", 71, T0 + 10_000, 2)) {}
+                        }, undoVisible = { undoShown })
+                    }
+                }
+            }
+        }
+        for (visible in listOf(false, true)) {
+            compose.runOnIdle { undoShown = visible }
+            settle()
+            compose.onNodeWithText("Add $7.00 cash tip").assertIsDisplayed()
+            val sheet = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
+            val body = compose.onNodeWithTag("hud.body").getBoundsInRoot()
+            val dock = compose.onNodeWithTag("hud.dock").getBoundsInRoot()
+            assertEquals(body.bottom, sheet.bottom)
+            assertEquals(body.bottom, dock.top)
+        }
+    }
+
     @Test fun `compact expense subcard rests above dock with HUD visible behind it`() {
         var open by mutableStateOf(true)
         compose.setContent {
@@ -363,6 +401,48 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("hud.sheet.outside.header").performClick()
         settle()
         compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h900dp")
+    fun `compact expense intercepts platform pointer taps and lets the goal pill replace it`() {
+        var route by mutableStateOf<String?>("EXPENSE")
+        var selected by mutableStateOf(Platform.DoorDash)
+        var switches = 0
+        val callbacks = mutableListOf<String>()
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state().copy(platform = selected,
+                            switchable = listOf(Platform.DoorDash, Platform.Uber)), null, {},
+                            onSelectPlatform = { selected = it; switches++ },
+                            onGoalClick = { callbacks += "goal"; route = "GOAL" },
+                            sheetOpen = route != null, sheetCompact = route == "EXPENSE",
+                            onSheetOutsideDismiss = { callbacks += "dismiss"; route = null },
+                            sheet = {
+                                when (route) {
+                                    "EXPENSE" -> ExpenseSubcard {}
+                                    "GOAL" -> GoalSheet(GoalSheetModel(150, 71.2), {}, {}, {})
+                                    else -> Unit
+                                }
+                            })
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText(Platform.Uber.shortName, ignoreCase = true).performTouchInput { click() }; settle()
+        compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+        assertEquals(Platform.DoorDash, selected)
+        assertEquals(0, switches)
+        assertEquals(listOf("dismiss"), callbacks)
+        compose.runOnIdle { route = "EXPENSE"; callbacks.clear() }; settle()
+        compose.onNodeWithTag("hud.goal").performTouchInput { click() }; settle()
+        compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+        compose.onNodeWithTag("goal.sheet").assertIsDisplayed()
+        assertEquals(listOf("dismiss", "goal"), callbacks)
+        assertEquals(0, switches)
     }
 
     @Test fun `gas Undo stays displayed and tappable below the compact subcard live and at rest`() {
@@ -430,6 +510,112 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(10_000)
         compose.onNodeWithText("Cash tip $7.00, Panera Bread").assertIsDisplayed()
         compose.onNodeWithText("Gas $42.00").assertDoesNotExist()
+    }
+
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h900dp")
+    fun `goal pill opens full frame and progress takes the additional height`() {
+        var open by mutableStateOf(false)
+        var height by mutableStateOf(600.dp)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(height)) {
+                        HudScreen(state(goal = 150.0, today = 71.2), null, {},
+                            onGoalClick = { open = true }, sheetOpen = open,
+                            onSheetDismiss = { open = false }, sheet = {
+                                GoalSheet(GoalSheetModel(150, 71.2), {}, {}, {})
+                            })
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.goal").performTouchInput { click() }
+        settle()
+        compose.onNodeWithTag("goal.sheet").assertIsDisplayed()
+        val frame = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
+        assertEquals(compose.onNodeWithTag("hud.body").getBoundsInRoot(), frame)
+        assertEquals(compose.onNodeWithTag("hud.dock").getBoundsInRoot().top, frame.bottom)
+        assertEquals(frame.bottom, compose.onNodeWithTag("goal.sheet").getBoundsInRoot().bottom)
+        val progress = compose.onNodeWithTag("goal.progress").getBoundsInRoot()
+        val bar = compose.onNodeWithTag("goal.bar").getBoundsInRoot()
+        val preset = compose.onNodeWithTag("goal.preset.100").getBoundsInRoot()
+        assertTrue(progress.top >= compose.onNodeWithTag("goal.figure").getBoundsInRoot().bottom)
+        assertTrue(bar.top >= progress.top && bar.bottom <= progress.bottom)
+        assertTrue(preset.bottom <= progress.top)
+        compose.runOnIdle { height = 760.dp }; settle()
+        assertEquals(progress.height + 160.dp, compose.onNodeWithTag("goal.progress").getBoundsInRoot().height)
+        assertEquals(bar.top + 160.dp, compose.onNodeWithTag("goal.bar").getBoundsInRoot().top)
+        assertEquals(preset.top, compose.onNodeWithTag("goal.preset.100").getBoundsInRoot().top)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h900dp")
+    fun `compact log goal pill opens the same sheet and leaves the log`() {
+        var log by mutableStateOf(true)
+        var open by mutableStateOf(false)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    HudScreen(state(logOpen = log), null, {},
+                        onGoalClick = { log = false; open = true }, sheetOpen = open,
+                        sheet = { GoalSheet(GoalSheetModel(null, 71.2), {}, {}, {}) })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.slot.log").assertIsDisplayed()
+        compose.onNodeWithTag("hud.goal").performTouchInput { click() }; settle()
+        compose.onNodeWithTag("hud.slot.log").assertDoesNotExist()
+        compose.onNodeWithTag("goal.sheet").assertIsDisplayed()
+        compose.onNodeWithTag("hud.hero").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h900dp")
+    fun `goal sheet shares one slot with odometer cash tip and compact expense`() {
+        var route by mutableStateOf<String?>(null)
+        var back: () -> Unit = {}
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true,
+                    LocalHudSheetBackHandler provides { enabled, dismiss ->
+                        SideEffect { back = if (enabled) dismiss else ({}) }
+                    }) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state(), null, { kind -> route = kind.name },
+                            onGoalClick = { route = "GOAL" }, sheetOpen = route != null,
+                            sheetCompact = route == "EXPENSE", onSheetDismiss = { route = null },
+                            sheet = {
+                                when (route) {
+                                    "GOAL" -> GoalSheet(GoalSheetModel(150, 71.2), {}, {}, {})
+                                    "EXPENSE" -> ExpenseSubcard {}
+                                    "CASH_TIP", "ODOMETER" -> Text(route!!, Modifier.testTag("other.sheet"))
+                                    else -> Unit
+                                }
+                            })
+                    }
+                }
+            }
+        }
+        settle()
+        for (kind in listOf(DockKind.ODOMETER, DockKind.CASH_TIP, DockKind.EXPENSE)) {
+            compose.onNodeWithTag("hud.dock.$kind").performTouchInput { click() }; settle()
+            compose.onNodeWithTag(if (kind == DockKind.EXPENSE) "expense.subcard" else "other.sheet").assertIsDisplayed()
+            // A real pointer tap proves the compact subcard's header scrim does not eat the pill tap.
+            compose.onNodeWithTag("hud.goal").performTouchInput { click() }; settle()
+            compose.onAllNodesWithTag("hud.sheet").assertCountEquals(1)
+            compose.onNodeWithTag("goal.sheet").assertIsDisplayed()
+            compose.onNodeWithTag("other.sheet").assertDoesNotExist()
+            compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+            compose.onNodeWithTag("hud.dock.$kind").performTouchInput { click() }; settle()
+            compose.onNodeWithTag("goal.sheet").assertDoesNotExist()
+        }
+        compose.onNodeWithTag("hud.goal").performTouchInput { click() }; settle()
+        compose.runOnIdle { back() }; settle()
+        compose.onNodeWithTag("goal.sheet").assertDoesNotExist()
     }
 
 }

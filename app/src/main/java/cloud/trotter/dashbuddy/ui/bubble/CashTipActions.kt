@@ -7,22 +7,20 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipFailure
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import timber.log.Timber
 import java.time.Clock
 
 /** One append per confirmed tap. A projection lag never loses an earlier committed tip. */
 internal class CashTipActions(
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
     private val corrections: CorrectionRepository,
     private val analytics: AnalyticsRepository,
     private val clock: Clock,
 ) {
-    private val writing = MutableStateFlow(false)
-    val busy = writing.asStateFlow()
     private val failure = MutableStateFlow(CashTipFailure.NONE)
     val failed = failure.asStateFlow()
-    private val events = MutableSharedFlow<CashTipCommit>(replay = 1, extraBufferCapacity = 1)
-    val committed: SharedFlow<CashTipCommit> = events.asSharedFlow()
+    private val writer = EntryWriter<CashTipCommit>(scope, "CashTip") { failure.value = CashTipFailure.WRITE }
+    val busy = writer.busy
+    val committed = writer.committed
     private val undoState = MutableStateFlow<CashTipCommit?>(null)
     val undo = undoState.asStateFlow()
     // Keyed by the durable append id; only the latest expectation for each delivery stands.
@@ -32,12 +30,11 @@ internal class CashTipActions(
     private var lastWatermark = 0L
 
     fun reopen() { failure.value = CashTipFailure.NONE }
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun committedHandled() { events.resetReplayCache() }
+    fun committedHandled() = writer.committedHandled()
 
     fun commit(deliveryId: Long, sessionId: String?, storeName: String?, enteredCents: Long, entryId: Long = 0) {
-        if (writing.value || enteredCents == 0L || sessionId == null) return
-        write {
+        if (busy.value || enteredCents == 0L || sessionId == null) return
+        writer.write {
             val pending = pendingState.value.values.find { it.deliveryId == deliveryId }
             // A cleared expectation means the projector transaction is durable, even if the UI's
             // separately collected rows still lag. Read the database, never a display snapshot.
@@ -55,15 +52,15 @@ internal class CashTipActions(
             failure.value = CashTipFailure.NONE
             expect(model)
             undoState.value = model
-            events.emit(model)
+            writer.commit(model)
         }
     }
 
     fun undo(model: CashTipCommit) {
-        if (writing.value || undoState.value != model || (!model.strip.failed && clock.millis() >= model.strip.deadline)) return
+        if (busy.value || undoState.value != model || (!model.strip.failed && clock.millis() >= model.strip.deadline)) return
         // Mark busy synchronously: a double tap cannot append two reversals. Retain for retry.
         undoState.value = model.copy(strip = model.strip.copy(busy = true, failed = false))
-        write(reportToSheet = false, onFailure = {
+        writer.write(reportFailure = false, onFailure = {
             // Re-arm the strip even when a retry fails before Compose observes the busy state.
             undoState.value = model.copy(strip = model.strip.copy(busy = false, failed = true,
                 token = HudNoticeOrder.next()))
@@ -92,20 +89,5 @@ internal class CashTipActions(
         if (model.strip.committedSequenceId <= lastWatermark) return
         pendingState.value = pendingState.value.filterValues { it.deliveryId != model.deliveryId } +
             (model.strip.committedSequenceId to model)
-    }
-
-    private fun write(reportToSheet: Boolean = true, onFailure: () -> Unit = {}, action: suspend () -> Unit) {
-        writing.value = true
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                withContext(NonCancellable) { action() }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                if (reportToSheet) failure.value = CashTipFailure.WRITE
-                onFailure()
-                Timber.tag("CashTip").w("%s", error.javaClass.simpleName)
-            } finally { writing.value = false }
-        }
     }
 }

@@ -136,8 +136,8 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("parked-state.preferences_pb") }))
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("parked-garage.preferences_pb") })))
-        garage.addVehicle("Parked", 1L)
-        val retired = garage.addVehicle("Retired", 2L)
+        garage.addVehicle("Parked", 1L, activateOn = ActivateOn.NEVER)
+        val retired = garage.addVehicle("Retired", 2L, activateOn = ActivateOn.NEVER)
         garage.retire(retired.id, 3L)
         val before = garage.garage.first()
         prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f)

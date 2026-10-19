@@ -13,15 +13,29 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0),
         last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
-        odometerLoaded: Boolean = true, odometerCue: Boolean = false) = HudStateMapper.map(
+        odometerLoaded: Boolean = true, odometerCue: Boolean = false,
+        goal: Double? = null, today: Double? = null, goalSheetOpen: Boolean = false,
+        editedGoalKey: String? = null) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
-        goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
+        goal = goal, todayProfit = today, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
         odometerLoaded = odometerLoaded, odometerCue = odometerCue,
+        goalDay = java.time.LocalDate.of(2026, 10, 18), mark = MarkRead.Loaded(null),
+        goalSheetOpen = goalSheetOpen, editedGoalKey = editedGoalKey,
     )
+
+    @Test fun `goal sheet suppression reaches the hero while Met remains visible`() {
+        val open = map(goal = 90.0, today = 96.0, goalSheetOpen = true)
+        assertEquals(GoalPillState.Met, open.hero.goal)
+        assertNull(open.hero.celebrateKey)
+        val closing = map(goal = 90.0, today = 96.0, editedGoalKey = "2026-10-18|9000")
+        assertEquals(GoalPillState.Met, closing.hero.goal)
+        assertNull(closing.hero.celebrateKey)
+        assertEquals("2026-10-18|9000", map(goal = 90.0, today = 96.0).hero.celebrateKey)
+    }
 
     @Test
     fun `live hero reads the session net`() {

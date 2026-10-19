@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsCar
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
+import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
@@ -54,6 +58,7 @@ fun SettingsHomeScreen(
 ) {
     // Relying strictly on the persisted DataStore state now
     val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsStateWithLifecycle(initialValue = false)
+    val garage by viewModel.garage.collectAsStateWithLifecycle(initialValue = null)
     val userEconomy by viewModel.userEconomy.collectAsStateWithLifecycle(initialValue = null)
 
     Scaffold(
@@ -112,6 +117,18 @@ fun SettingsHomeScreen(
                 } else {
                     stringResource(R.string.settings_home_economy_fallback_subtitle)
                 }
+                SettingsNavItem(
+                    icon = Icons.Default.DirectionsCar,
+                    title = stringResource(R.string.settings_home_item_garage_title),
+                    subtitle = when {
+                        garage?.readable == false -> stringResource(R.string.settings_home_item_garage_unreadable)
+                        else -> garage?.active?.let { vehicle ->
+                            val type = stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
+                            stringResource(R.string.settings_home_item_garage_subtitle, vehicle.displayName(), type)
+                        } ?: stringResource(R.string.settings_home_item_garage_empty)
+                    },
+                    onClick = { onNavigate(Screen.Garage.route) },
+                )
                 SettingsNavItem(
                     icon = Icons.Default.AttachMoney,
                     title = stringResource(R.string.settings_home_item_economy_title),

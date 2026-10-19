@@ -42,7 +42,8 @@ fun HudSheetHost(
     sheet: @Composable ColumnScope.() -> Unit = {},
 ) {
     LocalHudSheetBackHandler.current(sheetOpen, onSheetDismiss)
-    // Leave both the card and its dismiss target above the 48 dp undo slot and 8 dp spacer.
+    // Leave the compact card and dismiss target 8 dp above the visible 48 dp undo slot.
+    // Full sheets cover the entire body, including the undo slot.
     val frameModifier = modifier.padding(bottom = if (compact && undoBandVisible) 56.dp else 0.dp)
     if (rememberReducedMotion()) {
         if (sheetOpen) SheetFrame(frameModifier, compact, onOutsideDismiss, sheet)

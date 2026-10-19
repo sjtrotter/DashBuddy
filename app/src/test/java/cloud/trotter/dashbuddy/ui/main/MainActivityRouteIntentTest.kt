@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main
 
 import android.content.Intent
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +17,15 @@ import org.robolectric.RuntimeEnvironment
  */
 @RunWith(RobolectricTestRunner::class)
 class MainActivityRouteIntentTest {
+
+    @Test
+    fun `garage and add are deep link targets while parameterized edit is excluded`() {
+        assertTrue(Screen.Garage.route in Screen.allRoutes)
+        assertTrue(Screen.VehicleAdd.route in Screen.allRoutes)
+        assertFalse(Screen.VehicleEdit.route in Screen.allRoutes)
+        assertFalse(Screen.VehicleEdit.route("vehicle-id") in Screen.allRoutes)
+        assertEquals("settings/garage/vehicle/vehicle-id", Screen.VehicleEdit.route("vehicle-id"))
+    }
 
     @Test
     fun `routeIntent targets MainActivity with the route extra and NEW_TASK`() {

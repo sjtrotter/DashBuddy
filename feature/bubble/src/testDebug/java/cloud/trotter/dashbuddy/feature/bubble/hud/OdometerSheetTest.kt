@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w400dp-h800dp") // tall host: no performScrollTo under the frozen clock (see build gotchas)
 class OdometerSheetTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val clock = MutableClock(1_700_000_000_000L)
@@ -38,6 +38,37 @@ class OdometerSheetTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val car = Vehicle("civic", "Civic", 0)
     private var model by mutableStateOf(OdometerSheetModel(car, listOf(car), 52_388, null, OdometerCheck.First("Civic"), gpsLoaded = true))
+    @Test
+    fun `reading block rests against Save with slack above its title and keypad`() {
+        show(Modifier.width(400.dp).height(760.dp))
+        val sheet = compose.onNodeWithTag("odometer.sheet").getBoundsInRoot()
+        val title = compose.onNodeWithText("Odometer").assertIsDisplayed().getBoundsInRoot()
+        val firstKey = compose.onNodeWithTag("keypad.1").assertIsDisplayed().assertWidthIsEqualTo(60.dp).getBoundsInRoot()
+        val lastKey = compose.onNodeWithTag("keypad.backspace").assertIsDisplayed().getBoundsInRoot()
+        val save = compose.onNodeWithTag("odometer.save").assertIsDisplayed().getBoundsInRoot()
+        // Odometer keeps its title beside the keypad, so slack is measured from the sheet top.
+        val gapAbove = firstKey.top - sheet.top - 8.dp
+        val gapBelow = save.top - lastKey.bottom
+        assertEquals("Keypad must touch Save", 0.dp, gapBelow)
+        assertTrue("Slack belongs above the whole reading block", gapAbove > gapBelow)
+        assertTrue("Title must move down with the keypad", title.top - sheet.top - 8.dp > gapBelow)
+    }
+
+    @Test
+    fun `Save stays reachable in a short frame while the reading and keypad scroll`() {
+        show(Modifier.requiredSize(352.dp, 200.dp))
+        val save = compose.onNodeWithTag("odometer.save")
+            .assertIsDisplayed().assertIsEnabled().assertHasClickAction()
+            .assertWidthIsEqualTo(328.dp).assertHeightIsEqualTo(48.dp)
+        val bounds = save.getBoundsInRoot()
+        compose.onNodeWithTag("keypad.backspace").assertExists()
+        compose.onNodeWithTag("odometer.reading").assertExists().assertTextEquals("52,388")
+        compose.onNodeWithTag("keypad.block").assert(hasScrollAction())
+        assertEquals(bounds, save.assertIsDisplayed().getBoundsInRoot())
+        save.performTouchInput { click() }
+        assertEquals(1, saved)
+    }
+
     @Test fun `an unnamed vehicle uses its type label in the title row and first-reading copy`() {
         val bike = Vehicle("bike", null, 0, EBike())
         model = model.copy(vehicle = bike, vehicles = listOf(bike), check = OdometerCheck.First(null))
@@ -50,11 +81,11 @@ class OdometerSheetTest {
     private var added: String? = null
     private var addOpened = false
     private var visible by mutableStateOf(true)
-    private fun show() {
+    private fun show(hostModifier: Modifier = Modifier.width(352.dp).height(350.dp)) {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    Column(Modifier.width(352.dp).height(350.dp)) {
+                    Column(hostModifier) {
                         if (visible) OdometerSheet(model, { model = model.copy(vehicleName = it) },
                             {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {}, {})
                     }
