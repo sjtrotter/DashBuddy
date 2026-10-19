@@ -117,6 +117,15 @@ class OdometerSheetTest {
         compose.onNodeWithText("Add vehicle").assertIsDisplayed().performClick()
         assertTrue(addOpened)
     }
+    @Test fun `add vehicle link is disabled while saving`() {
+        model = model.copy(check = OdometerCheck.FewerThanTracked(12, 57.0, clock.millis), saving = true)
+        show()
+        compose.onNodeWithText("Add vehicle").assertIsDisplayed().assertIsNotEnabled().performClick()
+        assertFalse(addOpened)
+        compose.runOnIdle { model = model.copy(saving = false) }; settle()
+        compose.onNodeWithText("Add vehicle").assertIsEnabled().performClick()
+        assertTrue(addOpened)
+    }
     @Test fun `warning still allows save`() {
         model = model.copy(check = OdometerCheck.Lower(52_400))
         show()

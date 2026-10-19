@@ -6,7 +6,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
@@ -29,12 +31,9 @@ internal class OdometerHud(
 
     /** Back inside the sheet: one page up, or closed from the reading page. */
     fun back() { entry.back(viewModel.garage.value?.active != null) }
-    fun dismiss() { entry.open = false }
 
     @Composable
     fun ObserveEntry() {
-        // Keep the dock gate subscribed even when no footer or prompt is composed.
-        viewModel.odometerLoaded.collectAsStateWithLifecycle()
         LaunchedEffect(viewModel, entry) {
             viewModel.odometerSaveCompleted.collect {
                 if (entry.page == OdometerPage.READING) entry.open = false
@@ -60,14 +59,14 @@ internal class OdometerHud(
         val gpsTotal by viewModel.gpsTotalMiles.collectAsStateWithLifecycle()
         val saving by viewModel.odometerSaving.collectAsStateWithLifecycle()
         val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
-        val now by rememberNow()
-        val last = remember(readings, vehicle) {
-            readings?.let { rows -> vehicle?.let { VehicleOdometerReading.latestFor(rows, it.id) } }
-        }
-        val otherVehicleReadSince = last != null && vehicle != null && readings?.let {
-            !VehicleOdometerReading.singleVehicleSpan(it, vehicle.id, last.occurredAt, now)
-        } == true
-        val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, otherVehicleReadSince))
+        val last = viewModel.lastReading.collectAsStateWithLifecycle().value
+        val check = if (entry.page == OdometerPage.READING) {
+            val now by rememberNow()
+            val otherVehicleReadSince = last != null && vehicle != null && readings?.let {
+                !VehicleOdometerReading.singleVehicleSpan(it, vehicle.id, last.occurredAt, now)
+            } == true
+            OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, otherVehicleReadSince))
+        } else OdometerCheck.Empty
         Column(Modifier.fillMaxSize()) {
             OdometerSheet(OdometerSheetModel(vehicle, garage?.vehicles.orEmpty(), entry.reading, last, check, entry.page, saving,
                 writeFailed = if (garage?.readable == false) OdometerWriteFailure.UNREADABLE else writeFailed,
@@ -103,32 +102,32 @@ internal class OdometerHud(
         if (!loaded) return
         val garage by viewModel.garage.collectAsStateWithLifecycle()
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
-        val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()
-        val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
         val vehicle = garage?.active
-        val lastReading = remember(readings, vehicle) {
-            readings?.let { rows -> vehicle?.let { VehicleOdometerReading.latestFor(rows, it.id) } }
-        }
+        val lastReading by viewModel.lastReading.collectAsStateWithLifecycle()
         val reconciliation = remember(readings, vehicle) {
             readings?.let { list -> vehicle?.id?.let { MileageReconciliation.latest(list, it) } }
         }
         OdometerFooter(vehicle?.name, lastReading, reconciliation, ::openSheet)
-        OdometerPrompt(prompts, lastSession?.endedAt?.let(PromptAnchor::DashEnd), lastReading, ::openSheet)
     }
 
     @Composable
-    fun WaitingFoot() {
+    fun Cue(): Boolean {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
-        if (!loaded) return
-        val garage by viewModel.garage.collectAsStateWithLifecycle()
-        val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
-        val vehicle = garage?.active
-        val lastReading = remember(readings, vehicle) {
-            readings?.let { rows -> vehicle?.let { VehicleOdometerReading.latestFor(rows, it.id) } }
-        }
+        val lastReading by viewModel.lastReading.collectAsStateWithLifecycle()
         val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()
         val region by viewModel.focusedRegion.collectAsStateWithLifecycle()
-        OdometerPrompt(prompts, region?.session?.startedAt?.let(PromptAnchor::DashStart), lastReading, ::openSheet)
+        val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
+        val startedAt = region?.session?.startedAt
+        // Resting needs no clock. Drop the live ticker as soon as the start window closes.
+        val now = if (loaded && prompts && startedAt != null) {
+            val snapshot = LocalNowProvider.current.millis()
+            if (snapshot >= startedAt && snapshot - startedAt < OdometerCue.WINDOW_MS) {
+                val tick by rememberNow()
+                tick
+            } else snapshot
+        } else 0L
+        return OdometerCue.shows(prompts, startedAt, lastSession?.endedAt,
+            lastReading.takeIf { loaded }, loaded, now)
     }
 }
 

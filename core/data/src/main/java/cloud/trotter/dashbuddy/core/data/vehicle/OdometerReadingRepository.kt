@@ -31,7 +31,7 @@ class OdometerReadingRepository @Inject constructor(
 
     suspend fun record(vehicleId: String, readingMiles: Int): Long {
         require(vehicleId.isNotBlank())
-        require(readingMiles in 1..OdometerReadingLimit.MAX_MILES)
+        require(OdometerReadingLimit.isValid(readingMiles))
         val occurredAt = clock.millis()
         val gpsTotalMiles = odometer.totalMiles()
         return appEventRepo.appendUserEvent(

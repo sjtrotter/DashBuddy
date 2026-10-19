@@ -6,8 +6,6 @@ enum class OdometerPage { READING, VEHICLES, ADD_VEHICLE }
 
 enum class OdometerWriteFailure { NONE, RETRY, UNREADABLE }
 
-enum class VehicleChange { ADDED, SWITCHED }
-
 data class OdometerSheetModel(
     val vehicle: Vehicle?,
     val vehicles: List<Vehicle>,

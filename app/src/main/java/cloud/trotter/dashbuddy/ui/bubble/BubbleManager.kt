@@ -15,6 +15,9 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -34,6 +37,8 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerCue
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import android.os.SystemClock
@@ -42,9 +47,11 @@ import android.widget.RemoteViews
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -60,6 +67,9 @@ class BubbleManager @Inject constructor(
     // dagger.Lazy breaks the StateManagerV2 → EffectExecutor → BubbleManager
     // construction cycle (#437); resolved on first activeSessionId access.
     private val stateManager: dagger.Lazy<StateManagerV2>,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val garageRepository: GarageRepository,
+    private val odometerReadingRepository: OdometerReadingRepository,
 ) {
 
     companion object {
@@ -166,11 +176,23 @@ class BubbleManager @Inject constructor(
             "session start platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
         )
         val verb = sessionVerb(platformName)
-        postMessage(
+        val now = System.currentTimeMillis()
+        val started = enqueueMessage(
             context.getString(R.string.bubble_chat_session_started, verb),
-            ChatPersona.Dispatcher,
-            sessionId = sessionId,
+            ChatPersona.Dispatcher, expand = false, sessionId = sessionId,
         )
+        scope.launch {
+            // Keep the two history lines in order as well as the notifications.
+            started.join()
+            val enabled = appPreferencesRepository.odometerPrompts.first()
+            val vehicle = garageRepository.garage.first().active
+            val readings = odometerReadingRepository.readings.first()
+            val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
+            if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
+                postMessage(context.getString(R.string.bubble_chat_odometer_cue),
+                    ChatPersona.Dispatcher, sessionId = sessionId)
+            }
+        }
     }
 
     /**
@@ -240,6 +262,13 @@ class BubbleManager @Inject constructor(
         expand: Boolean = false,
         sessionId: String? = null,
     ) {
+        enqueueMessage(text, persona, expand, sessionId)
+    }
+
+    /** The save job lets session-start copy await its preceding history line. */
+    private fun enqueueMessage(
+        text: CharSequence, persona: ChatPersona, expand: Boolean, sessionId: String?,
+    ): Job {
         // #551 P7: chat text can carry raw merchant/store text ("Pickup: <store>"), so the
         // shareable INFO stream logs a counts-only milestone; the raw body stays on DEBUG.
         // #772: the persona itself logs as its PII-safe logLabel (kind, not displayName) on INFO+.
@@ -247,12 +276,13 @@ class BubbleManager @Inject constructor(
         Timber.tag("Chat").d("[%s]: %s", persona.displayName, text)
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
-        scope.launch {
+        val saved = scope.launch {
             chatRepository.saveMessage(sessionId ?: activeSessionId.value, text.toString(), persona)
         }
 
         // Post Notification
         showNotification(text, persona, expand)
+        return saved
     }
 
     /** Built once: a constant, extras-less broadcast for the bubble notification's delete intent (#916). */

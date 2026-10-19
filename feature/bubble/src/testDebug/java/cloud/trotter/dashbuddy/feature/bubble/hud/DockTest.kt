@@ -41,7 +41,7 @@ class DockTest {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    Box(Modifier.width(352.dp)) { Dock(DockMapper.map(mode)) { picked = it } }
+                    Box(Modifier.width(352.dp)) { Dock(DockMapper.map(mode, odometerLoaded = true)) { picked = it } }
                 }
             }
         }

@@ -41,15 +41,16 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
+    val odometerLoaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
     val logOpenState = rememberSaveable { mutableStateOf(false) }
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
     val odometer = rememberOdometerHud(viewModel, closeLog)
+    val odometerCue = odometer.Cue()
     val odometerSheet: @Composable ColumnScope.() -> Unit = remember(odometer) { { odometer.Sheet() } }
     val odometerUndo: @Composable () -> Unit = remember(odometer) { { odometer.Undo() } }
     val odometerUndoVisible: @Composable () -> Boolean = remember(odometer) { { odometer.UndoVisible() } }
     val odometerFooter: @Composable () -> Unit = remember(odometer) { { odometer.RestingFooter() } }
-    val odometerWaitingFoot: @Composable () -> Unit = remember(odometer) { { odometer.WaitingFoot() } }
     BackHandler(enabled = logOpen) { logOpen = false }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -71,11 +72,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val pendingOffer = region?.presentedOffer()
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model) {
+        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true,
-            goalDay = goalDay?.date, mark = goalMark)
+            goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
@@ -102,14 +103,14 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             onDockClick = { kind ->
                 when (kind) {
                     DockKind.ODOMETER -> odometer.openSheet()
-                    DockKind.LOG -> { odometer.dismiss(); logOpen = true }
+                    DockKind.LOG -> logOpen = true
                     DockKind.NOW -> logOpen = false
                     DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
                     DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
                 }
             },
             stateCard = {
-                StateCard(model, state.hero.profit, waitingFoot = odometerWaitingFoot)
+                StateCard(model, state.hero.profit)
             },
             offer = {
                 pendingOffer?.let { pending ->

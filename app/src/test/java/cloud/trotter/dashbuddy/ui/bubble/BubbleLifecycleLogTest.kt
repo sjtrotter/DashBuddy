@@ -7,6 +7,10 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -14,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.test.util.RecordingTree
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,9 +58,15 @@ class BubbleLifecycleLogTest {
         val context = RuntimeEnvironment.getApplication()
         notificationManager = mock()
         val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy { stateManager })
+        manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy { stateManager }, preferences, garage, readings)
         Timber.plant(tree)
     }
 

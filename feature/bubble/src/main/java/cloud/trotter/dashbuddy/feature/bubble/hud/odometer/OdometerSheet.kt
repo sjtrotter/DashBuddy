@@ -71,12 +71,12 @@ fun ColumnScope.OdometerSheet(
                         Text(odometerCopy(model), color = if (warning) AppTheme.colors.warn else AppTheme.colors.text3,
                             style = MaterialTheme.typography.labelSmall)
                         if (model.check is OdometerCheck.FewerThanTracked) {
-                            TextButton(onClick = onShowAddVehicle) { Text(stringResource(R.string.hud_odometer_add_vehicle)) }
+                            TextButton(onClick = onShowAddVehicle, enabled = !model.saving) { Text(stringResource(R.string.hud_odometer_add_vehicle)) }
                         }
                     }
                     Keypad(onDigit, null, onBackspace)
                 }
-                Button(onClick = onSave, enabled = model.vehicle != null && model.gpsLoaded && (model.readingMiles ?: 0) in 1..OdometerReadingLimit.MAX_MILES && !model.saving,
+                Button(onClick = onSave, enabled = model.vehicle != null && model.gpsLoaded && OdometerReadingLimit.isValid(model.readingMiles ?: 0) && !model.saving,
                     modifier = Modifier.fillMaxWidth().testTag("odometer.save")) {
                     Text(if (model.readingMiles == null) stringResource(R.string.hud_odometer_save_empty)
                         else stringResource(R.string.hud_odometer_save, Formats.commaInt(model.readingMiles)))

@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
-import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.VehicleChange
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository

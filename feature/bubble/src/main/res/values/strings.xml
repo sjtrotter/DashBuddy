@@ -203,5 +203,4 @@
     <string name="hud_odometer_comparison">car %1$s mi, tracked %2$s mi since %3$s</string>
     <string name="hud_odometer_other">other %1$s mi</string>
     <string name="hud_odometer_short">short of tracked by %1$s mi</string>
-    <string name="hud_odometer_prompt">Log odometer</string>
 </resources>

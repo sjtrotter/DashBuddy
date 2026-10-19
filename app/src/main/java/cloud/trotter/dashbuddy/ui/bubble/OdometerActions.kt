@@ -5,7 +5,6 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
-import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.VehicleChange
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
