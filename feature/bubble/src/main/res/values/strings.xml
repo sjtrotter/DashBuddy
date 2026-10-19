@@ -196,6 +196,7 @@
     <string name="hud_odometer_large_jump">+%1$s mi since %2$s, more than expected</string>
     <string name="hud_odometer_save_empty">Save reading</string>
     <string name="hud_odometer_save">Save %1$s mi</string>
+    <string name="hud_odometer_gps_loading">Waiting for the GPS total</string>
     <string name="hud_odometer_saved">Odometer saved, %1$s mi</string>
     <string name="hud_odometer_vehicles_unreadable">Saved vehicles could not be read.</string>
     <string name="hud_odometer_write_failed">Could not save. Try again.</string>

@@ -142,7 +142,7 @@ S2d: the log (`LogMapper` over the pure `JobGrouper` (one card per job, an accep
 `formatters/*`,
 `cards/*`, and `session/*` (the pure `BubbleSessionResolver` — follow-active + manual switcher / pinned / merged —
 plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`,
-`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`), `BubbleManager` and
+`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`; a sheet host such as S2f's `OdometerHud`, a remembered `@Stable` object with composable slot members, collects its own sheet-local state, the shape S3's sheets copy), `BubbleManager` and
 `BubbleViewModel` (`sessionNet`, `dailyGoal`, `todayProfit`) stay in `:app`, which consumes the moved renderers
 as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytics/*`) is a separate
 sibling surface, left for a future extraction.

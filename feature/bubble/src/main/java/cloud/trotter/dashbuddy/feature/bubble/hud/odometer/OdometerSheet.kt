@@ -76,10 +76,15 @@ fun ColumnScope.OdometerSheet(
                     }
                     Keypad(onDigit, null, onBackspace)
                 }
-                Button(onClick = onSave, enabled = model.vehicle != null && model.gpsLoaded && OdometerReadingLimit.isValid(model.readingMiles ?: 0) && !model.saving,
+                val canSave = model.vehicle != null && OdometerReadingLimit.isValid(model.readingMiles ?: 0) && !model.saving
+                Button(onClick = onSave, enabled = canSave && model.gpsLoaded,
                     modifier = Modifier.fillMaxWidth().testTag("odometer.save")) {
                     Text(if (model.readingMiles == null) stringResource(R.string.hud_odometer_save_empty)
                         else stringResource(R.string.hud_odometer_save, Formats.commaInt(model.readingMiles)))
+                }
+                if (canSave && !model.gpsLoaded) {
+                    Text(stringResource(R.string.hud_odometer_gps_loading), color = AppTheme.colors.text2,
+                        style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

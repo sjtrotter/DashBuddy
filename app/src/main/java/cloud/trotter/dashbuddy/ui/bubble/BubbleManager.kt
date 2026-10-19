@@ -45,6 +45,7 @@ import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -180,20 +181,29 @@ class BubbleManager @Inject constructor(
         val verb = sessionVerb(platformName)
         // One Clock rule: cue comparisons share the injected clock used to stamp readings.
         val now = clock.millis()
+        val startedLine = context.getString(R.string.bubble_chat_session_started, verb)
         val started = enqueueMessage(
-            context.getString(R.string.bubble_chat_session_started, verb),
+            startedLine,
             ChatPersona.Dispatcher, expand = false, sessionId = sessionId,
         )
         scope.launch {
-            // Keep the cue notification after the persisted session-start line.
-            started.join()
-            val enabled = appPreferencesRepository.odometerPrompts.first()
-            val vehicle = garageRepository.garage.first().active
-            val readings = odometerReadingRepository.readings.first()
-            val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
-            if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
-                showNotification(context.getString(R.string.bubble_chat_odometer_cue),
-                    ChatPersona.Dispatcher, expand = false)
+            try {
+                // Keep the cue notification after the persisted session-start line.
+                started.join()
+                val enabled = appPreferencesRepository.odometerPrompts.first()
+                val vehicle = garageRepository.garage.first().active
+                val readings = odometerReadingRepository.readings.first()
+                val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
+                if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
+                    showNotification(listOf(
+                        startedLine to ChatPersona.Dispatcher,
+                        context.getString(R.string.bubble_chat_odometer_cue) to ChatPersona.Dispatcher,
+                    ), expand = false)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.tag("Bubble").w("Odometer cue skipped (%s)", error.javaClass.simpleName)
             }
         }
     }
@@ -351,14 +361,22 @@ class BubbleManager @Inject constructor(
         text: CharSequence,
         persona: ChatPersona,
         expand: Boolean,
-    ) {
+    ) = showNotification(listOf(text to persona), expand)
 
-        val senderPerson = Person.Builder()
-            .setName(persona.displayName)
-            .setKey(persona.id)
-            .setIcon(IconCompat.createWithResource(context, persona.getIconResId()))
-            .setBot(persona is ChatPersona.Dispatcher) // Clean Kotlin type checking!
-            .build()
+    private fun showNotification(
+        messages: List<Pair<CharSequence, ChatPersona>>,
+        expand: Boolean,
+    ) {
+        val notificationMessages = messages.map { (text, persona) ->
+            text to Person.Builder()
+                .setName(persona.displayName)
+                .setKey(persona.id)
+                .setIcon(IconCompat.createWithResource(context, persona.getIconResId()))
+                .setBot(persona is ChatPersona.Dispatcher)
+                .build()
+        }
+        val persona = messages.last().second
+        val senderPerson = notificationMessages.last().second
 
         val intentWithAction = Intent(context, BubbleActivity::class.java).apply {
             action = Intent.ACTION_VIEW
@@ -387,7 +405,9 @@ class BubbleManager @Inject constructor(
         val style = NotificationCompat.MessagingStyle(senderPerson)
             .setConversationTitle(context.getString(R.string.bubble_notification_conversation_title))
             .setGroupConversation(true)
-            .addMessage(text, System.currentTimeMillis(), senderPerson)
+        notificationMessages.forEach { (text, sender) ->
+            style.addMessage(text, System.currentTimeMillis(), sender)
+        }
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.bag_red_idle)

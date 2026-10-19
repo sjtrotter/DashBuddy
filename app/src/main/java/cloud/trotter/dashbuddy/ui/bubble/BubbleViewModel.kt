@@ -80,7 +80,7 @@ class BubbleViewModel @Inject constructor(
     private val appStateRepository: AppStateRepository,
     garageRepository: GarageRepository,
     odometerReadingRepository: OdometerReadingRepository,
-    clock: Clock = Clock.systemUTC(),
+    clock: Clock,
 ) : ViewModel() {
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)

@@ -87,6 +87,9 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #693 — the bubble's post-dash idle surface reads the analytics read-model, not an in-memory
@@ -171,6 +174,7 @@ class BubbleViewModelTest {
         analyticsRepository = analyticsRepository,
         ledgerRepository = ledgerRepository,
         devSettingsRepository = devSettingsRepository,
+        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
 
     @Test

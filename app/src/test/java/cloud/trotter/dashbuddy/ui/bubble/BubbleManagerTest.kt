@@ -15,6 +15,8 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.Platform
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,6 +35,7 @@ import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -50,6 +53,7 @@ class BubbleManagerTest {
 
     private fun fixture(
         enabled: Boolean = true, active: Vehicle? = vehicle, readings: List<VehicleOdometerReading> = emptyList(),
+        readingsFlow: Flow<List<VehicleOdometerReading>> = flowOf(readings),
     ): Fixture {
         val context = RuntimeEnvironment.getApplication()
         val notifications: NotificationManager = mock()
@@ -60,7 +64,7 @@ class BubbleManagerTest {
         val state: StateManagerV2 = mock()
         whenever(preferences.odometerPrompts).thenReturn(flowOf(enabled))
         whenever(garage.garage).thenReturn(flowOf(Garage(listOfNotNull(active), active?.id, readable = true)))
-        whenever(odometer.readings).thenReturn(flowOf(readings))
+        whenever(odometer.readings).thenReturn(readingsFlow)
         return Fixture(BubbleManager(context, notifications, chat, dagger.Lazy { state },
             preferences, garage, odometer, clock), chat, notifications)
     }
@@ -79,11 +83,11 @@ class BubbleManagerTest {
         }
         verifyNoMoreInteractions(fixture.chat)
         assertTrue(texts.firstValue.startsWith("Started "))
-        assertEquals(listOf(texts.firstValue, "Log your odometer"), notifications.allValues.map {
+        assertEquals(listOf(listOf(texts.firstValue), listOf(texts.firstValue, "Log your odometer")), notifications.allValues.map {
             val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(it)!!
             assertEquals(RuntimeEnvironment.getApplication().getString(R.string.bubble_notification_conversation_title),
                 style.conversationTitle.toString())
-            style.messages.single().text.toString()
+            style.messages.map { message -> message.text.toString() }
         })
     }
 
@@ -98,7 +102,14 @@ class BubbleManagerTest {
             saveMessage(eq(sessionId), texts.capture(), eq(ChatPersona.Dispatcher))
         }
         assertTrue(texts.firstValue.startsWith("Started "))
-        verify(fixture.notifications, after(100).times(1)).notify(eq(BubbleManager.BUBBLE_NOTIFICATION_ID), any())
+        val notification = argumentCaptor<Notification>()
+        verify(fixture.notifications, after(100).times(1)).notify(eq(BubbleManager.BUBBLE_NOTIFICATION_ID), notification.capture())
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification.firstValue)!!
+        assertEquals(listOf(texts.firstValue), style.messages.map { it.text.toString() })
+    }
+
+    @Test fun `a failing readings read skips the cue and keeps the Started line`() {
+        assertNoCue(fixture(readingsFlow = flow { throw IOException("read failed") }))
     }
 
     @Test fun `a session start with no recent reading posts the cue without saving a chat row`() {

@@ -23,7 +23,10 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.GoalMetMark
 import cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillState
 import cloud.trotter.dashbuddy.feature.bubble.hud.HudMode
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -86,6 +89,7 @@ class BubbleGoalMarkTest {
         analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
         garageRepository = garage(), odometerReadingRepository = readings(),
+        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
     @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {
         val vm = model()

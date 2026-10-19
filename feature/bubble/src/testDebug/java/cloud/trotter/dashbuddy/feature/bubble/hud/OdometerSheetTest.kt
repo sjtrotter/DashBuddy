@@ -75,10 +75,23 @@ class OdometerSheetTest {
         model = model.copy(gpsLoaded = false)
         show()
         compose.onNodeWithTag("odometer.save").assertIsNotEnabled().performClick()
+        compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
         assertEquals(0, saved)
         compose.runOnIdle { model = model.copy(gpsLoaded = true) }; settle()
+        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
         compose.onNodeWithTag("odometer.save").assertIsEnabled().performClick()
         assertEquals(1, saved)
+    }
+    @Test fun `gps waiting label appears only when gps is the remaining save blocker`() {
+        model = model.copy(gpsLoaded = false, readingMiles = null, check = OdometerCheck.Empty)
+        show()
+        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.runOnIdle { model = model.copy(readingMiles = 52_388, saving = true) }; settle()
+        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.runOnIdle { model = model.copy(saving = false, vehicle = null, check = OdometerCheck.NoVehicle) }; settle()
+        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.name)) }; settle()
+        compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
     }
     @Test fun `add is disabled while the garage is unreadable`() {
         model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,

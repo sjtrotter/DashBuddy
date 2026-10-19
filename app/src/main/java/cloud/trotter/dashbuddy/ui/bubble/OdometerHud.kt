@@ -11,7 +11,6 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
 
 @Stable
@@ -66,10 +65,7 @@ internal class OdometerHud(
         val last = viewModel.lastReading.collectAsStateWithLifecycle().value
         val check = if (entry.page == OdometerPage.READING) {
             val now by rememberNow(60_000)
-            val otherVehicleReadSince = last != null && vehicle != null && readings?.let {
-                !VehicleOdometerReading.singleVehicleSpan(it, vehicle.id, last.occurredAt, now)
-            } == true
-            OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, otherVehicleReadSince))
+            OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, readings.orEmpty()))
         } else OdometerCheck.Empty
         Column(Modifier.fillMaxSize()) {
             OdometerSheet(OdometerSheetModel(vehicle, garage?.vehicles.orEmpty(), entry.reading, last, check, entry.page, saving,
@@ -114,6 +110,7 @@ internal class OdometerHud(
         OdometerFooter(vehicle?.name, lastReading, reconciliation, ::openSheet)
     }
 
+    /** The start-window cue ticks once a minute while its window is open. */
     @Composable
     fun Cue(startedAt: Long?, endedAt: Long?): Boolean {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
@@ -123,7 +120,7 @@ internal class OdometerHud(
         val now = if (loaded && prompts && startedAt != null) {
             val snapshot = LocalNowProvider.current.millis()
             if (snapshot >= startedAt && snapshot - startedAt < OdometerCue.WINDOW_MS) {
-                val tick by rememberNow()
+                val tick by rememberNow(60_000)
                 tick
             } else snapshot
         } else 0L
