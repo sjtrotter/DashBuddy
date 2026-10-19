@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.*
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.feature.bubble.hud.expense.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.goal.*
 import androidx.compose.ui.platform.testTag
@@ -339,6 +341,39 @@ internal class HudScreenTest : HudScreenFixture() {
         settle()
         compose.onNodeWithText("Odometer saved, 52,388 mi").assertIsDisplayed()
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun `live cash tip sheet reaches the body bottom and the dock with no gap`() {
+        var undoShown by mutableStateOf(false)
+        val delivery = DeliveryRecord(71, "live", Platform.DoorDash, "job", "task", "Panera Bread",
+            T0, 8.0, "OFFER_PAY", 6.0, null, null, null, null, cashTip = 10.0)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state(), null, {}, sheetOpen = true, sheet = {
+                            CashTipSheet(CashTipSheetModel(listOf(delivery), 71, totalCents = 700),
+                                onSelectDelivery = {}, onExpand = {}, onBack = {}, onSign = {}, onAmount = {},
+                                onOther = {}, onDigit = {}, onPoint = {}, onBackspace = {}, onDoneOther = {}, onCommit = {})
+                        }, undo = {
+                            if (undoShown) UndoStrip(UndoStripModel(700, "Panera Bread", 71, T0 + 10_000, 2)) {}
+                        }, undoVisible = { undoShown })
+                    }
+                }
+            }
+        }
+        for (visible in listOf(false, true)) {
+            compose.runOnIdle { undoShown = visible }
+            settle()
+            compose.onNodeWithText("Add $7.00 cash tip").assertIsDisplayed()
+            val sheet = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
+            val body = compose.onNodeWithTag("hud.body").getBoundsInRoot()
+            val dock = compose.onNodeWithTag("hud.dock").getBoundsInRoot()
+            assertEquals(body.bottom, sheet.bottom)
+            assertEquals(body.bottom, dock.top)
+        }
     }
 
     @Test fun `compact expense subcard rests above dock with HUD visible behind it`() {
