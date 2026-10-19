@@ -3,9 +3,6 @@ package cloud.trotter.dashbuddy.feature.setup.wizard.vehicle
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
-import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
-import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
-import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.setup.wizard.VEHICLE_NOT_LISTED
 import kotlinx.coroutines.CoroutineScope
@@ -32,12 +29,18 @@ interface VehicleDraftActions {
 class VehicleDraft(
     private val lookup: VehicleRepository,
     private val scope: CoroutineScope,
-    private val holder: MutableStateFlow<VehicleDraftState>,
+    initialState: VehicleDraftState,
     private val onShapeChanged: () -> Unit,
     private val onTrimDetails: (VehicleDetails) -> Unit = {},
     private val onTypeChanged: () -> Unit = onShapeChanged,
 ) : VehicleDraftActions {
+    private val holder = MutableStateFlow(initialState)
     val state: StateFlow<VehicleDraftState> = holder.asStateFlow()
+
+    fun load(state: VehicleDraftState) {
+        holder.value = state
+        if (state.lookupAllowed) fetchYears()
+    }
 
     fun allowLookup() {
         holder.update { it.copy(lookupAllowed = true) }
@@ -97,9 +100,8 @@ class VehicleDraft(
     }
 
     private fun VehicleDraftState.withTypeDefaults(): VehicleDraftState {
-        val shared = SharedEconomy()
-        val resolved = UserEconomy.from(VehicleEconomyInputs.from(profile(), shared), shared)
-        return copy(mpg = resolved.vehicleMpg.toFloat(),
+        val resolved = profile().resolvedConsumption()
+        return copy(mpg = resolved.mpg.toFloat(),
             kwhPer100Mi = resolved.kwhPer100Mi, whPerMile = resolved.whPerMile)
     }
 
@@ -121,7 +123,7 @@ class VehicleDraft(
         }
         scope.launch {
             val makes = listOf(VEHICLE_NOT_LISTED) + lookup.getMakes(year)
-            holder.update { it.copy(availableMakes = makes) }
+            holder.update { if (it.year == year) it.copy(availableMakes = makes) else it }
         }
     }
 
@@ -134,9 +136,12 @@ class VehicleDraft(
 
         // Skip API call if Not Listed
         if (make != VEHICLE_NOT_LISTED) {
+            val year = holder.value.year
             scope.launch {
-                val models = listOf(VEHICLE_NOT_LISTED) + lookup.getModels(holder.value.year, make)
-                holder.update { it.copy(availableModels = models) }
+                val models = listOf(VEHICLE_NOT_LISTED) + lookup.getModels(year, make)
+                holder.update {
+                    if (it.year == year && it.make == make) it.copy(availableModels = models) else it
+                }
             }
         }
     }
@@ -149,11 +154,17 @@ class VehicleDraft(
 
         // Skip API call if Not Listed
         if (model != VEHICLE_NOT_LISTED) {
+            val year = holder.value.year
+            val make = holder.value.make
             scope.launch {
                 val trims = listOf(
                     VehicleOption(id = "NOT_LISTED", displayName = VEHICLE_NOT_LISTED),
-                ) + lookup.getVehicleOptions(holder.value.year, holder.value.make, model)
-                holder.update { it.copy(availableTrims = trims) }
+                ) + lookup.getVehicleOptions(year, make, model)
+                holder.update {
+                    if (it.year == year && it.make == make && it.model == model) {
+                        it.copy(availableTrims = trims)
+                    } else it
+                }
             }
         }
     }

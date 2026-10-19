@@ -31,7 +31,7 @@ data class VehicleDraftState(
      */
     val userSetFields: Set<EconomyField> = emptySet(),
 ) {
-    val trimNames: List<String> get() = availableTrims.map { it.displayName }
+    val trimNames: List<String> = availableTrims.map { it.displayName }
 
     /** Apply vehicle edits without applying any host-owned cost groups. */
     fun profile(): VehicleProfile {
@@ -46,6 +46,33 @@ data class VehicleDraftState(
     }
 
     companion object {
+        fun from(
+            profile: VehicleProfile?,
+            economy: UserEconomy,
+            year: String,
+            make: String,
+            model: String,
+            trim: String,
+            mpg: Float,
+            lookupAllowed: Boolean,
+        ): VehicleDraftState {
+            val storedProfile = profile ?: economy.vehicleProfile
+            return VehicleDraftState(
+                profile = storedProfile,
+                vehicleClass = economy.vehicleClass,
+                lookupAllowed = lookupAllowed,
+                year = year, make = make, model = model, trim = trim,
+                manualMpgEntry = year.isNotBlank() && make.isNotBlank() && model.isNotBlank(),
+                mpg = mpg,
+                kwhPer100Mi = economy.kwhPer100Mi,
+                whPerMile = economy.whPerMile,
+                electricityPricePerKwh = economy.electricityPricePerKwh,
+                // The stored economy's set already carries the profile-derived vehicle fields AND a user-set
+                // tariff; reading it keeps the wizard's load exactly as before the split.
+                userSetFields = economy.userSetFields intersect fields,
+            )
+        }
+
         /** Fields owned by the vehicle form, including the shared electricity tariff. */
         val fields: Set<EconomyField> = setOf(
             EconomyField.VEHICLE_CLASS, EconomyField.VEHICLE_MPG, EconomyField.KWH_PER_100_MI,

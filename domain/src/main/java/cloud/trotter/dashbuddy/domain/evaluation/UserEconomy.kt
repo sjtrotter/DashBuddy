@@ -207,20 +207,17 @@ data class UserEconomy(
         fun from(inputs: VehicleEconomyInputs, shared: SharedEconomy): UserEconomy {
             val detail = inputs.disclosure
             val profile = detail?.profile ?: GasCar()
+            val consumption = profile.resolvedConsumption()
             val wear = detail?.wear ?: WearProfile(miscYearly = inputs.wearPerMile, miscYearlyMi = 1.0)
             val fixed = detail?.fixed ?: FixedCosts()
             val fields = EconomyFieldGroups.userSetFields(profile) +
                 shared.userSetFields.filter { it !in EconomyFieldGroups.vehicleFields }
             return UserEconomy(
                 vehicleClass = profile.legacyClass,
-                vehicleMpg = profile.gasMpg?.takeIf { it > 0 } ?: VehiclePresets.forProfile(profile).mpg,
+                vehicleMpg = consumption.mpg,
                 gasPricePerGallon = shared.gasPricePerGallon,
-                kwhPer100Mi = when (profile) {
-                    is ElectricCar -> profile.kwhPer100Mi ?: VehiclePresets.EV_KWH_PER_100_MI
-                    is ScooterMoped -> profile.kwhPer100Mi ?: VehiclePresets.SCOOTER_KWH_PER_100_MI
-                    else -> 0.0
-                },
-                whPerMile = (profile as? EBike)?.whPerMile ?: VehiclePresets.EBIKE_WH_PER_MILE,
+                kwhPer100Mi = consumption.kwhPer100Mi,
+                whPerMile = consumption.whPerMile,
                 electricityPricePerKwh = shared.electricityPricePerKwh,
                 avgMinutesPerMile = if (EconomyField.AVG_MIN_PER_MILE in fields)
                     shared.avgMinutesPerMile ?: inputs.travel.minutesPerMile else inputs.travel.minutesPerMile,

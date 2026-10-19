@@ -255,6 +255,31 @@ class WizardViewModelTest {
     }
 
     @Test
+    fun `a delayed stored lookup denial does not overwrite a new grant`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val storedPermission = CompletableDeferred<Boolean>()
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flow { emit(storedPermission.await()) })
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository,
+        )
+        testScheduler.runCurrent()
+
+        viewModel.allowVehicleLookup()
+        testScheduler.runCurrent()
+        assertTrue(viewModel.vehicleDraft.state.value.lookupAllowed)
+        storedPermission.complete(false)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(listOf("2020"), viewModel.vehicleDraft.state.value.availableYears)
+        verify(vehicleRepository).getYears()
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
     fun `allow lookup persists the choice before enabling and fetching years`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()

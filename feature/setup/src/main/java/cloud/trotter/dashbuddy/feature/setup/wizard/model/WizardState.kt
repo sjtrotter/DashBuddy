@@ -101,7 +101,7 @@ private fun WizardState.draftEconomy(vehicle: VehicleDraftState): UserEconomy = 
 )
 
 fun WizardState.toVehicleProfile(vehicle: VehicleDraftState): VehicleProfile =
-    EconomyFieldGroups.updateProfile(vehicle.profile(), draftEconomy(vehicle))
+    EconomyFieldGroups.updateProfile(vehicle.profile(), draftEconomy(vehicle).copy(userSetFields = userSetEconomyFields))
 
 fun WizardState.toUserEconomy(vehicle: VehicleDraftState): UserEconomy {
     val shared = SharedEconomy.from(draftEconomy(vehicle))

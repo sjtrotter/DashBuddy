@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,22 +57,27 @@ class WizardViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(WizardState())
     val state = _state.asStateFlow()
-    private val vehicleState = MutableStateFlow(VehicleDraftState())
     val vehicleDraft = VehicleDraft(
-        vehicleRepository, viewModelScope, vehicleState,
-        onShapeChanged = { _state.update { it.withTypeDefaults(vehicleState.value) } },
+        vehicleRepository, viewModelScope, VehicleDraftState(),
+        onShapeChanged = ::applyVehicleShapeDefaults,
         onTrimDetails = ::applyTrimDetails,
-        onTypeChanged = {
-            _state.update {
-                it.copy(userSetEconomyFields = it.userSetEconomyFields -
-                    (EconomyFieldGroups.vehicleFields - VehicleDraftState.fields))
-                    .withTypeDefaults(vehicleState.value)
-            }
-        },
+        onTypeChanged = ::applyVehicleTypeDefaults,
     )
-    val steps = combine(_state, vehicleState) { _, vehicle ->
+    val steps = vehicleDraft.state.map { vehicle ->
         WizardStep.entries.filter { it != WizardStep.GAS_PRICE || EconomyField.GAS_PRICE in EconomyFieldGroups.fieldsFor(vehicle.profile) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, WizardStep.entries)
+
+    private fun applyVehicleShapeDefaults() {
+        _state.update { it.withTypeDefaults(vehicleDraft.state.value) }
+    }
+
+    private fun applyVehicleTypeDefaults() {
+        _state.update {
+            it.copy(userSetEconomyFields = it.userSetEconomyFields -
+                (EconomyFieldGroups.vehicleFields - VehicleDraftState.fields))
+                .withTypeDefaults(vehicleDraft.state.value)
+        }
+    }
 
     private val _vehicleSaveFailed = MutableSharedFlow<Unit>(replay = 1)
     val vehicleSaveFailed = _vehicleSaveFailed.asSharedFlow()
@@ -124,20 +129,11 @@ class WizardViewModel @Inject constructor(
 
             // The currently-stored UserEconomy already merges class-derived defaults
             // with persisted user-set values, so just snapshot it for the wizard.
-            vehicleState.update { vehicle ->
-                vehicle.copy(
-                    vehicleClass = storedEconomy.vehicleClass,
-                    profile = activeProfile ?: storedEconomy.vehicleProfile,
-                    kwhPer100Mi = storedEconomy.kwhPer100Mi,
-                    whPerMile = storedEconomy.whPerMile,
-                    electricityPricePerKwh = storedEconomy.electricityPricePerKwh,
-                    year = currentYear, make = currentMake, model = currentModel, trim = currentTrim,
-                    manualMpgEntry = currentYear.isNotBlank() &&
-                        currentMake.isNotBlank() && currentModel.isNotBlank(),
-                    mpg = currentMpg,
-                    userSetFields = storedEconomy.userSetFields intersect VehicleDraftState.fields,
-                )
-            }
+            vehicleDraft.load(VehicleDraftState.from(
+                profile = activeProfile, economy = storedEconomy,
+                year = currentYear, make = currentMake, model = currentModel, trim = currentTrim,
+                mpg = currentMpg, lookupAllowed = vehicleDraft.state.value.lookupAllowed,
+            ))
             _state.update { currentState ->
                 currentState.copy(
                     chainCost = storedEconomy.chainCost, chainLifeMi = storedEconomy.chainLifeMi,
@@ -186,7 +182,6 @@ class WizardViewModel @Inject constructor(
             attemptAutoGasPriceFetch()
             val vehicleLookupAllowed = appPreferencesRepository.vehicleLookupAllowed.first()
             if (vehicleLookupAllowed) vehicleDraft.allowLookup()
-            else vehicleState.update { it.copy(lookupAllowed = false) }
         }
     }
 
@@ -360,7 +355,7 @@ class WizardViewModel @Inject constructor(
     }
 
     fun attemptAutoGasPriceFetch() {
-        if (!_state.value.isGasPriceAuto || EconomyField.GAS_PRICE !in EconomyFieldGroups.fieldsFor(vehicleState.value.profile)) return
+        if (!_state.value.isGasPriceAuto || EconomyField.GAS_PRICE !in EconomyFieldGroups.fieldsFor(vehicleDraft.state.value.profile)) return
 
         viewModelScope.launch {
             _state.update { it.copy(isFetchingGasPrice = true) }
@@ -431,7 +426,7 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             if (!garageDraftLoaded) return@launch
             val finalState = _state.value
-            val vehicle = vehicleState.value
+            val vehicle = vehicleDraft.state.value
 
             val economy = finalState.toUserEconomy(vehicle)
             try {

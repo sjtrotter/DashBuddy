@@ -125,7 +125,10 @@ path — a ViewModel that injects `:app`/`:core:state` machinery (`DashboardView
 `BubbleViewModel`) stays in `:app` rather than forcing an inversion (the honest-smaller-module
 doctrine), and a multi-consumer string/color is duplicated by choice into a module with the `:app`
 copy authoritative, documented at both sites (`common_content_desc_back` #99, `@color/white` #854).
-Shipped: `:feature:settings` (#99); `:feature:setup` (#98 — wizard VM/model/step cards; the
+Shipped: `:feature:settings` (#99); `:feature:setup` (#98 — wizard VM/model/step cards; #1359 slice A made `wizard/vehicle/VehicleDraft` +
+`VehicleDraftState` the vehicle form's one owner — the EPA lookup cascade, type/class/powertrain and EV-trim changes, and the
+five vehicle-shaped user-set fields — rendered by `VehicleCard(step, draft, actions, …)`, hosted by the wizard now and by the
+`:app` Garage editor in slice B; the cost drafts stay in `WizardState` and land in the saved profile; the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
 `:app`); `:feature:dashboard` (#97, reshaped by #977/#981/#1024 — Home's presentational composables

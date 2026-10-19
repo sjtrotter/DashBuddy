@@ -188,6 +188,20 @@ val VehicleProfile.gasFuel: FuelType? get() = when (this) {
     is ScooterMoped -> fuelType.takeIf { powertrain == Powertrain.GAS }
     else -> null
 }
+
+data class ResolvedConsumption(val mpg: Double, val kwhPer100Mi: Double, val whPerMile: Double)
+
+/** Consumption overrides with type defaults, independent of shared costs and tariffs. */
+fun VehicleProfile.resolvedConsumption(): ResolvedConsumption = ResolvedConsumption(
+    mpg = gasMpg?.takeIf { it > 0 } ?: VehiclePresets.forProfile(this).mpg,
+    kwhPer100Mi = when (this) {
+        is ElectricCar -> kwhPer100Mi ?: VehiclePresets.EV_KWH_PER_100_MI
+        is ScooterMoped -> kwhPer100Mi ?: VehiclePresets.SCOOTER_KWH_PER_100_MI
+        else -> 0.0
+    },
+    whPerMile = (this as? EBike)?.whPerMile ?: VehiclePresets.EBIKE_WH_PER_MILE,
+)
+
 fun VehicleProfile.withGas(mpg: Double? = gasMpg, fuelType: FuelType = gasFuel ?: FuelType.REGULAR): VehicleProfile = when (this) {
     is GasCar -> copy(mpg = mpg, fuelType = fuelType)
     is HybridCar -> copy(mpg = mpg, fuelType = fuelType)

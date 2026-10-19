@@ -168,7 +168,7 @@ fun VehicleCard(
                                     value = draft.trim,
                                     options = draft.trimNames,
                                     onValueChanged = actions::onTrimSelected,
-                                    enabled = draft.trimNames.isNotEmpty()
+                                    enabled = draft.availableTrims.isNotEmpty()
                                 )
                             }
                         }
