@@ -42,6 +42,10 @@ data class AppTextStyles(
     val smNum: TextStyle,
     val xsNum: TextStyle,
     val chip: TextStyle,
+    val stateWord: TextStyle,
+    val stateUnit: TextStyle,
+    val cardLabel: TextStyle,
+    val cardNum: TextStyle,
 )
 
 private fun num(size: TextUnit, weight: FontWeight = FontWeight.Bold, ls: Double = -0.01): TextStyle =
@@ -64,6 +68,10 @@ fun dashTextStyles(): AppTextStyles = AppTextStyles(
     mdNum = num(AppTypeScale.md),
     smNum = num(AppTypeScale.sm),
     xsNum = num(AppTypeScale.xs),
+    stateWord = TextStyle(fontFamily = HankenGrotesk, fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+    stateUnit = TextStyle(fontFamily = HankenGrotesk, fontSize = 16.sp, fontWeight = FontWeight.Medium),
+    cardLabel = TextStyle(fontFamily = HankenGrotesk, fontSize = 14.sp),
+    cardNum = num(15.sp, FontWeight.Medium),
     chip = TextStyle(
         fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Bold,
@@ -96,6 +104,10 @@ fun AppTextStyles.scaledByGlance(glance: Float): AppTextStyles = if (glance == 1
     smNum = smNum.scaledByGlance(glance),
     xsNum = xsNum.scaledByGlance(glance),
     chip = chip.scaledByGlance(glance),
+    stateWord = stateWord.scaledByGlance(glance),
+    stateUnit = stateUnit.scaledByGlance(glance),
+    cardLabel = cardLabel.scaledByGlance(glance),
+    cardNum = cardNum.scaledByGlance(glance),
 )
 
 /**

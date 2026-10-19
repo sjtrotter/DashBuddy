@@ -11,9 +11,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.glanceSp
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -37,7 +37,7 @@ internal fun StateLine(store: String, label: Int?, at: Long?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(store, Modifier.weight(1f), color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            style = AppTheme.num.stateWord)
         if (label != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 StateLabel(stringResource(label))
@@ -52,10 +52,10 @@ internal fun StateFigure(headline: Headline, label: Int? = null, big: Boolean = 
     val figureStyle = if (big) AppTheme.num.stateBigNum else AppTheme.num.stateNum
     Row(Modifier.testTag("state.figure"), verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(headlineText(headline), color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = figureStyle.fontSize * if (big) (58f / 56f) else (52f / 48f)),
+        Text(headlineText(headline), color = AppTheme.colors.text, style = figureStyle.copy(lineHeight = glanceSp(if (big) 58 else 52)),
             modifier = Modifier.alignByBaseline())
         label?.let {
-            Text(stringResource(it), color = AppTheme.colors.text2, fontSize = 16.sp, fontWeight = FontWeight.Medium,
+            Text(stringResource(it), color = AppTheme.colors.text2, style = AppTheme.num.stateUnit,
                 modifier = Modifier.alignByBaseline())
         }
     }
@@ -63,7 +63,7 @@ internal fun StateFigure(headline: Headline, label: Int? = null, big: Boolean = 
 
 @Composable
 internal fun JobColumn(facts: JobFacts) {
-    Column(Modifier.padding(bottom = 4.dp), horizontalAlignment = Alignment.End) {
+    Column(Modifier.testTag("state.jobColumn").padding(bottom = 4.dp), horizontalAlignment = Alignment.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(moneyOrEmpty(facts.pay), style = AppTheme.num.lgNum.copy(fontWeight = FontWeight.Medium), color = AppTheme.colors.text)
             StateLabel(stringResource(R.string.hud_state_job), size = 13)
@@ -77,12 +77,12 @@ internal fun JobColumn(facts: JobFacts) {
 
 @Composable
 internal fun StateLabel(text: String, color: Color = AppTheme.colors.text3, size: Int = 14) {
-    Text(text, color = color, fontSize = size.sp)
+    Text(text, color = color, style = AppTheme.num.cardLabel.copy(fontSize = glanceSp(size)))
 }
 
 @Composable
 internal fun StateNumber(text: String, color: Color = AppTheme.colors.text2, size: Int = 15) {
-    Text(text, color = color, style = AppTheme.num.mdNum.copy(fontSize = size.sp, fontWeight = FontWeight.Medium))
+    Text(text, color = color, style = AppTheme.num.cardNum.copy(fontSize = glanceSp(size)))
 }
 
 @Composable

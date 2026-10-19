@@ -31,7 +31,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val net by viewModel.sessionNet.collectAsStateWithLifecycle()
     val countExpenses by viewModel.countExpensesInKept.collectAsStateWithLifecycle()
     val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
-    val todayProfit by viewModel.todayProfit.collectAsStateWithLifecycle()
+    val goalDay by viewModel.goalDay.collectAsStateWithLifecycle()
+    val goalMark by viewModel.goalMark.collectAsStateWithLifecycle()
+    val todayProfit = goalDay?.profit
     val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
     val gasAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val gasRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
@@ -60,54 +62,61 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val pendingOffer = region?.presentedOffer()
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas, model) {
+        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
-            pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true)
+            pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true,
+            goalDay = goalDay?.date, mark = goalMark)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
     }
-    HudScreen(
-        state = state,
-        ribbon = ribbon,
-        // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
-        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
-        onSelectPlatform = viewModel::selectPlatform,
-        onSetGasPrice = viewModel::setGasPrice,
-        onRefreshGasPrice = { viewModel.refreshGasPrice() },
-        onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
-        onDockClick = { kind ->
-            when (kind) {
-                DockKind.LOG -> logOpen = true
-                DockKind.NOW -> logOpen = false
-                DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
-                DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
-            }
-        },
-        stateCard = {
-            StateCard(model, state.hero.profit)
-        },
-        offer = {
-            pendingOffer?.let { pending ->
-                val offerModel = remember(pending, region?.activeJob, cards.stack.completed, config) {
-                    OfferCardMapper.map(pending, region?.activeJob, cards.stack.completed, config)
+    CompositionLocalProvider(LocalHudSheetBackHandler provides { enabled, dismiss ->
+        BackHandler(enabled = enabled, onBack = dismiss)
+    }) {
+        HudScreen(
+            state = state,
+            ribbon = ribbon,
+            onGoalCelebrated = viewModel::goalCelebrated,
+            sheetOpen = false,
+            // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
+            modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
+            onSelectPlatform = viewModel::selectPlatform,
+            onSetGasPrice = viewModel::setGasPrice,
+            onRefreshGasPrice = { viewModel.refreshGasPrice() },
+            onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
+            onDockClick = { kind ->
+                when (kind) {
+                    DockKind.LOG -> logOpen = true
+                    DockKind.NOW -> logOpen = false
+                    DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
+                    DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
                 }
-                OfferCard(offerModel, viewModel::acceptOffer, viewModel::declineOffer)
-            }
-        },
-        log = {
-            val logData by viewModel.logData.collectAsStateWithLifecycle()
-            val messages by viewModel.messages.collectAsStateWithLifecycle()
-            val items = remember(cards.stack, logData, messages, model, region?.activeJob) {
-                LogMapper.map(cards.stack, logData, messages, model,
-                    liveLinks = region?.activeJob?.let { job ->
-                        mapOf(job.jobId to job.acceptedOffers.mapNotNull { it.offerHash }.toSet())
-                    }.orEmpty())
-            }
-            LogView(items, onNow = { logOpen = false }, onUndo = {})
-        },
-    )
+            },
+            stateCard = {
+                StateCard(model, state.hero.profit)
+            },
+            offer = {
+                pendingOffer?.let { pending ->
+                    val offerModel = remember(pending, region?.activeJob, cards.stack.completed, config) {
+                        OfferCardMapper.map(pending, region?.activeJob, cards.stack.completed, config)
+                    }
+                    OfferCard(offerModel, viewModel::acceptOffer, viewModel::declineOffer)
+                }
+            },
+            log = {
+                val logData by viewModel.logData.collectAsStateWithLifecycle()
+                val messages by viewModel.messages.collectAsStateWithLifecycle()
+                val items = remember(cards.stack, logData, messages, model, region?.activeJob) {
+                    LogMapper.map(cards.stack, logData, messages, model,
+                        liveLinks = region?.activeJob?.let { job ->
+                            mapOf(job.jobId to job.acceptedOffers.mapNotNull { it.offerHash }.toSet())
+                        }.orEmpty())
+                }
+                LogView(items, onNow = { logOpen = false }, onUndo = {})
+            },
+        )
+    }
 }
 
 /** Unwrap a Compose context to the hosting Activity. */

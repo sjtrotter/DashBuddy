@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.AppStatePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -15,6 +16,7 @@ class AppStateDataSource @Inject constructor(
     @param:AppStatePreferences private val ds: DataStore<Preferences>
 ) {
     private object Keys {
+        val GOAL_MET_MARK = stringPreferencesKey("goal_met_mark")
         val IS_FIRST_RUN = booleanPreferencesKey("is_first_run")
 
         /**
@@ -31,6 +33,12 @@ class AppStateDataSource @Inject constructor(
     /** False until the #938 English-locale notice has been posted once on this install. */
     val localeBoundaryNoticeShown: Flow<Boolean> =
         ds.data.map { it[Keys.LOCALE_BOUNDARY_NOTICE_SHOWN] ?: false }
+
+    val goalMetMark: Flow<String?> = ds.data.map { it[Keys.GOAL_MET_MARK] }
+
+    suspend fun setGoalMetMark(key: String) {
+        ds.edit { it[Keys.GOAL_MET_MARK] = key }
+    }
 
     // Safely encapsulated write action
     suspend fun setFirstRunComplete() {

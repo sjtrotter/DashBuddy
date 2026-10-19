@@ -31,7 +31,7 @@ internal fun TaskCard(model: StateCardModel.TaskCard) {
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
         StateFigure(headline, label, big = parked)
-        JobColumn(model.facts)
+        if (LocalHudTier.current < FontScaleTier.NO_JOB_COLUMN) JobColumn(model.facts)
     }
     TimeTrack(TrackMapper.map(leg, now), late,
         if (pickup) AppTheme.colors.stPickup else AppTheme.colors.stDropoff)

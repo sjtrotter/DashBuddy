@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
@@ -90,6 +91,7 @@ import org.mockito.kotlin.whenever
 @OptIn(ExperimentalCoroutinesApi::class)
 class BubbleViewModelTest {
 
+    private val appStateRepository: AppStateRepository = mock()
     private val strategyRepository: StrategyRepository = mock()
     private val configFlow = MutableStateFlow<EvaluationConfig?>(EvaluationConfig())
     private val chatRepository: ChatRepository = mock()
@@ -116,6 +118,7 @@ class BubbleViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         // Init-time flow accessors — the VM builds several stateIn() flows in its property initializers.
+        whenever(appStateRepository.goalMetMark).thenReturn(flowOf(null))
         whenever(stateManager.state).thenReturn(state)
         whenever(strategyRepository.evaluationConfig).thenReturn(configFlow)
         whenever(devSettingsRepository.bubbleSessionMode).thenReturn(modeFlow)
@@ -138,6 +141,7 @@ class BubbleViewModelTest {
     private fun viewModel() = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
+        appStateRepository = appStateRepository,
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,

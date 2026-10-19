@@ -197,6 +197,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   Screen-events keys from `app_prefs` without copying them: restored app preferences must never restore consent.
   An empty dedicated store re-asks once after this upgrade as well as on a new phone.
 - Your daily profit goal, in dollars, if you set one. Stays on the device.
+- One mark of the day you first met that goal and the goal amount it was met at (`goal_met_mark` in `app_state`, e.g.
+  `2026-10-18|7900`), so the HUD's goal animation plays once per day and goal. Stays on the device, backed up with the
+  app's preferences; it holds no money figure beyond the goal you set yourself.
 - Debug builds may keep capture envelopes for rule development under the app's files; release builds bind a no-op
   capture bus (`NoOpCaptureBus`) and keep none. Captures and census files are excluded from Android backup and
   device transfer (`app/src/main/res/xml/backup_rules.xml`).
@@ -230,6 +233,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r4 (2026-10-18)** — one new stored item: the day and goal amount at which the HUD's daily goal was first met
+  (`goal_met_mark` in `app_state`), so the goal animation plays once per day and goal (#1333 S2e). On device,
+  backed up with the app's preferences. Receipts created under r3 retain that revision.
 - **r3** — corrected user-initiated versus automated taps, accepted button labels, debug-decline behavior, filtering limitations, network recipients and controls, cloud-folder exports, and in-app backup/screenshot disclosures. Fixed the setup startup fetch ordering. Gas refresh is off by default on new installs; an existing setting is kept. Current in-app disclosures reference this revision.
 
 - **r2 (2026-10-07)** — consent stores and debug logs excluded from Android backup and device transfer;

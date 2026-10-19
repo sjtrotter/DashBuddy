@@ -24,7 +24,7 @@ sealed interface OnlineSpan {
     data class Fixed(val ms: Long) : OnlineSpan
     data object Unknown : OnlineSpan
 }
-data class HeroModel(val profit: Double?, val goal: GoalPillState)
+data class HeroModel(val profit: Double?, val goal: GoalPillState, val celebrateKey: String? = null, val markLoading: Boolean = false)
 sealed interface GoalPillState {
     data object NoGoal : GoalPillState
     data class InProgress(val remaining: String, val progress: Float) : GoalPillState
