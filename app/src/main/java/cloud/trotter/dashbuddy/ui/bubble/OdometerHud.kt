@@ -27,7 +27,7 @@ internal class OdometerHud(
         if (!viewModel.odometerLoaded.value) return
         closeLog()
         val garage = viewModel.garage.value
-        if (entry.show(activeVehicle = garage?.active != null, anyVehicles = garage?.vehicles?.any { it.retiredAt == null } == true)) {
+        if (entry.show(activeVehicle = garage?.active != null, anyVehicles = garage?.unretired?.isNotEmpty() == true)) {
             viewModel.reopenOdometer()
         }
     }
@@ -48,9 +48,9 @@ internal class OdometerHud(
                 when (change) {
                     VehicleChange.ADDED -> entry.vehicleAdded()
                     VehicleChange.SWITCHED -> entry.vehicleSwitched()
-                    VehicleChange.RETIRED -> {
+                    is VehicleChange.RETIRED -> {
                         val garage = viewModel.garageSnapshot()
-                        entry.vehicleRetired(garage.active != null, garage.vehicles.any { it.retiredAt == null })
+                        entry.vehicleRetired(change.wasActive, garage.active != null, garage.unretired.isNotEmpty())
                     }
                 }
                 viewModel.odometerVehicleChangeHandled()
@@ -73,7 +73,7 @@ internal class OdometerHud(
             OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, readings.orEmpty()))
         } else OdometerCheck.Empty
         Column(Modifier.fillMaxSize()) {
-            OdometerSheet(OdometerSheetModel(vehicle, garage?.vehicles.orEmpty(), entry.reading, last, check, entry.page, saving,
+            OdometerSheet(OdometerSheetModel(vehicle, garage?.unretired.orEmpty(), entry.reading, last, check, entry.page, saving,
                 writeFailed = if (garage?.readable == false) OdometerWriteFailure.UNREADABLE else writeFailed,
                 vehicleName = entry.vehicleName, gpsLoaded = gpsTotal != null),
                 onVehicleNameChange = { entry.vehicleName = it },

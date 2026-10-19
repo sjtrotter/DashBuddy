@@ -43,7 +43,7 @@ class VehicleSwitcherTest {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Box(Modifier.width(352.dp).height(350.dp)) {
-                        VehicleSwitcher(vehicles, active, saving, { active = it }, {}, {}, { id ->
+                        VehicleSwitcher(vehicles.filter { it.retiredAt == null }, active, saving, { active = it }, {}, {}, { id ->
                             vehicles = vehicles.map { if (it.id == id) it.copy(retiredAt = clock.millis()) else it }
                         })
                     }

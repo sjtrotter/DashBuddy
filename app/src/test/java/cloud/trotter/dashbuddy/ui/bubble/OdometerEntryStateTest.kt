@@ -151,7 +151,7 @@ class OdometerEntryStateTest {
         assertNull(state.reading)
     }
 
-    @Test fun `retirement routes to the surviving garage and keeps digits`() {
+    @Test fun `retiring the active car routes to the surviving garage and keeps digits`() {
         for ((active, remaining, page) in listOf(
             Triple(true, true, OdometerPage.READING),
             Triple(false, true, OdometerPage.VEHICLES),
@@ -162,11 +162,28 @@ class OdometerEntryStateTest {
             state.digit(5)
             state.digit(2)
             state.page = OdometerPage.VEHICLES
-            state.vehicleRetired(active, remaining)
+            state.vehicleRetired(wasActive = true, activeVehicle = active, anyVehicles = remaining)
             assertTrue(state.open)
             assertEquals(page, state.page)
             assertEquals(52, state.reading)
         }
     }
 
+    @Test fun `retiring a parked car keeps the current page and digits`() {
+        for (page in OdometerPage.entries) {
+            val state = entry()
+            state.show(activeVehicle = true, anyVehicles = true)
+            state.digit(5)
+            state.digit(2)
+            state.page = page
+            state.vehicleRetired(wasActive = false, activeVehicle = true, anyVehicles = true)
+            assertTrue(state.open)
+            assertEquals(page, state.page)
+            assertEquals(52, state.reading)
+            // Removing the last parked car must still route to vehicle creation.
+            state.vehicleRetired(wasActive = false, activeVehicle = false, anyVehicles = false)
+            assertEquals(OdometerPage.ADD_VEHICLE, state.page)
+            assertEquals(52, state.reading)
+        }
+    }
 }

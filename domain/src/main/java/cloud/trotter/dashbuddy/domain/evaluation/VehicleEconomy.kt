@@ -8,7 +8,7 @@ object VehicleEconomy {
         val cls = profile.vehicleClass
         return base.copy(
             vehicleClass = cls,
-            vehicleMpg = profile.mpg ?: cls.defaultMpg.coerceAtLeast(1.0),
+            vehicleMpg = profile.mpg?.takeIf { it > 0 } ?: cls.defaultMpg,
             tireSetCost = profile.tireSetCost ?: cls.tireSetCost,
             tireLifetimeMi = profile.tireLifetimeMi ?: cls.tireLifetimeMi,
             oilCost = profile.oilCost ?: cls.oilCost,
@@ -29,7 +29,7 @@ object VehicleEconomy {
                 field !in VEHICLE_FIELDS
             } + setOfNotNull(
                 EconomyField.VEHICLE_CLASS.takeIf { cls != cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass.SEDAN },
-                EconomyField.VEHICLE_MPG.takeIf { profile.mpg != null },
+                EconomyField.VEHICLE_MPG.takeIf { profile.mpg?.let { it > 0 } == true },
                 EconomyField.TIRE_COST.takeIf { profile.tireSetCost != null },
                 EconomyField.TIRE_LIFETIME.takeIf { profile.tireLifetimeMi != null },
                 EconomyField.OIL_COST.takeIf { profile.oilCost != null },
@@ -56,42 +56,9 @@ object VehicleEconomy {
 
     /** Applies only explicit draft overrides, preserving nullable preset-following fields. */
     fun updateProfile(profile: VehicleProfile, economy: UserEconomy): VehicleProfile {
-        val userSet = economy.userSetFields
-        var updated = profile
-        if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
-            updated = updated.copy(tireSetCost = economy.tireSetCost, tireLifetimeMi = economy.tireLifetimeMi)
-        }
-        if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
-            updated = updated.copy(oilCost = economy.oilCost, oilIntervalMi = economy.oilIntervalMi)
-        }
-        if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
-            updated = updated.copy(brakesCost = economy.brakesCost, brakesIntervalMi = economy.brakesIntervalMi)
-        }
-        if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
-            updated = updated.copy(fluidsCost = economy.fluidsCost, fluidsIntervalMi = economy.fluidsIntervalMi)
-        }
-        if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
-            updated = updated.copy(miscYearly = economy.miscYearly, miscYearlyMi = economy.miscYearlyMi)
-        }
-        if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
-            EconomyField.PURCHASE_PRICE in userSet || EconomyField.TOTAL_LIFETIME_MI in userSet
-        ) {
-            updated = updated.copy(
-                includeDepreciation = economy.includeDepreciation,
-                purchasePrice = economy.purchasePrice,
-                totalLifetimeMi = economy.totalLifetimeMi,
-            )
-        }
-        if (EconomyField.INSURANCE_DELTA in userSet) {
-            updated = updated.copy(insuranceDeltaPerMonth = economy.insuranceDeltaPerMonth)
-        }
-        if (EconomyField.REGISTRATION_DELTA in userSet) {
-            updated = updated.copy(registrationDeltaPerYear = economy.registrationDeltaPerYear)
-        }
-        if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
-            updated = updated.copy(expectedAnnualMiles = economy.expectedAnnualMiles)
-        }
-        return updated
+        return EconomyFieldGroups.entries
+            .filter { group -> group.fields.any { it in economy.userSetFields } }
+            .fold(profile) { updated, group -> group.updateProfile(updated, economy) }
     }
 
     private val VEHICLE_FIELDS = setOf(

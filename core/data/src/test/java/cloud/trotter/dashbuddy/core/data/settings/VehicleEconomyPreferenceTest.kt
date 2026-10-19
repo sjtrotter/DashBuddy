@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
@@ -9,7 +10,13 @@ import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
+import timber.log.Timber
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Rule
@@ -125,5 +132,65 @@ class VehicleEconomyPreferenceTest {
         ))
         assertTrue(garage.garage.first().vehicles.isEmpty())
         assertEquals(3.0, source.avgMinPerMile.first())
+    }
+
+    @Test fun `an unreadable garage keeps the preference write`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unreadable-prefs.preferences_pb") }))
+        val vehicleSource = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unreadable-garage.preferences_pb") }))
+        vehicleSource.save("unreadable private vehicle data", "old-id")
+        val before = vehicleSource.stored.first()
+        val repo = AppPreferencesRepository(source, GarageRepository(vehicleSource))
+
+        repo.updateVehicleClass(VehicleClass.COMPACT)
+        repo.updateFuelType(FuelType.PREMIUM)
+        repo.updateEstimatedMpg(34f)
+        repo.updateTireCost(720.0, 48_000.0)
+        repo.persistUserSetEconomy(UserEconomy(oilCost = 85.0, oilIntervalMi = 7_500.0,
+            userSetFields = setOf(EconomyField.OIL_COST)))
+        assertEquals(VehicleClass.COMPACT.name, source.vehicleClass.first())
+        assertEquals(FuelType.PREMIUM.name, source.fuelType.first())
+        assertEquals(34f, source.estimatedMpg.first())
+        assertEquals(720.0, source.tireSetCost.first())
+        assertEquals(48_000.0, source.tireLifetimeMi.first())
+        assertEquals(85.0, source.oilCost.first())
+        assertEquals(7_500.0, source.oilIntervalMi.first())
+        assertEquals(34.0, repo.userEconomy.first().vehicleMpg, 0.0)
+        assertEquals(720.0, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(before, vehicleSource.stored.first())
+    }
+
+    @Test fun `garage write failures warn once with only the exception class and cancellation propagates`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("failure-prefs.preferences_pb") }))
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
+        whenever(garage.updateOrCreateActiveProfile(any(), any()))
+            .thenThrow(IllegalStateException("private vehicle data"))
+        val repo = AppPreferencesRepository(source, garage)
+        val warnings = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority == 5 && tag == "Garage") {
+                    assertNull(t)
+                    warnings += message
+                }
+            }
+        }
+        Timber.plant(tree)
+        try {
+            repo.updateEstimatedMpg(30f)
+            repo.updateTireCost(720.0, 48_000.0)
+            assertEquals(listOf("IllegalStateException"), warnings)
+            assertEquals(30f, source.estimatedMpg.first())
+            val cancelled = CancellationException("cancelled")
+            whenever(garage.updateOrCreateActiveProfile(any(), any())).thenThrow(cancelled)
+            assertSame(cancelled, runCatching { repo.updateEstimatedMpg(40f) }.exceptionOrNull())
+            assertEquals(30f, source.estimatedMpg.first())
+            assertEquals(listOf("IllegalStateException"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
     }
 }

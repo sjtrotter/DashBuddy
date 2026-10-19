@@ -123,16 +123,6 @@ class GarageRepositoryTest {
         assertEquals(truck.profile, repo.garage.first().vehicles.first { it.id == truck.id }.profile)
     }
 
-    @Test fun `wizard edit refuses a car that is no longer active`() = runTest {
-        val repo = garage(backgroundScope)
-        val first = repo.addVehicle("First", 1)
-        val second = repo.addVehicle("Second", 2)
-        assertFalse(repo.updateActiveProfile(first.id) { it.copy(mpg = 99.0) })
-        assertTrue(repo.updateActiveProfile(second.id) { it.copy(mpg = 25.0) })
-        assertNull(repo.garage.first().vehicles.first { it.id == first.id }.profile.mpg)
-        assertEquals(25.0, repo.garage.first().active!!.profile.mpg)
-    }
-
     @Test fun `settings edits create one active profile under concurrent writes`() = runTest {
         val repo = garage(backgroundScope)
         val writes = listOf(
@@ -161,15 +151,18 @@ class GarageRepositoryTest {
         assertEquals(old.id, result.vehicles.last().id)
     }
 
-    @Test fun `unselected live garage is preserved by settings edit`() = runTest {
+    @Test fun `unselected live garage gets a new active car for settings`() = runTest {
         val repo = garage(backgroundScope)
         val first = repo.addVehicle("First", 1)
         val second = repo.addVehicle("Second", 2)
         assertTrue(repo.retire(second.id, 3))
         assertNull(repo.garage.first().active)
-        assertFalse(repo.updateOrCreateActiveProfile(4) { it.copy(mpg = 99.0) })
-        assertEquals(listOf(first.id, second.id), repo.garage.first().vehicles.map { it.id })
-        assertNull(repo.garage.first().vehicles.first().profile.mpg)
+        assertTrue(repo.updateOrCreateActiveProfile(4) { it.copy(mpg = 99.0) })
+        val result = repo.garage.first()
+        assertEquals(3, result.vehicles.size)
+        assertEquals(99.0, result.active!!.profile.mpg)
+        assertEquals(first, result.vehicles.first { it.id == first.id })
+        assertEquals(3L, result.vehicles.first { it.id == second.id }.retiredAt)
     }
 
     @Test fun `retiring active clears selection and keeps record ordered last`() = runTest {

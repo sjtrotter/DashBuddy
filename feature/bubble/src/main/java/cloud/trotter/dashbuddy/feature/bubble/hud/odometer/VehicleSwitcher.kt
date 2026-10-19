@@ -24,7 +24,7 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean, onSelect: (String) -> Unit, onAdd: () -> Unit, onBack: () -> Unit, onRetire: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         OdometerTitle(stringResource(R.string.hud_odometer_vehicles), onBack)
-        vehicles.filter { it.retiredAt == null }.forEach { vehicle ->
+        vehicles.forEach { vehicle ->
             Row(Modifier.fillMaxWidth().testTag("vehicle.${vehicle.id}").semantics { selected = vehicle.id == activeId }
                 .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {

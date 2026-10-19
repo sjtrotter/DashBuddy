@@ -4,6 +4,7 @@ import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomy
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -161,7 +164,7 @@ class AppPreferencesRepository @Inject constructor(
         val cls = id.vehicleClass
         UserEconomy(
             vehicleClass = cls,
-            vehicleMpg = id.mpg ?: cls.defaultMpg.coerceAtLeast(1.0),
+            vehicleMpg = id.mpg?.takeIf { it > 0 } ?: cls.defaultMpg,
             gasPricePerGallon = id.gasPrice ?: UserEconomy.DEFAULT_GAS_PRICE_PER_GALLON,
             avgMinutesPerMile = id.avgMinPerMi ?: UserEconomy.DEFAULT_MINUTES_PER_MILE,
             basePickupMinutes = id.basePickupMin ?: UserEconomy.DEFAULT_BASE_PICKUP_MINUTES,
@@ -369,8 +372,18 @@ class AppPreferencesRepository @Inject constructor(
         dataSource.updateRegistrationDelta(perYear)
     }
 
+    private val warnedVehicleWrite = AtomicBoolean(false)
+
     private suspend fun updateActiveProfile(transform: (VehicleProfile) -> VehicleProfile) {
-        garageRepository.updateOrCreateActiveProfile(System.currentTimeMillis(), transform)
+        try {
+            garageRepository.updateOrCreateActiveProfile(System.currentTimeMillis(), transform)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (warnedVehicleWrite.compareAndSet(false, true)) {
+                Timber.tag("Garage").w("%s", error.javaClass.simpleName)
+            }
+        }
     }
 
     suspend fun updateExpectedAnnualMi(miles: Double) {
@@ -397,59 +410,26 @@ class AppPreferencesRepository @Inject constructor(
 
     /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
     suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
-        val userSet = economy.userSetFields
-        // Grouped writes mirror the data-source write methods, which each mark
-        // their whole group user-set atomically — so any one member of a group
-        // being user-set commits (and re-marks) the whole pair/triple.
-        if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
-            dataSource.updateTireCost(economy.tireSetCost, economy.tireLifetimeMi)
-        }
-        if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
-            dataSource.updateOilCost(economy.oilCost, economy.oilIntervalMi)
-        }
-        if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
-            dataSource.updateBrakesCost(economy.brakesCost, economy.brakesIntervalMi)
-        }
-        if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
-            dataSource.updateFluidsCost(economy.fluidsCost, economy.fluidsIntervalMi)
-        }
-        if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
-            dataSource.updateMiscMaintenance(economy.miscYearly, economy.miscYearlyMi)
-        }
-        if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
-            EconomyField.PURCHASE_PRICE in userSet ||
-            EconomyField.TOTAL_LIFETIME_MI in userSet
-        ) {
-            dataSource.updateDepreciation(
-                economy.includeDepreciation,
-                economy.purchasePrice,
-                economy.totalLifetimeMi,
-            )
-        }
-        if (EconomyField.INSURANCE_DELTA in userSet) {
-            dataSource.updateInsuranceDelta(economy.insuranceDeltaPerMonth)
-        }
-        if (EconomyField.REGISTRATION_DELTA in userSet) {
-            dataSource.updateRegistrationDelta(economy.registrationDeltaPerYear)
-        }
-        if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
-            dataSource.updateExpectedAnnualMi(economy.expectedAnnualMiles)
-        }
-        if (EconomyField.PHONE_PLAN_TOTAL in userSet ||
-            EconomyField.PHONE_PLAN_LINES in userSet ||
-            EconomyField.PHONE_BUSINESS_PERCENT in userSet
-        ) {
-            dataSource.updatePhonePlan(
-                economy.phonePlanTotal,
-                economy.phonePlanLines,
-                economy.phoneBusinessPercent,
-            )
-        }
-        if (EconomyField.AVG_MIN_PER_MILE in userSet) {
-            dataSource.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, economy.avgMinutesPerMile)
-        }
-        if (EconomyField.BASE_PICKUP_MIN in userSet) {
-            dataSource.setTimeConstantOverride(EconomyField.BASE_PICKUP_MIN, economy.basePickupMinutes)
+        for (group in EconomyFieldGroups.entries) {
+            if (group.fields.none { it in economy.userSetFields }) continue
+            when (val value = group.readFromEconomy(economy)) {
+                // These have dedicated mirror methods used by deferred editors.
+                is EconomyFieldGroups.VehicleClassValue,
+                is EconomyFieldGroups.Mpg,
+                is EconomyFieldGroups.GasPrice -> Unit
+                is EconomyFieldGroups.Tires -> dataSource.updateTireCost(value.cost, value.lifetime)
+                is EconomyFieldGroups.Oil -> dataSource.updateOilCost(value.cost, value.interval)
+                is EconomyFieldGroups.Brakes -> dataSource.updateBrakesCost(value.cost, value.interval)
+                is EconomyFieldGroups.Fluids -> dataSource.updateFluidsCost(value.cost, value.interval)
+                is EconomyFieldGroups.Misc -> dataSource.updateMiscMaintenance(value.yearly, value.miles)
+                is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(value.include, value.price, value.lifetime)
+                is EconomyFieldGroups.Insurance -> dataSource.updateInsuranceDelta(value.value)
+                is EconomyFieldGroups.Registration -> dataSource.updateRegistrationDelta(value.value)
+                is EconomyFieldGroups.AnnualMiles -> dataSource.updateExpectedAnnualMi(value.value)
+                is EconomyFieldGroups.Phone -> dataSource.updatePhonePlan(value.total, value.lines, value.percent)
+                is EconomyFieldGroups.Pace -> dataSource.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, value.value)
+                is EconomyFieldGroups.Pickup -> dataSource.setTimeConstantOverride(EconomyField.BASE_PICKUP_MIN, value.value)
+            }
         }
     }
 

@@ -138,4 +138,19 @@ class GarageSeederTest {
         assertEquals(raw, source.stored.first().json)
         assertEquals("old", source.stored.first().activeId)
     }
+
+    @Test fun `a zero legacy mpg seeds no mpg`() = runTest {
+        val prefs = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("zero-prefs.preferences_pb") }))
+        val state = AppStateDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("zero-state.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("zero-garage.preferences_pb") })))
+        prefs.updateEconomySettings("2021", "Honda", "Civic", "", 0f, false, 3.80f)
+        GarageSeeder(garage, prefs, state).seed()
+        assertNull(garage.garage.first().active!!.profile.mpg)
+        assertTrue(state.garageSeeded.first())
+        prefs.updateEconomySettings("", "", "", "", 0f, false, 3.80f)
+        assertNull(prefs.legacyVehicleProfile.first())
+    }
 }

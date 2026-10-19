@@ -50,4 +50,19 @@ class VehicleEconomyTest {
             insuranceDeltaPerMonth = 75.0, registrationDeltaPerYear = 120.0, expectedAnnualMiles = 15_000.0),
             VehicleEconomy.updateProfile(VehicleProfile(), draft))
     }
+
+    @Test fun `a zero mpg falls back to the class default`() {
+        for (mpg in listOf(0.0, -1.0)) {
+            val result = VehicleEconomy.apply(UserEconomy(gasPricePerGallon = 4.0),
+                VehicleProfile(vehicleClass = VehicleClass.COMPACT, mpg = mpg))
+            assertEquals(VehicleClass.COMPACT.defaultMpg, result.vehicleMpg, 0.0)
+            assertFalse(EconomyField.VEHICLE_MPG in result.userSetFields)
+        }
+    }
+
+    @Test fun `every EconomyField belongs to exactly one group`() {
+        val fields = EconomyFieldGroups.entries.flatMap { it.fields }
+        assertEquals(EconomyField.entries.toSet(), fields.toSet())
+        assertEquals(EconomyField.entries.size, fields.size)
+    }
 }

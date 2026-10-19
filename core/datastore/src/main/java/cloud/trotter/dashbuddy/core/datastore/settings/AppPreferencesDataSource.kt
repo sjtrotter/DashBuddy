@@ -111,7 +111,7 @@ class AppPreferencesDataSource @Inject constructor(
         val year = prefs[Keys.VEHICLE_YEAR]
         val make = prefs[Keys.VEHICLE_MAKE]
         val model = prefs[Keys.VEHICLE_MODEL]
-        val mpg = prefs[Keys.ESTIMATED_MPG]?.toDouble()
+        val mpg = prefs[Keys.ESTIMATED_MPG]?.toDouble()?.takeIf { it > 0 }
         if (listOf(year, make, model).all { it.isNullOrBlank() } && mpg == null) {
             null
         } else {

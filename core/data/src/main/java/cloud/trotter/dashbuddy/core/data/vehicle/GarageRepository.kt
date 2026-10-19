@@ -102,36 +102,8 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
             saveForWrite(updated, saved.activeId)
             return@withLock true
         }
-        if (list.any { it.retiredAt == null }) return@withLock false
         val vehicle = Vehicle(UUID.randomUUID().toString(), null, now, transform(VehicleProfile()))
         saveForWrite(list + vehicle, vehicle.id)
-        true
-    }
-
-    /** Applies a wizard edit only while its selected car is still active. */
-    suspend fun updateActiveProfile(
-        expectedActiveId: String,
-        transform: (VehicleProfile) -> VehicleProfile,
-    ): Boolean = mutex.withLock {
-        val saved = savedForWrite()
-        if (saved.activeId != expectedActiveId) return@withLock false
-        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
-        val index = list.indexOfFirst { it.id == expectedActiveId && it.retiredAt == null }
-        if (index < 0) return@withLock false
-        val updated = list.toMutableList()
-        updated[index] = updated[index].copy(profile = transform(updated[index].profile))
-        saveForWrite(updated, expectedActiveId)
-        true
-    }
-
-    suspend fun rename(id: String, name: String?): Boolean = mutex.withLock {
-        val saved = savedForWrite()
-        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
-        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
-        if (index < 0) return@withLock false
-        val updated = list.toMutableList()
-        updated[index] = updated[index].copy(name = name?.trim())
-        saveForWrite(updated, saved.activeId)
         true
     }
 

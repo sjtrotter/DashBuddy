@@ -74,6 +74,8 @@ fun WizardScreen(
     // Skip and Finish share the completion sheet but must NOT share a save path:
     // Skip writes nothing (#347).
     var skippedSetup by remember { mutableStateOf(false) }
+    var vehicleSaveFailed by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Pre-fetch string resources OUTSIDE the pager's plain (non-@Composable) formatter lambdas.
@@ -291,19 +293,38 @@ fun WizardScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
+                if (vehicleSaveFailed) {
+                    Text(
+                        WizardCopy.VEHICLE_SAVE_FAILED,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
                     onClick = {
-                        coroutineScope.launch {
-                            sheetState.hide()
-                            showCompletionSheet = false
-                            if (skippedSetup) {
+                        if (vehicleSaveFailed) {
+                            onComplete()
+                        } else if (skippedSetup) {
+                            coroutineScope.launch {
+                                sheetState.hide()
+                                showCompletionSheet = false
                                 viewModel.skipAndFinish(onComplete)
-                            } else {
-                                viewModel.saveAndFinish(onComplete)
+                            }
+                        } else {
+                            saving = true
+                            viewModel.saveAndFinish {
+                                saving = false
+                                if (viewModel.vehicleSaveFailed.replayCache.isNotEmpty()) {
+                                    vehicleSaveFailed = true
+                                    viewModel.vehicleSaveFailureHandled()
+                                } else {
+                                    onComplete()
+                                }
                             }
                         }
                     },
+                    enabled = !saving,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)

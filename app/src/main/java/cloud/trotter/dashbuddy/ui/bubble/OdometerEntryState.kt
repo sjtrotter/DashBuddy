@@ -49,7 +49,8 @@ internal class OdometerEntryState(
         page = OdometerPage.READING
     }
     /** Retirement keeps the entered digits, including when the last car is removed. */
-    fun vehicleRetired(activeVehicle: Boolean, anyVehicles: Boolean) {
+    fun vehicleRetired(wasActive: Boolean, activeVehicle: Boolean, anyVehicles: Boolean) {
+        if (!wasActive && anyVehicles) return
         page = when {
             activeVehicle -> OdometerPage.READING
             anyVehicles -> OdometerPage.VEHICLES

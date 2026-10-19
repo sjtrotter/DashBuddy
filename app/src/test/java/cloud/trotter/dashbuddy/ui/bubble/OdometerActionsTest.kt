@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
@@ -32,6 +33,7 @@ import java.time.ZoneOffset
 class OdometerActionsTest {
     // A select succeeds unless a test says otherwise (a refused select is the stale-row case).
     private val garage: GarageRepository = mock {
+        on { garage } doReturn flowOf(Garage(listOf(Vehicle("civic", "Civic", 0)), "civic", true))
         on { selectVehicle(any()) } doReturn true
         on { retire(any(), any()) } doReturn true
     }
@@ -161,7 +163,7 @@ class OdometerActionsTest {
         actions.retire("civic")
         runCurrent()
         verify(garage, times(2)).retire("civic", 100)
-        assertEquals(listOf(VehicleChange.RETIRED), changes)
+        assertEquals(listOf(VehicleChange.RETIRED("civic", true)), changes)
         assertTrue(actions.vehicleChanged.replayCache.isEmpty())
         verifyNoInteractions(readings)
     }
@@ -175,7 +177,7 @@ class OdometerActionsTest {
         assertEquals(OdometerWriteFailure.UNREADABLE, actions.failed.value)
         actions.retire("civic")
         runCurrent()
-        assertEquals(listOf(VehicleChange.RETIRED), actions.vehicleChanged.replayCache)
+        assertEquals(listOf(VehicleChange.RETIRED("civic", true)), actions.vehicleChanged.replayCache)
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
     }
 
@@ -194,11 +196,11 @@ class OdometerActionsTest {
 
     @Test fun `a late collector sees a vehicle change until handled`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        for (change in VehicleChange.entries) {
+        for (change in listOf(VehicleChange.ADDED, VehicleChange.SWITCHED, VehicleChange.RETIRED("civic", true))) {
             when (change) {
                 VehicleChange.ADDED -> actions.add("Civic")
                 VehicleChange.SWITCHED -> actions.select("civic")
-                VehicleChange.RETIRED -> actions.retire("civic")
+                is VehicleChange.RETIRED -> actions.retire(change.id)
             }
             runCurrent()
             val changes = mutableListOf<VehicleChange>()
@@ -431,4 +433,12 @@ class OdometerActionsTest {
         assertNull(actions.notice.value)
     }
 
+
+    @Test fun `retiring a parked car emits its id without marking it active`() = runTest {
+        whenever(garage.retire("parked", 100)).thenReturn(true)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.retire("parked")
+        runCurrent()
+        assertEquals(listOf(VehicleChange.RETIRED("parked", false)), actions.vehicleChanged.replayCache)
+    }
 }

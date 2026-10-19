@@ -16,11 +16,16 @@ import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
 import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -62,7 +67,12 @@ class WizardViewModel @Inject constructor(
     private val _availableTrims = MutableStateFlow<List<VehicleOption>>(emptyList())
     private val _availableTrimNames = MutableStateFlow<List<String>>(emptyList())
     val availableTrimNames = _availableTrimNames.asStateFlow()
-    private var loadedActiveVehicleId: String? = null
+    private val _vehicleSaveFailed = MutableSharedFlow<Unit>(replay = 1)
+    val vehicleSaveFailed = _vehicleSaveFailed.asSharedFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun vehicleSaveFailureHandled() = _vehicleSaveFailed.resetReplayCache()
+
     private var garageDraftLoaded = false
 
     init {
@@ -73,8 +83,7 @@ class WizardViewModel @Inject constructor(
     private fun loadExistingSettings() {
         viewModelScope.launch {
             val garage = garageRepository.garage.first()
-            loadedActiveVehicleId = garage.active?.takeIf { it.retiredAt == null }?.id
-            val activeProfile = garage.active?.takeIf { it.retiredAt == null }?.profile
+            val activeProfile = garage.active?.profile
             val storedEconomy = appPreferencesRepository.userEconomy.first()
             // Provide safe defaults for the nullable DataStore flows!
             val currentYear = if (activeProfile != null) activeProfile.year.orEmpty() else appPreferencesRepository.vehicleYear.first().orEmpty()
@@ -82,7 +91,7 @@ class WizardViewModel @Inject constructor(
             val currentModel = if (activeProfile != null) activeProfile.model.orEmpty() else appPreferencesRepository.vehicleModel.first().orEmpty()
             val currentTrim = if (activeProfile != null) "" else appPreferencesRepository.vehicleTrim.first().orEmpty()
             val currentMpg = if (activeProfile != null) {
-                (activeProfile.mpg ?: storedEconomy.vehicleMpg).toFloat()
+                (activeProfile.mpg?.takeIf { it > 0 } ?: storedEconomy.vehicleMpg).toFloat()
             } else {
                 appPreferencesRepository.estimatedMpg.first()?.takeIf { it > 0f }
                     ?: storedEconomy.vehicleMpg.toFloat()
@@ -536,33 +545,34 @@ class WizardViewModel @Inject constructor(
             if (!garageDraftLoaded) return@launch
             val finalState = _state.value
 
-            // The garage is the source of vehicle identity. A fresh wizard creates
-            // its first active vehicle; rerunning it edits the active one in place.
-            val garage = garageRepository.garage.first()
-            if (!garage.readable) throw VehiclesUnreadableException()
-            if (garage.activeId != loadedActiveVehicleId) {
-                Timber.tag("WizardViewModel").w("Active vehicle changed while wizard was open")
-                return@launch
-            }
-            val vehicle = garage.active?.takeIf { it.retiredAt == null }
-                ?: if (garage.vehicles.none { it.retiredAt == null }) {
-                    garageRepository.addVehicle(null, System.currentTimeMillis())
-                } else null
-
             val economy = finalState.toUserEconomy()
-            if (vehicle != null) {
+            try {
+                // Capture the save target now; later switches do not redirect this draft.
+                val garage = garageRepository.garage.first()
+                if (!garage.readable) throw VehiclesUnreadableException()
+                val vehicle = garage.active
+                val original = vehicle?.profile ?: VehicleProfile()
                 val isBike = finalState.vehicleClass == VehicleClass.E_BIKE
-                val profile = VehicleEconomy.updateProfile(vehicle.profile, economy).copy(
+                val profile = VehicleEconomy.updateProfile(original, economy).copy(
                     year = finalState.vehicleYear.takeUnless { isBike || it.isBlank() },
                     make = finalState.vehicleMake.takeUnless { isBike || it.isBlank() },
                     model = finalState.vehicleModel.takeUnless { isBike || it.isBlank() },
                     vehicleClass = finalState.vehicleClass,
                     mpg = if (isBike) 999.0 else if (EconomyField.VEHICLE_MPG in finalState.userSetEconomyFields) {
                         finalState.estimatedMpg.toDouble()
-                    } else vehicle.profile.mpg,
+                    } else original.mpg,
                     fuelType = finalState.fuelType,
                 )
-                garageRepository.updateProfile(vehicle.id, profile)
+                if (vehicle == null) {
+                    garageRepository.addVehicle(null, System.currentTimeMillis(), profile)
+                } else {
+                    garageRepository.updateProfile(vehicle.id, profile)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.tag("Wizard").w("%s", error.javaClass.simpleName)
+                _vehicleSaveFailed.emit(Unit)
             }
 
             appPreferencesRepository.mirrorFuelType(finalState.fuelType)
