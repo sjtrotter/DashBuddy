@@ -23,7 +23,10 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.GoalMetMark
 import cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillState
 import cloud.trotter.dashbuddy.feature.bubble.hud.HudMode
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,19 +63,33 @@ class BubbleGoalMarkTest {
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow<EvaluationConfig?>(null))
         whenever(events.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(odometer.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(odometer.totalMilesFlow).thenReturn(flowOf(null))
         whenever(dev.bubbleSessionMode).thenReturn(flowOf(BubbleSessionMode.Default))
         whenever(preferences.glanceMode).thenReturn(flowOf(false))
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(true))
         whenever(preferences.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(preferences.dailyKeptGoalDollars).thenReturn(flowOf(null))
         whenever(preferences.gasPrice).thenReturn(flowOf(null))
         whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))
     }
     @After fun cleanup() { Dispatchers.resetMain() }
+    private fun garage(): cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository = mock()
+        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null, readable = true)))
+        return repo
+    }
+    private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository = mock()
+        whenever(repo.readings).thenReturn(flowOf(emptyList()))
+        return repo
+    }
     private fun model(repository: AppStateRepository = appState) = BubbleViewModel(
         chatRepository = mock<ChatRepository>(), odometerRepository = odometer, stateManager = state,
         appEventRepo = events, appPreferencesRepository = preferences, fuelPriceRepository = mock<FuelPriceRepository>(),
         analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
+        garageRepository = garage(), odometerReadingRepository = readings(),
+        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
     @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {
         val vm = model()

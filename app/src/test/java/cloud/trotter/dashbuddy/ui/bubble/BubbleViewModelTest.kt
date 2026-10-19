@@ -1,5 +1,11 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
+import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -31,6 +37,7 @@ import cloud.trotter.dashbuddy.domain.state.OfferIntent
 import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardMapper
 import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardModel
 import org.mockito.kotlin.argumentCaptor
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
@@ -55,6 +62,7 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.sessionEarningsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
@@ -79,6 +87,9 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #693 — the bubble's post-dash idle surface reads the analytics read-model, not an in-memory
@@ -125,6 +136,8 @@ class BubbleViewModelTest {
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(odometerRepository.totalMilesFlow).thenReturn(flowOf(null))
+        whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
         whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
         whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
@@ -138,10 +151,21 @@ class BubbleViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = BubbleViewModel(
+    private fun garage(): cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository = mock()
+        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null, readable = true)))
+        return repo
+    }
+    private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository = mock()
+        whenever(repo.readings).thenReturn(flowOf(emptyList()))
+        return repo
+    }
+    private fun viewModel(garageRepository: GarageRepository = garage(), readingRepository: OdometerReadingRepository = readings()) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
+        garageRepository = garageRepository, odometerReadingRepository = readingRepository,
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,
@@ -150,7 +174,138 @@ class BubbleViewModelTest {
         analyticsRepository = analyticsRepository,
         ledgerRepository = ledgerRepository,
         devSettingsRepository = devSettingsRepository,
+        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
+
+    @Test
+    fun `garage and odometer derivations share one garage collection`() = runTest(dispatcher) {
+        stubNoDashes()
+        val repo: GarageRepository = mock()
+        val updates = MutableStateFlow(Garage(emptyList(), null, readable = true))
+        var collections = 0
+        whenever(repo.garage).thenReturn(updates.onStart { collections++ })
+        val vm = viewModel(repo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.garage.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
+        runCurrent()
+        assertEquals(1, collections)
+        val civic = Vehicle("civic", "Civic", 0)
+        updates.value = Garage(listOf(civic), civic.id, readable = true)
+        runCurrent()
+        assertEquals(listOf(civic), vm.garage.value!!.vehicles)
+        assertEquals(civic, vm.garage.value?.active)
+        assertTrue(vm.odometerLoaded.value)
+        assertTrue(vm.garage.value!!.readable)
+        assertEquals(1, collections)
+    }
+
+    @Test
+    fun `the garage is not loaded until its first emission`() = runTest(dispatcher) {
+        stubNoDashes()
+        val repo: GarageRepository = mock()
+        val updates = MutableSharedFlow<Garage>()
+        whenever(repo.garage).thenReturn(updates)
+        val vm = viewModel(repo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.garage.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
+        runCurrent()
+        assertFalse(vm.odometerLoaded.value)
+        assertNull(vm.garage.value)
+
+        val civic = Vehicle("civic", "Civic", 0)
+        updates.emit(Garage(listOf(civic), civic.id, readable = true))
+        runCurrent()
+        assertTrue(vm.odometerLoaded.value)
+        assertTrue(vm.garage.value!!.readable)
+        assertEquals(listOf(civic), vm.garage.value!!.vehicles)
+        assertEquals(civic, vm.garage.value?.active)
+    }
+
+    @Test
+    fun `readings are not loaded until the first emission`() = runTest(dispatcher) {
+        stubNoDashes()
+        val civic = Vehicle("civic", "Civic", 0)
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(flowOf(Garage(listOf(civic), civic.id, readable = true)))
+        val updates = MutableSharedFlow<List<VehicleOdometerReading>>()
+        val readings: OdometerReadingRepository = mock()
+        whenever(readings.readings).thenReturn(updates)
+        val vm = viewModel(garage, readings)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerReadings.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
+        runCurrent()
+        assertNotNull(vm.garage.value)
+        assertNull(vm.odometerReadings.value)
+        assertNull(vm.lastReading.value)
+        assertFalse(vm.odometerLoaded.value)
+
+        val last = LastOdometerReading(52_388, 123.5, 100)
+        val rows = listOf(VehicleOdometerReading(civic.id, last, 1))
+        updates.emit(rows)
+        runCurrent()
+        assertEquals(rows, vm.odometerReadings.value)
+        assertEquals(last, vm.lastReading.value)
+        assertTrue(vm.odometerLoaded.value)
+
+        updates.emit(emptyList())
+        runCurrent()
+        assertEquals(emptyList<VehicleOdometerReading>(), vm.odometerReadings.value)
+        assertNull(vm.lastReading.value)
+        assertTrue(vm.odometerLoaded.value)
+    }
+
+    @Test
+    fun `an unreadable garage is loaded and exposes the failure`() = runTest(dispatcher) {
+        stubNoDashes()
+        val repo: GarageRepository = mock()
+        val updates = MutableStateFlow(Garage(emptyList(), null, readable = false))
+        whenever(repo.garage).thenReturn(updates)
+        val vm = viewModel(repo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.garage.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
+        runCurrent()
+        assertTrue(vm.odometerLoaded.value)
+        assertFalse(vm.garage.value!!.readable)
+
+        updates.value = Garage(emptyList(), null, readable = true)
+        runCurrent()
+        assertTrue(vm.odometerLoaded.value)
+        assertTrue(vm.garage.value!!.readable)
+    }
+
+    @Test
+    fun `the last reading switches with the vehicle in the same frame`() = runTest(dispatcher) {
+        stubNoDashes()
+        val civic = Vehicle("civic", "Civic", 0)
+        val truck = Vehicle("truck", "Truck", 0)
+        val cars = listOf(civic, truck)
+        val garageUpdates = MutableStateFlow(Garage(cars, civic.id, readable = true))
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(garageUpdates)
+        val civicReading = LastOdometerReading(52_388, 123.5, 100)
+        val truckReading = LastOdometerReading(90_000, 223.5, 200)
+        val readings: OdometerReadingRepository = mock()
+        var collections = 0
+        whenever(readings.readings).thenReturn(flowOf(listOf(
+            VehicleOdometerReading(civic.id, civicReading, 1),
+            VehicleOdometerReading(truck.id, truckReading, 2),
+        )).onStart { collections++ })
+        val vm = viewModel(garage, readings)
+        val emissions = mutableListOf<LastOdometerReading?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect { emissions += it } }
+        runCurrent()
+        assertEquals(civicReading, emissions.last())
+        emissions.clear()
+        garageUpdates.value = Garage(cars, truck.id, readable = true)
+        runCurrent()
+        assertEquals(truck, vm.garage.value?.active)
+        assertEquals(listOf(truckReading), emissions)
+        assertEquals(truckReading, vm.lastReading.value)
+        assertEquals(1, collections)
+    }
 
     @Test
     fun `logData merges events deliveries and ledger rows for the displayed dash`() = runTest {

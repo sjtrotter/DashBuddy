@@ -176,4 +176,32 @@
     <string name="hud_log_miles">%1$s mi</string>
     <string name="hud_log_en_route">%1$s en route</string>
     <string name="hud_log_left">%1$s left</string>
+
+    <string name="hud_dock_odometer">Odometer</string>
+    <string name="hud_keypad_backspace">Backspace</string>
+    <string name="hud_odometer_title">Odometer</string>
+    <string name="hud_odometer_switch">Switch vehicle</string>
+    <string name="hud_odometer_back">Back</string>
+    <string name="hud_odometer_vehicles">Vehicles</string>
+    <string name="hud_odometer_active">Active</string>
+    <string name="hud_odometer_add_vehicle">Add vehicle</string>
+    <string name="hud_odometer_vehicle_name">Vehicle name</string>
+    <string name="hud_odometer_add_named">Add %1$s</string>
+    <string name="hud_odometer_no_vehicle">No vehicle. Add one to log its odometer.</string>
+    <string name="hud_odometer_last">Last %1$s mi, %2$s</string>
+    <string name="hud_odometer_first">First reading for %1$s</string>
+    <string name="hud_odometer_lower">Below the last reading, %1$s mi</string>
+    <string name="hud_odometer_fewer">%3$s mi on this car, %1$s mi tracked since %2$s</string>
+    <string name="hud_odometer_delta">+%1$s mi since %2$s</string>
+    <string name="hud_odometer_large_jump">+%1$s mi since %2$s, more than expected</string>
+    <string name="hud_odometer_save_empty">Save reading</string>
+    <string name="hud_odometer_save">Save %1$s mi</string>
+    <string name="hud_odometer_gps_loading">Waiting for the GPS total</string>
+    <string name="hud_odometer_saved">Odometer saved, %1$s mi</string>
+    <string name="hud_odometer_vehicles_unreadable">Saved vehicles could not be read.</string>
+    <string name="hud_odometer_write_failed">Could not save. Try again.</string>
+    <string name="hud_odometer_footer">%1$s %2$s mi, %3$s</string>
+    <string name="hud_odometer_comparison">car %1$s mi, tracked %2$s mi since %3$s</string>
+    <string name="hud_odometer_other">other %1$s mi</string>
+    <string name="hud_odometer_short">short of tracked by %1$s mi</string>
 </resources>

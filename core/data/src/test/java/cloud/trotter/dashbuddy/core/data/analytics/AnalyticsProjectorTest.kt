@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
@@ -2334,6 +2335,25 @@ class AnalyticsProjectorTest {
         assertEquals(fuelIds, fuel.map { it.eventSequenceId })
         assertTrue(expenses.all { it.sessionId == null })
         assertTrue(fuel.all { it.sessionId == null })
+    }
+
+    @Test
+    fun `a session attributed odometer reading upserts no session row`() = runBlocking {
+        seedFullSession()
+        projector().catchUp()
+        val session = analyticsDao.sessionRecord("S1")!!
+        // Whitespace detects even a hydrate-and-reencode upsert with unchanged values.
+        analyticsDao.upsertSession(session.copy(legStateJson = "  ${session.legStateJson}  "))
+        val before = analyticsDao.sessionRecord("S1")!!
+        val readingId = insert(AppEventType.ODOMETER_READING, "S1", 5_000,
+            OdometerReadingPayload("civic", 52_388, 999.0), odometer = 999.0)
+
+        val stats = projector().processBatch(limit = 1)!!
+
+        assertEquals(0, stats.sessions)
+        assertEquals(0, stats.adjustmentSkips)
+        assertEquals(before, analyticsDao.sessionRecord("S1"))
+        assertEquals(readingId, analyticsDao.getWatermark()!!.watermarkSequenceId)
     }
 
 }

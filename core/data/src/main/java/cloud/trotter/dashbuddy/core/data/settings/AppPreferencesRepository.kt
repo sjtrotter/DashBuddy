@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AppPreferencesRepository @Inject constructor(
-    private val dataSource: AppPreferencesDataSource
+    private val dataSource: AppPreferencesDataSource,
 ) {
     // ============================================================================================
     // STREAMS
@@ -29,6 +29,7 @@ class AppPreferencesRepository @Inject constructor(
     val estimatedMpg = dataSource.estimatedMpg
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
+    val odometerPrompts = dataSource.odometerPrompts
     val countRealExpensesInKept = dataSource.countRealExpensesInKept
     val dailyKeptGoalDollars = dataSource.dailyKeptGoalDollars
     val hudPillShowsEarnings = dataSource.hudPillShowsEarnings
@@ -242,6 +243,8 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
+
+    suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
 
     suspend fun setCountRealExpensesInKept(enabled: Boolean) = dataSource.setCountRealExpensesInKept(enabled)
     suspend fun setHudPillShowsEarnings(enabled: Boolean) = dataSource.setHudPillShowsEarnings(enabled)

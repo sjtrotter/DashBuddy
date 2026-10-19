@@ -2,6 +2,10 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import android.app.NotificationManager
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -12,6 +16,7 @@ import cloud.trotter.dashbuddy.domain.state.Regions
 import cloud.trotter.dashbuddy.domain.state.Session
 import cloud.trotter.dashbuddy.domain.state.activeSessionId
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -25,6 +30,9 @@ import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verifyBlocking
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #867 (write-side): a chat line must be filed to the session it CAME FROM, not to whichever
@@ -70,11 +78,18 @@ class BubbleManagerSessionAttributionTest {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         val state = MutableStateFlow(stateWithDoorDashActive())
         whenever(stateManager.state).thenReturn(state)
         val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
-        val manager = BubbleManager(context, notificationManager, chatRepository, lazyStateManager)
+        val manager = BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
         // The derived flow is Eagerly-started on an IO scope; await it so the fallback assertions
         // race nothing (an un-emitted flow would read null, not the DoorDash session).
         runBlocking { withTimeout(5_000) { manager.activeSessionId.first { it != null } } }

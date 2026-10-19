@@ -38,14 +38,20 @@ class OdometerRepository @Inject constructor(
      * the per-session anchor bookkeeping below changed.
      */
     private val _meters = MutableStateFlow(0.0)
-    @Volatile private var totalLoaded = false
+    private val totalLoaded = MutableStateFlow(false)
 
     /**
      * #1333: the fill-up stamp. DashBuddy's GPS odometer total (it runs only while a dash is
      * tracked, so it is not the car's odometer); null until the persisted total loads.
      * Never a measurement anchor.
      */
-    fun totalMiles(): Double? = if (totalLoaded) getCurrentMiles() else null
+    fun totalMiles(): Double? = readTotalMiles(_meters.value, totalLoaded.value)
+
+    val totalMilesFlow: Flow<Double?> = combine(_meters, totalLoaded, ::readTotalMiles)
+
+    // Both the live sheet and save-time stamp use this loaded gate and conversion.
+    private fun readTotalMiles(meters: Double, loaded: Boolean): Double? =
+        if (loaded) milesFromMeters(meters) else null
 
     /**
      * #438 B5: per-session start anchors (sessionId → odometer meters at session start). Replaces the
@@ -61,7 +67,7 @@ class OdometerRepository @Inject constructor(
     val sessionMilesFlow: Flow<Double> =
         combine(_meters, _anchors, _currentSessionId) { total, anchors, sid ->
             val anchor = sid?.let { anchors[it] } ?: 0.0
-            (total - anchor).coerceAtLeast(0.0) * metersToMiles
+            milesFromMeters((total - anchor).coerceAtLeast(0.0))
         }
 
     /**
@@ -99,7 +105,7 @@ class OdometerRepository @Inject constructor(
         // single source of truth after startup; saves flow one-way to disk.
         scope.launch {
             _meters.value = odometerLocalDataSource.totalMetersFlow.first()
-            totalLoaded = true
+            totalLoaded.value = true
             // #438 B5: restore the current session's anchor so HUD miles survive a crash.
             val currentId = odometerLocalDataSource.currentSessionIdFlow.first()
             if (currentId != null) {
@@ -132,7 +138,7 @@ class OdometerRepository @Inject constructor(
     fun sessionMilesFlow(sessionId: String): Flow<Double> =
         combine(_meters, _anchors) { total, anchors ->
             val anchor = anchors[sessionId] ?: total
-            (total - anchor).coerceAtLeast(0.0) * metersToMiles
+            milesFromMeters((total - anchor).coerceAtLeast(0.0))
         }
 
     fun startTracking() {
@@ -287,14 +293,16 @@ class OdometerRepository @Inject constructor(
     /** Miles accrued by [sessionId] (its total delta since its anchor). */
     fun getCurrentSessionMiles(sessionId: String): Double {
         val anchor = _anchors.value[sessionId] ?: _meters.value
-        return (_meters.value - anchor).coerceAtLeast(0.0) * metersToMiles
+        return milesFromMeters((_meters.value - anchor).coerceAtLeast(0.0))
     }
 
     /**
      * The raw cumulative device odometer reading (miles) — the projector's `metadata.odometer` input
      * (#314). Unaffected by the #438 B5 per-session anchor change (it reads [_meters] only).
      */
-    fun getCurrentMiles(): Double = _meters.value * metersToMiles
+    fun getCurrentMiles(): Double = milesFromMeters(_meters.value)
+
+    private fun milesFromMeters(meters: Double): Double = meters * metersToMiles
 
     private companion object {
         private const val TAG = "Odometer"

@@ -134,4 +134,8 @@
     <string name="consent_receipt_allowed">Allowed</string>
     <string name="consent_receipt_denied">Not allowed</string>
     <string name="consent_privacy_link">Privacy details</string>
+    <string name="settings_count_expenses">Count expenses in profit</string>
+    <string name="settings_count_expenses_description">Subtract logged expenses. Gas stays in car cost.</string>
+    <string name="settings_odometer_prompts">Odometer reminder</string>
+    <string name="settings_odometer_prompts_description">Lights the Odometer block at the start of a dash and after one until you log a reading</string>
 </resources>

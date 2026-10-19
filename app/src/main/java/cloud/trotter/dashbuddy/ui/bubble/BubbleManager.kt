@@ -15,6 +15,9 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.state.effects.OfferActionReceiver
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
@@ -34,21 +37,27 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerCue
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,6 +69,10 @@ class BubbleManager @Inject constructor(
     // dagger.Lazy breaks the StateManagerV2 → EffectExecutor → BubbleManager
     // construction cycle (#437); resolved on first activeSessionId access.
     private val stateManager: dagger.Lazy<StateManagerV2>,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val garageRepository: GarageRepository,
+    private val odometerReadingRepository: OdometerReadingRepository,
+    private val clock: Clock,
 ) {
 
     companion object {
@@ -166,11 +179,36 @@ class BubbleManager @Inject constructor(
             "session start platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
         )
         val verb = sessionVerb(platformName)
-        postMessage(
-            context.getString(R.string.bubble_chat_session_started, verb),
-            ChatPersona.Dispatcher,
-            sessionId = sessionId,
+        // One Clock rule: cue comparisons share the injected clock used to stamp readings.
+        val now = clock.millis()
+        val startedLine = context.getString(R.string.bubble_chat_session_started, verb)
+        val started = enqueueMessage(
+            startedLine,
+            ChatPersona.Dispatcher, expand = false, sessionId = sessionId,
         )
+        scope.launch {
+            try {
+                // Keep the cue notification after the persisted session-start line.
+                started.join()
+                val enabled = appPreferencesRepository.odometerPrompts.first()
+                val garage = garageRepository.garage.first()
+                // An unreadable garage is not "no vehicle": the sheet says the vehicles could not be read, so no cue.
+                if (!garage.readable) return@launch
+                val vehicle = garage.active
+                val readings = odometerReadingRepository.readings.first()
+                val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
+                if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
+                    showNotification(listOf(
+                        startedLine to ChatPersona.Dispatcher,
+                        context.getString(R.string.bubble_chat_odometer_cue) to ChatPersona.Dispatcher,
+                    ), expand = false)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.tag("Bubble").w("Odometer cue skipped (%s)", error.javaClass.simpleName)
+            }
+        }
     }
 
     /**
@@ -240,6 +278,13 @@ class BubbleManager @Inject constructor(
         expand: Boolean = false,
         sessionId: String? = null,
     ) {
+        enqueueMessage(text, persona, expand, sessionId)
+    }
+
+    /** The save job lets session-start copy await its preceding history line. */
+    private fun enqueueMessage(
+        text: CharSequence, persona: ChatPersona, expand: Boolean, sessionId: String?,
+    ): Job {
         // #551 P7: chat text can carry raw merchant/store text ("Pickup: <store>"), so the
         // shareable INFO stream logs a counts-only milestone; the raw body stays on DEBUG.
         // #772: the persona itself logs as its PII-safe logLabel (kind, not displayName) on INFO+.
@@ -247,12 +292,13 @@ class BubbleManager @Inject constructor(
         Timber.tag("Chat").d("[%s]: %s", persona.displayName, text)
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
-        scope.launch {
+        val saved = scope.launch {
             chatRepository.saveMessage(sessionId ?: activeSessionId.value, text.toString(), persona)
         }
 
         // Post Notification
         showNotification(text, persona, expand)
+        return saved
     }
 
     /** Built once: a constant, extras-less broadcast for the bubble notification's delete intent (#916). */
@@ -318,14 +364,22 @@ class BubbleManager @Inject constructor(
         text: CharSequence,
         persona: ChatPersona,
         expand: Boolean,
-    ) {
+    ) = showNotification(listOf(text to persona), expand)
 
-        val senderPerson = Person.Builder()
-            .setName(persona.displayName)
-            .setKey(persona.id)
-            .setIcon(IconCompat.createWithResource(context, persona.getIconResId()))
-            .setBot(persona is ChatPersona.Dispatcher) // Clean Kotlin type checking!
-            .build()
+    private fun showNotification(
+        messages: List<Pair<CharSequence, ChatPersona>>,
+        expand: Boolean,
+    ) {
+        val notificationMessages = messages.map { (text, persona) ->
+            text to Person.Builder()
+                .setName(persona.displayName)
+                .setKey(persona.id)
+                .setIcon(IconCompat.createWithResource(context, persona.getIconResId()))
+                .setBot(persona is ChatPersona.Dispatcher)
+                .build()
+        }
+        val persona = messages.last().second
+        val senderPerson = notificationMessages.last().second
 
         val intentWithAction = Intent(context, BubbleActivity::class.java).apply {
             action = Intent.ACTION_VIEW
@@ -354,7 +408,9 @@ class BubbleManager @Inject constructor(
         val style = NotificationCompat.MessagingStyle(senderPerson)
             .setConversationTitle(context.getString(R.string.bubble_notification_conversation_title))
             .setGroupConversation(true)
-            .addMessage(text, System.currentTimeMillis(), senderPerson)
+        notificationMessages.forEach { (text, sender) ->
+            style.addMessage(text, System.currentTimeMillis(), sender)
+        }
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.bag_red_idle)

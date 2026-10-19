@@ -11,55 +11,83 @@ import cloud.trotter.dashbuddy.domain.model.cards.*
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class DockMapperTest {
+    @Test fun `odometer lights while the cue holds`() {
+        for (mode in HudMode.entries.filter { it != HudMode.OFFER }) {
+            for (cue in listOf(false, true)) {
+                val item = DockMapper.map(mode, odometerLoaded = true, odometerCue = cue)
+                    .items.single { it.kind == DockKind.ODOMETER }
+                assertEquals(if (cue) DockItemState.ACCENT else DockItemState.NORMAL, item.state)
+            }
+        }
+        assertTrue(DockMapper.map(HudMode.OFFER, odometerLoaded = true, odometerCue = true).items.isEmpty())
+    }
+
+    @Test fun `disabled wins over the cue`() {
+        for (mode in HudMode.entries.filter { it != HudMode.OFFER }) {
+            assertEquals(DockItemState.DISABLED,
+                DockMapper.map(mode, odometerLoaded = false, odometerCue = true)
+                    .items.single { it.kind == DockKind.ODOMETER }.state)
+        }
+    }
+
+    @Test fun `odometer is disabled until loaded`() {
+        for (mode in HudMode.entries.filter { it != HudMode.OFFER }) {
+            for (loaded in listOf(false, true)) {
+                val item = DockMapper.map(mode, odometerLoaded = loaded).items.single { it.kind == DockKind.ODOMETER }
+                assertEquals(if (loaded) DockItemState.NORMAL else DockItemState.DISABLED, item.state)
+            }
+        }
+    }
+
     @Test
-    fun `live dock is cash tip expense log`() {
-        val items = DockMapper.map(HudMode.LIVE).items
-        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.LOG), items.map { it.kind })
-        assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL), items.map { it.state })
+    fun `live dock is cash tip expense odometer log`() {
+        val items = DockMapper.map(HudMode.LIVE, odometerLoaded = true).items
+        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG), items.map { it.kind })
+        assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
         for (mode in HudMode.entries) {
-            DockMapper.map(mode).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
+            DockMapper.map(mode, odometerLoaded = true).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
                 .forEach { assertEquals(DockItemState.DISABLED, it.state) }
         }
     }
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(DockKind.entries.filter { it != DockKind.NOW }, DockMapper.map(HudMode.RESTING).items.map { it.kind })
+        assertEquals(listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
     }
 
     @Test
     fun `offer hides the dock`() {
-        assertTrue(DockMapper.map(HudMode.OFFER).items.isEmpty())
+        assertTrue(DockMapper.map(HudMode.OFFER, odometerLoaded = true).items.isEmpty())
     }
 
     @Test
     fun `log shown replaces Log with a lit Now`() {
-        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LIVE, logShown = true).items.single { it.kind == DockKind.NOW }.state)
+        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LIVE, logShown = true, odometerLoaded = true).items.single { it.kind == DockKind.NOW }.state)
     }
     @Test fun `door and receipt accent the cash tip`() {
         val facts = JobFacts("Store", null, null, null)
         val cards = listOf(StateCardModel.DropoffArrived(facts, 1_000),
             StateCardModel.Receipt("Store", 1_000, emptyList(), null, null))
         cards.forEach { card ->
-            val items = DockMapper.map(HudMode.LIVE, firstRun = false, cashTipCue = card.cuesCashTip).items
+            val items = DockMapper.map(HudMode.LIVE, firstRun = false, cashTipCue = card.cuesCashTip, odometerLoaded = true).items
             assertEquals(DockItemState.ACCENT, items.single { it.kind == DockKind.CASH_TIP }.state)
             assertEquals(DockItemState.DISABLED, items.single { it.kind == DockKind.EXPENSE }.state)
         }
     }
     @Test fun `first run disables cash tip even with the cue`() {
-        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.RESTING, firstRun = true, cashTipCue = true)
+        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.LIVE, firstRun = true, cashTipCue = true, odometerLoaded = true)
             .items.single { it.kind == DockKind.CASH_TIP }.state)
     }
     @Test fun `offer hides the dock regardless of the cue`() {
-        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = false, cashTipCue = true).items.isEmpty())
-        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = true, cashTipCue = true).items.isEmpty())
+        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = false, cashTipCue = true, odometerLoaded = true).items.isEmpty())
+        assertTrue(DockMapper.map(HudMode.OFFER, firstRun = true, cashTipCue = true, odometerLoaded = true).items.isEmpty())
     }
 
     @Test fun `Now never appears outside the log`() {
         HudMode.entries.forEach { mode ->
-            assertFalse(DockMapper.map(mode, logShown = false).items.any { it.kind == DockKind.NOW })
+            assertFalse(DockMapper.map(mode, logShown = false, odometerLoaded = true).items.any { it.kind == DockKind.NOW })
         }
-        assertFalse(DockMapper.map(HudMode.LIVE, logShown = true).items.any { it.kind == DockKind.LOG })
+        assertFalse(DockMapper.map(HudMode.LIVE, logShown = true, odometerLoaded = true).items.any { it.kind == DockKind.LOG })
     }
 
 }

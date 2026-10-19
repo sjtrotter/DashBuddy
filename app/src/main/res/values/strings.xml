@@ -582,6 +582,7 @@
     <string name="bubble_notification_conversation_title">Current dash</string>
     <!-- %1$s is Platform.sessionVerb (or its displayName fallback) — never a hardcoded platform word (Principle 8). -->
     <string name="bubble_chat_session_started">Started %1$s</string>
+    <string name="bubble_chat_odometer_cue">Log your odometer</string>
     <string name="bubble_chat_session_done">Done %1$s</string>
     <!-- BubbleManager.sessionVerb() fallbacks when a Platform has no sessionVerb of its own —
          %1$s is the platform's displayName (or the raw, unresolved platform id). -->

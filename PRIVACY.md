@@ -191,6 +191,18 @@ identity export. Vehicle/default resets preserve these learned preferences.
   at the fill, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
   them like the rest of the history (§6).
+- Vehicles you add and odometer readings you type stay on the device. A vehicle is a name you type,
+  an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id.
+  A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
+  own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
+  The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
+  over the same span; car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
+  and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
+  include both, like the rest of the history and preferences (§6).
+- The `odometer_prompts` app preference stores whether DashBuddy reminds you to log a reading: the
+  dock's Odometer block lit in accent for the first ten minutes of a dash and after a dash until a
+  reading, and one "Log your odometer" line in the session-start notification (default on). It stays
+  on the device and is included in preferences backup.
 - Preferences and consents are DataStore files on the device (`core/datastore`). General app/economy preferences
   are backed up; the two dedicated consent stores are excluded from backup and transfer so a new device re-asks.
   `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old
@@ -233,6 +245,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r5 (2026-10-18)** — two new stored items: the vehicles you add (name, id, creation time, the active one) in the
+  `vehicles` preferences file, and typed odometer readings as `ODOMETER_READING` events (the miles you typed, the
+  vehicle id, DashBuddy's own GPS total at that moment), compared on the device to the app's GPS mileage and shown only
+  to you; plus the `odometer_prompts` preference (#1333 S2f). Receipts created under r4 retain that revision.
 - **r4 (2026-10-18)** — one new stored item: the day and goal amount at which the HUD's daily goal was first met
   (`goal_met_mark` in `app_state`), so the goal animation plays once per day and goal (#1333 S2e). On device,
   backed up with the app's preferences. Receipts created under r3 retain that revision.

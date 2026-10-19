@@ -12,18 +12,44 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
-        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false) = HudStateMapper.map(
+        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
+        odometerLoaded: Boolean = true, odometerCue: Boolean = false) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
         countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
+        odometerLoaded = odometerLoaded, odometerCue = odometerCue,
     )
 
     @Test
     fun `live hero reads the session net`() {
         assertEquals(67.0, map().hero.profit!!, 0.0)
+    }
+
+    @Test fun `odometer cue reaches both docks and respects loading`() {
+        for (rest in listOf(false, true)) {
+            for (logOpen in listOf(false, true)) {
+                for (loaded in listOf(false, true)) {
+                    assertEquals(if (loaded) DockItemState.ACCENT else DockItemState.DISABLED,
+                        map(rest = rest, logOpen = logOpen, odometerLoaded = loaded, odometerCue = true)
+                            .dock.items.single { it.kind == DockKind.ODOMETER }.state)
+                }
+            }
+        }
+    }
+
+    @Test fun `odometer is disabled until loaded`() {
+        for (rest in listOf(false, true)) {
+            for (logOpen in listOf(false, true)) {
+                for (loaded in listOf(false, true)) {
+                    val item = map(rest = rest, logOpen = logOpen, odometerLoaded = loaded)
+                        .dock.items.single { it.kind == DockKind.ODOMETER }
+                    assertEquals(if (loaded) DockItemState.NORMAL else DockItemState.DISABLED, item.state)
+                }
+            }
+        }
     }
 
     @Test
@@ -66,8 +92,7 @@ class HudStateMapperTest {
     @Test fun `cash tip cue reaches the dock`() {
         assertEquals(DockItemState.ACCENT, map(cue = true).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
         assertEquals(DockItemState.DISABLED, map(cue = false).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
-        assertEquals(DockItemState.DISABLED, map(rest = true, last = null, cue = true)
-            .dock.items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertFalse(map(rest = true, last = null, cue = true).dock.items.any { it.kind == DockKind.CASH_TIP })
     }
     @Test fun `profit per hour preserves unknowns and real zero`() {
         assertNull(profitPerHour(null, 3_600_000))

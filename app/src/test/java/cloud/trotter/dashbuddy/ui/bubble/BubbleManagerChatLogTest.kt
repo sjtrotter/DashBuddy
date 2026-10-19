@@ -3,11 +3,16 @@ package cloud.trotter.dashbuddy.ui.bubble
 import android.app.NotificationManager
 import android.util.Log
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
+import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.test.util.RecordingTree
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
@@ -15,6 +20,9 @@ import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import timber.log.Timber
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * #772 / Principle-7: the two "Chat" INFO milestones in [BubbleManager.postMessage] /
@@ -32,10 +40,17 @@ class BubbleManagerChatLogTest {
         val context = RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
         val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
-        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager)
+        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
     }
 
     @Test
@@ -43,9 +58,16 @@ class BubbleManagerChatLogTest {
         val context = RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager })
+        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
         val evaluation = cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation(
             action = cloud.trotter.dashbuddy.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
             qualityLevel = cloud.trotter.dashbuddy.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,

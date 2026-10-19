@@ -32,9 +32,11 @@ fun HudScreen(
     onSheetDismiss: () -> Unit = {},
     sheet: @Composable ColumnScope.() -> Unit = {},
     undo: (@Composable () -> Unit)? = null,
+    restingFooter: @Composable () -> Unit = {},
     stateCard: @Composable () -> Unit = {},
     offer: @Composable () -> Unit = {},
     log: @Composable () -> Unit = {},
+    undoVisible: @Composable () -> Boolean = { undo != null },
 ) {
     val tier = FontScaleTier.of(LocalDensity.current.fontScale, LocalGlance.current)
     CompositionLocalProvider(LocalHudTier provides tier) {
@@ -56,6 +58,7 @@ fun HudScreen(
                                 state.mode == HudMode.RESTING -> {
                                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { RestingCard(state.resting) }
                                     GasRow(state.gas, onSetGasPrice, onRefreshGasPrice, onResumeAutoGasPrice)
+                                    restingFooter()
                                 }
                                 else -> Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.slot.state")) {
                                     Column(Modifier.verticalScroll(rememberScrollState()).fillMaxWidth().heightIn(min = 196.dp)
@@ -63,7 +66,7 @@ fun HudScreen(
                                 }
                             }
                             if (!showingLog && state.mode != HudMode.RESTING && ribbon != null) DashRibbon(ribbon)
-                            if (!showingLog) UndoSlot(state.mode, undo)
+                            if (!showingLog) UndoSlot(state.mode, undo, undoVisible)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (!showingLog) HudSheetHost(sheetOpen, onSheetDismiss, Modifier.fillMaxSize(), sheet)

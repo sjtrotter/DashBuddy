@@ -47,6 +47,8 @@ fun GeneralSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsMenuViewModel = hiltViewModel()
 ) {
+    val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle(initialValue = true)
+    val countExpenses by viewModel.countRealExpensesInKept.collectAsStateWithLifecycle(initialValue = false)
     val glanceMode by viewModel.glanceMode.collectAsStateWithLifecycle(initialValue = false)
     // #428 Half B: reflect the persisted override reactively; null ⇒ System default.
     val ttsLanguageTag by viewModel.ttsLanguageTag.collectAsStateWithLifecycle(initialValue = null)
@@ -79,6 +81,11 @@ fun GeneralSettingsScreen(
                 checked = glanceMode,
                 onCheckedChange = { viewModel.setGlanceMode(it) }
             )
+
+            SwitchRow(stringResource(R.string.settings_count_expenses), stringResource(R.string.settings_count_expenses_description),
+                countExpenses, { viewModel.setCountRealExpensesInKept(it) })
+            SwitchRow(stringResource(R.string.settings_odometer_prompts), stringResource(R.string.settings_odometer_prompts_description),
+                prompts, { viewModel.setOdometerPrompts(it) })
 
             // --- Voice: spoken-offer language (#428 Half B) ---
             Text(

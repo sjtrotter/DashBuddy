@@ -578,3 +578,11 @@ data class FuelFillupPayload(
 
 @Serializable
 data class LedgerEntryVoidedPayload(val targetEventSequenceId: Long) : AppEventPayload
+
+/** The typed car miles and the app's own GPS stamp, without session or platform attribution. */
+@Serializable
+data class OdometerReadingPayload(
+    val vehicleId: String,
+    val readingMiles: Int,
+    val gpsTotalMiles: Double? = null,
+) : AppEventPayload

@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.location.LocationDataSource
 import cloud.trotter.dashbuddy.domain.model.location.Coordinates
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestDispatcher
@@ -104,6 +105,32 @@ class OdometerRepositoryPerSessionTest {
         persistedTotal.emit(2_000.0)
         assertTrue(repo.getCurrentMiles() > 0.0)
         assertEquals(repo.getCurrentMiles(), repo.totalMiles()!!, 0.0)
+    }
+
+    @Test
+    fun `total flow is null until loaded, then follows the meters`() = runTest {
+        val persistedTotal = MutableSharedFlow<Double>()
+        val local: OdometerLocalDataSource = mock {
+            on { totalMetersFlow } doReturn persistedTotal
+            on { currentSessionIdFlow } doReturn flowOf(null)
+            on { sessionAnchorFlow(any()) } doReturn flowOf(null)
+        }
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = OdometerRepository(local, location, dispatcher)
+        val totals = mutableListOf<Double?>()
+        backgroundScope.launch(dispatcher) { repo.totalMilesFlow.collect { totals += it } }
+        assertEquals(listOf<Double?>(null), totals)
+        assertNull(repo.totalMiles())
+
+        persistedTotal.emit(2_000.0)
+        assertEquals(2_000.0 * 0.000621371, totals.last()!!, 1e-9)
+        assertEquals(repo.totalMiles(), totals.last())
+        val loadedMiles = totals.last()!!
+        repo.startTracking()
+        drive(0.000, 0.001, 0.002)
+        assertTrue(totals.last()!! > loadedMiles)
+        assertEquals(repo.totalMiles(), totals.last())
+        repo.stopTracking()
     }
 
     @Test
