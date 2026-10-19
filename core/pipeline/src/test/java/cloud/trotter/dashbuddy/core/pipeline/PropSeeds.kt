@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.core.pipeline
 
 import io.kotest.common.ExperimentalKotest
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import io.kotest.property.PropTestConfig
 
 /**
@@ -61,6 +64,14 @@ internal object PropSeeds {
 
     /** Pinned sample count on PR CI; [EXPLORE_FACTOR]× that under exploration. */
     fun samples(pinned: Int): Int = if (exploring) pinned * EXPLORE_FACTOR else pinned
+
+    /**
+     * The `runTest` body timeout a property passes explicitly. `runTest`'s default is 60 s, which a
+     * tree-generating property exceeds at [EXPLORE_FACTOR]× samples on the CI runner (every nightly
+     * from 2026-10-03 to 10-19 failed with `UncompletedCoroutinesError`, not a mapper defect); the
+     * PR path keeps the default so a hung property still fails fast there.
+     */
+    val runTestTimeout: Duration = if (exploring) 20.minutes else 60.seconds
 
     /**
      * Pinned [seed] on PR CI (deterministic); unseeded under exploration.
