@@ -115,7 +115,12 @@ class VehicleEditViewModel @Inject constructor(
                 electricityPricePerKwh = state.electricityPricePerKwh,
                 userSetFields = state.userSetFields intersect VehicleDraftState.fields,
             )
-            profile = EconomyFieldGroups.updateProfile(stored, edits).withIdentity(
+            // A scooter's powertrain is part of its shape, not a field group: carry a changed one over
+            // so its consumption fields become applicable before the user-set edits are applied.
+            val draftProfile = state.profile
+            val base = if (stored is ScooterMoped && draftProfile is ScooterMoped && stored.powertrain != draftProfile.powertrain)
+                stored.copy(powertrain = draftProfile.powertrain) else stored
+            profile = EconomyFieldGroups.updateProfile(base, edits).withIdentity(
                 year = state.year.editedIdentity(stored.year),
                 make = state.make.editedIdentity(stored.make),
                 model = state.model.editedIdentity(stored.model),

@@ -294,6 +294,23 @@ class VehicleEditViewModelTest {
         assertEquals(profile.gasFuel, saved.firstValue.gasFuel)
     }
 
+    @Test fun `scooter powertrain change on the stored type is saved with its consumption`() = runTest {
+        val profile = ScooterMoped(wear = WearProfile(tireSetCost = 150.0))
+        val vehicle = Vehicle("scoot", "Scooter", 1, profile)
+        val vm = model("scoot", Garage(listOf(vehicle), "scoot", true))
+        runCurrent()
+        vm.draft.updatePowertrain(Powertrain.ELECTRIC)
+        vm.draft.updateConsumption(2.5)
+        vm.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).updateVehicle(eq("scoot"), eq("Scooter"), saved.capture())
+        val scooter = saved.firstValue as ScooterMoped
+        assertEquals(Powertrain.ELECTRIC, scooter.powertrain)
+        assertEquals(2.5, scooter.kwhPer100Mi)
+        assertEquals(150.0, scooter.wear.tireSetCost)
+    }
+
     @Test fun `gas edit returning to stored type preserves SUV mpg costs fuel and identity`() = runTest {
         val profile = GasCar(vehicleClass = GasCarClass.SUV, mpg = 20.0, fuelType = FuelType.PREMIUM,
             year = "2020", make = "Toyota", model = "Highlander",
