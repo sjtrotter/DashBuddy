@@ -99,8 +99,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         log = {
             val logData by viewModel.logData.collectAsStateWithLifecycle()
             val messages by viewModel.messages.collectAsStateWithLifecycle()
-            val items = remember(cards.stack, logData, messages, model) {
-                LogMapper.map(cards.stack, logData, messages, model)
+            val items = remember(cards.stack, logData, messages, model, region?.activeJob) {
+                LogMapper.map(cards.stack, logData, messages, model,
+                    liveLinks = region?.activeJob?.let { job ->
+                        mapOf(job.jobId to job.acceptedOffers.mapNotNull { it.offerHash }.toSet())
+                    }.orEmpty())
             }
             LogView(items, onNow = { logOpen = false }, onUndo = {})
         },

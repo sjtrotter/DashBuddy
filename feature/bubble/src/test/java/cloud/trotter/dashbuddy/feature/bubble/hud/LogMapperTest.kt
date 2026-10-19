@@ -16,7 +16,8 @@ import org.junit.Test
 
 class LogMapperTest {
     private fun map(stack: CardStack = logStack(), data: LogData = LogData.Empty) =
-        LogMapper.map(stack, data, emptyList(), logLive())
+        // The standard fixture's accepted offer has an explicit pickup link.
+        LogMapper.map(stack, data.copy(events = listOf(logLink()) + data.events), emptyList(), logLive())
     private fun job(items: List<LogItem>) = items.filterIsInstance<JobCardModel>().single()
 
     @Test fun `a figure that prefixes another is styled on its own token`() {
@@ -56,6 +57,24 @@ class LogMapperTest {
         val row = map(CardStack(listOf(logOffer(outcome = AppEventType.OFFER_TIMEOUT)))).single() as OfferRow
         assertTrue(row.dimmed)
         assertEquals(AppEventType.OFFER_TIMEOUT, row.outcome)
+    }
+    @Test fun `an unlinked accept is its own thin row`() {
+        val items = LogMapper.map(logStack(), LogData.Empty, emptyList(), null)
+        val row = items.filterIsInstance<OfferRow>().single()
+        assertEquals(logOffer().id, row.key)
+        assertEquals(AppEventType.OFFER_ACCEPTED, row.outcome)
+        assertFalse(row.dimmed)
+        assertEquals("Panera Bread", row.store)
+        assertEquals(10.6, row.pay!!, 0.0)
+        assertEquals(4.2, row.miles!!, 0.0)
+        assertTrue(job(items).lines.none { it is JobLine.Accepted })
+    }
+    @Test fun `live links show the accepted line before pickup confirmation`() {
+        val stack = CardStack(listOf(logOffer()), logPickup().copy(phaseEndedAt = null, confirmedAt = null))
+        val items = LogMapper.map(stack, LogData.Empty, emptyList(), logLive(),
+            liveLinks = mapOf("job" to setOf("offer")))
+        assertEquals(1, items.size)
+        assertEquals(JobLine.Accepted(1_000, 16.0, 1.93, false), job(items).lines.first())
     }
     @Test fun `expense logged mid job sits above the live job card`() {
         val items = map(logStack(true), LogData(expenses = listOf(logExpense())))
@@ -146,7 +165,7 @@ class LogMapperTest {
         assertEquals(items, map(data = data.copy(expenses = data.expenses.reversed())))
     }
     @Test fun `item keys are unique`() {
-        val items = LogMapper.map(logStack(), LogData(expenses = listOf(logExpense(), logExpense()),
+        val items = LogMapper.map(logStack(), LogData(events = listOf(logLink()), expenses = listOf(logExpense(), logExpense()),
             fuel = listOf(logFuel(), logFuel())), listOf(logChat("Dash Paused!"), logChat("Dash Paused!")), null)
         assertEquals(items.size, items.map { it.key }.toSet().size)
         assertEquals(4, items.size)
@@ -181,8 +200,9 @@ class LogMapperTest {
     @Test fun `a delivered line lands at the completion event`() {
         val events = stackedEvents().take(6)
         val stack = CardStack.of(FlowCardMapper.fold(events), null)
-        val card = job(LogMapper.map(stack, LogData(events = events), emptyList(), null))
-        assertEquals(listOf(JobLine.Delivered(8_500, 16.0)), card.lines.filterIsInstance<JobLine.Delivered>())
+        val card = job(LogMapper.map(stack, LogData(events = events,
+            deliveries = listOf(logRecord(task = "drop1", cash = null).copy(realizedPay = 6.25))), emptyList(), null))
+        assertEquals(listOf(JobLine.Delivered(8_500, 6.25)), card.lines.filterIsInstance<JobLine.Delivered>())
         assertEquals(8_500L, card.at)
     }
     @Test fun `delivery payload completion time wins and missing time uses the event`() {
@@ -210,15 +230,26 @@ class LogMapperTest {
             card.lines.filterIsInstance<JobLine.Delivered>())
         assertEquals(12_500L, card.at)
     }
-    @Test fun `receipt amount is used only for a single drop job`() {
-        val singleDrop = stackedEvents().take(6)
-        val singleStack = CardStack.of(FlowCardMapper.fold(singleDrop), null)
-        assertEquals(listOf(JobLine.Delivered(8_500, 16.0)),
-            job(map(singleStack, LogData(events = singleDrop))).lines.filterIsInstance<JobLine.Delivered>())
-        val events = stackedEvents()
+    @Test fun `a completion without a projection row shows no amount`() {
+        // Both drops have started, but only the first has completed and the projection has not folded.
+        val events = stackedEvents().take(7)
         val stack = CardStack.of(FlowCardMapper.fold(events), null)
-        assertEquals(listOf(JobLine.Delivered(8_500, null), JobLine.Delivered(12_500, null)),
+        assertEquals(16.0, stack.completed.filterIsInstance<FlowCardSnapshot.PostTask>().single().totalPay!!, 0.0)
+        assertEquals(listOf(JobLine.Delivered(8_500, null)),
             job(map(stack, LogData(events = events))).lines.filterIsInstance<JobLine.Delivered>())
+    }
+    @Test fun `a double fired completion is one delivered line`() {
+        val original = stackedEvents()
+        val completion = original[5]
+        val duplicate = completion.copy(occurredAt = 8_750,
+            payload = (completion.payload as DeliveryPayload).copy(completedAt = 8_750))
+        // Put the later fire first to prove that input order does not choose the retained event.
+        val events = listOf(duplicate) + original
+        val stack = CardStack.of(FlowCardMapper.fold(events), null)
+        val records = listOf(logRecord(task = "drop1", cash = null).copy(realizedPay = 6.25),
+            logRecord(seq = 11, task = "drop2", cash = null).copy(realizedPay = 9.75))
+        assertEquals(listOf(JobLine.Delivered(8_500, 6.25), JobLine.Delivered(12_500, 9.75)),
+            job(map(stack, LogData(events = events, deliveries = records))).lines.filterIsInstance<JobLine.Delivered>())
     }
     @Test fun `a projection with unknown pay does not fall back to the receipt`() {
         val events = stackedEvents().take(6)
@@ -237,6 +268,18 @@ class LogMapperTest {
         assertEquals(listOf(JobLine.Delivered(9_000, 10.6)), job(map(stack)).lines)
         assertNull(job(map(stack, data.copy(deliveries = listOf(logRecord(cash = null).copy(realizedPay = null)))))
             .lines.filterIsInstance<JobLine.Delivered>().single().paid)
+    }
+    @Test fun `receipt only recovery never prices a multi drop job`() {
+        val events = stackedEvents().filter { it.type != AppEventType.DELIVERY_COMPLETED }
+        val stack = CardStack(listOf(logPost().copy(totalPay = 16.0)))
+        assertEquals(listOf(JobLine.Delivered(9_000, null)),
+            job(map(stack, LogData(events = events))).lines)
+    }
+    @Test fun `receipt only recovery can price one distinct delivery task across its events`() {
+        val events = stackedEvents().take(5)
+        val stack = CardStack(listOf(logPost(task = "drop1").copy(totalPay = 16.0)))
+        assertEquals(listOf(JobLine.Delivered(9_000, 16.0)),
+            job(map(stack, LogData(events = events))).lines)
     }
     @Test fun `a receipt for another task adds no recovery line when the job has a completion event`() {
         val events = stackedEvents().take(6)

@@ -5,10 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
-import cloud.trotter.dashbuddy.domain.model.event.payload.OfferPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.PickupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
-import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 
 data class JobGroup(
     val jobId: String, val offers: List<FlowCardSnapshot.Offer>,
@@ -17,26 +15,20 @@ data class JobGroup(
     val startedAt: Long, val endedAt: Long?,
 )
 
+/**
+ * Accepted offers join jobs only through explicit event or live-job hash links, with no inference.
+ * An unlinked accept stays unassigned so a wrong card is never drawn.
+ */
 object JobGrouper {
-    /**
-     * Accept and first-card events from one step can carry slightly different timestamps.
-     * Allow that skew while excluding jobs already open well before a standalone accept.
-     */
-    private const val ACCEPT_JOIN_SKEW_MS = 2_000L
-
-    fun group(stack: CardStack, events: List<AppEvent>): List<JobGroup> {
+    fun group(
+        stack: CardStack, events: List<AppEvent>, liveLinks: Map<String, Set<String>> = emptyMap(),
+    ): List<JobGroup> {
         // The active snapshot replaces its frozen twin (#458), using the production fold's ids.
         val cards = (stack.completed + listOfNotNull(stack.active)).associateBy { it.id }.values.toList()
         val links = mutableMapOf<String, MutableSet<String>>()
-        val offerSession = mutableMapOf<String, String>()
-        val jobSession = mutableMapOf<String, String>()
         val abandoned = events.filter { it.type == AppEventType.TASK_UNASSIGNED }
             .mapNotNull { it.payload as? TaskUnassignedPayload }.groupBy { it.jobId }
         events.forEach { event ->
-            if (event.type == AppEventType.OFFER_ACCEPTED) {
-                val offer = event.payload as? OfferPayload
-                if (offer != null) event.sessionId?.let { offerSession[offer.offerHash] = it }
-            }
             val pair = when (val p = event.payload) {
                 is PickupPayload -> p.jobId to p.jobOfferHashes
                 is DeliveryPayload -> p.jobId to p.jobOfferHashes
@@ -45,7 +37,6 @@ object JobGrouper {
             }
             pair?.let { (id, hashes) ->
                 links.getOrPut(id) { mutableSetOf() }.addAll(hashes)
-                event.sessionId?.let { jobSession[id] = it }
             }
         }
         val byJob = cards.mapNotNull { card -> card.jobId()?.let { it to card } }.groupBy({ it.first }, { it.second })
@@ -63,19 +54,8 @@ object JobGrouper {
             .filter { it.outcome == AppEventType.OFFER_ACCEPTED && it.phaseEndedAt != null }
             .sortedWith(compareBy({ it.phaseEndedAt }, { it.id }))
         val assigned = offers.mapNotNull { offer ->
-            val at = offer.phaseEndedAt!!
             val linked = groups.firstOrNull { offer.offerHash in links[it.jobId].orEmpty() }
-            val job = linked ?: run {
-                val session = offerSession[offer.offerHash]
-                val candidates = groups.filter { jobSession[it.jobId] == null || jobSession[it.jobId] == session }
-                when (offer.quoteBasis) {
-                    OfferQuoteBasis.INCREMENTAL -> candidates.filter {
-                        it.startedAt <= at && (it.endedAt == null || at <= it.endedAt)
-                    }.singleOrNull()
-                    // A standalone accept starts a new job, even while the previous receipt is open.
-                    OfferQuoteBasis.TOTAL -> candidates.firstOrNull { it.startedAt >= at - ACCEPT_JOIN_SKEW_MS }
-                }
-            }
+            val job = linked ?: groups.firstOrNull { offer.offerHash in liveLinks[it.jobId].orEmpty() }
             job?.let { it.jobId to offer }
         }.groupBy({ it.first }, { it.second })
         return groups.map { it.copy(offers = assigned[it.jobId].orEmpty()) }
