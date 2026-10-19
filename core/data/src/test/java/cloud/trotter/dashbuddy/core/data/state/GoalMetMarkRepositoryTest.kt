@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.core.data.state
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.preferencesOf
+import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.appstate.AppStateDataSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -22,8 +24,11 @@ class GoalMetMarkRepositoryTest {
     private val key = "2026-10-18|7900"
 
     /** Real data-source edit, held before the transformed preferences become durable. */
-    private class HeldStore(private val holdFirstOnly: Boolean = false) : DataStore<Preferences> {
-        override val data = MutableStateFlow(emptyPreferences())
+    private class HeldStore(
+        private val holdFirstOnly: Boolean = false,
+        initial: Preferences = emptyPreferences(),
+    ) : DataStore<Preferences> {
+        override val data = MutableStateFlow(initial)
         val release = CompletableDeferred<Unit>()
         var failure: Throwable? = null
         var edits = 0
@@ -54,7 +59,6 @@ class GoalMetMarkRepositoryTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 source.goalMetMark.collect { persisted += it }
             }
-            // Keep the combine active so the latest durable value can clear pending.
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 repository.goalMetMark.collect {}
             }
@@ -79,11 +83,11 @@ class GoalMetMarkRepositoryTest {
         }
     }
 
-    @Test fun `pending mark is visible before the write lands`() = runTest {
+    @Test fun `a request is visible before the write lands`() = runTest {
         val store = HeldStore()
         val source = AppStateDataSource(store)
         val repository = AppStateRepository(source, backgroundScope)
-        // No caller coroutine runs between setting pending and subscribing to the flow.
+        // No caller coroutine runs between making the request and subscribing to the flow.
         repository.setGoalMetMark(key)
         assertEquals(key, repository.goalMetMark.first())
         assertNull(source.goalMetMark.first())
@@ -94,7 +98,7 @@ class GoalMetMarkRepositoryTest {
         runCurrent()
     }
 
-    @Test fun `pending clears once persisted`() = runTest {
+    @Test fun `a request stays visible after persistence changes`() = runTest {
         val store = HeldStore()
         val source = AppStateDataSource(store)
         val repository = AppStateRepository(source, backgroundScope)
@@ -110,13 +114,66 @@ class GoalMetMarkRepositoryTest {
         runCurrent()
         assertEquals(key, source.goalMetMark.first())
         assertEquals(key, observed.last())
-        // A subsequent persisted change is visible only if the pending override was cleared.
-        source.clear()
+        val other = "2026-10-18|8000"
+        source.setGoalMetMark(other)
         runCurrent()
-        assertNull(observed.last())
+        assertEquals(other, source.goalMetMark.first())
+        assertEquals(key, observed.last())
+        assertEquals(key, repository.goalMetMark.first())
+        assertEquals(other, AppStateRepository(source, backgroundScope).goalMetMark.first())
     }
 
-    @Test fun `a failing write is logged and the pending mark stays`() = runTest {
+    @Test fun `a request back to the persisted key still cancels the held write`() = runTest {
+        val store = HeldStore(
+            holdFirstOnly = true,
+            initial = preferencesOf(stringPreferencesKey("goal_met_mark") to key),
+        )
+        val source = AppStateDataSource(store)
+        val repository = AppStateRepository(source, backgroundScope)
+        val other = "2026-10-18|8000"
+        val observed = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            repository.goalMetMark.collect { observed += it }
+        }
+        runCurrent()
+        assertEquals(key, observed.last())
+        repository.setGoalMetMark(other)
+        runCurrent()
+        assertEquals(1, store.edits)
+        val heldWrite = store.editJobs.single()
+        assertTrue(heldWrite.isActive)
+        assertEquals(other, observed.last())
+        assertEquals(key, source.goalMetMark.first())
+
+        repository.setGoalMetMark(key)
+        runCurrent()
+        assertTrue(heldWrite.isCancelled)
+        assertEquals(2, store.edits)
+        assertEquals(key, observed.last())
+        assertEquals(key, repository.goalMetMark.first())
+        assertEquals(key, source.goalMetMark.first())
+        store.release.complete(Unit)
+        runCurrent()
+        assertEquals(key, source.goalMetMark.first())
+        assertEquals(key, observed.last())
+        assertEquals(key, repository.goalMetMark.first())
+    }
+
+    @Test fun `a read with no request in this process is the persisted value`() = runTest {
+        val store = HeldStore(initial = preferencesOf(stringPreferencesKey("goal_met_mark") to key))
+        val source = AppStateDataSource(store)
+        val repository = AppStateRepository(source, backgroundScope)
+        assertEquals(key, repository.goalMetMark.first())
+        runCurrent()
+        assertEquals(0, store.edits)
+
+        val other = "2026-10-18|8000"
+        store.release.complete(Unit)
+        source.setGoalMetMark(other)
+        assertEquals(other, repository.goalMetMark.first())
+    }
+
+    @Test fun `a failing write is logged and the request stays visible`() = runTest {
         val store = HeldStore()
         val failure = IllegalStateException("storage unavailable")
         store.failure = failure

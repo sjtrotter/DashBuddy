@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -20,22 +19,24 @@ class AppStateRepository @Inject constructor(
     private val dataSource: AppStateDataSource,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
-    private val pendingMark = MutableStateFlow<String?>(null)
+    private val requested = MutableStateFlow<String?>(null)
 
-    /** A session mark survives bubble recreation, including a slow or failed durable write. */
-    val goalMetMark: Flow<String?> = combine(dataSource.goalMetMark, pendingMark) { persisted, pending ->
-        if (pending != null && persisted == pending) pendingMark.compareAndSet(pending, null)
-        pending ?: persisted
-    }.distinctUntilChanged()
+    /**
+     * A read prefers this process's latest request because persistence only matters across processes.
+     * A superseded write is cancelled by collectLatest and the newest key is always the last to land.
+     */
+    val goalMetMark: Flow<String?> = combine(dataSource.goalMetMark, requested) { persisted, request ->
+        request ?: persisted
+    }
 
     init {
         scope.launch {
-            pendingMark.filterNotNull().collectLatest { key -> write(key) }
+            requested.filterNotNull().collectLatest { write(it) }
         }
     }
 
     fun setGoalMetMark(key: String) {
-        pendingMark.value = key
+        requested.value = key
     }
 
     private suspend fun write(key: String) {
@@ -44,7 +45,6 @@ class AppStateRepository @Inject constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            // Retain pending so a storage failure cannot replay this session's celebration.
             Timber.tag(TAG).w(failure, "Could not persist goal met mark")
         }
     }
