@@ -76,7 +76,7 @@ class BubbleViewModel @Inject constructor(
     private val fuelPriceRepository: FuelPriceRepository,
     private val analyticsRepository: AnalyticsRepository,
     correctionRepository: CorrectionRepository,
-    ledgerRepository: LedgerRepository,
+    private val ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
     strategyRepository: StrategyRepository,
     private val appStateRepository: AppStateRepository,
@@ -84,6 +84,12 @@ class BubbleViewModel @Inject constructor(
     odometerReadingRepository: OdometerReadingRepository,
     private val clock: Clock,
 ) : ViewModel() {
+
+    internal val expenseActions = ExpenseActions(viewModelScope, ledgerRepository, clock)
+    internal fun recentLabels(category: cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory) =
+        ledgerRepository.recentLabels(category)
+    internal fun expenseOwner() = cloud.trotter.dashbuddy.feature.bubble.hud.expense.owner(
+        focusedRegion.value?.session?.sessionId, lastSession.value, clock.millis(), java.time.ZoneId.systemDefault())
 
     internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, analyticsRepository, clock)
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark

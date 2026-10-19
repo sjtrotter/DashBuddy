@@ -1070,7 +1070,8 @@ class AnalyticsProjector @Inject constructor(
         // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
         // 14: #1108 — per-job mileage budgets and session completion high-water allocation
         // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills readings surviving the bounded map)
-        // #1333: refold cash-only ownership and zero cash as no cash.
-        private const val PROJECTOR_VERSION = 16
+        // #1333: v16 refolded cash-only ownership and zero cash as no cash; v17 (S3b) stores a blank
+        // expense note as null, so rows projected before the rule are rebuilt too.
+        private const val PROJECTOR_VERSION = 17
     }
 }

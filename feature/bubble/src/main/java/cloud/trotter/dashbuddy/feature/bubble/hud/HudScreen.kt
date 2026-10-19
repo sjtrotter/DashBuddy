@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -37,20 +40,33 @@ fun HudScreen(
     offer: @Composable () -> Unit = {},
     log: @Composable () -> Unit = {},
     undoVisible: @Composable () -> Boolean = { undo != null },
+    sheetCompact: Boolean = false,
+    onSheetOutsideDismiss: () -> Unit = onSheetDismiss,
 ) {
     val tier = FontScaleTier.of(LocalDensity.current.fontScale, LocalGlance.current)
     CompositionLocalProvider(LocalHudTier provides tier) {
         Box(modifier.fillMaxSize().background(AppTheme.colors.bg)) {
             PhaseStrip(state.stripColor, state.mode == HudMode.RESTING || state.paused)
             Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp, bottom = 12.dp)) {
-                HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
+                val showingLog = state.logOpen || state.mode == HudMode.LOG
+                Box {
+                    Column {
+                        HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
+                        if (state.mode != HudMode.OFFER) {
+                            TopRow(state.top)
+                            if (showingLog) CompactHeroRow(state.hero, onGoalClick)
+                            else HeroRow(state.hero, onGoalCelebrated, onGoalClick)
+                        }
+                    }
+                    if (sheetOpen && sheetCompact && !showingLog && state.mode != HudMode.OFFER) {
+                        Box(Modifier.matchParentSize().testTag("hud.sheet.outside.header")
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                                onClick = onSheetOutsideDismiss))
+                    }
+                }
                 if (state.mode == HudMode.OFFER) {
                     Box(Modifier.fillMaxWidth().weight(1f).testTag("hud.slot.offer")) { offer() }
                 } else {
-                    TopRow(state.top)
-                    val showingLog = state.logOpen || state.mode == HudMode.LOG
-                    if (showingLog) CompactHeroRow(state.hero, onGoalClick)
-                    else HeroRow(state.hero, onGoalCelebrated, onGoalClick)
                     Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.body")) {
                         Column(Modifier.fillMaxSize()) {
                             when {
@@ -69,7 +85,8 @@ fun HudScreen(
                             if (!showingLog) UndoSlot(state.mode, undo, undoVisible)
                             Spacer(Modifier.height(8.dp))
                         }
-                        if (!showingLog) HudSheetHost(sheetOpen, onSheetDismiss, Modifier.fillMaxSize(), sheet)
+                        if (!showingLog) HudSheetHost(sheetOpen, onSheetDismiss, Modifier.fillMaxSize(),
+                            compact = sheetCompact, undoBandVisible = undoVisible(), onOutsideDismiss = onSheetOutsideDismiss, sheet = sheet)
                     }
                     Box(Modifier.testTag("hud.dock")) { Dock(state.dock, onDockClick) }
                 }

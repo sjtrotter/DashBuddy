@@ -190,7 +190,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
   read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the odometer total
   at the fill, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
-  them like the rest of the history (§6).
+  them like the rest of the history (§6). The expense sheet adds no stored field: its label is the
+  existing expense note, and its fill-up GPS stamp is the existing `odometerMiles`. Recent-label
+  chips are derived from non-voided expense notes, with no second label store. Expense actions
+  keep labels out of diagnostic logs entirely; a failed write logs only the exception class at WARN.
 - Vehicles you add and odometer readings you type stay on the device. A vehicle is a name you type,
   an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id; since #1355 it
   also carries the vehicle's profile by type (since #1358: a gas car, hybrid, EV, motorcycle, scooter or moped,

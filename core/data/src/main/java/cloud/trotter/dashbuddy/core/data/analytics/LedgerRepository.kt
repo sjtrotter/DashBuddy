@@ -80,6 +80,9 @@ class LedgerRepository @Inject constructor(
         )
     }
 
+    fun recentLabels(category: ExpenseCategory, limit: Int = 6): Flow<List<String>> =
+        ledgerDao.recentNotes(category.name, limit)
+
     fun expensesForSession(sessionId: String): Flow<List<ExpenseRecord>> =
         ledgerDao.expensesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
 

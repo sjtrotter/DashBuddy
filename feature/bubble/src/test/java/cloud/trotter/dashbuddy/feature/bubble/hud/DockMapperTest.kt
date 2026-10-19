@@ -43,16 +43,16 @@ class DockMapperTest {
     fun `live dock is cash tip expense odometer log`() {
         val items = DockMapper.map(HudMode.LIVE, odometerLoaded = true).items
         assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG), items.map { it.kind })
-        assertEquals(listOf(DockItemState.NORMAL, DockItemState.DISABLED, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
+        assertEquals(listOf(DockItemState.NORMAL, DockItemState.NORMAL, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
         for (mode in HudMode.entries) {
             DockMapper.map(mode, odometerLoaded = true).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
-                .forEach { assertEquals(if (it.kind == DockKind.CASH_TIP) DockItemState.NORMAL else DockItemState.DISABLED, it.state) }
+                .forEach { assertEquals(DockItemState.NORMAL, it.state) }
         }
     }
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
+        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
     }
 
     @Test
@@ -71,7 +71,7 @@ class DockMapperTest {
         cards.forEach { card ->
             val items = DockMapper.map(HudMode.LIVE, firstRun = false, cashTipCue = card.cuesCashTip, odometerLoaded = true).items
             assertEquals(DockItemState.ACCENT, items.single { it.kind == DockKind.CASH_TIP }.state)
-            assertEquals(DockItemState.DISABLED, items.single { it.kind == DockKind.EXPENSE }.state)
+            assertEquals(DockItemState.NORMAL, items.single { it.kind == DockKind.EXPENSE }.state)
         }
     }
     @Test fun `first run disables cash tip even with the cue`() {
@@ -99,4 +99,24 @@ class DockMapperTest {
             .items.any { it.kind == DockKind.CASH_TIP })
     }
 
+    @Test fun `expense is disabled at rest when no dash of today would own the entry`() {
+        val rest = DockMapper.map(HudMode.RESTING, odometerLoaded = true, expenseEnabled = false)
+        assertEquals(DockItemState.DISABLED, rest.items.first { it.kind == DockKind.EXPENSE }.state)
+        val live = DockMapper.map(HudMode.LIVE, odometerLoaded = true, expenseEnabled = true)
+        assertEquals(DockItemState.NORMAL, live.items.first { it.kind == DockKind.EXPENSE }.state)
+    }
+
+    @Test fun `expense accents only while its strip is visible live and at rest`() {
+        for (mode in listOf(HudMode.LIVE, HudMode.RESTING)) {
+            assertEquals(DockItemState.ACCENT, DockMapper.map(mode, odometerLoaded = true, expenseCue = true)
+                .items.single { it.kind == DockKind.EXPENSE }.state)
+            assertEquals(DockItemState.NORMAL, DockMapper.map(mode, odometerLoaded = true, expenseCue = false)
+                .items.single { it.kind == DockKind.EXPENSE }.state)
+        }
+    }
+    @Test fun `first resting dock offers unassigned expense before odometer and log`() {
+        val items = DockMapper.map(HudMode.RESTING, firstRun = true, odometerLoaded = true).items
+        assertEquals(listOf(DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), items.map { it.kind })
+        assertEquals(DockItemState.NORMAL, items.first().state)
+    }
 }

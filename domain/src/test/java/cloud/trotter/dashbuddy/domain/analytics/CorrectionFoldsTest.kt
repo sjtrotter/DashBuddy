@@ -31,6 +31,15 @@ class CorrectionFoldsTest {
         currentCostPerMile = null,
     )
 
+    @Test fun `expense fold normalizes blank notes to null`() {
+        for (note in listOf(null, "", " \t\n\r", "\u2003\u00a0")) {
+            val result = fold(AppEventType.EXPENSE_LOGGED, ExpenseLoggedPayload(null, ExpenseCategory.OTHER, 1.0, note))
+            assertNull(result.expenseLogged!!.note)
+        }
+        val result = fold(AppEventType.EXPENSE_LOGGED, ExpenseLoggedPayload(null, ExpenseCategory.OTHER, 1.0, " wipers "))
+        assertEquals(" wipers ", result.expenseLogged!!.note)
+    }
+
     @Test
     fun `ledger folds emit payload fields and do not measure odometer stamps`() {
         val expense = fold(AppEventType.EXPENSE_LOGGED, ExpenseLoggedPayload("payload-session", ExpenseCategory.PARKING, 4.5, "meter"))

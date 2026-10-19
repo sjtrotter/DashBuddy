@@ -117,6 +117,14 @@ class LogMapperTest {
         assertEquals(baseline, job(items))
         assertEquals(11.4, items.filterIsInstance<ExpenseRow>().single().amount, 0.0)
     }
+    @Test fun `expense mapping preserves category and note for every category`() {
+        cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory.entries.forEach { category ->
+            val record = logExpense().copy(category = category, note = "wipers")
+            val row = map(CardStack.Empty, LogData(expenses = listOf(record))).single() as ExpenseRow
+            assertEquals(category, row.category)
+            assertEquals("wipers", row.note)
+        }
+    }
     @Test fun `voided expense is dropped`() {
         assertTrue(map(CardStack.Empty, LogData(expenses = listOf(logExpense().copy(voidedAt = 7_000)))).isEmpty())
     }

@@ -39,11 +39,14 @@ fun UndoStrip(model: UndoStripModel, onUndo: () -> Unit) {
         }
     }
     if (!model.busy && !model.failed && rememberDeadlinePassed(model.deadline).value) return
+    val where = model.where ?: model.whereFallback?.let { stringResource(it) }
     Box(Modifier.fillMaxWidth().height(48.dp).testTag("undo.strip")) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (model.failed) stringResource(R.string.hud_undo_failed) else
-                stringResource(R.string.hud_undo_line, stringResource(model.whatLabel), Formats.money(model.amountCents / 100.0),
-                    model.where ?: stringResource(R.string.hud_cash_tip_delivery)),
+                if (where == null) stringResource(R.string.hud_undo_without_where,
+                    stringResource(model.whatLabel), Formats.money(model.amountCents / 100.0))
+                else stringResource(R.string.hud_undo_line, stringResource(model.whatLabel),
+                    Formats.money(model.amountCents / 100.0), where),
                 Modifier.weight(1f), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             TextButton(onClick = { if (!tapped && !model.busy) { tapped = true; onUndo() } }, enabled = !tapped && !model.busy) {

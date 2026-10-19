@@ -748,7 +748,20 @@ optional gallons, and optional `odometerMiles` from `OdometerRepository.totalMil
 GPS odometer, which runs only while a dash is tracked; null until loaded).
 Both carry `occurredAt`. `ExpenseCategorySerializer` encodes payload categories by name and decodes
 with `ExpenseCategory.fromStorage`; unknown names in payload JSON or Room fall back to `OTHER`
-without losing the expense amount or note.
+without losing the expense amount or note. S3b adds `CAR_CARE` (displayed as “Car care”) without a
+schema change. `LedgerDao.recentNotes(category, limit)` derives distinct, non-blank notes from
+non-voided expenses, ordered by their newest surviving occurrence (then sequence id), surfaced
+as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. At rest the dock offers Expense only when today's last dash would own the entry — an unassigned expense would show nowhere on the HUD.
+
+The S3b HUD expense sheet writes Long cents through one cents-to-amount conversion in
+`ExpenseActions`. Gas writes `FUEL_FILLUP`, with required positive gallons parsed once at the
+action boundary (five integer and three fractional digits) and the current `gpsTotalMiles` as
+`odometerMiles`, null until loaded. Other picks write `EXPENSE_LOGGED`; Car care, Supplies and
+Other use the existing note for an optional label. `ExpenseOwner.owner` chooses the active dash,
+else the last dash only if it ended on the current local date, else null. Its last-session argument
+is the existing analytics `SessionRecord` (the live `Session` has no `endedAt`). Expense remains
+absent from the resting dock. Undo voids the committed sequence id; all three HUD notices share
+one newest-token decision, with a ten-second expense strip and retry after failed undo.
 `pricePerGallon` is derived at read time, null for null or zero gallons, never stored.
 
 Undo appends `LEDGER_ENTRY_VOIDED(targetEventSequenceId)` and stamps the target's `voidedAt`.
@@ -757,7 +770,7 @@ unknown or forward target, it is a counted skip with a sequence-id-only `WARN`.
 Cash tips stay `DELIVERY_ADJUSTMENT` through `CorrectionRepository.adjustDelivery`; undo is a
 reversing adjustment with the previous `newCashTip`, or `0.0` when absent; one undo window is open
 at a time. Cash targets a delivery of the focused dash; the projector drops cash on null-session rows.
-Off-dash expenses and fills carry a null session; the hub does not render ledger rows yet.
+Expenses and fills without an active or same-day ended dash carry a null session; the hub does not render ledger rows yet.
 Commit writes at the tap; the 10 second undo window is UI state. An active-drop tip waits for its
 row, and is dropped with a `WARN` and a log line to the dasher when the task is unassigned or no row
 appears within a bound after the dash ends. ADR-0012 lists four questions open before slice 3,

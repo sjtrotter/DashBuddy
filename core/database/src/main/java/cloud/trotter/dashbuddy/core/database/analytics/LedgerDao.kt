@@ -49,6 +49,22 @@ abstract class LedgerDao {
     """)
     abstract fun fuelTotalForSession(sessionId: String): Flow<Double>
 
+    /**
+     * Distinct notes, ordered by each note's newest surviving occurrence (time, then sequence id of
+     * THAT occurrence — two independent maxima could pair a time and an id from different rows).
+     * One pass over the category; blank notes never reach a row (the fold stores them as null).
+     */
+    @Query("""
+        SELECT note FROM (
+            SELECT note, occurredAt, eventSequenceId,
+                ROW_NUMBER() OVER (PARTITION BY note ORDER BY occurredAt DESC, eventSequenceId DESC) AS rn
+            FROM expense_records
+            WHERE category = :category AND voidedAt IS NULL AND note IS NOT NULL
+        ) WHERE rn = 1
+        ORDER BY occurredAt DESC, eventSequenceId DESC LIMIT :limit
+    """)
+    abstract fun recentNotes(category: String, limit: Int): Flow<List<String>>
+
     @Query("DELETE FROM expense_records")
     abstract suspend fun deleteAllExpenses()
 
