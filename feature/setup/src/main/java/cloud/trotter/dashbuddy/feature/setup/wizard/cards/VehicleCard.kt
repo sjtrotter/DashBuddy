@@ -50,45 +50,24 @@ import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 import cloud.trotter.dashbuddy.feature.setup.wizard.vehicleTypeLabel
 import cloud.trotter.dashbuddy.feature.setup.wizard.VEHICLE_NOT_LISTED
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftActions
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftState
 import android.net.Uri
 
 @Composable
 fun VehicleCard(
     step: WizardStep,
-    vehicleClass: VehicleClass,
-    profile: VehicleProfile,
-    consumption: Double,
-    electricityPrice: Double,
-    onVehicleTypeSelected: (VehicleType) -> Unit,
-    onPowertrainSelected: (Powertrain) -> Unit,
-    onConsumptionChanged: (Double) -> Unit,
-    onElectricityPriceChanged: (Double) -> Unit,
-    vehicleLookupAllowed: Boolean,
-    manualMpgEntry: Boolean,
-    year: String,
-    make: String,
-    model: String,
-    trim: String,
-    mpg: Float,
-    availableYears: List<String>,
-    availableMakes: List<String>,
-    availableModels: List<String>,
-    availableTrims: List<String>,
+    draft: VehicleDraftState,
+    actions: VehicleDraftActions,
     onAllowVehicleLookup: () -> Unit,
-    onManualMpgEntry: () -> Unit,
-    onYearSelected: (String) -> Unit,
-    onMakeSelected: (String) -> Unit,
-    onModelSelected: (String) -> Unit,
-    onTrimSelected: (String) -> Unit,
-    onMpgChanged: (Float) -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
 
     // Trigger the manual override UI if any of these match
-    val isCustom = make == VEHICLE_NOT_LISTED || model == VEHICLE_NOT_LISTED || trim == VEHICLE_NOT_LISTED
-    val fields = EconomyFieldGroups.fieldsFor(profile)
-    val showMpgEntry = EconomyField.VEHICLE_MPG in fields && (manualMpgEntry || isCustom || !profile.hasCarIdentity)
-    val hasVehicleIdentity = listOf(year, make, model).all { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
+    val isCustom = draft.make == VEHICLE_NOT_LISTED || draft.model == VEHICLE_NOT_LISTED || draft.trim == VEHICLE_NOT_LISTED
+    val fields = EconomyFieldGroups.fieldsFor(draft.profile)
+    val showMpgEntry = EconomyField.VEHICLE_MPG in fields && (draft.manualMpgEntry || isCustom || !draft.profile.hasCarIdentity)
+    val hasVehicleIdentity = listOf(draft.year, draft.make, draft.model).all { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
 
     Column(
         modifier = Modifier
@@ -97,20 +76,20 @@ fun VehicleCard(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        WizardCardHeader(step, vehicleClass)
+        WizardCardHeader(step, draft.vehicleClass)
 
         Spacer(modifier = Modifier.height(24.dp))
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VehicleType.entries.forEach { type ->
-                FilterChip(selected = profile.vehicleType == type,
-                    onClick = { onVehicleTypeSelected(type) }, label = { Text(stringResource(vehicleTypeLabel(type))) })
+                FilterChip(selected = draft.profile.vehicleType == type,
+                    onClick = { actions.updateVehicleType(type) }, label = { Text(stringResource(vehicleTypeLabel(type))) })
             }
         }
-        if (profile is ScooterMoped) {
+        if (draft.profile is ScooterMoped) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Powertrain.entries.forEach { power ->
-                    FilterChip(selected = profile.powertrain == power, onClick = { onPowertrainSelected(power) },
+                    FilterChip(selected = draft.profile.powertrain == power, onClick = { actions.updatePowertrain(power) },
                         label = { Text(stringResource(if (power == Powertrain.GAS) R.string.vehicle_power_gas else R.string.vehicle_power_electric)) })
                 }
             }
@@ -118,30 +97,30 @@ fun VehicleCard(
         if (EconomyField.KWH_PER_100_MI in fields || EconomyField.WH_PER_MILE in fields) {
             VehicleNumberInput(
                 label = stringResource(if (EconomyField.WH_PER_MILE in fields) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi),
-                value = consumption, onChange = onConsumptionChanged,
+                value = if (draft.profile is EBike) draft.whPerMile else draft.kwhPer100Mi, onChange = actions::updateConsumption,
             )
             VehicleNumberInput(label = stringResource(R.string.vehicle_electricity_price),
-                value = electricityPrice, onChange = onElectricityPriceChanged)
+                value = draft.electricityPricePerKwh, onChange = actions::updateElectricityPrice)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         AnimatedVisibility(
-            visible = profile.hasCarIdentity,
+            visible = draft.profile.hasCarIdentity,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
             Column {
                 if (hasVehicleIdentity) {
                     Text(
-                        text = listOf(year, make, model, trim)
+                        text = listOf(draft.year, draft.make, draft.model, draft.trim)
                             .filter { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
                             .joinToString(" "),
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
-                if (!vehicleLookupAllowed) {
+                if (!draft.lookupAllowed) {
                     Text(
                         text = stringResource(R.string.wizard_vehicle_lookup_prompt),
                         style = MaterialTheme.typography.bodyMedium
@@ -152,51 +131,51 @@ fun VehicleCard(
                 } else {
                     VehicleDropdown(
                         label = stringResource(R.string.wizard_vehicle_card_year_label),
-                        value = year,
-                        options = availableYears,
-                        onValueChanged = onYearSelected
+                        value = draft.year,
+                        options = draft.availableYears,
+                        onValueChanged = actions::onYearSelected
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     VehicleDropdown(
                         label = stringResource(R.string.wizard_vehicle_card_make_label),
-                        value = make,
-                        options = availableMakes,
-                        onValueChanged = onMakeSelected,
-                        enabled = year.isNotBlank() && availableMakes.isNotEmpty()
+                        value = draft.make,
+                        options = draft.availableMakes,
+                        onValueChanged = actions::onMakeSelected,
+                        enabled = draft.year.isNotBlank() && draft.availableMakes.isNotEmpty()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Hide Model dropdown if they clicked Not Listed for Make
-                    AnimatedVisibility(visible = make.isNotBlank() && make != VEHICLE_NOT_LISTED) {
+                    AnimatedVisibility(visible = draft.make.isNotBlank() && draft.make != VEHICLE_NOT_LISTED) {
                         Column {
                             VehicleDropdown(
                                 label = stringResource(R.string.wizard_vehicle_card_model_label),
-                                value = model,
-                                options = availableModels,
-                                onValueChanged = onModelSelected,
-                                enabled = availableModels.isNotEmpty()
+                                value = draft.model,
+                                options = draft.availableModels,
+                                onValueChanged = actions::onModelSelected,
+                                enabled = draft.availableModels.isNotEmpty()
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
                             // Hide Trim dropdown if they clicked Not Listed for Model
-                            AnimatedVisibility(visible = model.isNotBlank() && model != VEHICLE_NOT_LISTED) {
+                            AnimatedVisibility(visible = draft.model.isNotBlank() && draft.model != VEHICLE_NOT_LISTED) {
                                 VehicleDropdown(
                                     label = stringResource(R.string.wizard_vehicle_card_trim_label),
-                                    value = trim,
-                                    options = availableTrims,
-                                    onValueChanged = onTrimSelected,
-                                    enabled = availableTrims.isNotEmpty()
+                                    value = draft.trim,
+                                    options = draft.trimNames,
+                                    onValueChanged = actions::onTrimSelected,
+                                    enabled = draft.trimNames.isNotEmpty()
                                 )
                             }
                         }
                     }
                 }
                 if (!showMpgEntry) {
-                    TextButton(onClick = onManualMpgEntry) {
+                    TextButton(onClick = actions::onManualMpgEntry) {
                         Text(stringResource(R.string.wizard_vehicle_manual_entry))
                     }
                 }
@@ -214,9 +193,9 @@ fun VehicleCard(
                 OutlinedButton(
                     onClick = {
                         val query = listOfNotNull(
-                            year.takeIf { it.isNotBlank() },
-                            make.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
-                            model.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
+                            draft.year.takeIf { it.isNotBlank() },
+                            draft.make.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
+                            draft.model.takeIf { it != VEHICLE_NOT_LISTED && it.isNotBlank() },
                             "mpg",
                         ).joinToString(" ")
 
@@ -240,7 +219,7 @@ fun VehicleCard(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = stringResource(R.string.wizard_vehicle_card_mpg_format, Formats.decimal(mpg.toDouble())),
+                    text = stringResource(R.string.wizard_vehicle_card_mpg_format, Formats.decimal(draft.mpg.toDouble())),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
@@ -256,8 +235,8 @@ fun VehicleCard(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Slider(
-                        value = mpg,
-                        onValueChange = onMpgChanged,
+                        value = draft.mpg,
+                        onValueChange = actions::updateEstimatedMpg,
                         valueRange = 8f..120f,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -272,7 +251,7 @@ fun VehicleCard(
             }
         }
 
-        if (profile is EBike) {
+        if (draft.profile is EBike) {
             Text(
                 text = stringResource(R.string.wizard_vehicle_card_ebike_note),
                 style = MaterialTheme.typography.bodyLarge,

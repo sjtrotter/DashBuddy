@@ -22,6 +22,7 @@ import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
 import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftState
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
@@ -39,6 +40,7 @@ import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 @Composable
 fun EconomyCostsCard(
     state: WizardState,
+    vehicle: VehicleDraftState,
     onClassChange: (VehicleClass) -> Unit,
     onTiresChange: (Double, Double) -> Unit,
     onOilChange: (Double, Double) -> Unit,
@@ -59,7 +61,7 @@ fun EconomyCostsCard(
 ) {
     // Build a live UserEconomy from current state so the editor can show
     // $/mi summaries without going through the repository.
-    val liveEconomy = remember(state) { state.toUserEconomy() }
+    val liveEconomy = remember(state, vehicle) { state.toUserEconomy(vehicle) }
 
     Card(
         modifier = Modifier
@@ -77,8 +79,8 @@ fun EconomyCostsCard(
             WizardCardHeader(step = WizardStep.ECONOMY_COSTS)
 
             Spacer(modifier = Modifier.height(12.dp))
-            if (EconomyField.VEHICLE_CLASS in EconomyFieldGroups.fieldsFor(state.vehicleProfile)) VehicleClassPicker(
-                selected = state.vehicleClass,
+            if (EconomyField.VEHICLE_CLASS in EconomyFieldGroups.fieldsFor(vehicle.profile)) VehicleClassPicker(
+                selected = vehicle.vehicleClass,
                 onClassChange = onClassChange,
             )
 

@@ -60,10 +60,7 @@ fun WizardScreen(
     val steps by viewModel.steps.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    val availableYears by viewModel.availableYears.collectAsStateWithLifecycle()
-    val availableMakes by viewModel.availableMakes.collectAsStateWithLifecycle()
-    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
-    val availableTrimNames by viewModel.availableTrimNames.collectAsStateWithLifecycle()
+    val vehicle by viewModel.vehicleDraft.state.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()
@@ -132,32 +129,9 @@ fun WizardScreen(
                     WizardStep.VEHICLE -> {
                         VehicleCard(
                             step = currentStep,
-                            vehicleClass = state.vehicleClass,
-                            profile = state.vehicleProfile,
-                            consumption = if (state.vehicleProfile is cloud.trotter.dashbuddy.domain.model.vehicle.EBike) state.whPerMile else state.kwhPer100Mi,
-                            electricityPrice = state.electricityPricePerKwh,
-                            onVehicleTypeSelected = viewModel::updateVehicleType,
-                            onPowertrainSelected = viewModel::updatePowertrain,
-                            onConsumptionChanged = viewModel::updateConsumption,
-                            onElectricityPriceChanged = viewModel::updateElectricityPrice,
-                            vehicleLookupAllowed = state.vehicleLookupAllowed,
-                            manualMpgEntry = state.manualMpgEntry,
-                            year = state.vehicleYear,
-                            make = state.vehicleMake,
-                            model = state.vehicleModel,
-                            trim = state.vehicleTrim,
-                            mpg = state.estimatedMpg,
-                            availableYears = availableYears,
-                            availableMakes = availableMakes,
-                            availableModels = availableModels,
-                            availableTrims = availableTrimNames,
+                            draft = vehicle,
+                            actions = viewModel.vehicleDraft,
                             onAllowVehicleLookup = viewModel::allowVehicleLookup,
-                            onManualMpgEntry = viewModel::onManualMpgEntry,
-                            onYearSelected = viewModel::onYearSelected,
-                            onMakeSelected = viewModel::onMakeSelected,
-                            onModelSelected = viewModel::onModelSelected,
-                            onTrimSelected = viewModel::onTrimSelected,
-                            onMpgChanged = viewModel::updateEstimatedMpg
                         )
                     }
 
@@ -175,7 +149,8 @@ fun WizardScreen(
                     WizardStep.ECONOMY_COSTS -> {
                         EconomyCostsCard(
                             state = state,
-                            onClassChange = viewModel::updateVehicleClass,
+                            vehicle = vehicle,
+                            onClassChange = viewModel.vehicleDraft::updateVehicleClass,
                             onTiresChange = viewModel::updateTires,
                             onOilChange = viewModel::updateOilChange,
                             onBrakesChange = viewModel::updateBrakes,
@@ -190,8 +165,8 @@ fun WizardScreen(
                             onChainChange = viewModel::updateChain,
                             onBatteryChange = viewModel::updateBattery,
                             onBeltChange = viewModel::updateBelt,
-                            onConsumptionChange = viewModel::updateConsumption,
-                            onElectricityPriceChange = viewModel::updateElectricityPrice,
+                            onConsumptionChange = viewModel.vehicleDraft::updateConsumption,
+                            onElectricityPriceChange = viewModel.vehicleDraft::updateElectricityPrice,
                         )
                     }
 
