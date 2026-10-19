@@ -197,10 +197,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
   over the same span; car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
-  and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
-  include both, like the rest of the history and preferences (§6).
-- The `odometer_prompts` app preference stores whether the waiting and resting cards show a
-  Log odometer link (default on). It stays on the device and is included in preferences backup.
+  and never writes a vehicle name to a log at INFO or above. The `odometer_prompts` setting (on by default) controls the reminder to log a reading: the dock's Odometer block lit
+  in accent for the first ten minutes of a dash and after a dash until a reading, and one "Log your odometer" line in the
+  session-start notification. It stays on the device and is included in preferences backup.
 - Preferences and consents are DataStore files on the device (`core/datastore`). General app/economy preferences
   are backed up; the two dedicated consent stores are excluded from backup and transfer so a new device re-asks.
   `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old
