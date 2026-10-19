@@ -15,10 +15,8 @@ data class OdometerSheetModel(
     val writeFailed: Boolean = false,
 )
 
-data class OdometerNoticeModel(val readingMiles: Int, val shownAt: Long) {
-    fun visibleAt(now: Long): Boolean = now - shownAt < VISIBLE_MS
-
-    companion object {
-        const val VISIBLE_MS = 10_000L
-    }
-}
+data class OdometerNoticeModel(
+    val readingMiles: Int,
+    /** Identity for the sheet's one-time close, never compared with a ticker. */
+    val shownAt: Long,
+)

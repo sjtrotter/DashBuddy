@@ -22,21 +22,37 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 @Composable
 fun Keypad(onDigit: (Int) -> Unit, onPoint: (() -> Unit)?, onBackspace: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.width(188.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9), listOf(-1, 0, -2)).forEach { row ->
+        listOf(
+            listOf(Key.Digit(1), Key.Digit(2), Key.Digit(3)),
+            listOf(Key.Digit(4), Key.Digit(5), Key.Digit(6)),
+            listOf(Key.Digit(7), Key.Digit(8), Key.Digit(9)),
+            listOf(Key.Point, Key.Digit(0), Key.Backspace),
+        ).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 row.forEach { key ->
-                    val enabled = key != -1 || onPoint != null
-                    Box(Modifier.size(width = 60.dp, height = 38.dp)
-                        .testTag(when (key) { -1 -> "keypad.point"; -2 -> "keypad.backspace"; else -> "keypad.$key" })
+                    val enabled = key != Key.Point || onPoint != null
+                    Box(Modifier.widthIn(min = 60.dp).heightIn(min = 38.dp)
+                        .testTag(when (key) {
+                            Key.Point -> "keypad.point"
+                            Key.Backspace -> "keypad.backspace"
+                            is Key.Digit -> "keypad.${key.n}"
+                        })
                         .background(AppTheme.colors.surface3, RoundedCornerShape(6.dp))
                         .clickable(enabled = enabled, role = Role.Button) {
-                            when (key) { -1 -> onPoint?.invoke(); -2 -> onBackspace(); else -> onDigit(key) }
+                            when (key) {
+                                Key.Point -> onPoint?.invoke()
+                                Key.Backspace -> onBackspace()
+                                is Key.Digit -> onDigit(key.n)
+                            }
                         }, contentAlignment = Alignment.Center) {
-                        if (key == -2) Icon(Icons.AutoMirrored.Outlined.Backspace,
-                            stringResource(R.string.hud_keypad_backspace), tint = AppTheme.colors.text2,
-                            modifier = Modifier.size(22.dp))
-                        else Text(if (key == -1) "." else key.toString(), style = AppTheme.num.mdNum,
-                            color = if (enabled) AppTheme.colors.text else AppTheme.colors.text3)
+                        when (key) {
+                            Key.Backspace -> Icon(Icons.AutoMirrored.Outlined.Backspace,
+                                stringResource(R.string.hud_keypad_backspace), tint = AppTheme.colors.text2,
+                                modifier = Modifier.size(22.dp))
+                            Key.Point, is Key.Digit -> Text(if (key is Key.Digit) key.n.toString() else ".",
+                                style = AppTheme.num.mdNum,
+                                color = if (enabled) AppTheme.colors.text else AppTheme.colors.text3)
+                        }
                     }
                 }
             }

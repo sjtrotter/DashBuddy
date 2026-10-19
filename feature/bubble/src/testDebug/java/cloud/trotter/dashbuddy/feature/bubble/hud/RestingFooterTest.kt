@@ -42,7 +42,7 @@ class RestingFooterTest {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    OdometerFooter("Civic", last, ReconciledMileage(59, 57.3)) { opened = true }
+                    OdometerFooter("Civic", last, ReconciledMileage(59, 57.3, reading.occurredAt - 86_400_000)) { opened = true }
                 }
             }
         }
@@ -51,7 +51,7 @@ class RestingFooterTest {
     @Test fun `shows last reading with vehicle name`() {
         show()
         compose.onNodeWithText("Civic 52,388 mi,", substring = true).assertIsDisplayed().performClick()
-        compose.onNodeWithText("car 59 mi, tracked 57.3 mi").assertIsDisplayed()
+        compose.onNodeWithText("car 59 mi, tracked 57.3 mi since ${odometerDate(reading.occurredAt - 86_400_000)}").assertIsDisplayed()
         assertTrue(opened)
     }
     @Test fun `hidden without a reading`() {

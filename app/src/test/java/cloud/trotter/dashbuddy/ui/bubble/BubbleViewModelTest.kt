@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
@@ -142,8 +145,7 @@ class BubbleViewModelTest {
 
     private fun garage(): cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository {
         val repo: cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository = mock()
-        whenever(repo.vehicles).thenReturn(flowOf(emptyList()))
-        whenever(repo.activeVehicle).thenReturn(flowOf(null))
+        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null)))
         return repo
     }
     private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
@@ -151,11 +153,11 @@ class BubbleViewModelTest {
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
         return repo
     }
-    private fun viewModel() = BubbleViewModel(
+    private fun viewModel(garageRepository: GarageRepository = garage()) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
-        garageRepository = garage(), odometerReadingRepository = readings(),
+        garageRepository = garageRepository, odometerReadingRepository = readings(),
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,
@@ -165,6 +167,26 @@ class BubbleViewModelTest {
         ledgerRepository = ledgerRepository,
         devSettingsRepository = devSettingsRepository,
     )
+
+    @Test
+    fun `vehicles and active vehicle share one garage collection`() = runTest(dispatcher) {
+        stubNoDashes()
+        val repo: GarageRepository = mock()
+        val updates = MutableStateFlow(Garage(emptyList(), null))
+        var collections = 0
+        whenever(repo.garage).thenReturn(updates.onStart { collections++ })
+        val vm = viewModel(repo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vehicles.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.activeVehicle.collect {} }
+        runCurrent()
+        assertEquals(1, collections)
+        val civic = Vehicle("civic", "Civic", 0)
+        updates.value = Garage(listOf(civic), civic.id)
+        runCurrent()
+        assertEquals(listOf(civic), vm.vehicles.value)
+        assertEquals(civic, vm.activeVehicle.value)
+        assertEquals(1, collections)
+    }
 
     @Test
     fun `logData merges events deliveries and ledger rows for the displayed dash`() = runTest {

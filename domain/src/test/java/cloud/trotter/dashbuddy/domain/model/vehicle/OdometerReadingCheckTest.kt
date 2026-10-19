@@ -12,10 +12,14 @@ class OdometerReadingCheckTest {
 
     @Test fun `no vehicle returns NoVehicle`() { assertEquals(OdometerCheck.NoVehicle, check(car = null)) }
     @Test fun `empty or zero reading returns Empty`() {
-        assertEquals(OdometerCheck.Empty, check(miles = null))
-        assertEquals(OdometerCheck.Empty, check(miles = 0))
+        assertEquals(OdometerCheck.Empty, check(miles = null, previous = last))
+        assertEquals(OdometerCheck.Empty, check(miles = 0, previous = last))
     }
     @Test fun `first reading for a vehicle returns First`() { assertEquals(OdometerCheck.First("Civic"), check(previous = null)) }
+    @Test fun `a new vehicle is first before any digit`() {
+        assertEquals(OdometerCheck.First("Civic"), check(miles = null, previous = null))
+        assertEquals(OdometerCheck.First("Civic"), check(miles = 0, previous = null))
+    }
     @Test fun `reading below last returns Lower`() { assertEquals(OdometerCheck.Lower(52_140), check(52_139)) }
     @Test fun `equal reading with no tracked miles is Ok with zero delta`() {
         assertEquals(OdometerCheck.Ok(0, 0), check(52_140, gps = 100.0))

@@ -34,4 +34,19 @@ class OdometerEntryStateTest {
         assertEquals(OdometerPage.VEHICLES, state.page)
         assertEquals(52, state.reading)
     }
+    @Test fun `a vehicle change keeps the digits`() {
+        val state = entry()
+        state.show(hasVehicle = true)
+        state.digit(5)
+        state.digit(2)
+        state.showAddVehicle()
+        state.vehicleChanged()
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+        assertEquals(52, state.reading)
+        state.page = OdometerPage.VEHICLES
+        state.vehicleChanged()
+        assertEquals(OdometerPage.READING, state.page)
+        assertEquals(52, state.reading)
+    }
 }

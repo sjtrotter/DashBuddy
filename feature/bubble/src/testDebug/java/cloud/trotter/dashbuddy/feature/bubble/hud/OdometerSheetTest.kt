@@ -89,6 +89,11 @@ class OdometerSheetTest {
         compose.runOnIdle { model = model.copy(check = OdometerCheck.FewerThanTracked(12, 84.0, clock.millis)) }; settle()
         compose.onNodeWithTag("odometer.save").assertIsEnabled()
     }
+    @Test fun `large jump says more than expected`() {
+        model = model.copy(check = OdometerCheck.LargeJump(469_260, clock.millis))
+        show()
+        compose.onNodeWithText("+469,260 mi since ${odometerDate(clock.millis)}, more than expected").assertIsDisplayed()
+    }
     @Test fun `add vehicle invokes callback with trimmed name`() {
         model = model.copy(page = OdometerPage.ADD_VEHICLE)
         show()

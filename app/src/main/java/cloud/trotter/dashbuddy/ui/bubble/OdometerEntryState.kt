@@ -31,7 +31,7 @@ internal class OdometerEntryState(
         addVehicleFrom = page
         page = OdometerPage.ADD_VEHICLE
     }
-    fun vehicleChanged() { digits = ""; page = OdometerPage.READING }
+    fun vehicleChanged() { page = OdometerPage.READING }
     fun back(hasVehicle: Boolean) {
         when {
             !hasVehicle || page == OdometerPage.READING -> open = false

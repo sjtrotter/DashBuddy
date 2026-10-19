@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import java.time.Clock
@@ -82,8 +83,10 @@ class BubbleViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
-    val vehicles = garageRepository.vehicles.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val activeVehicle = garageRepository.activeVehicle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val garage = garageRepository.garage
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Garage(emptyList(), null))
+    val vehicles = garage.map { it.vehicles }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val activeVehicle = garage.map { it.active }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     @OptIn(ExperimentalCoroutinesApi::class)
     val lastReading = activeVehicle.flatMapLatest { vehicle ->

@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -16,6 +17,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.theme.LocalGlance
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
+import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.Keypad
 import org.junit.Assert.*
 import java.util.Locale
 import org.junit.After
@@ -25,6 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -125,6 +128,26 @@ class HudFontScaleTest {
                 assertEquals(figure, layouts.single().layoutInput.text.text)
                 assertEquals(1, layouts.single().lineCount)
             }
+    }
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `keypad cells grow at the largest tier`() {
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, 2f)) {
+                DashBuddyTheme(glance = 1.3f) {
+                    CompositionLocalProvider(LocalHudTier provides FontScaleTier.of(2f, LocalGlance.current)) {
+                        Keypad({}, {}, {})
+                    }
+                }
+            }
+        }
+        settle()
+        val cell = compose.onNodeWithTag("keypad.8").getBoundsInRoot()
+        val digit = value("keypad.8", "8").getBoundsInRoot()
+        assertTrue("Cell should grow beyond 38 dp: $cell", cell.height > 38.dp)
+        assertTrue(digit.top >= cell.top && digit.bottom <= cell.bottom)
+        assertTrue(digit.left >= cell.left && digit.right <= cell.right)
     }
     @Test fun glance112_scalesCardText() {
         show()

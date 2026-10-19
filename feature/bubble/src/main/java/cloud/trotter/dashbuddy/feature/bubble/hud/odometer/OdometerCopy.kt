@@ -25,6 +25,6 @@ internal fun odometerCopy(model: OdometerSheetModel): String = when (val check =
     is OdometerCheck.Lower -> stringResource(R.string.hud_odometer_lower, Formats.commaInt(check.lastMiles))
     is OdometerCheck.FewerThanTracked -> stringResource(R.string.hud_odometer_fewer,
         odometerMiles(check.tracked), odometerDate(check.since), Formats.commaInt(check.delta))
-    is OdometerCheck.LargeJump -> stringResource(R.string.hud_odometer_delta, Formats.commaInt(check.delta), odometerDate(check.since))
+    is OdometerCheck.LargeJump -> stringResource(R.string.hud_odometer_large_jump, Formats.commaInt(check.delta), odometerDate(check.since))
     is OdometerCheck.Ok -> stringResource(R.string.hud_odometer_delta, Formats.commaInt(check.delta), odometerDate(check.since))
 }

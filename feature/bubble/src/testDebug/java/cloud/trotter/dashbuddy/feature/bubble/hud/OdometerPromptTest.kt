@@ -66,6 +66,15 @@ class OdometerPromptTest {
         compose.runOnIdle { last = LastOdometerReading(52_388, 100.0, startedAt) }; settle()
         compose.onNodeWithText("Log odometer").assertDoesNotExist()
     }
+    @Test fun `a reading just before the start hides the link`() {
+        last = LastOdometerReading(52_388, 100.0, startedAt - 60_000)
+        show()
+        compose.onNodeWithText("Log odometer").assertDoesNotExist()
+        compose.runOnIdle { last = last!!.copy(occurredAt = startedAt - 600_000) }; settle()
+        compose.onNodeWithText("Log odometer").assertDoesNotExist()
+        compose.runOnIdle { last = last!!.copy(occurredAt = startedAt - 600_001) }; settle()
+        compose.onNodeWithText("Log odometer").assertIsDisplayed()
+    }
     @Test fun `pref off hides the link`() {
         enabled = false; show()
         compose.onNodeWithText("Log odometer").assertDoesNotExist()

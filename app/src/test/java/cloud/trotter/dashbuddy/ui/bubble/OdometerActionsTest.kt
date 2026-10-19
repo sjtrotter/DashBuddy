@@ -85,6 +85,41 @@ class OdometerActionsTest {
         verify(garage).selectVehicle("civic")
         verifyNoInteractions(readings)
     }
+    @Test fun `the notice clears itself after ten seconds`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        val notice = actions.notice.value!!
+        advanceTimeBy(9_999)
+        runCurrent()
+        assertSame(notice, actions.notice.value)
+        advanceTimeBy(1)
+        runCurrent()
+        assertNull(actions.notice.value)
+    }
+
+    @Test fun `a newer notice outlives the older timer`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        val first = actions.notice.value!!
+        advanceTimeBy(5_000)
+        actions.save("civic", 52_400)
+        runCurrent()
+        val second = actions.notice.value!!
+        assertEquals(52_400, second.readingMiles)
+        assertNotSame(first, second)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertSame(second, actions.notice.value)
+        advanceTimeBy(4_999)
+        runCurrent()
+        assertSame(second, actions.notice.value)
+        advanceTimeBy(1)
+        runCurrent()
+        assertNull(actions.notice.value)
+    }
+
     @Test fun `a slow write still shows the notice for ten seconds`() = runTest {
         val tapAt = 100L
         val completionAt = tapAt + 11_000L
@@ -106,11 +141,13 @@ class OdometerActionsTest {
         verify(readings).record("civic", 52_388, tapAt)
         val notice = actions.notice.value!!
         assertEquals(completionAt, notice.shownAt)
-        assertTrue(notice.visibleAt(schedulerClock.millis()))
+        assertSame(notice, actions.notice.value)
         advanceTimeBy(9_999)
-        assertTrue(notice.visibleAt(schedulerClock.millis()))
+        runCurrent()
+        assertSame(notice, actions.notice.value)
         advanceTimeBy(1)
-        assertFalse(notice.visibleAt(schedulerClock.millis()))
+        runCurrent()
+        assertNull(actions.notice.value)
     }
 
     @Test fun `an unreadable garage shows the write failure`() = runTest {

@@ -14,7 +14,6 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.ReconciledMileage
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -28,19 +27,21 @@ fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliat
             color = AppTheme.colors.text2, style = MaterialTheme.typography.labelMedium)
         reconciliation?.let {
             Text(stringResource(R.string.hud_odometer_comparison, Formats.commaInt(it.carMiles),
-                odometerMiles(it.trackedMiles)), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
+                odometerMiles(it.trackedMiles), odometerDate(it.since)), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
             Text(stringResource(R.string.hud_odometer_other, odometerMiles(it.otherMiles)),
                 color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
 
+private const val PROMPT_WINDOW_MS = 600_000L
+
 @Composable
 fun OdometerPrompt(enabled: Boolean, startedAt: Long?, endedAt: Long?, last: LastOdometerReading?, onOpen: () -> Unit) {
     val now by rememberNow()
     val show = enabled && when {
         endedAt != null -> last == null || last.occurredAt < endedAt
-        startedAt != null -> now >= startedAt && now - startedAt < MileageReconciliation.START_WINDOW_MS && (last == null || last.occurredAt < startedAt)
+        startedAt != null -> now >= startedAt && now - startedAt < PROMPT_WINDOW_MS && (last == null || last.occurredAt < startedAt - PROMPT_WINDOW_MS)
         else -> false
     }
     if (show) TextButton(onClick = onOpen) { Text(stringResource(R.string.hud_odometer_prompt)) }

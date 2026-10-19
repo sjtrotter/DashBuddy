@@ -6,6 +6,7 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerNoticeModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -27,12 +28,21 @@ internal class OdometerActions(
     private val saved = MutableStateFlow<OdometerNoticeModel?>(null)
     val notice = saved.asStateFlow()
 
+    companion object {
+        const val NOTICE_MS = 10_000L
+    }
+
     fun reopen() { failure.value = false }
     fun save(vehicleId: String, miles: Int) {
         val at = clock.millis()
         write {
             readings.record(vehicleId, miles, at)
-            saved.value = OdometerNoticeModel(miles, clock.millis())
+            val model = OdometerNoticeModel(miles, clock.millis())
+            saved.value = model
+            scope.launch {
+                delay(NOTICE_MS)
+                if (saved.value === model) saved.value = null
+            }
         }
     }
     fun add(name: String) = write { garage.addVehicle(name, clock.millis()) }

@@ -28,8 +28,8 @@ object OdometerReadingCheck {
 
     fun check(input: OdometerCheckInput): OdometerCheck {
         val vehicle = input.vehicle ?: return OdometerCheck.NoVehicle
-        val miles = input.readingMiles?.takeIf { it > 0 } ?: return OdometerCheck.Empty
         val last = input.last ?: return OdometerCheck.First(vehicle.name)
+        val miles = input.readingMiles?.takeIf { it > 0 } ?: return OdometerCheck.Empty
         val delta = miles - last.readingMiles
         if (delta < 0) return OdometerCheck.Lower(last.readingMiles)
         val tracked = input.gpsTotalNow?.let { now -> last.gpsTotalMiles?.let { now - it } }

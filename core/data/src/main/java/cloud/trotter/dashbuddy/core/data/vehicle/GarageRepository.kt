@@ -13,15 +13,16 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class Garage(val vehicles: List<Vehicle>, val activeId: String?) {
+    val active: Vehicle? get() = vehicles.firstOrNull { it.id == activeId }
+}
+
 @Singleton
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
-    private data class Garage(val vehicles: List<Vehicle>, val activeId: String?)
-    private val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
+    val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
     val vehicles = garage.map { it.vehicles }
-    val activeVehicle = garage.map { g ->
-        g.vehicles.firstOrNull { it.id == g.activeId }
-    }
+    val activeVehicle = garage.map { it.active }
 
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name.trim(), now)
