@@ -20,5 +20,10 @@ fun vehicleTypeLabel(type: VehicleType): Int = when (type) {
     VehicleType.BICYCLE -> R.string.vehicle_type_bicycle
 }
 
+/**
+ * Authoritative for `:app` screens. Duplicated by choice in `:feature:bubble`'s
+ * `hud/odometer/VehicleTypeLabel.kt`, its one display-name owner, because a feature module
+ * cannot depend on `:app`.
+ */
 @Composable
 fun Vehicle.displayName(): String = identityName ?: stringResource(vehicleTypeLabel(profile.vehicleType))

@@ -17,7 +17,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
-import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.feature.bubble.R
 
@@ -26,7 +25,7 @@ fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean,
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         OdometerTitle(stringResource(R.string.hud_odometer_vehicles), onBack)
         vehicles.forEach { vehicle ->
-            val vehicleName = vehicle.identityName ?: stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
+            val vehicleName = vehicle.displayName()
             Row(Modifier.fillMaxWidth().testTag("vehicle.${vehicle.id}").semantics { selected = vehicle.id == activeId }
                 .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {

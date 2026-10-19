@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -43,7 +42,7 @@ fun ColumnScope.OdometerSheet(
     onRetireVehicle: (String) -> Unit,
 ) {
     val page = model.page
-    val vehicleName = model.vehicle?.let { it.identityName ?: stringResource(vehicleTypeLabel(it.profile.vehicleType)) }.orEmpty()
+    val vehicleName = model.vehicle?.displayName().orEmpty()
     Column(Modifier.fillMaxWidth().weight(1f).testTag("odometer.sheet").padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (model.writeFailed) {
             OdometerWriteFailure.NONE -> Unit

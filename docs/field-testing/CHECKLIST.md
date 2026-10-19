@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] 🆕 NEW — Resting HUD names the active car; swap opens the switcher; Add opens the Garage form in the app (#1359) — Confirmed: 0/2
+
 - [active] 🆕 NEW — Settings → Garage lists the car, switching makes the Economy screen follow it, retiring keeps the readings (#1359) — Confirmed: 0/2
 
 **S2 HUD (#1333), one item per slice; each needs its own two confirmations:**

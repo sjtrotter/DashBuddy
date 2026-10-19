@@ -8,6 +8,109 @@ import org.junit.Test
 class OdometerEntryStateTest {
     private fun entry() = OdometerEntryState(mutableStateOf(false), mutableStateOf(OdometerPage.READING), mutableStateOf(""))
 
+    @Test fun `showVehicles opens the switcher and clears drafts`() {
+        val state = entry()
+        state.digit(5)
+        state.vehicleName = "Civic"
+        assertTrue(state.showVehicles())
+        assertTrue(state.open)
+        assertEquals(OdometerPage.VEHICLES, state.page)
+        assertNull(state.reading)
+        assertEquals("", state.vehicleName)
+    }
+
+    @Test fun `showVehicles while open preserves the page and drafts`() {
+        val state = entry()
+        assertTrue(state.showVehicles())
+        state.showAddVehicle()
+        state.digit(5)
+        state.vehicleName = "Civic"
+        assertFalse(state.showVehicles())
+        assertEquals(OdometerPage.ADD_VEHICLE, state.page)
+        assertEquals(5, state.reading)
+        assertEquals("Civic", state.vehicleName)
+    }
+
+    @Test fun `back from a row-opened switcher closes with or without an active vehicle`() {
+        for (hasVehicle in listOf(false, true)) {
+            val state = entry()
+            state.showVehicles()
+            state.back(hasVehicle)
+            assertFalse(state.open)
+        }
+    }
+
+    @Test fun `a selection from a row-opened switcher clears digits and closes`() {
+        val state = entry()
+        state.showVehicles()
+        state.digit(5)
+        state.vehicleSwitched()
+        assertNull(state.reading)
+        assertFalse(state.open)
+    }
+
+    @Test fun `back from a reading-page switcher keeps the existing outcomes`() {
+        for (hasVehicle in listOf(false, true)) {
+            val state = entry()
+            state.show(activeVehicle = true, anyVehicles = true)
+            state.digit(5)
+            state.page = OdometerPage.VEHICLES
+            state.back(hasVehicle)
+            assertEquals(hasVehicle, state.open)
+            if (hasVehicle) assertEquals(OdometerPage.READING, state.page)
+            assertEquals(5, state.reading)
+        }
+    }
+
+    @Test fun `show resets row origin so a later switcher returns to reading`() {
+        val state = entry()
+        state.showVehicles()
+        state.back(hasVehicle = true)
+        state.show(activeVehicle = true, anyVehicles = true)
+        state.page = OdometerPage.VEHICLES
+        state.back(hasVehicle = true)
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+        state.page = OdometerPage.VEHICLES
+        state.vehicleSwitched()
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+    }
+
+    @Test fun `show while open preserves row origin`() {
+        val state = entry()
+        state.showVehicles()
+        assertFalse(state.show(activeVehicle = true, anyVehicles = true))
+        state.back(hasVehicle = true)
+        assertFalse(state.open)
+    }
+
+    @Test fun `showVehicles while reading preserves reading origin`() {
+        val state = entry()
+        state.show(activeVehicle = true, anyVehicles = true)
+        state.digit(5)
+        assertFalse(state.showVehicles())
+        state.page = OdometerPage.VEHICLES
+        state.back(hasVehicle = true)
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+        assertEquals(5, state.reading)
+    }
+
+    @Test fun `showVehicles resets add origin to the switcher`() {
+        val state = entry()
+        state.show(activeVehicle = true, anyVehicles = true)
+        state.showAddVehicle()
+        state.open = false
+        state.showVehicles()
+        state.showAddVehicle()
+        state.back(hasVehicle = true)
+        assertTrue(state.open)
+        assertEquals(OdometerPage.VEHICLES, state.page)
+        state.back(hasVehicle = true)
+        assertFalse(state.open)
+    }
+
     @Test fun `saved vehicles without an active one open the switcher`() {
         val state = entry()
         assertTrue(state.show(activeVehicle = false, anyVehicles = true))
