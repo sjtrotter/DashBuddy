@@ -17,6 +17,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.feature.bubble.hud.undo.cashTipUndoWins
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
@@ -46,11 +48,28 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
     val odometer = rememberOdometerHud(viewModel, closeLog)
+    val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
+    // One exclusive rule for every open route, including the resting odometer footer.
+    val openOdometer = remember(odometer, cashTip) { { cashTip.dismiss(); odometer.openSheet() } }
+    val openCashTip = remember(odometer, cashTip) { { odometer.dismiss(); cashTip.openSheet() } }
+    val cashTipCue = cashTip.Cue()
     val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
-    val odometerSheet: @Composable ColumnScope.() -> Unit = remember(odometer) { { odometer.Sheet() } }
-    val odometerUndo: @Composable () -> Unit = remember(odometer) { { odometer.Undo() } }
-    val odometerUndoVisible: @Composable () -> Boolean = remember(odometer) { { odometer.UndoVisible() } }
-    val odometerFooter: @Composable () -> Unit = remember(odometer) { { odometer.RestingFooter() } }
+    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip) {
+        { if (cashTip.open) cashTip.Sheet() else odometer.Sheet() }
+    }
+    val entryUndo: @Composable () -> Unit = remember(odometer, cashTip, viewModel) {
+        {
+            val strip by viewModel.cashTipActions.undo.collectAsStateWithLifecycle()
+            val notice by viewModel.odometerNotice.collectAsStateWithLifecycle()
+            val now = if (strip != null) { val tick by rememberNow(50); tick } else 0L
+            if (cashTipUndoWins(strip?.strip, notice?.token, now)) cashTip.Undo()
+            else odometer.Undo()
+        }
+    }
+    val entryUndoVisible: @Composable () -> Boolean = remember(odometer, cashTip) {
+        { val tipVisible = cashTip.UndoVisible(); val odometerVisible = odometer.UndoVisible(); tipVisible || odometerVisible }
+    }
+    val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer) { { odometer.RestingFooter(openOdometer) } }
     BackHandler(enabled = logOpen) { logOpen = false }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -72,10 +91,10 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val pendingOffer = region?.presentedOffer()
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue) {
+        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
-            pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true,
+            pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
@@ -88,11 +107,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             state = state,
             ribbon = ribbon,
             onGoalCelebrated = viewModel::goalCelebrated,
-            sheetOpen = odometer.open,
-            onSheetDismiss = odometer::back,
-            sheet = odometerSheet,
-            undo = odometerUndo,
-            undoVisible = odometerUndoVisible,
+            sheetOpen = odometer.open || cashTip.open,
+            onSheetDismiss = { if (cashTip.open) cashTip.back() else odometer.back() },
+            sheet = entrySheet,
+            undo = entryUndo,
+            undoVisible = entryUndoVisible,
             restingFooter = odometerFooter,
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
@@ -102,15 +121,21 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
             onDockClick = { kind ->
                 when (kind) {
-                    DockKind.ODOMETER -> odometer.openSheet()
+                    DockKind.ODOMETER -> openOdometer()
                     DockKind.LOG -> logOpen = true
                     DockKind.NOW -> logOpen = false
                     DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
-                    DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
+                    DockKind.CASH_TIP -> openCashTip()
+                    DockKind.EXPENSE -> Unit // S3b owns expense entry.
                 }
             },
             stateCard = {
-                StateCard(model, state.hero.profit)
+                val taskId = when (val active = cards.stack.active) {
+                    is cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot.Delivery -> active.taskId
+                    is cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot.PostTask -> active.taskId
+                    else -> null
+                }
+                StateCard(model, state.hero.profit, cashTip.Pending(taskId))
             },
             offer = {
                 pendingOffer?.let { pending ->

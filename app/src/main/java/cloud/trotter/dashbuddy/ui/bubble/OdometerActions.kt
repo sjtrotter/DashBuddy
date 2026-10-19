@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.Clock
-import java.util.concurrent.atomic.AtomicLong
 
 /** Owned by BubbleViewModel. Only successful appends produce a notice or close the sheet. */
 internal class OdometerActions(
@@ -44,7 +43,6 @@ internal class OdometerActions(
 
     companion object {
         const val NOTICE_MS = 10_000L
-        private val noticeTokens = AtomicLong()
     }
 
     fun reopen() {
@@ -62,7 +60,7 @@ internal class OdometerActions(
         write(WriteKind.READING) {
             readings.record(vehicleId, miles)
             completed.emit(Unit)
-            val model = OdometerNoticeModel(miles, noticeTokens.incrementAndGet())
+            val model = OdometerNoticeModel(miles, HudNoticeOrder.next())
             saved.value = model
             scope.launch {
                 delay(NOTICE_MS)

@@ -237,4 +237,20 @@ class StateCardTest {
         val mark = compose.onNodeWithTag("track.pin.mark", useUnmergedTree = true).getBoundsInRoot()
         org.junit.Assert.assertTrue("mark ${'$'}mark overlaps anchor ${'$'}anchor", mark.left >= anchor.right)
     }
+    @Test fun `pending cash tip foot follows confirmed projection lag`() {
+        val pending = mutableStateOf<Double?>(7.0)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    StateCard(StateCardModel.DropoffArrived(facts, T0), null, pending.value)
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText("Cash tip $7.00 pending").assertIsDisplayed()
+        compose.runOnIdle { pending.value = null }
+        settle()
+        compose.onNodeWithTag("state.foot.cashTip").assertDoesNotExist()
+    }
+
 }
