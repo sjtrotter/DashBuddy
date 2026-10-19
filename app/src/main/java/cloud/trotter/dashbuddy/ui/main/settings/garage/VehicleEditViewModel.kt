@@ -4,10 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
@@ -106,8 +108,18 @@ class VehicleEditViewModel @Inject constructor(
         val name = _name.value.trim().ifBlank { null }
         var profile = state.profile()
         storedProfile?.takeIf { it.vehicleType == profile.vehicleType }?.let { stored ->
-            profile = profile.withCosts(stored.wear, stored.fixed)
-            stored.gasFuel?.let { profile = profile.withGas(fuelType = it) }
+            // A type round trip clears draft overrides; defaults must not replace stored values.
+            val edits = UserEconomy(
+                vehicleClass = state.vehicleClass, vehicleMpg = state.mpg.toDouble(),
+                kwhPer100Mi = state.kwhPer100Mi, whPerMile = state.whPerMile,
+                electricityPricePerKwh = state.electricityPricePerKwh,
+                userSetFields = state.userSetFields intersect VehicleDraftState.fields,
+            )
+            profile = EconomyFieldGroups.updateProfile(stored, edits).withIdentity(
+                year = state.year.editedIdentity(stored.year),
+                make = state.make.editedIdentity(stored.make),
+                model = state.model.editedIdentity(stored.model),
+            )
         }
         if (resetsCosts(profile.vehicleType)) {
             val presets = profile.vehicleType.defaultProfile()
@@ -119,10 +131,8 @@ class VehicleEditViewModel @Inject constructor(
         writer.write(refused = GarageWriteFailure.GONE, onDone = onDone) {
             val id = vehicleId ?: addedVehicleId
             if (id == null) {
-                val garage = garageRepository.garage.first()
-                if (!garage.readable) throw VehiclesUnreadableException()
                 addedVehicleId = garageRepository.addVehicle(name, clock.millis(), profile,
-                    activate = garage.active == null).id
+                    activateOn = ActivateOn.IF_NONE_ACTIVE).id
             } else {
                 if (!garageRepository.updateVehicle(id, name, profile)) return@write false
             }
@@ -132,4 +142,7 @@ class VehicleEditViewModel @Inject constructor(
             true
         }
     }
+
+    private fun String.editedIdentity(stored: String?): String? =
+        if (this == stored.orEmpty()) stored else takeIf { it.isNotBlank() }
 }

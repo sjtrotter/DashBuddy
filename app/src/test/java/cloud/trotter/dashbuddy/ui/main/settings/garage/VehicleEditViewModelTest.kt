@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.settings.garage
 
 import androidx.lifecycle.SavedStateHandle
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
@@ -61,7 +62,7 @@ class VehicleEditViewModelTest {
         var done = 0
         vm.save { done++ }
         runCurrent()
-        verify(garage).addVehicle("Electric", 1234, ElectricCar(kwhPer100Mi = 28.5))
+        verify(garage).addVehicle("Electric", 1234, ElectricCar(kwhPer100Mi = 28.5), ActivateOn.IF_NONE_ACTIVE)
         verifyNoInteractions(preferences)
         assertEquals(1, done)
         assertEquals(GarageWriteFailure.NONE, vm.failure.value)
@@ -75,7 +76,7 @@ class VehicleEditViewModelTest {
         vm.draft.updateVehicleType(VehicleType.BICYCLE)
         vm.save {}
         runCurrent()
-        verify(garage).addVehicle(null, 1234, Bicycle())
+        verify(garage).addVehicle(null, 1234, Bicycle(), ActivateOn.IF_NONE_ACTIVE)
         assertNull(vm.draft.state.value.profile().gasMpg)
         verifyNoInteractions(preferences)
     }
@@ -135,7 +136,7 @@ class VehicleEditViewModelTest {
         assertEquals(GarageWriteFailure.RETRY, vm.failure.value)
         vm.save { done++ }
         runCurrent()
-        verify(garage, times(1)).addVehicle(null, 1234, ElectricCar())
+        verify(garage, times(1)).addVehicle(null, 1234, ElectricCar(), ActivateOn.IF_NONE_ACTIVE)
         verify(garage).updateVehicle("new", null, ElectricCar())
         assertEquals(1, done)
         assertEquals(GarageWriteFailure.NONE, vm.failure.value)
@@ -219,7 +220,7 @@ class VehicleEditViewModelTest {
         assertTrue(vm.busy.value)
         release.completeExceptionally(IllegalStateException("private name"))
         runCurrent()
-        verify(garage, times(1)).addVehicle("Keep me", 1234, ElectricCar(kwhPer100Mi = 26.0))
+        verify(garage, times(1)).addVehicle("Keep me", 1234, ElectricCar(kwhPer100Mi = 26.0), ActivateOn.IF_NONE_ACTIVE)
         assertFalse(done)
         assertFalse(vm.busy.value)
         assertEquals(GarageWriteFailure.RETRY, vm.failure.value)
@@ -256,7 +257,7 @@ class VehicleEditViewModelTest {
         var done = false
         vm.save { done = true }
         runCurrent()
-        verify(garage).addVehicle(vm.name.value, 1234, GasCar(), true)
+        verify(garage).addVehicle(vm.name.value, 1234, GasCar(), ActivateOn.IF_NONE_ACTIVE)
         assertTrue(done)
         assertEquals(GarageWriteFailure.NONE, vm.failure.value)
     }
@@ -293,17 +294,78 @@ class VehicleEditViewModelTest {
         assertEquals(profile.gasFuel, saved.firstValue.gasFuel)
     }
 
-    @Test fun `gas edit returning to stored type preserves tuned costs and fuel grade`() = runTest {
-        val profile = GasCar(fuelType = FuelType.PREMIUM,
+    @Test fun `gas edit returning to stored type preserves SUV mpg costs fuel and identity`() = runTest {
+        val profile = GasCar(vehicleClass = GasCarClass.SUV, mpg = 20.0, fuelType = FuelType.PREMIUM,
+            year = "2020", make = "Toyota", model = "Highlander",
             wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
         val vehicle = Vehicle("gas", null, 1, profile)
         val vm = model("gas", Garage(listOf(vehicle), "gas", true))
         runCurrent()
         vm.draft.updateVehicleType(VehicleType.BICYCLE)
         vm.draft.updateVehicleType(VehicleType.CAR)
+        assertTrue(vm.draft.state.value.userSetFields.isEmpty())
         vm.save {}
         runCurrent()
         verify(garage).updateVehicle("gas", null, profile)
+    }
+
+    @Test fun `explicit class after returning to stored type changes only class`() = runTest {
+        val profile = GasCar(vehicleClass = GasCarClass.SUV, mpg = 20.0, fuelType = FuelType.PREMIUM,
+            wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
+        val vehicle = Vehicle("gas", null, 1, profile)
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true))
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        vm.draft.updateVehicleType(VehicleType.CAR)
+        vm.draft.updateVehicleClass(VehicleClass.TRUCK)
+        assertEquals(setOf(EconomyField.VEHICLE_CLASS), vm.draft.state.value.userSetFields)
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null, profile.copy(vehicleClass = GasCarClass.TRUCK))
+    }
+
+    @Test fun `explicit mpg after returning to stored type changes only mpg`() = runTest {
+        val profile = GasCar(vehicleClass = GasCarClass.SUV, mpg = 20.0, fuelType = FuelType.PREMIUM,
+            wear = WearProfile(tireSetCost = 812.0), fixed = FixedCosts(purchasePrice = 32000.0))
+        val vehicle = Vehicle("gas", null, 1, profile)
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true))
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        vm.draft.updateVehicleType(VehicleType.CAR)
+        vm.draft.updateEstimatedMpg(23f)
+        assertEquals(setOf(EconomyField.VEHICLE_MPG), vm.draft.state.value.userSetFields)
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null, profile.copy(mpg = 23.0))
+    }
+
+    @Test fun `returning to stored electric type preserves unedited consumption`() = runTest {
+        for (profile in listOf(ElectricCar(kwhPer100Mi = 27.0), EBike(whPerMile = 18.0))) {
+            val vehicle = Vehicle("electric", null, 1, profile)
+            val vm = model("electric", Garage(listOf(vehicle), "electric", true))
+            runCurrent()
+            clearInvocations(garage)
+            vm.draft.updateVehicleType(VehicleType.BICYCLE)
+            vm.draft.updateVehicleType(profile.vehicleType)
+            vm.save {}
+            runCurrent()
+            verify(garage).updateVehicle("electric", null, profile)
+        }
+    }
+
+    @Test fun `identity edit after returning to stored type preserves class and mpg`() = runTest {
+        val profile = GasCar(vehicleClass = GasCarClass.SUV, mpg = 20.0,
+            year = "2020", make = "Toyota", model = "Highlander")
+        val vehicle = Vehicle("gas", null, 1, profile)
+        val vm = model("gas", Garage(listOf(vehicle), "gas", true), lookupAllowed = true)
+        whenever(lookup.getMakes("2021")).thenReturn(emptyList())
+        runCurrent()
+        vm.draft.updateVehicleType(VehicleType.BICYCLE)
+        vm.draft.updateVehicleType(VehicleType.CAR)
+        vm.draft.onYearSelected("2021")
+        vm.save {}
+        runCurrent()
+        verify(garage).updateVehicle("gas", null, profile.copy(year = "2021", make = null, model = null))
     }
 
     @Test fun `type change saves presets instead of stored costs`() = runTest {
@@ -355,16 +417,18 @@ class VehicleEditViewModelTest {
         vm.save {}
         runCurrent()
         val saved = argumentCaptor<VehicleProfile>()
-        verify(garage).addVehicle(isNull(), eq(1234L), saved.capture(), eq(true))
+        verify(garage).addVehicle(isNull(), eq(1234L), saved.capture(), eq(ActivateOn.IF_NONE_ACTIVE))
         assertEquals(FuelType.REGULAR, saved.firstValue.gasFuel)
     }
 
-    @Test fun `add with an active vehicle keeps the selection`() = runTest {
+    @Test fun `add delegates conditional activation to repository without rereading garage`() = runTest {
         val vehicle = Vehicle("active", null, 1)
         val vm = model(stored = Garage(listOf(vehicle), "active", true))
         runCurrent()
+        clearInvocations(garage)
         vm.save {}
         runCurrent()
-        verify(garage).addVehicle(null, 1234, GasCar(), activate = false)
+        verify(garage).addVehicle(null, 1234, GasCar(), activateOn = ActivateOn.IF_NONE_ACTIVE)
+        verifyNoMoreInteractions(garage)
     }
 }

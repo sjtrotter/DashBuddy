@@ -23,6 +23,9 @@ data class Garage(val vehicles: List<Vehicle>, val activeId: String?, val readab
 
 enum class SeedOutcome { ADDED, ATTACHED, NO_ACTIVE_VEHICLE }
 
+/** Evaluated under the garage lock: a caller never decides activation from a stale read. */
+enum class ActivateOn { ALWAYS, IF_NONE_ACTIVE, NEVER }
+
 class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 
 @Singleton
@@ -40,12 +43,17 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     }
 
     suspend fun addVehicle(
-        name: String?, now: Long, profile: VehicleProfile = GasCar(), activate: Boolean = true,
+        name: String?, now: Long, profile: VehicleProfile = GasCar(), activateOn: ActivateOn = ActivateOn.ALWAYS,
     ): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name?.trim(), now, profile)
         val saved = savedForWrite()
-        val list = (readVehicles(saved.json) ?: throw VehiclesUnreadableException()) + vehicle
-        saveForWrite(list, if (activate) vehicle.id else saved.activeId)
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val activate = when (activateOn) {
+            ActivateOn.ALWAYS -> true
+            ActivateOn.IF_NONE_ACTIVE -> list.none { it.id == saved.activeId && it.retiredAt == null }
+            ActivateOn.NEVER -> false
+        }
+        saveForWrite(list + vehicle, if (activate) vehicle.id else saved.activeId)
         vehicle
     }
 

@@ -122,10 +122,12 @@ class GarageRepositoryTest {
     }
 
     @Test fun `seedFrom leaves vehicles alone when none is active`() = runTest {
-        val repo = garage(backgroundScope)
-        val live = repo.addVehicle("Parked", 1L, activate = false)
-        val retired = repo.addVehicle("Retired", 2L, activate = false)
-        repo.retire(retired.id, 3L)
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("parked.preferences_pb") }))
+        val live = Vehicle("live", "Parked", 1L)
+        val retired = Vehicle("retired", "Retired", 2L, retiredAt = 3L)
+        source.save(VehicleStorage.encode(listOf(live, retired)), null)
+        val repo = GarageRepository(source)
         val before = repo.garage.first()
         assertEquals(SeedOutcome.NO_ACTIVE_VEHICLE, repo.seedFrom(LegacyProfile(make = "Honda").toTyped(), 4L))
         assertEquals(before, repo.garage.first())
@@ -221,12 +223,73 @@ class GarageRepositoryTest {
         assertNull(repo.garage.first().activeId)
     }
 
-    @Test fun `add without activation preserves active id`() = runTest {
+    @Test fun `IF_NONE_ACTIVE preserves an existing active vehicle`() = runTest {
         val repo = garage(backgroundScope)
         val active = repo.addVehicle("Active", 1)
-        val parked = repo.addVehicle("Parked", 2, ElectricCar(), activate = false)
+        val parked = repo.addVehicle("Parked", 2, ElectricCar(), activateOn = ActivateOn.IF_NONE_ACTIVE)
         assertEquals(listOf(active, parked), repo.garage.first().vehicles)
         assertEquals(active.id, repo.garage.first().activeId)
+    }
+
+    @Test fun `IF_NONE_ACTIVE activates when the garage is empty`() = runTest {
+        val repo = garage(backgroundScope)
+        val added = repo.addVehicle("First", 1, activateOn = ActivateOn.IF_NONE_ACTIVE)
+        assertEquals(added, repo.garage.first().active)
+    }
+
+    @Test fun `IF_NONE_ACTIVE activates when saved selection is absent missing or retired`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("inactive.preferences_pb") }))
+        val parked = Vehicle("parked", "Parked", 1)
+        val retired = Vehicle("retired", "Retired", 2, retiredAt = 3)
+        val repo = GarageRepository(source)
+        for (activeId in listOf(null, "missing", retired.id)) {
+            source.save(VehicleStorage.encode(listOf(parked, retired)), activeId)
+            val added = repo.addVehicle("New", 4, activateOn = ActivateOn.IF_NONE_ACTIVE)
+            assertEquals(added, repo.garage.first().active)
+            assertEquals(listOf(parked, added), repo.garage.first().unretired)
+        }
+    }
+
+    @Test fun `ALWAYS activates over an existing selection`() = runTest {
+        val repo = garage(backgroundScope)
+        repo.addVehicle("Active", 1)
+        val added = repo.addVehicle("Quick add", 2, activateOn = ActivateOn.ALWAYS)
+        assertEquals(added, repo.garage.first().active)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun `IF_NONE_ACTIVE uses selection committed while add waits for lock`() = runTest {
+        val saving = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                if (++writes == 2) {
+                    saving.complete(Unit)
+                    resume.await()
+                }
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val source = VehicleDataSource(store)
+        val parked = Vehicle("parked", "Parked", 1)
+        source.save(VehicleStorage.encode(listOf(parked)), null)
+        val repo = GarageRepository(source)
+        val selection = async { repo.selectVehicle(parked.id) }
+        saving.await()
+        val add = async { repo.addVehicle("Editor add", 2, activateOn = ActivateOn.IF_NONE_ACTIVE) }
+        runCurrent()
+        assertFalse(add.isCompleted)
+        assertNull(repo.garage.first().active)
+        assertEquals(2, store.writes)
+        resume.complete(Unit)
+        assertTrue(selection.await())
+        val added = add.await()
+        assertEquals(listOf(parked, added), repo.garage.first().vehicles)
+        assertEquals(parked, repo.garage.first().active)
+        assertEquals(3, store.writes)
     }
 
     @Test fun `updateVehicle commits name and profile once and refuses invalid or stale edits`() = runTest {
