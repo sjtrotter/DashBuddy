@@ -8,8 +8,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -26,18 +28,24 @@ class AppStateRepository @Inject constructor(
         pending ?: persisted
     }.distinctUntilChanged()
 
-    fun setGoalMetMark(key: String) {
-        if (pendingMark.value == key) return
-        pendingMark.value = key
+    init {
         scope.launch {
-            try {
-                dataSource.setGoalMetMark(key)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Throwable) {
-                // Retain pending so a storage failure cannot replay this session's celebration.
-                Timber.tag(TAG).w(failure, "Could not persist goal met mark %s", key)
-            }
+            pendingMark.filterNotNull().collectLatest { key -> write(key) }
+        }
+    }
+
+    fun setGoalMetMark(key: String) {
+        pendingMark.value = key
+    }
+
+    private suspend fun write(key: String) {
+        try {
+            dataSource.setGoalMetMark(key)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            // Retain pending so a storage failure cannot replay this session's celebration.
+            Timber.tag(TAG).w(failure, "Could not persist goal met mark")
         }
     }
 

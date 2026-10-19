@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -21,16 +22,60 @@ class GoalMetMarkRepositoryTest {
     private val key = "2026-10-18|7900"
 
     /** Real data-source edit, held before the transformed preferences become durable. */
-    private class HeldStore : DataStore<Preferences> {
+    private class HeldStore(private val holdFirstOnly: Boolean = false) : DataStore<Preferences> {
         override val data = MutableStateFlow(emptyPreferences())
         val release = CompletableDeferred<Unit>()
         var failure: Throwable? = null
         var edits = 0
+        val editJobs = mutableListOf<Job>()
         override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
             edits++
-            release.await()
+            editJobs += currentCoroutineContext()[Job]!!
+            if (!holdFirstOnly || edits == 1) release.await()
             failure?.let { throw it }
             return transform(data.value).also { data.value = it }
+        }
+    }
+
+    @Test fun `rapid keys persist the latest`() = runTest {
+        val store = HeldStore(holdFirstOnly = true)
+        val source = AppStateDataSource(store)
+        val repository = AppStateRepository(source, backgroundScope)
+        val latest = "2026-10-18|8000"
+        val persisted = mutableListOf<String?>()
+        var logged = false
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (tag == "AppState") logged = true
+            }
+        }
+        Timber.plant(tree)
+        try {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                source.goalMetMark.collect { persisted += it }
+            }
+            // Keep the combine active so the latest durable value can clear pending.
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                repository.goalMetMark.collect {}
+            }
+            repository.setGoalMetMark(key)
+            runCurrent()
+            assertEquals(1, store.edits)
+            assertNull(source.goalMetMark.first())
+            repository.setGoalMetMark(latest)
+            runCurrent()
+            assertEquals(2, store.edits)
+            assertTrue(store.editJobs.first().isCancelled)
+            assertEquals(latest, source.goalMetMark.first())
+            store.release.complete(Unit)
+            runCurrent()
+            assertEquals(listOf(null, latest), persisted)
+            assertEquals(latest, source.goalMetMark.first())
+            assertEquals(latest, repository.goalMetMark.first())
+            assertEquals(latest, AppStateRepository(source, backgroundScope).goalMetMark.first())
+            assertFalse(logged)
+        } finally {
+            Timber.uproot(tree)
         }
     }
 
@@ -80,7 +125,10 @@ class GoalMetMarkRepositoryTest {
         var logged = false
         val tree = object : Timber.Tree() {
             override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-                if (priority == 5 && tag == "AppState" && t === failure) logged = true
+                if (priority == 5 && tag == "AppState" && t === failure) {
+                    assertFalse(message.contains(key))
+                    logged = true
+                }
             }
         }
         Timber.plant(tree)
@@ -116,7 +164,7 @@ class GoalMetMarkRepositoryTest {
         try {
             repository.setGoalMetMark(key)
             runCurrent()
-            val write = backgroundScope.coroutineContext[Job]!!.children.single()
+            val write = store.editJobs.single()
             store.release.complete(Unit)
             runCurrent()
             assertTrue(write.isCancelled)

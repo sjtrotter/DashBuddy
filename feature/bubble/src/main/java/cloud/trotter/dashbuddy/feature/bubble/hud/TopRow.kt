@@ -72,7 +72,7 @@ private fun TopNumber(text: AnnotatedString, color: Color) {
     val maxSize = AppTheme.num.xlNum.fontSize
     Text(text, style = AppTheme.num.xlNum.copy(fontWeight = FontWeight.Medium), color = color,
         maxLines = 1, softWrap = false,
-        autoSize = TextAutoSize.StepBased(minFontSize = maxSize * 0.6f, maxFontSize = maxSize))
+        autoSize = TextAutoSize.StepBased(minFontSize = maxSize * 0.4f, maxFontSize = maxSize))
 }
 
 @Composable

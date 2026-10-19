@@ -13,6 +13,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.LocalGlance
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import org.junit.Assert.*
@@ -88,19 +89,28 @@ class HudFontScaleTest {
     @Test
     @Config(sdk = [35], qualifiers = "w390dp-h900dp")
     fun `top row figures fit at font scale 2_0 in the bubble width`() {
+        assertTopRowFits("$100.00", "142.6")
+    }
+    @Test
+    @Config(sdk = [35], qualifiers = "w390dp-h900dp")
+    fun `top row figures fit at font scale 2_0 with driving glance`() {
+        assertTopRowFits("$1000.00", "1042.6", glance = 1.3f)
+    }
+    private fun assertTopRowFits(earned: String, miles: String, glance: Float = 1f) {
         compose.setContent {
             val density = LocalDensity.current.density
-            CompositionLocalProvider(LocalDensity provides Density(density, 2f),
-                LocalHudTier provides FontScaleTier.of(2f, 1f)) {
-                DashBuddyTheme {
-                    Box(Modifier.width(390.dp).padding(start = 22.dp, end = 16.dp)) {
-                        TopRow(TopRowModel("$100.00", OnlineSpan.Fixed((12 * 60 + 41) * 60_000L), "142.6", false))
+            CompositionLocalProvider(LocalDensity provides Density(density, 2f)) {
+                DashBuddyTheme(glance = glance) {
+                    CompositionLocalProvider(LocalHudTier provides FontScaleTier.of(2f, LocalGlance.current)) {
+                        Box(Modifier.width(390.dp).padding(start = 22.dp, end = 16.dp)) {
+                            TopRow(TopRowModel(earned, OnlineSpan.Fixed((12 * 60 + 41) * 60_000L), miles, false))
+                        }
                     }
                 }
             }
         }
         settle()
-        listOf("hud.top.earned" to "$100.00", "hud.top.online" to "12 hr 41 min", "hud.top.miles" to "142.6")
+        listOf("hud.top.earned" to earned, "hud.top.online" to "12 hr 41 min", "hud.top.miles" to miles)
             .forEach { (tag, figure) ->
                 val slot = compose.onNodeWithTag(tag).getBoundsInRoot()
                 assertEquals(352f / 3f, slot.width.value, 1f)
