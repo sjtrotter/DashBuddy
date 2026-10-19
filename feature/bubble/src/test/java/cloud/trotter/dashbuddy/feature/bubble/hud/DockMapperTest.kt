@@ -24,7 +24,7 @@ class DockMapperTest {
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(DockKind.entries, DockMapper.map(HudMode.RESTING).items.map { it.kind })
+        assertEquals(DockKind.entries.filter { it != DockKind.NOW }, DockMapper.map(HudMode.RESTING).items.map { it.kind })
     }
 
     @Test
@@ -33,8 +33,8 @@ class DockMapperTest {
     }
 
     @Test
-    fun `log mode lights the log block`() {
-        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LOG).items.single { it.kind == DockKind.LOG }.state)
+    fun `log shown replaces Log with a lit Now`() {
+        assertEquals(DockItemState.LIT, DockMapper.map(HudMode.LIVE, logShown = true).items.single { it.kind == DockKind.NOW }.state)
     }
     @Test fun `door and receipt accent the cash tip`() {
         val facts = JobFacts("Store", null, null, null)
@@ -53,6 +53,13 @@ class DockMapperTest {
     @Test fun `offer hides the dock regardless of the cue`() {
         assertTrue(DockMapper.map(HudMode.OFFER, firstRun = false, cashTipCue = true).items.isEmpty())
         assertTrue(DockMapper.map(HudMode.OFFER, firstRun = true, cashTipCue = true).items.isEmpty())
+    }
+
+    @Test fun `Now never appears outside the log`() {
+        HudMode.entries.forEach { mode ->
+            assertFalse(DockMapper.map(mode, logShown = false).items.any { it.kind == DockKind.NOW })
+        }
+        assertFalse(DockMapper.map(HudMode.LIVE, logShown = true).items.any { it.kind == DockKind.LOG })
     }
 
 }

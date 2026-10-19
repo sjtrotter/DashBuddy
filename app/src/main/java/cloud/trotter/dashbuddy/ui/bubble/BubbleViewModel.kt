@@ -17,6 +17,7 @@ import cloud.trotter.dashbuddy.core.data.settings.DevSettingsRepository
 import cloud.trotter.dashbuddy.core.designsystem.theme.DRIVING_GLANCE_MULTIPLIER
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
@@ -28,8 +29,10 @@ import cloud.trotter.dashbuddy.feature.bubble.cards.BubbleCards
 import cloud.trotter.dashbuddy.feature.bubble.cards.CardStackAssembler
 import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardMapper
 import cloud.trotter.dashbuddy.feature.bubble.cards.LiveCardBuilder
+import cloud.trotter.dashbuddy.feature.bubble.hud.LogData
 import cloud.trotter.dashbuddy.feature.bubble.session.BubbleSessionPresentation
 import cloud.trotter.dashbuddy.feature.bubble.session.BubbleSessionResolver
+import cloud.trotter.dashbuddy.feature.bubble.session.CardSource
 import cloud.trotter.dashbuddy.feature.bubble.session.LiveSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +46,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -240,28 +244,51 @@ class BubbleViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** One Room events subscription per displayed session, shared by cards and the log. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val sessionEvents: StateFlow<List<Pair<CardSource, List<AppEvent>>>> = presentation
+        .map { it.cardSources }
+        .distinctUntilChanged()
+        .flatMapLatest { sources ->
+            if (sources.isEmpty()) flowOf(emptyList())
+            else combine(sources.map { source ->
+                appEventRepo.getEventsForSession(source.sessionId).map { events -> source to events }
+            }) { it.toList() }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Only the log slot subscribes to the projections. Events come from the cards' shared read. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val logData: StateFlow<LogData> = sessionEvents
+        .map { sessions -> sessions.map { it.first } }
+        .distinctUntilChanged()
+        .flatMapLatest { sources ->
+            if (sources.isEmpty()) flowOf(LogData.Empty)
+            else combine(
+                // Keep events and projections scoped together during a presentation switch.
+                sessionEvents.filter { sessions -> sessions.map { it.first } == sources },
+                combine(sources.map { source ->
+                    combine(
+                        analyticsRepository.sessionDetail(source.sessionId),
+                        ledgerRepository.expensesForSession(source.sessionId),
+                        ledgerRepository.fuelForSession(source.sessionId),
+                    ) { detail, expenses, fuel ->
+                        LogData(deliveries = detail?.deliveries.orEmpty(), expenses = expenses, fuel = fuel)
+                    }
+                }) { sessions -> sessions.fold(LogData.Empty) { all, session -> all + session } },
+            ) { events, projections ->
+                projections.copy(events = events.flatMap { it.second })
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
+
     /**
      * The folded completed cards for every displayed session — one list in the normal modes, N in
      * `MERGED`. Each fold stays per-session because [FlowCardMapper.fold] is a per-session fold by
      * construction (DASH_START clears the stack); the interleave happens after, in
      * [CardStackAssembler].
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val foldedCards = presentation
-        .map { it.cardSources }
-        .distinctUntilChanged()
-        .flatMapLatest { sources ->
-            if (sources.isEmpty()) {
-                flowOf(emptyList())
-            } else {
-                combine(
-                    sources.map { source ->
-                        appEventRepo.getEventsForSession(source.sessionId)
-                            .map { events -> source to FlowCardMapper.fold(events) }
-                    }
-                ) { folds -> folds.toList() }
-            }
-        }
+    private val foldedCards = sessionEvents.map { sessions ->
+        sessions.map { (source, events) -> source to FlowCardMapper.fold(events) }
+    }
 
     /**
      * Bubble HUD flow-card stack (#257) + its per-card platform badges (#867). Completed cards are

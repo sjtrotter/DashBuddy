@@ -12,13 +12,13 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
-        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false) = HudStateMapper.map(
+        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
         countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
-        logOpen = false, gas = GasRowModel(3.5f, true), cashTipCue = cue,
+        logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
     )
 
     @Test
@@ -76,6 +76,15 @@ class HudStateMapperTest {
         assertNull(profitPerHour(10.0, -1))
         assertEquals(0.0, profitPerHour(0.0, 3_600_000)!!, 0.0)
         assertEquals(20.0, profitPerHour(10.0, 1_800_000)!!, 0.0)
+    }
+
+    @Test fun `log open at rest keeps resting and shows Now`() {
+        val state = map(rest = true, logOpen = true)
+        assertEquals(HudMode.RESTING, state.mode)
+        assertTrue(state.logOpen)
+        assertEquals(DockItemState.LIT, state.dock.items.single { it.kind == DockKind.NOW }.state)
+        assertFalse(state.dock.items.any { it.kind == DockKind.LOG })
+        assertTrue(state.dock.items.any { it.kind == DockKind.SETTINGS })
     }
 
 }

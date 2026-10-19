@@ -31,13 +31,7 @@ object HudStateMapper {
                 moneyOrEmpty(profitPerHour(profit, span)),
                 last.deliveries, last.offersAccepted, last.offersReceived)
         }
-        // Resting wins in the base mode resolver, but its enabled Log block must still
-        // open the chat. Keep the resting identity and four-block dock while the log is open.
-        val dock = DockMapper.map(mode, firstRun, cashTipCue).let { model ->
-            if (!logOpen) model else model.copy(items = model.items.map { item ->
-                if (item.kind == DockKind.LOG) item.copy(state = DockItemState.LIT) else item
-            })
-        }
+        val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen)
         return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
             HeroModel(profit, GoalPillMapper.map(goal, todayProfit)), dock,

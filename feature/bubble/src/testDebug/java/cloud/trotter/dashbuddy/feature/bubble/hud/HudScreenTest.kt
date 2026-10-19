@@ -155,29 +155,29 @@ class HudScreenTest {
         DockKind.entries.forEach { compose.onNodeWithTag("hud.dock.$it").assertDoesNotExist() }
     }
 
-    @Test fun `log block calls back and log mode shows the log slot with log lit`() {
+    @Test fun `log block calls back and log mode shows the log slot with Now lit`() {
         var open by mutableStateOf(false)
         var calls = 0
-        show({ state(logOpen = open) }, { if (it == DockKind.LOG) { calls++; open = !open } })
+        show({ state(logOpen = open) }, { if (it == DockKind.LOG || it == DockKind.NOW) { calls++; open = !open } })
         compose.onNodeWithTag("hud.dock.LOG").performClick()
         settle()
         assertEquals(1, calls)
         compose.onNodeWithTag("hud.slot.log").assertIsDisplayed()
-        compose.onNodeWithTag("hud.dock.LOG").assertIsSelected()
-        compose.onNodeWithTag("hud.dock.LOG").performClick()
+        compose.onNodeWithTag("hud.dock.NOW").assertIsSelected()
+        compose.onNodeWithTag("hud.dock.NOW").performClick()
         settle()
         compose.onNodeWithTag("hud.slot.state").assertIsDisplayed()
     }
 
     @Test fun `resting log opens and closes while keeping settings reachable`() {
         var open by mutableStateOf(false)
-        show({ state(resting = true, logOpen = open) }, { if (it == DockKind.LOG) open = !open })
+        show({ state(resting = true, logOpen = open) }, { if (it == DockKind.LOG || it == DockKind.NOW) open = !open })
         compose.onNodeWithTag("hud.dock.LOG").performClick()
         settle()
         compose.onNodeWithTag("hud.slot.log").assertIsDisplayed()
-        compose.onNodeWithTag("hud.dock.LOG").assertIsSelected()
+        compose.onNodeWithTag("hud.dock.NOW").assertIsSelected()
         compose.onNodeWithTag("hud.dock.SETTINGS").assertIsDisplayed()
-        compose.onNodeWithTag("hud.dock.LOG").performClick()
+        compose.onNodeWithTag("hud.dock.NOW").performClick()
         settle()
         compose.onNodeWithText("Last dash").assertIsDisplayed()
     }
@@ -189,7 +189,7 @@ class HudScreenTest {
         value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2").assertExists()
         value("hud.top.miles", "42.5").assertExists()
-        DockKind.entries.forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
+        DockKind.entries.filter { it != DockKind.NOW }.forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
         org.junit.Assert.assertTrue(state(resting = true).top.dimmed)
     }
@@ -274,5 +274,27 @@ class HudScreenTest {
         compose.onNodeWithText("Offer real").assertDoesNotExist()
     }
 
+    @Test fun `log shows the compressed hero with the goal pill`() {
+        show({ state(logOpen = true) })
+        settle()
+        compose.onNodeWithTag("hud.hero.compact").assertIsDisplayed()
+        compose.onNodeWithTag("hud.goal").assertIsDisplayed()
+        compose.onNodeWithTag("hud.hero").assertDoesNotExist()
+    }
+    @Test fun `log hides the ribbon`() {
+        show({ state(logOpen = true) })
+        settle()
+        compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
+    }
+    @Test fun `dock reads Now in the log and reports NOW`() {
+        var clicked: DockKind? = null
+        show({ state(logOpen = true) }, { clicked = it })
+        settle()
+        compose.onNodeWithText("Now").assertIsDisplayed()
+        compose.onNodeWithTag("hud.dock.LOG").assertDoesNotExist()
+        compose.onNodeWithTag("hud.dock.NOW").performClick()
+        settle()
+        assertEquals(DockKind.NOW, clicked)
+    }
     private companion object { const val T0 = 1_700_000_000_000L }
 }
