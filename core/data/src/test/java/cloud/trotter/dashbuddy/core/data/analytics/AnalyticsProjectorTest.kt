@@ -2281,8 +2281,8 @@ class AnalyticsProjectorTest {
         assertEquals(300L, expenses.single().voidedAt)
         assertEquals(1, fuel.size)
         assertNull(fuel.single().voidedAt)
-        assertEquals(0.0, ledger.expenseTotalForSession("S").first(), 0.0)
-        assertEquals(30.0, ledger.fuelTotalForSession("S").first(), 0.0)
+        assertEquals(0.0, ledger.expensesForSession("S").first().filter { it.voidedAt == null }.sumOf { it.amount }, 0.0)
+        assertEquals(30.0, ledger.fuelForSession("S").first().filter { it.voidedAt == null }.sumOf { it.totalAmount }, 0.0)
 
         // A stale projected row must disappear during the real version rebuild.
         ledger.upsertExpense(expenses.single().copy(eventSequenceId = 9999))
@@ -2335,7 +2335,7 @@ class AnalyticsProjectorTest {
         val fuel = ledger.fuelForSession("S").first().single()
         assertEquals(fuelId, fuel.eventSequenceId)
         assertEquals(200L, fuel.voidedAt)
-        assertEquals(0.0, ledger.fuelTotalForSession("S").first(), 0.0)
+        assertEquals(0.0, ledger.fuelForSession("S").first().filter { it.voidedAt == null }.sumOf { it.totalAmount }, 0.0)
     }
 
     @Test
@@ -2354,7 +2354,7 @@ class AnalyticsProjectorTest {
         val ledger = db.ledgerDao()
         val expected = ledger.expensesForSession("S").first().single()
         assertNull(expected.voidedAt)
-        assertEquals(5.0, ledger.expenseTotalForSession("S").first(), 0.0)
+        assertEquals(5.0, ledger.expensesForSession("S").first().filter { it.voidedAt == null }.sumOf { it.amount }, 0.0)
 
         ledger.deleteAllExpenses()
         analyticsDao.setWatermark(analyticsDao.getWatermark()!!.copy(watermarkSequenceId = 0))
@@ -2381,8 +2381,8 @@ class AnalyticsProjectorTest {
         projector().catchUp()
 
         val ledger = db.ledgerDao()
-        val expenses = ledger.expensesUnassigned().first()
-        val fuel = ledger.fuelUnassigned().first()
+        val expenses = ledger.expensesUnassignedBetween(100, 201).first()
+        val fuel = ledger.fuelUnassignedBetween(100, 201).first()
         assertEquals(expenseIds, expenses.map { it.eventSequenceId })
         assertEquals(fuelIds, fuel.map { it.eventSequenceId })
         assertTrue(expenses.all { it.sessionId == null })

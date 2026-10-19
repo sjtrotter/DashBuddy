@@ -52,7 +52,7 @@ internal abstract class HudScreenFixture {
             Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
         flow = flow, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
-        net = profit?.let { SessionNet("live", it, 0.0, 0.0, 0.0, 0.0) },
+        net = profit?.let { SessionNet("live", it, 0.0, 0.0) },
         goal = goal, todayProfit = today,
         hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cashTipCue, odometerLoaded = true,
     )

@@ -331,7 +331,7 @@ class CsvExporterTest {
 
     @Test fun fuel_golden_missingGallonsLeavesPriceEmpty() {
         assertEquals(
-            "date,time,total,gallons,price_per_gallon,odometer_miles,dash_id,voided\n" +
+            "date,time,total,gallons,price_per_gallon,tracked_miles,dash_id,voided\n" +
                 "2026-10-19,00:02:00,30.00,,,1234.50,,false\n",
             ledgerExport().fuelCsv,
         )

@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPayload
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
@@ -106,6 +107,7 @@ class LedgerRepositoryTest {
         val date = LocalDate.of(2026, 11, 1) // Fall-back day lasts 25 hours.
         val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
         val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(25 * 60 * 60 * 1000L, end - start)
         val timestamps = listOf(start - 1, start, end - 1, end)
         val expenses = MutableStateFlow(timestamps.mapIndexed { index, time ->
             ExpenseRecordEntity(index.toLong(), null, time, "PARKING", 4.5, "meter", null)
@@ -113,8 +115,10 @@ class LedgerRepositoryTest {
         val fuel = MutableStateFlow(timestamps.mapIndexed { index, time ->
             FuelRecordEntity(index.toLong(), null, time, 30.0, 10.0, null, null)
         })
-        whenever(dao.expensesUnassigned()).thenReturn(expenses)
-        whenever(dao.fuelUnassigned()).thenReturn(fuel)
+        whenever(dao.expensesUnassignedBetween(start, end)).thenReturn(
+            expenses.map { rows -> rows.filter { it.occurredAt >= start && it.occurredAt < end } })
+        whenever(dao.fuelUnassignedBetween(start, end)).thenReturn(
+            fuel.map { rows -> rows.filter { it.occurredAt >= start && it.occurredAt < end } })
         val expenseFrames = mutableListOf<List<ExpenseRecord>>()
         val fuelFrames = mutableListOf<List<FuelRecord>>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -124,6 +128,8 @@ class LedgerRepositoryTest {
             ledger.fuelUnassignedOn(date, zone).collect { fuelFrames += it }
         }
         runCurrent()
+        verify(dao).expensesUnassignedBetween(start, end)
+        verify(dao).fuelUnassignedBetween(start, end)
         assertEquals(listOf(1L, 2L), expenseFrames.last().map { it.eventSequenceId })
         assertEquals(listOf(1L, 2L), fuelFrames.last().map { it.eventSequenceId })
         assertEquals(listOf("meter", "meter"), expenseFrames.last().map { it.note })

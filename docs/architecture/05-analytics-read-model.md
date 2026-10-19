@@ -751,15 +751,19 @@ with `ExpenseCategory.fromStorage`; unknown names in payload JSON or Room fall b
 without losing the expense amount or note. S3b adds `CAR_CARE` (displayed as “Car care”) without a
 schema change. `LedgerDao.recentNotes(category, limit)` derives distinct, non-blank notes from
 non-voided expenses, ordered by their newest surviving occurrence (then sequence id), surfaced
-as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. An expense is logged any time; one with no owning dash is unassigned and still shows in the HUD log for its day.
+as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. An expense is logged any time; one with no owning dash is unassigned and still shows in the HUD log beside the dash of that day; an entry with no dash on a day with no dash is in the export.
 
 The S3b HUD expense sheet writes Long cents through one cents-to-amount conversion in
 `ExpenseActions`. Gas writes `FUEL_FILLUP`, with required positive gallons parsed once at the
 action boundary (five integer and three fractional digits) and the current `gpsTotalMiles` as
 `odometerMiles`, null until loaded. Other picks write `EXPENSE_LOGGED`; Car care, Supplies and
-Other use the existing note for an optional label. `ExpenseOwner.owner` uses the active dash, else none. Existing rows keep their saved attribution.
+Other use the existing note for an optional label. `BubbleViewModel.expenseOwner()` is the one owner rule: the active dash, else none. Existing rows keep their saved attribution.
 Expense is available in both the active and resting docks, including before the first dash. Undo voids the committed sequence id; all three HUD notices share
 one newest-token decision, with a ten-second expense strip and retry after failed undo.
+The log queries unassigned rows in the local start day of the displayed dash (active while live,
+last dash at rest), using inclusive local midnight and exclusive next midnight; with no dash yet,
+it uses today from the injected clock. The day remains anchored across midnight while that dash is
+displayed. Merged dashes on the same day share one unassigned window.
 `pricePerGallon` is derived at read time, null for null or zero gallons, never stored.
 
 Undo appends `LEDGER_ENTRY_VOIDED(targetEventSequenceId)` and stamps the target's `voidedAt`.
@@ -780,11 +784,9 @@ including how a cash tip interacts with the #1033 re-price guard (`driverAdjuste
 
 **Vehicles as types (#1358).** `VehicleProfile` is sealed by type (gas car by class, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle). Each type produces the one `VehicleEconomyInputs` (energy per mile from its own consumption and price, wear per mile from part cost over part life, depreciation, fixed costs over annual miles, a travel profile) and `UserEconomy.from(inputs, shared)` assembles the economy the evaluator reads, so the evaluator never sees a type; the sedan with defaults is pinned to today's cost per mile to the cent. Presets are estimates in one `VehiclePresets` object. `VehicleStorage` is versioned: a v1 garage is read through a legacy mapping that keeps every typed figure and carries unknown keys as extras, and is rewritten on the first successful write. The current learning source is a Room observation query without vehicle provenance; production still materializes only platform medians. Producing vehicle-specific histories is blocked on the provenance decision and must not relabel historical samples using today's active vehicle. Frozen per-record economics are untouched.
 
-`LedgerDao.expenseTotalForSession(sessionId)` and `fuelTotalForSession(sessionId)` each emit
-the dash's non-voided total, or zero with no matching rows. `LedgerRepository.sessionNet(sessionId)`
-combines `sessionDetail` from its injected `AnalyticsRepository` with both totals and emits `SessionNet`:
-the hub's per-dash net terms (delivered net with a null net as zero, cash tips, unattributed pay),
-`SessionNet.expenses`, and `SessionNet.fuel`.
+`LedgerRepository.sessionNet(sessionId)` maps `sessionDetail` from its injected `AnalyticsRepository`
+to `SessionNet`: the hub's per-dash net terms (delivered net with a null net as zero, cash tips,
+unattributed pay). It does not subscribe to expense or fuel sums.
 `AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
 `SessionNet.kept()` is delivered net plus cash tips plus unattributed pay; expenses and fuel are
 a separate ledger that never enters kept or the goal (2026-10-19 ruling). The deduction preference
@@ -794,9 +796,11 @@ and `unattributedPay` are zero. Expenses alone do not make it non-null; the HUD 
 `LedgerDao.allExpenses()` / `allFuel()`, surfaced through `LedgerRepository`, read every projection
 row ordered by `occurredAt`, including voids. Settings → Export Data writes `expenses.csv`
 (`date,time,category,label,amount,dash_id,voided`) and `fuel.csv`
-(`date,time,total,gallons,price_per_gallon,odometer_miles,dash_id,voided`) beside `deliveries.csv`,
+(`date,time,total,gallons,price_per_gallon,tracked_miles,dash_id,voided`) beside `deliveries.csv`,
 `sessions.csv`, and `summary.csv` in the same chosen folder. Dates/times use the device’s local
-zone, labels use the CSV text neutralizer, and dash ids preserve stored attribution (empty when null).
+zone; `tracked_miles` is the app's tracked miles at the fill-up (its GPS lifetime total),
+not a typed car odometer reading. Labels use the CSV text neutralizer, and dash ids preserve stored attribution (empty when null).
+`AnalyticsRepository.buildCsvExport` bounds ledger rows by `occurredAt` in the same `[start, end)` range as earnings.
 `summary.csv` appends `expenses_total` and `fuel_total` for non-voided rows; existing figures stay unchanged.
 
 Fuel never changes the economy: no change to `UserEconomy.fuelCostPerMile`, the gas-price preference,

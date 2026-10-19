@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import java.time.Clock
+import cloud.trotter.dashbuddy.core.data.analytics.PeriodBounds
 import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
 import java.time.LocalDate
@@ -28,6 +29,8 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DRIVING_GLANCE_MULTIPLIER
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.AppState
@@ -89,8 +92,8 @@ class BubbleViewModel @Inject constructor(
     internal val expenseActions = ExpenseActions(viewModelScope, ledgerRepository, clock)
     internal fun recentLabels(category: cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory) =
         ledgerRepository.recentLabels(category)
-    internal fun expenseOwner() = cloud.trotter.dashbuddy.feature.bubble.hud.expense.owner(
-        focusedRegion.value?.session?.sessionId)
+    /** The one expense owner rule: the active dash, else none. */
+    internal fun expenseOwner() = focusedRegion.value?.session?.sessionId
 
     internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, analyticsRepository, clock)
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark
@@ -307,17 +310,41 @@ class BubbleViewModel @Inject constructor(
             }) { it.toList() }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Entries without a dash follow their own day, even when there are no session cards. */
+    /**
+     * Unassigned entries accompany the displayed dash's local start day; only first run uses today.
+     * Live starts come from state, resting starts from the shared DASH_START payloads. Merged dashes
+     * on the same day share one query, so an unassigned entry appears only once.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val unassignedLogData = ZoneId.systemDefault().let { zone ->
-        currentLocalDateFlow(zone = zone, now = clock::millis)
-            .distinctUntilChanged()
-            .flatMapLatest { date ->
+    private fun unassignedLogData(sources: List<CardSource>): Flow<LogData> {
+        val zone = ZoneId.systemDefault()
+        val days = if (sources.isEmpty()) {
+            currentLocalDateFlow(zone = zone, now = clock::millis).map { listOf(it) }
+        } else {
+            combine(
+                liveSessions,
+                sessionEvents.filter { sessions -> sessions.map { it.first } == sources },
+            ) { live, sessions ->
+                sessions.mapNotNull { (source, events) ->
+                    val start = live.firstOrNull { it.sessionId == source.sessionId }?.startedAt
+                        ?: events.firstNotNullOfOrNull { event ->
+                            if (event.type == AppEventType.DASH_START) {
+                                (event.payload as? SessionStartPayload)?.startedAt
+                            } else null
+                        }
+                    start?.let { PeriodBounds.localDate(it, zone) }
+                }.distinct()
+            }
+        }
+        return days.distinctUntilChanged().flatMapLatest { dates ->
+            if (dates.isEmpty()) flowOf(LogData.Empty)
+            else combine(dates.map { date ->
                 combine(
                     ledgerRepository.expensesUnassignedOn(date, zone),
                     ledgerRepository.fuelUnassignedOn(date, zone),
                 ) { expenses, fuel -> LogData(expenses = expenses, fuel = fuel) }
-            }
+            }) { days -> days.fold(LogData.Empty) { all, day -> all + day } }
+        }
     }
 
     /** Only the log slot subscribes to the projections. Events come from the cards' shared read. */
@@ -326,7 +353,7 @@ class BubbleViewModel @Inject constructor(
         .map { sessions -> sessions.map { it.first } }
         .distinctUntilChanged()
         .flatMapLatest { sources ->
-            if (sources.isEmpty()) flowOf(LogData.Empty)
+            if (sources.isEmpty()) unassignedLogData(sources)
             else combine(
                 // Keep events and projections scoped together during a presentation switch.
                 sessionEvents.filter { sessions -> sessions.map { it.first } == sources },
@@ -341,8 +368,8 @@ class BubbleViewModel @Inject constructor(
                 }) { sessions -> sessions.fold(LogData.Empty) { all, session -> all + session } },
             ) { events, projections ->
                 projections.copy(events = events.flatMap { it.second })
-            }
-        }.combine(unassignedLogData) { sessions, unassigned -> sessions + unassigned }
+            }.combine(unassignedLogData(sources)) { sessions, unassigned -> sessions + unassigned }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
 
     /**
@@ -414,7 +441,7 @@ class BubbleViewModel @Inject constructor(
 
     /** Deduplicate wakeups; each new day subscribes with fresh bounds and pairs its own total. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow().distinctUntilChanged().flatMapLatest { date ->
+    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow(now = clock::millis).distinctUntilChanged().flatMapLatest { date ->
         analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY).map { GoalDay(date, it.netProfit) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

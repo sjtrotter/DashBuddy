@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.LogData
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
@@ -67,6 +68,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -171,6 +173,7 @@ class BubbleViewModelTest {
         garageRepository: GarageRepository = garage(),
         readingRepository: OdometerReadingRepository = readings(),
         ledger: LedgerRepository = ledgerRepository,
+        testClock: Clock = clock,
     ) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
@@ -185,7 +188,7 @@ class BubbleViewModelTest {
         ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
-        clock = clock,
+        clock = testClock,
     )
 
     @Test
@@ -370,54 +373,92 @@ class BubbleViewModelTest {
     }
 
     @Test
-    fun `logData shows today's unassigned rows live but excludes yesterday`() = runTest {
-        checkUnassignedLog(live = true)
+    fun `logData uses the live dash start day across midnight and at rest`() = runTest {
+        checkUnassignedLog(hasDash = true, live = true)
     }
 
     @Test
-    fun `logData shows today's unassigned rows at rest with no dash but excludes yesterday`() = runTest {
-        checkUnassignedLog(live = false)
+    fun `logData at rest shows yesterday beside yesterday's dash and excludes today's fee`() = runTest {
+        checkUnassignedLog(hasDash = true, live = false)
     }
 
-    private suspend fun TestScope.checkUnassignedLog(live: Boolean) {
+    @Test
+    fun `logData with no dash uses today and rolls over at local midnight`() = runTest {
+        checkUnassignedLog(hasDash = false, live = false)
+    }
+
+    private suspend fun TestScope.checkUnassignedLog(hasDash: Boolean, live: Boolean) {
         stubNoDashes()
         val zone = ZoneId.systemDefault()
-        val today = clock.instant().atZone(zone).toLocalDate()
-        val now = clock.millis()
-        val yesterday = today.minusDays(1).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
-        val expense = ExpenseRecordEntity(20, null, now, "FOOD", 11.4, null, null)
-        val fillup = FuelRecordEntity(30, null, now, 31.9, 10.0, null, null)
-        val expenses = MutableStateFlow(listOf(expense.copy(eventSequenceId = 19, occurredAt = yesterday)))
-        val fuel = MutableStateFlow(listOf(fillup.copy(eventSequenceId = 29, occurredAt = yesterday)))
+        val date = java.time.LocalDate.of(2026, 10, 18)
+        val midnight = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val initialNow = if (live || !hasDash) midnight - 5 * 60_000L else midnight + 30 * 60_000L
+        val tickingClock = object : Clock() {
+            override fun getZone() = zone
+            override fun withZone(zone: ZoneId): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(initialNow + testScheduler.currentTime)
+        }
+        val start = midnight - 60 * 60_000L
+        val expense = ExpenseRecordEntity(20, null, midnight - 10 * 60_000L, "FOOD", 11.4, null, null)
+        val fillup = FuelRecordEntity(30, null, expense.occurredAt, 31.9, 10.0, null, null)
+        val expenses = MutableStateFlow(listOf(expense))
+        val fuel = MutableStateFlow(listOf(fillup))
         val dao: LedgerDao = mock()
-        whenever(dao.expensesUnassigned()).thenReturn(expenses)
-        whenever(dao.fuelUnassigned()).thenReturn(fuel)
+        whenever(dao.expensesUnassignedBetween(any(), any())).thenAnswer { call ->
+            val from = call.getArgument<Long>(0)
+            val until = call.getArgument<Long>(1)
+            expenses.map { rows -> rows.filter { it.occurredAt >= from && it.occurredAt < until } }
+        }
+        whenever(dao.fuelUnassignedBetween(any(), any())).thenAnswer { call ->
+            val from = call.getArgument<Long>(0)
+            val until = call.getArgument<Long>(1)
+            fuel.map { rows -> rows.filter { it.occurredAt >= from && it.occurredAt < until } }
+        }
         whenever(dao.expensesForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(dao.fuelForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(analyticsRepository.sessionDetail(any())).thenReturn(flowOf(null))
-        if (live) state.value = earningsState("session-dd")
-        // Exercise the real repository filter so a wrong date or zone cannot be hidden by a stub.
-        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao, analyticsRepository))
+        if (hasDash) {
+            whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf("session-dd"))
+            whenever(appEventRepo.getEventsForSession("session-dd")).thenReturn(
+                // A late/recovered event timestamp must not replace the payload's actual start day.
+                flowOf(listOf(AppEvent(
+                    AppEventType.DASH_START, midnight + 1, "session-dd",
+                    SessionStartPayload("session-dd", Platform.DoorDash.wire, start, "recovery", "test"),
+                ))),
+            )
+        }
+        if (live) state.value = earningsState("session-dd", startedAt = start)
+        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao, analyticsRepository), testClock = tickingClock)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
         runCurrent()
-        assertEquals(LogData.Empty, vm.logData.value)
+        assertEquals(listOf(20L), vm.logData.value.expenses.map { it.eventSequenceId })
+        assertEquals(listOf(30L), vm.logData.value.fuel.map { it.eventSequenceId })
 
-        expenses.value += expense
-        fuel.value += fillup
+        // A 00:20 fee belongs to the next day, even beside a dash still live from yesterday.
+        if (live || !hasDash) advanceTimeBy(35 * 60_000L)
+        expenses.value += expense.copy(eventSequenceId = 21, occurredAt = midnight + 20 * 60_000L)
+        fuel.value += fillup.copy(eventSequenceId = 31, occurredAt = midnight + 20 * 60_000L)
         runCurrent()
-        assertEquals(listOf(ExpenseRecord(20, null, now, ExpenseCategory.FOOD, 11.4, null, null)), vm.logData.value.expenses)
-        assertEquals(listOf(FuelRecord(30, null, now, 31.9, 10.0, null, null)), vm.logData.value.fuel)
+        val expenseId = if (hasDash) 20L else 21L
+        val fuelId = if (hasDash) 30L else 31L
+        assertEquals(listOf(expenseId), vm.logData.value.expenses.map { it.eventSequenceId })
+        assertEquals(listOf(fuelId), vm.logData.value.fuel.map { it.eventSequenceId })
 
-        expenses.value = expenses.value.map { if (it.eventSequenceId == 20L) it.copy(voidedAt = now + 1) else it }
-        fuel.value = fuel.value.map { if (it.eventSequenceId == 30L) it.copy(voidedAt = now + 1) else it }
+        expenses.value = expenses.value.map { it.copy(voidedAt = tickingClock.millis()) }
+        fuel.value = fuel.value.map { it.copy(voidedAt = tickingClock.millis()) }
         runCurrent()
-        assertEquals(now + 1, vm.logData.value.expenses.single().voidedAt)
-        assertEquals(now + 1, vm.logData.value.fuel.single().voidedAt)
+        assertEquals(tickingClock.millis(), vm.logData.value.expenses.single().voidedAt)
+        assertEquals(tickingClock.millis(), vm.logData.value.fuel.single().voidedAt)
         if (live) {
             state.value = AppState()
             runCurrent()
             assertEquals(20L, vm.logData.value.expenses.single().eventSequenceId)
             assertEquals(30L, vm.logData.value.fuel.single().eventSequenceId)
+            // Starting a new dash switches the unassigned window to its own day.
+            state.value = earningsState("next-dash", startedAt = midnight + 25 * 60_000L)
+            runCurrent()
+            assertEquals(21L, vm.logData.value.expenses.single().eventSequenceId)
+            assertEquals(31L, vm.logData.value.fuel.single().eventSequenceId)
         }
     }
 
@@ -457,7 +498,7 @@ class BubbleViewModelTest {
     fun `sessionNet follows the displayed session`() = runTest {
         val last = session("last", 10.0, 1)
         whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(last)))
-        val lastNet = SessionNet("last", 8.0, 0.0, 0.0, 0.0, 20.0)
+        val lastNet = SessionNet("last", 8.0, 0.0, 0.0)
         val ddNet = lastNet.copy(sessionId = "session-dd", deliveredNet = 18.0)
         val uberFlow = MutableStateFlow(lastNet.copy(sessionId = "session-uber", deliveredNet = 28.0))
         whenever(ledgerRepository.sessionNet("last")).thenReturn(flowOf(lastNet))
@@ -498,6 +539,15 @@ class BubbleViewModelTest {
         runCurrent()
         assertNull(vm.dailyGoal.value)
         job.cancel()
+    }
+
+    @Test
+    fun `goal day follows the injected fixed clock`() = runTest {
+        stubNoDashes()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalDay.collect {} }
+        runCurrent()
+        assertEquals(clock.instant().atZone(ZoneId.systemDefault()).toLocalDate(), vm.goalDay.value!!.date)
     }
 
     @Test
@@ -669,14 +719,14 @@ class BubbleViewModelTest {
         whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
     }
 
-    private fun earningsState(id: String, earnings: Double? = null) = AppState(
+    private fun earningsState(id: String, earnings: Double? = null, startedAt: Long = 100L) = AppState(
         regions = Regions(
             flow = FlowRegion(activePlatform = Platform.DoorDash),
             platforms = mapOf(
                 Platform.DoorDash to PlatformRegion(
                     platform = Platform.DoorDash,
                     mode = Mode.Online,
-                    session = Session(id, startedAt = 100L, runningEarnings = earnings),
+                    session = Session(id, startedAt = startedAt, runningEarnings = earnings),
                 ),
             ),
         ),

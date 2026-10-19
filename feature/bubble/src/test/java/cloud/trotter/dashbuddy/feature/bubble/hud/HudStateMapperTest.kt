@@ -11,7 +11,7 @@ import cloud.trotter.dashbuddy.domain.model.cards.*
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
-    private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
+    private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0),
         last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
         odometerLoaded: Boolean = true, odometerCue: Boolean = false) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,

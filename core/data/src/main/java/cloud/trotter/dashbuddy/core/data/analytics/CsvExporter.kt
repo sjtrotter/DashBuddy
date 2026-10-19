@@ -66,7 +66,7 @@ object CsvExporter {
     )
 
     private val FUEL_HEADER = listOf(
-        "date", "time", "total", "gallons", "price_per_gallon", "odometer_miles", "dash_id", "voided",
+        "date", "time", "total", "gallons", "price_per_gallon", "tracked_miles", "dash_id", "voided",
     )
 
     private val SESSION_HEADER = listOf(

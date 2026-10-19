@@ -145,7 +145,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. DashBuddy does not deliver it to the developer. |
-| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names, plus logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and odometer readings), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
+| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names, plus logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct DashBuddy upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -187,8 +187,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   tables are a rebuildable projection of your own event log. The database is backed up and transferred so your
   history can be restored on a new phone (§6).
 - Expenses and fuel fill-ups the dasher logs from the bubble are events in that log and rows in two
-  read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the odometer total
-  at the fill, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
+  read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the app's tracked miles at the fill-up, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
   them like the rest of the history (§6). The expense sheet adds no stored field: its label is the
   existing expense note, and its fill-up GPS stamp is the existing `odometerMiles`. Recent-label
@@ -259,7 +258,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 ## Revision history
 
 - **r8 (2026-10-19)** — CSV export includes logged expenses and fill-ups, including voided entries, in
-  `expenses.csv` and `fuel.csv`. Amounts, categories, the dasher’s own labels, gallons and odometer readings
+  `expenses.csv` and `fuel.csv`. Amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up
   go to the chosen folder/provider; no customer data. Receipts created under r7 retain that revision.
 - **r7 (2026-10-19)** — vehicle profiles are typed (gas car, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle) and store
   the type's own consumption and part-cost fields, shared electricity tariff and `legacyExtras`; older entries keep their values (#1358). Nothing

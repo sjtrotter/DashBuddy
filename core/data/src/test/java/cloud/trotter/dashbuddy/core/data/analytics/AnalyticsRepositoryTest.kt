@@ -66,6 +66,43 @@ class AnalyticsRepositoryTest {
         assertNull(repo.deliveryById(10))
     }
 
+    @Test
+    fun `CSV range bounds ledger files and their non-voided totals by occurrence`() = runBlocking {
+        val expense = cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord(
+            1, null, base, cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory.PARKING, 4.0, "included", null,
+        )
+        val fuel = cloud.trotter.dashbuddy.domain.analytics.FuelRecord(10, null, base, 30.0, 10.0, 100.0, null)
+        val out = repo.buildCsvExport(
+            zone = java.time.ZoneId.of("UTC"), generatedAtMillis = base,
+            start = base, end = base + hour,
+            expenses = listOf(
+                expense.copy(eventSequenceId = 0, occurredAt = base - 1, note = "before"),
+                expense,
+                expense.copy(eventSequenceId = 2, occurredAt = base + hour - 1, amount = 6.0, note = "last"),
+                expense.copy(eventSequenceId = 3, occurredAt = base + hour, amount = 99.0, note = "after"),
+                expense.copy(eventSequenceId = 4, amount = 50.0, note = "voided", voidedAt = base + 1),
+            ),
+            fuel = listOf(
+                fuel.copy(eventSequenceId = 9, occurredAt = base - 1, totalAmount = 999.0),
+                fuel,
+                fuel.copy(eventSequenceId = 11, occurredAt = base + hour - 1, totalAmount = 40.0),
+                fuel.copy(eventSequenceId = 12, occurredAt = base + hour, totalAmount = 888.0),
+                fuel.copy(eventSequenceId = 13, totalAmount = 50.0, voidedAt = base + 1),
+            ),
+        )
+        assertEquals(4, out.expensesCsv.trim().lines().size) // Header, two surviving rows, one void.
+        assertTrue(out.expensesCsv.contains(",included,"))
+        assertTrue(out.expensesCsv.contains(",last,"))
+        assertTrue(out.expensesCsv.contains(",voided,"))
+        org.junit.Assert.assertFalse(out.expensesCsv.contains(",before,"))
+        org.junit.Assert.assertFalse(out.expensesCsv.contains(",after,"))
+        assertTrue(out.summaryCsv.lines().contains("expenses_total,10.00"))
+        assertEquals(4, out.fuelCsv.trim().lines().size)
+        org.junit.Assert.assertFalse(out.fuelCsv.contains("999.00"))
+        org.junit.Assert.assertFalse(out.fuelCsv.contains("888.00"))
+        assertTrue(out.summaryCsv.lines().contains("fuel_total,70.00"))
+    }
+
     private fun delivery(
         seq: Long,
         sessionId: String?,
