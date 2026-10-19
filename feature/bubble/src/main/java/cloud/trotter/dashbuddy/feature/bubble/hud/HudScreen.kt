@@ -50,6 +50,12 @@ fun HudScreen(
             Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp, bottom = 12.dp)) {
                 val showingLog = state.logOpen || state.mode == HudMode.LOG
                 Box {
+                    // Behind header controls so the goal pill can replace the expense subcard.
+                    if (sheetOpen && sheetCompact && !showingLog && state.mode != HudMode.OFFER) {
+                        Box(Modifier.matchParentSize().testTag("hud.sheet.outside.header")
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                                onClick = onSheetOutsideDismiss))
+                    }
                     Column {
                         HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
                         if (state.mode != HudMode.OFFER) {
@@ -57,11 +63,6 @@ fun HudScreen(
                             if (showingLog) CompactHeroRow(state.hero, onGoalClick)
                             else HeroRow(state.hero, onGoalCelebrated, onGoalClick)
                         }
-                    }
-                    if (sheetOpen && sheetCompact && !showingLog && state.mode != HudMode.OFFER) {
-                        Box(Modifier.matchParentSize().testTag("hud.sheet.outside.header")
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                                onClick = onSheetOutsideDismiss))
                     }
                 }
                 if (state.mode == HudMode.OFFER) {

@@ -13,6 +13,13 @@ class GoalCelebrationResolverTest {
     @Test fun met_markEqualsKey_returnsNull() { assertNull(resolve(MarkRead.Loaded("2026-10-18|7900"))) }
     @Test fun met_markFromYesterday_returnsKey() { assertNotNull(resolve(MarkRead.Loaded("2026-10-17|7900"))) }
     @Test fun met_goalChanged_returnsKey() { assertNotNull(resolve(MarkRead.Loaded("2026-10-18|8000"))) }
+    @Test fun `only the latest mark is remembered so revisiting a met value replays`() {
+        val first = resolve(dollars = 100.0)!!
+        assertNull(resolve(MarkRead.Loaded(first), dollars = 100.0))
+        val second = resolve(MarkRead.Loaded(first), dollars = 125.0)!!
+        assertNull(resolve(MarkRead.Loaded(second), dollars = 125.0))
+        assertEquals(first, resolve(MarkRead.Loaded(second), dollars = 100.0))
+    }
     @Test fun markLoading_returnsNull() { assertNull(resolve(MarkRead.Loading)) }
     @Test fun offerMode_returnsNull() { assertNull(resolve(mode = HudMode.OFFER)) }
     @Test fun notMet_returnsNull() {

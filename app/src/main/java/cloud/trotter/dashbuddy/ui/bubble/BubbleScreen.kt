@@ -23,7 +23,7 @@ import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
 
-private enum class EntrySheet { ODOMETER, CASH_TIP, EXPENSE }
+private enum class EntrySheet { ODOMETER, CASH_TIP, EXPENSE, GOAL }
 
 @Composable
 fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
@@ -52,18 +52,21 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val odometer = rememberOdometerHud(viewModel, closeLog)
     val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
     val expense = rememberExpenseHud(viewModel, closeLog)
+    val goalHud = rememberGoalHud(viewModel, closeLog)
     var lastSheet by rememberSaveable { mutableStateOf(EntrySheet.ODOMETER) }
-    // Every route (including the resting footer) goes through this one three-way exclusive rule.
-    val openSheet: (EntrySheet?) -> Unit = remember(odometer, cashTip, expense) {
+    // Every route (including the resting footer and both goal pills) uses this four-way exclusive rule.
+    val openSheet: (EntrySheet?) -> Unit = remember(odometer, cashTip, expense, goalHud) {
         { next ->
             if (next != EntrySheet.ODOMETER) odometer.dismiss()
             if (next != EntrySheet.CASH_TIP) cashTip.dismiss()
             if (next != EntrySheet.EXPENSE) expense.dismiss()
+            if (next != EntrySheet.GOAL) goalHud.dismiss()
             if (next != null) lastSheet = next
             when (next) {
                 EntrySheet.ODOMETER -> odometer.openSheet()
                 EntrySheet.CASH_TIP -> cashTip.openSheet()
                 EntrySheet.EXPENSE -> expense.openSubcard()
+                EntrySheet.GOAL -> goalHud.openSheet()
                 null -> Unit
             }
         }
@@ -72,11 +75,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cashTipCue = cashTip.Cue()
     val expenseCue = expense.Cue()
     val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
-    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip, expense, lastSheet) {
+    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip, expense, goalHud, lastSheet) {
         { when (lastSheet) {
             EntrySheet.CASH_TIP -> cashTip.Sheet()
             EntrySheet.ODOMETER -> odometer.Sheet()
             EntrySheet.EXPENSE -> expense.Sheet()
+            EntrySheet.GOAL -> goalHud.Sheet()
         } }
     }
     val entryUndo: @Composable () -> Unit = remember(odometer, cashTip, expense, viewModel) {
@@ -145,13 +149,15 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             state = state,
             ribbon = ribbon,
             onGoalCelebrated = viewModel::goalCelebrated,
-            sheetOpen = odometer.open || cashTip.open || expense.open,
+            onGoalClick = { openSheet(EntrySheet.GOAL) },
+            sheetOpen = odometer.open || cashTip.open || expense.open || goalHud.open,
             sheetCompact = lastSheet == EntrySheet.EXPENSE && expense.compact,
             onSheetOutsideDismiss = expense::dismiss,
             onSheetDismiss = { when (lastSheet) {
                 EntrySheet.ODOMETER -> odometer.back()
                 EntrySheet.CASH_TIP -> cashTip.back()
                 EntrySheet.EXPENSE -> expense.back()
+                EntrySheet.GOAL -> goalHud.back()
             } },
             sheet = entrySheet,
             undo = entryUndo,

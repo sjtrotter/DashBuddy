@@ -101,6 +101,30 @@ class BubbleGoalMarkTest {
         assertEquals(MarkRead.Loaded(null), vm.goalMark.value)
         read.cancel()
     }
+    @Test fun `goal actions feed the existing daily goal flow and pill without a new event`() = runTest(dispatcher) {
+        val stored = MutableStateFlow<Double?>(null)
+        whenever(preferences.dailyKeptGoalDollars).thenReturn(stored)
+        doSuspendableAnswer { invocation -> stored.value = invocation.getArgument<Double?>(0) }
+            .whenever(preferences).setDailyKeptGoalDollars(anyOrNull())
+        val vm = model()
+        val activity = ViewModelStore().apply { put("bubble", vm) }
+        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dailyGoal.collect {} }
+        runCurrent()
+        vm.goalActions.set(150); runCurrent()
+        assertEquals(150.0, vm.dailyGoal.value)
+        assertTrue(cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2)
+            is GoalPillState.InProgress)
+        vm.goalActions.set(50); runCurrent()
+        assertEquals(GoalPillState.Met,
+            cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+        vm.goalActions.clear(); runCurrent()
+        assertNull(vm.dailyGoal.value)
+        assertEquals(GoalPillState.NoGoal,
+            cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+        verify(appState, never()).setGoalMetMark(any())
+        verify(events, never()).appendUserEvent(any(), anyOrNull())
+        read.cancel(); activity.clear()
+    }
     @Test fun `a new view model after collapse sees the pending mark`() = runTest(dispatcher) {
         val releaseWrite = CompletableDeferred<Unit>()
         val persisted = MutableStateFlow<String?>("2026-10-17|7900")
