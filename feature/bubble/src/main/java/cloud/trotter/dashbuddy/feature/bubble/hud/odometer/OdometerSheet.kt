@@ -40,19 +40,20 @@ fun ColumnScope.OdometerSheet(
     onSelectVehicle: (String) -> Unit,
     onShowAddVehicle: () -> Unit,
     onBack: () -> Unit,
+    onRetireVehicle: (String) -> Unit,
 ) {
     val page = model.page
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
             OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange,
                 enabled = !model.saving && model.writeFailed != OdometerWriteFailure.UNREADABLE, onBack, onAddVehicle)
-            OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack)
+            OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack, onRetireVehicle)
             OdometerPage.READING -> {
                 Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         OdometerTitle(stringResource(R.string.hud_odometer_title), onBack)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(model.vehicle?.name.orEmpty(), Modifier.weight(1f), color = AppTheme.colors.text,
+                            Text(model.vehicle?.displayName.orEmpty(), Modifier.weight(1f), color = AppTheme.colors.text,
                                 style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             IconButton(onClick = onSwitchVehicle, enabled = !model.saving, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_odometer_switch), tint = AppTheme.colors.accent)

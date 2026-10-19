@@ -35,7 +35,7 @@ class VehicleSwitcherTest {
     }
     @After fun cleanup() { Locale.setDefault(originalLocale) }
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
-    private val vehicles = listOf(Vehicle("civic", "Civic", 0), Vehicle("truck", "Truck", 0))
+    private var vehicles by mutableStateOf(listOf(Vehicle("civic", "Civic", 0), Vehicle("truck", "Truck", 0)))
     private var active by mutableStateOf("civic")
     private var name by mutableStateOf("Civic")
     private fun show(saving: Boolean = false) {
@@ -43,7 +43,9 @@ class VehicleSwitcherTest {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Box(Modifier.width(352.dp).height(350.dp)) {
-                        VehicleSwitcher(vehicles, active, saving, { active = it }, {}, {})
+                        VehicleSwitcher(vehicles, active, saving, { active = it }, {}, {}, { id ->
+                            vehicles = vehicles.map { if (it.id == id) it.copy(retiredAt = clock.millis()) else it }
+                        })
                     }
                 }
             }
@@ -75,6 +77,29 @@ class VehicleSwitcherTest {
         compose.onNodeWithTag("vehicle.add").assertIsNotEnabled()
         compose.onNodeWithTag("vehicle.truck").performClick(); settle()
         assertEquals("civic", active)
+    }
+
+    @Test fun `a trash can retires the row`() {
+        show()
+        compose.onNodeWithContentDescription("Remove Civic").performClick(); settle()
+        compose.onNodeWithTag("vehicle.civic").assertDoesNotExist()
+        compose.onNodeWithTag("vehicle.truck").assertIsDisplayed()
+        assertNotNull(vehicles.first { it.id == "civic" }.retiredAt)
+        assertEquals("civic", active) // The trash tap never selects another car.
+    }
+
+    @Test fun `trash cans are disabled while saving`() {
+        show(saving = true)
+        compose.onNodeWithContentDescription("Remove Civic").assertIsNotEnabled().performClick(); settle()
+        compose.onNodeWithTag("vehicle.civic").assertExists()
+        assertNull(vehicles.first { it.id == "civic" }.retiredAt)
+    }
+
+    @Test fun `identity supplies the row name when no name was typed`() {
+        vehicles = listOf(Vehicle("wizard", null, 0, profile = VehicleProfile(year = "2020", make = "Chevrolet", model = "Malibu")))
+        show()
+        compose.onNodeWithText("2020 Chevrolet Malibu").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove 2020 Chevrolet Malibu").assertExists()
     }
 
     @Test fun `a name over the cap is not accepted`() {

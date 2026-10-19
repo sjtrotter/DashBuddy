@@ -48,7 +48,7 @@ class OdometerSheetTest {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Column(Modifier.width(352.dp).height(350.dp)) {
                         if (visible) OdometerSheet(model, { model = model.copy(vehicleName = it) },
-                            {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {})
+                            {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {}, {})
                     }
                 }
             }
@@ -90,7 +90,7 @@ class OdometerSheetTest {
         compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
         compose.runOnIdle { model = model.copy(saving = false, vehicle = null, check = OdometerCheck.NoVehicle) }; settle()
         compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
-        compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.name)) }; settle()
+        compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.displayName)) }; settle()
         compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
     }
     @Test fun `add is disabled while the garage is unreadable`() {

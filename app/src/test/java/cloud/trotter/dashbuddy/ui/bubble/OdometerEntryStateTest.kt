@@ -151,4 +151,22 @@ class OdometerEntryStateTest {
         assertNull(state.reading)
     }
 
+    @Test fun `retirement routes to the surviving garage and keeps digits`() {
+        for ((active, remaining, page) in listOf(
+            Triple(true, true, OdometerPage.READING),
+            Triple(false, true, OdometerPage.VEHICLES),
+            Triple(false, false, OdometerPage.ADD_VEHICLE),
+        )) {
+            val state = entry()
+            state.show(activeVehicle = true, anyVehicles = true)
+            state.digit(5)
+            state.digit(2)
+            state.page = OdometerPage.VEHICLES
+            state.vehicleRetired(active, remaining)
+            assertTrue(state.open)
+            assertEquals(page, state.page)
+            assertEquals(52, state.reading)
+        }
+    }
+
 }

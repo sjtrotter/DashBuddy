@@ -18,6 +18,7 @@ class AppStateDataSource @Inject constructor(
     private object Keys {
         val GOAL_MET_MARK = stringPreferencesKey("goal_met_mark")
         val IS_FIRST_RUN = booleanPreferencesKey("is_first_run")
+        val GARAGE_SEEDED = booleanPreferencesKey("garage_seeded")
 
         /**
          * Whether the dasher has already been shown the "recognition is English-only"
@@ -29,6 +30,11 @@ class AppStateDataSource @Inject constructor(
 
     // Default to true if the key doesn't exist yet
     val isFirstRun: Flow<Boolean> = ds.data.map { it[Keys.IS_FIRST_RUN] ?: true }
+    val garageSeeded: Flow<Boolean> = ds.data.map { it[Keys.GARAGE_SEEDED] ?: false }
+
+    suspend fun setGarageSeeded() {
+        ds.edit { it[Keys.GARAGE_SEEDED] = true }
+    }
 
     /** False until the #938 English-locale notice has been posted once on this install. */
     val localeBoundaryNoticeShown: Flow<Boolean> =

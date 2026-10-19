@@ -29,7 +29,7 @@ object OdometerReadingCheck {
 
     fun check(input: OdometerCheckInput): OdometerCheck {
         val vehicle = input.vehicle ?: return OdometerCheck.NoVehicle
-        val last = input.last ?: return OdometerCheck.First(vehicle.name)
+        val last = input.last ?: return OdometerCheck.First(vehicle.displayName)
         val miles = input.readingMiles?.takeIf(OdometerReadingLimit::isValid) ?: return OdometerCheck.Empty
         val delta = miles - last.readingMiles
         if (delta < 0) return OdometerCheck.Lower(last.readingMiles)

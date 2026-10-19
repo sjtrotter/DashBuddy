@@ -1,12 +1,15 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
+import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -18,15 +21,20 @@ import javax.inject.Singleton
 @Singleton
 class AppPreferencesRepository @Inject constructor(
     private val dataSource: AppPreferencesDataSource,
+    /**
+     * S2f removed an unused garage write dependency. The economy now consumes the active vehicle
+     * on every read, and vehicle edits use the same source; the garage never reads settings.
+     */
+    private val garageRepository: GarageRepository,
 ) {
     // ============================================================================================
     // STREAMS
     // ============================================================================================
-    val vehicleYear = dataSource.vehicleYear
-    val vehicleMake = dataSource.vehicleMake
-    val vehicleModel = dataSource.vehicleModel
+    val vehicleYear = dataSource.vehicleYear.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.year ?: if (garage.active == null) old else null }
+    val vehicleMake = dataSource.vehicleMake.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.make ?: if (garage.active == null) old else null }
+    val vehicleModel = dataSource.vehicleModel.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.model ?: if (garage.active == null) old else null }
     val vehicleTrim = dataSource.vehicleTrim
-    val estimatedMpg = dataSource.estimatedMpg
+    val estimatedMpg = dataSource.estimatedMpg.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.mpg?.toFloat() ?: if (garage.active == null) old else null }
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
     val odometerPrompts = dataSource.odometerPrompts
@@ -41,12 +49,15 @@ class AppPreferencesRepository @Inject constructor(
     /** Spoken-offer language override (#428 Half B); null ⇒ follow the system locale. */
     val ttsLanguageTag = dataSource.ttsLanguageTag
 
-    val fuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
+    private val legacyFuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
             FuelType.valueOf(savedType ?: FuelType.REGULAR.name)
         } catch (_: Exception) {
             FuelType.REGULAR
         }
+    }
+    val fuelType: Flow<FuelType> = legacyFuelType.combine(garageRepository.garage) { old, garage ->
+        garage.active?.profile?.fuelType ?: old
     }
 
     /**
@@ -81,12 +92,15 @@ class AppPreferencesRepository @Inject constructor(
         }
     }
 
-    val vehicleClass: Flow<VehicleClass> = dataSource.vehicleClass.map { saved ->
+    private val legacyVehicleClass: Flow<VehicleClass> = dataSource.vehicleClass.map { saved ->
         try {
             VehicleClass.valueOf(saved ?: VehicleClass.SEDAN.name)
         } catch (_: Exception) {
             VehicleClass.SEDAN
         }
+    }
+    val vehicleClass: Flow<VehicleClass> = legacyVehicleClass.combine(garageRepository.garage) { old, garage ->
+        garage.active?.profile?.vehicleClass ?: old
     }
 
     /**
@@ -103,7 +117,7 @@ class AppPreferencesRepository @Inject constructor(
     val userEconomy: Flow<UserEconomy> = combine(
         // Identity + fuel + time
         combine(
-            vehicleClass,
+            legacyVehicleClass,
             dataSource.estimatedMpg,
             dataSource.gasPrice,
             dataSource.avgMinPerMile,
@@ -181,6 +195,9 @@ class AppPreferencesRepository @Inject constructor(
     .combine(dataSource.userSetEconomyFields) { eco, savedNames ->
         eco.copy(userSetFields = parseUserSetFields(savedNames))
     }
+    .combine(garageRepository.garage) { base, garage ->
+        garage.active?.let { VehicleEconomy.apply(base, it.profile) } ?: base
+    }
 
     private data class IdentityTuple(
         val vehicleClass: VehicleClass,
@@ -240,8 +257,19 @@ class AppPreferencesRepository @Inject constructor(
      * [updateGasPriceManual]. Frozen-economics invariant (#314): affects only FUTURE evaluations.
      */
     suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
-    suspend fun updateFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
-    suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
+    suspend fun updateFuelType(type: FuelType) {
+        updateActiveProfile { it.copy(fuelType = type) }
+        dataSource.updateFuelType(type.name)
+    }
+    suspend fun updateVehicleClass(type: VehicleClass) {
+        updateActiveProfile { it.copy(vehicleClass = type) }
+        dataSource.updateVehicleClass(type.name)
+    }
+    suspend fun updateEstimatedMpg(mpg: Float) {
+        require(mpg.isFinite() && mpg > 0f)
+        updateActiveProfile { it.copy(mpg = mpg.toDouble()) }
+        dataSource.updateEstimatedMpg(mpg)
+    }
     suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
 
     suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
@@ -283,36 +311,63 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,
         mpg: Float, isGasAuto: Boolean, price: Float,
-    ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
+    ) {
+        updateActiveProfile {
+            it.copy(year = year, make = make, model = model, mpg = mpg.toDouble())
+        }
+        dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
+    }
 
 
     // --- Personal Economy v2 writes (#145) ---
-    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) =
+    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
+        updateActiveProfile { it.copy(tireSetCost = setCost, tireLifetimeMi = lifetimeMi) }
         dataSource.updateTireCost(setCost, lifetimeMi)
+    }
 
-    suspend fun updateOilCost(cost: Double, intervalMi: Double) =
+    suspend fun updateOilCost(cost: Double, intervalMi: Double) {
+        updateActiveProfile { it.copy(oilCost = cost, oilIntervalMi = intervalMi) }
         dataSource.updateOilCost(cost, intervalMi)
+    }
 
-    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) =
+    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) {
+        updateActiveProfile { it.copy(brakesCost = cost, brakesIntervalMi = intervalMi) }
         dataSource.updateBrakesCost(cost, intervalMi)
+    }
 
-    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) =
+    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) {
+        updateActiveProfile { it.copy(fluidsCost = cost, fluidsIntervalMi = intervalMi) }
         dataSource.updateFluidsCost(cost, intervalMi)
+    }
 
-    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) =
+    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) {
+        updateActiveProfile { it.copy(miscYearly = yearly, miscYearlyMi = yearlyMi) }
         dataSource.updateMiscMaintenance(yearly, yearlyMi)
+    }
 
-    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) =
+    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) {
+        updateActiveProfile { it.copy(includeDepreciation = include, purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi) }
         dataSource.updateDepreciation(include, purchasePrice, totalLifetimeMi)
+    }
 
-    suspend fun updateInsuranceDelta(perMonth: Double) =
+    suspend fun updateInsuranceDelta(perMonth: Double) {
+        updateActiveProfile { it.copy(insuranceDeltaPerMonth = perMonth) }
         dataSource.updateInsuranceDelta(perMonth)
+    }
 
-    suspend fun updateRegistrationDelta(perYear: Double) =
+    suspend fun updateRegistrationDelta(perYear: Double) {
+        updateActiveProfile { it.copy(registrationDeltaPerYear = perYear) }
         dataSource.updateRegistrationDelta(perYear)
+    }
 
-    suspend fun updateExpectedAnnualMi(miles: Double) =
+    private suspend fun updateActiveProfile(transform: (VehicleProfile) -> VehicleProfile) {
+        garageRepository.updateOrCreateActiveProfile(System.currentTimeMillis(), transform)
+    }
+
+    suspend fun updateExpectedAnnualMi(miles: Double) {
+        updateActiveProfile { it.copy(expectedAnnualMiles = miles) }
         dataSource.updateExpectedAnnualMi(miles)
+    }
 
     suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) =
         dataSource.updatePhonePlan(total, lines, dashPercent)
@@ -392,7 +447,18 @@ class AppPreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun resetEconomyDefaults() = dataSource.resetEconomyDefaults()
+    suspend fun resetEconomyDefaults() {
+        updateActiveProfile {
+            it.copy(
+                tireSetCost = null, tireLifetimeMi = null, oilCost = null, oilIntervalMi = null,
+                brakesCost = null, brakesIntervalMi = null, fluidsCost = null, fluidsIntervalMi = null,
+                miscYearly = null, miscYearlyMi = null, includeDepreciation = null,
+                purchasePrice = null, totalLifetimeMi = null, insuranceDeltaPerMonth = null,
+                registrationDeltaPerYear = null, expectedAnnualMiles = null,
+            )
+        }
+        dataSource.resetEconomyDefaults()
+    }
 
     suspend fun clearPreferences() {
         Timber.tag(TAG).w("Clearing App Preferences")

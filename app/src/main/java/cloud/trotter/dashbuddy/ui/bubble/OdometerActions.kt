@@ -81,6 +81,11 @@ internal class OdometerActions(
         if (written) changed.emit(VehicleChange.SWITCHED)
         written
     }
+    fun retire(id: String) = write(WriteKind.VEHICLE) {
+        val written = garage.retire(id, clock.millis())
+        if (written) changed.emit(VehicleChange.RETIRED)
+        written
+    }
 
     /**
      * The failure shown follows the last COMPLETED write of its kind: a confirmed success of the same

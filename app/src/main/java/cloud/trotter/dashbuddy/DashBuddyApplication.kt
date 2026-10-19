@@ -70,6 +70,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var analyticsProjector: cloud.trotter.dashbuddy.core.data.analytics.AnalyticsProjector
 
+    @Inject
+    lateinit var garageSeeder: cloud.trotter.dashbuddy.core.data.vehicle.GarageSeeder
+
     // Global Context Accessor (Still useful for Utils, but avoid if possible)
     companion object {
         /** Stable Timber tag for the build-identity startup line (PR #1066, principle 7). */
@@ -193,6 +196,7 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // durable read-model tables (backfill on first launch, then incremental). NOT debug-gated —
         // this is the product's historical earnings/miles source of truth, not debug telemetry.
         analyticsProjector.start(applicationScope)
+        applicationScope.launch { garageSeeder.seed() }
 
         // 4. Schedule Background Tasks
         scheduleBackgroundWorkers()

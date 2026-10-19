@@ -31,7 +31,10 @@ import java.time.ZoneOffset
 @OptIn(ExperimentalCoroutinesApi::class)
 class OdometerActionsTest {
     // A select succeeds unless a test says otherwise (a refused select is the stale-row case).
-    private val garage: GarageRepository = mock { on { selectVehicle(any()) } doReturn true }
+    private val garage: GarageRepository = mock {
+        on { selectVehicle(any()) } doReturn true
+        on { retire(any(), any()) } doReturn true
+    }
     private val readings: OdometerReadingRepository = mock()
     private val clock = Clock.fixed(Instant.ofEpochMilli(100), ZoneOffset.UTC)
 
@@ -147,8 +150,37 @@ class OdometerActionsTest {
         assertEquals(listOf(VehicleChange.SWITCHED), changes)
     }
 
+    @Test fun `retire emits RETIRED once`() = runTest {
+        whenever(garage.retire("civic", 100)).thenReturn(true).thenReturn(false)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val changes = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { changes += it; actions.vehicleChangeHandled() } }
+        runCurrent()
+        actions.retire("civic")
+        runCurrent()
+        actions.retire("civic")
+        runCurrent()
+        verify(garage, times(2)).retire("civic", 100)
+        assertEquals(listOf(VehicleChange.RETIRED), changes)
+        assertTrue(actions.vehicleChanged.replayCache.isEmpty())
+        verifyNoInteractions(readings)
+    }
+
+    @Test fun `a failed retire emits nothing and can be retried`() = runTest {
+        whenever(garage.retire("civic", 100)).thenThrow(VehiclesUnreadableException()).thenReturn(true)
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.retire("civic")
+        runCurrent()
+        assertTrue(actions.vehicleChanged.replayCache.isEmpty())
+        assertEquals(OdometerWriteFailure.UNREADABLE, actions.failed.value)
+        actions.retire("civic")
+        runCurrent()
+        assertEquals(listOf(VehicleChange.RETIRED), actions.vehicleChanged.replayCache)
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+    }
+
     @Test fun `a failed add emits nothing`() = runTest {
-        whenever(garage.addVehicle(any(), any())).thenThrow(VehiclesUnreadableException())
+        whenever(garage.addVehicle(any(), any(), any())).thenThrow(VehiclesUnreadableException())
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         val changes = mutableListOf<VehicleChange>()
         backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
@@ -166,6 +198,7 @@ class OdometerActionsTest {
             when (change) {
                 VehicleChange.ADDED -> actions.add("Civic")
                 VehicleChange.SWITCHED -> actions.select("civic")
+                VehicleChange.RETIRED -> actions.retire("civic")
             }
             runCurrent()
             val changes = mutableListOf<VehicleChange>()
@@ -202,7 +235,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a successful add clears an add failure`() = runTest {
-        whenever(garage.addVehicle(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
+        whenever(garage.addVehicle(any(), any(), any())).thenThrow(IllegalStateException("storage unavailable"))
             .thenReturn(Vehicle("civic", "Civic", 100))
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         actions.add("Civic")
@@ -389,7 +422,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `an unreadable garage is its own failure`() = runTest {
-        whenever(garage.addVehicle(any(), any())).thenThrow(VehiclesUnreadableException())
+        whenever(garage.addVehicle(any(), any(), any())).thenThrow(VehiclesUnreadableException())
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         actions.add("Civic")
         runCurrent()

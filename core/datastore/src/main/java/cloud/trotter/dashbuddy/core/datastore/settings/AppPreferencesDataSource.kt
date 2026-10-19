@@ -13,6 +13,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import cloud.trotter.dashbuddy.core.datastore.di.AppPreferences
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -102,6 +105,47 @@ class AppPreferencesDataSource @Inject constructor(
         val startEpochDay: Long?,
         val endEpochDay: Long?,
     )
+
+    /** One DataStore snapshot for the one-time garage import. Null means no saved car. */
+    val legacyVehicleProfile: Flow<VehicleProfile?> = ds.data.map { prefs ->
+        val year = prefs[Keys.VEHICLE_YEAR]
+        val make = prefs[Keys.VEHICLE_MAKE]
+        val model = prefs[Keys.VEHICLE_MODEL]
+        val mpg = prefs[Keys.ESTIMATED_MPG]?.toDouble()
+        if (listOf(year, make, model).all { it.isNullOrBlank() } && mpg == null) {
+            null
+        } else {
+            val className = prefs[Keys.VEHICLE_CLASS] ?: when (prefs[Keys.VEHICLE_TYPE]) {
+                "CAR" -> "SEDAN"
+                "E_BIKE" -> "E_BIKE"
+                else -> null
+            }
+            VehicleProfile(
+                year = year?.takeIf { it.isNotBlank() },
+                make = make?.takeIf { it.isNotBlank() },
+                model = model?.takeIf { it.isNotBlank() },
+                mpg = mpg,
+                vehicleClass = VehicleClass.entries.firstOrNull { it.name == className } ?: VehicleClass.SEDAN,
+                fuelType = FuelType.entries.firstOrNull { it.name == prefs[Keys.FUEL_TYPE] } ?: FuelType.REGULAR,
+                tireSetCost = prefs[Keys.TIRE_SET_COST],
+                tireLifetimeMi = prefs[Keys.TIRE_LIFETIME_MI],
+                oilCost = prefs[Keys.OIL_COST],
+                oilIntervalMi = prefs[Keys.OIL_INTERVAL_MI],
+                brakesCost = prefs[Keys.BRAKES_COST],
+                brakesIntervalMi = prefs[Keys.BRAKES_INTERVAL_MI],
+                fluidsCost = prefs[Keys.FLUIDS_COST],
+                fluidsIntervalMi = prefs[Keys.FLUIDS_INTERVAL_MI],
+                miscYearly = prefs[Keys.MISC_YEARLY],
+                miscYearlyMi = prefs[Keys.MISC_YEARLY_MI],
+                includeDepreciation = prefs[Keys.INCLUDE_DEPRECIATION],
+                purchasePrice = prefs[Keys.PURCHASE_PRICE],
+                totalLifetimeMi = prefs[Keys.TOTAL_LIFETIME_MI],
+                insuranceDeltaPerMonth = prefs[Keys.INSURANCE_DELTA_PER_MONTH],
+                registrationDeltaPerYear = prefs[Keys.REGISTRATION_DELTA_PER_YEAR],
+                expectedAnnualMiles = prefs[Keys.EXPECTED_ANNUAL_MI],
+            )
+        }
+    }
 
     // ============================================================================================
     // STREAMS
@@ -229,6 +273,13 @@ class AppPreferencesDataSource @Inject constructor(
 
     suspend fun updateVehicleClass(type: String) {
         ds.edit { it[Keys.VEHICLE_CLASS] = type }
+    }
+
+    suspend fun updateEstimatedMpg(mpg: Float) {
+        ds.edit {
+            it[Keys.ESTIMATED_MPG] = mpg
+            it.markUserSet(EconomyField.VEHICLE_MPG)
+        }
     }
 
     suspend fun setOdometerPrompts(enabled: Boolean) {

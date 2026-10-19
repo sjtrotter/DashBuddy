@@ -3,11 +3,20 @@ package cloud.trotter.dashbuddy.domain.model.vehicle
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Vehicle(val id: String, val name: String, val createdAt: Long) {
+data class Vehicle(
+    val id: String,
+    val name: String?,
+    val createdAt: Long,
+    val profile: VehicleProfile = VehicleProfile(),
+    val retiredAt: Long? = null,
+) {
     init {
         require(id.isNotBlank())
-        require(name == name.trim() && name.codePointCount(0, name.length) in 1..MAX_NAME_CODE_POINTS)
+        require(name == null || (name == name.trim() && name.codePointCount(0, name.length) in 1..MAX_NAME_CODE_POINTS))
     }
+
+    val displayName: String get() = name ?: listOfNotNull(profile.year, profile.make, profile.model)
+        .filter { it.isNotBlank() }.joinToString(" ").ifBlank { profile.vehicleClass.displayName }
 
     companion object {
         const val MAX_NAME_CODE_POINTS = 30

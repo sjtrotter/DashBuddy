@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.domain.model.vehicle
 
+import kotlinx.serialization.Serializable
+
 /**
  * The vehicle category the Dasher uses. Each value carries IRS-aligned default
  * operating-cost constants so a user who accepts the wizard's defaults still
@@ -8,6 +10,7 @@ package cloud.trotter.dashbuddy.domain.model.vehicle
  * Defaults are approximate midpoints; the user can override any field via the
  * Economy wizard step or Personal Economy settings.
  */
+@Serializable
 enum class VehicleClass(
     val displayName: String,
     /** Default combined MPG (gas vehicles); zero/ignored for EV and non-car classes. */

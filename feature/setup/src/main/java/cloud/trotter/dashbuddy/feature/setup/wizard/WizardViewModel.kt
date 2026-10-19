@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -38,7 +40,8 @@ class WizardViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val appStateRepository: AppStateRepository,
     private val vehicleRepository: VehicleRepository,
-    private val gasPriceRepository: FuelPriceRepository
+    private val gasPriceRepository: FuelPriceRepository,
+    private val garageRepository: GarageRepository,
 ) : ViewModel() {
 
     val steps = MutableStateFlow(WizardStep.entries).asStateFlow()
@@ -58,6 +61,8 @@ class WizardViewModel @Inject constructor(
     private val _availableTrims = MutableStateFlow<List<VehicleOption>>(emptyList())
     private val _availableTrimNames = MutableStateFlow<List<String>>(emptyList())
     val availableTrimNames = _availableTrimNames.asStateFlow()
+    private var loadedActiveVehicleId: String? = null
+    private var garageDraftLoaded = false
 
     init {
         Timber.tag("WizardViewModel").v("Initializing WizardViewModel")
@@ -66,14 +71,23 @@ class WizardViewModel @Inject constructor(
 
     private fun loadExistingSettings() {
         viewModelScope.launch {
+            val garage = garageRepository.garage.first()
+            loadedActiveVehicleId = garage.active?.takeIf { it.retiredAt == null }?.id
+            val activeProfile = garage.active?.takeIf { it.retiredAt == null }?.profile
+            val storedEconomy = appPreferencesRepository.userEconomy.first()
             // Provide safe defaults for the nullable DataStore flows!
-            val currentYear = appPreferencesRepository.vehicleYear.first() ?: ""
-            val currentMake = appPreferencesRepository.vehicleMake.first() ?: ""
-            val currentModel = appPreferencesRepository.vehicleModel.first() ?: ""
-            val currentTrim = appPreferencesRepository.vehicleTrim.first() ?: ""
-            val currentMpg = appPreferencesRepository.estimatedMpg.first() ?: 0.0f
+            val currentYear = if (activeProfile != null) activeProfile.year.orEmpty() else appPreferencesRepository.vehicleYear.first().orEmpty()
+            val currentMake = if (activeProfile != null) activeProfile.make.orEmpty() else appPreferencesRepository.vehicleMake.first().orEmpty()
+            val currentModel = if (activeProfile != null) activeProfile.model.orEmpty() else appPreferencesRepository.vehicleModel.first().orEmpty()
+            val currentTrim = if (activeProfile != null) "" else appPreferencesRepository.vehicleTrim.first().orEmpty()
+            val currentMpg = if (activeProfile != null) {
+                (activeProfile.mpg ?: storedEconomy.vehicleMpg).toFloat()
+            } else {
+                appPreferencesRepository.estimatedMpg.first()?.takeIf { it > 0f }
+                    ?: storedEconomy.vehicleMpg.toFloat()
+            }
             val currentFuelType =
-                appPreferencesRepository.fuelType.first() // Already non-null in Repo
+                activeProfile?.fuelType ?: appPreferencesRepository.fuelType.first()
             val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
             val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: WizardState().gasPrice
 
@@ -93,8 +107,6 @@ class WizardViewModel @Inject constructor(
 
             // The currently-stored UserEconomy already merges class-derived defaults
             // with persisted user-set values, so just snapshot it for the wizard.
-            val storedEconomy = appPreferencesRepository.userEconomy.first()
-
             _state.update { currentState ->
                 currentState.copy(
                     vehicleClass = storedEconomy.vehicleClass,
@@ -143,6 +155,7 @@ class WizardViewModel @Inject constructor(
                     userSetEconomyFields = storedEconomy.userSetFields,
                 )
             }
+            garageDraftLoaded = true
             // Wait for saved preferences before any startup gas/location request.
             attemptAutoGasPriceFetch()
             val vehicleLookupAllowed = appPreferencesRepository.vehicleLookupAllowed.first()
@@ -183,6 +196,7 @@ class WizardViewModel @Inject constructor(
             val unset = EconomyField.entries.toSet() - s.userSetEconomyFields
             s.copy(
                 vehicleClass = type,
+                estimatedMpg = if (EconomyField.VEHICLE_MPG in unset) type.defaultMpg.toFloat() else s.estimatedMpg,
                 tireSetCost = if (EconomyField.TIRE_COST in unset) type.tireSetCost else s.tireSetCost,
                 tireLifetimeMi = if (EconomyField.TIRE_LIFETIME in unset) type.tireLifetimeMi else s.tireLifetimeMi,
                 oilCost = if (EconomyField.OIL_COST in unset) type.oilCost else s.oilCost,
@@ -375,7 +389,10 @@ class WizardViewModel @Inject constructor(
                     currentState.copy(
                         estimatedMpg = details.combinedMpg ?: currentState.estimatedMpg,
                         fuelType = details.fuelType,
-                        gasPrice = newPrice
+                        gasPrice = newPrice,
+                        userSetEconomyFields = if (details.combinedMpg != null) {
+                            currentState.userSetEconomyFields + EconomyField.VEHICLE_MPG
+                        } else currentState.userSetEconomyFields,
                     )
                 }
             }
@@ -384,7 +401,12 @@ class WizardViewModel @Inject constructor(
 
     // --- NEW: Manual MPG Slider update ---
     fun updateEstimatedMpg(mpg: Float) {
-        _state.update { it.copy(estimatedMpg = mpg) }
+        _state.update {
+            it.copy(
+                estimatedMpg = mpg,
+                userSetEconomyFields = it.userSetEconomyFields + EconomyField.VEHICLE_MPG,
+            )
+        }
     }
 
     fun updateFuelType(type: FuelType) {
@@ -510,7 +532,21 @@ class WizardViewModel @Inject constructor(
 
     fun saveAndFinish(onComplete: () -> Unit) {
         viewModelScope.launch {
+            if (!garageDraftLoaded) return@launch
             val finalState = _state.value
+
+            // The garage is the source of vehicle identity. A fresh wizard creates
+            // its first active vehicle; rerunning it edits the active one in place.
+            val garage = garageRepository.garage.first()
+            if (!garage.readable) throw VehiclesUnreadableException()
+            if (garage.activeId != loadedActiveVehicleId) {
+                Timber.tag("WizardViewModel").w("Active vehicle changed while wizard was open")
+                return@launch
+            }
+            val vehicle = garage.active?.takeIf { it.retiredAt == null }
+                ?: if (garage.vehicles.none { it.retiredAt == null }) {
+                    garageRepository.addVehicle(null, System.currentTimeMillis())
+                } else null
 
             appPreferencesRepository.updateFuelType(finalState.fuelType)
             appPreferencesRepository.updateVehicleClass(finalState.vehicleClass)
@@ -538,6 +574,22 @@ class WizardViewModel @Inject constructor(
                     finalState.vehicleModel, finalState.vehicleTrim,
                     finalState.estimatedMpg, finalState.isGasPriceAuto, finalState.gasPrice
                 )
+            }
+
+            if (vehicle != null) {
+                val isBike = finalState.vehicleClass == VehicleClass.E_BIKE
+                check(garageRepository.updateActiveProfile(vehicle.id) { profile ->
+                    profile.copy(
+                        year = finalState.vehicleYear.takeUnless { isBike || it.isBlank() },
+                        make = finalState.vehicleMake.takeUnless { isBike || it.isBlank() },
+                        model = finalState.vehicleModel.takeUnless { isBike || it.isBlank() },
+                        vehicleClass = finalState.vehicleClass,
+                        mpg = if (isBike) 999.0 else if (EconomyField.VEHICLE_MPG in finalState.userSetEconomyFields) {
+                            finalState.estimatedMpg.toDouble()
+                        } else vehicle.profile.mpg,
+                        fuelType = finalState.fuelType,
+                    )
+                }) { "Active vehicle changed before wizard save" }
             }
 
             val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS

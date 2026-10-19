@@ -6,17 +6,26 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
@@ -25,6 +34,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 
 /**
  * The shared personal-economy editor (#357): the ten cost accordions used by
@@ -301,6 +311,49 @@ fun VehicleClassPicker(
                 selected = selected == vc,
                 onClick = { onClassChange(vc) },
                 label = { Text(vc.displayName) },
+            )
+        }
+    }
+}
+
+/** Vehicle-specific inputs shared by settings and other economy surfaces. */
+@Composable
+fun VehicleEconomyInputs(
+    mpg: Double,
+    fuelType: FuelType,
+    onMpgChange: (Double) -> Unit,
+    onFuelTypeChange: (FuelType) -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    var mpgText by remember { mutableStateOf(mpg.toString()) }
+    LaunchedEffect(mpg, focused) {
+        if (!focused) mpgText = mpg.toString()
+    }
+    OutlinedTextField(
+        value = mpgText,
+        onValueChange = { input ->
+            mpgText = input
+            input.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }?.let(onMpgChange)
+        },
+        label = { Text(stringResource(R.string.economy_editor_mpg_label)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+    )
+    Text(
+        text = stringResource(R.string.economy_editor_fuel_type_title),
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        FuelType.entries.forEach { type ->
+            FilterChip(
+                selected = fuelType == type,
+                onClick = { onFuelTypeChange(type) },
+                label = { Text(type.displayName) },
             )
         }
     }
