@@ -54,6 +54,7 @@ class BubbleManagerTest {
     private fun fixture(
         enabled: Boolean = true, active: Vehicle? = vehicle, readings: List<VehicleOdometerReading> = emptyList(),
         readingsFlow: Flow<List<VehicleOdometerReading>> = flowOf(readings),
+        readable: Boolean = true,
     ): Fixture {
         val context = RuntimeEnvironment.getApplication()
         val notifications: NotificationManager = mock()
@@ -63,7 +64,7 @@ class BubbleManagerTest {
         val odometer: OdometerReadingRepository = mock()
         val state: StateManagerV2 = mock()
         whenever(preferences.odometerPrompts).thenReturn(flowOf(enabled))
-        whenever(garage.garage).thenReturn(flowOf(Garage(listOfNotNull(active), active?.id, readable = true)))
+        whenever(garage.garage).thenReturn(flowOf(Garage(listOfNotNull(active), active?.id, readable = readable)))
         whenever(odometer.readings).thenReturn(readingsFlow)
         return Fixture(BubbleManager(context, notifications, chat, dagger.Lazy { state },
             preferences, garage, odometer, clock), chat, notifications)
@@ -106,6 +107,10 @@ class BubbleManagerTest {
         verify(fixture.notifications, after(100).times(1)).notify(eq(BubbleManager.BUBBLE_NOTIFICATION_ID), notification.capture())
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification.firstValue)!!
         assertEquals(listOf(texts.firstValue), style.messages.map { it.text.toString() })
+    }
+
+    @Test fun `an unreadable garage posts the Started line only`() {
+        assertNoCue(fixture(active = null, readable = false))
     }
 
     @Test fun `a failing readings read skips the cue and keeps the Started line`() {

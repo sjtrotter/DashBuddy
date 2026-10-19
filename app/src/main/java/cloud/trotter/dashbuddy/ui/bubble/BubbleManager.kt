@@ -191,7 +191,10 @@ class BubbleManager @Inject constructor(
                 // Keep the cue notification after the persisted session-start line.
                 started.join()
                 val enabled = appPreferencesRepository.odometerPrompts.first()
-                val vehicle = garageRepository.garage.first().active
+                val garage = garageRepository.garage.first()
+                // An unreadable garage is not "no vehicle": the sheet says the vehicles could not be read, so no cue.
+                if (!garage.readable) return@launch
+                val vehicle = garage.active
                 val readings = odometerReadingRepository.readings.first()
                 val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
                 if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {
