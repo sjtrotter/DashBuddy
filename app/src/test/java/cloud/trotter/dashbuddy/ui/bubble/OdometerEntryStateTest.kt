@@ -8,6 +8,56 @@ import org.junit.Test
 class OdometerEntryStateTest {
     private fun entry() = OdometerEntryState(mutableStateOf(false), mutableStateOf(OdometerPage.READING), mutableStateOf(""))
 
+    @Test fun `showVehicles opens the switcher or add and clears drafts`() {
+        for (anyVehicles in listOf(true, false)) {
+            val state = entry()
+            state.digit(5)
+            state.vehicleName = "Civic"
+            assertTrue(state.showVehicles(anyVehicles))
+            assertTrue(state.open)
+            assertEquals(if (anyVehicles) OdometerPage.VEHICLES else OdometerPage.ADD_VEHICLE, state.page)
+            assertNull(state.reading)
+            assertEquals("", state.vehicleName)
+        }
+    }
+
+    @Test fun `showVehicles while open preserves the page and drafts`() {
+        val state = entry()
+        assertTrue(state.showVehicles(true))
+        state.showAddVehicle()
+        state.digit(5)
+        state.vehicleName = "Civic"
+        assertFalse(state.showVehicles(true))
+        assertFalse(state.showVehicles(false))
+        assertEquals(OdometerPage.ADD_VEHICLE, state.page)
+        assertEquals(5, state.reading)
+        assertEquals("Civic", state.vehicleName)
+    }
+
+    @Test fun `back from a direct switcher closes without an active vehicle and otherwise reads`() {
+        for (hasVehicle in listOf(false, true)) {
+            val state = entry()
+            state.showVehicles(true)
+            state.back(hasVehicle)
+            assertEquals(hasVehicle, state.open)
+            if (hasVehicle) assertEquals(OdometerPage.READING, state.page)
+        }
+    }
+
+    @Test fun `showVehicles resets add origin to the switcher`() {
+        for (anyVehicles in listOf(true, false)) {
+            val state = entry()
+            state.show(activeVehicle = true, anyVehicles = true)
+            state.showAddVehicle()
+            state.open = false
+            state.showVehicles(anyVehicles)
+            state.showAddVehicle()
+            state.back(hasVehicle = true)
+            assertTrue(state.open)
+            assertEquals(OdometerPage.VEHICLES, state.page)
+        }
+    }
+
     @Test fun `saved vehicles without an active one open the switcher`() {
         val state = entry()
         assertTrue(state.show(activeVehicle = false, anyVehicles = true))

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.theme.LocalGlance
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRow
 
 @Composable
 fun HudScreen(
@@ -44,6 +45,8 @@ fun HudScreen(
     undoVisible: @Composable () -> Boolean = { undo != null },
     sheetCompact: Boolean = false,
     onSheetOutsideDismiss: () -> Unit = onSheetDismiss,
+    onSwapVehicle: () -> Unit = {},
+    onAddVehicle: () -> Unit = {},
 ) {
     val tier = FontScaleTier.of(LocalDensity.current.fontScale, LocalGlance.current)
     CompositionLocalProvider(LocalHudTier provides tier) {
@@ -82,6 +85,10 @@ fun HudScreen(
                             when {
                                 showingLog -> Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.slot.log")) { log() }
                                 state.mode == HudMode.RESTING -> {
+                                    state.vehicle?.let {
+                                        VehicleRow(it, onSwapVehicle, onAddVehicle)
+                                        Spacer(Modifier.height(8.dp))
+                                    }
                                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { RestingCard(state.resting) }
                                     GasRow(state.gas, onSetGasPrice, onRefreshGasPrice, onResumeAutoGasPrice)
                                     restingFooter()

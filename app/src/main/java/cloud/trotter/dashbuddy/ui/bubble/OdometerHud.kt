@@ -32,6 +32,15 @@ internal class OdometerHud(
         }
     }
 
+    fun openVehicles() {
+        if (!viewModel.odometerLoaded.value) return
+        closeLog()
+        val garage = viewModel.garage.value
+        if (entry.showVehicles(garage?.unretired?.isNotEmpty() == true)) {
+            viewModel.reopenOdometer()
+        }
+    }
+
     fun dismiss() { entry.open = false }
 
     /** Back inside the sheet: one page up, or closed from the reading page. */

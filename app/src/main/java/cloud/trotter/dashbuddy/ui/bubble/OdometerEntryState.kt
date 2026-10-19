@@ -35,6 +35,15 @@ internal class OdometerEntryState(
         open = true
         return true
     }
+    fun showVehicles(anyVehicles: Boolean): Boolean {
+        if (open) return false
+        addVehicleFrom = OdometerPage.VEHICLES
+        digits = ""
+        vehicleName = ""
+        page = if (anyVehicles) OdometerPage.VEHICLES else OdometerPage.ADD_VEHICLE
+        open = true
+        return true
+    }
     fun showAddVehicle() {
         if (page != OdometerPage.ADD_VEHICLE) addVehicleFrom = page
         page = OdometerPage.ADD_VEHICLE

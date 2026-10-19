@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import cloud.trotter.dashbuddy.domain.state.PhaseColor
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowModel
 
 data class HudUiState(
     val mode: HudMode,
@@ -16,6 +17,7 @@ data class HudUiState(
     val firstRun: Boolean,
     val gas: GasRowModel,
     val logOpen: Boolean = false,
+    val vehicle: VehicleRowModel? = null,
 )
 enum class HudMode { LIVE, OFFER, LOG, RESTING }
 data class TopRowModel(val earned: String, val online: OnlineSpan, val miles: String, val dimmed: Boolean)

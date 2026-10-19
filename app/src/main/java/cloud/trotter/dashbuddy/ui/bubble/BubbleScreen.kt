@@ -14,10 +14,16 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowInput
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowMapper
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.vehicleTypeLabel
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
@@ -44,6 +50,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
     val odometerLoaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
+    val garage by viewModel.garage.collectAsStateWithLifecycle()
+    val vehicleTypeText = garage?.active?.profile?.vehicleType?.let { stringResource(vehicleTypeLabel(it)) }
+    val vehicleName = garage?.active?.displayName()
     val logOpenState = rememberSaveable { mutableStateOf(false) }
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
@@ -145,12 +154,15 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         pillGoal, goalDay?.date, goal, goalMark, goalEditing, editKey)
     LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey) {
+        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, garage, vehicleName, vehicleTypeText) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            goalSheetOpen = goalEditing, editedGoalKey = editKey)
+            goalSheetOpen = goalEditing, editedGoalKey = editKey,
+            vehicle = VehicleRowMapper.map(garage?.let {
+                VehicleRowInput(vehicleName, vehicleTypeText, it.unretired.isNotEmpty(), it.readable)
+            }))
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
@@ -176,6 +188,17 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             undo = entryUndo,
             undoVisible = entryUndoVisible,
             restingFooter = odometerFooter,
+            onSwapVehicle = {
+                if (viewModel.odometerLoaded.value) {
+                    if (!odometer.open) {
+                        // The host must show the odometer even if another sheet was last opened.
+                        openSheet(null)
+                        lastSheet = EntrySheet.ODOMETER
+                    }
+                    odometer.openVehicles()
+                }
+            },
+            onAddVehicle = { context.startActivity(MainActivity.routeIntent(context, Screen.VehicleAdd.route)) },
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             onSelectPlatform = viewModel::selectPlatform,

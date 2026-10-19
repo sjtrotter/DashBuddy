@@ -180,6 +180,9 @@
     <string name="hud_dock_odometer">Odometer</string>
     <string name="hud_keypad_backspace">Backspace</string>
     <string name="hud_odometer_title">Odometer</string>
+    <string name="hud_vehicle_none">No vehicle</string>
+    <string name="hud_vehicle_switch">Switch vehicle</string>
+    <string name="hud_vehicle_add">Add</string>
     <string name="hud_odometer_switch">Switch vehicle</string>
     <string name="hud_odometer_back">Back</string>
     <string name="hud_odometer_vehicles">Vehicles</string>
