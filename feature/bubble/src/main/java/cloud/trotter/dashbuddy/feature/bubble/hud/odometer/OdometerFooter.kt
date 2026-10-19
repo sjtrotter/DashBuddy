@@ -18,6 +18,7 @@ import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.ReconciledMileage
 import cloud.trotter.dashbuddy.feature.bubble.R
+import kotlin.math.abs
 
 @Composable
 fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliation: ReconciledMileage?, onOpen: () -> Unit) {
@@ -29,7 +30,8 @@ fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliat
         reconciliation?.let {
             Text(stringResource(R.string.hud_odometer_comparison, Formats.commaInt(it.carMiles),
                 Formats.decimal(it.trackedMiles), formatShortDate(it.since)), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
-            Text(stringResource(R.string.hud_odometer_other, Formats.decimal(it.otherMiles)),
+            val otherCopy = if (it.otherMiles < 0) R.string.hud_odometer_short else R.string.hud_odometer_other
+            Text(stringResource(otherCopy, Formats.decimal(abs(it.otherMiles))),
                 color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -37,13 +39,19 @@ fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliat
 
 private const val PROMPT_WINDOW_MS = 600_000L
 
+sealed interface PromptAnchor {
+    data class DashStart(val startedAt: Long) : PromptAnchor
+    data class DashEnd(val endedAt: Long) : PromptAnchor
+}
+
 @Composable
-fun OdometerPrompt(enabled: Boolean, startedAt: Long?, endedAt: Long?, last: LastOdometerReading?, onOpen: () -> Unit) {
+fun OdometerPrompt(enabled: Boolean, anchor: PromptAnchor?, last: LastOdometerReading?, onOpen: () -> Unit) {
     val now by rememberNow()
-    val show = enabled && when {
-        endedAt != null -> last == null || last.occurredAt < endedAt
-        startedAt != null -> now >= startedAt && now - startedAt < PROMPT_WINDOW_MS && (last == null || last.occurredAt < startedAt - PROMPT_WINDOW_MS)
-        else -> false
+    val show = enabled && when (anchor) {
+        is PromptAnchor.DashStart -> now >= anchor.startedAt && now - anchor.startedAt < PROMPT_WINDOW_MS &&
+            (last == null || last.occurredAt < anchor.startedAt - PROMPT_WINDOW_MS)
+        is PromptAnchor.DashEnd -> last == null || last.occurredAt < anchor.endedAt - PROMPT_WINDOW_MS
+        null -> false
     }
     if (show) TextButton(onClick = onOpen) { Text(stringResource(R.string.hud_odometer_prompt)) }
 }

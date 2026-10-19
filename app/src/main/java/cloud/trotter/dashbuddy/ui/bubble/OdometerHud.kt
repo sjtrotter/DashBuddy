@@ -48,7 +48,7 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
     LaunchedEffect(vehicle?.id) {
         val id = vehicle?.id
         if (id != null && id != seenVehicleId) {
-            entry.vehicleChanged()
+            if (seenVehicleId != null) entry.vehicleChanged()
             seenVehicleId = id
         }
     }
@@ -85,10 +85,10 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
         undo = noticeContent,
         restingFooter = {
             OdometerFooter(vehicle?.name, lastReading, reconciliation, openOdometer)
-            OdometerPrompt(prompts, null, lastSession?.endedAt, lastReading, openOdometer)
+            OdometerPrompt(prompts, lastSession?.endedAt?.let(PromptAnchor::DashEnd), lastReading, openOdometer)
         },
         waitingFoot = {
-            OdometerPrompt(prompts, region?.session?.startedAt, null, lastReading, openOdometer)
+            OdometerPrompt(prompts, region?.session?.startedAt?.let(PromptAnchor::DashStart), lastReading, openOdometer)
         },
     )
 }

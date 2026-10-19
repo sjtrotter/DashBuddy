@@ -23,8 +23,6 @@ class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
     val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
-    val vehicles = garage.map { it.vehicles }
-    val activeVehicle = garage.map { it.active }
 
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name.trim(), now)

@@ -37,14 +37,14 @@ class OdometerPromptTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private var enabled by mutableStateOf(true)
     private var last by mutableStateOf<LastOdometerReading?>(null)
-    private var endedAt by mutableStateOf<Long?>(null)
     private var opened = false
     private val startedAt = clock.millis
+    private var anchor by mutableStateOf<PromptAnchor?>(PromptAnchor.DashStart(startedAt))
     private fun show() {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    OdometerPrompt(enabled, startedAt, endedAt, last) { opened = true }
+                    OdometerPrompt(enabled, anchor, last) { opened = true }
                 }
             }
         }
@@ -80,13 +80,38 @@ class OdometerPromptTest {
         compose.onNodeWithText("Log odometer").assertDoesNotExist()
     }
     @Test fun `resting link lasts until a reading after the dash end`() {
-        endedAt = startedAt + 60_000
+        val endedAt = startedAt + 3_600_000
+        anchor = PromptAnchor.DashEnd(endedAt)
         clock.millis += 86_400_000
         last = LastOdometerReading(52_000, 0.0, startedAt)
         show()
         compose.onNodeWithText("Log odometer").assertIsDisplayed()
-        compose.runOnIdle { last = LastOdometerReading(52_388, 100.0, endedAt!! + 1) }; settle()
+        compose.runOnIdle { last = LastOdometerReading(52_388, 100.0, endedAt + 1) }; settle()
         compose.onNodeWithText("Log odometer").assertDoesNotExist()
     }
 
+    @Test fun `a reading in the last ten minutes of the dash hides the resting link`() {
+        val endedAt = startedAt + 3_600_000
+        anchor = PromptAnchor.DashEnd(endedAt)
+        clock.millis += 86_400_000
+        last = LastOdometerReading(52_388, 100.0, endedAt - 60_000)
+        show()
+        compose.onNodeWithText("Log odometer").assertDoesNotExist()
+        compose.runOnIdle { last = last!!.copy(occurredAt = endedAt - 600_000) }; settle()
+        compose.onNodeWithText("Log odometer").assertDoesNotExist()
+    }
+
+    @Test fun `a reading before that window shows it`() {
+        val endedAt = startedAt + 3_600_000
+        anchor = PromptAnchor.DashEnd(endedAt)
+        clock.millis += 86_400_000
+        last = LastOdometerReading(52_388, 100.0, endedAt - 600_001)
+        show()
+        compose.onNodeWithText("Log odometer").assertIsDisplayed()
+    }
+
+    @Test fun `no anchor hides the link`() {
+        anchor = null; show()
+        compose.onNodeWithText("Log odometer").assertDoesNotExist()
+    }
 }

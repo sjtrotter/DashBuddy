@@ -38,12 +38,13 @@ class RestingFooterTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val reading = LastOdometerReading(52_388, 157.3, clock.millis)
     private var last by mutableStateOf<LastOdometerReading?>(reading)
+    private var reconciliation = ReconciledMileage(59, 57.0, reading.occurredAt - 86_400_000)
     private var opened = false
     private fun show() {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    OdometerFooter("Civic", last, ReconciledMileage(59, 57.0, reading.occurredAt - 86_400_000)) { opened = true }
+                    OdometerFooter("Civic", last, reconciliation) { opened = true }
                 }
             }
         }
@@ -62,4 +63,17 @@ class RestingFooterTest {
         compose.onNodeWithText("car", substring = true).assertDoesNotExist()
     }
 
+    @Test fun `a negative other figure reads as a shortfall`() {
+        reconciliation = ReconciledMileage(59, 79.0, reading.occurredAt - 86_400_000)
+        show()
+        compose.onNodeWithText("car 59 mi, tracked 79.0 mi since ${formatShortDate(reconciliation.since)}").assertIsDisplayed()
+        compose.onNodeWithText("car short of tracked by 20.0 mi").assertIsDisplayed()
+        compose.onNodeWithText("other -20.0 mi").assertDoesNotExist()
+    }
+
+    @Test fun `a positive other figure stays a figure`() {
+        show()
+        compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
+        compose.onNodeWithText("car short of tracked by", substring = true).assertDoesNotExist()
+    }
 }

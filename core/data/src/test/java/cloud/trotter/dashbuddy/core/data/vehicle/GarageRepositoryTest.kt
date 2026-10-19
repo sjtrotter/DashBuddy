@@ -19,12 +19,12 @@ class GarageRepositoryTest {
         val repo = garage(backgroundScope)
         val civic = repo.addVehicle("Civic", 100)
         val truck = repo.addVehicle("Truck", 200)
-        assertEquals(listOf(civic, truck), repo.vehicles.first())
-        assertEquals(truck, repo.activeVehicle.first())
+        assertEquals(listOf(civic, truck), repo.garage.first().vehicles)
+        assertEquals(truck, repo.garage.first().active)
         assertEquals(200L, truck.createdAt)
         assertNotEquals(civic.id, truck.id)
         repo.selectVehicle(civic.id)
-        assertEquals(civic, repo.activeVehicle.first())
+        assertEquals(civic, repo.garage.first().active)
     }
     @Test fun `name trimmed and bounded`() = runTest {
         val repo = garage(backgroundScope)
@@ -33,7 +33,7 @@ class GarageRepositoryTest {
         listOf("  ", "x".repeat(31)).forEach { name ->
             assertThrows(IllegalArgumentException::class.java) { runBlocking { repo.addVehicle(name, 100) } }
         }
-        assertEquals(2, repo.vehicles.first().size)
+        assertEquals(2, repo.garage.first().vehicles.size)
     }
     @Test fun `an unreadable garage refuses to add`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
@@ -42,8 +42,8 @@ class GarageRepositoryTest {
         source.save(raw, "good")
         val before = source.stored.first()
         val repo = GarageRepository(source)
-        assertTrue(repo.vehicles.first().isEmpty())
-        assertNull(repo.activeVehicle.first())
+        assertTrue(repo.garage.first().vehicles.isEmpty())
+        assertNull(repo.garage.first().active)
         val error = runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull()
         assertTrue(error is VehiclesUnreadableException)
         assertEquals("vehicles unreadable", error?.message)
