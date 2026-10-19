@@ -51,8 +51,7 @@ internal class CashTipEntryState(
     fun point() { otherAmount = MoneyEntry(otherAmount).point().digits }
     fun backspace() { otherAmount = MoneyEntry(otherAmount).backspace().digits }
     fun doneOther() {
-        val cents = MoneyEntry(otherAmount).cents
-        totalCents = cents.coerceIn(0, MAX_CENTS)
+        if (otherAmount.isNotEmpty()) totalCents = MoneyEntry(otherAmount).cents.coerceIn(0, MAX_CENTS)
         page = CashTipPage.COMPACT
     }
     fun back() {

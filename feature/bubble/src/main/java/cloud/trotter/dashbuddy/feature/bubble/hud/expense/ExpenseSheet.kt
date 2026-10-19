@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.*
@@ -31,6 +30,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.Keypad
+import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.KeypadFrame
 import java.util.Locale
 
 @Composable
@@ -50,18 +50,19 @@ fun ColumnScope.ExpenseSheet(
 ) {
     val title = stringResource(model.pick.labelResource)
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(Modifier.testTag("expense.title"), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.hud_odometer_back))
-            }
-            Icon(model.pick.icon, null, Modifier.size(22.dp), tint = AppTheme.colors.text2)
-            Text(title, color = AppTheme.colors.text, style = MaterialTheme.typography.titleSmall)
-        }
-        // Bottom arrangement puts unused scroll height above the block, while allowing
-        // the block to use all available height on short frames.
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
-            Row(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (model.failure == ExpenseFailure.WRITE) Text(stringResource(R.string.hud_expense_failed),
+            color = AppTheme.colors.warn, style = MaterialTheme.typography.labelSmall)
+        KeypadFrame(title = null, block = {
+            Row(Modifier.wrapContentHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Row weight shares width only; the scroll content needs its natural height.
+                Column(Modifier.weight(1f).wrapContentHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.testTag("expense.title"), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.hud_odometer_back))
+                        }
+                        Icon(model.pick.icon, null, Modifier.size(22.dp), tint = AppTheme.colors.text2)
+                        Text(title, color = AppTheme.colors.text, style = MaterialTheme.typography.titleSmall)
+                    }
                     if (model.pick.hasLabel) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             model.recentLabels.forEachIndexed { index, label ->
@@ -104,12 +105,12 @@ fun ColumnScope.ExpenseSheet(
                     onPoint = { if (!model.busy) onPoint() }, onBackspace = { if (!model.busy) onBackspace() },
                     modifier = Modifier.align(Alignment.Bottom))
             }
-        }
-        Button(onClick = onLog, enabled = model.canLog, modifier = Modifier.fillMaxWidth().testTag("expense.log")) {
-            Text(stringResource(R.string.hud_expense_log, Formats.money(model.totalCents / 100.0), title.lowercase(Locale.getDefault())))
-        }
-        if (model.failure == ExpenseFailure.WRITE) Text(stringResource(R.string.hud_expense_failed),
-            color = AppTheme.colors.warn, style = MaterialTheme.typography.labelSmall)
+        }, button = {
+            Button(onClick = onLog, enabled = model.canLog, contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).testTag("expense.log")) {
+                Text(stringResource(R.string.hud_expense_log, Formats.money(model.totalCents / 100.0), title.lowercase(Locale.getDefault())), maxLines = 2)
+            }
+        })
     }
 }
 

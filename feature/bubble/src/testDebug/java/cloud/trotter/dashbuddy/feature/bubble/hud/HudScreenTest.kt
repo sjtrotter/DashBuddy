@@ -368,7 +368,6 @@ internal class HudScreenTest : HudScreenFixture() {
             val sheet = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
             val body = compose.onNodeWithTag("hud.body").getBoundsInRoot()
             val dock = compose.onNodeWithTag("hud.dock").getBoundsInRoot()
-            println("Cash tip bounds (undo=$visible): sheet.bottom=${sheet.bottom}, body.bottom=${body.bottom}, dock.top=${dock.top}")
             assertEquals(body.bottom, sheet.bottom)
             assertEquals(body.bottom, dock.top)
         }

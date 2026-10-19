@@ -61,13 +61,26 @@ class CashTipEntryStateTest {
         entry.point(); entry.digit(7); entry.digit(0); entry.doneOther()
         assertEquals(70L, entry.totalCents)
     }
-    @Test fun `Other replaces in minus mode and empty Done clears the amount`() {
+    @Test fun `Other replaces in minus mode and empty Done keeps the amount`() {
         val entry = entry()
         entry.show(9); entry.add(500); entry.sign = CashTipSign.MINUS
         entry.other(); entry.digit(2); entry.doneOther()
         assertEquals(200L, entry.totalCents)
         assertEquals(CashTipSign.MINUS, entry.sign)
         entry.other(); entry.doneOther()
+        assertEquals(200L, entry.totalCents)
+        assertEquals(CashTipPage.COMPACT, entry.page)
+        assertEquals(CashTipSign.MINUS, entry.sign)
+    }
+    @Test fun `empty Done keeps five dollars but an explicit zero replaces it`() {
+        val entry = entry()
+        entry.show(9); entry.add(500)
+        entry.other(); entry.doneOther()
+        assertEquals(500L, entry.totalCents)
+        assertEquals(CashTipPage.COMPACT, entry.page)
+        entry.other(); entry.digit(2); entry.backspace(); entry.doneOther()
+        assertEquals(500L, entry.totalCents)
+        entry.other(); entry.digit(0); entry.doneOther()
         assertEquals(0L, entry.totalCents)
     }
     @Test fun `Other replacement remains bounded at the money entry limit`() {

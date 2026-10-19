@@ -208,6 +208,8 @@
     <string name="hud_cash_tip_title">Cash tip</string>
     <string name="hud_cash_tip_fewer">Fewer</string>
     <string name="hud_cash_tip_another">Another delivery</string>
+    <string name="hud_cash_tip_sign_add">Add</string>
+    <string name="hud_cash_tip_sign_remove">Remove</string>
     <string name="hud_cash_tip_other">Other</string>
     <string name="hud_cash_tip_done">Done</string>
     <string name="hud_cash_tip_add">Add %1$s cash tip</string>
