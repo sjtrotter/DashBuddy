@@ -28,7 +28,7 @@ internal class OdometerEntryState(
         open = true
     }
     fun showAddVehicle() {
-        addVehicleFrom = page
+        if (page != OdometerPage.ADD_VEHICLE) addVehicleFrom = page
         page = OdometerPage.ADD_VEHICLE
     }
     fun vehicleChanged() { page = OdometerPage.READING }

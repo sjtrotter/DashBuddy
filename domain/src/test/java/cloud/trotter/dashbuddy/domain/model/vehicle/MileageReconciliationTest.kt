@@ -26,12 +26,12 @@ class MileageReconciliationTest {
         assertNull(VehicleOdometerReading.latestFor(rows, "missing"))
     }
     @Test fun `the latest two win over an earlier pair`() {
-        val rows = listOf(reading(10, 1_000, 100.0), reading(20, 1_010, 105.0),
-            reading(90, 1_100, 175.0), reading(210, 1_159, 232.3))
+        val rows = listOf(reading(90, 1_000, 100.0), reading(110, 1_010, 105.0),
+            reading(150, 1_100, 175.0), reading(210, 1_159, 232.3))
         val result = compare(rows)!!
         assertEquals(59, result.carMiles)
         assertEquals(57.3, result.trackedMiles, 0.00001)
-        assertEquals(90 * 60_000L, result.since)
+        assertEquals(150 * 60_000L, result.since)
     }
     @Test fun `weeks between readings still make the span`() {
         val earlier = reading(90, 1_000, 100.0)

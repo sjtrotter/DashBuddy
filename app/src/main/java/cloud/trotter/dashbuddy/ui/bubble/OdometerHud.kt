@@ -39,14 +39,10 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
     val savedNotice by viewModel.odometerNotice.collectAsStateWithLifecycle()
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
     val entry = rememberOdometerEntryState()
-    var acknowledgedToken by rememberSaveable { mutableStateOf<Long?>(null) }
     var seenVehicleId by rememberSaveable { mutableStateOf(vehicle?.id) }
-    LaunchedEffect(savedNotice?.token) {
-        savedNotice?.let { saved ->
-            if (saved.token != acknowledgedToken) {
-                if (entry.page == OdometerPage.READING) entry.open = false
-                acknowledgedToken = saved.token
-            }
+    LaunchedEffect(viewModel) {
+        viewModel.odometerSaveCompleted.collect {
+            if (entry.page == OdometerPage.READING) entry.open = false
         }
     }
     LaunchedEffect(vehicle?.id) {

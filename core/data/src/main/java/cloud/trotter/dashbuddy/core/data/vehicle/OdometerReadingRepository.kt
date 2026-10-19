@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Clock
 import javax.inject.Inject
@@ -19,7 +20,8 @@ class OdometerReadingRepository @Inject constructor(
     private val odometer: OdometerRepository,
     private val clock: Clock,
 ) {
-    val readings = appEventRepo.getSequencedEventsByType(AppEventType.ODOMETER_READING).map { events ->
+    /** Unchanged DAO row lists skip payload mapping and downstream emission after table invalidation. */
+    val readings = appEventRepo.getSequencedEventsByType(AppEventType.ODOMETER_READING).distinctUntilChanged().map { events ->
         events.mapNotNull { sequenced ->
             val event = sequenced.event
             val p = event.payload as? OdometerReadingPayload ?: return@mapNotNull null

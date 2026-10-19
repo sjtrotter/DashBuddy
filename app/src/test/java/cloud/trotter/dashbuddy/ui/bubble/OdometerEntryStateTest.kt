@@ -34,6 +34,20 @@ class OdometerEntryStateTest {
         assertEquals(OdometerPage.VEHICLES, state.page)
         assertEquals(52, state.reading)
     }
+
+    @Test fun `a repeated add vehicle keeps the first origin`() {
+        for (origin in listOf(OdometerPage.READING, OdometerPage.VEHICLES)) {
+            val state = entry()
+            state.show(hasVehicle = true)
+            state.page = origin
+            state.showAddVehicle()
+            state.showAddVehicle()
+            assertEquals(OdometerPage.ADD_VEHICLE, state.page)
+            state.back(hasVehicle = true)
+            assertTrue(state.open)
+            assertEquals(origin, state.page)
+        }
+    }
     @Test fun `a vehicle change keeps the digits`() {
         val state = entry()
         state.show(hasVehicle = true)

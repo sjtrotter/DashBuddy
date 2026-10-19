@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
+import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
@@ -81,8 +82,9 @@ class OdometerSheetTest {
         compose.onNodeWithText("Could not save. Try again.").assertDoesNotExist()
     }
     @Test fun `fewer than tracked shows add vehicle link`() {
-        model = model.copy(check = OdometerCheck.FewerThanTracked(12, 84.0, clock.millis))
+        model = model.copy(check = OdometerCheck.FewerThanTracked(12, 57.0, clock.millis))
         show()
+        compose.onNodeWithText("57.0 mi tracked since ${formatShortDate(clock.millis)}, 12 on this car").assertIsDisplayed()
         compose.onNodeWithText("Add vehicle").assertIsDisplayed().performClick()
         assertTrue(addOpened)
     }
@@ -99,7 +101,15 @@ class OdometerSheetTest {
     @Test fun `large jump says more than expected`() {
         model = model.copy(check = OdometerCheck.LargeJump(469_260, clock.millis))
         show()
-        compose.onNodeWithText("+469,260 mi since ${odometerDate(clock.millis)}, more than expected").assertIsDisplayed()
+        compose.onNodeWithText("+469,260 mi since ${formatShortDate(clock.millis)}, more than expected").assertIsDisplayed()
+    }
+    @Test fun `last reading and delta use the shared date format`() {
+        val since = clock.millis - 400 * 86_400_000L
+        model = model.copy(readingMiles = null, last = LastOdometerReading(52_388, 100.0, since), check = OdometerCheck.Empty)
+        show()
+        compose.onNodeWithText("Last 52,388 mi, ${formatShortDate(since)}").assertIsDisplayed()
+        compose.runOnIdle { model = model.copy(readingMiles = 52_400, check = OdometerCheck.Ok(12, since)) }; settle()
+        compose.onNodeWithText("+12 mi since ${formatShortDate(since)}").assertIsDisplayed()
     }
     @Test fun `add vehicle invokes callback with trimmed name`() {
         model = model.copy(page = OdometerPage.ADD_VEHICLE)

@@ -5,11 +5,11 @@ import org.junit.Test
 
 class WholeNumberEntryTest {
     @Test fun `no leading zero`() {
-        assertNull(WholeNumberEntry().digit(0).value)
-        assertEquals(10, WholeNumberEntry().digit(1).digit(0).value)
+        assertNull(WholeNumberEntry(maxDigits = 6).digit(0).value)
+        assertEquals(10, WholeNumberEntry(maxDigits = 6).digit(1).digit(0).value)
     }
     @Test fun `caps at six digits`() {
-        var entry = WholeNumberEntry()
+        var entry = WholeNumberEntry(maxDigits = 6)
         repeat(7) { entry = entry.digit(9) }
         assertEquals(999_999, entry.value)
     }
@@ -23,7 +23,7 @@ class WholeNumberEntryTest {
         assertEquals(3, entry.maxDigits)
     }
     @Test fun `backspace to empty is null`() {
-        assertNull(WholeNumberEntry().digit(1).backspace().value)
-        assertNull(WholeNumberEntry().backspace().value)
+        assertNull(WholeNumberEntry(maxDigits = 6).digit(1).backspace().value)
+        assertNull(WholeNumberEntry(maxDigits = 6).backspace().value)
     }
 }

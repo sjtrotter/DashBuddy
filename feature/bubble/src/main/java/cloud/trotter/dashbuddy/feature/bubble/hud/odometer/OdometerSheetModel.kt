@@ -19,6 +19,6 @@ data class OdometerSheetModel(
 
 data class OdometerNoticeModel(
     val readingMiles: Int,
-    /** Unique save identity for the sheet's one-time close and notice timer. */
+    /** In-process notice timer identity; prevents StateFlow conflating identical readings. */
     val token: Long,
 )

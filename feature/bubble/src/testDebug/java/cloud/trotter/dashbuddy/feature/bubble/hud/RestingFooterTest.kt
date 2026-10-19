@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
+import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
@@ -42,7 +43,7 @@ class RestingFooterTest {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    OdometerFooter("Civic", last, ReconciledMileage(59, 57.3, reading.occurredAt - 86_400_000)) { opened = true }
+                    OdometerFooter("Civic", last, ReconciledMileage(59, 57.0, reading.occurredAt - 86_400_000)) { opened = true }
                 }
             }
         }
@@ -50,8 +51,9 @@ class RestingFooterTest {
     }
     @Test fun `shows last reading with vehicle name`() {
         show()
-        compose.onNodeWithText("Civic 52,388 mi,", substring = true).assertIsDisplayed().performClick()
-        compose.onNodeWithText("car 59 mi, tracked 57.3 mi since ${odometerDate(reading.occurredAt - 86_400_000)}").assertIsDisplayed()
+        compose.onNodeWithText("Civic 52,388 mi, ${formatShortDate(reading.occurredAt)}").assertIsDisplayed().performClick()
+        compose.onNodeWithText("car 59 mi, tracked 57.0 mi since ${formatShortDate(reading.occurredAt - 86_400_000)}").assertIsDisplayed()
+        compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
         assertTrue(opened)
     }
     @Test fun `hidden without a reading`() {

@@ -9,6 +9,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -53,6 +54,28 @@ class OdometerActionsTest {
         assertFalse(actions.saving.value)
         actions.reopen()
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
+    }
+
+    @Test fun `a completed save emits once`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val completions = mutableListOf<Unit>()
+        backgroundScope.launch { actions.saveCompleted.collect { completions += it } }
+        runCurrent()
+        repeat(2) { index ->
+            actions.save("civic", 52_388)
+            runCurrent()
+            assertEquals(index + 1, completions.size)
+        }
+        whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
+        actions.save("civic", 52_400)
+        runCurrent()
+        assertEquals(2, completions.size)
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+
+        val lateCompletions = mutableListOf<Unit>()
+        backgroundScope.launch { actions.saveCompleted.collect { lateCompletions += it } }
+        runCurrent()
+        assertTrue(lateCompletions.isEmpty())
     }
 
     @Test fun `double tap appends only once`() = runTest {

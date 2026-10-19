@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.ReconciledMileage
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -23,12 +24,12 @@ fun OdometerFooter(vehicleName: String?, last: LastOdometerReading?, reconciliat
     if (last == null) return
     Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 4.dp)) {
         Text(stringResource(R.string.hud_odometer_footer, vehicleName ?: EMPTY_VALUE,
-            Formats.commaInt(last.readingMiles), odometerDate(last.occurredAt)),
+            Formats.commaInt(last.readingMiles), formatShortDate(last.occurredAt)),
             color = AppTheme.colors.text2, style = MaterialTheme.typography.labelMedium)
         reconciliation?.let {
             Text(stringResource(R.string.hud_odometer_comparison, Formats.commaInt(it.carMiles),
-                odometerMiles(it.trackedMiles), odometerDate(it.since)), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
-            Text(stringResource(R.string.hud_odometer_other, odometerMiles(it.otherMiles)),
+                Formats.decimal(it.trackedMiles), formatShortDate(it.since)), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.hud_odometer_other, Formats.decimal(it.otherMiles)),
                 color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
         }
     }

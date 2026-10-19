@@ -9,7 +9,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,6 +33,8 @@ internal class OdometerActions(
     val failed = failure.asStateFlow()
     private val saved = MutableStateFlow<OdometerNoticeModel?>(null)
     val notice = saved.asStateFlow()
+    private val completed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val saveCompleted: SharedFlow<Unit> = completed.asSharedFlow()
 
     companion object {
         const val NOTICE_MS = 10_000L
@@ -40,6 +45,7 @@ internal class OdometerActions(
     fun save(vehicleId: String, miles: Int) {
         write {
             readings.record(vehicleId, miles)
+            completed.emit(Unit)
             val model = OdometerNoticeModel(miles, noticeTokens.incrementAndGet())
             saved.value = model
             scope.launch {

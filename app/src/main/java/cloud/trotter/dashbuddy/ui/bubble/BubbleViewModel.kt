@@ -97,6 +97,7 @@ class BubbleViewModel @Inject constructor(
     val odometerSaving = odometerActions.saving
     val odometerWriteFailed = odometerActions.failed
     val odometerNotice = odometerActions.notice
+    val odometerSaveCompleted = odometerActions.saveCompleted
     fun reopenOdometer() = odometerActions.reopen()
     fun saveOdometerReading(miles: Int) { activeVehicle.value?.let { odometerActions.save(it.id, miles) } }
     fun addVehicle(name: String) = odometerActions.add(name)
