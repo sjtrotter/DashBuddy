@@ -37,6 +37,7 @@ class BubbleScreenTest {
         val expense = ExpenseActions(scope, mock(), clock)
         whenever(vm.cashTipActions).thenReturn(tip)
         whenever(vm.expenseActions).thenReturn(expense)
+        whenever(vm.expenseOwner()).thenReturn("dash") // the live dash owns an entry; a mocked owner would be null and grey the block
         whenever(vm.appState).thenReturn(MutableStateFlow(AppState()))
         whenever(vm.focusedPlatform).thenReturn(MutableStateFlow(Platform.DoorDash))
         whenever(vm.focusedRegion).thenReturn(MutableStateFlow(

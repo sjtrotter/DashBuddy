@@ -751,7 +751,7 @@ with `ExpenseCategory.fromStorage`; unknown names in payload JSON or Room fall b
 without losing the expense amount or note. S3b adds `CAR_CARE` (displayed as “Car care”) without a
 schema change. `LedgerDao.recentNotes(category, limit)` derives distinct, non-blank notes from
 non-voided expenses, ordered by their newest surviving occurrence (then sequence id), surfaced
-as `LedgerRepository.recentLabels(category, limit = 6)`; there is no separate label store.
+as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. At rest the dock offers Expense only when today's last dash would own the entry — an unassigned expense would show nowhere on the HUD.
 
 The S3b HUD expense sheet writes Long cents through one cents-to-amount conversion in
 `ExpenseActions`. Gas writes `FUEL_FILLUP`, with required positive gallons parsed once at the
