@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -31,7 +32,7 @@ internal fun TripLine(model: TripLineModel) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             model.nodes.forEach { node ->
-                val label = node.overflow?.let { stringResource(R.string.hud_offer_cd_more, it) } ?: stringResource(when (node.icon) {
+                val label = node.overflow?.let { pluralStringResource(R.plurals.hud_offer_cd_more, it, it) } ?: stringResource(when (node.icon) {
                     TrackIcon.STORE -> R.string.hud_offer_cd_store
                     TrackIcon.HOUSE -> R.string.hud_offer_cd_house
                     else -> R.string.hud_offer_cd_pin

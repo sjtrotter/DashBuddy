@@ -8,6 +8,8 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.domain.state.Job
 import cloud.trotter.dashbuddy.domain.state.PendingOffer
 
@@ -17,8 +19,13 @@ object OfferCardMapper {
         val o = p.offerFields.parsedOffer
         val head = OfferHead(o.displayStores.firstOrNull()?.takeIf { it.isNotBlank() }, o.payAmount,
             p.presentedAt, p.countdownExpiresAt)
-        val badges = FlowCardSnapshot.Offer.badgesOf(o).map(::OfferBadgeModel) +
-            if (o.effectiveScope == OfferScope.ADD_ON) listOf(OfferBadgeModel("ADD_ON")) else emptyList()
+        val badges = FlowCardSnapshot.Offer.badgesOf(o).map { name ->
+            when (name) {
+                FlowCardSnapshot.Offer.SHOP_BADGE -> OfferBadgeModel.Shop
+                else -> OfferBadge.entries.firstOrNull { it.name == name }?.let(OfferBadgeModel::Platform)
+                    ?: OfferBadgeModel.Order(OrderBadge.valueOf(name))
+            }
+        } + if (o.effectiveScope == OfferScope.ADD_ON) listOf(OfferBadgeModel.AddOn) else emptyList()
         if (o.quoteBasis == OfferQuoteBasis.TOTAL) {
             val e = p.evaluation
             val scored = e?.hasDistanceMetrics == true && o.payAmount != null
@@ -29,9 +36,13 @@ object OfferCardMapper {
         }
         val before = job?.let(CombinedOffer::quote)
         val summed = job?.let { CombinedOffer.build(it, o) }
-        if (job != null && before != null && summed != null && config != null) {
-            val e = evaluate(summed, config.forPlatform(p.platform))
-            if (e.hasDistanceMetrics) {
+        if (job != null && before != null && summed != null && config != null &&
+            before.units == o.itemCountIsUnits) {
+            val resolvedConfig = config.forPlatform(p.platform)
+            val previousOffer = before.beforeOffer(o.offerHash)
+            val previous = evaluate(previousOffer, resolvedConfig)
+            val e = evaluate(summed, resolvedConfig)
+            if (e.hasDistanceMetrics && previous.hasDistanceMetrics) {
                 val was = job.acceptedOffers.singleOrNull()?.offerHash?.let { hash ->
                     completed.filterIsInstance<FlowCardSnapshot.Offer>().lastOrNull {
                         it.offerHash == hash && it.outcome == AppEventType.OFFER_ACCEPTED
@@ -40,22 +51,24 @@ object OfferCardMapper {
                 return OfferCardModel.Combined(head.copy(pay = summed.payAmount, addedPay = o.payAmount),
                     badges, TripLineMapper.withAddOn(job, o), RingModel(e.score.toInt(), was),
                     PayBarMapper.map(summed.payAmount, e.netPayAmount, true, true),
-                    gauges(summed, e, OfferTargets.from(config, p.platform, summed.isShop), before))
+                    gauges(summed, e, OfferTargets.from(config, p.platform, summed.isShop), previousOffer, previous))
             }
         }
         return OfferCardModel.AddOnRaw(head, badges, job?.let { TripLineMapper.withAddOn(it, o) }
             ?: TripLineMapper.offer(o), DeltaTiles(o.timeToCompleteMinutes, o.distanceMiles, o.stopCount, o.itemCount))
     }
 
-    private fun gauges(o: ParsedOffer, e: OfferEvaluation?, targets: Targets, before: JobQuote? = null): List<GaugeModel> {
+    private fun gauges(o: ParsedOffer, e: OfferEvaluation?, targets: Targets,
+        beforeOffer: ParsedOffer? = null, before: OfferEvaluation? = null): List<GaugeModel> {
         val items = o.itemCount.takeIf { it > 0 }?.toDouble()
+        val previousItems = beforeOffer?.takeIf { it.isShop && it.itemCount > 0 }?.itemCount
         return listOfNotNull(
             GaugeMapper.map(GaugeKind.HOUR, e?.estimatedTimeMinutes, e?.dollarsPerHour, targets.perHour,
-                before?.let { it.net * 60 / it.minutes }, before?.let { e?.estimatedTimeMinutes?.minus(it.minutes) }),
+                before?.dollarsPerHour, before?.let { e?.estimatedTimeMinutes?.minus(it.estimatedTimeMinutes) }),
             GaugeMapper.map(GaugeKind.MILE, e?.distanceMiles, e?.dollarsPerMile, targets.perMile,
-                before?.let { it.net / it.miles }, before?.let { e?.distanceMiles?.minus(it.miles) }),
+                before?.dollarsPerMile, before?.let { e?.distanceMiles?.minus(it.distanceMiles) }),
             if (o.isShop) GaugeMapper.map(GaugeKind.ITEM, items, items?.let { e?.netPayAmount?.div(it) },
-                targets.perItem, before?.takeIf { it.items > 0 }?.let { it.net / it.items },
-                before?.let { items?.minus(it.items) }) else null)
+                targets.perItem, previousItems?.let { before?.netPayAmount?.div(it) },
+                beforeOffer?.let { items?.minus(it.itemCount) }) else null)
     }
 }

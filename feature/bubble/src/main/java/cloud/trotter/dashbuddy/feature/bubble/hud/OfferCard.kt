@@ -31,14 +31,13 @@ import cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreColor
 
 @Composable
 fun OfferCard(model: OfferCardModel, onAccept: () -> Unit, onDecline: () -> Unit) {
-    val now by rememberNow()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
         Column(Modifier.weight(1f, fill = false).fillMaxWidth()
             .clip(RoundedCornerShape(16.dp)).background(AppTheme.colors.surface)
             .verticalScroll(rememberScrollState())
             .padding(start = 18.dp, top = 16.dp, end = 18.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OfferHeader(model.head, now)
+            OfferHeader(model.head)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
@@ -54,19 +53,21 @@ fun OfferCard(model: OfferCardModel, onAccept: () -> Unit, onDecline: () -> Unit
                 }
                 if (model is OfferCardModel.Scored) OfferRing(model.ring)
             }
-            OfferBadges(model.badges)
+            // Approved order (design §10, 09c): pay bar, trip line, gauges, badges; the raw add-on: tiles, trip, note.
             when (model) {
                 is OfferCardModel.Scored -> {
                     PayBar(model.bar)
+                    TripLine(model.trip)
                     model.gauges.forEach { OfferGauge(it) }
                 }
                 is OfferCardModel.AddOnRaw -> {
                     AddOnDeltaRow(model.tiles)
+                    TripLine(model.trip)
                     Text(stringResource(R.string.hud_offer_addon_note), color = AppTheme.colors.text2,
                         fontSize = 14.sp)
                 }
             }
-            TripLine(model.trip)
+            OfferBadges(model.badges)
         }
         Spacer(Modifier.height(12.dp))
         OfferActions(onAccept, onDecline)
@@ -74,23 +75,27 @@ fun OfferCard(model: OfferCardModel, onAccept: () -> Unit, onDecline: () -> Unit
 }
 
 @Composable
-private fun OfferHeader(head: OfferHead, now: Long) {
+private fun OfferHeader(head: OfferHead) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(head.store ?: stringResource(R.string.flow_card_offer_fallback_store), Modifier.weight(1f),
             fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = AppTheme.colors.text,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        head.expiresAt?.let { expiry ->
-            val left = (expiry - now).coerceAtLeast(0)
-            val fraction = if (expiry > head.presentedAt) left.toDouble() / (expiry - head.presentedAt) else 0.0
-            val time = formatCountdown(left)
-            val description = stringResource(R.string.hud_offer_cd_left, time)
-            Row(Modifier.testTag("offer.countdown").semantics { contentDescription = description },
-                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(time, style = AppTheme.num.xlNum, color = offerExpiryColor(fraction, AppTheme.colors))
-                Text(stringResource(R.string.hud_offer_left), fontSize = 14.sp, color = AppTheme.colors.text2)
-            }
-        }
+        head.expiresAt?.let { OfferCountdown(head.presentedAt, it) }
+    }
+}
+
+@Composable
+private fun OfferCountdown(presentedAt: Long, expiry: Long) {
+    val now by rememberNow()
+    val left = (expiry - now).coerceAtLeast(0)
+    val fraction = if (expiry > presentedAt) left.toDouble() / (expiry - presentedAt) else 0.0
+    val time = formatCountdown(left)
+    val description = stringResource(R.string.hud_offer_cd_left, time)
+    Row(Modifier.testTag("offer.countdown").semantics { contentDescription = description },
+        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(time, style = AppTheme.num.xlNum, color = offerExpiryColor(fraction, AppTheme.colors))
+        Text(stringResource(R.string.hud_offer_left), fontSize = 14.sp, color = AppTheme.colors.text2)
     }
 }
 
@@ -125,13 +130,20 @@ private fun OfferRing(ring: RingModel) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun OfferBadges(badges: List<OfferBadgeModel>) {
+internal fun OfferBadges(badges: List<OfferBadgeModel>) {
     val c = AppTheme.colors
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(Modifier.testTag("offer.badges"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         badges.forEach { badge ->
-            val (label, ink) = if (badge.name == "ADD_ON") stringResource(R.string.hud_offer_addon) to c.stOffer
-                else badgeMeta(badge.name, c)
-            val bg = when (ink) { c.good -> c.goodBg; c.warn -> c.warnBg; else -> c.stOfferBg }
+            val (label, ink) = when (badge) {
+                OfferBadgeModel.AddOn -> stringResource(R.string.hud_offer_addon) to c.stOffer
+                OfferBadgeModel.Shop -> stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
+                is OfferBadgeModel.Platform -> badgeMeta(badge.badge, c)
+                is OfferBadgeModel.Order -> badgeMeta(badge.badge, c)
+            }
+            val bg = when (ink) {
+                c.good -> c.goodBg; c.warn -> c.warnBg; c.bad -> c.badBg
+                c.stPickup -> c.stPickupBg; c.stOffer -> c.stOfferBg; else -> c.neutralBg
+            }
             Box(Modifier.height(26.dp).clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center) { Text(label, color = ink, fontSize = 12.sp) }
         }

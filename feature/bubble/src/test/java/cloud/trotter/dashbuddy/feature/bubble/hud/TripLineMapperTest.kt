@@ -71,4 +71,15 @@ class TripLineMapperTest {
         assertEquals(3, nodes.last().overflow)
         assertTrue(nodes.last().added)
     }
+    @Test fun `added stores use the job's resolved store names`() {
+        val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
+            it.copy(expectedStoreHint = "Chick-fil-A", storeName = "Chick Fil A") else it })
+        val offer = OfferFixtures.addon().copy(stopCount = 3,
+            orders = listOf(OfferFixtures.order(" chick fil a "), OfferFixtures.order("New", 3)))
+        val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
+        assertEquals(1, nodes.count { it.icon == TrackIcon.STORE })
+        assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
+        assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
+    }
+
 }

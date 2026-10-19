@@ -3,15 +3,23 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.offer.newStores
+import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
+import cloud.trotter.dashbuddy.domain.model.offer.storeKey
 import cloud.trotter.dashbuddy.domain.model.order.CountUnit
 import cloud.trotter.dashbuddy.domain.model.order.OrderType
 import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
 import cloud.trotter.dashbuddy.domain.state.Job
-import java.util.Locale
 
 /** Accept-time economics, independent of arrival corrections and today's economy. */
 data class JobQuote(val pay: Double, val net: Double, val minutes: Double, val miles: Double,
-    val items: Int, val orders: List<ParsedOrder>, val units: Boolean)
+    val items: Int, val orders: List<ParsedOrder>, val units: Boolean) {
+    /** Display-only evaluator input, never an action or persistence identity. */
+    fun beforeOffer(hash: String) = ParsedOffer(offerHash = "before:" + hash,
+        payAmount = pay, distanceMiles = miles, orders = orders.mapIndexed { i, o -> o.copy(orderIndex = i) },
+        itemCount = items, itemCountIsUnits = units,
+        quoteBasis = OfferQuoteBasis.TOTAL, offerScope = OfferScope.STANDALONE)
+}
 
 object CombinedOffer {
     fun quote(job: Job): JobQuote? {
@@ -29,16 +37,24 @@ object CombinedOffer {
         }
         return JobQuote(job.offerPayTotal ?: return null, job.blendedNetPay ?: return null,
             job.blendedEstMinutes ?: return null, job.blendedDistanceMiles ?: return null,
-            accepts.sumOf { it.quotedItemCount ?: 0 }, orders, accepts.all { it.offerUnitCount != null })
+            accepts.filter { it.isShop }.sumOf { it.quotedItemCount ?: 0 }, orders,
+            accepts.all { it.offerUnitCount != null })
     }
 
-    /** Whole-route listings include the owned order. Remove its hints as a multiset, retaining duplicates. */
+    /**
+     * Whole-route listings include the owned order. Subtract pickup hints and resolved names as a multiset.
+     * An add-on whose every listed order matches an owned store (a second order at the same store) still
+     * ADDS a stop: its pay and miles are deltas, so the listing is taken whole rather than emptied.
+     */
     internal fun newOrders(job: Job, offer: ParsedOffer): List<ParsedOrder> {
-        val owned = job.acceptedOffers.flatMap { it.storeHints }.map { key(it) }.toMutableList()
-        return offer.orders.filter { order ->
-            val at = owned.indexOf(key(order.storeName))
+        val owned = ownedStoreKeys(job.tasks).toMutableList()
+        val addedStores = newStores(owned, offer).map(::storeKey).toSet()
+        val remaining = offer.orders.filter { order ->
+            if (storeKey(order.storeName) in addedStores) return@filter true
+            val at = owned.indexOf(storeKey(order.storeName))
             if (at < 0) true else { owned.removeAt(at); false }
         }
+        return if (remaining.isEmpty() && offer.orders.isNotEmpty()) offer.orders else remaining
     }
 
     /** Temporary evaluator input only. Never pass this synthetic identity to an action or writer. */
@@ -50,10 +66,9 @@ object CombinedOffer {
         return ParsedOffer(offerHash = "combined:" + offer.offerHash,
             payAmount = before.pay + pay, distanceMiles = before.miles + miles,
             orders = (before.orders + added).mapIndexed { i, order -> order.copy(orderIndex = i) },
-            itemCount = before.items + added.sumOf { it.itemCount },
+            // A plain pickup carries a default count of one, which is not shopping (the parser never counts it).
+            itemCount = before.items + added.filter { it.orderType == OrderType.SHOP_FOR_ITEMS }.sumOf { it.itemCount },
             itemCountIsUnits = before.units && offer.itemCountIsUnits,
             quoteBasis = OfferQuoteBasis.TOTAL, offerScope = OfferScope.STANDALONE)
     }
-
-    private fun key(store: String) = store.trim().lowercase(Locale.ROOT)
 }

@@ -16,18 +16,21 @@ class AddOnStopsReplayTest {
         val platform = Platform.DoorDash
         val machine = StateMachine(FlowRegionStepper(), PlatformRegionStepper(),
             CrossPlatformRegionStepper(), TransitionPolicy(), EffectMap())
-        for ((stops, drops) in listOf(3 to 2, null to 1)) {
+        data class Case(val stops: Int?, val drops: Int, val hint: String = "Old", val resolved: String? = null,
+            val listed: String = "Old")
+        for ((stops, drops, hint, resolved, listed) in listOf(Case(3, 2), Case(null, 1),
+            Case(3, 2, hint = "Chick-fil-A", resolved = "Chick Fil A", listed = " chick fil a "))) {
             val parsed = ParsedOffer("addon", quoteBasis = OfferQuoteBasis.INCREMENTAL,
                 offerScope = OfferScope.ADD_ON, payAmount = 7.0, distanceMiles = 2.1, stopCount = stops,
-                orders = listOf("Old", "New").mapIndexed { i, store ->
+                orders = listOf(listed, "New").mapIndexed { i, store ->
                     ParsedOrder(i, OrderType.PICKUP, store, 1, false, emptySet())
                 })
             val pending = PendingOffer("addon", ParsedFields.OfferFields(parsedOffer = parsed),
                 presentedAt = 800, returnFlow = Flow.TaskDropoffNavigation,
                 lastClickIntent = OfferIntent.ACCEPT, acceptClickAt = 900, acceptedAt = 900)
-            val old = Job("job", listOf("Old"), "before", startedAt = 100,
+            val old = Job("job", listOf(hint), "before", startedAt = 100,
                 acceptedOffers = listOf(AcceptedOfferEconomics("before", acceptedAt = 100)),
-                tasks = listOf(Task("pickup", "job", TaskPhase.PICKUP, expectedStoreHint = "Old", startedAt = 100),
+                tasks = listOf(Task("pickup", "job", TaskPhase.PICKUP, expectedStoreHint = hint, storeName = resolved, startedAt = 100),
                     Task("drop", "job", TaskPhase.DROPOFF, startedAt = 100)))
             val initial = AppState(regions = Regions(
                 flow = FlowRegion(flow = Flow.Idle, activePlatform = platform),

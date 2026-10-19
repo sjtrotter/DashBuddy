@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
 import cloud.trotter.dashbuddy.domain.model.offer.AddOnStops
+import cloud.trotter.dashbuddy.domain.model.offer.newStores
+import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -253,12 +255,11 @@ internal fun PlatformRegionStepper.appendAddOn(
     fun pickupHints(tasks: List<Task>) = tasks
         .flatMap { listOfNotNull(it.expectedStoreHint, it.storeName) }
         .map { it.lowercase(Locale.ROOT) }.toSet()
-    val allPickupHints = pickupHints(pickups)
     val openPickupHints = pickupHints(pickups.filter { it.confirmedAt == null && it.unassignedAt == null })
     val hints = distinctStoreHints(inputs.storeHints)
     // #1315 r3: +N stops counts stores new to the ROUTE, deduplicated against ALL pickups.
     // A confirmed same-store revisit needs a placeholder but is not a new store in this arithmetic.
-    val newStoreHints = hints.filter { it.lowercase(Locale.ROOT) !in allPickupHints }
+    val newStoreHints = newStores(ownedStoreKeys(existing.tasks), hints)
     val addOnPickupHints = hints.filter { it.lowercase(Locale.ROOT) !in openPickupHints }
     // #1304: an INCREMENTAL card lists the OWNED order beside the new one, so `orders.size` over-mints.
     // +N stops minus stores new to the route gives added drops; TOTAL keeps its per-order count.

@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.FullChatView
-import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
@@ -58,12 +57,13 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val model = remember(flow, cards.stack, region, lastSession, liveCardShown) {
         StateCardMapper.map(flow, region?.mode, cards.stack.active, cards.stack, region, lastSession, flowOwned = liveCardShown)
     }
+    val pendingOffer = region?.presentedOffer()
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
         net, countExpenses, goal, todayProfit, cards.stack.active, logOpen, gas, model) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
-            cards.stack.active is FlowCardSnapshot.Offer, logOpen, gas, cashTipCue = model?.cuesCashTip == true)
+            pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
@@ -88,7 +88,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             StateCard(model, state.hero.profit)
         },
         offer = {
-            region?.presentedOffer()?.let { pending ->
+            pendingOffer?.let { pending ->
                 val offerModel = remember(pending, region?.activeJob, cards.stack.completed, config) {
                     OfferCardMapper.map(pending, region?.activeJob, cards.stack.completed, config)
                 }

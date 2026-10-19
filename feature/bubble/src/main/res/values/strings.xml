@@ -17,66 +17,16 @@
     <string name="bubble_mode_idle_gas_resume_auto">Resume auto</string>
     <string name="bubble_mode_idle_gas_refresh_error">Couldn\'t refresh</string>
 
-    <!-- bubble/cards/FlowCardItem.kt -->
-    <string name="flow_card_content_desc_collapse">Collapse</string>
-    <string name="flow_card_content_desc_expand">Expand</string>
-    <string name="flow_card_awaiting_active_format">Waiting · %1$s</string>
-    <string name="flow_card_awaiting_frozen_format">Waited %1$s</string>
+    <!-- Shared card labels -->
     <string name="flow_card_offer_fallback_store">Offer</string>
-    <string name="flow_card_pickup_arrived_format">%1$s · arrived %2$s</string>
-    <string name="flow_card_delivery_delivered_format">%1$s · delivered %2$s</string>
-    <string name="flow_card_since_last_offer">since last offer</string>
-    <string name="flow_card_before_next_offer">before next offer</string>
-    <string name="flow_card_score_gauge_label">Score</string>
-    <string name="flow_card_advised_format">Advised %1$s</string>
-    <string name="flow_card_hourly_hero_format" translatable="false">%1$s/hr</string>
-    <string name="flow_card_net_secondary_format">Net %1$s</string>
-    <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>
-    <string name="flow_card_per_mile_secondary_format" translatable="false">%1$s/mi</string>
     <string name="flow_card_badge_shop_and_deliver">Shop and deliver</string>
-    <string name="flow_card_timer_dwell_label">Wait</string>
-    <string name="flow_card_timer_at_door_sub">at door</string>
-    <string name="flow_card_timer_at_store_sub">at store</string>
-    <string name="flow_card_timer_overdue_label">Overdue</string>
-    <string name="flow_card_timer_to_go_label">To go</string>
-    <string name="flow_card_timer_elapsed_label">Elapsed</string>
-    <string name="flow_card_timer_en_route_sub">en route</string>
-    <string name="flow_card_running_at_label">Running at</string>
-    <string name="flow_card_running_at_overdue_format" translatable="false">%1$s/hr ↓</string>
-    <string name="flow_card_running_at_dropping_sub">dropping</string>
-    <string name="flow_card_running_at_on_track_sub">on track</string>
-    <string name="flow_card_arrived_margin_format">"arrived %1$s %2$s · "</string>
-    <string name="flow_card_margin_early">early</string>
-    <string name="flow_card_margin_late">late</string>
-    <string name="flow_card_at_stop">at stop</string>
-    <string name="flow_card_en_route">en route</string>
-    <string name="flow_card_past_deadline_format">%1$s past %2$s-by</string>
-    <string name="flow_card_by_deadline_format">%1$s by %2$s</string>
-    <string name="flow_card_verb_deliver">deliver</string>
-    <string name="flow_card_verb_pickup">pickup</string>
-    <string name="flow_card_below_floor_warning">Below your floor</string>
-    <string name="flow_card_shop_progress_format" translatable="false">shop %1$d/%2$d</string>
-    <string name="flow_card_shop_pace_format" translatable="false">%1$s/min</string>
-    <string name="flow_card_detail_arrived_format">" · arrived %1$s"</string>
-    <string name="flow_card_detail_picked_up_format">" · picked up %1$s"</string>
-    <string name="flow_card_post_task_delivery_total">delivery total</string>
-    <string name="flow_card_post_task_tip_format">tip · %1$s</string>
-    <string name="flow_card_post_task_session_format">dash %1$s</string>
     <string name="flow_card_action_decline">Decline</string>
     <string name="flow_card_action_accept">Accept</string>
-    <string name="flow_card_outcome_accepted">Accepted</string>
-    <string name="flow_card_outcome_declined">Declined</string>
-    <string name="flow_card_outcome_timed_out">Timed out</string>
 
     <!-- #867 manual dash switcher (multi-app) -->
     <string name="bubble_switcher_label">Showing</string>
     <string name="bubble_switcher_content_desc">Switch which dash the bubble shows</string>
 
-    <string name="flow_card_addon_summary">Add-on · %1$s · +%2$s</string>
-    <string name="flow_card_addon_reason">Add-on · no verdict</string>
-    <string name="flow_card_addon_pay">+%1$s pay</string>
-    <string name="flow_card_addon_distance">+%1$s mi</string>
-    <string name="flow_card_addon_minutes">+%1$d min</string>
 
     <!-- HUD foundations -->
     <string name="hud_top_earned">Earned</string>
@@ -156,7 +106,7 @@
     <string name="hud_offer_unit_mi">mi</string>
     <string name="hud_offer_rate_hr">/hr</string>
     <string name="hud_offer_rate_mi">/mi</string>
-    <string name="hud_offer_rate_ea">ea</string>
+    <string name="hud_offer_rate_ea">/ea</string>
     <plurals name="hud_offer_items"><item quantity="one">item</item><item quantity="other">items</item></plurals>
     <plurals name="hud_offer_stops"><item quantity="one">stop</item><item quantity="other">stops</item></plurals>
     <string name="hud_offer_added">+%1$s added</string>
@@ -174,5 +124,8 @@
     <string name="hud_offer_cd_store">Pickup</string>
     <string name="hud_offer_cd_house">Dropoff</string>
     <string name="hud_offer_more">+%1$d</string>
-    <string name="hud_offer_cd_more">%1$d more stops</string>
+    <plurals name="hud_offer_cd_more">
+        <item quantity="one">%1$d more stop</item>
+        <item quantity="other">%1$d more stops</item>
+    </plurals>
 </resources>

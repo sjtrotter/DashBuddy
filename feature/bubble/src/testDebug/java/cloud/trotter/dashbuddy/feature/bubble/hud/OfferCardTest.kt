@@ -111,7 +111,7 @@ class OfferCardTest {
         show()
         listOf("31", "min", "$16", "/hr").forEach { value("offer.gauge.HOUR", it).assertExists() }
         listOf("6.4", "mi", "$1.30", "/mi").forEach { value("offer.gauge.MILE", it).assertExists() }
-        listOf("12", "items", "69¢", "ea").forEach { value("offer.gauge.ITEM", it).assertExists() }
+        listOf("12", "items", "69¢", "/ea").forEach { value("offer.gauge.ITEM", it).assertExists() }
         compose.onNodeWithTag("offer.gauge.ITEM").assertContentDescriptionEquals("target from your hourly target")
     }
     @Test fun `gauge state says above or below target`() {
@@ -184,4 +184,32 @@ class OfferCardTest {
         tick(5_000)
         value("offer.countdown", "0:36").assertExists()
     }
+
+    @Test fun `card sections run bar then trip then gauges then badges`() {
+        show()
+        val bar = compose.onNodeWithTag("offer.bar", useUnmergedTree = true).getBoundsInRoot().top
+        val trip = compose.onAllNodesWithTag("offer.trip.node", useUnmergedTree = true).onFirst().getBoundsInRoot().top
+        val gauge = compose.onNodeWithTag("offer.gauge.HOUR", useUnmergedTree = true).getBoundsInRoot().top
+        val badges = compose.onNodeWithTag("offer.badges", useUnmergedTree = true).getBoundsInRoot().top
+        org.junit.Assert.assertTrue("$bar < $trip < $gauge < $badges", bar < trip && trip < gauge && gauge < badges)
+    }
+    @Test fun `badges render without a clock`() {
+        compose.setContent {
+            DashBuddyTheme { OfferBadges(listOf(OfferBadgeModel.Platform(OfferBadge.HIGH_PAYING),
+                OfferBadgeModel.Shop, OfferBadgeModel.AddOn)) }
+        }
+        settle()
+        compose.onNodeWithTag("offer.badges").assertExists()
+        listOf("High paying", "Shop and deliver", "Add-on").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+    @Test fun `overflow descriptions pluralize more stops`() {
+        val overflow = mutableStateOf(1)
+        compose.setContent { DashBuddyTheme { TripLine(TripLineModel(listOf(TripNode(TrackIcon.NAV_PIN, overflow = overflow.value)))) } }
+        settle()
+        compose.onNodeWithContentDescription("1 more stop").assertExists()
+        compose.runOnIdle { overflow.value = 2 }
+        settle()
+        compose.onNodeWithContentDescription("2 more stops").assertExists()
+    }
+
 }

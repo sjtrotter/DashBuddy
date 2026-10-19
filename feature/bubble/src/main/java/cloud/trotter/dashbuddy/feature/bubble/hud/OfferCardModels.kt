@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
+import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
+
 /** UI-only output: no offer identity, parsed offer, event or persistence payload can escape here. */
 sealed interface OfferCardModel {
     val head: OfferHead
@@ -29,6 +32,7 @@ sealed interface OfferCardModel {
 
 data class OfferHead(val store: String?, val pay: Double?, val presentedAt: Long,
     val expiresAt: Long?, val addedPay: Double? = null)
+/** [was] is the folded accepted card's score: what the dasher saw, rather than today's re-evaluation. */
 data class RingModel(val score: Int?, val was: Int? = null)
 sealed interface PayBarModel {
     data class Split(val profitCents: Long, val carCents: Long, val profitFraction: Float) : PayBarModel
@@ -45,4 +49,9 @@ data class GaugeModel(
 data class TripLineModel(val nodes: List<TripNode>)
 data class TripNode(val icon: TrackIcon, val added: Boolean = false, val overflow: Int? = null)
 data class DeltaTiles(val minutes: Long?, val miles: Double?, val stops: Int?, val items: Int?)
-data class OfferBadgeModel(val name: String)
+sealed interface OfferBadgeModel {
+    data class Platform(val badge: OfferBadge) : OfferBadgeModel
+    data class Order(val badge: OrderBadge) : OfferBadgeModel
+    data object Shop : OfferBadgeModel
+    data object AddOn : OfferBadgeModel
+}
