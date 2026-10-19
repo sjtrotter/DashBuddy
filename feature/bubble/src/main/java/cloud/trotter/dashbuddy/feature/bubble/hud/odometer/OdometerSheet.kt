@@ -45,39 +45,42 @@ fun ColumnScope.OdometerSheet(
 ) {
     val page = model.page
     val vehicleName = model.vehicle?.let { it.identityName ?: stringResource(vehicleTypeLabel(it.profile.vehicleType)) }.orEmpty()
-    Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().weight(1f).testTag("odometer.sheet").padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
             OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange,
                 enabled = !model.saving && model.writeFailed != OdometerWriteFailure.UNREADABLE, onBack, onAddVehicle)
             OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack, onRetireVehicle)
             OdometerPage.READING -> {
-                Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OdometerTitle(stringResource(R.string.hud_odometer_title), onBack)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(vehicleName, Modifier.weight(1f), color = AppTheme.colors.text,
-                                style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = onSwitchVehicle, enabled = !model.saving, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_odometer_switch), tint = AppTheme.colors.accent)
+                // Keep the title with the fields; unused scroll height belongs above them.
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Bottom) {
+                    Row(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OdometerTitle(stringResource(R.string.hud_odometer_title), onBack)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(vehicleName, Modifier.weight(1f), color = AppTheme.colors.text,
+                                    style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                IconButton(onClick = onSwitchVehicle, enabled = !model.saving, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_odometer_switch), tint = AppTheme.colors.accent)
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
+                                .background(AppTheme.colors.surface3, RoundedCornerShape(12.dp))
+                                .border(1.dp, AppTheme.colors.accent, RoundedCornerShape(12.dp)).padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(model.readingMiles?.let(Formats::commaInt) ?: EMPTY_VALUE,
+                                    Modifier.weight(1f).testTag("odometer.reading"), style = AppTheme.num.mdNum,
+                                    color = AppTheme.colors.text, textAlign = TextAlign.End)
+                                Text(stringResource(R.string.hud_state_mi), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
+                            }
+                            val warning = model.check is OdometerCheck.Lower || model.check is OdometerCheck.FewerThanTracked || model.check is OdometerCheck.LargeJump
+                            Text(odometerCopy(model), color = if (warning) AppTheme.colors.warn else AppTheme.colors.text3,
+                                style = MaterialTheme.typography.labelSmall)
+                            if (model.check is OdometerCheck.FewerThanTracked) {
+                                TextButton(onClick = onShowAddVehicle, enabled = !model.saving) { Text(stringResource(R.string.hud_odometer_add_vehicle)) }
                             }
                         }
-                        Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
-                            .background(AppTheme.colors.surface3, RoundedCornerShape(12.dp))
-                            .border(1.dp, AppTheme.colors.accent, RoundedCornerShape(12.dp)).padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(model.readingMiles?.let(Formats::commaInt) ?: EMPTY_VALUE,
-                                Modifier.weight(1f).testTag("odometer.reading"), style = AppTheme.num.mdNum,
-                                color = AppTheme.colors.text, textAlign = TextAlign.End)
-                            Text(stringResource(R.string.hud_state_mi), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
-                        }
-                        val warning = model.check is OdometerCheck.Lower || model.check is OdometerCheck.FewerThanTracked || model.check is OdometerCheck.LargeJump
-                        Text(odometerCopy(model), color = if (warning) AppTheme.colors.warn else AppTheme.colors.text3,
-                            style = MaterialTheme.typography.labelSmall)
-                        if (model.check is OdometerCheck.FewerThanTracked) {
-                            TextButton(onClick = onShowAddVehicle, enabled = !model.saving) { Text(stringResource(R.string.hud_odometer_add_vehicle)) }
-                        }
+                        Keypad(onDigit, null, onBackspace, Modifier.align(Alignment.Bottom))
                     }
-                    Keypad(onDigit, null, onBackspace)
                 }
                 val canSave = model.vehicle != null && OdometerReadingLimit.isValid(model.readingMiles ?: 0) && !model.saving
                 Button(onClick = onSave, enabled = canSave && model.gpsLoaded,

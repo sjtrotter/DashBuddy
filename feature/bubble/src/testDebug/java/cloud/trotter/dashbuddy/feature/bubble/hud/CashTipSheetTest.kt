@@ -44,10 +44,10 @@ class CashTipSheetTest {
     private var model by mutableStateOf(CashTipSheetModel(rows, 5))
     private var commits = 0
     private val amounts = mutableListOf<Long>()
-    private fun show() {
+    private fun show(hostModifier: Modifier = Modifier.width(352.dp).height(390.dp)) {
         compose.setContent {
             DashBuddyTheme(darkTheme = true) {
-                Column(Modifier.width(352.dp).height(390.dp)) {
+                Column(hostModifier) {
                     CashTipSheet(model, onSelectDelivery = { model = model.copy(selectedDeliveryId = it, page = CashTipPage.COMPACT) },
                         onExpand = { model = model.copy(page = CashTipPage.EXPANDED) },
                         onBack = { model = model.copy(page = CashTipPage.COMPACT) },
@@ -80,6 +80,21 @@ class CashTipSheetTest {
             color
         }
     }
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun `other amount keypad rests against Done with slack below the title`() {
+        model = model.copy(page = CashTipPage.OTHER_AMOUNT, otherAmount = "7.25")
+        show(Modifier.width(400.dp).height(760.dp))
+        val title = compose.onNodeWithTag("cashTip.title").getBoundsInRoot()
+        val firstKey = compose.onNodeWithTag("keypad.1").assertIsDisplayed().assertWidthIsEqualTo(60.dp).getBoundsInRoot()
+        val lastKey = compose.onNodeWithTag("keypad.backspace").assertIsDisplayed().getBoundsInRoot()
+        val done = compose.onNodeWithTag("cashTip.done").assertIsDisplayed().getBoundsInRoot()
+        val gapAbove = firstKey.top - title.bottom
+        val gapBelow = done.top - lastKey.bottom
+        assertTrue("Keypad must end within 12 dp above Done: $gapBelow", gapBelow >= 0.dp && gapBelow <= 12.dp)
+        assertTrue("Slack belongs below the title and above the keypad", gapAbove > gapBelow)
+    }
+
     @Test fun `compact offers two rows and latest is preselected`() {
         show()
         compose.onNodeWithText("Store 5").assertIsDisplayed()

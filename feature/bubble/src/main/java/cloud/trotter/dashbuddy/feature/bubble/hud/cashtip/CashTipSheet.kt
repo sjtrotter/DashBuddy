@@ -50,7 +50,7 @@ fun ColumnScope.CashTipSheet(
     onCommit: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().testTag("cashTip.title"), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.hud_cash_tip_title), Modifier.weight(1f), color = AppTheme.colors.text,
                 style = MaterialTheme.typography.titleSmall)
             Text(Formats.money(model.totalCents / 100.0), Modifier.testTag("cashTip.total"), color = AppTheme.colors.text, style = AppTheme.num.mdNum)
@@ -70,12 +70,13 @@ fun ColumnScope.CashTipSheet(
                     .background(Brush.verticalGradient(listOf(Color.Transparent, AppTheme.colors.surface))))
             }
             CashTipPage.OTHER_AMOUNT -> {
-                Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(model.otherAmount.ifEmpty { EMPTY_VALUE }, Modifier.weight(1f),
                         color = AppTheme.colors.text, style = AppTheme.num.mdNum)
                     Keypad(onDigit, onPoint, onBackspace)
                 }
-                Button(onClick = onDoneOther, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onDoneOther, enabled = !model.busy, modifier = Modifier.fillMaxWidth().testTag("cashTip.done")) {
                     Text(stringResource(R.string.hud_cash_tip_done))
                 }
             }

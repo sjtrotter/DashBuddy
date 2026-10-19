@@ -27,10 +27,10 @@ class ExpenseSheetTest {
     private var model by mutableStateOf(ExpenseSheetModel(ExpensePick.Fuel))
     private var logs = 0
     private var back = 0
-    private fun show() {
+    private fun show(hostModifier: Modifier = Modifier.width(352.dp).height(390.dp)) {
         compose.setContent {
             DashBuddyTheme {
-                Column(Modifier.width(352.dp).height(390.dp)) {
+                Column(hostModifier) {
                     ExpenseSheet(model, onBack = { back++ }, onField = { model = model.copy(activeField = it) },
                         onLabel = { model = model.copy(label = it) },
                         onSelectLabel = { model = model.copy(label = it, keyboardOpen = false) },
@@ -44,6 +44,20 @@ class ExpenseSheetTest {
             }
         }
     }
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun `keypad rests against Log with slack below the title`() {
+        show(Modifier.width(400.dp).height(760.dp))
+        val title = compose.onNodeWithTag("expense.title").getBoundsInRoot()
+        val firstKey = compose.onNodeWithTag("keypad.1").assertIsDisplayed().assertWidthIsEqualTo(60.dp).getBoundsInRoot()
+        val lastKey = compose.onNodeWithTag("keypad.backspace").assertIsDisplayed().getBoundsInRoot()
+        val log = compose.onNodeWithTag("expense.log").assertIsDisplayed().getBoundsInRoot()
+        val gapAbove = firstKey.top - title.bottom
+        val gapBelow = log.top - lastKey.bottom
+        assertTrue("Keypad must end within 12 dp above Log: $gapBelow", gapBelow >= 0.dp && gapBelow <= 12.dp)
+        assertTrue("Slack belongs below the title and above the keypad", gapAbove > gapBelow)
+    }
+
     @Test fun `gas requires positive gallons and the button states amount and category`() {
         model = model.copy(totalText = "42.00")
         show()

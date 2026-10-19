@@ -38,6 +38,23 @@ class OdometerSheetTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val car = Vehicle("civic", "Civic", 0)
     private var model by mutableStateOf(OdometerSheetModel(car, listOf(car), 52_388, null, OdometerCheck.First("Civic"), gpsLoaded = true))
+    @Test
+    @Config(qualifiers = "w400dp-h800dp")
+    fun `reading block rests against Save with slack above its title and keypad`() {
+        show(Modifier.width(400.dp).height(760.dp))
+        val sheet = compose.onNodeWithTag("odometer.sheet").getBoundsInRoot()
+        val title = compose.onNodeWithText("Odometer").assertIsDisplayed().getBoundsInRoot()
+        val firstKey = compose.onNodeWithTag("keypad.1").assertIsDisplayed().assertWidthIsEqualTo(60.dp).getBoundsInRoot()
+        val lastKey = compose.onNodeWithTag("keypad.backspace").assertIsDisplayed().getBoundsInRoot()
+        val save = compose.onNodeWithTag("odometer.save").assertIsDisplayed().getBoundsInRoot()
+        // Odometer keeps its title beside the keypad, so slack is measured from the sheet top.
+        val gapAbove = firstKey.top - sheet.top - 8.dp
+        val gapBelow = save.top - lastKey.bottom
+        assertTrue("Keypad must end within 12 dp above Save: $gapBelow", gapBelow >= 0.dp && gapBelow <= 12.dp)
+        assertTrue("Slack belongs above the whole reading block", gapAbove > gapBelow)
+        assertTrue("Title must move down with the keypad", title.top - sheet.top - 8.dp > gapBelow)
+    }
+
     @Test fun `an unnamed vehicle uses its type label in the title row and first-reading copy`() {
         val bike = Vehicle("bike", null, 0, EBike())
         model = model.copy(vehicle = bike, vehicles = listOf(bike), check = OdometerCheck.First(null))
@@ -50,11 +67,11 @@ class OdometerSheetTest {
     private var added: String? = null
     private var addOpened = false
     private var visible by mutableStateOf(true)
-    private fun show() {
+    private fun show(hostModifier: Modifier = Modifier.width(352.dp).height(350.dp)) {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    Column(Modifier.width(352.dp).height(350.dp)) {
+                    Column(hostModifier) {
                         if (visible) OdometerSheet(model, { model = model.copy(vehicleName = it) },
                             {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {}, {})
                     }
