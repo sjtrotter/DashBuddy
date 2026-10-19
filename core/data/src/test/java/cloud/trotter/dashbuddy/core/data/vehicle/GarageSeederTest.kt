@@ -12,6 +12,12 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoMoreInteractions
+import org.mockito.kotlin.whenever
 
 class GarageSeederTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -75,6 +81,46 @@ class GarageSeederTest {
         assertTrue(state.garageSeeded.first())
         assertEquals(named, garage.garage.first().active)
         assertEquals(1, garage.garage.first().vehicles.size)
+    }
+
+    @Test fun `every seed outcome marks import done after one repository call`() = runTest {
+        for (outcome in SeedOutcome.entries) {
+            val prefs = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+                produceFile = { tmp.newFile("${outcome}-prefs.preferences_pb") }))
+            val state = AppStateDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+                produceFile = { tmp.newFile("${outcome}-state.preferences_pb") }))
+            prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f)
+            val identity = prefs.legacyVehicleProfile.first()!!
+            val garage: GarageRepository = mock()
+            whenever(garage.seedFrom(any(), any())).thenReturn(outcome)
+
+            val seeder = GarageSeeder(garage, prefs, state)
+            seeder.seed()
+            seeder.seed()
+
+            assertTrue(state.garageSeeded.first())
+            verify(garage).seedFrom(eq(identity), any())
+            verifyNoMoreInteractions(garage)
+        }
+    }
+
+    @Test fun `no active vehicle marks import done without attaching to a parked car`() = runTest {
+        val prefs = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("parked-prefs.preferences_pb") }))
+        val state = AppStateDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("parked-state.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("parked-garage.preferences_pb") })))
+        garage.addVehicle("Parked", 1L)
+        val retired = garage.addVehicle("Retired", 2L)
+        garage.retire(retired.id, 3L)
+        val before = garage.garage.first()
+        prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f)
+
+        GarageSeeder(garage, prefs, state).seed()
+
+        assertTrue(state.garageSeeded.first())
+        assertEquals(before, garage.garage.first())
     }
 
     @Test fun `unreadable garage is kept and seed remains pending`() = runTest {

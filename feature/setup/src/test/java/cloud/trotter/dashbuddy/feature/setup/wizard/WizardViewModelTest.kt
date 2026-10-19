@@ -18,6 +18,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -58,7 +59,7 @@ class WizardViewModelTest {
     private suspend fun stubRepositories() {
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
         whenever(garageRepository.addVehicle(isNull(), any(), any())).thenReturn(Vehicle("new-id", null, 1L))
-        whenever(garageRepository.updateActiveProfile(any(), any())).thenReturn(true)
+        whenever(garageRepository.updateProfile(any(), any<VehicleProfile>())).thenReturn(true)
         whenever(appPreferencesRepository.vehicleYear).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.vehicleMake).thenReturn(flowOf(null))
@@ -125,7 +126,7 @@ class WizardViewModelTest {
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
-        verify(appPreferencesRepository).updateEconomySettings(
+        verify(appPreferencesRepository).mirrorEconomySettings(
             "2020", "Toyota", "Corolla", "Automatic", 32f, false, 3.50f,
         )
         verify(appStateRepository).setFirstRunComplete()
@@ -394,7 +395,7 @@ class WizardViewModelTest {
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
-        verify(appPreferencesRepository).updateEconomySettings(
+        verify(appPreferencesRepository).mirrorEconomySettings(
             "", "", "", "", VehicleClass.SEDAN.defaultMpg.toFloat(), false, 3.50f,
         )
         verify(appStateRepository).setFirstRunComplete()
@@ -524,9 +525,9 @@ class WizardViewModelTest {
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
-        val transform = argumentCaptor<(VehicleProfile) -> VehicleProfile>()
-        verify(garageRepository).updateActiveProfile(eq(active.id), transform.capture())
-        val saved = transform.firstValue(active.profile)
+        val profile = argumentCaptor<VehicleProfile>()
+        verify(garageRepository).updateProfile(eq(active.id), profile.capture())
+        val saved = profile.firstValue
         assertEquals("2021", saved.year)
         assertEquals("Honda", saved.make)
         assertEquals("Civic", saved.model)
@@ -534,6 +535,61 @@ class WizardViewModelTest {
         assertEquals(28.0, saved.mpg!!, 0.0)
         assertEquals(FuelType.PREMIUM, saved.fuelType)
         verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
+    }
+
+    @Test
+    fun `a switch during the save does not retarget it`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val first = Vehicle("first-id", "First", 1L, VehicleProfile(make = "Honda", mpg = 31.0))
+        val second = Vehicle("second-id", "Second", 2L, VehicleProfile(make = "Toyota", mpg = 50.0))
+        val garage = MutableStateFlow(Garage(listOf(first, second), first.id, true))
+        whenever(garageRepository.garage).thenReturn(garage)
+        val saving = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        whenever(garageRepository.updateProfile(any(), any<VehicleProfile>())).doSuspendableAnswer { call ->
+            val id = call.getArgument<String>(0)
+            val profile = call.getArgument<VehicleProfile>(1)
+            saving.complete(Unit)
+            resume.await()
+            garage.value = garage.value.copy(vehicles = garage.value.vehicles.map {
+                if (it.id == id) it.copy(profile = profile) else it
+            })
+            true
+        }
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository,
+        )
+        testScheduler.advanceUntilIdle()
+        viewModel.updateVehicleClass(VehicleClass.SUV)
+        viewModel.updateEstimatedMpg(28f)
+        viewModel.updateFuelType(FuelType.PREMIUM)
+        viewModel.updateTires(720.0, 48_000.0)
+        var completed = false
+        viewModel.saveAndFinish { completed = true }
+        saving.await()
+        garage.value = garage.value.copy(activeId = second.id)
+        resume.complete(Unit)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(true, completed)
+        val saved = garage.value.vehicles.first { it.id == first.id }.profile
+        assertEquals("Honda", saved.make)
+        assertEquals(VehicleClass.SUV, saved.vehicleClass)
+        assertEquals(28.0, saved.mpg)
+        assertEquals(FuelType.PREMIUM, saved.fuelType)
+        assertEquals(720.0, saved.tireSetCost)
+        assertEquals(viewModel.state.value.tireLifetimeMi, saved.tireLifetimeMi)
+        assertEquals(second, garage.value.vehicles.first { it.id == second.id })
+        assertEquals(second.id, garage.value.activeId)
+        verify(garageRepository).updateProfile(eq(first.id), any<VehicleProfile>())
+        verify(appPreferencesRepository).mirrorFuelType(FuelType.PREMIUM)
+        verify(appPreferencesRepository).mirrorVehicleClass(VehicleClass.SUV)
+        verify(appPreferencesRepository).mirrorUserSetEconomy(any())
+        verify(appPreferencesRepository, org.mockito.kotlin.never()).updateFuelType(any())
+        verify(appPreferencesRepository, org.mockito.kotlin.never()).updateVehicleClass(any())
+        verify(appPreferencesRepository, org.mockito.kotlin.never()).persistUserSetEconomy(any())
     }
 
     @Test
@@ -552,8 +608,8 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verify(garageRepository).addVehicle(isNull(), any(), any())
-        verify(garageRepository).updateActiveProfile(eq("new-id"), any())
-        verify(garageRepository, org.mockito.kotlin.never()).updateActiveProfile(eq(retired.id), any())
+        verify(garageRepository).updateProfile(eq("new-id"), any<VehicleProfile>())
+        verify(garageRepository, org.mockito.kotlin.never()).updateProfile(eq(retired.id), any<VehicleProfile>())
     }
 
     @Test
@@ -572,7 +628,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any())
-        verify(garageRepository, org.mockito.kotlin.never()).updateActiveProfile(any(), any())
+        verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appStateRepository).setFirstRunComplete()
     }
 
@@ -593,7 +649,7 @@ class WizardViewModelTest {
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
-        verify(garageRepository, org.mockito.kotlin.never()).updateActiveProfile(any(), any())
+        verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appStateRepository, org.mockito.kotlin.never()).setFirstRunComplete()
     }
 }

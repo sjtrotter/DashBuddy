@@ -50,6 +50,50 @@ object VehicleEconomy {
         )
     }
 
+    fun hasCostOverrides(economy: UserEconomy): Boolean = economy.userSetFields.any {
+        it in VEHICLE_FIELDS && it != EconomyField.VEHICLE_CLASS && it != EconomyField.VEHICLE_MPG
+    }
+
+    /** Applies only explicit draft overrides, preserving nullable preset-following fields. */
+    fun updateProfile(profile: VehicleProfile, economy: UserEconomy): VehicleProfile {
+        val userSet = economy.userSetFields
+        var updated = profile
+        if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
+            updated = updated.copy(tireSetCost = economy.tireSetCost, tireLifetimeMi = economy.tireLifetimeMi)
+        }
+        if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
+            updated = updated.copy(oilCost = economy.oilCost, oilIntervalMi = economy.oilIntervalMi)
+        }
+        if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
+            updated = updated.copy(brakesCost = economy.brakesCost, brakesIntervalMi = economy.brakesIntervalMi)
+        }
+        if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
+            updated = updated.copy(fluidsCost = economy.fluidsCost, fluidsIntervalMi = economy.fluidsIntervalMi)
+        }
+        if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
+            updated = updated.copy(miscYearly = economy.miscYearly, miscYearlyMi = economy.miscYearlyMi)
+        }
+        if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
+            EconomyField.PURCHASE_PRICE in userSet || EconomyField.TOTAL_LIFETIME_MI in userSet
+        ) {
+            updated = updated.copy(
+                includeDepreciation = economy.includeDepreciation,
+                purchasePrice = economy.purchasePrice,
+                totalLifetimeMi = economy.totalLifetimeMi,
+            )
+        }
+        if (EconomyField.INSURANCE_DELTA in userSet) {
+            updated = updated.copy(insuranceDeltaPerMonth = economy.insuranceDeltaPerMonth)
+        }
+        if (EconomyField.REGISTRATION_DELTA in userSet) {
+            updated = updated.copy(registrationDeltaPerYear = economy.registrationDeltaPerYear)
+        }
+        if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
+            updated = updated.copy(expectedAnnualMiles = economy.expectedAnnualMiles)
+        }
+        return updated
+    }
+
     private val VEHICLE_FIELDS = setOf(
         EconomyField.VEHICLE_CLASS, EconomyField.VEHICLE_MPG,
         EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME, EconomyField.OIL_COST, EconomyField.OIL_INTERVAL,

@@ -2,11 +2,16 @@ package cloud.trotter.dashbuddy.core.data.vehicle
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -25,6 +30,86 @@ class GarageRepositoryTest {
     @get:Rule val tmp = TemporaryFolder()
     private fun garage(scope: CoroutineScope) = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
         scope = scope, produceFile = { tmp.newFile("vehicles.preferences_pb") })))
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun `seeding under a pending add never duplicates`() = runTest {
+        val saving = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var saves = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                if (saves++ == 0) {
+                    saving.complete(Unit)
+                    resume.await()
+                }
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        val identity = VehicleProfile(year = "2021", make = "Honda", model = "Civic", mpg = 31.0)
+        val add = async { repo.addVehicle("My car", 1L, VehicleProfile(tireSetCost = 900.0)) }
+        saving.await()
+        val seed = async { repo.seedFrom(identity, 2L) }
+        runCurrent()
+        assertFalse(seed.isCompleted)
+        assertEquals(1, store.saves)
+        resume.complete(Unit)
+
+        val added = add.await()
+        assertEquals(SeedOutcome.ATTACHED, seed.await())
+        val result = repo.garage.first()
+        assertEquals(1, result.vehicles.size)
+        assertEquals(added.id, result.activeId)
+        assertEquals("My car", result.active!!.name)
+        assertEquals(identity.copy(tireSetCost = 900.0), result.active!!.profile)
+        assertEquals(1, result.vehicles.count { it.profile.make == "Honda" && it.profile.model == "Civic" })
+    }
+
+    @Test fun `seedFrom attaches to the active vehicle`() = runTest {
+        val repo = garage(backgroundScope)
+        val active = repo.addVehicle("Active", 1L, VehicleProfile(make = "Honda", tireSetCost = 900.0))
+        val other = repo.addVehicle("Other", 2L, VehicleProfile(make = "Toyota", mpg = 50.0))
+        repo.selectVehicle(active.id)
+
+        assertEquals(SeedOutcome.ATTACHED, repo.seedFrom(
+            VehicleProfile(year = "2021", make = "Ford", model = "Civic", mpg = 31.0,
+                tireSetCost = 600.0, tireLifetimeMi = 40_000.0), 3L,
+        ))
+
+        val result = repo.garage.first()
+        assertEquals(2, result.vehicles.size)
+        assertEquals(active.id, result.activeId)
+        assertEquals(active.copy(profile = VehicleProfile(year = "2021", make = "Honda", model = "Civic",
+            mpg = 31.0, tireSetCost = 900.0, tireLifetimeMi = 40_000.0)), result.active)
+        assertEquals(other, result.vehicles.first { it.id == other.id })
+    }
+
+    @Test fun `seedFrom adds to an empty garage`() = runTest {
+        val repo = garage(backgroundScope)
+        val identity = VehicleProfile(year = "2021", make = "Honda", model = "Civic", mpg = 31.0)
+        assertEquals(SeedOutcome.ADDED, repo.seedFrom(identity, 123L))
+        val result = repo.garage.first()
+        assertEquals(1, result.vehicles.size)
+        assertEquals(result.vehicles.single(), result.active)
+        assertEquals(identity, result.active!!.profile)
+        assertEquals(123L, result.active!!.createdAt)
+        assertNull(result.active!!.name)
+    }
+
+    @Test fun `seedFrom leaves vehicles alone when none is active`() = runTest {
+        val repo = garage(backgroundScope)
+        val live = repo.addVehicle("Parked", 1L)
+        val retired = repo.addVehicle("Retired", 2L)
+        repo.retire(retired.id, 3L)
+        val before = repo.garage.first()
+        assertEquals(SeedOutcome.NO_ACTIVE_VEHICLE, repo.seedFrom(VehicleProfile(make = "Honda"), 4L))
+        assertEquals(before, repo.garage.first())
+        repo.retire(live.id, 5L)
+        val retiredOnly = repo.garage.first()
+        assertEquals(SeedOutcome.NO_ACTIVE_VEHICLE, repo.seedFrom(VehicleProfile(make = "Honda"), 6L))
+        assertEquals(retiredOnly, repo.garage.first())
+    }
+
     @Test fun `profile edits remain with each car across switching`() = runTest {
         val repo = garage(backgroundScope)
         val civic = repo.addVehicle("Civic", 100, VehicleProfile(vehicleClass = VehicleClass.COMPACT))
@@ -199,6 +284,8 @@ class GarageRepositoryTest {
                 assertTrue(runCatching { repo.selectVehicle("civic") }.exceptionOrNull() is VehiclesUnreadableException)
                 assertTrue(runCatching { repo.updateOrCreateActiveProfile(100) { it.copy(mpg = 20.0) } }
                     .exceptionOrNull() is VehiclesUnreadableException)
+                assertTrue(runCatching { repo.seedFrom(VehicleProfile(), 100) }
+                    .exceptionOrNull() is VehiclesUnreadableException)
                 assertEquals(index + 1, warnings.size)
             }
             assertEquals(listOf("IOException", "IOException"), warnings)
@@ -219,6 +306,7 @@ class GarageRepositoryTest {
         assertSame(cancelled, runCatching { repo.garage.first() }.exceptionOrNull())
         assertSame(cancelled, runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull())
         assertSame(cancelled, runCatching { repo.selectVehicle("civic") }.exceptionOrNull())
+        assertSame(cancelled, runCatching { repo.seedFrom(VehicleProfile(), 100) }.exceptionOrNull())
     }
 
     @Test fun `an unreadable garage refuses to add`() = runTest {

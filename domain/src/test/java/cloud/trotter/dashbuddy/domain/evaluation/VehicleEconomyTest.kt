@@ -22,4 +22,32 @@ class VehicleEconomyTest {
         assertEquals(120.0, truck.phonePlanTotal, 0.0)
         assertEquals(40.0, truck.phoneBusinessPercent, 0.0)
     }
+    @Test fun `draft overrides preserve untouched nulls and commit explicit cost groups`() {
+        val original = VehicleProfile(make = "Honda", mpg = 31.0, oilCost = 90.0)
+        val draft = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            includeDepreciation = false, purchasePrice = 25_000.0, totalLifetimeMi = 180_000.0,
+            insuranceDeltaPerMonth = 0.0,
+            userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PURCHASE_PRICE, EconomyField.INSURANCE_DELTA))
+        assertTrue(VehicleEconomy.hasCostOverrides(draft))
+        assertEquals(original.copy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            includeDepreciation = false, purchasePrice = 25_000.0, totalLifetimeMi = 180_000.0,
+            insuranceDeltaPerMonth = 0.0), VehicleEconomy.updateProfile(original, draft))
+        val sharedOnly = UserEconomy(userSetFields = setOf(EconomyField.PHONE_PLAN_TOTAL, EconomyField.AVG_MIN_PER_MILE))
+        assertFalse(VehicleEconomy.hasCostOverrides(sharedOnly))
+        assertEquals(original, VehicleEconomy.updateProfile(original, sharedOnly))
+    }
+    @Test fun `a complete economy draft includes every vehicle cost override`() {
+        val draft = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            oilCost = 85.0, oilIntervalMi = 7_500.0, brakesCost = 600.0, brakesIntervalMi = 50_000.0,
+            fluidsCost = 125.0, fluidsIntervalMi = 30_000.0, miscYearly = 800.0, miscYearlyMi = 12_000.0,
+            includeDepreciation = false, purchasePrice = 28_000.0, totalLifetimeMi = 180_000.0,
+            insuranceDeltaPerMonth = 75.0, registrationDeltaPerYear = 120.0, expectedAnnualMiles = 15_000.0,
+            userSetFields = EconomyField.entries.toSet())
+        assertEquals(VehicleProfile(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            oilCost = 85.0, oilIntervalMi = 7_500.0, brakesCost = 600.0, brakesIntervalMi = 50_000.0,
+            fluidsCost = 125.0, fluidsIntervalMi = 30_000.0, miscYearly = 800.0, miscYearlyMi = 12_000.0,
+            includeDepreciation = false, purchasePrice = 28_000.0, totalLifetimeMi = 180_000.0,
+            insuranceDeltaPerMonth = 75.0, registrationDeltaPerYear = 120.0, expectedAnnualMiles = 15_000.0),
+            VehicleEconomy.updateProfile(VehicleProfile(), draft))
+    }
 }

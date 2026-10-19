@@ -259,12 +259,16 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
     suspend fun updateFuelType(type: FuelType) {
         updateActiveProfile { it.copy(fuelType = type) }
-        dataSource.updateFuelType(type.name)
+        mirrorFuelType(type)
     }
     suspend fun updateVehicleClass(type: VehicleClass) {
         updateActiveProfile { it.copy(vehicleClass = type) }
-        dataSource.updateVehicleClass(type.name)
+        mirrorVehicleClass(type)
     }
+    // Deferred saves commit their captured garage profile once, then mirror legacy preferences.
+    suspend fun mirrorFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
+    suspend fun mirrorVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
+
     suspend fun updateEstimatedMpg(mpg: Float) {
         require(mpg.isFinite() && mpg > 0f)
         updateActiveProfile { it.copy(mpg = mpg.toDouble()) }
@@ -315,9 +319,14 @@ class AppPreferencesRepository @Inject constructor(
         updateActiveProfile {
             it.copy(year = year, make = make, model = model, mpg = mpg.toDouble())
         }
-        dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
+        mirrorEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
     }
 
+
+    suspend fun mirrorEconomySettings(
+        year: String, make: String, model: String, trim: String,
+        mpg: Float, isGasAuto: Boolean, price: Float,
+    ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
     // --- Personal Economy v2 writes (#145) ---
     suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
@@ -378,72 +387,69 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) =
         dataSource.updateTimeConstants(avgMinPerMile, basePickupMin)
 
-    /**
-     * Persist a [UserEconomy] snapshot through the user-set write path, for ONLY
-     * the fields the user explicitly set in [economy]'s [UserEconomy.userSetFields].
-     *
-     * This is the single owner of the `EconomyField → grouped write` mapping
-     * (#357 SSOT): a deferred-commit editor (the setup wizard) collects edits in
-     * memory, then hands its snapshot here so each user-set field routes through
-     * the exact same atomic write — and atomic user-set marker — the immediate
-     * Personal Economy settings screen uses. Callers no longer re-derive the
-     * mapping with a parallel `if (field in userSet)` chain. Fields the user did
-     * not touch are left untouched, so they keep tracking class defaults.
-     */
+    /** Commits explicit vehicle overrides together, then mirrors all explicit economy fields. */
     suspend fun persistUserSetEconomy(economy: UserEconomy) {
+        if (VehicleEconomy.hasCostOverrides(economy)) {
+            updateActiveProfile { VehicleEconomy.updateProfile(it, economy) }
+        }
+        mirrorUserSetEconomy(economy)
+    }
+
+    /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
+    suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
         val userSet = economy.userSetFields
         // Grouped writes mirror the data-source write methods, which each mark
         // their whole group user-set atomically — so any one member of a group
         // being user-set commits (and re-marks) the whole pair/triple.
         if (EconomyField.TIRE_COST in userSet || EconomyField.TIRE_LIFETIME in userSet) {
-            updateTireCost(economy.tireSetCost, economy.tireLifetimeMi)
+            dataSource.updateTireCost(economy.tireSetCost, economy.tireLifetimeMi)
         }
         if (EconomyField.OIL_COST in userSet || EconomyField.OIL_INTERVAL in userSet) {
-            updateOilCost(economy.oilCost, economy.oilIntervalMi)
+            dataSource.updateOilCost(economy.oilCost, economy.oilIntervalMi)
         }
         if (EconomyField.BRAKES_COST in userSet || EconomyField.BRAKES_INTERVAL in userSet) {
-            updateBrakesCost(economy.brakesCost, economy.brakesIntervalMi)
+            dataSource.updateBrakesCost(economy.brakesCost, economy.brakesIntervalMi)
         }
         if (EconomyField.FLUIDS_COST in userSet || EconomyField.FLUIDS_INTERVAL in userSet) {
-            updateFluidsCost(economy.fluidsCost, economy.fluidsIntervalMi)
+            dataSource.updateFluidsCost(economy.fluidsCost, economy.fluidsIntervalMi)
         }
         if (EconomyField.MISC_YEARLY in userSet || EconomyField.MISC_YEARLY_MI in userSet) {
-            updateMiscMaintenance(economy.miscYearly, economy.miscYearlyMi)
+            dataSource.updateMiscMaintenance(economy.miscYearly, economy.miscYearlyMi)
         }
         if (EconomyField.INCLUDE_DEPRECIATION in userSet ||
             EconomyField.PURCHASE_PRICE in userSet ||
             EconomyField.TOTAL_LIFETIME_MI in userSet
         ) {
-            updateDepreciation(
+            dataSource.updateDepreciation(
                 economy.includeDepreciation,
                 economy.purchasePrice,
                 economy.totalLifetimeMi,
             )
         }
         if (EconomyField.INSURANCE_DELTA in userSet) {
-            updateInsuranceDelta(economy.insuranceDeltaPerMonth)
+            dataSource.updateInsuranceDelta(economy.insuranceDeltaPerMonth)
         }
         if (EconomyField.REGISTRATION_DELTA in userSet) {
-            updateRegistrationDelta(economy.registrationDeltaPerYear)
+            dataSource.updateRegistrationDelta(economy.registrationDeltaPerYear)
         }
         if (EconomyField.EXPECTED_ANNUAL_MI in userSet) {
-            updateExpectedAnnualMi(economy.expectedAnnualMiles)
+            dataSource.updateExpectedAnnualMi(economy.expectedAnnualMiles)
         }
         if (EconomyField.PHONE_PLAN_TOTAL in userSet ||
             EconomyField.PHONE_PLAN_LINES in userSet ||
             EconomyField.PHONE_BUSINESS_PERCENT in userSet
         ) {
-            updatePhonePlan(
+            dataSource.updatePhonePlan(
                 economy.phonePlanTotal,
                 economy.phonePlanLines,
                 economy.phoneBusinessPercent,
             )
         }
         if (EconomyField.AVG_MIN_PER_MILE in userSet) {
-            setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, economy.avgMinutesPerMile)
+            dataSource.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, economy.avgMinutesPerMile)
         }
         if (EconomyField.BASE_PICKUP_MIN in userSet) {
-            setTimeConstantOverride(EconomyField.BASE_PICKUP_MIN, economy.basePickupMinutes)
+            dataSource.setTimeConstantOverride(EconomyField.BASE_PICKUP_MIN, economy.basePickupMinutes)
         }
     }
 

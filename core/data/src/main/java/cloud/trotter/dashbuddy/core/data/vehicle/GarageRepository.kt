@@ -21,6 +21,8 @@ data class Garage(val vehicles: List<Vehicle>, val activeId: String?, val readab
     val unretired: List<Vehicle> get() = vehicles.filter { it.retiredAt == null }
 }
 
+enum class SeedOutcome { ADDED, ATTACHED, NO_ACTIVE_VEHICLE }
+
 class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 
 @Singleton
@@ -42,6 +44,23 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         val list = vehiclesForWrite() + vehicle
         saveForWrite(list, vehicle.id)
         vehicle
+    }
+
+    /** The seed decision shares the write lock with HUD adds and selection changes. */
+    suspend fun seedFrom(identity: VehicleProfile, now: Long): SeedOutcome = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        if (list.isEmpty()) {
+            val vehicle = Vehicle(UUID.randomUUID().toString(), null, now, identity)
+            saveForWrite(listOf(vehicle), vehicle.id)
+            return@withLock SeedOutcome.ADDED
+        }
+        val index = list.indexOfFirst { it.id == saved.activeId && it.retiredAt == null }
+        if (index < 0) return@withLock SeedOutcome.NO_ACTIVE_VEHICLE
+        val updated = list.toMutableList()
+        updated[index] = updated[index].copy(profile = mergeSeed(updated[index].profile, identity))
+        saveForWrite(updated, saved.activeId)
+        SeedOutcome.ATTACHED
     }
 
     /** True when the active vehicle was written; false for an unknown id (a stale switcher row), which changes nothing. */
@@ -166,4 +185,30 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         }
     }
 
+    private fun mergeSeed(current: VehicleProfile, saved: VehicleProfile): VehicleProfile = current.copy(
+        year = current.year ?: saved.year,
+        make = current.make ?: saved.make,
+        model = current.model ?: saved.model,
+        mpg = current.mpg ?: saved.mpg,
+        vehicleClass = if (current.vehicleClass == cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass.SEDAN)
+            saved.vehicleClass else current.vehicleClass,
+        fuelType = if (current.fuelType == cloud.trotter.dashbuddy.domain.model.vehicle.FuelType.REGULAR)
+            saved.fuelType else current.fuelType,
+        tireSetCost = current.tireSetCost ?: saved.tireSetCost,
+        tireLifetimeMi = current.tireLifetimeMi ?: saved.tireLifetimeMi,
+        oilCost = current.oilCost ?: saved.oilCost,
+        oilIntervalMi = current.oilIntervalMi ?: saved.oilIntervalMi,
+        brakesCost = current.brakesCost ?: saved.brakesCost,
+        brakesIntervalMi = current.brakesIntervalMi ?: saved.brakesIntervalMi,
+        fluidsCost = current.fluidsCost ?: saved.fluidsCost,
+        fluidsIntervalMi = current.fluidsIntervalMi ?: saved.fluidsIntervalMi,
+        miscYearly = current.miscYearly ?: saved.miscYearly,
+        miscYearlyMi = current.miscYearlyMi ?: saved.miscYearlyMi,
+        includeDepreciation = current.includeDepreciation ?: saved.includeDepreciation,
+        purchasePrice = current.purchasePrice ?: saved.purchasePrice,
+        totalLifetimeMi = current.totalLifetimeMi ?: saved.totalLifetimeMi,
+        insuranceDeltaPerMonth = current.insuranceDeltaPerMonth ?: saved.insuranceDeltaPerMonth,
+        registrationDeltaPerYear = current.registrationDeltaPerYear ?: saved.registrationDeltaPerYear,
+        expectedAnnualMiles = current.expectedAnnualMiles ?: saved.expectedAnnualMiles,
+    )
 }

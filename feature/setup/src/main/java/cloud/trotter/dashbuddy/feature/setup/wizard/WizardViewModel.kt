@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
+import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
@@ -548,18 +549,28 @@ class WizardViewModel @Inject constructor(
                     garageRepository.addVehicle(null, System.currentTimeMillis())
                 } else null
 
-            appPreferencesRepository.updateFuelType(finalState.fuelType)
-            appPreferencesRepository.updateVehicleClass(finalState.vehicleClass)
+            val economy = finalState.toUserEconomy()
+            if (vehicle != null) {
+                val isBike = finalState.vehicleClass == VehicleClass.E_BIKE
+                val profile = VehicleEconomy.updateProfile(vehicle.profile, economy).copy(
+                    year = finalState.vehicleYear.takeUnless { isBike || it.isBlank() },
+                    make = finalState.vehicleMake.takeUnless { isBike || it.isBlank() },
+                    model = finalState.vehicleModel.takeUnless { isBike || it.isBlank() },
+                    vehicleClass = finalState.vehicleClass,
+                    mpg = if (isBike) 999.0 else if (EconomyField.VEHICLE_MPG in finalState.userSetEconomyFields) {
+                        finalState.estimatedMpg.toDouble()
+                    } else vehicle.profile.mpg,
+                    fuelType = finalState.fuelType,
+                )
+                garageRepository.updateProfile(vehicle.id, profile)
+            }
 
-            // Persist the economy fields the user explicitly set in the ECONOMY_COSTS step.
-            // The repository owns the EconomyField → grouped-write mapping (#357 SSOT): each
-            // user-set field routes through the same atomic write — and atomic user-set marker —
-            // the Personal Economy settings screen uses, instead of a parallel `if (field in
-            // userSet)` chain re-derived here.
-            appPreferencesRepository.persistUserSetEconomy(finalState.toUserEconomy())
+            appPreferencesRepository.mirrorFuelType(finalState.fuelType)
+            appPreferencesRepository.mirrorVehicleClass(finalState.vehicleClass)
+            appPreferencesRepository.mirrorUserSetEconomy(economy)
 
             if (finalState.vehicleClass == VehicleClass.E_BIKE) {
-                appPreferencesRepository.updateEconomySettings(
+                appPreferencesRepository.mirrorEconomySettings(
                     "E-Bike",
                     "E-Bike",
                     "E-Bike",
@@ -569,27 +580,11 @@ class WizardViewModel @Inject constructor(
                     0.0f
                 )
             } else {
-                appPreferencesRepository.updateEconomySettings(
+                appPreferencesRepository.mirrorEconomySettings(
                     finalState.vehicleYear, finalState.vehicleMake,
                     finalState.vehicleModel, finalState.vehicleTrim,
                     finalState.estimatedMpg, finalState.isGasPriceAuto, finalState.gasPrice
                 )
-            }
-
-            if (vehicle != null) {
-                val isBike = finalState.vehicleClass == VehicleClass.E_BIKE
-                check(garageRepository.updateActiveProfile(vehicle.id) { profile ->
-                    profile.copy(
-                        year = finalState.vehicleYear.takeUnless { isBike || it.isBlank() },
-                        make = finalState.vehicleMake.takeUnless { isBike || it.isBlank() },
-                        model = finalState.vehicleModel.takeUnless { isBike || it.isBlank() },
-                        vehicleClass = finalState.vehicleClass,
-                        mpg = if (isBike) 999.0 else if (EconomyField.VEHICLE_MPG in finalState.userSetEconomyFields) {
-                            finalState.estimatedMpg.toDouble()
-                        } else vehicle.profile.mpg,
-                        fuelType = finalState.fuelType,
-                    )
-                }) { "Active vehicle changed before wizard save" }
             }
 
             val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS

@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
 import kotlinx.coroutines.flow.first
@@ -66,5 +68,62 @@ class VehicleEconomyPreferenceTest {
         assertEquals(1100.0, active.profile.tireSetCost)
         assertEquals(18_000.0, active.profile.expectedAnnualMiles)
         assertEquals(1100.0, repo.userEconomy.first().tireSetCost, 0.0)
+    }
+    @Test fun `legacy mirrors do not write either garage profile after a switch`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("mirror-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("mirror-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        val first = garage.addVehicle("First", 1L, VehicleProfile(make = "Honda"))
+        val second = garage.addVehicle("Second", 2L, VehicleProfile(make = "Toyota"))
+        garage.selectVehicle(first.id)
+        garage.selectVehicle(second.id)
+        val before = garage.garage.first()
+        val economy = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            phonePlanTotal = 80.0, phonePlanLines = 2, phoneBusinessPercent = 50.0,
+            avgMinutesPerMile = 3.0,
+            userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PHONE_PLAN_TOTAL, EconomyField.AVG_MIN_PER_MILE))
+
+        repo.mirrorFuelType(FuelType.PREMIUM)
+        repo.mirrorVehicleClass(VehicleClass.SUV)
+        repo.mirrorUserSetEconomy(economy)
+        repo.mirrorEconomySettings("2021", "Honda", "Civic", "EX", 28f, false, 3.75f)
+
+        assertEquals(before, garage.garage.first())
+        assertEquals(FuelType.PREMIUM.name, source.fuelType.first())
+        assertEquals(VehicleClass.SUV.name, source.vehicleClass.first())
+        assertEquals("2021", source.vehicleYear.first())
+        assertEquals("Honda", source.vehicleMake.first())
+        assertEquals("Civic", source.vehicleModel.first())
+        assertEquals("EX", source.vehicleTrim.first())
+        assertEquals(28f, source.estimatedMpg.first())
+        assertEquals(false, source.isGasPriceAuto.first())
+        assertEquals(3.75f, source.gasPrice.first())
+        assertEquals(720.0, source.tireSetCost.first())
+        assertEquals(48_000.0, source.tireLifetimeMi.first())
+        assertEquals(80.0, source.phonePlanTotal.first())
+        assertEquals(2, source.phonePlanLines.first())
+        assertEquals(50.0, source.phoneBusinessPercent.first())
+        assertEquals(3.0, source.avgMinPerMile.first())
+        assertNull(source.oilCost.first())
+        assertNull(source.basePickupMin.first())
+        assertTrue(source.userSetEconomyFields.first().containsAll(setOf(
+            EconomyField.TIRE_COST.name, EconomyField.TIRE_LIFETIME.name,
+            EconomyField.PHONE_PLAN_TOTAL.name, EconomyField.PHONE_PLAN_LINES.name,
+            EconomyField.PHONE_BUSINESS_PERCENT.name, EconomyField.AVG_MIN_PER_MILE.name,
+        )))
+    }
+
+    @Test fun `shared economy drafts do not create a garage vehicle`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("shared-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("shared-garage.preferences_pb") })))
+        AppPreferencesRepository(source, garage).persistUserSetEconomy(UserEconomy(
+            avgMinutesPerMile = 3.0, userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE),
+        ))
+        assertTrue(garage.garage.first().vehicles.isEmpty())
+        assertEquals(3.0, source.avgMinPerMile.first())
     }
 }
