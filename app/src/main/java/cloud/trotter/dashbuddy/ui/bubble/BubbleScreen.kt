@@ -17,11 +17,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
-import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberDeadlinePassed
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.cashTipUndoWins
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
+
+private enum class EntrySheet { ODOMETER, CASH_TIP }
 
 @Composable
 fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
@@ -54,14 +56,23 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val openCashTip = remember(odometer, cashTip) { { odometer.dismiss(); cashTip.openSheet() } }
     val cashTipCue = cashTip.Cue()
     val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
-    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip) {
-        { if (cashTip.open) cashTip.Sheet() else odometer.Sheet() }
+    var lastSheet by remember { mutableStateOf(EntrySheet.ODOMETER) }
+    LaunchedEffect(cashTip.open) { if (cashTip.open) lastSheet = EntrySheet.CASH_TIP }
+    LaunchedEffect(odometer.open) { if (odometer.open) lastSheet = EntrySheet.ODOMETER }
+    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip, lastSheet) {
+        { when (lastSheet) {
+            EntrySheet.CASH_TIP -> cashTip.Sheet()
+            EntrySheet.ODOMETER -> odometer.Sheet()
+        } }
     }
     val entryUndo: @Composable () -> Unit = remember(odometer, cashTip, viewModel) {
         {
             val strip by viewModel.cashTipActions.undo.collectAsStateWithLifecycle()
             val notice by viewModel.odometerNotice.collectAsStateWithLifecycle()
-            val now = if (strip != null) { val tick by rememberNow(50); tick } else 0L
+            val now = strip?.strip?.let { model ->
+                val passed by rememberDeadlinePassed(model.deadline)
+                if (passed) model.deadline else model.deadline - 1
+            } ?: 0L
             if (cashTipUndoWins(strip?.strip, notice?.token, now)) cashTip.Undo()
             else odometer.Undo()
         }

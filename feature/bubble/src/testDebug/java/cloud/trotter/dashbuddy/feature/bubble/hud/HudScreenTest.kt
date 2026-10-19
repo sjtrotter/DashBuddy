@@ -302,7 +302,8 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.runOnIdle { resting = true }
         settle()
         compose.onNodeWithText("Cash tip $7.00, Panera Bread").assertIsDisplayed()
-        tick(10_000)
+        compose.runOnIdle { clock.millis += 10_000 }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(10_000)
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
     }
 

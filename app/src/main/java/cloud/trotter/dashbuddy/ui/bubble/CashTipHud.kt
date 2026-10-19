@@ -61,13 +61,13 @@ internal class CashTipHud(
     fun Sheet() {
         val actions = viewModel.cashTipActions
         val busy by actions.busy.collectAsStateWithLifecycle()
-        val failed by actions.failed.collectAsStateWithLifecycle()
+        val failure by actions.failed.collectAsStateWithLifecycle()
         val pending by actions.pending.collectAsStateWithLifecycle()
         // Use the last confirmed value during projection lag, including removal validation.
         val pendingCents = pending.values.associate { it.deliveryId to it.expectedCashTipCents }
         Column(Modifier.fillMaxSize()) {
             CashTipSheet(CashTipSheetModel(rows, entry.selectedDeliveryId, entry.totalCents, entry.sign,
-                entry.page, entry.otherAmount, busy, failed, pendingCents),
+                entry.page, entry.otherAmount, busy, failure, pendingCents),
                 onSelectDelivery = entry::select, onExpand = { entry.page = CashTipPage.EXPANDED },
                 onBack = ::back, onSign = { entry.sign = it }, onAmount = entry::add,
                 onOther = entry::other, onDigit = entry::digit, onPoint = entry::point,

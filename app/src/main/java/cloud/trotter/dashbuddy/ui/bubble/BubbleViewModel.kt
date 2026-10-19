@@ -87,12 +87,7 @@ class BubbleViewModel @Inject constructor(
 
     internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, analyticsRepository, clock)
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark
-    internal fun cashTipDeliveries(sessionId: String) = combine(
-        analyticsRepository.deliveriesForSession(sessionId), currentLocalDateFlow(now = clock::millis),
-    ) { deliveries, today ->
-        val zone = java.time.ZoneId.systemDefault()
-        deliveries.filter { java.time.Instant.ofEpochMilli(it.completedAt).atZone(zone).toLocalDate() == today }
-    }
+    internal fun cashTipDeliveries(sessionId: String) = analyticsRepository.deliveriesForSession(sessionId)
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
     val garage: StateFlow<Garage?> = garageRepository.garage

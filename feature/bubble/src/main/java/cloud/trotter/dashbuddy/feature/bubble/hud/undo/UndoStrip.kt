@@ -13,22 +13,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
-import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberDeadlinePassed
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
 fun undoStripVisible(model: UndoStripModel?): Boolean {
-    if (model == null || !model.visible(LocalNowProvider.current.millis())) return false
-    val now by rememberNow(50)
-    return model.visible(now)
+    if (model == null) return false
+    return model.busy || model.failed || !rememberDeadlinePassed(model.deadline).value
 }
 
 /** A deadline from the host, with a smooth drain driven only by Compose frames. */
 @Composable
 fun UndoStrip(model: UndoStripModel, onUndo: () -> Unit) {
     val clock = LocalNowProvider.current
-    val now by rememberNow(50)
     var remaining by remember(model) { mutableFloatStateOf(((model.deadline - clock.millis()).toFloat() / UndoStripModel.WINDOW_MS).coerceIn(0f, 1f)) }
     var tapped by remember(model) { mutableStateOf(false) }
     LaunchedEffect(model, clock) {
@@ -40,7 +38,7 @@ fun UndoStrip(model: UndoStripModel, onUndo: () -> Unit) {
             }
         }
     }
-    if (!model.visible(now)) return
+    if (!model.busy && !model.failed && rememberDeadlinePassed(model.deadline).value) return
     Box(Modifier.fillMaxWidth().height(48.dp).testTag("undo.strip")) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (model.failed) stringResource(R.string.hud_undo_failed) else

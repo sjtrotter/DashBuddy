@@ -214,6 +214,7 @@
     <string name="hud_cash_tip_remove">Remove %1$s cash tip</string>
     <string name="hud_cash_tip_empty">No completed deliveries in this dash</string>
     <string name="hud_cash_tip_delivery">Delivery</string>
+    <string name="hud_cash_tip_below_zero">Less cash than that is logged. Nothing changed.</string>
     <string name="hud_cash_tip_failed">Cash tip not saved. Try again.</string>
     <string name="hud_undo_line">%1$s %2$s, %3$s</string>
     <string name="hud_undo_action">Undo</string>

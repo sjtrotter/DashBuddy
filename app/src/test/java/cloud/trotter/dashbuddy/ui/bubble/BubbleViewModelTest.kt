@@ -936,7 +936,7 @@ class BubbleViewModelTest {
         assertEquals(pending, state.value.regions.platforms[platform]?.presentedOffer())
         collector.cancel()
     }
-    @Test fun `cash tip picker is scoped to the requested dash and current local day`() = runTest(dispatcher) {
+    @Test fun `cash tip picker lists every row of the requested dash across midnight`() = runTest(dispatcher) {
         stubNoDashes()
         val zone = java.time.ZoneId.systemDefault()
         val day = Instant.parse("2026-10-18T00:00:00Z").atZone(zone).toLocalDate()
@@ -944,14 +944,15 @@ class BubbleViewModelTest {
             id, "dash", Platform.DoorDash, "job$id", "task$id", "Store", date.atStartOfDay(zone).toInstant().toEpochMilli(),
             8.0, "OFFER_PAY", 6.0, null, null, null, null)
         val today = row(2, day)
-        whenever(analyticsRepository.deliveriesForSession("dash")).thenReturn(flowOf(listOf(row(1, day.minusDays(1)), today)))
+        val yesterday = row(1, day.minusDays(1))
+        whenever(analyticsRepository.deliveriesForSession("dash")).thenReturn(flowOf(listOf(yesterday, today)))
         val vm = viewModel()
         var seen: List<DeliveryRecord>? = null
         val reader = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.cashTipDeliveries("dash").collect { seen = it }
         }
         runCurrent()
-        assertEquals(listOf(today), seen)
+        assertEquals(listOf(yesterday, today), seen)
         verify(analyticsRepository).deliveriesForSession("dash")
         reader.cancel()
     }

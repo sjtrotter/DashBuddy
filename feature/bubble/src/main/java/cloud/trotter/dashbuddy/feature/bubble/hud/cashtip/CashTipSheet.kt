@@ -113,8 +113,13 @@ fun ColumnScope.CashTipSheet(
                 }
             }
         }
-        if (model.failed) Text(stringResource(R.string.hud_cash_tip_failed), color = AppTheme.colors.warn,
-            style = MaterialTheme.typography.labelSmall)
+        val failureMessage = when (model.failed) {
+            CashTipFailure.NONE -> null
+            CashTipFailure.WRITE -> R.string.hud_cash_tip_failed
+            CashTipFailure.BELOW_ZERO -> R.string.hud_cash_tip_below_zero
+        }
+        failureMessage?.let { Text(stringResource(it), color = AppTheme.colors.warn,
+            style = MaterialTheme.typography.labelSmall) }
     }
 }
 

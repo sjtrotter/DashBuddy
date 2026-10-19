@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipFailure
 import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipSheetModel
 import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.CashTipSign
 import kotlinx.coroutines.*
@@ -29,7 +30,7 @@ class CashTipActionsTest {
     private fun row(cash: Double? = null) = DeliveryRecord(9, "dash", Platform.DoorDash, "job", "task", "Panera Bread",
         50, 8.0, "OFFER_PAY", 6.0, null, null, null, null, cashTip = cash)
     private val projected = MutableStateFlow<DeliveryRecord?>(row())
-    private val analytics: AnalyticsRepository = mock { on { deliveryById(9) } doReturn projected }
+    private val analytics: AnalyticsRepository = mock { on { deliveryById(9) } doAnswer { projected.value } }
     private fun actions(scope: CoroutineScope) = CashTipActions(scope, CorrectionRepository(events), analytics, clock)
     private suspend fun adjustments(): List<DeliveryAdjustmentPayload> {
         val captor = argumentCaptor<AppEvent>()
@@ -51,7 +52,7 @@ class CashTipActionsTest {
         assertEquals(700L, model.strip.amountCents)
         assertEquals(900L, model.expectedCashTipCents)
         assertEquals(12L, model.entryId)
-        assertFalse(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
     }
     @Test fun `undo restores previous cash and suppresses double tap synchronously`() = runTest {
         val actions = actions(backgroundScope)
@@ -79,21 +80,38 @@ class CashTipActionsTest {
     }
     @Test fun `zero and a removal below zero append nothing`() = runTest {
         val actions = actions(backgroundScope)
-        actions.commit(9, "dash", "Panera Bread", 0); projected.value = row(1.0); actions.commit(9, "dash", "Panera Bread", -200); runCurrent()
+        actions.commit(9, "dash", "Panera Bread", 0)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
+        projected.value = row(1.0)
+        actions.commit(9, "dash", "Panera Bread", -200); runCurrent()
+        assertEquals(CashTipFailure.BELOW_ZERO, actions.failed.value)
+        assertFalse(actions.busy.value)
+        assertTrue(actions.committed.replayCache.isEmpty())
+        assertTrue(actions.pending.value.isEmpty())
+        assertNull(actions.undo.value)
         verifyNoInteractions(events)
+    }
+    @Test fun `a valid commit clears a refused removal`() = runTest {
+        val actions = actions(backgroundScope)
+        projected.value = row(1.0)
+        actions.commit(9, "dash", "Panera Bread", -200); runCurrent()
+        assertEquals(CashTipFailure.BELOW_ZERO, actions.failed.value)
+        actions.commit(9, "dash", "Panera Bread", -100); runCurrent()
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
+        assertEquals(0.0, adjustments().single().newCashTip!!, 0.0)
     }
     @Test fun `failed write marks failure emits nothing and retry succeeds`() = runTest {
         whenever(events.appendUserEvent(any(), anyOrNull())).thenThrow(IllegalStateException("private amount and store"))
             .thenReturn(71)
         val actions = actions(backgroundScope)
         actions.commit(9, "dash", "Panera Bread", 700); runCurrent()
-        assertTrue(actions.failed.value)
+        assertEquals(CashTipFailure.WRITE, actions.failed.value)
         assertFalse(actions.busy.value)
         assertTrue(actions.committed.replayCache.isEmpty())
         assertTrue(actions.pending.value.isEmpty())
         assertNull(actions.undo.value)
         actions.commit(9, "dash", "Panera Bread", 700); runCurrent()
-        assertFalse(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
         assertEquals(71L, actions.committed.replayCache.single().strip.committedSequenceId)
     }
     @Test fun `late collector receives one pending commit until consumed`() = runTest {
@@ -125,10 +143,7 @@ class CashTipActionsTest {
         assertNotNull(actions.undo.value)
     }
     @Test fun `busy suppresses a repeated commit and cancellation still lands the append`() = runTest {
-        whenever(analytics.deliveryById(9)).thenReturn(kotlinx.coroutines.flow.flow {
-            delay(500)
-            emit(row())
-        })
+        doSuspendableAnswer { delay(500); row() }.whenever(analytics).deliveryById(9)
         doSuspendableAnswer { delay(1_000); 71L }.whenever(events).appendUserEvent(any(), anyOrNull())
         val scope = CoroutineScope(coroutineContext + Job())
         val actions = actions(scope)
@@ -151,17 +166,17 @@ class CashTipActionsTest {
         val failedUndo = actions.undo.value!!
         assertTrue(failedUndo.strip.failed)
         assertFalse(failedUndo.strip.busy)
-        assertTrue(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
         assertTrue(actions.committed.replayCache.isEmpty())
         assertEquals(700L, actions.pending.value.values.single().expectedCashTipCents)
         actions.reopen()
-        assertTrue(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
         assertSame(failedUndo, actions.undo.value)
         actions.undoExpired(failedUndo)
         assertSame(failedUndo, actions.undo.value)
         actions.undo(failedUndo); actions.undo(failedUndo); runCurrent()
         assertNull(actions.undo.value)
-        assertFalse(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
         assertEquals(listOf(7.0, 0.0, 0.0), adjustments().map { it.newCashTip })
         assertEquals(setOf(72L), actions.pending.value.keys)
         assertEquals(0L, actions.pending.value.values.single().expectedCashTipCents)
@@ -172,6 +187,17 @@ class CashTipActionsTest {
         assertEquals(9.35, adjustments().single().newCashTip!!, 0.0)
         actions.undo(actions.undo.value!!); runCurrent()
         assertEquals(2.35, adjustments().last().newCashTip!!, 0.0)
+    }
+    @Test fun `half cent cash uses the displayed cents for commit undo and removal`() = runTest {
+        val actions = actions(backgroundScope)
+        projected.value = row(1.005)
+        val sheet = CashTipSheetModel(listOf(row(1.005)), 9L, totalCents = 101, sign = CashTipSign.MINUS)
+        assertTrue(sheet.canCommit)
+        assertFalse(sheet.copy(totalCents = 102).canCommit)
+        actions.commit(9, "dash", "Panera Bread", 200); runCurrent()
+        assertEquals(3.01, adjustments().single().newCashTip!!, 0.0)
+        actions.undo(actions.undo.value!!); runCurrent()
+        assertEquals(1.01, adjustments().last().newCashTip!!, 0.0)
     }
     @Test fun `another undo failure re-arms retry even after the original deadline`() = runTest {
         var now = 100L
@@ -193,7 +219,7 @@ class CashTipActionsTest {
         assertNotEquals(firstFailure.strip, secondFailure.strip)
         actions.undo(secondFailure); runCurrent()
         assertNull(actions.undo.value)
-        assertFalse(actions.failed.value)
+        assertEquals(CashTipFailure.NONE, actions.failed.value)
         assertEquals(0.0, adjustments().last().newCashTip!!, 0.0)
     }
     @Test fun `add undo add writes two dollars`() = runTest {

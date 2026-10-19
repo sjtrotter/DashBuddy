@@ -116,6 +116,18 @@ class CashTipSheetTest {
         compose.onNodeWithText("No completed deliveries in this dash").assertIsDisplayed()
         compose.onNodeWithTag("cashTip.commit").assertIsNotEnabled()
     }
+    @Test fun `sheet errors distinguish refused removal from failed save and clear at none`() {
+        model = model.copy(failed = CashTipFailure.BELOW_ZERO)
+        show()
+        compose.onNodeWithText("Less cash than that is logged. Nothing changed.").assertIsDisplayed()
+        compose.onNodeWithText("Cash tip not saved. Try again.").assertDoesNotExist()
+        compose.runOnIdle { model = model.copy(failed = CashTipFailure.WRITE) }
+        compose.onNodeWithText("Cash tip not saved. Try again.").assertIsDisplayed()
+        compose.onNodeWithText("Less cash than that is logged. Nothing changed.").assertDoesNotExist()
+        compose.runOnIdle { model = model.copy(failed = CashTipFailure.NONE) }
+        compose.onNodeWithText("Cash tip not saved. Try again.").assertDoesNotExist()
+        compose.onNodeWithText("Less cash than that is logged. Nothing changed.").assertDoesNotExist()
+    }
     @Test fun `removing more than the selected delivery cash is disabled`() {
         model = model.copy(totalCents = 1100, sign = CashTipSign.MINUS)
         show()

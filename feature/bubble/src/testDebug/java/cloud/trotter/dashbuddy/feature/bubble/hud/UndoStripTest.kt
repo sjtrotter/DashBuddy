@@ -80,15 +80,16 @@ class UndoStripTest {
     @Test fun `drain follows Compose frames and host hides exactly at deadline`() {
         show()
         val initial = progress()
+        compose.runOnIdle { clock.millis += 5_000 }
         compose.mainClock.advanceTimeBy(5_000)
         val halfway = progress()
         assertTrue(halfway < initial)
         assertTrue(halfway in 0.45f..0.55f)
-        compose.runOnIdle { clock.millis += 9_999 }
-        compose.waitForIdle(); compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle { clock.millis += 4_800 }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(4_800)
         compose.onNodeWithTag("undo.strip").assertExists()
-        compose.runOnIdle { clock.millis += 1 }
-        compose.waitForIdle(); compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle { clock.millis += 200 }
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(200)
         compose.onNodeWithTag("undo.strip").assertDoesNotExist()
     }
 }

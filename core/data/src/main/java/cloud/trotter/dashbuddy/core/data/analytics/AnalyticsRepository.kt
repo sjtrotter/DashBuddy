@@ -54,7 +54,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -686,10 +685,9 @@ class AnalyticsRepository @Inject constructor(
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecord>> =
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
 
-    /** A fresh, single-row read on each collection, independent of any UI's collected snapshot. */
-    fun deliveryById(eventSequenceId: Long): Flow<DeliveryRecord?> = flow {
-        emit(analyticsDao.deliveryRecord(eventSequenceId)?.toDomain())
-    }
+    /** A fresh, single-row read on each call, independent of any UI's collected snapshot. */
+    suspend fun deliveryById(eventSequenceId: Long): DeliveryRecord? =
+        analyticsDao.deliveryRecord(eventSequenceId)?.toDomain()
 
     /**
      * The orphan "(No session)" deliveries for [period], newest first (#660 piece 2) — the categorize
