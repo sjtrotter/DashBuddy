@@ -52,7 +52,7 @@ internal class CashTipEntryState(
     fun backspace() { otherAmount = MoneyEntry(otherAmount).backspace().digits }
     fun doneOther() {
         val cents = MoneyEntry(otherAmount).cents
-        add(cents)
+        totalCents = cents.coerceIn(0, MAX_CENTS)
         page = CashTipPage.COMPACT
     }
     fun back() {

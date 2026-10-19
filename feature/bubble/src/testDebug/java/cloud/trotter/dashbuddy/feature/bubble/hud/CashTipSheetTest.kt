@@ -7,7 +7,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.ViewGroup
+import androidx.compose.ui.graphics.Color
+import kotlin.math.roundToInt
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
+import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
+import cloud.trotter.dashbuddy.core.designsystem.theme.HankenGrotesk
+import cloud.trotter.dashbuddy.core.designsystem.theme.SpaceGrotesk
 import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.feature.bubble.hud.cashtip.*
@@ -16,6 +29,7 @@ import org.junit.Assert.*
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
@@ -32,7 +46,7 @@ class CashTipSheetTest {
     private val amounts = mutableListOf<Long>()
     private fun show() {
         compose.setContent {
-            DashBuddyTheme {
+            DashBuddyTheme(darkTheme = true) {
                 Column(Modifier.width(352.dp).height(390.dp)) {
                     CashTipSheet(model, onSelectDelivery = { model = model.copy(selectedDeliveryId = it, page = CashTipPage.COMPACT) },
                         onExpand = { model = model.copy(page = CashTipPage.EXPANDED) },
@@ -41,15 +55,29 @@ class CashTipSheetTest {
                         onAmount = { amount ->
                             amounts += amount
                             model = model.copy(totalCents = (model.totalCents + if (model.sign == CashTipSign.PLUS) amount else -amount).coerceAtLeast(0))
-                        }, onOther = { model = model.copy(page = CashTipPage.OTHER_AMOUNT) },
+                        }, onOther = { model = model.copy(page = CashTipPage.OTHER_AMOUNT, otherAmount = "") },
                         onDigit = { model = model.copy(otherAmount = model.otherAmount + it) },
                         onPoint = { model = model.copy(otherAmount = model.otherAmount + ".") },
                         onBackspace = { model = model.copy(otherAmount = model.otherAmount.dropLast(1)) },
                         onDoneOther = { model = model.copy(page = CashTipPage.COMPACT,
-                            totalCents = model.totalCents + model.otherAmount.toBigDecimal().movePointRight(2).toLong()) },
+                            totalCents = model.otherAmount.toBigDecimalOrNull()?.movePointRight(2)?.toLong() ?: 0L) },
                         onCommit = { commits++ })
                 }
             }
+        }
+    }
+    // Draw the actual Compose view: PixelCopy-based captureToImage waits for a window
+    // redraw that Robolectric does not deliver, even with native graphics enabled.
+    private fun pixel(node: SemanticsNodeInteraction, x: Float, y: Float): Color {
+        val bounds = node.fetchSemanticsNode().boundsInRoot
+        return compose.runOnIdle {
+            val view = compose.activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            val color = Color(bitmap.getPixel((bounds.left + bounds.width * x).roundToInt(),
+                (bounds.top + bounds.height * y).roundToInt()))
+            bitmap.recycle()
+            color
         }
     }
     @Test fun `compact offers two rows and latest is preselected`() {
@@ -68,7 +96,7 @@ class CashTipSheetTest {
         compose.onNodeWithText("$1").performClick()
         compose.onNodeWithText("Add $7.00 cash tip").assertIsDisplayed().performClick()
         assertEquals(1, commits)
-        compose.onNodeWithTag("cashTip.sign.MINUS").performClick()
+        compose.onNodeWithTag("cashTip.sign").performClick()
         compose.onNodeWithText("$5").performClick()
         compose.onNodeWithText("Remove $2.00 cash tip").assertIsDisplayed()
         compose.onNodeWithText("$20").performClick()
@@ -76,7 +104,67 @@ class CashTipSheetTest {
         assertEquals(0L, model.totalCents)
         assertEquals(listOf(500L, 100L, 100L, 500L, 2000L), amounts)
     }
-    @Test fun `Other opens point enabled keypad and Done adds fractional amount`() {
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `one sign button toggles both ways and highlights only its active glyph`() {
+        show()
+        val colors = darkAppColors()
+        val button = compose.onNodeWithTag("cashTip.sign")
+        button.assertHasClickAction()
+        for ((index, active) in listOf(CashTipSign.PLUS, CashTipSign.MINUS, CashTipSign.PLUS).withIndex()) {
+            for (sign in CashTipSign.entries) {
+                val glyph = compose.onNodeWithTag("cashTip.sign.$sign", useUnmergedTree = true)
+                glyph.assertHasNoClickAction().assertWidthIsEqualTo(34.dp).assertHeightIsEqualTo(22.dp)
+                if (sign == active) glyph.assertIsSelected() else glyph.assertIsNotSelected()
+                assertEquals(if (sign == active) colors.accent else colors.surface3, pixel(glyph, 0.1f, 0.5f))
+                val text = compose.onNode(hasText(if (sign == CashTipSign.PLUS) "+" else "−") and
+                    hasAnyAncestor(hasTestTag("cashTip.sign.$sign")), useUnmergedTree = true)
+                val layouts = mutableListOf<TextLayoutResult>()
+                text.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertEquals(if (sign == active) colors.accentText else colors.neutral,
+                    layouts.single().layoutInput.style.color)
+            }
+            if (index < 2) button.performClick()
+        }
+        compose.runOnIdle { model = model.copy(busy = true) }
+        button.assertIsNotEnabled()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `filled pad is a single 56 dp row below deliveries touching commit`() {
+        show()
+        val tags = listOf("cashTip.sign", "cashTip.amount.1", "cashTip.amount.5", "cashTip.amount.10",
+            "cashTip.amount.20", "cashTip.other")
+        val bounds = tags.map { tag ->
+            val button = compose.onNodeWithTag(tag).assertHasClickAction().assertHeightIsEqualTo(56.dp)
+            assertEquals(darkAppColors().surface3, pixel(button, 0.5f, 0.05f))
+            button.getBoundsInRoot()
+        }
+        bounds.zipWithNext().forEach { (left, right) ->
+            assertEquals(left.top, right.top)
+            assertEquals(left.bottom, right.bottom)
+            assertEquals(left.right + 4.dp, right.left)
+        }
+        for ((text, size) in listOf("$1" to 18.sp, "$5" to 18.sp, "$10" to 18.sp, "$20" to 18.sp, "Other" to 14.sp)) {
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(text, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val style = layouts.single().layoutInput.style
+            assertEquals(size, style.fontSize)
+            assertEquals(FontWeight.SemiBold, style.fontWeight)
+            assertEquals(if (text == "Other") HankenGrotesk else SpaceGrotesk, style.fontFamily)
+            if (text != "Other") assertEquals("tnum", style.fontFeatureSettings)
+        }
+        val pad = compose.onNodeWithTag("cashTip.pad").getBoundsInRoot()
+        val delivery = compose.onNodeWithTag("cashTip.deliveryRow.4").getBoundsInRoot()
+        val another = compose.onNodeWithText("Another delivery").getBoundsInRoot()
+        assertTrue(pad.top >= delivery.bottom + 10.dp)
+        assertTrue(pad.top >= another.bottom + 10.dp)
+        assertEquals(pad.bottom, compose.onNodeWithTag("cashTip.commit").getBoundsInRoot().top)
+    }
+
+    @Test fun `Other opens point enabled keypad and Done replaces fractional amount`() {
         model = model.copy(totalCents = 100)
         show()
         compose.onNodeWithText("Other").performClick()
@@ -86,8 +174,14 @@ class CashTipSheetTest {
         compose.onNodeWithTag("keypad.3").performClick()
         compose.onNodeWithTag("keypad.5").performClick()
         compose.onNodeWithText("Done").performClick()
-        compose.onNodeWithText("Add $3.35 cash tip").assertIsDisplayed()
+        compose.onNodeWithText("Add $2.35 cash tip").assertIsDisplayed()
+        compose.onNodeWithTag("cashTip.total").assertTextEquals("$2.35")
         compose.onNodeWithTag("keypad.point").assertDoesNotExist()
+        compose.onNodeWithText("Other").performClick()
+        assertEquals("", model.otherAmount)
+        compose.onNodeWithTag("keypad.7").performClick()
+        compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithTag("cashTip.total").assertTextEquals("$7.00")
     }
     @Test fun `expanded picker lists every delivery hides pad and selecting returns compact`() {
         show()

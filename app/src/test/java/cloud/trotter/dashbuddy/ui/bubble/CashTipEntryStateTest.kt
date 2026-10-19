@@ -43,21 +43,39 @@ class CashTipEntryStateTest {
         entry.add(100)
         assertEquals(100L, entry.totalCents)
     }
-    @Test fun `Other adds fractional dollars exactly and limits cents to two digits`() {
+    @Test fun `Other replaces fractional dollars exactly and limits cents to two digits`() {
         val entry = entry()
         entry.show(9); entry.add(100)
         entry.other(); entry.digit(2); entry.point(); entry.digit(3); entry.digit(5); entry.digit(9)
         assertEquals("2.35", entry.otherAmount)
         entry.doneOther()
-        assertEquals(335L, entry.totalCents)
+        assertEquals(235L, entry.totalCents)
         assertEquals(CashTipPage.COMPACT, entry.page)
     }
-    @Test fun `ten and seventy cents accumulate as eighty cents`() {
+    @Test fun `Other reopens empty and seventy cents replaces ten cents`() {
         val entry = entry()
         entry.show(9)
         entry.other(); entry.point(); entry.digit(1); entry.digit(0); entry.doneOther()
-        entry.other(); entry.point(); entry.digit(7); entry.digit(0); entry.doneOther()
-        assertEquals(80L, entry.totalCents)
+        entry.other()
+        assertEquals("", entry.otherAmount)
+        entry.point(); entry.digit(7); entry.digit(0); entry.doneOther()
+        assertEquals(70L, entry.totalCents)
+    }
+    @Test fun `Other replaces in minus mode and empty Done clears the amount`() {
+        val entry = entry()
+        entry.show(9); entry.add(500); entry.sign = CashTipSign.MINUS
+        entry.other(); entry.digit(2); entry.doneOther()
+        assertEquals(200L, entry.totalCents)
+        assertEquals(CashTipSign.MINUS, entry.sign)
+        entry.other(); entry.doneOther()
+        assertEquals(0L, entry.totalCents)
+    }
+    @Test fun `Other replacement remains bounded at the money entry limit`() {
+        val entry = entry()
+        entry.show(9); entry.add(100)
+        entry.other(); repeat(7) { entry.digit(9) }; entry.point(); repeat(3) { entry.digit(9) }
+        entry.doneOther()
+        assertEquals(CashTipEntryState.MAX_CENTS, entry.totalCents)
     }
     @Test fun `point first and backspace work without a system keyboard`() {
         val entry = entry()

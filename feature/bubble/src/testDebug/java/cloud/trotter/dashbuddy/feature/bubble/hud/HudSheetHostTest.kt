@@ -63,7 +63,7 @@ class HudSheetHostTest {
         compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
         assertFalse(composed)
     }
-    @Test fun sheetOpen_spansFromHeroBottomToDockTop() {
+    @Test fun sheetOpen_spansBodyToTheDock() {
         open = true; show()
         val sheet = compose.onNodeWithTag("hud.sheet").getBoundsInRoot()
         val body = compose.onNodeWithTag("hud.body").getBoundsInRoot()
