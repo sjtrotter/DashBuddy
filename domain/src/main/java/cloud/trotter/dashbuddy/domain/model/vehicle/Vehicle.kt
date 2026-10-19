@@ -29,5 +29,8 @@ data class VehicleOdometerReading(
 
         fun latestFor(readings: List<VehicleOdometerReading>, vehicleId: String): LastOdometerReading? =
             readings.filter { it.vehicleId == vehicleId }.minWithOrNull(NEWEST_FIRST)?.reading
+
+        fun singleVehicleSpan(readings: List<VehicleOdometerReading>, vehicleId: String, from: Long, to: Long): Boolean =
+            readings.none { it.vehicleId != vehicleId && it.reading.occurredAt > from && it.reading.occurredAt <= to }
     }
 }

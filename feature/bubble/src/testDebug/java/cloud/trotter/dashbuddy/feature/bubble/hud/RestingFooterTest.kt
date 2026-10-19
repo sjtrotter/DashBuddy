@@ -67,13 +67,13 @@ class RestingFooterTest {
         reconciliation = ReconciledMileage(59, 79.0, reading.occurredAt - 86_400_000)
         show()
         compose.onNodeWithText("car 59 mi, tracked 79.0 mi since ${formatShortDate(reconciliation.since)}").assertIsDisplayed()
-        compose.onNodeWithText("car short of tracked by 20.0 mi").assertIsDisplayed()
+        compose.onNodeWithText("short of tracked by 20.0 mi").assertIsDisplayed()
         compose.onNodeWithText("other -20.0 mi").assertDoesNotExist()
     }
 
     @Test fun `a positive other figure stays a figure`() {
         show()
         compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
-        compose.onNodeWithText("car short of tracked by", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("short of tracked by", substring = true).assertDoesNotExist()
     }
 }

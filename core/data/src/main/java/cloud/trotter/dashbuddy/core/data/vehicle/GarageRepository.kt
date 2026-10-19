@@ -22,6 +22,7 @@ class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 @Singleton
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
+    private val warnedUnreadable = AtomicBoolean(false)
     val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
 
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
@@ -35,7 +36,10 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     suspend fun selectVehicle(id: String) = mutex.withLock {
         val list = VehicleStorage.decode(dataSource.stored.first().json)
             ?: throw VehiclesUnreadableException()
-        require(list.any { it.id == id })
+        if (list.none { it.id == id }) {
+            Timber.tag("Garage").w("Ignored a select for an unknown vehicle id")
+            return@withLock
+        }
         dataSource.save(VehicleStorage.encode(list), id)
     }
 
@@ -45,7 +49,4 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         }
     }.orEmpty()
 
-    private companion object {
-        val warnedUnreadable = AtomicBoolean(false)
-    }
 }

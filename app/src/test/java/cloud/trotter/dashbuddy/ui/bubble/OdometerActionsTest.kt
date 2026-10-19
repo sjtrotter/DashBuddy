@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.VehicleChange
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
@@ -59,7 +60,7 @@ class OdometerActionsTest {
     @Test fun `a completed save emits once`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings, clock)
         val completions = mutableListOf<Unit>()
-        backgroundScope.launch { actions.saveCompleted.collect { completions += it } }
+        backgroundScope.launch { actions.saveCompleted.collect { completions += it; actions.saveHandled() } }
         runCurrent()
         repeat(2) { index ->
             actions.save("civic", 52_388)
@@ -76,6 +77,109 @@ class OdometerActionsTest {
         backgroundScope.launch { actions.saveCompleted.collect { lateCompletions += it } }
         runCurrent()
         assertTrue(lateCompletions.isEmpty())
+    }
+
+    @Test fun `a late collector sees one pending completion`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        val completions = mutableListOf<Unit>()
+        backgroundScope.launch { actions.saveCompleted.collect { completions += it } }
+        runCurrent()
+        assertEquals(listOf(Unit), completions)
+    }
+
+    @Test fun `a handled completion is not replayed`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        val completions = mutableListOf<Unit>()
+        val collector = backgroundScope.launch {
+            actions.saveCompleted.collect { completions += it; actions.saveHandled() }
+        }
+        runCurrent()
+        assertEquals(listOf(Unit), completions)
+        collector.cancel()
+        val lateCompletions = mutableListOf<Unit>()
+        backgroundScope.launch { actions.saveCompleted.collect { lateCompletions += it } }
+        runCurrent()
+        assertTrue(lateCompletions.isEmpty())
+    }
+
+    @Test fun `an added vehicle emits ADDED once`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val changes = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
+        runCurrent()
+        actions.add("Civic")
+        runCurrent()
+        verify(garage).addVehicle("Civic", 100)
+        assertEquals(listOf(VehicleChange.ADDED), changes)
+    }
+
+    @Test fun `a selected vehicle emits SWITCHED once`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val changes = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
+        runCurrent()
+        actions.select("civic")
+        runCurrent()
+        verify(garage).selectVehicle("civic")
+        assertEquals(listOf(VehicleChange.SWITCHED), changes)
+    }
+
+    @Test fun `a failed add emits nothing`() = runTest {
+        whenever(garage.addVehicle(any(), any())).thenThrow(VehiclesUnreadableException())
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val changes = mutableListOf<VehicleChange>()
+        backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
+        runCurrent()
+        actions.add("Civic")
+        runCurrent()
+        assertTrue(changes.isEmpty())
+        assertTrue(actions.vehicleChanged.replayCache.isEmpty())
+        assertEquals(OdometerWriteFailure.UNREADABLE, actions.failed.value)
+    }
+
+    @Test fun `a late collector sees a vehicle change until handled`() = runTest {
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        for (change in VehicleChange.entries) {
+            when (change) {
+                VehicleChange.ADDED -> actions.add("Civic")
+                VehicleChange.SWITCHED -> actions.select("civic")
+            }
+            runCurrent()
+            val changes = mutableListOf<VehicleChange>()
+            val collector = backgroundScope.launch {
+                actions.vehicleChanged.collect { changes += it; actions.vehicleChangeHandled() }
+            }
+            runCurrent()
+            assertEquals(listOf(change), changes)
+            collector.cancel()
+            val lateChanges = mutableListOf<VehicleChange>()
+            val lateCollector = backgroundScope.launch { actions.vehicleChanged.collect { lateChanges += it } }
+            runCurrent()
+            assertTrue(lateChanges.isEmpty())
+            lateCollector.cancel()
+        }
+    }
+
+    @Test fun `a vehicle select keeps a save failure visible`() = runTest {
+        whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
+        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        actions.save("civic", 52_388)
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.select("civic")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        actions.add("Truck")
+        runCurrent()
+        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
+        doSuspendableAnswer { 1L }.whenever(readings).record(any(), any())
+        actions.save("civic", 52_388)
+        runCurrent()
+        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
     }
 
     @Test fun `double tap appends only once`() = runTest {

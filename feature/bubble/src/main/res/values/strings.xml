@@ -191,7 +191,7 @@
     <string name="hud_odometer_last">Last %1$s mi, %2$s</string>
     <string name="hud_odometer_first">First reading for %1$s</string>
     <string name="hud_odometer_lower">Below the last reading, %1$s mi</string>
-    <string name="hud_odometer_fewer">%1$s mi tracked since %2$s, %3$s on this car</string>
+    <string name="hud_odometer_fewer">%3$s mi on this car, %1$s mi tracked since %2$s</string>
     <string name="hud_odometer_delta">+%1$s mi since %2$s</string>
     <string name="hud_odometer_large_jump">+%1$s mi since %2$s, more than expected</string>
     <string name="hud_odometer_save_empty">Save reading</string>
@@ -202,6 +202,6 @@
     <string name="hud_odometer_footer">%1$s %2$s mi, %3$s</string>
     <string name="hud_odometer_comparison">car %1$s mi, tracked %2$s mi since %3$s</string>
     <string name="hud_odometer_other">other %1$s mi</string>
-    <string name="hud_odometer_short">car short of tracked by %1$s mi</string>
+    <string name="hud_odometer_short">short of tracked by %1$s mi</string>
     <string name="hud_odometer_prompt">Log odometer</string>
 </resources>

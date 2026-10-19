@@ -49,19 +49,17 @@ class OdometerEntryStateTest {
         }
     }
     @Test fun `an added vehicle keeps the digits`() {
-        val state = entry()
-        state.show(hasVehicle = true)
-        state.digit(5)
-        state.digit(2)
-        state.showAddVehicle()
-        state.vehicleChanged()
-        assertTrue(state.open)
-        assertEquals(OdometerPage.READING, state.page)
-        assertEquals(52, state.reading)
-        state.page = OdometerPage.VEHICLES
-        state.vehicleChanged()
-        assertEquals(OdometerPage.READING, state.page)
-        assertNull(state.reading)
+        for (hasVehicle in listOf(false, true)) {
+            val state = entry()
+            state.show(hasVehicle = hasVehicle)
+            state.digit(5)
+            state.digit(2)
+            state.showAddVehicle()
+            state.vehicleAdded()
+            assertTrue(state.open)
+            assertEquals(OdometerPage.READING, state.page)
+            assertEquals(52, state.reading)
+        }
     }
 
     @Test fun `a switched vehicle clears the digits`() {
@@ -70,21 +68,10 @@ class OdometerEntryStateTest {
         state.digit(5)
         state.digit(2)
         state.page = OdometerPage.VEHICLES
-        state.vehicleChanged()
+        state.vehicleSwitched()
         assertTrue(state.open)
         assertEquals(OdometerPage.READING, state.page)
         assertNull(state.reading)
     }
 
-    @Test fun `a switch after cancelling an add clears the digits`() {
-        val state = entry()
-        state.show(hasVehicle = true)
-        state.digit(5)
-        state.page = OdometerPage.VEHICLES
-        state.showAddVehicle()
-        state.back(hasVehicle = true)
-        state.vehicleChanged()
-        assertEquals(OdometerPage.READING, state.page)
-        assertNull(state.reading)
-    }
 }

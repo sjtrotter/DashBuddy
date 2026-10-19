@@ -7,8 +7,8 @@ class OdometerReadingCheckTest {
     private val vehicle = Vehicle("civic", "Civic", 0)
     private val last = LastOdometerReading(52_140, 100.0, 0)
     private fun check(miles: Int? = 52_388, car: Vehicle? = vehicle, previous: LastOdometerReading? = last,
-        gps: Double? = 184.0, now: Long = 86_400_000) =
-        OdometerReadingCheck.check(OdometerCheckInput(miles, car, previous, gps, now))
+        gps: Double? = 184.0, now: Long = 86_400_000, otherVehicleReadSince: Boolean = false) =
+        OdometerReadingCheck.check(OdometerCheckInput(miles, car, previous, gps, now, otherVehicleReadSince))
 
     @Test fun `no vehicle returns NoVehicle`() { assertEquals(OdometerCheck.NoVehicle, check(car = null)) }
     @Test fun `empty or zero reading returns Empty`() {
@@ -26,6 +26,11 @@ class OdometerReadingCheckTest {
     }
     @Test fun `delta under tracked minus slack returns FewerThanTracked`() {
         assertEquals(OdometerCheck.FewerThanTracked(12, 84.0, 0), check(52_152))
+    }
+    @Test fun `another vehicle read since the last reading disables the tracked check`() {
+        assertEquals(OdometerCheck.Ok(12, 0), check(52_152, otherVehicleReadSince = true))
+        assertEquals(OdometerCheck.Ok(1_050, 0), check(53_190))
+        assertEquals(OdometerCheck.LargeJump(1_050, 0), check(53_190, otherVehicleReadSince = true))
     }
     @Test fun `delta inside tracked slack is Ok`() { assertEquals(OdometerCheck.Ok(76, 0), check(52_216)) }
     @Test fun `slack uses the larger of five miles and ten percent`() {

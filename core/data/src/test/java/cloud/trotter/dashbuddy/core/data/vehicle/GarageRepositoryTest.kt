@@ -10,6 +10,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import timber.log.Timber
 
 class GarageRepositoryTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -34,6 +35,37 @@ class GarageRepositoryTest {
             assertThrows(IllegalArgumentException::class.java) { runBlocking { repo.addVehicle(name, 100) } }
         }
         assertEquals(2, repo.garage.first().vehicles.size)
+    }
+    @Test fun `an unknown id is ignored`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unknown.preferences_pb") }))
+        val repo = GarageRepository(source)
+        repo.addVehicle("Civic", 100)
+        val before = source.stored.first()
+        repo.selectVehicle("missing")
+        assertEquals(before, source.stored.first())
+    }
+
+    @Test fun `each repository warns once for an unreadable garage`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("warnings.preferences_pb") }))
+        source.save("invalid json", null)
+        val warnings = mutableListOf<Pair<String?, String>>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority == 5 && tag == "Garage") warnings += tag to message
+            }
+        }
+        Timber.plant(tree)
+        try {
+            repeat(2) { index ->
+                val repo = GarageRepository(source)
+                repeat(2) { repo.garage.first() }
+                assertEquals(index + 1, warnings.size)
+            }
+        } finally {
+            Timber.uproot(tree)
+        }
     }
     @Test fun `an unreadable garage refuses to add`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,

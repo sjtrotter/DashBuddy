@@ -9,6 +9,7 @@ data class OdometerCheckInput(
     val last: LastOdometerReading?,
     val gpsTotalNow: Double?,
     val now: Long,
+    val otherVehicleReadSince: Boolean,
 )
 
 sealed interface OdometerCheck {
@@ -33,7 +34,7 @@ object OdometerReadingCheck {
         val delta = miles - last.readingMiles
         if (delta < 0) return OdometerCheck.Lower(last.readingMiles)
         val tracked = input.gpsTotalNow?.let { now -> last.gpsTotalMiles?.let { now - it } }
-            ?.takeIf { it.isFinite() && it >= 0 }
+            ?.takeIf { !input.otherVehicleReadSince && it.isFinite() && it >= 0 }
         if (tracked != null && delta < tracked - max(TRACKED_SLACK_MILES, TRACKED_SLACK_FRACTION * tracked)) {
             return OdometerCheck.FewerThanTracked(delta, tracked, last.occurredAt)
         }

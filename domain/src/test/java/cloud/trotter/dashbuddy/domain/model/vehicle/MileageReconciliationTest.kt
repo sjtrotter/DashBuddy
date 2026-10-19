@@ -49,6 +49,16 @@ class MileageReconciliationTest {
         assertNull(compare(listOf(pair[0], reading(220, 52_388, 157.3, "other"))))
         assertEquals(compare(), compare(pair + reading(220, 1, 0.0, "other")))
     }
+    @Test fun `another vehicle read inside the span withholds the comparison`() {
+        for (at in listOf(91L, 150L, 210L)) {
+            assertNull(compare(pair + reading(at, 1_000, 130.0, "other")))
+        }
+    }
+    @Test fun `another vehicle read outside the span does not`() {
+        for (at in listOf(89L, 90L, 211L)) {
+            assertEquals(compare(), compare(pair + reading(at, 1_000, 130.0, "other")))
+        }
+    }
     @Test fun `tracked uses the gps stamps not the typed miles`() {
         val result = compare(listOf(reading(90, 1, 100.0), reading(210, 1_000, 157.3)))!!
         assertEquals(999, result.carMiles)

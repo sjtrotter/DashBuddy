@@ -63,6 +63,12 @@ class OdometerSheetTest {
         show()
         compose.onNodeWithTag("odometer.save").assertIsNotEnabled()
     }
+    @Test fun `save is disabled without a vehicle`() {
+        model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle)
+        show()
+        compose.onNodeWithTag("odometer.save").assertIsNotEnabled()
+        assertEquals(0, saved)
+    }
     @Test fun `point key disabled`() {
         show()
         compose.onNodeWithTag("keypad.point").assertIsNotEnabled()
@@ -84,7 +90,7 @@ class OdometerSheetTest {
     @Test fun `fewer than tracked shows add vehicle link`() {
         model = model.copy(check = OdometerCheck.FewerThanTracked(12, 57.0, clock.millis))
         show()
-        compose.onNodeWithText("57.0 mi tracked since ${formatShortDate(clock.millis)}, 12 on this car").assertIsDisplayed()
+        compose.onNodeWithText("12 mi on this car, 57.0 mi tracked since ${formatShortDate(clock.millis)}").assertIsDisplayed()
         compose.onNodeWithText("Add vehicle").assertIsDisplayed().performClick()
         assertTrue(addOpened)
     }

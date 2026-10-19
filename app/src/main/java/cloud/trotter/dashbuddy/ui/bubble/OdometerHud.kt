@@ -3,13 +3,13 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
 
@@ -39,17 +39,19 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
     val savedNotice by viewModel.odometerNotice.collectAsStateWithLifecycle()
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
     val entry = rememberOdometerEntryState()
-    var seenVehicleId by rememberSaveable { mutableStateOf(vehicle?.id) }
     LaunchedEffect(viewModel) {
         viewModel.odometerSaveCompleted.collect {
             if (entry.page == OdometerPage.READING) entry.open = false
+            viewModel.odometerSaveHandled()
         }
     }
-    LaunchedEffect(vehicle?.id) {
-        val id = vehicle?.id
-        if (id != null && id != seenVehicleId) {
-            if (seenVehicleId != null) entry.vehicleChanged()
-            seenVehicleId = id
+    LaunchedEffect(viewModel) {
+        viewModel.odometerVehicleChanged.collect { change ->
+            when (change) {
+                VehicleChange.ADDED -> entry.vehicleAdded()
+                VehicleChange.SWITCHED -> entry.vehicleSwitched()
+            }
+            viewModel.odometerVehicleChangeHandled()
         }
     }
     val reconciliation = remember(readings, vehicle) {
@@ -69,7 +71,11 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
         openSheet = openOdometer,
         sheet = {
             val now by rememberNow()
-            val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, lastReading, gpsTotal, now))
+            val last = lastReading
+            val currentVehicle = vehicle
+            val otherVehicleReadSince = last != null && currentVehicle != null &&
+                !VehicleOdometerReading.singleVehicleSpan(readings, currentVehicle.id, last.occurredAt, now)
+            val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, currentVehicle, last, gpsTotal, now, otherVehicleReadSince))
             Column(Modifier.fillMaxSize()) {
                 OdometerSheet(OdometerSheetModel(vehicle, vehicles, entry.reading, lastReading, check, entry.page, saving, writeFailed),
                     onDigit = entry::digit, onBackspace = entry::backspace,
