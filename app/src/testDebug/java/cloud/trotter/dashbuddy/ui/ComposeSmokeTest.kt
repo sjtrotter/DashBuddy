@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui
 
+import cloud.trotter.dashbuddy.feature.bubble.hud.DispatcherRow
+import cloud.trotter.dashbuddy.feature.bubble.hud.LogView
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -61,6 +63,22 @@ class ComposeSmokeTest {
 
         compose.onNodeWithText("1m 5s").assertExists()
         compose.onNodeWithText("5s").assertDoesNotExist()
+    }
+
+    @Test
+    fun `log renders under the app resources`() {
+        val clock = MutableClock(T0)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    LogView(listOf(DispatcherRow("chat:start", T0, "Started dashing")), {}, {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithText("Started dashing").assertIsDisplayed()
     }
 
     private class MutableClock(var millis: Long) : Clock() {

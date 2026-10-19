@@ -4,6 +4,14 @@ import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
+import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
+import cloud.trotter.dashbuddy.domain.analytics.SessionDetail
+import cloud.trotter.dashbuddy.domain.model.event.AppEvent
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.feature.bubble.hud.LogData
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
@@ -138,6 +146,56 @@ class BubbleViewModelTest {
         ledgerRepository = ledgerRepository,
         devSettingsRepository = devSettingsRepository,
     )
+
+    @Test
+    fun `logData merges events deliveries and ledger rows for the displayed dash`() = runTest {
+        stubNoDashes()
+        val dash = session("session-dd", 10.0, 1)
+        val delivery = DeliveryRecord(10, "session-dd", Platform.DoorDash, "job", "drop", "Panera Bread", 9_000,
+            realizedPay = 10.0, payBasis = "DROP_SHARE", netProfit = 8.0, realizedMiles = 4.0,
+            realizedMinutes = 20.0, tip = 5.0, basePay = 5.0, cashTip = 3.0)
+        val event = AppEvent(AppEventType.DASH_PAUSED, 5_000, "session-dd")
+        val expense = ExpenseRecord(20, "session-dd", 6_000, ExpenseCategory.FOOD, 11.4, null, null)
+        val fuel = FuelRecord(30, "session-dd", 7_000, 31.9, 10.0, null, null)
+        val expenses = MutableStateFlow(listOf(expense))
+        val events = MutableStateFlow(listOf(event))
+        whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf("session-dd"))
+        whenever(appEventRepo.getEventsForSession("session-dd")).thenReturn(events)
+        whenever(analyticsRepository.sessionDetail("session-dd")).thenReturn(flowOf(SessionDetail(dash, listOf(delivery))))
+        whenever(ledgerRepository.expensesForSession("session-dd")).thenReturn(expenses)
+        whenever(ledgerRepository.fuelForSession("session-dd")).thenReturn(flowOf(listOf(fuel)))
+        whenever(analyticsRepository.sessionDetail("session-uber")).thenReturn(flowOf(null))
+        whenever(ledgerRepository.expensesForSession("session-uber")).thenReturn(flowOf(emptyList()))
+        val otherFuel = fuel.copy(eventSequenceId = 31, sessionId = "session-uber")
+        whenever(ledgerRepository.fuelForSession("session-uber")).thenReturn(flowOf(listOf(otherFuel)))
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val vm = viewModel()
+        runCurrent()
+        // Building the ViewModel alone does not start the log's projection reads.
+        verify(analyticsRepository, never()).sessionDetail(any())
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
+        runCurrent()
+        assertEquals(LogData(listOf(event), listOf(delivery), listOf(expense), listOf(fuel)), vm.logData.value)
+        expenses.value = listOf(expense.copy(voidedAt = 8_000))
+        events.value = listOf(event, event.copy(occurredAt = 8_000))
+        runCurrent()
+        assertEquals(8_000L, vm.logData.value.expenses.single().voidedAt)
+        assertEquals(2, vm.logData.value.events.size)
+        vm.selectPlatform(Platform.Uber)
+        runCurrent()
+        assertEquals(LogData(fuel = listOf(otherFuel)), vm.logData.value)
+        modeFlow.value = BubbleSessionMode.MERGED
+        runCurrent()
+        assertEquals(listOf(delivery), vm.logData.value.deliveries)
+        assertEquals(listOf(fuel, otherFuel), vm.logData.value.fuel)
+        assertEquals(2, vm.logData.value.events.size)
+        modeFlow.value = BubbleSessionMode.FOLLOW_ACTIVE
+        state.value = AppState() // At rest the durable most-recent dash remains displayed.
+        runCurrent()
+        assertEquals(listOf(fuel), vm.logData.value.fuel)
+        assertEquals(listOf(delivery), vm.logData.value.deliveries)
+        collector.cancel()
+    }
 
     @Test
     fun `sessionNet follows the displayed session`() = runTest {

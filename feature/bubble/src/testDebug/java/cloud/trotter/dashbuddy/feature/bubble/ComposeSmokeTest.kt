@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.feature.bubble
 
+import androidx.compose.runtime.CompositionLocalProvider
+import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
+import cloud.trotter.dashbuddy.feature.bubble.hud.DispatcherRow
+import cloud.trotter.dashbuddy.feature.bubble.hud.LogView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -42,4 +46,20 @@ class ComposeSmokeTest {
         compose.onNodeWithText("Delivery total").assertIsDisplayed()
         compose.onNodeWithText("$11.75").assertIsDisplayed()
     }
+    @Test
+    fun `log renders with the feature resources`() {
+        compose.mainClock.autoAdvance = false
+        val clock = MutableClock(1_700_000_000_000L)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    LogView(listOf(DispatcherRow("chat:start", clock.millis, "Started dashing")), {}, {})
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithText("Started dashing").assertIsDisplayed()
+    }
+
 }

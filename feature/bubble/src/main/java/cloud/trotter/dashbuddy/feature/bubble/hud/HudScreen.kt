@@ -35,7 +35,8 @@ fun HudScreen(
                 Box(Modifier.fillMaxWidth().weight(1f).testTag("hud.slot.offer")) { offer() }
             } else {
                 TopRow(state.top)
-                HeroRow(state.hero)
+                val showingLog = state.logOpen || state.mode == HudMode.LOG
+                if (showingLog) CompactHeroRow(state.hero) else HeroRow(state.hero)
                 when {
                     state.logOpen || state.mode == HudMode.LOG ->
                         Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.slot.log")) { log() }
@@ -50,7 +51,7 @@ fun HudScreen(
                         }
                     }
                 }
-                if (state.mode != HudMode.RESTING && ribbon != null) DashRibbon(ribbon)
+                if (!showingLog && state.mode != HudMode.RESTING && ribbon != null) DashRibbon(ribbon)
                 Spacer(Modifier.height(8.dp))
                 Dock(state.dock, onDockClick)
             }

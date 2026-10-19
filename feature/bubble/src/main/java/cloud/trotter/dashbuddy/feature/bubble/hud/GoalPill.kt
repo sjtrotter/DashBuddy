@@ -26,7 +26,7 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 
 /** Static B2 states. The goal sheet and one-time met sequence belong to S3 and S2e. */
 @Composable
-fun GoalPill(state: GoalPillState) {
+fun GoalPill(state: GoalPillState, compact: Boolean = false) {
     val c = AppTheme.colors
     val met = state == GoalPillState.Met
     val description = when (state) {
@@ -35,29 +35,30 @@ fun GoalPill(state: GoalPillState) {
         is GoalPillState.InProgress -> stringResource(R.string.hud_goal_cd_progress, state.remaining)
     }
     Row(Modifier.testTag("hud.goal").semantics { contentDescription = description }
-        .height(56.dp).background(c.surface2, RoundedCornerShape(28.dp))
+        .height(if (compact) 44.dp else 56.dp).background(c.surface2, RoundedCornerShape(28.dp))
         .padding(start = if (met) 6.dp else 14.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (met) 0.dp else 10.dp)) {
         when (state) {
             GoalPillState.NoGoal -> Text(stringResource(R.string.hud_goal_set), style = MaterialTheme.typography.labelMedium, color = c.text2)
             is GoalPillState.InProgress -> Column {
-                Text(state.remaining, style = AppTheme.num.lgNum, color = c.text)
+                Text(state.remaining, style = if (compact) AppTheme.num.mdNum else AppTheme.num.lgNum, color = c.text)
                 Text(stringResource(R.string.hud_goal_to_go), style = MaterialTheme.typography.labelSmall, color = c.text2)
             }
             GoalPillState.Met -> Unit
         }
-        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(if (compact) 36.dp else 44.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val stroke = 4.dp.toPx()
-                val inset = (size.width - 38.dp.toPx()) / 2
-                val arcSize = Size(38.dp.toPx(), 38.dp.toPx())
-                drawCircle(c.surface3, radius = 19.dp.toPx(), style = Stroke(stroke))
+                val diameter = (if (compact) 30.dp else 38.dp).toPx()
+                val inset = (size.width - diameter) / 2
+                val arcSize = Size(diameter, diameter)
+                drawCircle(c.surface3, radius = diameter / 2, style = Stroke(stroke))
                 val progress = if (met) 1f else (state as? GoalPillState.InProgress)?.progress ?: 0f
                 drawArc(if (met) c.accent else c.good, -90f, 360f * progress, false,
                     topLeft = Offset(inset, inset), size = arcSize, style = Stroke(stroke))
             }
             Icon(if (met) Icons.Filled.Flag else Icons.Outlined.Flag, null,
-                tint = if (met) c.accent else c.text2, modifier = Modifier.size(22.dp))
+                tint = if (met) c.accent else c.text2, modifier = Modifier.size(if (compact) 18.dp else 22.dp))
         }
     }
 }

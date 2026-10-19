@@ -28,6 +28,7 @@ import cloud.trotter.dashbuddy.feature.bubble.cards.BubbleCards
 import cloud.trotter.dashbuddy.feature.bubble.cards.CardStackAssembler
 import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardMapper
 import cloud.trotter.dashbuddy.feature.bubble.cards.LiveCardBuilder
+import cloud.trotter.dashbuddy.feature.bubble.hud.LogData
 import cloud.trotter.dashbuddy.feature.bubble.session.BubbleSessionPresentation
 import cloud.trotter.dashbuddy.feature.bubble.session.BubbleSessionResolver
 import cloud.trotter.dashbuddy.feature.bubble.session.LiveSession
@@ -239,6 +240,25 @@ class BubbleViewModel @Inject constructor(
                 flowOf(emptyList())
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Only the log slot subscribes. Follow exactly the sessions folded into the card stack. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val logData: StateFlow<LogData> = presentation
+        .map { it.cardSources }
+        .distinctUntilChanged()
+        .flatMapLatest { sources ->
+            if (sources.isEmpty()) flowOf(LogData.Empty)
+            else combine(sources.map { source ->
+                combine(
+                    appEventRepo.getEventsForSession(source.sessionId),
+                    analyticsRepository.sessionDetail(source.sessionId),
+                    ledgerRepository.expensesForSession(source.sessionId),
+                    ledgerRepository.fuelForSession(source.sessionId),
+                ) { events, detail, expenses, fuel ->
+                    LogData(events, detail?.deliveries.orEmpty(), expenses, fuel)
+                }
+            }) { sessions -> sessions.fold(LogData.Empty) { all, session -> all + session } }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
 
     /**
      * The folded completed cards for every displayed session — one list in the normal modes, N in

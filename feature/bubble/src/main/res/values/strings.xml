@@ -128,4 +128,52 @@
         <item quantity="one">%1$d more stop</item>
         <item quantity="other">%1$d more stops</item>
     </plurals>
+
+    <!-- S2d: job log -->
+    <string name="hud_dock_now">Now</string>
+    <string name="hud_log_now">Now</string>
+    <string name="hud_log_declined">Declined %1$s</string>
+    <string name="hud_log_timed_out">Timed out %1$s</string>
+    <string name="hud_log_accepted_row">Accepted %1$s</string>
+    <string name="hud_log_offer_unknown_store">Offer</string>
+    <string name="hud_log_expense">Expense %1$s</string>
+    <string name="hud_log_cat_food">Food</string>
+    <string name="hud_log_cat_parking">Parking</string>
+    <string name="hud_log_cat_supplies">Supplies</string>
+    <string name="hud_log_cat_other">Other</string>
+    <string name="hud_log_gas_price">Gas price %1$s/gal</string>
+    <string name="hud_log_gas_total">Gas %1$s</string>
+    <string name="hud_log_accepted">accepted</string>
+    <string name="hud_log_addon">add-on accepted</string>
+    <string name="hud_log_accepted_rates">%1$s, %2$s</string>
+    <string name="hud_log_per_hr">%1$s/hr</string>
+    <string name="hud_log_per_mi">%1$s/mi</string>
+    <string name="hud_log_picked_up_arrived">arrived, picked up %1$s</string>
+    <string name="hud_log_picked_up">picked up %1$s</string>
+    <string name="hud_log_at_store">%1$s at store</string>
+    <string name="hud_log_delivered">delivered</string>
+    <string name="hud_log_paid">paid %1$s</string>
+    <string name="hud_log_unassigned">unassigned</string>
+    <string name="hud_log_cash_tip">cash tip %1$s</string>
+    <string name="hud_log_pending">pending</string>
+    <string name="hud_log_undo">Undo</string>
+    <string name="hud_log_cd_undo">Undo cash tip %1$s</string>
+    <string name="hud_log_now_to_store">to the store, due %1$s</string>
+    <string name="hud_log_now_at_store">%1$s at the store, due %2$s</string>
+    <string name="hud_log_now_shopping">shopping, %1$d of %2$d</string>
+    <string name="hud_log_now_to_door">to the customer, due %1$s</string>
+    <string name="hud_log_now_at_door">%1$s at the door, due %2$s</string>
+    <string name="hud_log_now_receipt">on the receipt</string>
+    <string name="hud_log_now_nodue_to_store">%1$s to the store</string>
+    <string name="hud_log_now_nodue_to_door">%1$s to the customer</string>
+    <string name="hud_log_now_nodue_at_store">%1$s at the store</string>
+    <string name="hud_log_now_nodue_at_door">%1$s at the door</string>
+    <string name="hud_log_net">net %1$s</string>
+    <string name="hud_log_score_cd">Score %1$d</string>
+    <string name="hud_log_empty">Nothing logged yet this dash.</string>
+    <string name="hud_hero_compact_cd">Profit %1$s</string>
+    <string name="hud_log_minutes">%1$d min</string>
+    <string name="hud_log_miles">%1$s mi</string>
+    <string name="hud_log_en_route">%1$s en route</string>
+    <string name="hud_log_left">%1$s left</string>
 </resources>
