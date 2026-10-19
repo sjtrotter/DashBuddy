@@ -41,12 +41,14 @@ class OdometerSheetTest {
     private var saved = 0
     private var added: String? = null
     private var addOpened = false
+    private var visible by mutableStateOf(true)
     private fun show() {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Column(Modifier.width(352.dp).height(350.dp)) {
-                        OdometerSheet(model, {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {})
+                        if (visible) OdometerSheet(model, { model = model.copy(vehicleName = it) },
+                            {}, {}, { saved++ }, { added = it }, {}, {}, { addOpened = true }, {})
                     }
                 }
             }
@@ -122,6 +124,19 @@ class OdometerSheetTest {
         show()
         compose.onNodeWithTag("vehicle.name").performTextInput("  Civic  "); settle()
         compose.onNodeWithText("Add Civic").assertExists()
+        compose.onNodeWithTag("vehicle.save").performClick()
+        assertEquals("Civic", added)
+    }
+
+    @Test fun `the vehicle name draft survives the sheet leaving composition`() {
+        model = model.copy(page = OdometerPage.ADD_VEHICLE)
+        show()
+        compose.onNodeWithTag("vehicle.name").performTextInput("Civic"); settle()
+        assertEquals("Civic", model.vehicleName)
+        compose.runOnIdle { visible = false }; settle()
+        compose.onNodeWithTag("vehicle.name").assertDoesNotExist()
+        compose.runOnIdle { visible = true }; settle()
+        compose.onNodeWithTag("vehicle.name").assertTextContains("Civic")
         compose.onNodeWithTag("vehicle.save").performClick()
         assertEquals("Civic", added)
     }

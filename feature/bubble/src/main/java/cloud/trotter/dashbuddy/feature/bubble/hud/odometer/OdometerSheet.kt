@@ -31,6 +31,7 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.Keypad
 @Composable
 fun ColumnScope.OdometerSheet(
     model: OdometerSheetModel,
+    onVehicleNameChange: (String) -> Unit,
     onDigit: (Int) -> Unit,
     onBackspace: () -> Unit,
     onSave: () -> Unit,
@@ -43,7 +44,7 @@ fun ColumnScope.OdometerSheet(
     val page = model.page
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
-            OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.saving, onBack, onAddVehicle)
+            OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange, model.saving, onBack, onAddVehicle)
             OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack)
             OdometerPage.READING -> {
                 Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

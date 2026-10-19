@@ -72,7 +72,7 @@ class BubbleGoalMarkTest {
     @After fun cleanup() { Dispatchers.resetMain() }
     private fun garage(): cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository {
         val repo: cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository = mock()
-        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null)))
+        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null, readable = true)))
         return repo
     }
     private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {

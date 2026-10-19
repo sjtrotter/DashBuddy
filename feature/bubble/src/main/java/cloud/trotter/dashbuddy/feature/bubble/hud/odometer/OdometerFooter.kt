@@ -46,10 +46,12 @@ sealed interface PromptAnchor {
 
 @Composable
 fun OdometerPrompt(enabled: Boolean, anchor: PromptAnchor?, last: LastOdometerReading?, onOpen: () -> Unit) {
-    val now by rememberNow()
     val show = enabled && when (anchor) {
-        is PromptAnchor.DashStart -> now >= anchor.startedAt && now - anchor.startedAt < PROMPT_WINDOW_MS &&
-            (last == null || last.occurredAt < anchor.startedAt - PROMPT_WINDOW_MS)
+        is PromptAnchor.DashStart -> {
+            val now by rememberNow()
+            now >= anchor.startedAt && now - anchor.startedAt < PROMPT_WINDOW_MS &&
+                (last == null || last.occurredAt < anchor.startedAt - PROMPT_WINDOW_MS)
+        }
         is PromptAnchor.DashEnd -> last == null || last.occurredAt < anchor.endedAt - PROMPT_WINDOW_MS
         null -> false
     }

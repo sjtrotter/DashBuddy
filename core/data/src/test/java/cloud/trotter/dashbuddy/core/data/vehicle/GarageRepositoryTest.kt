@@ -22,6 +22,7 @@ class GarageRepositoryTest {
         val truck = repo.addVehicle("Truck", 200)
         assertEquals(listOf(civic, truck), repo.garage.first().vehicles)
         assertEquals(truck, repo.garage.first().active)
+        assertTrue(repo.garage.first().readable)
         assertEquals(200L, truck.createdAt)
         assertNotEquals(civic.id, truck.id)
         repo.selectVehicle(civic.id)
@@ -44,6 +45,23 @@ class GarageRepositoryTest {
         val before = source.stored.first()
         repo.selectVehicle("missing")
         assertEquals(before, source.stored.first())
+    }
+
+    @Test fun `an unreadable garage says so on read`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unreadable.preferences_pb") }))
+        val repo = GarageRepository(source)
+        assertTrue(repo.garage.first().readable)
+        source.save("invalid json", "stale")
+        val before = source.stored.first()
+        val garage = repo.garage.first()
+        assertFalse(garage.readable)
+        assertTrue(garage.vehicles.isEmpty())
+        assertNull(garage.activeId)
+        assertNull(garage.active)
+        assertEquals(before, source.stored.first())
+        source.save("[]", null)
+        assertTrue(repo.garage.first().readable)
     }
 
     @Test fun `each repository warns once for an unreadable garage`() = runTest {

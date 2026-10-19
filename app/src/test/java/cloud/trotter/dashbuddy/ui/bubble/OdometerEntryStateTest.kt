@@ -29,10 +29,22 @@ class OdometerEntryStateTest {
         state.digit(5)
         state.digit(2)
         state.page = OdometerPage.VEHICLES
+        state.vehicleName = "Civic"
         state.show(hasVehicle = true)
         assertTrue(state.open)
         assertEquals(OdometerPage.VEHICLES, state.page)
         assertEquals(52, state.reading)
+        assertEquals("Civic", state.vehicleName)
+    }
+
+    @Test fun `show reports whether it opened`() {
+        for (hasVehicle in listOf(false, true)) {
+            val state = entry()
+            assertTrue(state.show(hasVehicle))
+            assertFalse(state.show(hasVehicle))
+            state.open = false
+            assertTrue(state.show(hasVehicle))
+        }
     }
 
     @Test fun `a repeated add vehicle keeps the first origin`() {
@@ -48,18 +60,50 @@ class OdometerEntryStateTest {
             assertEquals(origin, state.page)
         }
     }
-    @Test fun `an added vehicle keeps the digits`() {
-        for (hasVehicle in listOf(false, true)) {
+    @Test fun `a vehicle added from the reading page keeps the digits`() {
+        val state = entry()
+        state.show(hasVehicle = true)
+        state.digit(5)
+        state.digit(2)
+        state.showAddVehicle()
+        state.vehicleAdded()
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+        assertEquals(52, state.reading)
+    }
+
+    @Test fun `a vehicle added from the switcher clears the digits`() {
+        val state = entry()
+        state.show(hasVehicle = true)
+        state.digit(5)
+        state.digit(2)
+        state.page = OdometerPage.VEHICLES
+        state.showAddVehicle()
+        state.vehicleAdded()
+        assertTrue(state.open)
+        assertEquals(OdometerPage.READING, state.page)
+        assertNull(state.reading)
+    }
+
+    @Test fun `the name draft clears after an add`() {
+        for (origin in listOf(OdometerPage.READING, OdometerPage.VEHICLES)) {
             val state = entry()
-            state.show(hasVehicle = hasVehicle)
-            state.digit(5)
-            state.digit(2)
+            state.show(hasVehicle = true)
+            state.page = origin
             state.showAddVehicle()
+            state.vehicleName = "Civic"
             state.vehicleAdded()
-            assertTrue(state.open)
-            assertEquals(OdometerPage.READING, state.page)
-            assertEquals(52, state.reading)
+            assertEquals("", state.vehicleName)
         }
+    }
+
+    @Test fun `a fresh show clears the name draft`() {
+        val state = entry()
+        state.show(hasVehicle = false)
+        state.vehicleName = "Civic"
+        state.open = false
+        state.show(hasVehicle = false)
+        assertEquals("", state.vehicleName)
     }
 
     @Test fun `a switched vehicle clears the digits`() {

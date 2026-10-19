@@ -6,7 +6,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -36,11 +35,10 @@ fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean,
 }
 
 @Composable
-internal fun AddVehicleForm(saving: Boolean, onBack: () -> Unit, onAdd: (String) -> Unit) {
-    var name by rememberSaveable { mutableStateOf("") }
+internal fun AddVehicleForm(name: String, onNameChange: (String) -> Unit, saving: Boolean, onBack: () -> Unit, onAdd: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()) {
         OdometerTitle(stringResource(R.string.hud_odometer_add_vehicle), onBack)
-        OutlinedTextField(name, { name = it.take(30) }, singleLine = true, enabled = !saving,
+        OutlinedTextField(name, { if (it.codePointCount(0, it.length) <= Vehicle.MAX_NAME_CODE_POINTS) onNameChange(it) }, singleLine = true, enabled = !saving,
             label = { Text(stringResource(R.string.hud_odometer_vehicle_name)) },
             modifier = Modifier.fillMaxWidth().testTag("vehicle.name"))
         Button(onClick = { onAdd(name.trim()) }, enabled = name.trim().isNotEmpty() && !saving,

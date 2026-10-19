@@ -84,10 +84,12 @@ class BubbleViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
-    private val garage = garageRepository.garage
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Garage(emptyList(), null))
-    val vehicles = garage.map { it.vehicles }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val activeVehicle = garage.map { it.active }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val garage: StateFlow<Garage?> = garageRepository.garage
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val vehicles = garage.map { it?.vehicles.orEmpty() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val activeVehicle = garage.map { it?.active }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val garageLoaded: StateFlow<Boolean> = garage.map { it != null }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val garageUnreadable: StateFlow<Boolean> = garage.map { it?.readable == false }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val lastReading = combine(odometerReadings, activeVehicle) { list, vehicle ->
         vehicle?.let { VehicleOdometerReading.latestFor(list, it.id) }

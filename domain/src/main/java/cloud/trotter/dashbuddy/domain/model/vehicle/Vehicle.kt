@@ -6,7 +6,11 @@ import kotlinx.serialization.Serializable
 data class Vehicle(val id: String, val name: String, val createdAt: Long) {
     init {
         require(id.isNotBlank())
-        require(name == name.trim() && name.length in 1..30)
+        require(name == name.trim() && name.codePointCount(0, name.length) in 1..MAX_NAME_CODE_POINTS)
+    }
+
+    companion object {
+        const val MAX_NAME_CODE_POINTS = 30
     }
 }
 

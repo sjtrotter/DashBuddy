@@ -13,7 +13,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class Garage(val vehicles: List<Vehicle>, val activeId: String?) {
+data class Garage(val vehicles: List<Vehicle>, val activeId: String?, val readable: Boolean) {
     val active: Vehicle? get() = vehicles.firstOrNull { it.id == activeId }
 }
 
@@ -23,7 +23,11 @@ class VehiclesUnreadableException : IllegalStateException("vehicles unreadable")
 class GarageRepository @Inject constructor(private val dataSource: VehicleDataSource) {
     private val mutex = Mutex()
     private val warnedUnreadable = AtomicBoolean(false)
-    val garage = dataSource.stored.map { saved -> Garage(readVehicles(saved.json), saved.activeId) }
+    val garage = dataSource.stored.map { saved ->
+        val vehicles = readVehicles(saved.json)
+        if (vehicles == null) Garage(emptyList(), null, readable = false)
+        else Garage(vehicles, saved.activeId, readable = true)
+    }
 
     suspend fun addVehicle(name: String, now: Long): Vehicle = mutex.withLock {
         val vehicle = Vehicle(UUID.randomUUID().toString(), name.trim(), now)
@@ -45,10 +49,10 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
-    private fun readVehicles(raw: String?): List<Vehicle> = VehicleStorage.decode(raw) { error ->
+    private fun readVehicles(raw: String?): List<Vehicle>? = VehicleStorage.decode(raw) { error ->
         if (warnedUnreadable.compareAndSet(false, true)) {
             Timber.tag("Garage").w("%s", error.javaClass.simpleName)
         }
-    }.orEmpty()
+    }
 
 }

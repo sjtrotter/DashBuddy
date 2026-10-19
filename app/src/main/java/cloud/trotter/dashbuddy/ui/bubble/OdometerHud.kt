@@ -30,6 +30,8 @@ internal class OdometerHud(
 internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformRegion?, closeLog: () -> Unit): OdometerHud {
     val vehicle by viewModel.activeVehicle.collectAsStateWithLifecycle()
     val vehicles by viewModel.vehicles.collectAsStateWithLifecycle()
+    val garageLoaded by viewModel.garageLoaded.collectAsStateWithLifecycle()
+    val garageUnreadable by viewModel.garageUnreadable.collectAsStateWithLifecycle()
     val lastReading by viewModel.lastReading.collectAsStateWithLifecycle()
     val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
     val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()
@@ -57,10 +59,11 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
     val reconciliation = remember(readings, vehicle) {
         vehicle?.id?.let { MileageReconciliation.latest(readings, it) }
     }
-    val openOdometer = {
+    /** The garage loads in the first moments of the HUD; a tap in that window is inert. */
+    val openOdometer: () -> Unit = openOdometer@{
+        if (!garageLoaded) return@openOdometer
         closeLog()
-        viewModel.reopenOdometer()
-        entry.show(vehicle != null)
+        if (entry.show(vehicle != null)) viewModel.reopenOdometer()
     }
     val sheetBack = { entry.back(vehicle != null) }
     val noticeContent: (@Composable () -> Unit)? = savedNotice?.let { { OdometerNotice(it) } }
@@ -77,7 +80,10 @@ internal fun rememberOdometerHud(viewModel: BubbleViewModel, region: PlatformReg
                 !VehicleOdometerReading.singleVehicleSpan(readings, currentVehicle.id, last.occurredAt, now)
             val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, currentVehicle, last, gpsTotal, now, otherVehicleReadSince))
             Column(Modifier.fillMaxSize()) {
-                OdometerSheet(OdometerSheetModel(vehicle, vehicles, entry.reading, lastReading, check, entry.page, saving, writeFailed),
+                OdometerSheet(OdometerSheetModel(vehicle, vehicles, entry.reading, lastReading, check, entry.page, saving,
+                    writeFailed = if (garageUnreadable) OdometerWriteFailure.UNREADABLE else writeFailed,
+                    vehicleName = entry.vehicleName),
+                    onVehicleNameChange = { entry.vehicleName = it },
                     onDigit = entry::digit, onBackspace = entry::backspace,
                     onSave = { entry.reading?.let(viewModel::saveOdometerReading) },
                     onAddVehicle = viewModel::addVehicle,

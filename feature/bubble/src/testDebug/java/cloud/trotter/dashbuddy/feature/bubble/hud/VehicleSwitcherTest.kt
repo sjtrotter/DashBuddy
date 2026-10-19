@@ -37,6 +37,7 @@ class VehicleSwitcherTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val vehicles = listOf(Vehicle("civic", "Civic", 0), Vehicle("truck", "Truck", 0))
     private var active by mutableStateOf("civic")
+    private var name by mutableStateOf("Civic")
     private fun show(saving: Boolean = false) {
         compose.setContent {
             DashBuddyTheme {
@@ -74,6 +75,25 @@ class VehicleSwitcherTest {
         compose.onNodeWithTag("vehicle.add").assertIsNotEnabled()
         compose.onNodeWithTag("vehicle.truck").performClick(); settle()
         assertEquals("civic", active)
+    }
+
+    @Test fun `a name over the cap is not accepted`() {
+        compose.setContent {
+            DashBuddyTheme {
+                Box(Modifier.width(352.dp).height(350.dp)) {
+                    AddVehicleForm(name, { name = it }, false, {}, {})
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("vehicle.name").performTextReplacement("x".repeat(31)); settle()
+        assertEquals("Civic", name)
+        val atCap = "x".repeat(29) + "🚗"
+        compose.onNodeWithTag("vehicle.name").performTextReplacement(atCap); settle()
+        assertEquals(atCap, name)
+        compose.onNodeWithTag("vehicle.name").performTextReplacement(atCap + "x"); settle()
+        assertEquals(atCap, name)
+        compose.onNodeWithTag("vehicle.name").assertTextContains(atCap)
     }
 
 }

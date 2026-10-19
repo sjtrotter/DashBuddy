@@ -17,6 +17,7 @@ data class OdometerSheetModel(
     val page: OdometerPage = OdometerPage.READING,
     val saving: Boolean = false,
     val writeFailed: OdometerWriteFailure = OdometerWriteFailure.NONE,
+    val vehicleName: String = "",
 )
 
 data class OdometerNoticeModel(
