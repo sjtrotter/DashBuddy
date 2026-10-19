@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantSeeds
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsPlatformUiState
 import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsUiState
@@ -22,9 +23,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Backs the Personal Economy settings screen. Pure passthrough to
- * [AppPreferencesRepository] for reads and writes. Each write atomically marks
- * the corresponding [EconomyField] as user-set in DataStore.
+ * Backs the Personal Economy settings screen. Vehicle-shaped fields are
+ * persisted on the active garage profile by [AppPreferencesRepository].
  */
 @HiltViewModel
 class EconomySettingsViewModel @Inject constructor(
@@ -36,6 +36,12 @@ class EconomySettingsViewModel @Inject constructor(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         UserEconomy(),
+    )
+
+    val fuelType = repo.fuelType.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        FuelType.REGULAR,
     )
 
     val timeConstants = strategyRepository.evaluationConfig.filterNotNull().map { config ->
@@ -61,6 +67,16 @@ class EconomySettingsViewModel @Inject constructor(
 
     fun setVehicleClass(vc: VehicleClass) = viewModelScope.launch {
         repo.updateVehicleClass(vc)
+    }
+
+    fun setMpg(mpg: Double) = viewModelScope.launch {
+        if (mpg.isFinite() && mpg > 0.0 && mpg <= Float.MAX_VALUE) {
+            repo.updateEstimatedMpg(mpg.toFloat())
+        }
+    }
+
+    fun setFuelType(fuelType: FuelType) = viewModelScope.launch {
+        repo.updateFuelType(fuelType)
     }
 
     fun setTires(setCost: Double, lifetimeMi: Double) = viewModelScope.launch {

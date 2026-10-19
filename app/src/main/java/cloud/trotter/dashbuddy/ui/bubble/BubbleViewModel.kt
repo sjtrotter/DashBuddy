@@ -78,7 +78,7 @@ class BubbleViewModel @Inject constructor(
     devSettingsRepository: DevSettingsRepository,
     strategyRepository: StrategyRepository,
     private val appStateRepository: AppStateRepository,
-    garageRepository: GarageRepository,
+    private val garageRepository: GarageRepository,
     odometerReadingRepository: OdometerReadingRepository,
     clock: Clock,
 ) : ViewModel() {
@@ -91,9 +91,6 @@ class BubbleViewModel @Inject constructor(
     val odometerLoaded: StateFlow<Boolean> = combine(garage, odometerReadings) { garage, readings ->
         garage != null && readings != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val lastReading = combine(odometerReadings, garage) { list, garage ->
-        if (list == null) null else garage?.active?.let { VehicleOdometerReading.latestFor(list, it.id) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val gpsTotalMiles = odometerRepository.totalMilesFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerSaving = odometerActions.saving
@@ -107,6 +104,9 @@ class BubbleViewModel @Inject constructor(
     fun saveOdometerReading(miles: Int) { garage.value?.active?.let { odometerActions.save(it.id, miles) } }
     fun addVehicle(name: String) = odometerActions.add(name)
     fun selectVehicle(id: String) = odometerActions.select(id)
+    fun retireVehicle(id: String) = odometerActions.retire(id)
+    // Read the committed snapshot when handling a retirement; stateIn may still hold the old car.
+    suspend fun garageSnapshot(): Garage = garageRepository.garage.first()
 
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
 

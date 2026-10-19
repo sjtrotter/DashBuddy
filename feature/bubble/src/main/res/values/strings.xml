@@ -184,6 +184,7 @@
     <string name="hud_odometer_back">Back</string>
     <string name="hud_odometer_vehicles">Vehicles</string>
     <string name="hud_odometer_active">Active</string>
+    <string name="hud_odometer_remove_vehicle">Remove %1$s</string>
     <string name="hud_odometer_add_vehicle">Add vehicle</string>
     <string name="hud_odometer_vehicle_name">Vehicle name</string>
     <string name="hud_odometer_add_named">Add %1$s</string>

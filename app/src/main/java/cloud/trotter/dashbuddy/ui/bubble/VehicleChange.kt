@@ -1,3 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
-enum class VehicleChange { ADDED, SWITCHED }
+sealed interface VehicleChange {
+    data object ADDED : VehicleChange
+    data object SWITCHED : VehicleChange
+    data class RETIRED(val id: String, val wasActive: Boolean) : VehicleChange
+}

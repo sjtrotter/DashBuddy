@@ -29,6 +29,7 @@ import cloud.trotter.dashbuddy.ui.components.economy.EconomyTimeConstantsSection
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
+import cloud.trotter.dashbuddy.ui.components.economy.VehicleEconomyInputs
 
 /**
  * Personal Economy settings. Chrome only: the Scaffold, intro copy, and the
@@ -44,6 +45,7 @@ fun EconomySettingsScreen(
     viewModel: EconomySettingsViewModel = hiltViewModel(),
 ) {
     val eco by viewModel.userEconomy.collectAsStateWithLifecycle()
+    val fuelType by viewModel.fuelType.collectAsStateWithLifecycle()
     val timeConstants by viewModel.timeConstants.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -83,6 +85,14 @@ fun EconomySettingsScreen(
             VehicleClassPicker(
                 selected = eco.vehicleClass,
                 onClassChange = viewModel::setVehicleClass,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            VehicleEconomyInputs(
+                mpg = eco.vehicleMpg,
+                fuelType = fuelType,
+                onMpgChange = viewModel::setMpg,
+                onFuelTypeChange = viewModel::setFuelType,
             )
 
             Spacer(modifier = Modifier.height(12.dp))

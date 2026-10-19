@@ -187,7 +187,6 @@ class BubbleViewModelTest {
         val vm = viewModel(repo)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.garage.collect {} }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
         runCurrent()
         assertEquals(1, collections)
         val civic = Vehicle("civic", "Civic", 0)
@@ -209,7 +208,6 @@ class BubbleViewModelTest {
         val vm = viewModel(repo)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.garage.collect {} }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
         runCurrent()
         assertFalse(vm.odometerLoaded.value)
         assertNull(vm.garage.value)
@@ -235,11 +233,9 @@ class BubbleViewModelTest {
         val vm = viewModel(garage, readings)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerReadings.collect {} }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerLoaded.collect {} }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect {} }
         runCurrent()
         assertNotNull(vm.garage.value)
         assertNull(vm.odometerReadings.value)
-        assertNull(vm.lastReading.value)
         assertFalse(vm.odometerLoaded.value)
 
         val last = LastOdometerReading(52_388, 123.5, 100)
@@ -247,13 +243,11 @@ class BubbleViewModelTest {
         updates.emit(rows)
         runCurrent()
         assertEquals(rows, vm.odometerReadings.value)
-        assertEquals(last, vm.lastReading.value)
         assertTrue(vm.odometerLoaded.value)
 
         updates.emit(emptyList())
         runCurrent()
         assertEquals(emptyList<VehicleOdometerReading>(), vm.odometerReadings.value)
-        assertNull(vm.lastReading.value)
         assertTrue(vm.odometerLoaded.value)
     }
 
@@ -277,7 +271,7 @@ class BubbleViewModelTest {
     }
 
     @Test
-    fun `the last reading switches with the vehicle in the same frame`() = runTest(dispatcher) {
+    fun `each vehicle in hand selects its own reading without a derived last reading flow`() = runTest(dispatcher) {
         stubNoDashes()
         val civic = Vehicle("civic", "Civic", 0)
         val truck = Vehicle("truck", "Truck", 0)
@@ -294,16 +288,23 @@ class BubbleViewModelTest {
             VehicleOdometerReading(truck.id, truckReading, 2),
         )).onStart { collections++ })
         val vm = viewModel(garage, readings)
-        val emissions = mutableListOf<LastOdometerReading?>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastReading.collect { emissions += it } }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.odometerReadings.collect {} }
+        runCurrent() // the readings are loaded before the first garage frame is judged
+        val frames = mutableListOf<Pair<String, LastOdometerReading?>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.garage.collect { snapshot ->
+                // The host derives last from the vehicle in this frame and its readings snapshot.
+                snapshot?.active?.let { vehicle ->
+                    frames += vehicle.id to VehicleOdometerReading.latestFor(vm.odometerReadings.value.orEmpty(), vehicle.id)
+                }
+            }
+        }
         runCurrent()
-        assertEquals(civicReading, emissions.last())
-        emissions.clear()
+        assertEquals(civic.id to civicReading, frames.last())
+        frames.clear()
         garageUpdates.value = Garage(cars, truck.id, readable = true)
         runCurrent()
-        assertEquals(truck, vm.garage.value?.active)
-        assertEquals(listOf(truckReading), emissions)
-        assertEquals(truckReading, vm.lastReading.value)
+        assertEquals(listOf(truck.id to truckReading), frames)
         assertEquals(1, collections)
     }
 

@@ -3,8 +3,10 @@ package cloud.trotter.dashbuddy.core.data.strategy
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.data.analytics.TimeConstantRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
+import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedTimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
@@ -36,6 +38,10 @@ class StrategyRepositoryTimeConstantsTest {
     @get:Rule val tmp = TemporaryFolder()
     private val platforms = Platform.entries.filter { it != Platform.Unknown }
     private val learned = LearnedTimeConstants(TimeConstantPair(2.0, 8.0), 10)
+    private fun garage() = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
+        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO),
+        produceFile = { tmp.newFile("garage-${java.util.UUID.randomUUID()}.preferences_pb") },
+    )))
 
     @Test fun `persisted map resolves config then collector replaces idempotently even under overrides`() = runTest {
         val strategyStore = PreferenceDataStoreFactory.create(scope = backgroundScope,
@@ -43,7 +49,7 @@ class StrategyRepositoryTimeConstantsTest {
         val prefsStore = PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("prefs.preferences_pb") })
         val source = StrategyDataSource(strategyStore)
-        val prefs = AppPreferencesRepository(AppPreferencesDataSource(prefsStore))
+        val prefs = AppPreferencesRepository(AppPreferencesDataSource(prefsStore), garage())
         source.replaceTimeConstants(mapOf(platforms[0] to learned))
         val snapshots = MutableSharedFlow<Map<Platform, LearnedTimeConstants>>(extraBufferCapacity = 8)
         val reader = mock<TimeConstantRepository> { on { learnedTimeConstants } doReturn snapshots }
@@ -80,7 +86,7 @@ class StrategyRepositoryTimeConstantsTest {
         val ds = PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("independent.preferences_pb") })
         val source = AppPreferencesDataSource(ds)
-        val repo = AppPreferencesRepository(source)
+        val repo = AppPreferencesRepository(source, garage())
         repo.persistUserSetEconomy(UserEconomy(avgMinutesPerMile = 3.0,
             userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE)))
         assertEquals(setOf(EconomyField.AVG_MIN_PER_MILE.name), source.userSetEconomyFields.first())
@@ -96,7 +102,7 @@ class StrategyRepositoryTimeConstantsTest {
         val source = StrategyDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("retry.preferences_pb") }))
         val prefs = AppPreferencesRepository(AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
-            produceFile = { tmp.newFile("retry-prefs.preferences_pb") })))
+            produceFile = { tmp.newFile("retry-prefs.preferences_pb") })), garage())
         var attempts = 0
         val values = mapOf(platforms[0] to learned)
         val transient = flow {

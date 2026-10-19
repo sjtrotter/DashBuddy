@@ -192,7 +192,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
   them like the rest of the history (§6).
 - Vehicles you add and odometer readings you type stay on the device. A vehicle is a name you type,
-  an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id.
+  an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id; since #1355 it
+  also carries the car's profile (year, make, model, MPG, class, fuel type and the cost figures the economy derives,
+  each optional) and a retired mark when you remove it (its readings stay). The first time the app runs after this
+  change it copies the car you entered in the setup wizard into the garage, once, and never adds a duplicate.
   A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
@@ -245,6 +248,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r6 (2026-10-19)** — the garage vehicle gains a profile (year, make, model, MPG, class, fuel type, cost figures) and a
+  retired mark; the economy's vehicle-shaped values now come from the active vehicle, seeded once from the wizard's saved
+  car (#1355). Nothing new leaves the device. Receipts created under r5 retain that revision.
 - **r5 (2026-10-18)** — two new stored items: the vehicles you add (name, id, creation time, the active one) in the
   `vehicles` preferences file, and typed odometer readings as `ODOMETER_READING` events (the miles you typed, the
   vehicle id, DashBuddy's own GPS total at that moment), compared on the device to the app's GPS mileage and shown only

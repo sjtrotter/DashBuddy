@@ -409,6 +409,8 @@
     <string name="economy_editor_annual_miles_value_format">%1$s miles per year</string>
     <string name="economy_editor_annual_miles_helper">Spreads insurance, registration and phone costs over gig miles. More miles → lower cost per mile.</string>
     <string name="economy_editor_vehicle_class_title">Vehicle class</string>
+    <string name="economy_editor_mpg_label">Combined MPG</string>
+    <string name="economy_editor_fuel_type_title">Fuel type</string>
     <string name="economy_editor_true_cost_format">Estimated costs %1$s/mi</string>
 
     <!-- main/analytics/MoneyTab.kt -->

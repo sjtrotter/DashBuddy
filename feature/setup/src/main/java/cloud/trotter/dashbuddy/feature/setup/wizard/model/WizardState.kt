@@ -72,8 +72,8 @@ data class WizardState(
  * Projects the wizard's in-memory economy edits onto a [UserEconomy] — the single
  * owner of this conversion (#357). The ECONOMY_COSTS card uses it to drive live
  * $/mi summaries and "(default)" badges; [cloud.trotter.dashbuddy.feature.setup.wizard.WizardViewModel.saveAndFinish]
- * hands it to `AppPreferencesRepository.persistUserSetEconomy`, which persists each
- * user-set field through the same atomic write the settings screen uses. Carries
+ * commits its vehicle overrides in one targeted profile write and mirrors the
+ * user-set fields to legacy preferences. Carries
  * [userSetEconomyFields] so the repository persists exactly the fields the user touched.
  */
 fun WizardState.toUserEconomy(): UserEconomy = UserEconomy(

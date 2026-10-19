@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -18,14 +21,18 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean, onSelect: (String) -> Unit, onAdd: () -> Unit, onBack: () -> Unit) {
+fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean, onSelect: (String) -> Unit, onAdd: () -> Unit, onBack: () -> Unit, onRetire: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         OdometerTitle(stringResource(R.string.hud_odometer_vehicles), onBack)
         vehicles.forEach { vehicle ->
             Row(Modifier.fillMaxWidth().testTag("vehicle.${vehicle.id}").semantics { selected = vehicle.id == activeId }
-                .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp)) {
-                Text(vehicle.name, Modifier.weight(1f), color = AppTheme.colors.text)
+                .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(vehicle.displayName, Modifier.weight(1f), color = AppTheme.colors.text)
                 if (vehicle.id == activeId) Text(stringResource(R.string.hud_odometer_active), color = AppTheme.colors.accent)
+                IconButton(onClick = { onRetire(vehicle.id) }, enabled = !saving) {
+                    Icon(Icons.Outlined.Delete, stringResource(R.string.hud_odometer_remove_vehicle, vehicle.displayName), tint = AppTheme.colors.text2)
+                }
             }
         }
         TextButton(onClick = onAdd, enabled = !saving, modifier = Modifier.testTag("vehicle.add")) {

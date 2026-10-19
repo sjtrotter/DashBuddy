@@ -1,0 +1,196 @@
+package cloud.trotter.dashbuddy.core.data.settings
+
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
+import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleProfile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
+import timber.log.Timber
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+
+class VehicleEconomyPreferenceTest {
+    @get:Rule val tmp = TemporaryFolder()
+
+    @Test fun `active profile owns car costs while gas and phone remain shared`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("prefs.preferences_pb") }))
+        val vehicleSource = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("garage.preferences_pb") }))
+        val garage = GarageRepository(vehicleSource)
+        val repo = AppPreferencesRepository(source, garage)
+        val compact = garage.addVehicle("Compact", 1, VehicleProfile(vehicleClass = VehicleClass.COMPACT))
+        repo.updateTireCost(700.0, 42_000.0)
+        repo.updateEstimatedMpg(35f)
+        repo.updatePhonePlan(100.0, 2, 50.0)
+        repo.updateGasPrice(4.00f)
+        val truck = garage.addVehicle("Truck", 2, VehicleProfile(vehicleClass = VehicleClass.TRUCK))
+        assertEquals(VehicleClass.TRUCK.tireSetCost, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(100.0, repo.userEconomy.first().phonePlanTotal, 0.0)
+        assertEquals(4.00, repo.userEconomy.first().gasPricePerGallon, 0.0)
+        assertTrue(garage.selectVehicle(compact.id))
+        assertEquals(700.0, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(35.0, repo.userEconomy.first().vehicleMpg, 0.0)
+        assertEquals(42_000.0, repo.userEconomy.first().tireLifetimeMi, 0.0)
+        assertTrue(garage.selectVehicle(truck.id))
+        assertEquals(VehicleClass.TRUCK.tireSetCost, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(700.0, source.tireSetCost.first()!!, 0.0)
+        vehicleSource.save("invalid json", truck.id)
+        // A failed vehicle read falls back to the legacy preference snapshot.
+        assertEquals(700.0, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(VehicleClass.SEDAN, repo.userEconomy.first().vehicleClass)
+    }
+
+    @Test fun `settings create an active car and retain several edits before garage setup`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("new-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("new-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        repo.updateVehicleClass(VehicleClass.TRUCK)
+        repo.updateFuelType(FuelType.DIESEL)
+        repo.updateEstimatedMpg(22f)
+        repo.updateTireCost(1100.0, 35_000.0)
+        repo.updateExpectedAnnualMi(18_000.0)
+        val active = garage.garage.first().active!!
+        assertEquals(1, garage.garage.first().vehicles.size)
+        assertNull(active.name)
+        assertEquals(VehicleClass.TRUCK, active.profile.vehicleClass)
+        assertEquals(FuelType.DIESEL, active.profile.fuelType)
+        assertEquals(22.0, active.profile.mpg)
+        assertEquals(1100.0, active.profile.tireSetCost)
+        assertEquals(18_000.0, active.profile.expectedAnnualMiles)
+        assertEquals(1100.0, repo.userEconomy.first().tireSetCost, 0.0)
+    }
+    @Test fun `legacy mirrors do not write either garage profile after a switch`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("mirror-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("mirror-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        val first = garage.addVehicle("First", 1L, VehicleProfile(make = "Honda"))
+        val second = garage.addVehicle("Second", 2L, VehicleProfile(make = "Toyota"))
+        garage.selectVehicle(first.id)
+        garage.selectVehicle(second.id)
+        val before = garage.garage.first()
+        val economy = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
+            phonePlanTotal = 80.0, phonePlanLines = 2, phoneBusinessPercent = 50.0,
+            avgMinutesPerMile = 3.0,
+            userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PHONE_PLAN_TOTAL, EconomyField.AVG_MIN_PER_MILE))
+
+        repo.mirrorFuelType(FuelType.PREMIUM)
+        repo.mirrorVehicleClass(VehicleClass.SUV)
+        repo.mirrorUserSetEconomy(economy)
+        repo.mirrorEconomySettings("2021", "Honda", "Civic", "EX", 28f, false, 3.75f)
+
+        assertEquals(before, garage.garage.first())
+        assertEquals(FuelType.PREMIUM.name, source.fuelType.first())
+        assertEquals(VehicleClass.SUV.name, source.vehicleClass.first())
+        assertEquals("2021", source.vehicleYear.first())
+        assertEquals("Honda", source.vehicleMake.first())
+        assertEquals("Civic", source.vehicleModel.first())
+        assertEquals("EX", source.vehicleTrim.first())
+        assertEquals(28f, source.estimatedMpg.first())
+        assertEquals(false, source.isGasPriceAuto.first())
+        assertEquals(3.75f, source.gasPrice.first())
+        assertEquals(720.0, source.tireSetCost.first())
+        assertEquals(48_000.0, source.tireLifetimeMi.first())
+        assertEquals(80.0, source.phonePlanTotal.first())
+        assertEquals(2, source.phonePlanLines.first())
+        assertEquals(50.0, source.phoneBusinessPercent.first())
+        assertEquals(3.0, source.avgMinPerMile.first())
+        assertNull(source.oilCost.first())
+        assertNull(source.basePickupMin.first())
+        assertTrue(source.userSetEconomyFields.first().containsAll(setOf(
+            EconomyField.TIRE_COST.name, EconomyField.TIRE_LIFETIME.name,
+            EconomyField.PHONE_PLAN_TOTAL.name, EconomyField.PHONE_PLAN_LINES.name,
+            EconomyField.PHONE_BUSINESS_PERCENT.name, EconomyField.AVG_MIN_PER_MILE.name,
+        )))
+    }
+
+    @Test fun `shared economy drafts do not create a garage vehicle`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("shared-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("shared-garage.preferences_pb") })))
+        AppPreferencesRepository(source, garage).persistUserSetEconomy(UserEconomy(
+            avgMinutesPerMile = 3.0, userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE),
+        ))
+        assertTrue(garage.garage.first().vehicles.isEmpty())
+        assertEquals(3.0, source.avgMinPerMile.first())
+    }
+
+    @Test fun `an unreadable garage keeps the preference write`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unreadable-prefs.preferences_pb") }))
+        val vehicleSource = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("unreadable-garage.preferences_pb") }))
+        vehicleSource.save("unreadable private vehicle data", "old-id")
+        val before = vehicleSource.stored.first()
+        val repo = AppPreferencesRepository(source, GarageRepository(vehicleSource))
+
+        repo.updateVehicleClass(VehicleClass.COMPACT)
+        repo.updateFuelType(FuelType.PREMIUM)
+        repo.updateEstimatedMpg(34f)
+        repo.updateTireCost(720.0, 48_000.0)
+        repo.persistUserSetEconomy(UserEconomy(oilCost = 85.0, oilIntervalMi = 7_500.0,
+            userSetFields = setOf(EconomyField.OIL_COST)))
+        assertEquals(VehicleClass.COMPACT.name, source.vehicleClass.first())
+        assertEquals(FuelType.PREMIUM.name, source.fuelType.first())
+        assertEquals(34f, source.estimatedMpg.first())
+        assertEquals(720.0, source.tireSetCost.first())
+        assertEquals(48_000.0, source.tireLifetimeMi.first())
+        assertEquals(85.0, source.oilCost.first())
+        assertEquals(7_500.0, source.oilIntervalMi.first())
+        assertEquals(34.0, repo.userEconomy.first().vehicleMpg, 0.0)
+        assertEquals(720.0, repo.userEconomy.first().tireSetCost, 0.0)
+        assertEquals(before, vehicleSource.stored.first())
+    }
+
+    @Test fun `garage write failures warn once with only the exception class and cancellation propagates`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("failure-prefs.preferences_pb") }))
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
+        whenever(garage.updateOrCreateActiveProfile(any(), any()))
+            .thenThrow(IllegalStateException("private vehicle data"))
+        val repo = AppPreferencesRepository(source, garage)
+        val warnings = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority == 5 && tag == "Garage") {
+                    assertNull(t)
+                    warnings += message
+                }
+            }
+        }
+        Timber.plant(tree)
+        try {
+            repo.updateEstimatedMpg(30f)
+            repo.updateTireCost(720.0, 48_000.0)
+            assertEquals(listOf("IllegalStateException"), warnings)
+            assertEquals(30f, source.estimatedMpg.first())
+            val cancelled = CancellationException("cancelled")
+            whenever(garage.updateOrCreateActiveProfile(any(), any())).thenThrow(cancelled)
+            assertSame(cancelled, runCatching { repo.updateEstimatedMpg(40f) }.exceptionOrNull())
+            assertEquals(30f, source.estimatedMpg.first())
+            assertEquals(listOf("IllegalStateException"), warnings)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+}

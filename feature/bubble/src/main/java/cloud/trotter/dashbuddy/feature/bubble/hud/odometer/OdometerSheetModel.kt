@@ -8,6 +8,7 @@ enum class OdometerWriteFailure { NONE, RETRY, UNREADABLE }
 
 data class OdometerSheetModel(
     val vehicle: Vehicle?,
+    /** Live vehicles supplied by Garage.unretired. */
     val vehicles: List<Vehicle>,
     val readingMiles: Int?,
     val last: LastOdometerReading?,
