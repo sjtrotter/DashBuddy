@@ -4,12 +4,20 @@ import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
+import cloud.trotter.dashbuddy.domain.evaluation.*
 
 /**
  * Represents the volatile UI state of the Setup Wizard before it is committed to DataStore.
  */
 data class WizardState(
+    val vehicleProfile: VehicleProfile = GasCar(),
+    val kwhPer100Mi: Double = VehiclePresets.EV_KWH_PER_100_MI,
+    val whPerMile: Double = VehiclePresets.EBIKE_WH_PER_MILE,
+    val electricityPricePerKwh: Double = SharedEconomy.DEFAULT_ELECTRICITY_PRICE_PER_KWH,
+    val chainCost: Double = 0.0, val chainLifeMi: Double = 1.0,
+    val batteryCost: Double = 0.0, val batteryLifeMi: Double = 1.0,
+    val beltCost: Double = 0.0, val beltLifeMi: Double = 1.0,
     // Economy Variables
     val vehicleClass: VehicleClass = VehicleClass.SEDAN,
     val vehicleLookupAllowed: Boolean = false,
@@ -76,8 +84,11 @@ data class WizardState(
  * user-set fields to legacy preferences. Carries
  * [userSetEconomyFields] so the repository persists exactly the fields the user touched.
  */
-fun WizardState.toUserEconomy(): UserEconomy = UserEconomy(
+private fun WizardState.draftEconomy(): UserEconomy = UserEconomy(
     vehicleClass = vehicleClass,
+    kwhPer100Mi = kwhPer100Mi, whPerMile = whPerMile, electricityPricePerKwh = electricityPricePerKwh,
+    chainCost = chainCost, chainLifeMi = chainLifeMi, batteryCost = batteryCost, batteryLifeMi = batteryLifeMi,
+    beltCost = beltCost, beltLifeMi = beltLifeMi,
     vehicleMpg = estimatedMpg.toDouble(),
     gasPricePerGallon = gasPrice.toDouble(),
     avgMinutesPerMile = avgMinutesPerMile,
@@ -97,3 +108,14 @@ fun WizardState.toUserEconomy(): UserEconomy = UserEconomy(
     phoneBusinessPercent = phoneBusinessPercent,
     userSetFields = userSetEconomyFields,
 )
+
+fun WizardState.toVehicleProfile(): VehicleProfile {
+    val edited = EconomyFieldGroups.updateProfile(vehicleProfile, draftEconomy())
+    return if (edited.hasCarIdentity) edited.withIdentity(
+        vehicleYear.takeIf { it.isNotBlank() }, vehicleMake.takeIf { it.isNotBlank() }, vehicleModel.takeIf { it.isNotBlank() }) else edited
+}
+
+fun WizardState.toUserEconomy(): UserEconomy {
+    val shared = SharedEconomy.from(draftEconomy())
+    return UserEconomy.from(VehicleEconomyInputs.from(toVehicleProfile(), shared), shared)
+}

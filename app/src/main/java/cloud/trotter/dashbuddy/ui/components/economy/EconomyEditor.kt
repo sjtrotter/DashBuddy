@@ -36,7 +36,8 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 
 /**
@@ -64,8 +65,24 @@ fun EconomyEditor(
     onRegistrationChange: (perYear: Double) -> Unit,
     onPhoneChange: (total: Double, lines: Int, dashPercent: Double) -> Unit,
     onExpectedAnnualMilesChange: (miles: Double) -> Unit,
+    onChainChange: (Double, Double) -> Unit = { _, _ -> },
+    onBatteryChange: (Double, Double) -> Unit = { _, _ -> },
+    onBeltChange: (Double, Double) -> Unit = { _, _ -> },
+    onConsumptionChange: (Double) -> Unit = {},
+    onElectricityPriceChange: (Double) -> Unit = {},
 ) {
     val userSet = economy.userSetFields
+    val fields = EconomyFieldGroups.fieldsFor(economy.vehicleProfile)
+    if (EconomyField.KWH_PER_100_MI in fields || EconomyField.WH_PER_MILE in fields) {
+        DecimalInput(
+            label = stringResource(if (EconomyField.WH_PER_MILE in fields) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi),
+            value = if (EconomyField.WH_PER_MILE in fields) economy.whPerMile else economy.kwhPer100Mi,
+            onValueChange = onConsumptionChange,
+        )
+        DecimalInput(label = stringResource(R.string.vehicle_electricity_price), value = economy.electricityPricePerKwh,
+            onValueChange = onElectricityPriceChange)
+    }
+
 
     // -------- Tires --------
     EconomyAccordionRow(
@@ -83,6 +100,7 @@ fun EconomyEditor(
         )
     }
 
+    if (EconomyField.OIL_COST in fields) {
     // -------- Oil changes --------
     EconomyAccordionRow(
         title = stringResource(R.string.economy_editor_oil_title),
@@ -97,6 +115,8 @@ fun EconomyEditor(
             intervalValue = economy.oilIntervalMi,
             onIntervalChange = { onOilChange(economy.oilCost, it) },
         )
+    }
+
     }
 
     // -------- Brakes --------
@@ -115,6 +135,7 @@ fun EconomyEditor(
         )
     }
 
+    if (EconomyField.FLUIDS_COST in fields) {
     // -------- Fluids --------
     EconomyAccordionRow(
         title = stringResource(R.string.economy_editor_fluids_title),
@@ -131,6 +152,9 @@ fun EconomyEditor(
         )
     }
 
+    }
+
+    if (EconomyField.MISC_YEARLY in fields) {
     // -------- Misc repairs --------
     EconomyAccordionRow(
         title = stringResource(R.string.economy_editor_misc_title),
@@ -147,6 +171,41 @@ fun EconomyEditor(
             intervalSuffix = stringResource(R.string.economy_editor_misc_interval_suffix),
             helperText = stringResource(R.string.economy_editor_misc_helper),
         )
+    }
+
+    }
+
+    if (EconomyField.CHAIN_COST in fields) {
+        EconomyAccordionRow(title = stringResource(R.string.vehicle_chain),
+            summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.chainCostPerMile)),
+            isUserSet = EconomyField.CHAIN_COST in userSet || EconomyField.CHAIN_LIFETIME in userSet) {
+            PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
+                costValue = economy.chainCost, onCostChange = { onChainChange(it, economy.chainLifeMi) },
+                intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
+                intervalValue = economy.chainLifeMi, onIntervalChange = { onChainChange(economy.chainCost, it) })
+        }
+    }
+
+    if (EconomyField.BATTERY_COST in fields) {
+        EconomyAccordionRow(title = stringResource(R.string.vehicle_battery),
+            summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.batteryCostPerMile)),
+            isUserSet = EconomyField.BATTERY_COST in userSet || EconomyField.BATTERY_LIFETIME in userSet) {
+            PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
+                costValue = economy.batteryCost, onCostChange = { onBatteryChange(it, economy.batteryLifeMi) },
+                intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
+                intervalValue = economy.batteryLifeMi, onIntervalChange = { onBatteryChange(economy.batteryCost, it) })
+        }
+    }
+
+    if (EconomyField.BELT_COST in fields) {
+        EconomyAccordionRow(title = stringResource(R.string.vehicle_belt),
+            summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.beltCostPerMile)),
+            isUserSet = EconomyField.BELT_COST in userSet || EconomyField.BELT_LIFETIME in userSet) {
+            PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
+                costValue = economy.beltCost, onCostChange = { onBeltChange(it, economy.beltLifeMi) },
+                intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
+                intervalValue = economy.beltLifeMi, onIntervalChange = { onBeltChange(economy.beltCost, it) })
+        }
     }
 
     // -------- Depreciation --------
@@ -309,7 +368,7 @@ fun VehicleClassPicker(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        VehicleClass.entries.forEach { vc ->
+        VehicleClass.entries.filter { it.gasClass != null }.forEach { vc ->
             FilterChip(
                 selected = selected == vc,
                 onClick = { onClassChange(vc) },
@@ -321,7 +380,7 @@ fun VehicleClassPicker(
 
 /** Vehicle-specific inputs shared by settings and other economy surfaces. */
 @Composable
-fun VehicleEconomyInputs(
+fun VehicleMpgAndFuelInputs(
     mpg: Double,
     fuelType: FuelType,
     onMpgChange: (Double) -> Unit,
@@ -368,7 +427,7 @@ fun VehicleEconomyInputs(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        FuelType.entries.forEach { type ->
+        FuelType.entries.filter { it != FuelType.ELECTRICITY }.forEach { type ->
             FilterChip(
                 selected = fuelType == type,
                 onClick = { onFuelTypeChange(type) },

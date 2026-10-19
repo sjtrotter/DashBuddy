@@ -69,7 +69,7 @@ fun GasPriceCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FuelType.entries.forEach { type ->
+            FuelType.entries.filter { it != FuelType.ELECTRICITY }.forEach { type ->
                 FilterChip(
                     selected = fuelType == type,
                     onClick = { onFuelTypeSelected(type) },

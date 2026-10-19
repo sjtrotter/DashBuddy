@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -36,10 +37,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.feature.setup.R
 import cloud.trotter.dashbuddy.domain.format.Formats
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import cloud.trotter.dashbuddy.feature.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicleTypeLabel
 import cloud.trotter.dashbuddy.feature.setup.wizard.VEHICLE_NOT_LISTED
 import android.net.Uri
 
@@ -47,6 +56,13 @@ import android.net.Uri
 fun VehicleCard(
     step: WizardStep,
     vehicleClass: VehicleClass,
+    profile: VehicleProfile,
+    consumption: Double,
+    electricityPrice: Double,
+    onVehicleTypeSelected: (VehicleType) -> Unit,
+    onPowertrainSelected: (Powertrain) -> Unit,
+    onConsumptionChanged: (Double) -> Unit,
+    onElectricityPriceChanged: (Double) -> Unit,
     vehicleLookupAllowed: Boolean,
     manualMpgEntry: Boolean,
     year: String,
@@ -58,7 +74,6 @@ fun VehicleCard(
     availableMakes: List<String>,
     availableModels: List<String>,
     availableTrims: List<String>,
-    onTypeSelected: (VehicleClass) -> Unit,
     onAllowVehicleLookup: () -> Unit,
     onManualMpgEntry: () -> Unit,
     onYearSelected: (String) -> Unit,
@@ -71,7 +86,8 @@ fun VehicleCard(
 
     // Trigger the manual override UI if any of these match
     val isCustom = make == VEHICLE_NOT_LISTED || model == VEHICLE_NOT_LISTED || trim == VEHICLE_NOT_LISTED
-    val showMpgEntry = vehicleClass != VehicleClass.E_BIKE && (manualMpgEntry || isCustom)
+    val fields = EconomyFieldGroups.fieldsFor(profile)
+    val showMpgEntry = EconomyField.VEHICLE_MPG in fields && (manualMpgEntry || isCustom || !profile.hasCarIdentity)
     val hasVehicleIdentity = listOf(year, make, model).all { it.isNotBlank() && it != VEHICLE_NOT_LISTED }
 
     Column(
@@ -85,24 +101,33 @@ fun VehicleCard(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            FilterChip(
-                selected = vehicleClass == VehicleClass.SEDAN,
-                onClick = { onTypeSelected(VehicleClass.SEDAN) },
-                label = { Text(stringResource(R.string.wizard_vehicle_card_type_car)) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            VehicleType.entries.forEach { type ->
+                FilterChip(selected = profile.vehicleType == type,
+                    onClick = { onVehicleTypeSelected(type) }, label = { Text(stringResource(vehicleTypeLabel(type))) })
+            }
+        }
+        if (profile is ScooterMoped) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Powertrain.entries.forEach { power ->
+                    FilterChip(selected = profile.powertrain == power, onClick = { onPowertrainSelected(power) },
+                        label = { Text(stringResource(if (power == Powertrain.GAS) R.string.vehicle_power_gas else R.string.vehicle_power_electric)) })
+                }
+            }
+        }
+        if (EconomyField.KWH_PER_100_MI in fields || EconomyField.WH_PER_MILE in fields) {
+            VehicleNumberInput(
+                label = stringResource(if (EconomyField.WH_PER_MILE in fields) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi),
+                value = consumption, onChange = onConsumptionChanged,
             )
-            Spacer(modifier = Modifier.padding(8.dp))
-            FilterChip(
-                selected = vehicleClass == VehicleClass.E_BIKE,
-                onClick = { onTypeSelected(VehicleClass.E_BIKE) },
-                label = { Text(stringResource(R.string.wizard_vehicle_card_type_ebike)) }
-            )
+            VehicleNumberInput(label = stringResource(R.string.vehicle_electricity_price),
+                value = electricityPrice, onChange = onElectricityPriceChanged)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         AnimatedVisibility(
-            visible = vehicleClass != VehicleClass.E_BIKE,
+            visible = profile.hasCarIdentity,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
@@ -233,7 +258,7 @@ fun VehicleCard(
                     Slider(
                         value = mpg,
                         onValueChange = onMpgChanged,
-                        valueRange = 8f..65f,
+                        valueRange = 8f..120f,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -247,7 +272,7 @@ fun VehicleCard(
             }
         }
 
-        if (vehicleClass == VehicleClass.E_BIKE) {
+        if (profile is EBike) {
             Text(
                 text = stringResource(R.string.wizard_vehicle_card_ebike_note),
                 style = MaterialTheme.typography.bodyLarge,
@@ -257,4 +282,22 @@ fun VehicleCard(
             )
         }
     }
+}
+
+/**
+ * Documented duplicate of :app's ui/components/economy/CurrencyInput.kt decimal field.
+ * The focus-aware text handling is kept here because :feature:setup cannot depend on :app.
+ * Keep both in sync; a shared UI module is the follow-up if this boundary changes.
+ */
+@Composable
+private fun VehicleNumberInput(label: String, value: Double, onChange: (Double) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf(value.toString().removeSuffix(".0")) }
+    LaunchedEffect(value, focused) { if (!focused) text = value.toString().removeSuffix(".0") }
+    OutlinedTextField(value = text, onValueChange = { input ->
+        text = input
+        input.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let(onChange)
+    }, label = { Text(label) }, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused })
 }

@@ -193,8 +193,15 @@ identity export. Vehicle/default resets preserve these learned preferences.
   them like the rest of the history (§6).
 - Vehicles you add and odometer readings you type stay on the device. A vehicle is a name you type,
   an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id; since #1355 it
-  also carries the car's profile (year, make, model, MPG, class, fuel type and the cost figures the economy derives,
-  each optional) and a retired mark when you remove it (its readings stay). The first time the app runs after this
+  also carries the vehicle's profile by type (since #1358: a gas car, hybrid, EV, motorcycle, scooter or moped,
+  e-bike or bicycle; its identity where it has one, its consumption in MPG, kWh per 100 miles or Wh per mile, its fuel
+  type where applicable, and optional part costs and lives: tires and brakes for every type; oil and fluids for
+  gas cars, hybrids and motorcycles; coolant for EVs; chain for motorcycles and bicycles; battery replacement for
+  e-bikes; belt for scooters; and miscellaneous upkeep where applicable. Depreciation, purchase price, lifetime miles,
+  insurance and registration deltas and annual miles remain optional fixed-cost inputs. Scooters also save gas or
+  electric powertrain. The electricity tariff (`electricityPricePerKwh`) is shared in app preferences, not on a vehicle.
+  A retired mark is kept when you remove a vehicle (its readings stay). Older entries are read into the typed shape
+  with every value kept; unknown and incompatible fields ride along unread in the vehicle's `legacyExtras` map. The first time the app runs after this
   change it copies the car you entered in the setup wizard into the garage, once, and never adds a duplicate.
   A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
@@ -248,6 +255,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r7 (2026-10-19)** — vehicle profiles are typed (gas car, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle) and store
+  the type's own consumption and part-cost fields, shared electricity tariff and `legacyExtras`; older entries keep their values (#1358). Nothing
+  new leaves the device. Receipts created under r6 retain that revision.
 - **r6 (2026-10-19)** — the garage vehicle gains a profile (year, make, model, MPG, class, fuel type, cost figures) and a
   retired mark; the economy's vehicle-shaped values now come from the active vehicle, seeded once from the wizard's saved
   car (#1355). Nothing new leaves the device. Receipts created under r5 retain that revision.

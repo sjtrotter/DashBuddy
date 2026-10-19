@@ -40,11 +40,12 @@ class RestingFooterTest {
     private var last by mutableStateOf<LastOdometerReading?>(reading)
     private var reconciliation = ReconciledMileage(59, 57.0, reading.occurredAt - 86_400_000)
     private var opened = false
+    private var vehicle = Vehicle("civic", "Civic", 0)
     private fun show() {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    OdometerFooter("Civic", last, reconciliation) { opened = true }
+                    OdometerFooter(vehicle, last, reconciliation) { opened = true }
                 }
             }
         }
@@ -57,6 +58,12 @@ class RestingFooterTest {
         compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
         assertTrue(opened)
     }
+    @Test fun `unnamed vehicle uses the resource type label`() {
+        vehicle = Vehicle("bike", null, 0, EBike())
+        show()
+        compose.onNodeWithText("E-bike 52,388 mi, ${formatShortDate(reading.occurredAt)}").assertIsDisplayed()
+    }
+
     @Test fun `hidden without a reading`() {
         last = null; show()
         compose.onNodeWithText("Civic", substring = true).assertDoesNotExist()

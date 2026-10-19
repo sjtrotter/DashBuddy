@@ -220,4 +220,14 @@
     <string name="hud_undo_action">Undo</string>
     <string name="hud_undo_failed">Undo failed, tap to retry</string>
     <string name="hud_cash_tip_pending">Cash tip %1$s pending</string>
+    <!-- Documented duplicate: vehicle_type_* is shared by :app, :feature:setup and :feature:bubble.
+         The :app copy is AUTHORITATIVE. Keep all three byte-identical; non-transitive R and the
+         feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
+    <string name="vehicle_type_car">Car</string>
+    <string name="vehicle_type_hybrid">Hybrid</string>
+    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_motorcycle">Motorcycle</string>
+    <string name="vehicle_type_scooter">Scooter or moped</string>
+    <string name="vehicle_type_e_bike">E-bike</string>
+    <string name="vehicle_type_bicycle">Bicycle</string>
 </resources>

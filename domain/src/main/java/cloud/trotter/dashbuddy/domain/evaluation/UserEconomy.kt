@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.domain.evaluation
 
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
+import cloud.trotter.dashbuddy.domain.model.vehicle.*
 
 /**
  * The persistent financial and time-estimation profile of the Dasher.
@@ -112,9 +112,18 @@ data class UserEconomy(
 
     /** Which [EconomyField]s the user has explicitly set. The rest are class defaults. */
     val userSetFields: Set<EconomyField> = emptySet(),
+    val electricityPricePerKwh: Double = SharedEconomy.DEFAULT_ELECTRICITY_PRICE_PER_KWH,
+    val chainCost: Double = 0.0, val chainLifeMi: Double = 1.0,
+    val batteryCost: Double = 0.0, val batteryLifeMi: Double = 1.0,
+    val beltCost: Double = 0.0, val beltLifeMi: Double = 1.0,
+    val kwhPer100Mi: Double = VehiclePresets.EV_KWH_PER_100_MI,
+    val whPerMile: Double = VehiclePresets.EBIKE_WH_PER_MILE,
+    val activeVehicleId: String? = null,
+    val vehicleInputs: VehicleEconomyInputs? = null,
+
 ) {
     /** Marginal fuel cost per mile. Zero for vehicle classes that don't burn fuel. */
-    val fuelCostPerMile: Double = if (!vehicleClass.burnsFuel) 0.0
+    val fuelCostPerMile: Double = vehicleInputs?.energyPerMile ?: if (!vehicleClass.burnsFuel) 0.0
                                   else gasPricePerGallon / vehicleMpg.coerceAtLeast(1.0)
 
     val tireCostPerMile: Double = tireSetCost / tireLifetimeMi.coerceAtLeast(1.0)
@@ -134,9 +143,15 @@ data class UserEconomy(
         (dashingMonthly * 12.0) / expectedAnnualMiles.coerceAtLeast(1.0)
     }
 
+    val chainCostPerMile: Double = chainCost / chainLifeMi.coerceAtLeast(1.0)
+    val batteryCostPerMile: Double = batteryCost / batteryLifeMi.coerceAtLeast(1.0)
+    val beltCostPerMile: Double = beltCost / beltLifeMi.coerceAtLeast(1.0)
+    val vehicleProfile: VehicleProfile get() = vehicleInputs?.disclosure?.profile ?: LegacyProfile(vehicleClass = vehicleClass).toTyped()
+
     val nonFuelCostPerMile: Double
-        get() = tireCostPerMile + oilCostPerMile + brakesCostPerMile +
-            fluidsCostPerMile + miscCostPerMile + depreciationCostPerMile +
+        get() = vehicleInputs?.let { it.wearPerMile + it.depreciationPerMile + it.fixedPerMile + phoneCostPerMile }
+            ?: tireCostPerMile + oilCostPerMile + brakesCostPerMile +
+            fluidsCostPerMile + miscCostPerMile + chainCostPerMile + batteryCostPerMile + beltCostPerMile + depreciationCostPerMile +
             insuranceCostPerMile + registrationCostPerMile + phoneCostPerMile
 
     val operatingCostPerMile: Double get() = fuelCostPerMile + nonFuelCostPerMile
@@ -186,14 +201,71 @@ data class UserEconomy(
     fun isUserSet(field: EconomyField): Boolean = field in userSetFields
 
     /** True when at least one [EconomyField] is still at its class/default value. */
-    val isUsingDefaults: Boolean get() = userSetFields.size < EconomyField.entries.size
+    val isUsingDefaults: Boolean get() = !userSetFields.containsAll(EconomyFieldGroups.fieldsFor(vehicleProfile))
 
     companion object {
+        fun from(inputs: VehicleEconomyInputs, shared: SharedEconomy): UserEconomy {
+            val detail = inputs.disclosure
+            val profile = detail?.profile ?: GasCar()
+            val wear = detail?.wear ?: WearProfile(miscYearly = inputs.wearPerMile, miscYearlyMi = 1.0)
+            val fixed = detail?.fixed ?: FixedCosts()
+            val fields = EconomyFieldGroups.userSetFields(profile) +
+                shared.userSetFields.filter { it !in EconomyFieldGroups.vehicleFields }
+            return UserEconomy(
+                vehicleClass = profile.legacyClass,
+                vehicleMpg = profile.gasMpg?.takeIf { it > 0 } ?: VehiclePresets.forProfile(profile).mpg,
+                gasPricePerGallon = shared.gasPricePerGallon,
+                kwhPer100Mi = when (profile) {
+                    is ElectricCar -> profile.kwhPer100Mi ?: VehiclePresets.EV_KWH_PER_100_MI
+                    is ScooterMoped -> profile.kwhPer100Mi ?: VehiclePresets.SCOOTER_KWH_PER_100_MI
+                    else -> 0.0
+                },
+                whPerMile = (profile as? EBike)?.whPerMile ?: VehiclePresets.EBIKE_WH_PER_MILE,
+                electricityPricePerKwh = shared.electricityPricePerKwh,
+                avgMinutesPerMile = if (EconomyField.AVG_MIN_PER_MILE in fields)
+                    shared.avgMinutesPerMile ?: inputs.travel.minutesPerMile else inputs.travel.minutesPerMile,
+                basePickupMinutes = if (EconomyField.BASE_PICKUP_MIN in fields)
+                    shared.basePickupMinutes ?: inputs.travel.basePickupMinutes else inputs.travel.basePickupMinutes,
+                learnedShopItemsPerMinute = shared.learnedShopItemsPerMinute,
+                shopRateSampleCount = shared.shopRateSampleCount,
+                shopSeedItemsPerMin = shared.shopSeedItemsPerMin,
+                learnedItemsPerUnitRatio = shared.learnedItemsPerUnitRatio,
+                itemsPerUnitRatioSampleCount = shared.itemsPerUnitRatioSampleCount,
+                itemsPerUnitRatioSeed = shared.itemsPerUnitRatioSeed,
+                tireSetCost = wear.tireSetCost ?: 0.0,
+                tireLifetimeMi = wear.tireLifetimeMi ?: 1.0,
+                oilCost = wear.oilCost ?: 0.0,
+                oilIntervalMi = wear.oilIntervalMi ?: 1.0,
+                brakesCost = wear.brakesCost ?: 0.0,
+                brakesIntervalMi = wear.brakesIntervalMi ?: 1.0,
+                fluidsCost = wear.fluidsCost ?: 0.0,
+                fluidsIntervalMi = wear.fluidsIntervalMi ?: 1.0,
+                chainCost = wear.chainCost ?: 0.0,
+                chainLifeMi = wear.chainLifeMi ?: 1.0,
+                batteryCost = wear.batteryCost ?: 0.0,
+                batteryLifeMi = wear.batteryLifeMi ?: 1.0,
+                beltCost = wear.beltCost ?: 0.0,
+                beltLifeMi = wear.beltLifeMi ?: 1.0,
+                miscYearly = wear.miscYearly ?: 0.0,
+                miscYearlyMi = wear.miscYearlyMi ?: 1.0,
+                includeDepreciation = fixed.includeDepreciation ?: false,
+                purchasePrice = fixed.purchasePrice ?: 0.0,
+                totalLifetimeMi = fixed.totalLifetimeMi ?: 1.0,
+                insuranceDeltaPerMonth = fixed.insuranceDeltaPerMonth ?: 0.0,
+                registrationDeltaPerYear = fixed.registrationDeltaPerYear ?: 0.0,
+                expectedAnnualMiles = fixed.expectedAnnualMiles ?: shared.expectedAnnualMiles,
+                phonePlanTotal = shared.phonePlanTotal, phonePlanLines = shared.phonePlanLines,
+                phoneBusinessPercent = shared.phoneBusinessPercent,
+                userSetFields = fields, vehicleInputs = inputs,
+            )
+        }
+
+
         /** Fallback price-per-gallon when no fetched price exists (#401). */
         const val DEFAULT_GAS_PRICE_PER_GALLON = 3.50
 
-        const val DEFAULT_MINUTES_PER_MILE = 2.5
-        const val DEFAULT_BASE_PICKUP_MINUTES = 7.0
+        const val DEFAULT_MINUTES_PER_MILE = VehiclePresets.CAR_MINUTES_PER_MILE
+        const val DEFAULT_BASE_PICKUP_MINUTES = VehiclePresets.CAR_BASE_PICKUP_MINUTES
 
         /**
          * Effective shopping pace (items/min, incl. checkout/ID/wait), the cold-start seed for the

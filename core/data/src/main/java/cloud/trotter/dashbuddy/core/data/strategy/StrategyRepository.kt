@@ -176,7 +176,8 @@ class StrategyRepository @Inject constructor(
         allowShopping,
         appPreferencesRepository.userEconomy,
         // One inner source keeps the outer combine within the typed five-source overload.
-        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios, dataSource.learnedTimeConstants) {
+        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios,
+            dataSource.learnedTimeConstants) {
             s, r, t -> Triple(s, r, t)
         },
     ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios, timeConstants) ->

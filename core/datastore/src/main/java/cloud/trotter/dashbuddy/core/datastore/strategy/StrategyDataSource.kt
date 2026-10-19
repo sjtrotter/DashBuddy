@@ -222,7 +222,8 @@ class StrategyDataSource @Inject constructor(
         })
         ds.edit { prefs ->
             val prefixes = listOf("learned_minutes_per_mile:", "learned_stop_overhead_minutes:", "time_constant_sample_count:")
-            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) } }
+            // keys with `:` are reserved for the per-vehicle constants #1360 adds
+            prefs.asMap().keys.filter { key -> prefixes.any { key.name.startsWith(it) && !key.name.removePrefix(it).contains(':') } }
                 .forEach { prefs.remove(it) }
             values.forEach { (platform, learned) ->
                 prefs[timePaceKey(platform)] = learned.median.minutesPerMile

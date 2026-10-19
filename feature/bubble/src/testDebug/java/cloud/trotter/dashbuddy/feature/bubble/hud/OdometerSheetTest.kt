@@ -38,6 +38,14 @@ class OdometerSheetTest {
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
     private val car = Vehicle("civic", "Civic", 0)
     private var model by mutableStateOf(OdometerSheetModel(car, listOf(car), 52_388, null, OdometerCheck.First("Civic"), gpsLoaded = true))
+    @Test fun `an unnamed vehicle uses its type label in the title row and first-reading copy`() {
+        val bike = Vehicle("bike", null, 0, EBike())
+        model = model.copy(vehicle = bike, vehicles = listOf(bike), check = OdometerCheck.First(null))
+        show()
+        compose.onNodeWithText("E-bike").assertIsDisplayed()
+        compose.onNodeWithText("First reading for E-bike").assertIsDisplayed()
+    }
+
     private var saved = 0
     private var added: String? = null
     private var addOpened = false
@@ -90,7 +98,7 @@ class OdometerSheetTest {
         compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
         compose.runOnIdle { model = model.copy(saving = false, vehicle = null, check = OdometerCheck.NoVehicle) }; settle()
         compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
-        compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.displayName)) }; settle()
+        compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.identityName)) }; settle()
         compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
     }
     @Test fun `add is disabled while the garage is unreadable`() {

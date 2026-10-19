@@ -96,10 +96,17 @@ class VehicleSwitcherTest {
     }
 
     @Test fun `identity supplies the row name when no name was typed`() {
-        vehicles = listOf(Vehicle("wizard", null, 0, profile = VehicleProfile(year = "2020", make = "Chevrolet", model = "Malibu")))
+        vehicles = listOf(Vehicle("wizard", null, 0, profile = LegacyProfile(year = "2020", make = "Chevrolet", model = "Malibu").toTyped()))
         show()
         compose.onNodeWithText("2020 Chevrolet Malibu").assertIsDisplayed()
         compose.onNodeWithContentDescription("Remove 2020 Chevrolet Malibu").assertExists()
+    }
+
+    @Test fun `an unnamed vehicle uses its type label for the row and remove action`() {
+        vehicles = listOf(Vehicle("bike", null, 0, EBike()))
+        show()
+        compose.onNodeWithText("E-bike").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove E-bike").assertExists()
     }
 
     @Test fun `a name over the cap is not accepted`() {
