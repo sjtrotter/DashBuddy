@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
-import cloud.trotter.dashbuddy.domain.analytics.DeliveryRecord
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -13,6 +13,7 @@ import kotlin.math.roundToLong
 internal class CashTipActions(
     private val scope: CoroutineScope,
     private val corrections: CorrectionRepository,
+    private val analytics: AnalyticsRepository,
     private val clock: Clock,
 ) {
     private val writing = MutableStateFlow(false)
@@ -27,25 +28,26 @@ internal class CashTipActions(
     // Kept past the undo deadline until the projector folds that append's sequence.
     private val pendingState = MutableStateFlow<Map<Long, CashTipCommit>>(emptyMap())
     val pending = pendingState.asStateFlow()
+    private var lastWatermark = 0L
 
     fun reopen() { if (undoState.value?.strip?.failed != true) failure.value = false }
     @OptIn(ExperimentalCoroutinesApi::class)
     fun committedHandled() { events.resetReplayCache() }
 
-    fun previous(row: DeliveryRecord): Long = pendingState.value.values
-        .find { it.deliveryId == row.eventSequenceId }?.expectedCashTipCents
-        ?: ((row.cashTip ?: 0.0) * 100).roundToLong()
-
-    fun commit(row: DeliveryRecord, enteredCents: Long, entryId: Long = 0) {
-        if (writing.value || enteredCents == 0L || row.sessionId == null) return
-        val previous = previous(row)
-        val next = try { Math.addExact(previous, enteredCents) } catch (_: ArithmeticException) { return }
-        if (next < 0L) return
+    fun commit(deliveryId: Long, sessionId: String?, storeName: String?, enteredCents: Long, entryId: Long = 0) {
+        if (writing.value || enteredCents == 0L || sessionId == null) return
         write {
-            val sequenceId = corrections.adjustDelivery(row.eventSequenceId, row.sessionId, newCashTip = next / 100.0)
-            val model = CashTipCommit(UndoStripModel(enteredCents, row.storeName, sequenceId,
-                clock.millis() + UndoStripModel.WINDOW_MS, HudNoticeOrder.next()), row.eventSequenceId,
-                row.sessionId, row.taskId, previous, next, entryId)
+            val pending = pendingState.value.values.find { it.deliveryId == deliveryId }
+            // A cleared expectation means the projector transaction is durable, even if the UI's
+            // separately collected rows still lag. Read the database, never a display snapshot.
+            val delivery = if (pending == null) analytics.deliveryById(deliveryId).first() else null
+            val previous = pending?.expectedCashTipCents ?: ((delivery?.cashTip ?: 0.0) * 100).roundToLong()
+            val next = try { Math.addExact(previous, enteredCents) } catch (_: ArithmeticException) { return@write }
+            if (next < 0L) return@write
+            val sequenceId = corrections.adjustDelivery(deliveryId, sessionId, newCashTip = next / 100.0)
+            val model = CashTipCommit(UndoStripModel(enteredCents, storeName, sequenceId,
+                clock.millis() + UndoStripModel.WINDOW_MS, HudNoticeOrder.next()), deliveryId,
+                sessionId, pending?.taskId ?: delivery?.taskId.orEmpty(), previous, next, entryId)
             expect(model)
             undoState.value = model
             events.emit(model)
@@ -75,12 +77,14 @@ internal class CashTipActions(
     }
 
     fun acknowledgeThrough(watermarkSequenceId: Long) {
+        lastWatermark = maxOf(lastWatermark, watermarkSequenceId)
         pendingState.value = pendingState.value.filterValues { pending ->
-            pending.strip.committedSequenceId > watermarkSequenceId
+            pending.strip.committedSequenceId > lastWatermark
         }
     }
 
     private fun expect(model: CashTipCommit) {
+        if (model.strip.committedSequenceId <= lastWatermark) return
         pendingState.value = pendingState.value.filterValues { it.deliveryId != model.deliveryId } +
             (model.strip.committedSequenceId to model)
     }

@@ -74,7 +74,8 @@ internal class CashTipHud(
                 onBackspace = entry::backspace, onDoneOther = entry::doneOther,
                 onCommit = {
                     rows.find { it.eventSequenceId == entry.selectedDeliveryId }?.let { row ->
-                        actions.commit(row, if (entry.sign == CashTipSign.MINUS) -entry.totalCents else entry.totalCents, entry.entryId)
+                        actions.commit(row.eventSequenceId, row.sessionId, row.storeName,
+                            if (entry.sign == CashTipSign.MINUS) -entry.totalCents else entry.totalCents, entry.entryId)
                     }
                 })
         }
