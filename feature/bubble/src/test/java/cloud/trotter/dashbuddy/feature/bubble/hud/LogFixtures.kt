@@ -5,6 +5,8 @@ import cloud.trotter.dashbuddy.domain.model.cards.*
 import cloud.trotter.dashbuddy.domain.model.chat.*
 import cloud.trotter.dashbuddy.domain.model.event.*
 import cloud.trotter.dashbuddy.domain.model.event.payload.*
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 
@@ -43,3 +45,8 @@ internal fun logUnassigned(job: String = "job", at: Long = 10_000) =
             unassignedAt = at, jobOfferHashes = listOf("offer")))
 internal fun logChat(text: String, persona: ChatPersona = ChatPersona.Dispatcher, id: String = "line", at: Long = 500) =
     ChatMessage(id, "dash", text, at, persona)
+
+internal fun logAccepted(hash: String = "offer", at: Long = 1_000, session: String? = "dash") =
+    AppEvent(AppEventType.OFFER_ACCEPTED, at, session,
+        OfferPayload(hash, ParsedOffer(offerHash = hash), outcome = AppEventType.OFFER_ACCEPTED,
+            presentedAt = at - 100, decidedAt = at, returnFlow = Flow.Idle))

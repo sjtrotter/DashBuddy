@@ -170,7 +170,7 @@
     <string name="hud_log_now_nodue_at_door">%1$s at the door</string>
     <string name="hud_log_net">net %1$s</string>
     <string name="hud_log_score_cd">Score %1$d</string>
-    <string name="hud_log_empty">Nothing logged yet this dash.</string>
+    <string name="hud_log_empty">Nothing logged yet this dash. Offers, deliveries and expenses land here.</string>
     <string name="hud_hero_compact_cd">Profit %1$s</string>
     <string name="hud_log_minutes">%1$d min</string>
     <string name="hud_log_miles">%1$s mi</string>

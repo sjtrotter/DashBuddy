@@ -55,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -195,6 +196,38 @@ class BubbleViewModelTest {
         assertEquals(listOf(fuel), vm.logData.value.fuel)
         assertEquals(listOf(delivery), vm.logData.value.deliveries)
         collector.cancel()
+    }
+
+    @Test
+    fun `log data and cards share one events read per session`() = runTest {
+        stubNoDashes()
+        modeFlow.value = BubbleSessionMode.MERGED
+        state.value = appState(Platform.DoorDash, *dualOnline)
+        val subscriptions = mutableMapOf<String, Int>()
+        val events = dualOnline.associate { (_, sessionId) -> sessionId to MutableStateFlow<List<AppEvent>>(emptyList()) }
+        dualOnline.forEach { (_, sessionId) ->
+            whenever(appEventRepo.getEventsForSession(sessionId)).thenReturn(events.getValue(sessionId).onStart {
+                subscriptions[sessionId] = subscriptions.getOrDefault(sessionId, 0) + 1
+            })
+            whenever(analyticsRepository.sessionDetail(sessionId)).thenReturn(flowOf(null))
+            whenever(ledgerRepository.expensesForSession(sessionId)).thenReturn(flowOf(emptyList()))
+            whenever(ledgerRepository.fuelForSession(sessionId)).thenReturn(flowOf(emptyList()))
+        }
+        val vm = viewModel()
+        val cardsCollector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.cards.collect {} }
+        runCurrent()
+        val logCollector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
+        runCurrent()
+        assertEquals(mapOf("session-dd" to 1, "session-uber" to 1), subscriptions)
+        val event = AppEvent(AppEventType.DASH_PAUSED, 5_000, "session-dd")
+        events.getValue("session-dd").value = listOf(event)
+        runCurrent()
+        assertEquals(listOf(event), vm.logData.value.events)
+        assertEquals(mapOf("session-dd" to 1, "session-uber" to 1), subscriptions)
+        verify(appEventRepo).getEventsForSession("session-dd")
+        verify(appEventRepo).getEventsForSession("session-uber")
+        cardsCollector.cancel()
+        logCollector.cancel()
     }
 
     @Test

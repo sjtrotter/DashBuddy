@@ -28,17 +28,20 @@ internal fun LogNowLine(line: JobLine.Now, onNow: () -> Unit) {
         else -> headlineText(headline)
     }
     val due = line.dueAt?.let(rememberTimeFormatter())
-    val text = when (line.phase) {
-        NowPhase.PICKUP_NAV -> if (due == null) stringResource(R.string.hud_log_now_nodue_to_store, figure)
-            else stringResource(R.string.hud_log_now_to_store, due)
-        NowPhase.DROPOFF_NAV -> if (due == null) stringResource(R.string.hud_log_now_nodue_to_door, figure)
-            else stringResource(R.string.hud_log_now_to_door, due)
-        NowPhase.PICKUP_ARRIVED -> if (due == null) stringResource(R.string.hud_log_now_nodue_at_store, figure)
-            else stringResource(R.string.hud_log_now_at_store, figure, due)
-        NowPhase.DROPOFF_ARRIVED -> if (due == null) stringResource(R.string.hud_log_now_nodue_at_door, figure)
-            else stringResource(R.string.hud_log_now_at_door, figure, due)
-        NowPhase.SHOPPING -> stringResource(R.string.hud_log_now_shopping, line.shopped ?: 0, line.total ?: 0)
-        NowPhase.RECEIPT -> stringResource(R.string.hud_log_now_receipt)
+    val figureParts = logFigure(figure)
+    val dueParts = due?.let(::logFigure)
+    val parts = when (line.phase) {
+        NowPhase.PICKUP_NAV -> if (dueParts == null) logTextParts(R.string.hud_log_now_nodue_to_store, figureParts)
+            else logTextParts(R.string.hud_log_now_to_store, dueParts)
+        NowPhase.DROPOFF_NAV -> if (dueParts == null) logTextParts(R.string.hud_log_now_nodue_to_door, figureParts)
+            else logTextParts(R.string.hud_log_now_to_door, dueParts)
+        NowPhase.PICKUP_ARRIVED -> if (dueParts == null) logTextParts(R.string.hud_log_now_nodue_at_store, figureParts)
+            else logTextParts(R.string.hud_log_now_at_store, figureParts, dueParts)
+        NowPhase.DROPOFF_ARRIVED -> if (dueParts == null) logTextParts(R.string.hud_log_now_nodue_at_door, figureParts)
+            else logTextParts(R.string.hud_log_now_at_door, figureParts, dueParts)
+        NowPhase.SHOPPING -> logTextParts(R.string.hud_log_now_shopping,
+            logFigure((line.shopped ?: 0).toString()), logFigure((line.total ?: 0).toString()))
+        NowPhase.RECEIPT -> logTextParts(R.string.hud_log_now_receipt)
     }
     Row(Modifier.fillMaxWidth().testTag("hud.log.now").clickable(role = Role.Button, onClick = onNow)
         .padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
@@ -46,9 +49,9 @@ internal fun LogNowLine(line: JobLine.Now, onNow: () -> Unit) {
         LogTime(stringResource(R.string.hud_log_now), line.phase.color.color(AppTheme.colors))
         Column(Modifier.weight(1f)) {
             if (!parked && due != null && line.phase != NowPhase.RECEIPT) LogText(
-                stringResource(if (StateHeadline.lateMinutes(line.dueAt, now) != null) R.string.hud_log_en_route else R.string.hud_log_left, figure), listOf(figure))
-            LogText(text, listOfNotNull(figure, due, line.shopped?.toString(), line.total?.toString()), AppTheme.colors.text)
+                logTextParts(if (StateHeadline.lateMinutes(line.dueAt, now) != null) R.string.hud_log_en_route else R.string.hud_log_left, figureParts))
+            LogText(parts, AppTheme.colors.text)
         }
-        line.net?.let { LogText(stringResource(R.string.hud_log_net, Formats.money(it)), listOf(Formats.money(it))) }
+        line.net?.let { LogText(logTextParts(R.string.hud_log_net, logFigure(Formats.money(it)))) }
     }
 }

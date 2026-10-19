@@ -38,7 +38,7 @@ fun HudScreen(
                 val showingLog = state.logOpen || state.mode == HudMode.LOG
                 if (showingLog) CompactHeroRow(state.hero) else HeroRow(state.hero)
                 when {
-                    state.logOpen || state.mode == HudMode.LOG ->
+                    showingLog ->
                         Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.slot.log")) { log() }
                     state.mode == HudMode.RESTING -> {
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { RestingCard(state.resting) }

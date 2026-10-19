@@ -8,8 +8,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,9 +44,9 @@ internal fun LogThinRow(item: LogItem) {
                             item.note?.takeIf { item.category == ExpenseCategory.OTHER && it.isNotBlank() } ?: category),
                             color = c.text2, fontSize = 14.sp)
                     }
-                    is FuelRow -> LogText(stringResource(if (item.pricePerGallon != null) R.string.hud_log_gas_price else R.string.hud_log_gas_total,
-                        Formats.money(item.pricePerGallon ?: item.total)), color = c.neutral)
-                    is DispatcherRow -> Text(AnnotatedString.fromHtml(item.text), color = c.neutral, fontSize = 12.sp)
+                    is FuelRow -> LogText(logTextParts(if (item.pricePerGallon != null) R.string.hud_log_gas_price else R.string.hud_log_gas_total,
+                        listOf(LogTextPart(Formats.money(item.pricePerGallon ?: item.total)))), color = c.neutral)
+                    is DispatcherRow -> Text(item.text, color = c.neutral, fontSize = 12.sp)
                     is JobCardModel -> Unit
                 }
             }

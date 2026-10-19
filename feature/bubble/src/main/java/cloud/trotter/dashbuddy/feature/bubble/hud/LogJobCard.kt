@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -71,19 +72,20 @@ private fun LogJobLine(line: JobLine, onUndo: (UndoTarget) -> Unit) {
                     val label = stringResource(if (line.addOn) R.string.hud_log_addon else R.string.hud_log_accepted)
                     val hour = line.perHour?.let { Formats.money0(it) }
                     val mile = line.perMile?.let { Formats.money(it) }
-                    val rates = listOfNotNull(hour?.let { stringResource(R.string.hud_log_per_hr, it) },
-                        mile?.let { stringResource(R.string.hud_log_per_mi, it) }).joinToString(" ")
-                    LogText(if (rates.isEmpty()) label else stringResource(R.string.hud_log_accepted_rates, label, rates),
-                        listOfNotNull(hour, mile))
+                    val rates = listOfNotNull(hour?.let { logTextParts(R.string.hud_log_per_hr, logFigure(it)) },
+                        mile?.let { logTextParts(R.string.hud_log_per_mi, logFigure(it)) })
+                        .flatMapIndexed { index, parts -> if (index == 0) parts else listOf(LogTextPart(" ")) + parts }
+                    LogText(if (rates.isEmpty()) listOf(LogTextPart(label))
+                        else logTextParts(R.string.hud_log_accepted_rates, listOf(LogTextPart(label)), rates))
                 }
                 is JobLine.PickedUp -> {
                     val at = time(line.pickedUpAt)
-                    LogText(stringResource(if (line.arrivedAt != null) R.string.hud_log_picked_up_arrived else R.string.hud_log_picked_up, at), listOf(at))
+                    LogText(logTextParts(if (line.arrivedAt != null) R.string.hud_log_picked_up_arrived else R.string.hud_log_picked_up, logFigure(at)))
                 }
-                is JobLine.Delivered -> LogText(stringResource(R.string.hud_log_delivered))
-                is JobLine.Unassigned -> LogText(stringResource(R.string.hud_log_unassigned))
+                is JobLine.Delivered -> LogText(logTextParts(R.string.hud_log_delivered))
+                is JobLine.Unassigned -> LogText(logTextParts(R.string.hud_log_unassigned))
                 is JobLine.CashTip -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LogText(stringResource(R.string.hud_log_cash_tip, Formats.money(line.amount)), listOf(Formats.money(line.amount)))
+                    LogText(logTextParts(R.string.hud_log_cash_tip, logFigure(Formats.money(line.amount))))
                     if (line.pending) Text(stringResource(R.string.hud_log_pending), color = AppTheme.colors.warn, fontSize = 11.sp)
                 }
                 is JobLine.Now -> Unit
@@ -91,10 +93,10 @@ private fun LogJobLine(line: JobLine, onUndo: (UndoTarget) -> Unit) {
         }
         if (line is JobLine.PickedUp) line.dwellMs?.let { dwell ->
             val minutes = stringResource(R.string.hud_log_minutes, dwell / 60_000)
-            LogText(stringResource(R.string.hud_log_at_store, minutes), listOf(minutes))
+            LogText(logTextParts(R.string.hud_log_at_store, logFigure(minutes)))
         }
         if (line is JobLine.Delivered) line.paid?.let {
-            LogText(stringResource(R.string.hud_log_paid, Formats.money(it)), listOf(Formats.money(it)))
+            LogText(logTextParts(R.string.hud_log_paid, logFigure(Formats.money(it))))
         }
         if (line is JobLine.CashTip) line.undo?.let { window ->
             val now by rememberNow()
@@ -114,16 +116,41 @@ internal fun LogTime(text: String, color: Color = AppTheme.colors.neutral) {
     Text(text, Modifier.width(58.dp), style = AppTheme.num.smNum.copy(fontSize = 12.sp), color = color)
 }
 
+internal data class LogTextPart(val text: String, val number: Boolean = false)
+
+internal fun logFigure(text: String) = listOf(LogTextPart(text, number = true))
+
+// Read placeholders from the unformatted resource, so literal labels/units and figures stay separate.
+// Nested parts (such as accepted rates) retain their styles, including in reordered translations.
+private val logPlaceholder = Regex("%([1-9][0-9]*)\\$[sd]")
+
+internal fun logTextParts(template: String, vararg arguments: List<LogTextPart>): List<LogTextPart> = buildList {
+    var end = 0
+    logPlaceholder.findAll(template).forEach { match ->
+        if (match.range.first > end) add(LogTextPart(template.substring(end, match.range.first)))
+        addAll(arguments[match.groupValues[1].toInt() - 1])
+        end = match.range.last + 1
+    }
+    if (end < template.length) add(LogTextPart(template.substring(end)))
+}
+
 @Composable
-internal fun LogText(text: String, numbers: List<String> = emptyList(), color: Color = AppTheme.colors.text2) {
-    val numberStyle = SpanStyle(fontFamily = AppTheme.num.smNum.fontFamily, fontFeatureSettings = AppTheme.num.smNum.fontFeatureSettings, fontWeight = FontWeight.SemiBold, color = AppTheme.colors.text)
-    val annotated = AnnotatedString.Builder(text).apply {
-        numbers.forEach { value ->
-            val start = text.indexOf(value)
-            if (start >= 0) addStyle(numberStyle, start, start + value.length)
+internal fun logTextParts(@StringRes template: Int, vararg arguments: List<LogTextPart>): List<LogTextPart> =
+    logTextParts(stringResource(template), *arguments)
+
+internal fun buildLogText(parts: List<LogTextPart>, numberStyle: SpanStyle): AnnotatedString =
+    AnnotatedString.Builder().apply {
+        parts.forEach { part ->
+            if (part.number) pushStyle(numberStyle)
+            append(part.text)
+            if (part.number) pop()
         }
     }.toAnnotatedString()
-    Text(annotated, color = color, fontSize = 13.sp)
+
+@Composable
+internal fun LogText(parts: List<LogTextPart>, color: Color = AppTheme.colors.text2) {
+    val numberStyle = SpanStyle(fontFamily = AppTheme.num.smNum.fontFamily, fontFeatureSettings = AppTheme.num.smNum.fontFeatureSettings, fontWeight = FontWeight.SemiBold, color = AppTheme.colors.text)
+    Text(buildLogText(parts, numberStyle), color = color, fontSize = 13.sp)
 }
 
 @Composable

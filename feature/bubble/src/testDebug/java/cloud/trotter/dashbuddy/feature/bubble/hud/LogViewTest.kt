@@ -145,10 +145,6 @@ class LogViewTest {
         compose.onNodeWithText("Gas $31.90").assertIsDisplayed()
         compose.onNodeWithText("-", substring = true).assertDoesNotExist()
     }
-    @Test fun `dispatcher HTML renders as Compose text`() {
-        show(listOf(DispatcherRow("chat:html", T0, "<b>Panera Bread</b>: 12 items")))
-        compose.onNodeWithText("Panera Bread: 12 items").assertIsDisplayed()
-    }
     @Test fun `declined offer renders pay and miles`() {
         show(listOf(OfferRow("offer:decline", T0, "Panera Bread", 3.25, 6.8, AppEventType.OFFER_DECLINED)))
         compose.onNodeWithText("Declined Panera Bread").assertIsDisplayed()

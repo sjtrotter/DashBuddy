@@ -56,4 +56,16 @@ class LogChatFilterTest {
         assertEquals(2, kept.size)
         kept.forEach { assertFalse(PiiShapes.hasNameShape(LogChatFilter.plainText(it.text))) }
     }
+    @Test fun `a name split by a run of spaces is never kept`() {
+        listOf("     ", "\t", "\u00a0").forEach { gap ->
+            val html = "<b>Store${gap}" + ('P' + 1) + "</b>"
+            assertNull(LogChatFilter.kept(logChat(html)))
+            assertFalse(LogChatFilter.keep(logChat(html)))
+        }
+    }
+    @Test fun `the kept text is the collapsed plain text`() {
+        val html = "  <b>Panera     Bread</b>\t&amp;\u00a0status:&nbsp;12&#32;items  "
+        assertEquals("Panera Bread & status: 12 items", LogChatFilter.kept(logChat(html)))
+    }
+
 }
