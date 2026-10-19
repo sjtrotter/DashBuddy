@@ -348,6 +348,40 @@ class WizardViewModelTest {
     }
 
     @Test
+    fun `a trim lookup that answers after a type change changes nothing`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2024"))
+        whenever(vehicleRepository.getMakes("2024")).thenReturn(listOf("Hyundai"))
+        whenever(vehicleRepository.getModels("2024", "Hyundai")).thenReturn(listOf("Ioniq 6"))
+        whenever(vehicleRepository.getVehicleOptions("2024", "Hyundai", "Ioniq 6"))
+            .thenReturn(listOf(VehicleOption("ev", "Electric")))
+        whenever(vehicleRepository.getVehicleDetails("ev")).doSuspendableAnswer {
+            kotlinx.coroutines.delay(5_000)
+            VehicleDetails(combinedMpg = 132f, fuelType = FuelType.ELECTRICITY)
+        }
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+        vm.allowVehicleLookup()
+        testScheduler.advanceUntilIdle()
+        vm.onYearSelected("2024")
+        testScheduler.advanceUntilIdle()
+        vm.onMakeSelected("Hyundai")
+        testScheduler.advanceUntilIdle()
+        vm.onModelSelected("Ioniq 6")
+        testScheduler.advanceUntilIdle()
+        vm.onTrimSelected("Electric")
+        vm.updateVehicleType(VehicleType.BICYCLE)
+        testScheduler.advanceUntilIdle()
+
+        val state = vm.state.value
+        assertTrue(state.vehicleProfile is Bicycle)
+        assertEquals(false, EconomyField.KWH_PER_100_MI in state.userSetEconomyFields)
+        assertEquals(false, EconomyField.VEHICLE_MPG in state.userSetEconomyFields)
+    }
+
+    @Test
     fun `an EPA electric trim converts MPGe and saves an electric profile`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()

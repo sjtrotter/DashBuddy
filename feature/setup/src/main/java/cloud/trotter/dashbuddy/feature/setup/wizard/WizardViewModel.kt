@@ -439,6 +439,8 @@ class WizardViewModel @Inject constructor(
         // Escape hatch! Don't look up MPG if Not Listed.
         if (trimName == VEHICLE_NOT_LISTED || !_state.value.vehicleLookupAllowed) return
 
+        // The lookup answers for THIS identity; a type or identity change while it is in flight wins.
+        val lookedUp = _state.value.let { Triple(it.vehicleYear, it.vehicleMake, it.vehicleModel) }
         viewModelScope.launch {
             val vehicleId =
                 _availableTrims.value.find { it.displayName == trimName }?.id ?: return@launch
@@ -446,6 +448,9 @@ class WizardViewModel @Inject constructor(
 
             if (details != null) {
                 _state.update { currentState ->
+                    val stale = !currentState.vehicleProfile.hasCarIdentity || currentState.vehicleTrim != trimName ||
+                        Triple(currentState.vehicleYear, currentState.vehicleMake, currentState.vehicleModel) != lookedUp
+                    if (stale) return@update currentState
                     if (details.fuelType == FuelType.ELECTRICITY) {
                         val current = currentState.toVehicleProfile()
                         val consumption = details.combinedMpg?.let { VehiclePresets.MPGE_TO_KWH_PER_100_MI / it }
