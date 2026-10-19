@@ -12,6 +12,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.EventMetadata
 import cloud.trotter.dashbuddy.domain.model.event.SequencedAppEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import timber.log.Timber
@@ -80,9 +81,13 @@ class AppEventRepo @Inject constructor(
     fun getEventsByType(type: AppEventType): Flow<List<AppEvent>> =
         dao.getEventsByType(type).map { rows -> rows.map { it.toDomain() } }
 
-    /** Events with durable append identities for consumers that must break timestamp ties. */
+    /**
+     * Events with durable append identities for consumers that must break timestamp ties. The row
+     * list is deduplicated BEFORE the payload decode: every lifecycle event invalidates `app_events`,
+     * and an unchanged row list must not re-decode a type's payloads for a HUD observer.
+     */
     fun getSequencedEventsByType(type: AppEventType): Flow<List<SequencedAppEvent>> =
-        dao.getEventsByType(type).map { rows -> rows.map { it.toSequenced() } }
+        dao.getEventsByType(type).distinctUntilChanged().map { rows -> rows.map { it.toSequenced() } }
 
     fun getEventsInTimeRange(startTime: Long, endTime: Long): Flow<List<AppEvent>> =
         dao.getEventsInTimeRange(startTime, endTime).map { rows -> rows.map { it.toDomain() } }

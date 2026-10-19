@@ -196,11 +196,12 @@ sibling surface, left for a future extraction.
   concrete data layers; census Keystore credentials, bounded file spool, debug upload sink (#1182), trusted-envelope sink + spool (debug), and the identity reset + upload lock (#1185).
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration, signed census transport (#1182).
 - **`:core:location`** — Play Services GPS tracking.
-- **`:core:datastore`** — Preferences DataStore (ten single-concern stores behind Hilt
-  qualifiers — app prefs, strategy, dev settings, odometer, app state, platforms,
-  rule-capability grants, the #981 **weekly plan**, the #1333 S2f **vehicles** store (the saved
-  vehicles and the active one, a user artifact like the plan, backed up), and `census_credentials`
-  (which lives in `:core:data` beside its Keystore sealer)). The weekly-plan store is deliberately
+- **`:core:datastore`** — Preferences DataStore (twelve single-concern stores behind Hilt
+  qualifiers: ten in `DataStoreModule` — app prefs, strategy, dev settings, odometer, app state,
+  platforms, rule-capability grants, the #1151 event-receipt consent, the #981 **weekly plan**, and
+  the #1333 S2f **vehicles** store (the saved vehicles and the active one, a user artifact like the
+  plan, backed up) — plus `census_credentials` and the census health store in `:core:data`'s
+  `CensusCredentialsModule`, beside the Keystore sealer). The weekly-plan store is deliberately
   NOT a Room table: a saved plan is a **user artifact** (nothing in `app_events` implies it, and
   nothing can rebuild it), so it must not live in the read-model DB that a `PROJECTOR_VERSION`
   bump wipes — see §5.

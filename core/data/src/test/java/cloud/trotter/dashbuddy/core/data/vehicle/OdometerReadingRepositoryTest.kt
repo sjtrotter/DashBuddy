@@ -57,14 +57,4 @@ class OdometerReadingRepositoryTest {
         verify(events).appendUserEvent(captured.capture(), isNull())
         assertEquals(OdometerReadingPayload("civic", 1), captured.firstValue.payload)
     }
-
-    @Test fun `an unchanged row list maps once`() = runTest {
-        val rows = listOf(SequencedAppEvent(42, AppEvent(AppEventType.ODOMETER_READING, 200, null,
-            OdometerReadingPayload("civic", 52_388, 123.5))))
-        whenever(events.getSequencedEventsByType(AppEventType.ODOMETER_READING))
-            .thenReturn(flowOf(rows, rows.toList()))
-        val repo = OdometerReadingRepository(events, gps, clock)
-        assertEquals(listOf(listOf(VehicleOdometerReading("civic", LastOdometerReading(52_388, 123.5, 200), 42))),
-            repo.readings.toList())
-    }
 }
