@@ -70,7 +70,7 @@ class LogMapperTest {
     @Test fun `job whose latest event is its completion freezes at its completion time`() {
         val before = job(map())
         val after = job(map(data = LogData(expenses = listOf(logExpense(at = 50_000)))))
-        assertEquals(8_000L, before.at)
+        assertEquals(9_000L, before.at)
         assertEquals(before, after)
     }
     @Test fun `two jobs in one dash are two cards ordered by their latest event`() {
@@ -79,7 +79,7 @@ class LogMapperTest {
         val items = map(CardStack(logStack().completed + second), LogData(events = listOf(
             logLink(), logLink("job2", listOf("second"), 21_000))))
         assertEquals(listOf("job", "job2"), items.filterIsInstance<JobCardModel>().map { it.jobId })
-        assertEquals(listOf(8_000L, 27_000L), items.map { it.at })
+        assertEquals(listOf(9_000L, 28_000L), items.map { it.at })
     }
     @Test fun `cash tip is a line inside its delivery's card`() {
         val items = map(data = LogData(deliveries = listOf(logRecord())))
@@ -171,6 +171,31 @@ class LogMapperTest {
         assertEquals("Panera Bread & status", row.text)
         assertEquals(LogChatFilter.kept(msg), row.text)
     }
+    @Test fun `an arrived but not completed drop has no delivered line`() {
+        val events = stackedEvents().take(4)
+        val stack = CardStack.of(FlowCardMapper.fold(events), null)
+        assertEquals(7_000L, stack.completed.filterIsInstance<FlowCardSnapshot.Delivery>().single().phaseEndedAt)
+        val card = job(LogMapper.map(stack, LogData(events = events), emptyList(), null))
+        assertTrue(card.lines.filterIsInstance<JobLine.Delivered>().isEmpty())
+    }
+    @Test fun `a delivered line lands at the completion event`() {
+        val events = stackedEvents().take(6)
+        val stack = CardStack.of(FlowCardMapper.fold(events), null)
+        val card = job(LogMapper.map(stack, LogData(events = events), emptyList(), null))
+        assertEquals(listOf(JobLine.Delivered(8_500, 16.0)), card.lines.filterIsInstance<JobLine.Delivered>())
+        assertEquals(8_500L, card.at)
+    }
+    @Test fun `delivery payload completion time wins and missing time uses the event`() {
+        val original = stackedEvents().take(6)
+        listOf(8_250L, null).forEach { completedAt ->
+            val event = original.last()
+            val events = original.dropLast(1) + event.copy(
+                payload = (event.payload as DeliveryPayload).copy(completedAt = completedAt))
+            val stack = CardStack.of(FlowCardMapper.fold(events), null)
+            assertEquals(completedAt ?: event.occurredAt,
+                job(map(stack, LogData(events = events))).lines.filterIsInstance<JobLine.Delivered>().single().at)
+        }
+    }
     @Test fun `a stacked job shows one delivered line per drop through the production fold`() {
         val events = stackedEvents()
         val stack = CardStack.of(FlowCardMapper.fold(events), null)
@@ -181,31 +206,56 @@ class LogMapperTest {
             logRecord(seq = 11, task = "drop2", cash = 4.0).copy(realizedPay = 9.75, tip = 5.0, basePay = 4.75),
         )
         val card = job(map(stack, LogData(events = events, deliveries = records)))
-        assertEquals(listOf(JobLine.Delivered(8_000, 6.25), JobLine.Delivered(12_000, 9.75)),
+        assertEquals(listOf(JobLine.Delivered(8_500, 6.25), JobLine.Delivered(12_500, 9.75)),
             card.lines.filterIsInstance<JobLine.Delivered>())
-        assertEquals(12_000L, card.at)
+        assertEquals(12_500L, card.at)
     }
     @Test fun `receipt amount is used only for a single drop job`() {
-        assertEquals(listOf(JobLine.Delivered(8_000, 10.6)), job(map()).lines.filterIsInstance<JobLine.Delivered>())
+        val singleDrop = stackedEvents().take(6)
+        val singleStack = CardStack.of(FlowCardMapper.fold(singleDrop), null)
+        assertEquals(listOf(JobLine.Delivered(8_500, 16.0)),
+            job(map(singleStack, LogData(events = singleDrop))).lines.filterIsInstance<JobLine.Delivered>())
         val events = stackedEvents()
         val stack = CardStack.of(FlowCardMapper.fold(events), null)
-        assertEquals(listOf(JobLine.Delivered(8_000, null), JobLine.Delivered(12_000, null)),
+        assertEquals(listOf(JobLine.Delivered(8_500, null), JobLine.Delivered(12_500, null)),
             job(map(stack, LogData(events = events))).lines.filterIsInstance<JobLine.Delivered>())
     }
     @Test fun `a projection with unknown pay does not fall back to the receipt`() {
-        val data = LogData(deliveries = listOf(logRecord().copy(realizedPay = null)))
-        assertNull(job(map(data = data)).lines.filterIsInstance<JobLine.Delivered>().single().paid)
+        val events = stackedEvents().take(6)
+        val stack = CardStack.of(FlowCardMapper.fold(events), null)
+        val data = LogData(events = events, deliveries = listOf(logRecord(task = "drop1").copy(realizedPay = null)))
+        assertNull(job(map(stack, data)).lines.filterIsInstance<JobLine.Delivered>().single().paid)
     }
     @Test fun `a receipt without a matching delivery still shows a delivered line`() {
         val card = job(map(CardStack(listOf(logPost()))))
         assertEquals(listOf(JobLine.Delivered(9_000, 10.6)), card.lines)
     }
+    @Test fun `receipt only recovery prefers the projection's pay`() {
+        val stack = CardStack(listOf(logPost()))
+        val data = LogData(deliveries = listOf(logRecord(cash = null).copy(realizedPay = 12.6)))
+        assertEquals(listOf(JobLine.Delivered(9_000, 12.6)), job(map(stack, data)).lines)
+        assertEquals(listOf(JobLine.Delivered(9_000, 10.6)), job(map(stack)).lines)
+        assertNull(job(map(stack, data.copy(deliveries = listOf(logRecord(cash = null).copy(realizedPay = null)))))
+            .lines.filterIsInstance<JobLine.Delivered>().single().paid)
+    }
+    @Test fun `a receipt for another task adds no recovery line when the job has a completion event`() {
+        val events = stackedEvents().take(6)
+        val folded = CardStack.of(FlowCardMapper.fold(events), null)
+        val stack = folded.copy(completed = folded.completed + logPost(task = "recovered"))
+        assertEquals(listOf(JobLine.Delivered(8_500, null)),
+            job(map(stack, LogData(events = events))).lines.filterIsInstance<JobLine.Delivered>())
+    }
     @Test fun `an unassigned delivery never shows a delivered line`() {
         val event = AppEvent(AppEventType.TASK_UNASSIGNED, 8_000, "dash",
-            TaskUnassignedPayload("job", "drop", TaskPhase.DROPOFF, startedAt = 4_000, unassignedAt = 8_000))
-        val card = job(map(CardStack(listOf(logDelivery())), LogData(events = listOf(event))))
+            TaskUnassignedPayload("job", "drop1", TaskPhase.DROPOFF, startedAt = 4_000, unassignedAt = 8_000))
+        val events = stackedEvents().take(6) + event
+        val stack = CardStack.of(FlowCardMapper.fold(events), null)
+        val card = job(map(stack, LogData(events = events)))
         assertTrue(card.lines.filterIsInstance<JobLine.Delivered>().isEmpty())
-        assertEquals(listOf(JobLine.Unassigned(8_000)), card.lines)
+        assertEquals(JobLine.Unassigned(8_000), card.lines.last())
+        val receiptOnly = CardStack(listOf(logPost(task = "drop1")))
+        assertTrue(job(map(receiptOnly, LogData(events = listOf(event))))
+            .lines.filterIsInstance<JobLine.Delivered>().isEmpty())
     }
 
     private fun stackedEvents(): List<AppEvent> {

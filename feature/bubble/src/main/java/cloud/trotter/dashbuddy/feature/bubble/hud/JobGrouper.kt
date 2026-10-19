@@ -12,12 +12,18 @@ import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 
 data class JobGroup(
     val jobId: String, val offers: List<FlowCardSnapshot.Offer>,
-    val pickups: List<FlowCardSnapshot.Pickup>, val deliveries: List<FlowCardSnapshot.Delivery>,
+    val pickups: List<FlowCardSnapshot.Pickup>,
     val postTasks: List<FlowCardSnapshot.PostTask>, val unassignedAt: Long?, val live: Boolean,
     val startedAt: Long, val endedAt: Long?,
 )
 
 object JobGrouper {
+    /**
+     * Accept and first-card events from one step can carry slightly different timestamps.
+     * Allow that skew while excluding jobs already open well before a standalone accept.
+     */
+    private const val ACCEPT_JOIN_SKEW_MS = 2_000L
+
     fun group(stack: CardStack, events: List<AppEvent>): List<JobGroup> {
         // The active snapshot replaces its frozen twin (#458), using the production fold's ids.
         val cards = (stack.completed + listOfNotNull(stack.active)).associateBy { it.id }.values.toList()
@@ -48,7 +54,7 @@ object JobGrouper {
             val unassigned = abandoned[id].orEmpty()
             val live = stack.active?.jobId() == id
             JobGroup(id, emptyList(), own.filterIsInstance<FlowCardSnapshot.Pickup>(),
-                own.filterIsInstance<FlowCardSnapshot.Delivery>(), own.filterIsInstance<FlowCardSnapshot.PostTask>(),
+                own.filterIsInstance<FlowCardSnapshot.PostTask>(),
                 unassigned.maxOfOrNull { it.unassignedAt }, live,
                 (own.map { it.phaseStartedAt } + unassigned.map { it.startedAt }).min(),
                 if (live) null else (own.mapNotNull { it.phaseEndedAt } + unassigned.map { it.unassignedAt }).maxOrNull())
@@ -67,7 +73,7 @@ object JobGrouper {
                         it.startedAt <= at && (it.endedAt == null || at <= it.endedAt)
                     }.singleOrNull()
                     // A standalone accept starts a new job, even while the previous receipt is open.
-                    OfferQuoteBasis.TOTAL -> candidates.firstOrNull { it.startedAt >= at }
+                    OfferQuoteBasis.TOTAL -> candidates.firstOrNull { it.startedAt >= at - ACCEPT_JOIN_SKEW_MS }
                 }
             }
             job?.let { it.jobId to offer }

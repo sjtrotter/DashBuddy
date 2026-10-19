@@ -32,6 +32,14 @@ class JobGrouperTest {
         val onlyPrevious = stack.copy(completed = stack.completed.take(3))
         assertTrue(JobGrouper.group(onlyPrevious, events).single().offers.isEmpty())
     }
+    @Test fun `a job started a few ms before the accept still takes it`() {
+        val offer = logOffer("standalone", 10_000)
+        val stack = CardStack(listOf(offer, logPickup("later", "pickup2", 20_000),
+            logPickup("job", "pickup", 9_997)))
+        val groups = JobGrouper.group(stack, listOf(logAccepted("standalone", 10_000)))
+        assertEquals(listOf(offer), groups.single { it.jobId == "job" }.offers)
+        assertTrue(groups.single { it.jobId == "later" }.offers.isEmpty())
+    }
     @Test fun `an add-on accept joins the open job`() {
         val offer = logOffer("addon", 5_000).copy(quoteBasis = OfferQuoteBasis.INCREMENTAL)
         val stack = CardStack(listOf(logPickup("j1"), logDelivery("j1"), offer,

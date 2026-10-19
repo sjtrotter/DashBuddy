@@ -4,6 +4,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.chat.ChatMessage
+import cloud.trotter.dashbuddy.domain.model.event.AppEventType
+import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
 
@@ -16,8 +18,12 @@ object LogMapper {
         val tips = CashTipFold.fold(data.events, data.deliveries)
         val groups = JobGrouper.group(cards, data.events)
         val records = data.deliveries.associateBy { it.taskId }
-        val unassigned = data.events.mapNotNull { it.payload as? TaskUnassignedPayload }
+        val unassigned = data.events.filter { it.type == AppEventType.TASK_UNASSIGNED }
+            .mapNotNull { it.payload as? TaskUnassignedPayload }
             .mapTo(HashSet()) { it.jobId to it.taskId }
+        val completed = data.events.filter { it.type == AppEventType.DELIVERY_COMPLETED }
+            .mapNotNull { event -> (event.payload as? DeliveryPayload)?.let { it to event.occurredAt } }
+            .groupBy { (delivery, _) -> delivery.jobId }
         val joined = groups.flatMap { it.offers }.mapTo(HashSet()) { it.id }
         val rows = mutableListOf<LogItem>()
         groups.forEach { group ->
@@ -29,18 +35,21 @@ object LogMapper {
                 pickup.confirmedAt?.let { at -> lines += JobLine.PickedUp(pickup.arrivedAt, at,
                     pickup.arrivedAt?.let { (at - it).coerceAtLeast(0) }) }
             }
-            group.deliveries.filter { it.phaseEndedAt != null && (it.jobId to it.taskId) !in unassigned }
-                .forEach { delivery ->
+            val drops = completed[group.jobId].orEmpty()
+            drops.filter { (delivery, _) -> (delivery.jobId to delivery.taskId) !in unassigned }
+                .forEach { (delivery, occurredAt) ->
                     val record = records[delivery.taskId]
                     val receipt = group.postTasks.singleOrNull { it.taskId == null || it.taskId == delivery.taskId }
                     val paid = if (record != null) record.realizedPay
-                        else receipt?.totalPay?.takeIf { group.deliveries.size == 1 }
-                    lines += JobLine.Delivered(delivery.phaseEndedAt!!, paid)
+                        else receipt?.totalPay?.takeIf { drops.size == 1 }
+                    lines += JobLine.Delivered(delivery.completedAt ?: occurredAt, paid)
                 }
-            // A receipt can be the only surviving evidence for a recovered delivery.
-            group.postTasks.filter { post -> group.deliveries.none { post.taskId == null || it.taskId == post.taskId } }
+            // Recover from receipts only when the job has no completion events at all.
+            group.postTasks.filter { post -> drops.isEmpty() && (post.jobId to post.taskId) !in unassigned }
                 .forEach { post ->
-                    lines += JobLine.Delivered(post.phaseEndedAt ?: post.phaseStartedAt, post.totalPay)
+                    val record = records[post.taskId]
+                    val paid = if (record != null) record.realizedPay else post.totalPay
+                    lines += JobLine.Delivered(post.phaseEndedAt ?: post.phaseStartedAt, paid)
                 }
             group.unassignedAt?.let { lines += JobLine.Unassigned(it) }
             val committed = tips.filter { it.jobId == group.jobId }
