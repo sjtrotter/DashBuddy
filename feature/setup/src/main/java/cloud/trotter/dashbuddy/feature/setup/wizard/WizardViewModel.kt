@@ -13,17 +13,16 @@ import cloud.trotter.dashbuddy.domain.config.OfferStrategy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.MetricType
 import cloud.trotter.dashbuddy.domain.evaluation.ScoringRule
-import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
-import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOption
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toVehicleProfile
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.withTypeDefaults
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraft
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -58,23 +57,28 @@ class WizardViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(WizardState())
     val state = _state.asStateFlow()
-    val steps = _state.map { state ->
-        WizardStep.entries.filter { it != WizardStep.GAS_PRICE || EconomyField.GAS_PRICE in EconomyFieldGroups.fieldsFor(state.vehicleProfile) }
+    val vehicleDraft = VehicleDraft(
+        vehicleRepository, viewModelScope, VehicleDraftState(),
+        onShapeChanged = ::applyVehicleShapeDefaults,
+        onTrimDetails = ::applyTrimDetails,
+        onTypeChanged = ::applyVehicleTypeDefaults,
+    )
+    val steps = vehicleDraft.state.map { vehicle ->
+        WizardStep.entries.filter { it != WizardStep.GAS_PRICE || EconomyField.GAS_PRICE in EconomyFieldGroups.fieldsFor(vehicle.profile) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, WizardStep.entries)
 
+    private fun applyVehicleShapeDefaults() {
+        _state.update { it.withTypeDefaults(vehicleDraft.state.value) }
+    }
 
-    private val _availableYears = MutableStateFlow<List<String>>(emptyList())
-    val availableYears = _availableYears.asStateFlow()
+    private fun applyVehicleTypeDefaults() {
+        _state.update {
+            it.copy(userSetEconomyFields = it.userSetEconomyFields -
+                (EconomyFieldGroups.vehicleFields - VehicleDraftState.fields))
+                .withTypeDefaults(vehicleDraft.state.value)
+        }
+    }
 
-    private val _availableMakes = MutableStateFlow<List<String>>(emptyList())
-    val availableMakes = _availableMakes.asStateFlow()
-
-    private val _availableModels = MutableStateFlow<List<String>>(emptyList())
-    val availableModels = _availableModels.asStateFlow()
-
-    private val _availableTrims = MutableStateFlow<List<VehicleOption>>(emptyList())
-    private val _availableTrimNames = MutableStateFlow<List<String>>(emptyList())
-    val availableTrimNames = _availableTrimNames.asStateFlow()
     private val _vehicleSaveFailed = MutableSharedFlow<Unit>(replay = 1)
     val vehicleSaveFailed = _vehicleSaveFailed.asSharedFlow()
 
@@ -125,23 +129,16 @@ class WizardViewModel @Inject constructor(
 
             // The currently-stored UserEconomy already merges class-derived defaults
             // with persisted user-set values, so just snapshot it for the wizard.
+            vehicleDraft.load(VehicleDraftState.from(
+                profile = activeProfile, economy = storedEconomy,
+                year = currentYear, make = currentMake, model = currentModel, trim = currentTrim,
+                mpg = currentMpg, lookupAllowed = vehicleDraft.state.value.lookupAllowed,
+            ))
             _state.update { currentState ->
                 currentState.copy(
-                    vehicleClass = storedEconomy.vehicleClass,
-                    vehicleProfile = activeProfile ?: storedEconomy.vehicleProfile,
-                    kwhPer100Mi = storedEconomy.kwhPer100Mi,
-                    whPerMile = storedEconomy.whPerMile,
-                    electricityPricePerKwh = storedEconomy.electricityPricePerKwh,
                     chainCost = storedEconomy.chainCost, chainLifeMi = storedEconomy.chainLifeMi,
                     batteryCost = storedEconomy.batteryCost, batteryLifeMi = storedEconomy.batteryLifeMi,
                     beltCost = storedEconomy.beltCost, beltLifeMi = storedEconomy.beltLifeMi,
-                    vehicleYear = currentYear,
-                    vehicleMake = currentMake,
-                    vehicleModel = currentModel,
-                    vehicleTrim = currentTrim,
-                    manualMpgEntry = currentYear.isNotBlank() &&
-                        currentMake.isNotBlank() && currentModel.isNotBlank(),
-                    estimatedMpg = currentMpg,
                     fuelType = currentFuelType,
                     isGasPriceAuto = currentGasAuto,
                     gasPrice = currentGasPrice,
@@ -177,100 +174,24 @@ class WizardViewModel @Inject constructor(
                     phoneBusinessPercent = storedEconomy.phoneBusinessPercent,
                     avgMinutesPerMile = storedEconomy.avgMinutesPerMile,
                     basePickupMinutes = storedEconomy.basePickupMinutes,
-                    userSetEconomyFields = storedEconomy.userSetFields,
+                    userSetEconomyFields = storedEconomy.userSetFields - VehicleDraftState.fields,
                 )
             }
             garageDraftLoaded = true
             // Wait for saved preferences before any startup gas/location request.
             attemptAutoGasPriceFetch()
             val vehicleLookupAllowed = appPreferencesRepository.vehicleLookupAllowed.first()
-            _state.update { it.copy(vehicleLookupAllowed = vehicleLookupAllowed) }
-            if (vehicleLookupAllowed) fetchVehicleYears()
+            if (vehicleLookupAllowed) vehicleDraft.allowLookup()
         }
     }
 
     fun allowVehicleLookup() {
         viewModelScope.launch {
             appPreferencesRepository.setVehicleLookupAllowed(true)
-            _state.update { it.copy(vehicleLookupAllowed = true) }
-            fetchVehicleYears()
+            vehicleDraft.allowLookup()
         }
     }
 
-    private fun fetchVehicleYears() {
-        viewModelScope.launch {
-            if (!_state.value.vehicleLookupAllowed || !_state.value.vehicleProfile.hasCarIdentity) {
-                return@launch
-            }
-            _availableYears.value = vehicleRepository.getYears()
-        }
-    }
-
-    fun onManualMpgEntry() {
-        _state.update { it.copy(manualMpgEntry = true) }
-    }
-
-    /**
-     * Sets the vehicle class. Any [EconomyField] still at its default (i.e. NOT in
-     * [WizardState.userSetEconomyFields]) shifts to the new class's preset. User-set
-     * values are preserved.
-     */
-    fun updateVehicleType(type: VehicleType) {
-        _state.update { state ->
-            if (state.vehicleProfile.vehicleType == type) return@update state
-            state.copy(vehicleProfile = type.defaultProfile(), vehicleClass = type.defaultProfile().legacyClass,
-                userSetEconomyFields = state.userSetEconomyFields - EconomyFieldGroups.vehicleFields)
-                .withTypeDefaults()
-        }
-        if (_state.value.vehicleProfile.hasCarIdentity) fetchVehicleYears()
-    }
-
-    fun updatePowertrain(powertrain: Powertrain) {
-        _state.update { state ->
-            val scooter = state.vehicleProfile as? ScooterMoped ?: return@update state
-            state.copy(vehicleProfile = scooter.copy(powertrain = powertrain)).withTypeDefaults()
-        }
-    }
-
-    fun updateVehicleClass(type: VehicleClass) {
-        val hadIdentity = _state.value.vehicleProfile.hasCarIdentity
-        _state.update { state ->
-            val profile = when (val current = state.vehicleProfile) {
-                is HybridCar -> current.copy(vehicleClass = type.gasClass ?: current.vehicleClass)
-                else -> LegacyProfile(vehicleClass = type).toTyped().withCosts(current.wear, current.fixed)
-            }
-            state.copy(vehicleProfile = profile, vehicleClass = type,
-                userSetEconomyFields = state.userSetEconomyFields + EconomyField.VEHICLE_CLASS).withTypeDefaults()
-        }
-        if (!hadIdentity && _state.value.vehicleProfile.hasCarIdentity) fetchVehicleYears()
-    }
-
-    private fun WizardState.withTypeDefaults(): WizardState {
-        val resolved = toUserEconomy()
-        return copy(
-            estimatedMpg = resolved.vehicleMpg.toFloat(),
-            tireSetCost = resolved.tireSetCost, tireLifetimeMi = resolved.tireLifetimeMi,
-            oilCost = resolved.oilCost, oilIntervalMi = resolved.oilIntervalMi,
-            brakesCost = resolved.brakesCost, brakesIntervalMi = resolved.brakesIntervalMi,
-            fluidsCost = resolved.fluidsCost, fluidsIntervalMi = resolved.fluidsIntervalMi,
-            miscYearly = resolved.miscYearly, miscYearlyMi = resolved.miscYearlyMi,
-            purchasePrice = resolved.purchasePrice, totalLifetimeMi = resolved.totalLifetimeMi,
-            chainCost = resolved.chainCost, chainLifeMi = resolved.chainLifeMi,
-            batteryCost = resolved.batteryCost, batteryLifeMi = resolved.batteryLifeMi,
-            beltCost = resolved.beltCost, beltLifeMi = resolved.beltLifeMi,
-            avgMinutesPerMile = resolved.avgMinutesPerMile, basePickupMinutes = resolved.basePickupMinutes,
-            kwhPer100Mi = resolved.kwhPer100Mi, whPerMile = resolved.whPerMile,
-        )
-    }
-
-    fun updateConsumption(value: Double) = _state.update {
-        if (it.vehicleProfile is EBike) it.copy(whPerMile = value,
-            userSetEconomyFields = it.userSetEconomyFields + EconomyField.WH_PER_MILE)
-        else it.copy(kwhPer100Mi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.KWH_PER_100_MI)
-    }
-    fun updateElectricityPrice(value: Double) = _state.update {
-        it.copy(electricityPricePerKwh = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.ELECTRICITY_PRICE)
-    }
     fun updateChain(cost: Double, life: Double) = _state.update {
         it.copy(chainCost = cost, chainLifeMi = life, userSetEconomyFields = it.userSetEconomyFields + setOf(EconomyField.CHAIN_COST, EconomyField.CHAIN_LIFETIME))
     }
@@ -375,120 +296,12 @@ class WizardViewModel @Inject constructor(
         )
     }
 
-    fun onYearSelected(year: String) {
-        if (!_state.value.vehicleLookupAllowed || year !in _availableYears.value) return
-        _state.update {
-            it.copy(
-                vehicleYear = year,
-                vehicleMake = "",
-                vehicleModel = "",
-                vehicleTrim = ""
-            )
-        }
-        _availableMakes.value = emptyList(); _availableModels.value =
-            emptyList(); _availableTrims.value = emptyList(); _availableTrimNames.value = emptyList()
-        viewModelScope.launch {
-            _availableMakes.value =
-                listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getMakes(year)
-        }
-    }
-
-    fun onMakeSelected(make: String) {
-        if (make != VEHICLE_NOT_LISTED &&
-            (!_state.value.vehicleLookupAllowed || _state.value.vehicleYear !in _availableYears.value)
-        ) return
-        _state.update { it.copy(vehicleMake = make, vehicleModel = "", vehicleTrim = "") }
-        _availableModels.value = emptyList(); _availableTrims.value =
-            emptyList(); _availableTrimNames.value = emptyList()
-
-        // Skip API call if Not Listed
-        if (make != VEHICLE_NOT_LISTED) {
-            viewModelScope.launch {
-                _availableModels.value =
-                    listOf(VEHICLE_NOT_LISTED) + vehicleRepository.getModels(_state.value.vehicleYear, make)
-            }
-        }
-    }
-
-    fun onModelSelected(model: String) {
-        if (model != VEHICLE_NOT_LISTED &&
-            (!_state.value.vehicleLookupAllowed || _state.value.vehicleYear !in _availableYears.value)
-        ) return
-        _state.update { it.copy(vehicleModel = model, vehicleTrim = "") }
-        _availableTrims.value = emptyList(); _availableTrimNames.value = emptyList()
-
-        // Skip API call if Not Listed
-        if (model != VEHICLE_NOT_LISTED) {
-            viewModelScope.launch {
-                val trims = listOf(
-                    VehicleOption(id = "NOT_LISTED", displayName = VEHICLE_NOT_LISTED),
-                ) + vehicleRepository.getVehicleOptions(
-                    _state.value.vehicleYear,
-                    _state.value.vehicleMake,
-                    model,
-                )
-                _availableTrims.value = trims; _availableTrimNames.value =
-                trims.map { it.displayName }
-            }
-        }
-    }
-
-    fun onTrimSelected(trimName: String) {
-        _state.update { it.copy(vehicleTrim = trimName) }
-
-        // Escape hatch! Don't look up MPG if Not Listed.
-        if (trimName == VEHICLE_NOT_LISTED || !_state.value.vehicleLookupAllowed) return
-
-        // The lookup answers for THIS identity; a type or identity change while it is in flight wins.
-        val lookedUp = _state.value.let { Triple(it.vehicleYear, it.vehicleMake, it.vehicleModel) }
-        viewModelScope.launch {
-            val vehicleId =
-                _availableTrims.value.find { it.displayName == trimName }?.id ?: return@launch
-            val details = vehicleRepository.getVehicleDetails(vehicleId)
-
-            if (details != null) {
-                _state.update { currentState ->
-                    val stale = !currentState.vehicleProfile.hasCarIdentity || currentState.vehicleTrim != trimName ||
-                        Triple(currentState.vehicleYear, currentState.vehicleMake, currentState.vehicleModel) != lookedUp
-                    if (stale) return@update currentState
-                    if (details.fuelType == FuelType.ELECTRICITY) {
-                        val current = currentState.toVehicleProfile()
-                        val consumption = details.combinedMpg?.let { VehiclePresets.MPGE_TO_KWH_PER_100_MI / it }
-                        return@update currentState.copy(
-                            vehicleProfile = ElectricCar(kwhPer100Mi = consumption,
-                                year = current.year, make = current.make, model = current.model)
-                                .withCosts(current.wear, current.fixed),
-                            vehicleClass = VehicleClass.EV,
-                            kwhPer100Mi = consumption ?: VehiclePresets.EV_KWH_PER_100_MI,
-                            userSetEconomyFields = (currentState.userSetEconomyFields - EconomyField.VEHICLE_MPG).let {
-                                if (consumption != null) it + EconomyField.KWH_PER_100_MI else it
-                            },
-                        ).withTypeDefaults()
-                    }
-                    val cachedPrice = currentState.fetchedGasPrices[details.fuelType]
-                    val newPrice =
-                        if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
-
-                    currentState.copy(
-                        estimatedMpg = details.combinedMpg ?: currentState.estimatedMpg,
-                        fuelType = details.fuelType,
-                        gasPrice = newPrice,
-                        userSetEconomyFields = if (details.combinedMpg != null) {
-                            currentState.userSetEconomyFields + EconomyField.VEHICLE_MPG
-                        } else currentState.userSetEconomyFields,
-                    )
-                }
-            }
-        }
-    }
-
-    // --- NEW: Manual MPG Slider update ---
-    fun updateEstimatedMpg(mpg: Float) {
-        _state.update {
-            it.copy(
-                estimatedMpg = mpg,
-                userSetEconomyFields = it.userSetEconomyFields + EconomyField.VEHICLE_MPG,
-            )
+    private fun applyTrimDetails(details: VehicleDetails) {
+        _state.update { currentState ->
+            val cachedPrice = currentState.fetchedGasPrices[details.fuelType]
+            val newPrice =
+                if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
+            currentState.copy(fuelType = details.fuelType, gasPrice = newPrice)
         }
     }
 
@@ -542,7 +355,7 @@ class WizardViewModel @Inject constructor(
     }
 
     fun attemptAutoGasPriceFetch() {
-        if (!_state.value.isGasPriceAuto || EconomyField.GAS_PRICE !in EconomyFieldGroups.fieldsFor(_state.value.vehicleProfile)) return
+        if (!_state.value.isGasPriceAuto || EconomyField.GAS_PRICE !in EconomyFieldGroups.fieldsFor(vehicleDraft.state.value.profile)) return
 
         viewModelScope.launch {
             _state.update { it.copy(isFetchingGasPrice = true) }
@@ -613,18 +426,19 @@ class WizardViewModel @Inject constructor(
         viewModelScope.launch {
             if (!garageDraftLoaded) return@launch
             val finalState = _state.value
+            val vehicle = vehicleDraft.state.value
 
-            val economy = finalState.toUserEconomy()
+            val economy = finalState.toUserEconomy(vehicle)
             try {
                 // Capture the save target now; later switches do not redirect this draft.
                 val garage = garageRepository.garage.first()
                 if (!garage.readable) throw VehiclesUnreadableException()
-                val vehicle = garage.active
-                val profile = finalState.toVehicleProfile().withGas(fuelType = finalState.fuelType)
-                if (vehicle == null) {
+                val activeVehicle = garage.active
+                val profile = finalState.toVehicleProfile(vehicle).withGas(fuelType = finalState.fuelType)
+                if (activeVehicle == null) {
                     garageRepository.addVehicle(null, System.currentTimeMillis(), profile)
                 } else {
-                    garageRepository.updateProfile(vehicle.id, profile)
+                    garageRepository.updateProfile(activeVehicle.id, profile)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -634,13 +448,13 @@ class WizardViewModel @Inject constructor(
             }
 
             appPreferencesRepository.mirrorFuelType(finalState.fuelType)
-            appPreferencesRepository.mirrorVehicleClass(finalState.vehicleClass)
+            appPreferencesRepository.mirrorVehicleClass(vehicle.vehicleClass)
             appPreferencesRepository.mirrorUserSetEconomy(economy)
 
             appPreferencesRepository.mirrorEconomySettings(
-                finalState.vehicleYear, finalState.vehicleMake,
-                finalState.vehicleModel, finalState.vehicleTrim,
-                finalState.estimatedMpg, finalState.isGasPriceAuto, finalState.gasPrice
+                vehicle.year, vehicle.make,
+                vehicle.model, vehicle.trim,
+                vehicle.mpg, finalState.isGasPriceAuto, finalState.gasPrice
             )
 
             val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS

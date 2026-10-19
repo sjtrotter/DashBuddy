@@ -10,6 +10,26 @@ class VehicleEconomyTest {
     private fun economy(profile: VehicleProfile, shared: SharedEconomy = SharedEconomy()): UserEconomy =
         UserEconomy.from(VehicleEconomyInputs.from(profile, shared), shared)
 
+    @Test fun `resolved consumption matches the economy for every profile type`() {
+        val profiles = VehicleType.entries.map { it.defaultProfile() } + listOf(
+            ScooterMoped(Powertrain.ELECTRIC),
+            GasCar(mpg = 32.0), HybridCar(mpg = 50.0), ElectricCar(kwhPer100Mi = 27.0),
+            Motorcycle(mpg = 60.0), ScooterMoped(mpg = 110.0, kwhPer100Mi = 8.0),
+            ScooterMoped(Powertrain.ELECTRIC, mpg = 110.0, kwhPer100Mi = 8.0), EBike(whPerMile = 15.0),
+            GasCar(mpg = 0.0), HybridCar(mpg = -1.0),
+        )
+        profiles.forEach { profile ->
+            val resolved = profile.resolvedConsumption()
+            listOf(SharedEconomy(), SharedEconomy(gasPricePerGallon = 5.0, electricityPricePerKwh = .30))
+                .forEach { shared ->
+                    val economy = economy(profile, shared)
+                    assertEquals(profile.toString(), economy.vehicleMpg, resolved.mpg, 0.0)
+                    assertEquals(profile.toString(), economy.kwhPer100Mi, resolved.kwhPer100Mi, 0.0)
+                    assertEquals(profile.toString(), economy.whPerMile, resolved.whPerMile, 0.0)
+                }
+        }
+    }
+
     @Test fun `car class mappings are inverse and non-car legacy classes have no gas class`() {
         GasCarClass.entries.forEach { assertEquals(it, it.legacy.gasClass) }
         VehicleClass.entries.forEach { cls ->

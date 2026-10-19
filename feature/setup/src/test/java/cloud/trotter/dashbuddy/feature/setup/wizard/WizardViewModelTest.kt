@@ -104,8 +104,8 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(emptyList<String>(), viewModel.availableYears.value)
+        assertEquals(false, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(emptyList<String>(), viewModel.vehicleDraft.state.value.availableYears)
         verifyNoInteractions(vehicleRepository)
     }
 
@@ -124,13 +124,13 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(true, viewModel.state.value.manualMpgEntry)
-        assertEquals("2020", viewModel.state.value.vehicleYear)
-        assertEquals("Toyota", viewModel.state.value.vehicleMake)
-        assertEquals("Corolla", viewModel.state.value.vehicleModel)
-        assertEquals("Automatic", viewModel.state.value.vehicleTrim)
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        assertEquals(false, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(true, viewModel.vehicleDraft.state.value.manualMpgEntry)
+        assertEquals("2020", viewModel.vehicleDraft.state.value.year)
+        assertEquals("Toyota", viewModel.vehicleDraft.state.value.make)
+        assertEquals("Corolla", viewModel.vehicleDraft.state.value.model)
+        assertEquals("Automatic", viewModel.vehicleDraft.state.value.trim)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
 
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
@@ -157,11 +157,13 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
         val originalState = viewModel.state.value
+        val originalVehicle = viewModel.vehicleDraft.state.value
 
-        viewModel.onManualMpgEntry()
+        viewModel.vehicleDraft.onManualMpgEntry()
         testScheduler.advanceUntilIdle()
 
-        assertEquals(originalState.copy(manualMpgEntry = true), viewModel.state.value)
+        assertEquals(originalState, viewModel.state.value)
+        assertEquals(originalVehicle.copy(manualMpgEntry = true), viewModel.vehicleDraft.state.value)
         verifyNoInteractions(vehicleRepository)
         verify(appPreferencesRepository, org.mockito.kotlin.never()).setVehicleLookupAllowed(any())
     }
@@ -177,17 +179,19 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(emptyList<String>(), viewModel.availableYears.value)
-        assertEquals(false, viewModel.state.value.manualMpgEntry)
+        assertEquals(true, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(emptyList<String>(), viewModel.vehicleDraft.state.value.availableYears)
+        assertEquals(false, viewModel.vehicleDraft.state.value.manualMpgEntry)
         val originalState = viewModel.state.value
+        val originalVehicle = viewModel.vehicleDraft.state.value
 
-        viewModel.onManualMpgEntry()
+        viewModel.vehicleDraft.onManualMpgEntry()
         testScheduler.advanceUntilIdle()
 
-        assertEquals(originalState.copy(manualMpgEntry = true), viewModel.state.value)
-        viewModel.updateEstimatedMpg(32f)
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        assertEquals(originalState, viewModel.state.value)
+        assertEquals(originalVehicle.copy(manualMpgEntry = true), viewModel.vehicleDraft.state.value)
+        viewModel.vehicleDraft.updateEstimatedMpg(32f)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
         verify(vehicleRepository).getYears()
         verifyNoMoreInteractions(vehicleRepository)
     }
@@ -205,12 +209,12 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(VehicleClass.E_BIKE, viewModel.state.value.vehicleClass)
-        assertEquals(emptyList<String>(), viewModel.availableYears.value)
+        assertEquals(true, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(VehicleClass.E_BIKE, viewModel.vehicleDraft.state.value.vehicleClass)
+        assertEquals(emptyList<String>(), viewModel.vehicleDraft.state.value.availableYears)
         verifyNoInteractions(vehicleRepository)
 
-        viewModel.updateVehicleClass(VehicleClass.SEDAN)
+        viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SEDAN)
         testScheduler.advanceUntilIdle()
 
         verify(vehicleRepository).getYears()
@@ -235,17 +239,42 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(false, viewModel.vehicleDraft.state.value.lookupAllowed)
         verifyNoInteractions(vehicleRepository)
 
         economy.complete(UserEconomy())
         testScheduler.advanceUntilIdle()
 
-        assertEquals("2020", viewModel.state.value.vehicleYear)
-        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(true, viewModel.state.value.manualMpgEntry)
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
-        assertEquals(listOf("2020"), viewModel.availableYears.value)
+        assertEquals("2020", viewModel.vehicleDraft.state.value.year)
+        assertEquals(true, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(true, viewModel.vehicleDraft.state.value.manualMpgEntry)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
+        assertEquals(listOf("2020"), viewModel.vehicleDraft.state.value.availableYears)
+        verify(vehicleRepository).getYears()
+        verifyNoMoreInteractions(vehicleRepository)
+    }
+
+    @Test
+    fun `a delayed stored lookup denial does not overwrite a new grant`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val storedPermission = CompletableDeferred<Boolean>()
+        whenever(appPreferencesRepository.vehicleLookupAllowed).thenReturn(flow { emit(storedPermission.await()) })
+        whenever(vehicleRepository.getYears()).thenReturn(listOf("2020"))
+        val viewModel = WizardViewModel(
+            strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository,
+        )
+        testScheduler.runCurrent()
+
+        viewModel.allowVehicleLookup()
+        testScheduler.runCurrent()
+        assertTrue(viewModel.vehicleDraft.state.value.lookupAllowed)
+        storedPermission.complete(false)
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(listOf("2020"), viewModel.vehicleDraft.state.value.availableYears)
         verify(vehicleRepository).getYears()
         verifyNoMoreInteractions(vehicleRepository)
     }
@@ -267,14 +296,14 @@ class WizardViewModelTest {
 
         viewModel.allowVehicleLookup()
         testScheduler.advanceUntilIdle()
-        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
+        assertEquals(false, viewModel.vehicleDraft.state.value.lookupAllowed)
         verifyNoInteractions(vehicleRepository)
 
         saved.complete(Unit)
         testScheduler.advanceUntilIdle()
 
-        assertEquals(true, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals(listOf("2020"), viewModel.availableYears.value)
+        assertEquals(true, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals(listOf("2020"), viewModel.vehicleDraft.state.value.availableYears)
         inOrder(appPreferencesRepository, vehicleRepository) {
             verify(appPreferencesRepository).setVehicleLookupAllowed(true)
             verify(vehicleRepository).getYears()
@@ -292,18 +321,18 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        viewModel.onYearSelected("2020")
-        viewModel.onMakeSelected("Toyota")
-        viewModel.onModelSelected("Corolla")
-        viewModel.onTrimSelected("Automatic")
-        viewModel.onManualMpgEntry()
-        viewModel.updateEstimatedMpg(32f)
+        viewModel.vehicleDraft.onYearSelected("2020")
+        viewModel.vehicleDraft.onMakeSelected("Toyota")
+        viewModel.vehicleDraft.onModelSelected("Corolla")
+        viewModel.vehicleDraft.onTrimSelected("Automatic")
+        viewModel.vehicleDraft.onManualMpgEntry()
+        viewModel.vehicleDraft.updateEstimatedMpg(32f)
         testScheduler.advanceUntilIdle()
 
-        assertEquals(false, viewModel.state.value.vehicleLookupAllowed)
-        assertEquals("", viewModel.state.value.vehicleMake)
-        assertEquals(true, viewModel.state.value.manualMpgEntry)
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        assertEquals(false, viewModel.vehicleDraft.state.value.lookupAllowed)
+        assertEquals("", viewModel.vehicleDraft.state.value.make)
+        assertEquals(true, viewModel.vehicleDraft.state.value.manualMpgEntry)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
         verifyNoInteractions(vehicleRepository)
         verify(appPreferencesRepository, org.mockito.kotlin.never()).setVehicleLookupAllowed(any())
     }
@@ -327,16 +356,16 @@ class WizardViewModelTest {
 
         viewModel.allowVehicleLookup()
         testScheduler.advanceUntilIdle()
-        viewModel.onYearSelected("2020")
+        viewModel.vehicleDraft.onYearSelected("2020")
         testScheduler.advanceUntilIdle()
-        viewModel.onMakeSelected("Toyota")
+        viewModel.vehicleDraft.onMakeSelected("Toyota")
         testScheduler.advanceUntilIdle()
-        viewModel.onModelSelected("Corolla")
+        viewModel.vehicleDraft.onModelSelected("Corolla")
         testScheduler.advanceUntilIdle()
-        viewModel.onTrimSelected("Automatic")
+        viewModel.vehicleDraft.onTrimSelected("Automatic")
         testScheduler.advanceUntilIdle()
 
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0.0f)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
         inOrder(vehicleRepository) {
             verify(vehicleRepository).getYears()
             verify(vehicleRepository).getMakes("2020")
@@ -365,20 +394,20 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
         vm.allowVehicleLookup()
         testScheduler.advanceUntilIdle()
-        vm.onYearSelected("2024")
+        vm.vehicleDraft.onYearSelected("2024")
         testScheduler.advanceUntilIdle()
-        vm.onMakeSelected("Hyundai")
+        vm.vehicleDraft.onMakeSelected("Hyundai")
         testScheduler.advanceUntilIdle()
-        vm.onModelSelected("Ioniq 6")
+        vm.vehicleDraft.onModelSelected("Ioniq 6")
         testScheduler.advanceUntilIdle()
-        vm.onTrimSelected("Electric")
-        vm.updateVehicleType(VehicleType.BICYCLE)
+        vm.vehicleDraft.onTrimSelected("Electric")
+        vm.vehicleDraft.updateVehicleType(VehicleType.BICYCLE)
         testScheduler.advanceUntilIdle()
 
-        val state = vm.state.value
-        assertTrue(state.vehicleProfile is Bicycle)
-        assertEquals(false, EconomyField.KWH_PER_100_MI in state.userSetEconomyFields)
-        assertEquals(false, EconomyField.VEHICLE_MPG in state.userSetEconomyFields)
+        val vehicle = vm.vehicleDraft.state.value
+        assertTrue(vehicle.profile is Bicycle)
+        assertEquals(false, EconomyField.KWH_PER_100_MI in vehicle.userSetFields)
+        assertEquals(false, EconomyField.VEHICLE_MPG in vehicle.userSetFields)
     }
 
     @Test
@@ -397,34 +426,35 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
         vm.allowVehicleLookup()
         testScheduler.advanceUntilIdle()
-        vm.onYearSelected("2024")
+        vm.vehicleDraft.onYearSelected("2024")
         testScheduler.advanceUntilIdle()
-        vm.onMakeSelected("Hyundai")
+        vm.vehicleDraft.onMakeSelected("Hyundai")
         testScheduler.advanceUntilIdle()
-        vm.onModelSelected("Ioniq 6")
+        vm.vehicleDraft.onModelSelected("Ioniq 6")
         testScheduler.advanceUntilIdle()
-        vm.updateEstimatedMpg(30f)
+        vm.vehicleDraft.updateEstimatedMpg(30f)
         vm.updateTires(900.0, 45_000.0)
         vm.updateInsuranceDelta(25.0)
         vm.updateFuelType(FuelType.PREMIUM)
         vm.updateGasPrice(4.25f)
-        vm.onTrimSelected("Electric")
+        vm.vehicleDraft.onTrimSelected("Electric")
         testScheduler.advanceUntilIdle()
 
         val state = vm.state.value
-        assertTrue(state.vehicleProfile is ElectricCar)
-        assertEquals(25.53, (state.vehicleProfile as ElectricCar).kwhPer100Mi!!, 0.01)
-        assertEquals(25.53, state.kwhPer100Mi, 0.01)
-        assertTrue(EconomyField.VEHICLE_MPG !in state.userSetEconomyFields)
-        assertTrue(EconomyField.KWH_PER_100_MI in state.userSetEconomyFields)
+        val vehicle = vm.vehicleDraft.state.value
+        assertTrue(vehicle.profile is ElectricCar)
+        assertEquals(25.53, (vehicle.profile as ElectricCar).kwhPer100Mi!!, 0.01)
+        assertEquals(25.53, vehicle.kwhPer100Mi, 0.01)
+        assertTrue(EconomyField.VEHICLE_MPG !in vehicle.userSetFields)
+        assertTrue(EconomyField.KWH_PER_100_MI in vehicle.userSetFields)
         assertTrue(WizardStep.GAS_PRICE !in vm.steps.value)
         assertEquals(FuelType.PREMIUM, state.fuelType)
         assertEquals(4.25f, state.gasPrice, 0.0f)
         assertEquals(VehiclePresets.electricCar.fixed.purchasePrice!!, state.purchasePrice, 0.0)
         assertEquals(VehiclePresets.electricCar.wear.brakesIntervalMi!!, state.brakesIntervalMi, 0.0)
-        assertEquals(900.0, state.vehicleProfile.wear.tireSetCost)
-        assertEquals(25.0, state.vehicleProfile.fixed.insuranceDeltaPerMonth)
-        assertNull(state.vehicleProfile.gasFuel)
+        assertEquals(900.0, state.toVehicleProfile(vehicle).wear.tireSetCost)
+        assertEquals(25.0, state.toVehicleProfile(vehicle).fixed.insuranceDeltaPerMonth)
+        assertNull(vehicle.profile.gasFuel)
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val saved = argumentCaptor<VehicleProfile>()
@@ -453,17 +483,17 @@ class WizardViewModelTest {
         val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
             vehicleRepository, gasPriceRepository, garageRepository)
         testScheduler.advanceUntilIdle()
-        vm.onModelSelected("Ioniq 6")
+        vm.vehicleDraft.onModelSelected("Ioniq 6")
         testScheduler.advanceUntilIdle()
-        vm.updateEstimatedMpg(30f)
-        vm.onTrimSelected("Electric")
+        vm.vehicleDraft.updateEstimatedMpg(30f)
+        vm.vehicleDraft.onTrimSelected("Electric")
         testScheduler.advanceUntilIdle()
-        val state = vm.state.value
-        assertTrue(state.vehicleProfile is ElectricCar)
-        assertNull((state.vehicleProfile as ElectricCar).kwhPer100Mi)
-        assertEquals(VehiclePresets.EV_KWH_PER_100_MI, state.kwhPer100Mi, 0.0)
-        assertTrue(EconomyField.KWH_PER_100_MI !in state.userSetEconomyFields)
-        assertTrue(EconomyField.VEHICLE_MPG !in state.userSetEconomyFields)
+        val vehicle = vm.vehicleDraft.state.value
+        assertTrue(vehicle.profile is ElectricCar)
+        assertNull((vehicle.profile as ElectricCar).kwhPer100Mi)
+        assertEquals(VehiclePresets.EV_KWH_PER_100_MI, vehicle.kwhPer100Mi, 0.0)
+        assertTrue(EconomyField.KWH_PER_100_MI !in vehicle.userSetFields)
+        assertTrue(EconomyField.VEHICLE_MPG !in vehicle.userSetFields)
         assertTrue(WizardStep.GAS_PRICE !in vm.steps.value)
     }
 
@@ -641,8 +671,10 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository)
         testScheduler.advanceUntilIdle()
         val before = vm.state.value
-        vm.updateVehicleType(VehicleType.CAR)
+        val vehicleBefore = vm.vehicleDraft.state.value
+        vm.vehicleDraft.updateVehicleType(VehicleType.CAR)
         assertEquals(before, vm.state.value)
+        assertEquals(vehicleBefore, vm.vehicleDraft.state.value)
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val saved = argumentCaptor<VehicleProfile>()
@@ -667,13 +699,14 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository)
         testScheduler.advanceUntilIdle()
 
-        vm.updateVehicleClass(VehicleClass.SUV)
+        vm.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
 
         val state = vm.state.value
-        assertNull(state.toVehicleProfile().wear.tireLifetimeMi)
-        assertEquals(900.0, state.toVehicleProfile().wear.tireSetCost)
+        val vehicle = vm.vehicleDraft.state.value
+        assertNull(state.toVehicleProfile(vehicle).wear.tireLifetimeMi)
+        assertEquals(900.0, state.toVehicleProfile(vehicle).wear.tireSetCost)
         assertEquals(VehiclePresets.cars.getValue(GasCarClass.SUV).wear.tireLifetimeMi!!,
-            state.toUserEconomy().tireLifetimeMi, 0.0)
+            state.toUserEconomy(vehicle).tireLifetimeMi, 0.0)
     }
 
     @Test
@@ -683,10 +716,10 @@ class WizardViewModelTest {
         val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
             vehicleRepository, gasPriceRepository, garageRepository)
         testScheduler.advanceUntilIdle()
-        vm.updateVehicleType(VehicleType.SCOOTER)
-        vm.updatePowertrain(Powertrain.ELECTRIC)
-        vm.updateConsumption(2.5)
-        vm.updateElectricityPrice(.22)
+        vm.vehicleDraft.updateVehicleType(VehicleType.SCOOTER)
+        vm.vehicleDraft.updatePowertrain(Powertrain.ELECTRIC)
+        vm.vehicleDraft.updateConsumption(2.5)
+        vm.vehicleDraft.updateElectricityPrice(.22)
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val scooter = argumentCaptor<VehicleProfile>()
@@ -694,9 +727,9 @@ class WizardViewModelTest {
         assertTrue(scooter.firstValue is ScooterMoped)
         assertEquals(Powertrain.ELECTRIC, (scooter.firstValue as ScooterMoped).powertrain)
         assertEquals(2.5, (scooter.firstValue as ScooterMoped).kwhPer100Mi)
-        assertEquals(.0055, vm.state.value.toUserEconomy().fuelCostPerMile, 1e-12)
+        assertEquals(.0055, vm.state.value.toUserEconomy(vm.vehicleDraft.state.value).fuelCostPerMile, 1e-12)
         clearInvocations(garageRepository)
-        vm.updateVehicleType(VehicleType.BICYCLE)
+        vm.vehicleDraft.updateVehicleType(VehicleType.BICYCLE)
         vm.saveAndFinish { }
         testScheduler.advanceUntilIdle()
         val bicycle = argumentCaptor<VehicleProfile>()
@@ -724,10 +757,10 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        assertEquals("Honda", viewModel.state.value.vehicleMake)
+        assertEquals("Honda", viewModel.vehicleDraft.state.value.make)
 
-        viewModel.updateVehicleClass(VehicleClass.SUV)
-        viewModel.updateEstimatedMpg(28f)
+        viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
+        viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateFuelType(FuelType.PREMIUM)
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
@@ -769,8 +802,8 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        viewModel.updateVehicleClass(VehicleClass.SUV)
-        viewModel.updateEstimatedMpg(28f)
+        viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
+        viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateFuelType(FuelType.PREMIUM)
         viewModel.updateTires(720.0, 48_000.0)
         var completed = false
@@ -830,8 +863,8 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        viewModel.updateVehicleClass(VehicleClass.SUV)
-        viewModel.updateEstimatedMpg(28f)
+        viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
+        viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateTires(720.0, 48_000.0)
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
@@ -955,6 +988,6 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        assertEquals(32f, viewModel.state.value.estimatedMpg, 0f)
+        assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0f)
     }
 }
