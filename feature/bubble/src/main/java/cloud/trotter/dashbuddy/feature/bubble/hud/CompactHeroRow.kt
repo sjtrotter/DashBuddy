@@ -17,7 +17,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun CompactHeroRow(model: HeroModel) {
+fun CompactHeroRow(model: HeroModel, onGoalClick: (() -> Unit)? = null) {
     val description = stringResource(R.string.hud_hero_compact_cd, moneyOrEmpty(model.profit))
     Row(Modifier.fillMaxWidth().height(48.dp).testTag("hud.hero.compact"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -30,6 +30,6 @@ fun CompactHeroRow(model: HeroModel) {
             Text(stringResource(R.string.hud_hero_profit), style = MaterialTheme.typography.labelMedium,
                 color = AppTheme.colors.text2, modifier = Modifier.padding(start = 8.dp).alignByBaseline())
         }
-        GoalPill(model.goal, compact = true)
+        GoalPill(model.goal, compact = true, onClick = onGoalClick)
     }
 }

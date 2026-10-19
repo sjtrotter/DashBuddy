@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.feature.bubble.R
 
@@ -21,8 +20,8 @@ internal fun ReceiptCard(model: StateCardModel.Receipt) {
         HorizontalDivider(Modifier.padding(top = 6.dp, bottom = 6.dp), color = AppTheme.colors.lineStrong)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(stringResource(R.string.hud_state_total), color = AppTheme.colors.text,
-                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.alignByBaseline())
-            Text(moneyOrEmpty(model.total), style = AppTheme.num.xlNum.copy(fontSize = 20.sp, fontWeight = FontWeight.SemiBold),
+                style = AppTheme.num.cardLabel.copy(fontSize = AppTheme.num.cardLabel.fontSize * (15f / 14f), fontWeight = FontWeight.SemiBold), modifier = Modifier.alignByBaseline())
+            Text(moneyOrEmpty(model.total), style = AppTheme.num.cardNum.copy(fontSize = AppTheme.num.cardNum.fontSize * (20f / 15f), fontWeight = FontWeight.SemiBold),
                 color = AppTheme.colors.text, modifier = Modifier.alignByBaseline())
         }
     }
@@ -31,10 +30,10 @@ internal fun ReceiptCard(model: StateCardModel.Receipt) {
 @Composable
 private fun ReceiptRow(label: String, value: Double?) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = AppTheme.colors.text2, fontSize = 15.sp, lineHeight = 26.sp,
+        Text(label, color = AppTheme.colors.text2, style = AppTheme.num.cardLabel.copy(fontSize = AppTheme.num.cardLabel.fontSize * (15f / 14f), lineHeight = AppTheme.num.cardLabel.fontSize * (26f / 14f)),
             modifier = Modifier.alignByBaseline())
         Text(moneyOrEmpty(value), color = AppTheme.colors.text,
-            style = AppTheme.num.mdNum.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 26.sp),
+            style = AppTheme.num.cardNum.copy(fontSize = AppTheme.num.cardNum.fontSize * (16f / 15f), lineHeight = AppTheme.num.cardNum.fontSize * (26f / 15f)),
             modifier = Modifier.alignByBaseline())
     }
 }

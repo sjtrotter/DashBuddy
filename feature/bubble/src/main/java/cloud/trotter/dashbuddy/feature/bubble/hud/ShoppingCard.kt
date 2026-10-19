@@ -15,9 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.format.Formats
@@ -33,11 +31,11 @@ internal fun ShoppingCard(model: StateCardModel.Shopping) {
             Text(model.shopped.toString(), style = AppTheme.num.stateNum, color = AppTheme.colors.text,
                 modifier = Modifier.alignByBaseline())
             Text(stringResource(R.string.hud_state_of_total, model.total), color = AppTheme.colors.text2,
-                style = AppTheme.num.xlNum.copy(fontSize = 26.sp, fontWeight = FontWeight.Medium), modifier = Modifier.alignByBaseline())
+                style = AppTheme.num.cardNum.copy(fontSize = AppTheme.num.cardNum.fontSize * (26f / 15f)), modifier = Modifier.alignByBaseline())
             Text(stringResource(R.string.hud_state_shopped), color = AppTheme.colors.text2,
-                fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.alignByBaseline())
+                style = AppTheme.num.stateUnit, modifier = Modifier.alignByBaseline())
         }
-        JobColumn(model.facts)
+        if (LocalHudTier.current < FontScaleTier.NO_JOB_COLUMN) JobColumn(model.facts)
     }
     ItemsTrack(model.shopped, model.total)
     val late = StateHeadline.lateMinutes(model.facts.deadlineAt, now)

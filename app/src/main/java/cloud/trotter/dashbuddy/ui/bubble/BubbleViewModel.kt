@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
+import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
+import java.time.LocalDate
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
@@ -68,6 +72,7 @@ class BubbleViewModel @Inject constructor(
     ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
     strategyRepository: StrategyRepository,
+    private val appStateRepository: AppStateRepository,
 ) : ViewModel() {
 
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
@@ -351,9 +356,25 @@ class BubbleViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // S3 adds date-ranged logged expenses so the goal also follows the deduction setting.
-    val todayProfit: StateFlow<Double?> = analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)
-        .map { it.netProfit }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow().flatMapLatest { date ->
+        analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY).map { GoalDay(date, it.netProfit) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val todayProfit: StateFlow<Double?> = goalDay.map { it?.profit }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val pendingMark = MutableStateFlow<String?>(null)
+    val goalMark: StateFlow<MarkRead> = combine(appStateRepository.goalMetMark, pendingMark) { persisted, pending ->
+        // Pending wins over an older persisted mark until the write lands.
+        MarkRead.Loaded(pending ?: persisted)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MarkRead.Loading)
+
+    fun goalCelebrated(key: String) {
+        if (pendingMark.value == key) return
+        pendingMark.value = key
+        viewModelScope.launch { appStateRepository.setGoalMetMark(key) }
+    }
 
     // Gas price for the idle-card quick edit (#693) — read straight off the economy SSOT the settings
     // screen owns; the write path (setGasPrice) flips auto OFF so the daily EIA worker won't clobber it.
@@ -449,3 +470,6 @@ class BubbleViewModel @Inject constructor(
         _collapse.tryEmit(Unit)
     }
 }
+
+/** Date and profit travel together so midnight cannot pair a new date with the old total. */
+data class GoalDay(val date: LocalDate, val profit: Double?)

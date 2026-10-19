@@ -25,64 +25,7 @@ import org.junit.After
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
-class HudScreenTest {
-    @get:Rule val compose = createComposeRule()
-    private val clock = MutableClock(T0)
-    private lateinit var locale: Locale
-
-    @Before fun setup() {
-        locale = Locale.getDefault()
-        Locale.setDefault(Locale.US)
-        compose.mainClock.autoAdvance = false
-    }
-    @After fun cleanup() { Locale.setDefault(locale) }
-
-    private fun last() = SessionRecord(
-        "last", Platform.DoorDash, T0 - 158 * 60_000, T0 - 38 * 60_000,
-        reportedEarnings = 100.0, reportedDurationMillis = null, miles = 42.5,
-        deliveries = 5, jobsCompleted = 5, offersReceived = 8, offersAccepted = 5,
-        offersDeclined = 2, offersTimeout = 1,
-    )
-
-    private fun state(
-        flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
-        profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false, cashTipCue: Boolean = false,
-    ) = HudStateMapper.map(
-        region = if (resting || first) null else PlatformRegion(
-            Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
-        flow = flow, platform = Platform.DoorDash, switchable = emptyList(),
-        earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
-        net = profit?.let { SessionNet("live", it, 0.0, 0.0, 0.0, 0.0) },
-        countExpenses = false, goal = goal, todayProfit = today,
-        hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cashTipCue,
-    )
-
-    private fun show(model: @Composable () -> HudUiState = { state() }, onDock: (DockKind) -> Unit = {}) {
-        compose.setContent {
-            DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) {
-                    HudScreen(model(), RibbonModel(T0 - 180 * 60_000,
-                        listOf(RibbonSegment(RibbonKind.WAIT, T0 - 180 * 60_000, null)), emptyList(), RibbonKind.WAIT),
-                        onDockClick = onDock, stateCard = { Text("State slot") },
-                        offer = { Text("Offer slot") }, log = { Text("Log slot") })
-                }
-            }
-        }
-    }
-
-    private fun value(tag: String, text: String) = compose.onNode(
-        hasText(text) and hasAnyAncestor(hasTestTag(tag)), useUnmergedTree = true)
-
-    // A state write from the test (a click callback, a runOnIdle assignment) lands as a pending snapshot
-    // notification on the paused main looper; waitForIdle delivers it, and only THEN does a clock
-    // advance run the frame that recomposes. Advancing first runs a frame the write has not reached.
-    private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
-
-    private fun tick(delta: Long) {
-        clock.millis += delta
-        compose.mainClock.advanceTimeBy(2_000)
-    }
-
+internal class HudScreenTest : HudScreenFixture() {
     @Test fun `online ticks once a minute under the test clock`() {
         show()
         value("hud.top.online", "40").assertExists()
@@ -295,6 +238,50 @@ class HudScreenTest {
         compose.onNodeWithTag("hud.dock.NOW").performClick()
         settle()
         assertEquals(DockKind.NOW, clicked)
+    }
+
+    @Test fun offerUp_suppressesSequence_thenPlaysAfterResolve() {
+        var mode by mutableStateOf(HudMode.OFFER)
+        var mark by mutableStateOf<MarkRead>(MarkRead.Loaded(null))
+        val calls = mutableListOf<String>()
+        val day = java.time.LocalDate.of(2026, 10, 18)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides false) {
+                    val key = GoalCelebrationResolver.resolve(GoalPillState.Met, mode, day, 79.0, mark)
+                    HudScreen(polishState(mode, HeroModel(80.0, GoalPillState.Met, key)), null, {},
+                        onGoalCelebrated = { calls += it; mark = MarkRead.Loaded(it) })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.goal").assertDoesNotExist()
+        assertEquals(emptyList<String>(), calls)
+        compose.runOnIdle { mode = HudMode.LIVE }; settle()
+        compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetPhaseKey, GoalMetPhase.CLOSE))
+        assertEquals(listOf("2026-10-18|7900"), calls)
+    }
+    @Test fun offerMidSequence_returnsToEndState() {
+        var mode by mutableStateOf(HudMode.LIVE)
+        var mark by mutableStateOf<MarkRead>(MarkRead.Loaded(null))
+        val calls = mutableListOf<String>()
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides false) {
+                    val key = GoalCelebrationResolver.resolve(GoalPillState.Met, mode,
+                        java.time.LocalDate.of(2026, 10, 18), 79.0, mark)
+                    HudScreen(polishState(mode, HeroModel(80.0, GoalPillState.Met, key)), null, {},
+                        onGoalCelebrated = { calls += it; mark = MarkRead.Loaded(it) })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetPhaseKey, GoalMetPhase.CLOSE))
+        compose.runOnIdle { mode = HudMode.OFFER }; settle()
+        compose.onNodeWithTag("hud.goal").assertDoesNotExist()
+        compose.runOnIdle { mode = HudMode.LIVE }; settle()
+        compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetPhaseKey, GoalMetPhase.DONE))
+        assertEquals(1, calls.size)
     }
     private companion object { const val T0 = 1_700_000_000_000L }
 }

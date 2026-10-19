@@ -8,12 +8,15 @@ import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.presentation
 
+import java.time.LocalDate
+
 object HudStateMapper {
     fun map(
         region: PlatformRegion?, flow: Flow, platform: Platform?, switchable: List<Platform>,
         earnings: Double?, miles: Double, lastSession: SessionRecord?, net: SessionNet?,
         countExpenses: Boolean, goal: Double?, todayProfit: Double?, hasActiveCard: Boolean,
         hasOfferCard: Boolean, logOpen: Boolean, gas: GasRowModel, cashTipCue: Boolean = false,
+        goalDay: LocalDate? = null, mark: MarkRead = MarkRead.Loading,
     ): HudUiState {
         val mode = HudModeResolver.resolve(flow, region?.mode, region?.session != null, hasActiveCard, hasOfferCard, logOpen)
         val firstRun = region?.session == null && lastSession == null
@@ -32,9 +35,11 @@ object HudStateMapper {
                 last.deliveries, last.offersAccepted, last.offersReceived)
         }
         val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen)
+        val goalState = GoalPillMapper.map(goal, todayProfit)
+        val celebration = if (logOpen) null else GoalCelebrationResolver.resolve(goalState, mode, goalDay, goal, mark)
         return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
-            HeroModel(profit, GoalPillMapper.map(goal, todayProfit)), dock,
+            HeroModel(profit, goalState, celebration), dock,
             resting, firstRun, gas, logOpen)
     }
 }

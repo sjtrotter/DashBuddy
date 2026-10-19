@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
@@ -20,7 +21,7 @@ import cloud.trotter.dashbuddy.feature.bubble.R
 fun TopRow(model: TopRowModel) {
     val c = AppTheme.colors
     val ink = if (model.dimmed) c.text2 else c.text
-    Row(Modifier.fillMaxWidth().height(52.dp)) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
         TopMetric(stringResource(R.string.hud_top_earned), "hud.top.earned", Modifier.weight(1f), Alignment.Start) {
             TopNumber(model.earned, ink)
         }
@@ -35,9 +36,23 @@ fun TopRow(model: TopRowModel) {
 
 @Composable
 private fun TopMetric(label: String, tag: String, modifier: Modifier, alignment: Alignment.Horizontal, value: @Composable () -> Unit) {
-    Column(modifier.testTag(tag), horizontalAlignment = alignment) {
-        value()
-        Text(label, style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.neutral)
+    if (LocalHudTier.current >= FontScaleTier.LABELS_BESIDE) {
+        Row(modifier.testTag(tag).heightIn(min = 52.dp),
+            horizontalArrangement = when (alignment) {
+                Alignment.Start -> Arrangement.Start
+                Alignment.End -> Arrangement.End
+                else -> Arrangement.Center
+            }, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.alignByBaseline()) { value() }
+            Text(label, Modifier.padding(start = 4.dp).weight(1f, fill = false).alignByBaseline(),
+                style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.neutral,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    } else {
+        Column(modifier.testTag(tag), horizontalAlignment = alignment) {
+            value()
+            Text(label, style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.neutral)
+        }
     }
 }
 
