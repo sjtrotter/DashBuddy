@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.settings
 
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.census.CensusCredentialStore
 import cloud.trotter.dashbuddy.core.data.census.CensusIdentityResetter
 import cloud.trotter.dashbuddy.core.data.di.CensusEnvelopeSpool
@@ -23,12 +24,15 @@ class SettingsMenuViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val devSettingsRepository: DevSettingsRepository,
     private val strategyRepository: StrategyRepository,
+    garageRepository: GarageRepository,
     credentials: CensusCredentialStore,
     spool: CensusSpool,
     @CensusEnvelopeSpool envelopeSpool: CensusSpool,
     private val censusResetter: CensusIdentityResetter,
     private val censusScheduler: CensusUploadScheduler,
 ) : ViewModel() {
+
+    val garage = garageRepository.garage
 
     val censusAvailable = devSettingsRepository.censusAvailable
     val censusUploadEnabled = devSettingsRepository.censusUploadEnabled

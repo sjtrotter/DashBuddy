@@ -107,6 +107,20 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
+    /** Like addVehicle, Vehicle validates the trimmed name's code-point limit before any write. */
+    suspend fun rename(id: String, name: String?): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
+        if (index < 0) return@withLock false
+        val renamed = list[index].copy(name = name?.trim())
+        if (renamed == list[index]) return@withLock true
+        val updated = list.toMutableList()
+        updated[index] = renamed
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     suspend fun retire(id: String, now: Long): Boolean = mutex.withLock {
         val saved = savedForWrite()
         val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()

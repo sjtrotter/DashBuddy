@@ -845,4 +845,28 @@
     <string name="vehicle_type_scooter">Scooter or moped</string>
     <string name="vehicle_type_e_bike">E-bike</string>
     <string name="vehicle_type_bicycle">Bicycle</string>
+    <string name="garage_title">Garage</string>
+    <string name="garage_empty">No vehicles yet.</string>
+    <string name="garage_add">Add vehicle</string>
+    <string name="garage_vehicle_details">%1$s · %2$s</string>
+    <string name="garage_retire_vehicle">Retire %1$s</string>
+    <string name="garage_retire_confirmation">Retire %1$s? Its readings stay.</string>
+    <string name="garage_cancel">Cancel</string>
+    <string name="garage_retire">Retire</string>
+    <string name="garage_save_failed">Couldn\'t save. Try again.</string>
+    <!-- Same wording as :feature:bubble hud_odometer_vehicles_unreadable. -->
+    <string name="garage_vehicles_unreadable">Saved vehicles could not be read.</string>
+    <string name="vehicle_edit_title">Edit vehicle</string>
+    <string name="vehicle_edit_add_title">Add vehicle</string>
+    <string name="vehicle_edit_name">Name</string>
+    <string name="vehicle_edit_name_hint">Optional. Shown on the HUD.</string>
+    <string name="vehicle_edit_save">Save</string>
+    <string name="settings_home_item_garage_title">Garage</string>
+    <string name="settings_home_item_garage_subtitle">%1$s · %2$s</string>
+    <string name="settings_home_item_garage_empty">No vehicle</string>
+    <string name="settings_home_item_garage_unreadable">Vehicles can\'t be read</string>
+    <string name="economy_settings_vehicle_label">Vehicle</string>
+    <string name="economy_settings_vehicle_description">%1$s · %2$s</string>
+    <string name="economy_settings_vehicle_empty">No vehicle</string>
+    <string name="economy_settings_vehicle_garage">Garage</string>
 </resources>

@@ -226,6 +226,60 @@ class GarageRepositoryTest {
         }
         assertEquals(2, repo.garage.first().vehicles.size)
     }
+    @Test fun `rename trims validates code points and writes only a changed live name`() = runTest {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                writes++
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        val profile = GasCar(mpg = 31.0, year = "2020", make = "Honda", model = "Civic")
+        val target = repo.addVehicle("Civic", 1, profile)
+        val active = repo.addVehicle("Active", 2)
+        assertTrue(repo.rename(target.id, "  Commute  "))
+        assertEquals(3, store.writes)
+        val renamed = repo.garage.first()
+        assertEquals(target.copy(name = "Commute"), renamed.vehicles.first())
+        assertEquals(active, renamed.active)
+
+        assertTrue(repo.rename(target.id, "  Commute  "))
+        assertFalse(repo.rename("missing", "New"))
+        assertEquals(3, store.writes)
+        listOf("  ", "x".repeat(31), "😀".repeat(31)).forEach { invalid ->
+            assertTrue(runCatching { repo.rename(target.id, invalid) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        assertEquals(3, store.writes)
+        assertEquals(renamed, repo.garage.first())
+
+        val unicodeName = "😀".repeat(Vehicle.MAX_NAME_CODE_POINTS)
+        assertTrue(repo.rename(target.id, unicodeName))
+        assertEquals(unicodeName, repo.garage.first().vehicles.first().name)
+        assertTrue(repo.rename(target.id, null))
+        assertNull(repo.garage.first().vehicles.first().name)
+        val beforeUnchangedNull = store.writes
+        assertTrue(repo.rename(target.id, null))
+        assertEquals(beforeUnchangedNull, store.writes)
+        repo.retire(target.id, 3)
+        val beforeRetired = repo.garage.first()
+        val beforeRefused = store.writes
+        assertFalse(repo.rename(target.id, "Retired"))
+        assertEquals(beforeRefused, store.writes)
+        assertEquals(beforeRetired, repo.garage.first())
+    }
+
+    @Test fun `rename refuses unreadable vehicles without a write`() = runTest {
+        val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("rename-corrupt.preferences_pb") }))
+        source.save("invalid json", "one")
+        val repo = GarageRepository(source)
+        val before = source.stored.first()
+        assertTrue(runCatching { repo.rename("one", "Name") }.exceptionOrNull() is VehiclesUnreadableException)
+        assertEquals(before, source.stored.first())
+    }
+
     @Test fun `an unknown id is ignored`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("unknown.preferences_pb") }))

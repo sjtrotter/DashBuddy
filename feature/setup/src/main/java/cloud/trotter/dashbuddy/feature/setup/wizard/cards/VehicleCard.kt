@@ -60,6 +60,8 @@ fun VehicleCard(
     draft: VehicleDraftState,
     actions: VehicleDraftActions,
     onAllowVehicleLookup: () -> Unit,
+    showStepHeader: Boolean = true,
+    scrollable: Boolean = true,
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -72,13 +74,14 @@ fun VehicleCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        WizardCardHeader(step, draft.vehicleClass)
-
-        Spacer(modifier = Modifier.height(24.dp))
+        if (showStepHeader) {
+            WizardCardHeader(step, draft.vehicleClass)
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VehicleType.entries.forEach { type ->

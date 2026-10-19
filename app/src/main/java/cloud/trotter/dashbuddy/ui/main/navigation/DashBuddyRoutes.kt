@@ -47,6 +47,12 @@ sealed class Screen(val route: String) {
     data object EvidenceSettings : Screen("settings/evidence")
     data object DataExport : Screen("settings/data-export")
     data object ConsentSettings : Screen("settings/consent")
+    data object Garage : Screen("settings/garage")
+    data object VehicleAdd : Screen("settings/garage/add")
+    data object VehicleEdit : Screen("settings/garage/vehicle/{vehicleId}") {
+        fun route(vehicleId: String) = "settings/garage/vehicle/$vehicleId"
+        const val ARG = "vehicleId"
+    }
     data object EconomySettings : Screen("settings/economy")
     data object GeneralSettings : Screen("settings/general")
     data object DeveloperSettings : Screen("settings/developer")
@@ -65,6 +71,7 @@ sealed class Screen(val route: String) {
             SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
             ConsentSettings.route,
+            Garage.route, VehicleAdd.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
             PlatformSettings.route,
         ) }

@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
@@ -13,7 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -36,6 +41,31 @@ class EconomySettingsViewModelTest {
     }
 
     @Test
+    fun `vehicle heading follows active selection and retirement`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val car = Vehicle("car", "Car", 1)
+        val bicycle = Vehicle("bicycle", "Bicycle", 2, Bicycle())
+        val updates = MutableStateFlow(Garage(listOf(car, bicycle), car.id, true))
+        val garage: GarageRepository = mock()
+        whenever(garage.garage).thenReturn(updates)
+        val preferences: AppPreferencesRepository = mock()
+        whenever(preferences.userEconomy).thenReturn(flowOf(cloud.trotter.dashbuddy.domain.evaluation.UserEconomy()))
+        whenever(preferences.fuelType).thenReturn(flowOf(FuelType.REGULAR))
+        val strategy: StrategyRepository = mock()
+        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
+        val vm = EconomySettingsViewModel(preferences, strategy, garage)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.activeVehicle.collect {} }
+        runCurrent()
+        assertEquals(car, vm.activeVehicle.value)
+        updates.value = updates.value.copy(activeId = bicycle.id)
+        runCurrent()
+        assertEquals(bicycle, vm.activeVehicle.value)
+        updates.value = Garage(listOf(car, bicycle.copy(retiredAt = 3)), null, true)
+        runCurrent()
+        assertEquals(null, vm.activeVehicle.value)
+    }
+
+    @Test
     fun `the economy editor writes the active vehicle's profile`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
@@ -50,7 +80,7 @@ class EconomySettingsViewModelTest {
         val active = garage.addVehicle("Current car", 2L, LegacyProfile(vehicleClass = VehicleClass.SEDAN).toTyped())
         val strategy: StrategyRepository = mock()
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
-        val viewModel = EconomySettingsViewModel(preferences, strategy)
+        val viewModel = EconomySettingsViewModel(preferences, strategy, garage)
 
         viewModel.setVehicleClass(VehicleClass.SUV)
         viewModel.setMpg(27.5)

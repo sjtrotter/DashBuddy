@@ -1,5 +1,9 @@
 package cloud.trotter.dashbuddy.ui.main.settings
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
+import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,8 +48,10 @@ import cloud.trotter.dashbuddy.ui.components.economy.VehicleMpgAndFuelInputs
 @Composable
 fun EconomySettingsScreen(
     onBack: () -> Unit,
+    onOpenGarage: () -> Unit,
     viewModel: EconomySettingsViewModel = hiltViewModel(),
 ) {
+    val activeVehicle by viewModel.activeVehicle.collectAsStateWithLifecycle()
     val eco by viewModel.userEconomy.collectAsStateWithLifecycle()
     val fuelType by viewModel.fuelType.collectAsStateWithLifecycle()
     val timeConstants by viewModel.timeConstants.collectAsStateWithLifecycle()
@@ -82,6 +88,17 @@ fun EconomySettingsScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.economy_settings_vehicle_label), style = MaterialTheme.typography.labelMedium)
+                    Text(activeVehicle?.let { vehicle ->
+                        val type = stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
+                        stringResource(R.string.economy_settings_vehicle_description, vehicle.identityName ?: type, type)
+                    } ?: stringResource(R.string.economy_settings_vehicle_empty))
+                }
+                TextButton(onClick = onOpenGarage) { Text(stringResource(R.string.economy_settings_vehicle_garage)) }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             if (EconomyField.VEHICLE_CLASS in EconomyFieldGroups.fieldsFor(eco.vehicleProfile)) VehicleClassPicker(
