@@ -1,6 +1,9 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
+import java.time.Clock
 import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
 import java.time.LocalDate
@@ -63,7 +66,7 @@ import javax.inject.Inject
 @HiltViewModel
 class BubbleViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
-    odometerRepository: OdometerRepository,
+    private val odometerRepository: OdometerRepository,
     private val stateManager: StateManagerV2,
     appEventRepo: AppEventRepo,
     private val appPreferencesRepository: AppPreferencesRepository,
@@ -73,7 +76,27 @@ class BubbleViewModel @Inject constructor(
     devSettingsRepository: DevSettingsRepository,
     strategyRepository: StrategyRepository,
     private val appStateRepository: AppStateRepository,
+    garageRepository: GarageRepository,
+    odometerReadingRepository: OdometerReadingRepository,
+    clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
+
+    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, odometerRepository, clock)
+    val vehicles = garageRepository.vehicles.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val activeVehicle = garageRepository.activeVehicle.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val odometerReadings = odometerReadingRepository.readings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val lastReading = combine(activeVehicle, odometerReadings) { vehicle, readings ->
+        readings.filter { it.vehicleId == vehicle?.id }.maxByOrNull { it.reading.occurredAt }?.reading
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val gpsTotalMiles = odometerActions.gpsTotalMiles
+    val odometerSaving = odometerActions.saving
+    val odometerWriteFailed = odometerActions.failed
+    val odometerNotice = odometerActions.notice
+    fun refreshOdometer() = odometerActions.refresh()
+    fun saveOdometerReading(miles: Int) { activeVehicle.value?.let { odometerActions.save(it.id, miles) } }
+    fun addVehicle(name: String) = odometerActions.add(name)
+    fun selectVehicle(id: String) = odometerActions.select(id)
 
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
 

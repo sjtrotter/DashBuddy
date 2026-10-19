@@ -125,6 +125,7 @@ class BubbleViewModelTest {
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
         whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
         whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
@@ -138,10 +139,22 @@ class BubbleViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
+    private fun garage(): cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository = mock()
+        whenever(repo.vehicles).thenReturn(flowOf(emptyList()))
+        whenever(repo.activeVehicle).thenReturn(flowOf(null))
+        return repo
+    }
+    private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository = mock()
+        whenever(repo.readings).thenReturn(flowOf(emptyList()))
+        return repo
+    }
     private fun viewModel() = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
+        garageRepository = garage(), odometerReadingRepository = readings(),
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,

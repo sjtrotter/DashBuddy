@@ -59,6 +59,10 @@ class SettingsMenuViewModel @Inject constructor(
     val evidenceConfig = strategyRepository.evidenceConfig
     val appTheme = appPreferencesRepository.appTheme
     /** Driving / glance mode (#318) — surfaced on General settings. */
+    val odometerPrompts = appPreferencesRepository.odometerPrompts
+    val countRealExpensesInKept = appPreferencesRepository.countRealExpensesInKept
+    fun setOdometerPrompts(enabled: Boolean) = viewModelScope.launch { appPreferencesRepository.setOdometerPrompts(enabled) }
+    fun setCountRealExpensesInKept(enabled: Boolean) = viewModelScope.launch { appPreferencesRepository.setCountRealExpensesInKept(enabled) }
     val glanceMode = appPreferencesRepository.glanceMode
     /** Spoken-offer language override (#428 Half B) — surfaced on General settings; null ⇒ system. */
     val ttsLanguageTag = appPreferencesRepository.ttsLanguageTag

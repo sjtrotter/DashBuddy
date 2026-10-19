@@ -18,6 +18,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
+import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
+import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
+import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
 import kotlinx.coroutines.delay
 
 @Composable
@@ -40,7 +45,50 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
+    val vehicle by viewModel.activeVehicle.collectAsStateWithLifecycle()
+    val vehicles by viewModel.vehicles.collectAsStateWithLifecycle()
+    val lastReading by viewModel.lastReading.collectAsStateWithLifecycle()
+    val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
+    val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()
+    val gpsTotal by viewModel.gpsTotalMiles.collectAsStateWithLifecycle()
+    val saving by viewModel.odometerSaving.collectAsStateWithLifecycle()
+    val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
+    val savedNotice by viewModel.odometerNotice.collectAsStateWithLifecycle()
+    val now by rememberNow()
+    val entry = rememberOdometerEntryState()
+    val notice = savedNotice?.takeIf { now - it.savedAt in 0L until 10_000L }
+    var acknowledgedNoticeAt by rememberSaveable { mutableStateOf<Long?>(null) }
+    var seenVehicleId by rememberSaveable { mutableStateOf(vehicle?.id) }
+    LaunchedEffect(savedNotice) {
+        savedNotice?.let { saved ->
+            if (saved.savedAt != acknowledgedNoticeAt) {
+                entry.open = false
+                acknowledgedNoticeAt = saved.savedAt
+            }
+        }
+    }
+    LaunchedEffect(vehicle?.id) {
+        val id = vehicle?.id
+        if (id != null && id != seenVehicleId) {
+            entry.vehicleChanged()
+            seenVehicleId = id
+        }
+    }
+    val reconciliation = remember(readings, vehicle, lastSession) {
+        val last = lastSession
+        val id = vehicle?.id
+        val ended = last?.endedAt
+        if (id == null || last == null || ended == null) null
+        else MileageReconciliation.between(readings, id, last.startedAt, ended)
+    }
     var logOpen by rememberSaveable { mutableStateOf(false) }
+    val openOdometer = {
+        logOpen = false
+        viewModel.refreshOdometer()
+        entry.show(vehicle != null)
+    }
+    val sheetBack = { entry.back(vehicle != null) }
+    val noticeContent: (@Composable () -> Unit)? = if (notice == null) null else ({ OdometerNotice(notice) })
     BackHandler(enabled = logOpen) { logOpen = false }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -78,7 +126,25 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             state = state,
             ribbon = ribbon,
             onGoalCelebrated = viewModel::goalCelebrated,
-            sheetOpen = false,
+            sheetOpen = entry.open,
+            onSheetDismiss = sheetBack,
+            sheet = {
+                val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, lastReading, gpsTotal, now))
+                OdometerSheet(OdometerSheetModel(vehicle, vehicles, entry.reading, lastReading, check, entry.page, saving, writeFailed),
+                    onDigit = entry::digit, onBackspace = entry::backspace,
+                    onSave = { entry.reading?.let(viewModel::saveOdometerReading) },
+                    onAddVehicle = viewModel::addVehicle,
+                    onSwitchVehicle = { entry.page = OdometerPage.VEHICLES },
+                    onSelectVehicle = { id ->
+                        if (id == vehicle?.id) entry.page = OdometerPage.READING else viewModel.selectVehicle(id)
+                    },
+                    onShowAddVehicle = { entry.page = OdometerPage.ADD_VEHICLE }, onBack = sheetBack)
+            },
+            undo = noticeContent,
+            restingFooter = {
+                OdometerFooter(vehicle?.name, lastReading, reconciliation, openOdometer)
+                OdometerPrompt(prompts, null, lastSession?.endedAt, lastReading, openOdometer)
+            },
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             onSelectPlatform = viewModel::selectPlatform,
@@ -87,14 +153,17 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
             onDockClick = { kind ->
                 when (kind) {
-                    DockKind.LOG -> logOpen = true
+                    DockKind.ODOMETER -> openOdometer()
+                    DockKind.LOG -> { entry.open = false; logOpen = true }
                     DockKind.NOW -> logOpen = false
                     DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
                     DockKind.CASH_TIP, DockKind.EXPENSE -> Unit // Cash tip cue is clickable; S3 owns the sheet.
                 }
             },
             stateCard = {
-                StateCard(model, state.hero.profit)
+                StateCard(model, state.hero.profit, waitingFoot = {
+                    OdometerPrompt(prompts, region?.session?.startedAt, null, lastReading, openOdometer)
+                })
             },
             offer = {
                 pendingOffer?.let { pending ->

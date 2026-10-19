@@ -32,6 +32,7 @@ fun HudScreen(
     onSheetDismiss: () -> Unit = {},
     sheet: @Composable ColumnScope.() -> Unit = {},
     undo: (@Composable () -> Unit)? = null,
+    restingFooter: @Composable () -> Unit = {},
     stateCard: @Composable () -> Unit = {},
     offer: @Composable () -> Unit = {},
     log: @Composable () -> Unit = {},
@@ -56,6 +57,7 @@ fun HudScreen(
                                 state.mode == HudMode.RESTING -> {
                                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { RestingCard(state.resting) }
                                     GasRow(state.gas, onSetGasPrice, onRefreshGasPrice, onResumeAutoGasPrice)
+                                    restingFooter()
                                 }
                                 else -> Box(Modifier.weight(1f).fillMaxWidth().testTag("hud.slot.state")) {
                                     Column(Modifier.verticalScroll(rememberScrollState()).fillMaxWidth().heightIn(min = 196.dp)

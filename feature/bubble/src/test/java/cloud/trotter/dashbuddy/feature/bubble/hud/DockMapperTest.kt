@@ -12,10 +12,10 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class DockMapperTest {
     @Test
-    fun `live dock is cash tip expense log`() {
+    fun `live dock is cash tip expense odometer log`() {
         val items = DockMapper.map(HudMode.LIVE).items
-        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.LOG), items.map { it.kind })
-        assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL), items.map { it.state })
+        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG), items.map { it.kind })
+        assertEquals(listOf(DockItemState.DISABLED, DockItemState.DISABLED, DockItemState.NORMAL, DockItemState.NORMAL), items.map { it.state })
         for (mode in HudMode.entries) {
             DockMapper.map(mode).items.filter { it.kind == DockKind.CASH_TIP || it.kind == DockKind.EXPENSE }
                 .forEach { assertEquals(DockItemState.DISABLED, it.state) }
@@ -24,7 +24,7 @@ class DockMapperTest {
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(DockKind.entries.filter { it != DockKind.NOW }, DockMapper.map(HudMode.RESTING).items.map { it.kind })
+        assertEquals(listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING).items.map { it.kind })
     }
 
     @Test
@@ -47,7 +47,7 @@ class DockMapperTest {
         }
     }
     @Test fun `first run disables cash tip even with the cue`() {
-        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.RESTING, firstRun = true, cashTipCue = true)
+        assertEquals(DockItemState.DISABLED, DockMapper.map(HudMode.LIVE, firstRun = true, cashTipCue = true)
             .items.single { it.kind == DockKind.CASH_TIP }.state)
     }
     @Test fun `offer hides the dock regardless of the cue`() {

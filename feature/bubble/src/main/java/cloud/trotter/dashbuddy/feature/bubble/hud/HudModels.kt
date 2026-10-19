@@ -32,7 +32,7 @@ sealed interface GoalPillState {
 }
 data class DockModel(val items: List<DockItem>)
 data class DockItem(val kind: DockKind, val state: DockItemState)
-enum class DockKind { CASH_TIP, EXPENSE, LOG, NOW, SETTINGS }
+enum class DockKind { CASH_TIP, EXPENSE, ODOMETER, LOG, NOW, SETTINGS }
 enum class DockItemState { NORMAL, LIT, ACCENT, DISABLED }
 data class RestingModel(
     val startedAt: Long,

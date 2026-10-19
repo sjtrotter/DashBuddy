@@ -430,6 +430,7 @@ object RecordFolds {
         AppEventType.PAY_ADJUSTMENT,
         AppEventType.DELIVERY_ADJUSTMENT,
         AppEventType.EXPENSE_LOGGED,
+        AppEventType.ODOMETER_READING,
         AppEventType.FUEL_FILLUP,
         AppEventType.LEDGER_ENTRY_VOIDED,
         AppEventType.MANUAL_DELIVERY,
@@ -496,6 +497,7 @@ object RecordFolds {
             AppEventType.MANUAL_DELIVERY -> CorrectionFolds.foldManualDelivery(event, context, currentCostPerMile)
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
             AppEventType.EXPENSE_LOGGED -> CorrectionFolds.foldExpenseLogged(event, context)
+            AppEventType.ODOMETER_READING -> FoldOutcome(context = context)
             AppEventType.FUEL_FILLUP -> CorrectionFolds.foldFuelFillup(event, context)
             AppEventType.LEDGER_ENTRY_VOIDED -> CorrectionFolds.foldLedgerVoid(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)

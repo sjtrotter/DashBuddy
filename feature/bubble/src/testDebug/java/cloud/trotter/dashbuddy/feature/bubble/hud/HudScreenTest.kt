@@ -132,7 +132,7 @@ internal class HudScreenTest : HudScreenFixture() {
         value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2 hr 0 min").assertExists()
         value("hud.top.miles", "42.5").assertExists()
-        DockKind.entries.filter { it != DockKind.NOW }.forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
+        listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
         org.junit.Assert.assertTrue(state(resting = true).top.dimmed)
     }
@@ -145,12 +145,12 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithText("38").assertDoesNotExist()
     }
 
-    @Test fun `first run shows em dashes and a disabled cash tip`() {
+    @Test fun `first run shows em dashes and the resting dock`() {
         show({ state(first = true, profit = null) })
         listOf("hud.top.earned", "hud.top.online", "hud.top.miles").forEach { value(it, EMPTY_VALUE).assertExists() }
         compose.onNodeWithText("No dash yet").assertIsDisplayed()
-        compose.onNodeWithTag("hud.dock.CASH_TIP").assertIsNotEnabled()
-        compose.onNodeWithTag("hud.dock.EXPENSE").assertIsNotEnabled()
+        compose.onNodeWithTag("hud.dock.CASH_TIP").assertDoesNotExist()
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertIsEnabled()
     }
 
     @Test fun `ribbon is present live and absent at rest`() {

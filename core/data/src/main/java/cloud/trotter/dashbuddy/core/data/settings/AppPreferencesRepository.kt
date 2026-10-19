@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -17,7 +18,8 @@ import javax.inject.Singleton
 
 @Singleton
 class AppPreferencesRepository @Inject constructor(
-    private val dataSource: AppPreferencesDataSource
+    private val dataSource: AppPreferencesDataSource,
+    private val garageRepository: GarageRepository,
 ) {
     // ============================================================================================
     // STREAMS
@@ -29,6 +31,7 @@ class AppPreferencesRepository @Inject constructor(
     val estimatedMpg = dataSource.estimatedMpg
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
+    val odometerPrompts = dataSource.odometerPrompts
     val countRealExpensesInKept = dataSource.countRealExpensesInKept
     val dailyKeptGoalDollars = dataSource.dailyKeptGoalDollars
     val hudPillShowsEarnings = dataSource.hudPillShowsEarnings
@@ -243,6 +246,8 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
     suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
 
+    suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
+
     suspend fun setCountRealExpensesInKept(enabled: Boolean) = dataSource.setCountRealExpensesInKept(enabled)
     suspend fun setHudPillShowsEarnings(enabled: Boolean) = dataSource.setHudPillShowsEarnings(enabled)
     suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.setAnalyticsShowMore(enabled)
@@ -394,6 +399,7 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun clearPreferences() {
         Timber.tag(TAG).w("Clearing App Preferences")
         dataSource.clear()
+        garageRepository.clear()
     }
 
     private companion object {

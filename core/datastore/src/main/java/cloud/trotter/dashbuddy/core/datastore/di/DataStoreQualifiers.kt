@@ -38,3 +38,8 @@ annotation class RuleCapabilityPreferences
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class WeeklyPlanPreferences
+
+/** User-owned garage, included in device backup like weekly_plan. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class VehiclePreferences

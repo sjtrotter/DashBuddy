@@ -763,6 +763,8 @@ row, and is dropped with a `WARN` and a log line to the dasher when the task is 
 appears within a bound after the dash ends. ADR-0012 lists four questions open before slice 3,
 including how a cash tip interacts with the #1033 re-price guard (`driverAdjustedAt`).
 
+**Odometer readings (#1333 S2f).** `ODOMETER_READING` is a bookkeeping event: the typed car reading (whole miles), the vehicle id and `OdometerRepository.totalMiles()` at that moment; `sessionId` is always null. It is in `RecordFolds.BOOKKEEPING_EVENTS` and has an explicit `foldMeasuredEvent` arm returning the context unchanged, proven by `folds to nothing with a session context present`. The GPS odometer stays the mileage source of every fold; a reading never moves it. `MileageReconciliation` (`:domain`, pure) takes the latest reading at or before `session.startedAt` and the earliest at or after `session.endedAt`, both for the active vehicle, and returns car miles (the readings' difference), tracked miles (the GPS stamps' difference) and other miles (car minus tracked, a figure in its own right, never an error); null when either end is missing. No fold, no read-model column, no projector change.
+
 `LedgerDao.expenseTotalForSession(sessionId)` and `fuelTotalForSession(sessionId)` each emit
 the dash's non-voided total, or zero with no matching rows. `LedgerRepository.sessionNet(sessionId)`
 combines `sessionDetail` from its injected `AnalyticsRepository` with both totals and emits `SessionNet`:

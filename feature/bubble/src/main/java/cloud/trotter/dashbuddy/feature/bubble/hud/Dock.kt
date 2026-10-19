@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,7 @@ fun Dock(model: DockModel, onClick: (DockKind) -> Unit) {
                 DockKind.CASH_TIP -> R.string.hud_dock_cash_tip to Icons.Outlined.Payments
                 DockKind.EXPENSE -> R.string.hud_dock_expense to Icons.Outlined.Receipt
                 DockKind.NOW -> R.string.hud_dock_now to Icons.Outlined.Schedule
+                DockKind.ODOMETER -> R.string.hud_dock_odometer to Icons.Outlined.Speed
                 DockKind.LOG -> R.string.hud_dock_log to Icons.AutoMirrored.Outlined.List
                 DockKind.SETTINGS -> R.string.hud_dock_settings to Icons.Outlined.Settings
             }

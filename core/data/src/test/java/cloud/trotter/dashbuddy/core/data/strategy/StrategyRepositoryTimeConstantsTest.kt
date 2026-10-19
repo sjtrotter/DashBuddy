@@ -43,7 +43,7 @@ class StrategyRepositoryTimeConstantsTest {
         val prefsStore = PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("prefs.preferences_pb") })
         val source = StrategyDataSource(strategyStore)
-        val prefs = AppPreferencesRepository(AppPreferencesDataSource(prefsStore))
+        val prefs = AppPreferencesRepository(AppPreferencesDataSource(prefsStore), org.mockito.kotlin.mock())
         source.replaceTimeConstants(mapOf(platforms[0] to learned))
         val snapshots = MutableSharedFlow<Map<Platform, LearnedTimeConstants>>(extraBufferCapacity = 8)
         val reader = mock<TimeConstantRepository> { on { learnedTimeConstants } doReturn snapshots }
@@ -80,7 +80,7 @@ class StrategyRepositoryTimeConstantsTest {
         val ds = PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("independent.preferences_pb") })
         val source = AppPreferencesDataSource(ds)
-        val repo = AppPreferencesRepository(source)
+        val repo = AppPreferencesRepository(source, org.mockito.kotlin.mock())
         repo.persistUserSetEconomy(UserEconomy(avgMinutesPerMile = 3.0,
             userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE)))
         assertEquals(setOf(EconomyField.AVG_MIN_PER_MILE.name), source.userSetEconomyFields.first())
@@ -96,7 +96,7 @@ class StrategyRepositoryTimeConstantsTest {
         val source = StrategyDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("retry.preferences_pb") }))
         val prefs = AppPreferencesRepository(AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
-            produceFile = { tmp.newFile("retry-prefs.preferences_pb") })))
+            produceFile = { tmp.newFile("retry-prefs.preferences_pb") })), org.mockito.kotlin.mock())
         var attempts = 0
         val values = mapOf(platforms[0] to learned)
         val transient = flow {

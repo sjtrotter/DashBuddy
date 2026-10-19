@@ -66,8 +66,7 @@ class HudStateMapperTest {
     @Test fun `cash tip cue reaches the dock`() {
         assertEquals(DockItemState.ACCENT, map(cue = true).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
         assertEquals(DockItemState.DISABLED, map(cue = false).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
-        assertEquals(DockItemState.DISABLED, map(rest = true, last = null, cue = true)
-            .dock.items.single { it.kind == DockKind.CASH_TIP }.state)
+        assertFalse(map(rest = true, last = null, cue = true).dock.items.any { it.kind == DockKind.CASH_TIP })
     }
     @Test fun `profit per hour preserves unknowns and real zero`() {
         assertNull(profitPerHour(null, 3_600_000))

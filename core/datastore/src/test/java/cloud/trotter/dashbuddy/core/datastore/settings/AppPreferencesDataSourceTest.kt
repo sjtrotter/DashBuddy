@@ -42,6 +42,16 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
+    fun `odometer prompts default true and round trip`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "odometer-prompts.preferences_pb")
+        assertEquals(true, source.odometerPrompts.first())
+        source.setOdometerPrompts(false)
+        assertEquals(false, source.odometerPrompts.first())
+        source.setOdometerPrompts(true)
+        assertEquals(true, source.odometerPrompts.first())
+    }
+
+    @Test
     fun `daily kept goal round trips and clears to null`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "daily-goal.preferences_pb")
         assertNull(source.dailyKeptGoalDollars.first())
