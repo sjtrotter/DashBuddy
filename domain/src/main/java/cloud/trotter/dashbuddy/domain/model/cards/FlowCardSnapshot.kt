@@ -150,7 +150,7 @@ sealed class FlowCardSnapshot {
              * (#461) — `orderType` is known at offer time, so the card can be
              * typed at a glance.
              */
-            private fun badgesOf(parsedOffer: ParsedOffer): List<String> =
+            fun badgesOf(parsedOffer: ParsedOffer): List<String> =
                 (parsedOffer.badges.map { it.name } +
                     parsedOffer.orders.flatMap { it.badges }.map { it.name } +
                     if (parsedOffer.orders.any { it.orderType == OrderType.SHOP_FOR_ITEMS }) {

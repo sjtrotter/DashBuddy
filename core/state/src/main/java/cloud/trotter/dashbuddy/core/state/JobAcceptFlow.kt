@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.state
 
+import cloud.trotter.dashbuddy.domain.model.offer.AddOnStops
+import cloud.trotter.dashbuddy.domain.model.offer.newStores
+import cloud.trotter.dashbuddy.domain.model.offer.ownedStoreKeys
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.dashbuddy.domain.model.offer.OfferScope
 import cloud.trotter.dashbuddy.domain.pipeline.Observation
@@ -14,12 +17,6 @@ import cloud.trotter.dashbuddy.domain.state.StoreNameMatch
 import cloud.trotter.dashbuddy.domain.state.Task
 import cloud.trotter.dashbuddy.domain.state.TaskPhase
 import java.util.Locale
-
-/**
- * #1304 (review P2): a card's `+N stops` is untrusted third-party text; a value past any real route
- * (DoorDash stacks are ≤ 4 orders) is treated as unparsed so the mint never allocates one Task per digit.
- */
-private const val MAX_ADDON_STOPS = 8
 
 /**
  * #526 / #237 — the **accept → job-mint → placeholder → swap** unit, extracted from
@@ -241,7 +238,7 @@ internal fun PlatformRegionStepper.mintFreshJobFromAccept(
  * add-on folds into an open pickup, #499; never a confirmed one, #1315), at offsets D..D+P-1.
  * No job mint this step.
  * For an INCREMENTAL add-on, D = stopCount − new pickup hints, floored at 1;
- * counts outside 1..MAX_ADDON_STOPS or unparsed → 1 (#1304).
+ * counts outside 1..AddOnStops.MAX_ADDON_STOPS or unparsed → 1 (#1304).
  * Deduped by offerHash so a re-entered OfferPresented for the same offer can't double-count.
  */
 internal fun PlatformRegionStepper.appendAddOn(
@@ -258,12 +255,11 @@ internal fun PlatformRegionStepper.appendAddOn(
     fun pickupHints(tasks: List<Task>) = tasks
         .flatMap { listOfNotNull(it.expectedStoreHint, it.storeName) }
         .map { it.lowercase(Locale.ROOT) }.toSet()
-    val allPickupHints = pickupHints(pickups)
     val openPickupHints = pickupHints(pickups.filter { it.confirmedAt == null && it.unassignedAt == null })
     val hints = distinctStoreHints(inputs.storeHints)
     // #1315 r3: +N stops counts stores new to the ROUTE, deduplicated against ALL pickups.
     // A confirmed same-store revisit needs a placeholder but is not a new store in this arithmetic.
-    val newStoreHints = hints.filter { it.lowercase(Locale.ROOT) !in allPickupHints }
+    val newStoreHints = newStores(ownedStoreKeys(existing.tasks), hints)
     val addOnPickupHints = hints.filter { it.lowercase(Locale.ROOT) !in openPickupHints }
     // #1304: an INCREMENTAL card lists the OWNED order beside the new one, so `orders.size` over-mints.
     // +N stops minus stores new to the route gives added drops; TOTAL keeps its per-order count.
@@ -276,7 +272,7 @@ internal fun PlatformRegionStepper.appendAddOn(
     // closes the job early (`JobCompleteness` ignores outstanding pickups), stranding the new order
     // in a fresh job without its accepted economics.
     val addOnDropoffCount = if (inputs.economics.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
-        inputs.stopCount?.takeIf { it in 1..MAX_ADDON_STOPS }?.let { (it - newStoreHints.size).coerceAtLeast(1) } ?: 1
+        AddOnStops.addedDropoffs(inputs.stopCount, newStoreHints.size)
     } else inputs.dropoffCount
     val addOnDropoffs = preCreatedDropoffs(
         region, obs, existing.jobId, addOnDropoffCount, startOffset = 0, offerHash = inputs.offerHash,

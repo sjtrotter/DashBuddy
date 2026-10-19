@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
+import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -234,6 +235,43 @@ class HudScreenTest {
             .performClick()
         settle()
         assertEquals(DockKind.CASH_TIP, clicked)
+    }
+
+    @Test fun `offer mode and offer content come from the region's pending offer`() {
+        val pending = OfferFixtures.pending()
+        var region by mutableStateOf(PlatformRegion(Platform.DoorDash, Mode.Online, Session("live", T0)))
+        // The independently collected stack can lag both the arrival and removal of the pending offer.
+        var snapshot by mutableStateOf<FlowCardSnapshot?>(
+            FlowCardSnapshot.Offer(T0, offerHash = "stale"))
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    val presented = region.presentedOffer()
+                    val model = HudStateMapper.map(region, Flow.OfferPresented, Platform.DoorDash,
+                        emptyList(), 100.0, 42.5, null, null, false, null, null,
+                        hasActiveCard = snapshot != null, hasOfferCard = presented != null,
+                        logOpen = false, gas = GasRowModel(3.5f, true))
+                    HudScreen(model, ribbon = null, onDockClick = {}, stateCard = { Text("State slot") },
+                        offer = { presented?.let { Text("Offer " + it.offerHash) } })
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithTag("hud.slot.offer").assertDoesNotExist()
+        compose.runOnIdle {
+            snapshot = FlowCardSnapshot.Awaiting("waiting", T0)
+            region = region.copy(pendingOffers = listOf(pending))
+        }
+        settle()
+        compose.onNodeWithTag("hud.slot.offer").assertIsDisplayed()
+        compose.onNodeWithText("Offer real").assertIsDisplayed()
+        compose.runOnIdle {
+            snapshot = FlowCardSnapshot.Offer(T0, offerHash = "stale")
+            region = region.copy(pendingOffers = listOf(pending.copy(acceptedAt = T0)))
+        }
+        settle()
+        compose.onNodeWithTag("hud.slot.offer").assertDoesNotExist()
+        compose.onNodeWithText("Offer real").assertDoesNotExist()
     }
 
     private companion object { const val T0 = 1_700_000_000_000L }

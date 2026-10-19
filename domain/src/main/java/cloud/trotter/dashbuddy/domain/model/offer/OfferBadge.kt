@@ -13,7 +13,7 @@ enum class OfferBadge(
     val displayName: String,
 ) {
     /** Indicates the offer is marked as high paying by DoorDash. */
-    HIGH_PAYING(displayName = "High Paying"),
+    HIGH_PAYING(displayName = "High paying"),
 
     /** Indicates priority access due to Dasher status (Platinum, Gold, Silver) or Pro Shopper ratings. */
     PRIORITY_ACCESS(displayName = "Priority Access"),

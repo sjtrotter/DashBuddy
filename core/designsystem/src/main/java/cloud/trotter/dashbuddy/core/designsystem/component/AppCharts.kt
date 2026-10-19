@@ -165,10 +165,11 @@ fun AppSparkline(
 fun AppGaugeRing(
     progress: Float,
     value: String,
-    label: String,
+    label: String? = null,
     modifier: Modifier = Modifier,
     color: Color = AppTheme.colors.accent,
     diameter: Dp = 88.dp,
+    valueStyle: androidx.compose.ui.text.TextStyle = AppTheme.num.lgNum,
 ) {
     val c = AppTheme.colors
     val track = c.surface3
@@ -188,9 +189,9 @@ fun AppGaugeRing(
                     topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round),
                 )
             }
-            Text(value, style = AppTheme.num.lgNum, color = c.text)
+            Text(value, style = valueStyle, color = c.text)
         }
-        Text(label, style = MaterialTheme.typography.bodySmall, color = c.text2)
+        label?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.text2) }
     }
 }
 

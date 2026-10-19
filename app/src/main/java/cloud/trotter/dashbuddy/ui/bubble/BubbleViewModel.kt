@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
@@ -61,7 +63,10 @@ class BubbleViewModel @Inject constructor(
     analyticsRepository: AnalyticsRepository,
     ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
+    strategyRepository: StrategyRepository,
 ) : ViewModel() {
+
+    val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
 
     // Current app state — drives the mode card in the HUD
     val appState = stateManager.state

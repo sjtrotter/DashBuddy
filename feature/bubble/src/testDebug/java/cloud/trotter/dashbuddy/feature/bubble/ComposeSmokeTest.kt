@@ -1,14 +1,12 @@
 package cloud.trotter.dashbuddy.feature.bubble
 
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import cloud.trotter.dashbuddy.core.designsystem.component.AppStatTile
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
-import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
-import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
+import cloud.trotter.dashbuddy.feature.bubble.hud.StateCard
+import cloud.trotter.dashbuddy.feature.bubble.hud.StateCardModel
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,38 +32,14 @@ class ComposeSmokeTest {
     }
 
     @Test
-    fun `awaiting card ticks with the provided clock`() {
-        val clock = MutableClock(T0 + 5_000)
-        compose.mainClock.autoAdvance = false
+    fun `state receipt card renders its total`() {
         compose.setContent {
             DashBuddyTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) {
-                    FlowCardItem(
-                        snapshot = FlowCardSnapshot.Awaiting(
-                            id = "awaiting:test",
-                            phaseStartedAt = T0,
-                            phaseEndedAt = null,
-                            sessionId = null,
-                        ),
-                        isActive = true,
-                        expanded = true,
-                        onToggleExpand = {},
-                    )
-                }
+                StateCard(StateCardModel.Receipt("Store", 1_700_000_000_000L,
+                    lines = emptyList(), tip = 4.0, total = 11.75), kept = null)
             }
         }
-
-        compose.onNodeWithText("5s").assertExists()
-
-        clock.millis = T0 + 65_000
-        // A 1,000 ms advance rounds to whole frames and can miss the recomposition that shows the new value;
-        // 2,000 ms leaves headroom.
-        compose.mainClock.advanceTimeBy(2_000)
-
-        compose.onNodeWithText("1m 5s").assertExists()
-        compose.onNodeWithText("5s").assertDoesNotExist()
-    }
-    private companion object {
-        const val T0 = 1_700_000_000_000L
+        compose.onNodeWithText("Delivery total").assertIsDisplayed()
+        compose.onNodeWithText("$11.75").assertIsDisplayed()
     }
 }
