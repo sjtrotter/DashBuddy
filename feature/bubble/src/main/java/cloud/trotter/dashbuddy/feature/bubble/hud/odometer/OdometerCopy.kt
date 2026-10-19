@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatShortDate
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.feature.bubble.R
 
@@ -13,7 +14,8 @@ internal fun odometerCopy(model: OdometerSheetModel): String = when (val check =
     OdometerCheck.Empty -> model.last?.let {
         stringResource(R.string.hud_odometer_last, Formats.commaInt(it.readingMiles), formatShortDate(it.occurredAt))
     }.orEmpty()
-    is OdometerCheck.First -> stringResource(R.string.hud_odometer_first, check.vehicleName)
+    is OdometerCheck.First -> stringResource(R.string.hud_odometer_first,
+        check.vehicleName ?: model.vehicle?.let { stringResource(vehicleTypeLabel(it.profile.vehicleType)) }.orEmpty())
     is OdometerCheck.Lower -> stringResource(R.string.hud_odometer_lower, Formats.commaInt(check.lastMiles))
     is OdometerCheck.FewerThanTracked -> stringResource(R.string.hud_odometer_fewer,
         Formats.decimal(check.tracked), formatShortDate(check.since), Formats.commaInt(check.delta))

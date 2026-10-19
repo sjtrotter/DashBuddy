@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.domain.format.Formats
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingLimit
 import cloud.trotter.dashbuddy.feature.bubble.R
@@ -43,6 +44,7 @@ fun ColumnScope.OdometerSheet(
     onRetireVehicle: (String) -> Unit,
 ) {
     val page = model.page
+    val vehicleName = model.vehicle?.let { it.identityName ?: stringResource(vehicleTypeLabel(it.profile.vehicleType)) }.orEmpty()
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         when (page) {
             OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange,
@@ -53,7 +55,7 @@ fun ColumnScope.OdometerSheet(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         OdometerTitle(stringResource(R.string.hud_odometer_title), onBack)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(model.vehicle?.displayName.orEmpty(), Modifier.weight(1f), color = AppTheme.colors.text,
+                            Text(vehicleName, Modifier.weight(1f), color = AppTheme.colors.text,
                                 style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             IconButton(onClick = onSwitchVehicle, enabled = !model.saving, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Outlined.SwapHoriz, stringResource(R.string.hud_odometer_switch), tint = AppTheme.colors.accent)

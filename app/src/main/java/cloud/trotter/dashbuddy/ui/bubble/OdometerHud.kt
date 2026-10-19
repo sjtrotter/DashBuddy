@@ -113,7 +113,7 @@ internal class OdometerHud(
         val reconciliation = remember(readings, vehicle) {
             readings?.let { list -> vehicle?.id?.let { MileageReconciliation.latest(list, it) } }
         }
-        OdometerFooter(vehicle?.displayName, lastReading, reconciliation, ::openSheet)
+        OdometerFooter(vehicle, lastReading, reconciliation, ::openSheet)
     }
 
     /** The start-window cue ticks once a minute while its window is open. */

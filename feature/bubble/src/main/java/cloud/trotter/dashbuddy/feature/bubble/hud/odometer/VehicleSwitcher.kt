@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.feature.bubble.R
 
@@ -25,13 +26,14 @@ fun VehicleSwitcher(vehicles: List<Vehicle>, activeId: String?, saving: Boolean,
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         OdometerTitle(stringResource(R.string.hud_odometer_vehicles), onBack)
         vehicles.forEach { vehicle ->
+            val vehicleName = vehicle.identityName ?: stringResource(vehicleTypeLabel(vehicle.profile.vehicleType))
             Row(Modifier.fillMaxWidth().testTag("vehicle.${vehicle.id}").semantics { selected = vehicle.id == activeId }
                 .clickable(enabled = !saving, role = Role.RadioButton) { onSelect(vehicle.id) }.padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(vehicle.displayName, Modifier.weight(1f), color = AppTheme.colors.text)
+                Text(vehicleName, Modifier.weight(1f), color = AppTheme.colors.text)
                 if (vehicle.id == activeId) Text(stringResource(R.string.hud_odometer_active), color = AppTheme.colors.accent)
                 IconButton(onClick = { onRetire(vehicle.id) }, enabled = !saving) {
-                    Icon(Icons.Outlined.Delete, stringResource(R.string.hud_odometer_remove_vehicle, vehicle.displayName), tint = AppTheme.colors.text2)
+                    Icon(Icons.Outlined.Delete, stringResource(R.string.hud_odometer_remove_vehicle, vehicleName), tint = AppTheme.colors.text2)
                 }
             }
         }

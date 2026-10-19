@@ -37,7 +37,7 @@ class GarageSeederTest {
         assertTrue(state.garageSeeded.first())
         val car = garage.garage.first().active!!
         assertNull(car.name)
-        assertEquals("2021 Honda Civic", car.displayName)
+        assertEquals("2021 Honda Civic", car.identityName)
         assertEquals(VehicleClass.COMPACT, car.profile.legacyClass)
         assertEquals(31.0, car.profile.gasMpg)
         assertEquals(650.0, car.profile.wear.tireSetCost)

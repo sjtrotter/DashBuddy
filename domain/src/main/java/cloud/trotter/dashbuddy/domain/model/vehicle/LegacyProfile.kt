@@ -38,6 +38,6 @@ fun LegacyProfile.toTyped(): VehicleProfile {
         VehicleClass.EV -> ElectricCar(wear = wear, fixed = fixed, year = year, make = make, model = model)
         VehicleClass.MOTORCYCLE -> Motorcycle(mpg, fuelType, wear, fixed, year, make, model)
         VehicleClass.E_BIKE -> EBike(wear = wear, fixed = fixed, year = year, make = make, model = model)
-        else -> GasCar(GasCarClass.valueOf(vehicleClass.name), mpg, fuelType, wear, fixed, year, make, model)
+        else -> GasCar(requireNotNull(vehicleClass.gasClass), mpg, fuelType, wear, fixed, year, make, model)
     }
 }

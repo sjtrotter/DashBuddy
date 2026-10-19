@@ -46,8 +46,8 @@ object EconomyFieldGroups {
             fields = setOf(EconomyField.VEHICLE_CLASS),
             readFromEconomy = { VehicleClassValue(it.vehicleClass) },
             applyToProfile = { profile, value, _ -> when (profile) {
-                is GasCar -> GasCarClass.entries.firstOrNull { it.name == value.value.name }?.let { profile.copy(vehicleClass = it) } ?: profile
-                is HybridCar -> GasCarClass.entries.firstOrNull { it.name == value.value.name }?.let { profile.copy(vehicleClass = it) } ?: profile
+                is GasCar -> value.value.gasClass?.let { profile.copy(vehicleClass = it) } ?: profile
+                is HybridCar -> value.value.gasClass?.let { profile.copy(vehicleClass = it) } ?: profile
                 else -> profile
             } },
         ),

@@ -31,7 +31,7 @@ import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.ui.components.economy.EconomyEditor
 import cloud.trotter.dashbuddy.ui.components.economy.TrueCostFooter
 import cloud.trotter.dashbuddy.ui.components.economy.VehicleClassPicker
-import cloud.trotter.dashbuddy.ui.components.economy.VehicleEconomyInputs
+import cloud.trotter.dashbuddy.ui.components.economy.VehicleMpgAndFuelInputs
 
 /**
  * Personal Economy settings. Chrome only: the Scaffold, intro copy, and the
@@ -90,7 +90,7 @@ fun EconomySettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            if (EconomyField.VEHICLE_MPG in EconomyFieldGroups.fieldsFor(eco.vehicleProfile)) VehicleEconomyInputs(
+            if (EconomyField.VEHICLE_MPG in EconomyFieldGroups.fieldsFor(eco.vehicleProfile)) VehicleMpgAndFuelInputs(
                 mpg = eco.vehicleMpg,
                 fuelType = fuelType,
                 onMpgChange = viewModel::setMpg,

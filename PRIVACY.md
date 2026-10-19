@@ -208,9 +208,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
   over the same span; car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
   and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
-  include both, like the rest of the history and preferences (§6). Learned travel tuples can be stored in strategy
-  preferences under platform and vehicle id, with platform-only fallback; the present read-model source lacks vehicle
-  attribution and still produces only platform tuples.
+  include both, like the rest of the history and preferences (§6).
 - The `odometer_prompts` app preference stores whether DashBuddy reminds you to log a reading: the
   dock's Odometer block lit in accent for the first ten minutes of a dash and after a dash until a
   reading, and one "Log your odometer" line in the session-start notification (default on). It stays
@@ -258,7 +256,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 ## Revision history
 
 - **r7 (2026-10-19)** — vehicle profiles are typed (gas car, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle) and store
-  the type's own consumption and part-cost fields, shared electricity tariff, `legacyExtras` and optional vehicle-keyed learned travel tuples; older entries keep their values (#1358). Nothing
+  the type's own consumption and part-cost fields, shared electricity tariff and `legacyExtras`; older entries keep their values (#1358). Nothing
   new leaves the device. Receipts created under r6 retain that revision.
 - **r6 (2026-10-19)** — the garage vehicle gains a profile (year, make, model, MPG, class, fuel type, cost figures) and a
   retired mark; the economy's vehicle-shaped values now come from the active vehicle, seeded once from the wizard's saved

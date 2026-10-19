@@ -17,8 +17,8 @@ data class Vehicle(
         require(name == null || (name == name.trim() && name.codePointCount(0, name.length) in 1..MAX_NAME_CODE_POINTS))
     }
 
-    val displayName: String get() = name ?: listOfNotNull(profile.year, profile.make, profile.model)
-        .filter { it.isNotBlank() }.joinToString(" ").ifBlank { profile.displayType }
+    val identityName: String? get() = name ?: listOfNotNull(profile.year, profile.make, profile.model)
+        .filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
 
     companion object {
         const val MAX_NAME_CODE_POINTS = 30

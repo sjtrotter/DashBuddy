@@ -10,6 +10,42 @@ class VehicleEconomyTest {
     private fun economy(profile: VehicleProfile, shared: SharedEconomy = SharedEconomy()): UserEconomy =
         UserEconomy.from(VehicleEconomyInputs.from(profile, shared), shared)
 
+    @Test fun `car class mappings are inverse and non-car legacy classes have no gas class`() {
+        GasCarClass.entries.forEach { assertEquals(it, it.legacy.gasClass) }
+        VehicleClass.entries.forEach { cls ->
+            when (cls) {
+                VehicleClass.EV, VehicleClass.MOTORCYCLE, VehicleClass.E_BIKE -> assertNull(cls.gasClass)
+                else -> assertEquals(cls, cls.gasClass!!.legacy)
+            }
+        }
+    }
+
+    @Test fun `default consumption clears each override without changing identity or costs`() {
+        val profiles = listOf(GasCar(mpg = 40.0), HybridCar(mpg = 50.0), ElectricCar(kwhPer100Mi = 42.0),
+            Motorcycle(mpg = 60.0), ScooterMoped(mpg = 110.0, kwhPer100Mi = 8.0),
+            ScooterMoped(Powertrain.ELECTRIC, mpg = 110.0, kwhPer100Mi = 8.0), EBike(whPerMile = 35.0), Bicycle())
+        profiles.forEach { original ->
+            val profile = original.withIdentity("2024", "Maker", "Model")
+                .withCosts(WearProfile(tireSetCost = 123.0), FixedCosts(purchasePrice = 456.0))
+            val reset = profile.withDefaultConsumption()
+            assertEquals(profile.vehicleType, reset.vehicleType)
+            assertEquals(profile.year, reset.year)
+            assertEquals(profile.make, reset.make)
+            assertEquals(profile.model, reset.model)
+            assertEquals(profile.wear, reset.wear)
+            assertEquals(profile.fixed, reset.fixed)
+            assertNull(reset.gasMpg)
+            when (reset) {
+                is ElectricCar -> assertNull(reset.kwhPer100Mi)
+                is ScooterMoped -> { assertNull(reset.mpg); assertNull(reset.kwhPer100Mi) }
+                is EBike -> assertNull(reset.whPerMile)
+                else -> Unit
+            }
+            assertTrue(economy(reset).userSetFields.intersect(setOf(
+                EconomyField.VEHICLE_MPG, EconomyField.KWH_PER_100_MI, EconomyField.WH_PER_MILE)).isEmpty())
+        }
+    }
+
     @Test fun `the sedan default economy is unchanged to the cent`() {
         // Independent pre-1358 constants, including the production phone share, not the new presets.
         val before = 3.50 / 30 + 800.0 / 40_000 + 60.0 / 5_000 + 400.0 / 40_000 +
@@ -73,18 +109,6 @@ class VehicleEconomyTest {
         }
         val override = economy(Bicycle(), SharedEconomy(avgMinutesPerMile = 3.0, userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE)))
         assertEquals(3.0, override.effectiveAvgMinutesPerMile, 0.0)
-    }
-
-    @Test fun `vehicle-specific learned travel wins with a platform-only fallback`() {
-        val legacy = LearnedTimeConstants(TimeConstantPair(2.0, 8.0), 40)
-        val scoped = LearnedTimeConstants(TimeConstantPair(5.0, 4.0), 40)
-        val base = EvaluationConfig(userEconomy = economy(EBike()).copy(activeVehicleId = "bike"),
-            timeConstants = mapOf(Platform.DoorDash to legacy),
-            vehicleTimeConstants = mapOf(VehicleTimeKey(Platform.DoorDash, "bike") to scoped))
-        assertEquals(scoped, base.learnedTimeFor(Platform.DoorDash))
-        assertEquals(5.0, base.forPlatform(Platform.DoorDash).userEconomy.effectiveAvgMinutesPerMile, 1e-12)
-        assertEquals(legacy, base.copy(userEconomy = base.userEconomy.copy(activeVehicleId = "other")).learnedTimeFor(Platform.DoorDash))
-        assertNull(base.learnedTimeFor(Platform.entries.first { it != Platform.DoorDash && it != Platform.Unknown }))
     }
 
     @Test fun `draft overrides preserve untouched nulls and commit explicit cost groups`() {

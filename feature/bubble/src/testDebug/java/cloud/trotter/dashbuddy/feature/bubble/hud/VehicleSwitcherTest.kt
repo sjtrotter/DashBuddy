@@ -102,6 +102,13 @@ class VehicleSwitcherTest {
         compose.onNodeWithContentDescription("Remove 2020 Chevrolet Malibu").assertExists()
     }
 
+    @Test fun `an unnamed vehicle uses its type label for the row and remove action`() {
+        vehicles = listOf(Vehicle("bike", null, 0, EBike()))
+        show()
+        compose.onNodeWithText("E-bike").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove E-bike").assertExists()
+    }
+
     @Test fun `a name over the cap is not accepted`() {
         compose.setContent {
             DashBuddyTheme {

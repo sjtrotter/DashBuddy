@@ -368,7 +368,7 @@ fun VehicleClassPicker(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        VehicleClass.entries.filter { it.name in GasCarClass.entries.map { cls -> cls.name } }.forEach { vc ->
+        VehicleClass.entries.filter { it.gasClass != null }.forEach { vc ->
             FilterChip(
                 selected = selected == vc,
                 onClick = { onClassChange(vc) },
@@ -380,7 +380,7 @@ fun VehicleClassPicker(
 
 /** Vehicle-specific inputs shared by settings and other economy surfaces. */
 @Composable
-fun VehicleEconomyInputs(
+fun VehicleMpgAndFuelInputs(
     mpg: Double,
     fuelType: FuelType,
     onMpgChange: (Double) -> Unit,

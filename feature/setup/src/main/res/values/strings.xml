@@ -47,7 +47,21 @@
     <string name="wizard_vehicle_manual_entry">Enter MPG myself</string>
     <string name="vehicle_power_gas">Gas</string>
     <string name="vehicle_power_electric">Electric</string>
+    <!-- Documented duplicate: vehicle_wh_per_mile, vehicle_kwh_per_100_mi and vehicle_electricity_price
+         are shared by :app and :feature:setup. The :app copy is AUTHORITATIVE. Keep both byte-identical;
+         non-transitive R and the feature-to-app module boundary require local copies.
+         A shared resource module is the follow-up. -->
     <string name="vehicle_wh_per_mile">Wh per mile</string>
     <string name="vehicle_kwh_per_100_mi">kWh per 100 miles</string>
     <string name="vehicle_electricity_price">Electricity ($/kWh)</string>
+    <!-- Documented duplicate: vehicle_type_* is shared by :app, :feature:setup and :feature:bubble.
+         The :app copy is AUTHORITATIVE. Keep all three byte-identical; non-transitive R and the
+         feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
+    <string name="vehicle_type_car">Car</string>
+    <string name="vehicle_type_hybrid">Hybrid</string>
+    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_motorcycle">Motorcycle</string>
+    <string name="vehicle_type_scooter">Scooter or moped</string>
+    <string name="vehicle_type_e_bike">E-bike</string>
+    <string name="vehicle_type_bicycle">Bicycle</string>
 </resources>

@@ -151,7 +151,6 @@ fun WizardScreen(
                             availableMakes = availableMakes,
                             availableModels = availableModels,
                             availableTrims = availableTrimNames,
-                            onTypeSelected = viewModel::updateVehicleClass,
                             onAllowVehicleLookup = viewModel::allowVehicleLookup,
                             onManualMpgEntry = viewModel::onManualMpgEntry,
                             onYearSelected = viewModel::onYearSelected,

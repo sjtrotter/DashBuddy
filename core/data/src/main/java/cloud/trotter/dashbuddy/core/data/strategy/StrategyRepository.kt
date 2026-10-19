@@ -177,7 +177,7 @@ class StrategyRepository @Inject constructor(
         appPreferencesRepository.userEconomy,
         // One inner source keeps the outer combine within the typed five-source overload.
         combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios,
-            combine(dataSource.learnedTimeConstants, dataSource.learnedVehicleTimeConstants) { p, v -> p to v }) {
+            dataSource.learnedTimeConstants) {
             s, r, t -> Triple(s, r, t)
         },
     ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios, timeConstants) ->
@@ -193,8 +193,7 @@ class StrategyRepository @Inject constructor(
             shopRates = shopRates,
             // #823 Phase 1: same per-platform discipline for the items:units ratio.
             itemsPerUnitRatios = itemsPerUnitRatios,
-            timeConstants = timeConstants.first,
-            vehicleTimeConstants = timeConstants.second,
+            timeConstants = timeConstants,
         )
     }.stateIn(scope, SharingStarted.Eagerly, null)
 

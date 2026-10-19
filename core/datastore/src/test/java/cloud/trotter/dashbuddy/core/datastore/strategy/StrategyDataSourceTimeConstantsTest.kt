@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedTimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
-import cloud.trotter.dashbuddy.domain.evaluation.VehicleTimeKey
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -50,30 +49,6 @@ class StrategyDataSourceTimeConstantsTest {
         source.replaceTimeConstants(emptyMap())
         assertEquals(before, ds.data.first().asMap())
         assertTrue(seen.all { it.isEmpty() || it == both || it == one })
-    }
-
-    @Test fun `vehicle tuples survive platform replay and scoped replacement preserves fallback`() = runTest {
-        val ds = PreferenceDataStoreFactory.create(scope = backgroundScope,
-            produceFile = { tmp.newFile("vehicle-times.preferences_pb") })
-        val source = StrategyDataSource(ds)
-        val car = VehicleTimeKey(platforms[0], "car")
-        val bike = VehicleTimeKey(platforms[0], "bike:with:separators")
-        val scoped = mapOf(car to value, bike to value.copy(median = TimeConstantPair(5.0, 4.0)))
-        val fallback = mapOf(platforms[0] to value.copy(sampleCount = 12))
-        source.replaceVehicleTimeConstants(scoped)
-        source.replaceTimeConstants(fallback)
-        assertEquals(scoped, source.learnedVehicleTimeConstants.first())
-        assertEquals(fallback, source.learnedTimeConstants.first())
-        source.replaceVehicleTimeConstants(mapOf(bike to scoped.getValue(bike)))
-        assertEquals(mapOf(bike to scoped.getValue(bike)), source.learnedVehicleTimeConstants.first())
-        assertEquals(fallback, source.learnedTimeConstants.first())
-        source.replaceTimeConstants(emptyMap())
-        assertEquals(mapOf(bike to scoped.getValue(bike)), source.learnedVehicleTimeConstants.first())
-        ds.edit { it.remove(intPreferencesKey("time_constant_sample_count:${platforms[0].wire}:${bike.vehicleId}")) }
-        assertTrue(source.learnedVehicleTimeConstants.first().isEmpty())
-        assertThrows(IllegalArgumentException::class.java) {
-            kotlinx.coroutines.runBlocking { source.replaceVehicleTimeConstants(mapOf(car.copy(vehicleId = "") to value)) }
-        }
     }
 
     @Test fun `incomplete nonfinite wrongly typed and invalid persisted tuples are rejected together`() = runTest {

@@ -276,7 +276,7 @@ class AppPreferencesRepository @Inject constructor(
     }
     suspend fun updateVehicleClass(type: VehicleClass) {
         updateActiveProfile { when (it) {
-            is HybridCar -> it.copy(vehicleClass = GasCarClass.entries.firstOrNull { cls -> cls.name == type.name } ?: it.vehicleClass)
+            is HybridCar -> it.copy(vehicleClass = type.gasClass ?: it.vehicleClass)
             is GasCar -> LegacyProfile(vehicleClass = type, mpg = it.mpg, fuelType = it.fuelType,
                 year = it.year, make = it.make, model = it.model).toTyped().withCosts(it.wear, it.fixed)
             else -> it
@@ -476,7 +476,7 @@ class AppPreferencesRepository @Inject constructor(
     }
 
     suspend fun resetEconomyDefaults() {
-        updateActiveProfile { it.withCosts(WearProfile(), FixedCosts()) }
+        updateActiveProfile { it.withCosts(WearProfile(), FixedCosts()).withDefaultConsumption() }
         dataSource.resetEconomyDefaults()
     }
 

@@ -24,6 +24,10 @@ import java.util.Locale
  * 1.0, round-trip, and reset the text to "1", eating the decimal separator —
  * #350). On blur, the formatted upstream value re-syncs/normalizes the text.
  *
+ * Documented duplicate: :feature:setup's wizard/cards/VehicleCard.kt VehicleNumberInput
+ * keeps this focus-aware decimal text handling because :feature:setup cannot depend on :app.
+ * Keep both in sync; a shared UI module is the follow-up if this boundary changes.
+ *
  * Used for: purchase price, insurance/registration deltas, phone plan total.
  */
 @Composable
@@ -36,9 +40,9 @@ fun CurrencyInput(
     showCurrencySymbol: Boolean = true,
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(if (showCurrencySymbol) editableAmount(value) else value.toString()) }
+    var text by remember { mutableStateOf(if (showCurrencySymbol) editableAmount(value) else value.toString().removeSuffix(".0")) }
     LaunchedEffect(value, isFocused, showCurrencySymbol) {
-        if (!isFocused) text = if (showCurrencySymbol) editableAmount(value) else value.toString()
+        if (!isFocused) text = if (showCurrencySymbol) editableAmount(value) else value.toString().removeSuffix(".0")
     }
 
     OutlinedTextField(

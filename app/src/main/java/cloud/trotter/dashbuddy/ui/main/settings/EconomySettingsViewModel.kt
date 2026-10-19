@@ -53,7 +53,7 @@ class EconomySettingsViewModel @Inject constructor(
                 val resolved = config.forPlatform(platform).userEconomy
                 TimeConstantsPlatformUiState(
                     platform = platform,
-                    automatic = TimeConstants.blend(config.travelSeedFor(platform), config.learnedTimeFor(platform)),
+                    automatic = TimeConstants.blend(config.travelSeedFor(platform), config.timeConstants[platform]),
                     effective = TimeConstantPair(resolved.effectiveAvgMinutesPerMile, resolved.effectiveBasePickupMinutes),
                     sampleCount = resolved.timeConstantSampleCount,
                 )

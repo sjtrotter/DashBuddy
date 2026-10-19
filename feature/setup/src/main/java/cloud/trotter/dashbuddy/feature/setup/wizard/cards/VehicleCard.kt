@@ -48,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import cloud.trotter.dashbuddy.feature.setup.wizard.components.VehicleDropdown
 import cloud.trotter.dashbuddy.feature.setup.wizard.components.WizardCardHeader
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.feature.setup.wizard.vehicleTypeLabel
 import cloud.trotter.dashbuddy.feature.setup.wizard.VEHICLE_NOT_LISTED
 import android.net.Uri
 
@@ -73,7 +74,6 @@ fun VehicleCard(
     availableMakes: List<String>,
     availableModels: List<String>,
     availableTrims: List<String>,
-    onTypeSelected: (VehicleClass) -> Unit,
     onAllowVehicleLookup: () -> Unit,
     onManualMpgEntry: () -> Unit,
     onYearSelected: (String) -> Unit,
@@ -104,7 +104,7 @@ fun VehicleCard(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VehicleType.entries.forEach { type ->
                 FilterChip(selected = profile.vehicleType == type,
-                    onClick = { onVehicleTypeSelected(type) }, label = { Text(type.displayName) })
+                    onClick = { onVehicleTypeSelected(type) }, label = { Text(stringResource(vehicleTypeLabel(type))) })
             }
         }
         if (profile is ScooterMoped) {
@@ -284,11 +284,16 @@ fun VehicleCard(
     }
 }
 
+/**
+ * Documented duplicate of :app's ui/components/economy/CurrencyInput.kt decimal field.
+ * The focus-aware text handling is kept here because :feature:setup cannot depend on :app.
+ * Keep both in sync; a shared UI module is the follow-up if this boundary changes.
+ */
 @Composable
 private fun VehicleNumberInput(label: String, value: Double, onChange: (Double) -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(value.toString()) }
-    LaunchedEffect(value, focused) { if (!focused) text = value.toString() }
+    var text by remember { mutableStateOf(value.toString().removeSuffix(".0")) }
+    LaunchedEffect(value, focused) { if (!focused) text = value.toString().removeSuffix(".0") }
     OutlinedTextField(value = text, onValueChange = { input ->
         text = input
         input.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let(onChange)

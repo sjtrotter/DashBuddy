@@ -15,7 +15,7 @@ data class OdometerCheckInput(
 sealed interface OdometerCheck {
     data object NoVehicle : OdometerCheck
     data object Empty : OdometerCheck
-    data class First(val vehicleName: String) : OdometerCheck
+    data class First(val vehicleName: String?) : OdometerCheck
     data class Lower(val lastMiles: Int) : OdometerCheck
     data class FewerThanTracked(val delta: Int, val tracked: Double, val since: Long) : OdometerCheck
     data class LargeJump(val delta: Int, val since: Long) : OdometerCheck
@@ -29,7 +29,7 @@ object OdometerReadingCheck {
 
     fun check(input: OdometerCheckInput): OdometerCheck {
         val vehicle = input.vehicle ?: return OdometerCheck.NoVehicle
-        val last = input.last ?: return OdometerCheck.First(vehicle.displayName)
+        val last = input.last ?: return OdometerCheck.First(vehicle.identityName)
         val miles = input.readingMiles?.takeIf(OdometerReadingLimit::isValid) ?: return OdometerCheck.Empty
         val delta = miles - last.readingMiles
         if (delta < 0) return OdometerCheck.Lower(last.readingMiles)

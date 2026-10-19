@@ -16,6 +16,8 @@ object VehiclePresets {
     val bicycleTravel = TravelProfile(6.0, 4.0)
     const val HYBRID_MPG = 45.0
     const val HYBRID_BRAKE_LIFE_MULTIPLIER = 1.5
+    // 33.7 kWh is one gallon of gasoline equivalent; multiply by 100 for kWh per 100 miles.
+    const val MPGE_TO_KWH_PER_100_MI = 3370.0
     const val EV_KWH_PER_100_MI = 30.0
     const val SCOOTER_MPG = 90.0
     const val SCOOTER_KWH_PER_100_MI = 3.0

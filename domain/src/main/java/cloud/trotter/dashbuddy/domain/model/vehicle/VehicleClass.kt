@@ -11,7 +11,7 @@ enum class VehicleClass(val displayName: String) {
         EV -> VehiclePresets.electricCar
         MOTORCYCLE -> VehiclePresets.motorcycle
         E_BIKE -> VehiclePresets.eBike
-        else -> VehiclePresets.cars.getValue(GasCarClass.valueOf(name))
+        else -> VehiclePresets.cars.getValue(requireNotNull(gasClass))
     }
     val defaultMpg: Double get() = preset.mpg
     val tireSetCost: Double get() = preset.wear.tireSetCost ?: 0.0

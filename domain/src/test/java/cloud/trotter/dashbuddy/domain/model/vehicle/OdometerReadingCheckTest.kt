@@ -16,6 +16,9 @@ class OdometerReadingCheckTest {
         assertEquals(OdometerCheck.Empty, check(miles = 0, previous = last))
     }
     @Test fun `first reading for a vehicle returns First`() { assertEquals(OdometerCheck.First("Civic"), check(previous = null)) }
+    @Test fun `first reading leaves an unnamed vehicle label to the UI`() {
+        assertEquals(OdometerCheck.First(null), check(car = Vehicle("bike", null, 0, EBike()), previous = null))
+    }
     @Test fun `a new vehicle is first before any digit`() {
         assertEquals(OdometerCheck.First("Civic"), check(miles = null, previous = null))
         assertEquals(OdometerCheck.First("Civic"), check(miles = 0, previous = null))

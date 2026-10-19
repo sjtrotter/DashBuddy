@@ -236,7 +236,7 @@ class WizardViewModel @Inject constructor(
         val hadIdentity = _state.value.vehicleProfile.hasCarIdentity
         _state.update { state ->
             val profile = when (val current = state.vehicleProfile) {
-                is HybridCar -> current.copy(vehicleClass = GasCarClass.entries.firstOrNull { it.name == type.name } ?: current.vehicleClass)
+                is HybridCar -> current.copy(vehicleClass = type.gasClass ?: current.vehicleClass)
                 else -> LegacyProfile(vehicleClass = type).toTyped().withCosts(current.wear, current.fixed)
             }
             state.copy(vehicleProfile = profile, vehicleClass = type,
@@ -446,6 +446,20 @@ class WizardViewModel @Inject constructor(
 
             if (details != null) {
                 _state.update { currentState ->
+                    if (details.fuelType == FuelType.ELECTRICITY) {
+                        val current = currentState.toVehicleProfile()
+                        val consumption = details.combinedMpg?.let { VehiclePresets.MPGE_TO_KWH_PER_100_MI / it }
+                        return@update currentState.copy(
+                            vehicleProfile = ElectricCar(kwhPer100Mi = consumption,
+                                year = current.year, make = current.make, model = current.model)
+                                .withCosts(current.wear, current.fixed),
+                            vehicleClass = VehicleClass.EV,
+                            kwhPer100Mi = consumption ?: VehiclePresets.EV_KWH_PER_100_MI,
+                            userSetEconomyFields = (currentState.userSetEconomyFields - EconomyField.VEHICLE_MPG).let {
+                                if (consumption != null) it + EconomyField.KWH_PER_100_MI else it
+                            },
+                        ).withTypeDefaults()
+                    }
                     val cachedPrice = currentState.fetchedGasPrices[details.fuelType]
                     val newPrice =
                         if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice

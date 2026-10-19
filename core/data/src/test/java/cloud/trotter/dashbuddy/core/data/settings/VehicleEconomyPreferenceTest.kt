@@ -82,6 +82,30 @@ class VehicleEconomyPreferenceTest {
         assertEquals(2.5, repo.userEconomy.first().effectiveAvgMinutesPerMile, 0.0)
     }
 
+    @Test fun `reset clears electric consumption overrides and their user-set marker`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("reset-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("reset-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        val vehicle = garage.addVehicle("EV", 1, ElectricCar(kwhPer100Mi = 42.0))
+        repo.updateElectricityPrice(.25)
+        assertEquals(42.0, repo.userEconomy.first().kwhPer100Mi, 0.0)
+        assertTrue(EconomyField.KWH_PER_100_MI in repo.userEconomy.first().userSetFields)
+
+        repo.resetEconomyDefaults()
+
+        val economy = repo.userEconomy.first()
+        assertEquals(VehiclePresets.EV_KWH_PER_100_MI, economy.kwhPer100Mi, 0.0)
+        assertFalse(EconomyField.KWH_PER_100_MI in economy.userSetFields)
+        assertFalse(EconomyField.ELECTRICITY_PRICE in economy.userSetFields)
+        assertEquals(cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy.DEFAULT_ELECTRICITY_PRICE_PER_KWH,
+            economy.electricityPricePerKwh, 0.0)
+        val active = garage.garage.first().active!!
+        assertEquals(vehicle.id, active.id)
+        assertNull((active.profile as ElectricCar).kwhPer100Mi)
+    }
+
     @Test fun `unreadable garage preserves cost-only legacy preference fallback`() = runTest {
         val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("cost-only-prefs.preferences_pb") }))

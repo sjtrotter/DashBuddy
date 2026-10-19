@@ -41,9 +41,11 @@ data class EvaluationConfig(
      */
     val itemsPerUnitRatios: Map<Platform, LearnedItemsPerUnitRatio> = emptyMap(),
     val timeConstants: Map<Platform, LearnedTimeConstants> = emptyMap(),
-    val vehicleTimeConstants: Map<VehicleTimeKey, LearnedTimeConstants> = emptyMap(),
 
 ) {
+    fun travelSeedFor(platform: Platform): TimeConstantPair = userEconomy.vehicleInputs?.travel
+        ?.let { TimeConstantPair(it.minutesPerMile, it.basePickupMinutes) } ?: TimeConstantSeeds.seedFor(platform)
+
     /**
      * #588: resolve THIS offer's [platform]'s learned pace + seed into [userEconomy], producing the
      * config the evaluator scores against. Keeps [OfferEvaluator.evaluate] and
@@ -56,16 +58,10 @@ data class EvaluationConfig(
      * [userEconomy]) is not an error — it means learned fields are whatever they were on this
      * config already (seed-only for a freshly-built one), never a platform's real learned pace.
      */
-    fun learnedTimeFor(platform: Platform): LearnedTimeConstants? = userEconomy.activeVehicleId
-        ?.let { vehicleTimeConstants[VehicleTimeKey(platform, it)] } ?: timeConstants[platform]
-
-    fun travelSeedFor(platform: Platform): TimeConstantPair = userEconomy.vehicleInputs?.travel
-        ?.let { TimeConstantPair(it.minutesPerMile, it.basePickupMinutes) } ?: TimeConstantSeeds.seedFor(platform)
-
     fun forPlatform(platform: Platform): EvaluationConfig {
         val learned = shopRates[platform]
         val learnedRatio = itemsPerUnitRatios[platform]
-        val time = learnedTimeFor(platform)
+        val time = timeConstants[platform]
         val seed = travelSeedFor(platform)
         return copy(
             userEconomy = userEconomy.copy(
@@ -89,6 +85,3 @@ data class EvaluationConfig(
         )
     }
 }
-
-/** A learned tuple belongs to one platform and one persistent vehicle identity. */
-data class VehicleTimeKey(val platform: Platform, val vehicleId: String)

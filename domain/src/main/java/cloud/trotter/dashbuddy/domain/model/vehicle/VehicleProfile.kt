@@ -20,6 +20,23 @@ enum class GasCarClass {
     val wear: WearProfile get() = VehiclePresets.cars.getValue(this).wear
     val fixed: FixedCosts get() = VehiclePresets.cars.getValue(this).fixed
 }
+val GasCarClass.legacy: VehicleClass get() = when (this) {
+    GasCarClass.COMPACT -> VehicleClass.COMPACT
+    GasCarClass.SEDAN -> VehicleClass.SEDAN
+    GasCarClass.SUV -> VehicleClass.SUV
+    GasCarClass.TRUCK -> VehicleClass.TRUCK
+    GasCarClass.LUXURY -> VehicleClass.LUXURY
+}
+
+val VehicleClass.gasClass: GasCarClass? get() = when (this) {
+    VehicleClass.COMPACT -> GasCarClass.COMPACT
+    VehicleClass.SEDAN -> GasCarClass.SEDAN
+    VehicleClass.SUV -> GasCarClass.SUV
+    VehicleClass.TRUCK -> GasCarClass.TRUCK
+    VehicleClass.LUXURY -> GasCarClass.LUXURY
+    VehicleClass.EV, VehicleClass.MOTORCYCLE, VehicleClass.E_BIKE -> null
+}
+
 @Serializable
 enum class Powertrain { GAS, ELECTRIC }
 
@@ -139,21 +156,23 @@ fun VehicleProfile.withCosts(wear: WearProfile = this.wear, fixed: FixedCosts = 
     is Bicycle -> copy(wear = wear, fixed = fixed)
 }
 
+/** Null consumption overrides follow the type's preset. */
+fun VehicleProfile.withDefaultConsumption(): VehicleProfile = when (this) {
+    is GasCar -> copy(mpg = null)
+    is HybridCar -> copy(mpg = null)
+    is ElectricCar -> copy(kwhPer100Mi = null)
+    is Motorcycle -> copy(mpg = null)
+    is ScooterMoped -> copy(mpg = null, kwhPer100Mi = null)
+    is EBike -> copy(whPerMile = null)
+    is Bicycle -> this
+}
+
 val VehicleProfile.legacyClass: VehicleClass get() = when (this) {
-    is GasCar -> VehicleClass.valueOf(vehicleClass.name)
-    is HybridCar -> VehicleClass.valueOf(vehicleClass.name)
+    is GasCar -> vehicleClass.legacy
+    is HybridCar -> vehicleClass.legacy
     is ElectricCar -> VehicleClass.EV
     is Motorcycle, is ScooterMoped -> VehicleClass.MOTORCYCLE
     is EBike, is Bicycle -> VehicleClass.E_BIKE
-}
-val VehicleProfile.displayType: String get() = when (this) {
-    is GasCar -> legacyClass.displayName
-    is HybridCar -> "Hybrid"
-    is ElectricCar -> "EV"
-    is Motorcycle -> "Motorcycle"
-    is ScooterMoped -> "Scooter or moped"
-    is EBike -> "E-Bike"
-    is Bicycle -> "Bicycle"
 }
 val VehicleProfile.gasMpg: Double? get() = when (this) {
     is GasCar -> mpg
@@ -187,9 +206,8 @@ fun VehicleProfile.withIdentity(year: String? = this.year, make: String? = this.
     is Bicycle -> copy(year = year, make = make, model = model)
 }
 
-enum class VehicleType(val displayName: String) {
-    CAR("Car"), HYBRID("Hybrid"), EV("EV"), MOTORCYCLE("Motorcycle"),
-    SCOOTER("Scooter or moped"), E_BIKE("E-bike"), BICYCLE("Bicycle");
+enum class VehicleType {
+    CAR, HYBRID, EV, MOTORCYCLE, SCOOTER, E_BIKE, BICYCLE;
     fun defaultProfile(): VehicleProfile = when (this) {
         CAR -> GasCar()
         HYBRID -> HybridCar()

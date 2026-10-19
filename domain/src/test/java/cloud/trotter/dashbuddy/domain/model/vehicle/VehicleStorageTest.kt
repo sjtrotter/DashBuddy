@@ -21,7 +21,7 @@ class VehicleStorageTest {
             garage.zip(VehicleClass.entries).forEach { (vehicle, cls) ->
                 val profile = vehicle.profile
                 assertEquals(cls, profile.legacyClass)
-                assertEquals("2021 Honda Model", vehicle.displayName)
+                assertEquals("2021 Honda Model", vehicle.identityName)
                 assertEquals(200L, vehicle.retiredAt)
                 assertEquals(WearProfile(tireSetCost = 0.0, tireLifetimeMi = 12345.0, oilCost = 85.0,
                     oilIntervalMi = 6000.0, brakesCost = 240.0, brakesIntervalMi = 30000.0,
@@ -65,19 +65,27 @@ class VehicleStorageTest {
     @Test fun `old vehicle json uses a default profile and keeps its name`() {
         val old = """[{"id":"one","name":"Civic","createdAt":100}]"""
         val decoded = VehicleStorage.decode(old)!!.single()
-        assertEquals("Civic", decoded.displayName)
+        assertEquals("Civic", decoded.identityName)
         assertEquals(LegacyProfile().toTyped(), decoded.profile)
         assertNull(decoded.retiredAt)
     }
 
     @Test fun `unnamed car displays saved identity`() {
         val car = Vehicle("one", null, 100, LegacyProfile(year = "2020", make = "Honda", model = "Civic").toTyped())
-        assertEquals("2020 Honda Civic", car.displayName)
+        assertEquals("2020 Honda Civic", car.identityName)
         assertEquals(car, VehicleStorage.decode(VehicleStorage.encode(listOf(car)))!!.single())
     }
-    @Test fun `unnamed car without identity displays its class`() {
-        assertEquals("Truck", Vehicle("truck", null, 1,
-            LegacyProfile(vehicleClass = VehicleClass.TRUCK).toTyped()).displayName)
+    @Test fun `unnamed vehicles without identity leave the type fallback to the UI`() {
+        VehicleType.entries.forEach { type ->
+            assertNull(Vehicle(type.name, null, 1, type.defaultProfile()).identityName)
+        }
+        assertNull(Vehicle("truck", null, 1,
+            LegacyProfile(vehicleClass = VehicleClass.TRUCK).toTyped()).identityName)
+    }
+    @Test fun `custom name wins over identity and blank identity parts are omitted`() {
+        val profile = GasCar(year = "2020", make = " ", model = "Civic")
+        assertEquals("Work car", Vehicle("one", "Work car", 1, profile).identityName)
+        assertEquals("2020 Civic", Vehicle("two", null, 1, profile).identityName)
     }
     @Test fun `round trips`() {
         val vehicles = listOf(Vehicle("one", "Civic", 100), Vehicle("two", "Truck", 200))

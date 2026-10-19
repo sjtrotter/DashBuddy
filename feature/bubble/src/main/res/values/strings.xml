@@ -205,4 +205,14 @@
     <string name="hud_odometer_comparison">car %1$s mi, tracked %2$s mi since %3$s</string>
     <string name="hud_odometer_other">other %1$s mi</string>
     <string name="hud_odometer_short">short of tracked by %1$s mi</string>
+    <!-- Documented duplicate: vehicle_type_* is shared by :app, :feature:setup and :feature:bubble.
+         The :app copy is AUTHORITATIVE. Keep all three byte-identical; non-transitive R and the
+         feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
+    <string name="vehicle_type_car">Car</string>
+    <string name="vehicle_type_hybrid">Hybrid</string>
+    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_motorcycle">Motorcycle</string>
+    <string name="vehicle_type_scooter">Scooter or moped</string>
+    <string name="vehicle_type_e_bike">E-bike</string>
+    <string name="vehicle_type_bicycle">Bicycle</string>
 </resources>
