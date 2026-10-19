@@ -51,16 +51,10 @@ abstract class LedgerDao {
 
     /** Deduplicate by note, ordered by its newest surviving occurrence (including tied times). */
     @Query("""
-        SELECT e.note FROM expense_records e
-        WHERE e.category = :category AND e.voidedAt IS NULL
-          AND e.note IS NOT NULL AND TRIM(e.note, char(9,10,11,12,13,28,29,30,31,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)) != ''
-          AND NOT EXISTS (
-              SELECT 1 FROM expense_records newer
-              WHERE newer.category = e.category AND newer.note = e.note AND newer.voidedAt IS NULL
-                AND (newer.occurredAt > e.occurredAt OR
-                     (newer.occurredAt = e.occurredAt AND newer.eventSequenceId > e.eventSequenceId))
-          )
-        ORDER BY e.occurredAt DESC, e.eventSequenceId DESC LIMIT :limit
+        SELECT note FROM expense_records
+        WHERE category = :category AND voidedAt IS NULL AND note IS NOT NULL
+        GROUP BY note
+        ORDER BY MAX(occurredAt) DESC, MAX(eventSequenceId) DESC LIMIT :limit
     """)
     abstract fun recentNotes(category: String, limit: Int): Flow<List<String>>
 

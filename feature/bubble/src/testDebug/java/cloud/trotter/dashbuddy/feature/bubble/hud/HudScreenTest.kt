@@ -131,14 +131,14 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithText("Last dash").assertIsDisplayed()
     }
 
-    @Test fun `resting shows the last dash and four dock blocks`() {
+    @Test fun `resting shows the last dash and five dock blocks`() {
         show({ state(resting = true) })
         compose.onNodeWithText("Last dash").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
         value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2 hr 0 min").assertExists()
         value("hud.top.miles", "42.5").assertExists()
-        listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
+        listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
         compose.onNodeWithTag("hud.ribbon").assertDoesNotExist()
         org.junit.Assert.assertTrue(state(resting = true).top.dimmed)
     }
@@ -156,6 +156,7 @@ internal class HudScreenTest : HudScreenFixture() {
         listOf("hud.top.earned", "hud.top.online", "hud.top.miles").forEach { value(it, EMPTY_VALUE).assertExists() }
         compose.onNodeWithText("No dash yet").assertIsDisplayed()
         compose.onNodeWithTag("hud.dock.CASH_TIP").assertDoesNotExist()
+        compose.onNodeWithTag("hud.dock.EXPENSE").assertIsEnabled()
         compose.onNodeWithTag("hud.dock.ODOMETER").assertIsEnabled()
     }
 
@@ -362,6 +363,39 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("hud.sheet.outside.header").performClick()
         settle()
         compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+    }
+
+    @Test fun `gas Undo stays displayed and tappable below the compact subcard live and at rest`() {
+        var resting by mutableStateOf(false)
+        var open by mutableStateOf(true)
+        var undos = 0
+        var strip by mutableStateOf(UndoStripModel(4200, null, 72, T0 + 10_000, 3,
+            whatLabel = cloud.trotter.dashbuddy.feature.bubble.R.string.hud_expense_gas, whereFallback = null))
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state(resting = resting), null, {}, sheetOpen = open, sheetCompact = true,
+                            onSheetDismiss = { open = false }, sheet = { ExpenseSubcard {} },
+                            undo = { UndoStrip(strip) { undos++ } }, undoVisible = { undoStripVisible(strip) })
+                    }
+                }
+            }
+        }
+        settle()
+        for (atRest in listOf(false, true)) {
+            compose.runOnIdle { resting = atRest; strip = strip.copy(token = strip.token + 1) }
+            settle()
+            compose.onNodeWithText("Gas $42.00").assertIsDisplayed()
+            val band = compose.onNodeWithTag("hud.slot.undo").getBoundsInRoot()
+            assertEquals(band.top, compose.onNodeWithTag("hud.sheet").getBoundsInRoot().bottom)
+            assertEquals(band.top, compose.onNodeWithTag("hud.sheet.outside").getBoundsInRoot().bottom)
+            // Pointer input catches an overlay intercepting the strip; semantics clicks would bypass it.
+            compose.onNodeWithText("Undo").assertIsDisplayed().assertIsEnabled().performTouchInput { click() }
+            settle()
+            assertEquals(if (atRest) 2 else 1, undos)
+            compose.onNodeWithTag("expense.subcard").assertIsDisplayed()
+        }
     }
 
     @Test fun `undo band selects newest of three and falls back when expense expires`() {

@@ -53,16 +53,17 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val expense = rememberExpenseHud(viewModel, closeLog)
     var lastSheet by rememberSaveable { mutableStateOf(EntrySheet.ODOMETER) }
     // Every route (including the resting footer) goes through this one three-way exclusive rule.
-    val openSheet: (EntrySheet) -> Unit = remember(odometer, cashTip, expense) {
+    val openSheet: (EntrySheet?) -> Unit = remember(odometer, cashTip, expense) {
         { next ->
             if (next != EntrySheet.ODOMETER) odometer.dismiss()
             if (next != EntrySheet.CASH_TIP) cashTip.dismiss()
             if (next != EntrySheet.EXPENSE) expense.dismiss()
-            lastSheet = next
+            if (next != null) lastSheet = next
             when (next) {
                 EntrySheet.ODOMETER -> odometer.openSheet()
                 EntrySheet.CASH_TIP -> cashTip.openSheet()
                 EntrySheet.EXPENSE -> expense.openSubcard()
+                null -> Unit
             }
         }
     }
@@ -158,7 +159,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             onRefreshGasPrice = { viewModel.refreshGasPrice() },
             onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
             onDockClick = { kind ->
-                if (kind != DockKind.EXPENSE) expense.dismiss()
+                if (kind == DockKind.LOG || kind == DockKind.NOW || kind == DockKind.SETTINGS) openSheet(null)
                 when (kind) {
                     DockKind.ODOMETER -> openOdometer()
                     DockKind.LOG -> logOpen = true

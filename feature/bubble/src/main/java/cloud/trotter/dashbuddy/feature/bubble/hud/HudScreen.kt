@@ -86,7 +86,7 @@ fun HudScreen(
                             Spacer(Modifier.height(8.dp))
                         }
                         if (!showingLog) HudSheetHost(sheetOpen, onSheetDismiss, Modifier.fillMaxSize(),
-                            compact = sheetCompact, onOutsideDismiss = onSheetOutsideDismiss, sheet = sheet)
+                            compact = sheetCompact, undoBandVisible = undoVisible(), onOutsideDismiss = onSheetOutsideDismiss, sheet = sheet)
                     }
                     Box(Modifier.testTag("hud.dock")) { Dock(state.dock, onDockClick) }
                 }

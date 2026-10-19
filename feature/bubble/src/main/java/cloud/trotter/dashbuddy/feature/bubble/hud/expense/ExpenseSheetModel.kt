@@ -1,7 +1,12 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud.expense
 
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.MoneyEntry
 import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.DecimalEntry
+
+object ExpenseLabel {
+    const val MAX_CODE_POINTS = 40
+}
 
 sealed interface ExpensePick {
     data object Fuel : ExpensePick
@@ -21,7 +26,7 @@ val ExpensePick.hasLabel: Boolean get() = when (this) {
 
 data class ExpenseSheetModel(
     val pick: ExpensePick,
-    val totalCents: Long = 0,
+    val totalText: String = "",
     val gallonsText: String = "",
     val label: String = "",
     val recentLabels: List<String> = emptyList(),
@@ -29,8 +34,8 @@ data class ExpenseSheetModel(
     val busy: Boolean = false,
     val failure: ExpenseFailure = ExpenseFailure.NONE,
     val keyboardOpen: Boolean = false,
-    val totalText: String = "",
 ) {
+    val totalCents: Long get() = MoneyEntry(totalText).cents
     val canLog: Boolean get() = totalCents > 0 && !busy &&
         (pick != ExpensePick.Fuel || DecimalEntry(gallonsText).positive)
 }

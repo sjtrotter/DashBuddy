@@ -41,7 +41,7 @@ internal object CorrectionFolds {
                 occurredAt = event.event.occurredAt,
                 category = p.category,
                 amount = p.amount,
-                note = p.note,
+                note = p.note?.takeIf { it.isNotBlank() },
             ),
         )
     }

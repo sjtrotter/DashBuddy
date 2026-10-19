@@ -30,7 +30,9 @@ internal class ExpenseActions(private val scope: CoroutineScope, private val led
 
     fun logExpense(owner: String?, category: ExpenseCategory, cents: Long, label: String?, entryId: Long = 0) {
         if (writing.value || cents <= 0) return
-        val note = label?.trim()?.takeIf { it.isNotEmpty() }
+        val note = label?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            it.substring(0, it.offsetByCodePoints(0, minOf(it.codePointCount(0, it.length), ExpenseLabel.MAX_CODE_POINTS)))
+        }
         commit(ExpensePick.Expense(category), cents, note, entryId) { amount, now ->
             ledger.logExpense(owner, category, amount, note, now)
         }

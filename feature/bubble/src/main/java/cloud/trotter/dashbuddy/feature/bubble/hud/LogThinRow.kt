@@ -13,10 +13,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberTimeFormatter
-import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.feature.bubble.hud.expense.ExpensePick
+import cloud.trotter.dashbuddy.feature.bubble.hud.expense.labelResource
 
 @Composable
 internal fun LogThinRow(item: LogItem) {
@@ -34,15 +35,9 @@ internal fun LogThinRow(item: LogItem) {
                     }, item.store ?: stringResource(R.string.hud_log_offer_unknown_store)),
                         color = if (item.dimmed) c.neutral else c.text2, fontSize = 14.sp)
                     is ExpenseRow -> {
-                        val category = stringResource(when (item.category) {
-                            ExpenseCategory.FOOD -> R.string.hud_log_cat_food
-                            ExpenseCategory.CAR_CARE -> R.string.hud_log_cat_car_care
-                            ExpenseCategory.PARKING -> R.string.hud_log_cat_parking
-                            ExpenseCategory.SUPPLIES -> R.string.hud_log_cat_supplies
-                            ExpenseCategory.OTHER -> R.string.hud_log_cat_other
-                        })
-                        Text(stringResource(R.string.hud_log_expense,
-                            item.note?.takeIf { item.category == ExpenseCategory.OTHER && it.isNotBlank() } ?: category),
+                        val category = stringResource(ExpensePick.Expense(item.category).labelResource)
+                        val label = item.note?.takeIf { it.isNotBlank() }?.let { "$category · $it" } ?: category
+                        Text(stringResource(R.string.hud_log_expense, label),
                             color = c.text2, fontSize = 14.sp)
                     }
                     is FuelRow -> LogText(logTextParts(if (item.pricePerGallon != null) R.string.hud_log_gas_price else R.string.hud_log_gas_total,

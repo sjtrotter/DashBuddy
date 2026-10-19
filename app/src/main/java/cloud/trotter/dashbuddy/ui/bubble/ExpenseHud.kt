@@ -49,11 +49,12 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
         key(category) {
             val recent by labels.collectAsStateWithLifecycle(emptyList())
             Column(Modifier.fillMaxSize()) {
-                ExpenseSheet(ExpenseSheetModel(entry.pick, entry.totalCents, entry.gallonsDigits, entry.label,
-                    recent, entry.activeField, busy, failure, entry.keyboardOpen, entry.totalDigits),
+                ExpenseSheet(ExpenseSheetModel(entry.pick, entry.totalDigits, entry.gallonsDigits, entry.label,
+                    recent, entry.activeField, busy, failure, entry.keyboardOpen),
                     onBack = { closeKeyboard(); back() },
                     onField = { closeKeyboard(); entry.activeField = it },
-                    onLabel = { entry.label = it }, onSelectLabel = { closeKeyboard(); entry.label = it }, onNewLabel = { entry.label = ""; entry.keyboardOpen = true },
+                    onLabel = { entry.label = it }, onSelectLabel = { closeKeyboard(); entry.label = it }, onNewLabel = { entry.newLabel(recent) },
+                    onEditLabel = entry::editLabel,
                     onKeyboardDone = ::closeKeyboard, onDigit = entry::digit, onPoint = entry::point,
                     onBackspace = entry::backspace, onLog = {
                         closeKeyboard()

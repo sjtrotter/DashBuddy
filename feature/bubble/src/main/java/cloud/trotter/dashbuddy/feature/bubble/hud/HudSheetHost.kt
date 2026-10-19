@@ -37,14 +37,17 @@ fun HudSheetHost(
     onSheetDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    undoBandVisible: Boolean = false,
     onOutsideDismiss: () -> Unit = onSheetDismiss,
     sheet: @Composable ColumnScope.() -> Unit = {},
 ) {
     LocalHudSheetBackHandler.current(sheetOpen, onSheetDismiss)
+    // Leave both the card and its dismiss target above the 48 dp undo slot and 8 dp spacer.
+    val frameModifier = modifier.padding(bottom = if (compact && undoBandVisible) 56.dp else 0.dp)
     if (rememberReducedMotion()) {
-        if (sheetOpen) SheetFrame(modifier, compact, onOutsideDismiss, sheet)
+        if (sheetOpen) SheetFrame(frameModifier, compact, onOutsideDismiss, sheet)
     } else {
-        AnimatedVisibility(sheetOpen, modifier.clipToBounds(),
+        AnimatedVisibility(sheetOpen, frameModifier.clipToBounds(),
             enter = slideInVertically(tween(400, easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f))) { it },
             exit = slideOutVertically(tween(200, easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f))) { it }) {
             SheetFrame(Modifier.fillMaxSize(), compact, onOutsideDismiss, sheet)

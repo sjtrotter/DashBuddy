@@ -7,6 +7,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ExpenseEntryStateTest {
+    @Test fun `label state refuses more than forty code points`() {
+        val entry = ExpenseEntryState()
+        val label = "🚗".repeat(40)
+        entry.label = label
+        assertEquals(label, entry.label)
+        entry.label = label + "x"
+        assertEquals(label, entry.label)
+    }
+    @Test fun `edit and New label preserve typed text but New clears a recent selection`() {
+        val entry = ExpenseEntryState()
+        entry.label = "tires"
+        entry.editLabel()
+        assertTrue(entry.keyboardOpen); assertEquals("tires", entry.label)
+        entry.keyboardOpen = false
+        entry.newLabel(listOf("wipers"))
+        assertTrue(entry.keyboardOpen); assertEquals("tires", entry.label)
+        entry.label = "wipers"; entry.keyboardOpen = false
+        entry.newLabel(listOf("wipers"))
+        assertTrue(entry.keyboardOpen); assertEquals("", entry.label)
+        entry.keyboardOpen = false
+        entry.newLabel(emptyList())
+        assertTrue(entry.keyboardOpen); assertEquals("", entry.label)
+    }
     @Test fun `back walks sheet subcard closed`() {
         val entry = ExpenseEntryState()
         entry.show(); assertTrue(entry.open); assertEquals(ExpensePage.SUBCARD, entry.page)

@@ -52,7 +52,7 @@ class DockMapperTest {
 
     @Test
     fun `resting dock adds settings`() {
-        assertEquals(listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
+        assertEquals(listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), DockMapper.map(HudMode.RESTING, odometerLoaded = true).items.map { it.kind })
     }
 
     @Test
@@ -99,12 +99,17 @@ class DockMapperTest {
             .items.any { it.kind == DockKind.CASH_TIP })
     }
 
-    @Test fun `expense accents only while its strip is visible and stays absent at rest`() {
-        assertEquals(DockItemState.ACCENT, DockMapper.map(HudMode.LIVE, odometerLoaded = true, expenseCue = true)
-            .items.single { it.kind == DockKind.EXPENSE }.state)
-        assertEquals(DockItemState.NORMAL, DockMapper.map(HudMode.LIVE, odometerLoaded = true, expenseCue = false)
-            .items.single { it.kind == DockKind.EXPENSE }.state)
-        assertFalse(DockMapper.map(HudMode.RESTING, odometerLoaded = true, expenseCue = true)
-            .items.any { it.kind == DockKind.EXPENSE })
+    @Test fun `expense accents only while its strip is visible live and at rest`() {
+        for (mode in listOf(HudMode.LIVE, HudMode.RESTING)) {
+            assertEquals(DockItemState.ACCENT, DockMapper.map(mode, odometerLoaded = true, expenseCue = true)
+                .items.single { it.kind == DockKind.EXPENSE }.state)
+            assertEquals(DockItemState.NORMAL, DockMapper.map(mode, odometerLoaded = true, expenseCue = false)
+                .items.single { it.kind == DockKind.EXPENSE }.state)
+        }
+    }
+    @Test fun `first resting dock offers unassigned expense before odometer and log`() {
+        val items = DockMapper.map(HudMode.RESTING, firstRun = true, odometerLoaded = true).items
+        assertEquals(listOf(DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS), items.map { it.kind })
+        assertEquals(DockItemState.NORMAL, items.first().state)
     }
 }

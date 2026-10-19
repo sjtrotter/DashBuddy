@@ -26,6 +26,16 @@ class ExpenseActionsTest {
         verify(events, atLeastOnce()).appendUserEvent(captor.capture(), anyOrNull())
         return captor.allValues
     }
+    @Test fun `expense trims before capping the durable note at forty code points`() = runTest {
+        val actions = actions(backgroundScope)
+        val labels = listOf("x".repeat(40), "🚗".repeat(40), "x".repeat(39) + "🚗")
+        for (label in labels) {
+            actions.logExpense(null, ExpenseCategory.CAR_CARE, 100, "  $label extra  ")
+            runCurrent()
+            assertEquals(label, (appended().last().payload as ExpenseLoggedPayload).note)
+            assertEquals(label, actions.undo.value!!.strip.where)
+        }
+    }
     @Test fun `expense writes exact cents and existing note then arms durable undo`() = runTest {
         val actions = actions(backgroundScope)
         actions.logExpense("dash", ExpenseCategory.CAR_CARE, 1840, "wipers", 12); runCurrent()

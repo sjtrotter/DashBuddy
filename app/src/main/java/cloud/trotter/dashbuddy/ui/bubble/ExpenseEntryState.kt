@@ -18,11 +18,22 @@ internal class ExpenseEntryState {
         private set
     var gallonsDigits by mutableStateOf("")
         private set
-    var label by mutableStateOf("")
+    private var labelValue by mutableStateOf("")
+    var label: String
+        get() = labelValue
+        set(value) {
+            if (value.codePointCount(0, value.length) <= ExpenseLabel.MAX_CODE_POINTS) labelValue = value
+        }
     var keyboardOpen by mutableStateOf(false)
     var entryId by mutableStateOf(0L)
         private set
     val totalCents get() = MoneyEntry(totalDigits).cents
+
+    fun newLabel(recentLabels: List<String>) {
+        if (label in recentLabels || label.isEmpty()) label = ""
+        editLabel()
+    }
+    fun editLabel() { keyboardOpen = true }
 
     fun show() {
         entryId++

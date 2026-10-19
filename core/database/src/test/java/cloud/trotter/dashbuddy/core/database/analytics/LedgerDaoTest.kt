@@ -22,14 +22,14 @@ class LedgerDaoTest {
     }
     @After fun cleanup() { db.close() }
 
-    @Test fun `recent notes are distinct nonblank surviving notes in latest occurrence order`() = runBlocking {
+    @Test fun `recent notes are distinct nonnull surviving notes in latest occurrence order`() = runBlocking {
         val dao = db.ledgerDao()
         suspend fun row(id: Long, at: Long, note: String?, category: String = "CAR_CARE", voided: Long? = null) {
             dao.upsertExpense(ExpenseRecordEntity(id, null, at, category, 1.0, note, voided))
         }
         row(1, 10, "wipers"); row(2, 20, "wash"); row(3, 30, "wipers")
         row(4, 40, "tires", voided = 50); row(5, 50, "bags", category = "SUPPLIES")
-        row(6, 60, null); row(7, 70, ""); row(8, 80, " \t\n\r"); row(9, 90, "\u2003\u00a0")
+        row(6, 60, null)
         row(10, 30, "oil")
         assertEquals(listOf("oil", "wipers", "wash"), dao.recentNotes("CAR_CARE", 6).first())
         assertEquals(listOf("oil", "wipers"), dao.recentNotes("CAR_CARE", 2).first())

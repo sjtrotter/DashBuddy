@@ -41,6 +41,7 @@ fun ColumnScope.ExpenseSheet(
     onLabel: (String) -> Unit,
     onSelectLabel: (String) -> Unit,
     onNewLabel: () -> Unit,
+    onEditLabel: () -> Unit,
     onKeyboardDone: () -> Unit,
     onDigit: (Int) -> Unit,
     onPoint: () -> Unit,
@@ -76,7 +77,9 @@ fun ColumnScope.ExpenseSheet(
                         val focus = remember { FocusRequester() }
                         val keyboard = LocalSoftwareKeyboardController.current
                         LaunchedEffect(Unit) { focus.requestFocus(); keyboard?.show() }
-                        OutlinedTextField(model.label, onLabel, singleLine = true, enabled = !model.busy,
+                        OutlinedTextField(model.label, {
+                            if (it.codePointCount(0, it.length) <= ExpenseLabel.MAX_CODE_POINTS) onLabel(it)
+                        }, singleLine = true, enabled = !model.busy,
                             modifier = Modifier.fillMaxWidth().testTag("expense.label.input").focusRequester(focus),
                             placeholder = { Text(stringResource(R.string.hud_expense_label)) },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -84,12 +87,11 @@ fun ColumnScope.ExpenseSheet(
                     } else if (model.label.isNotEmpty() && model.label !in model.recentLabels) {
                         AppChip(model.label, uppercase = false, container = AppTheme.colors.accent,
                             color = AppTheme.colors.accentText,
-                            modifier = Modifier.clickable(enabled = !model.busy, onClick = onNewLabel))
+                            modifier = Modifier.testTag("expense.label.edit")
+                                .clickable(enabled = !model.busy, onClick = onEditLabel))
                     }
                 }
-                AmountField(model.totalText.ifEmpty {
-                    if (model.totalCents == 0L) EMPTY_VALUE else Formats.money(model.totalCents / 100.0).removePrefix("$")
-                }, "$", true, model.activeField == ExpenseField.TOTAL, !model.busy,
+                AmountField(model.totalText.ifEmpty { EMPTY_VALUE }, "$", true, model.activeField == ExpenseField.TOTAL, !model.busy,
                     "expense.total", stringResource(R.string.hud_expense_total)) { onField(ExpenseField.TOTAL) }
                 if (model.pick == ExpensePick.Fuel) AmountField(model.gallonsText.ifEmpty { EMPTY_VALUE }, "gal", false,
                     model.activeField == ExpenseField.GALLONS, !model.busy, "expense.gallons",

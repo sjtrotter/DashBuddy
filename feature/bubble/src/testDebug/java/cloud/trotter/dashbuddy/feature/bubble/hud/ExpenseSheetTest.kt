@@ -34,7 +34,10 @@ class ExpenseSheetTest {
                     ExpenseSheet(model, onBack = { back++ }, onField = { model = model.copy(activeField = it) },
                         onLabel = { model = model.copy(label = it) },
                         onSelectLabel = { model = model.copy(label = it, keyboardOpen = false) },
-                        onNewLabel = { model = model.copy(keyboardOpen = true) },
+                        onNewLabel = { model = model.copy(
+                            label = if (model.label in model.recentLabels || model.label.isEmpty()) "" else model.label,
+                            keyboardOpen = true) },
+                        onEditLabel = { model = model.copy(keyboardOpen = true) },
                         onKeyboardDone = { model = model.copy(keyboardOpen = false) },
                         onDigit = {}, onPoint = {}, onBackspace = {}, onLog = { logs++ })
                 }
@@ -42,7 +45,7 @@ class ExpenseSheetTest {
         }
     }
     @Test fun `gas requires positive gallons and the button states amount and category`() {
-        model = model.copy(totalCents = 4200)
+        model = model.copy(totalText = "42.00")
         show()
         compose.onNodeWithText("Log $42.00 gas").assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithTag("expense.total").assertIsSelected()
@@ -56,14 +59,14 @@ class ExpenseSheetTest {
         assertEquals(1, logs)
         compose.runOnIdle { model = model.copy(busy = true) }
         compose.onNodeWithTag("expense.log").assertIsNotEnabled()
-        compose.runOnIdle { model = model.copy(busy = false, totalCents = 0) }
+        compose.runOnIdle { model = model.copy(busy = false, totalText = "") }
         compose.onNodeWithTag("expense.log").assertIsNotEnabled()
     }
     @Test fun `fields follow category and only three categories offer labels`() {
         show()
         compose.onNodeWithTag("expense.label.new").assertDoesNotExist()
         ExpenseCategory.entries.forEach { category ->
-            compose.runOnIdle { model = ExpenseSheetModel(ExpensePick.Expense(category), totalCents = 600) }
+            compose.runOnIdle { model = ExpenseSheetModel(ExpensePick.Expense(category), totalText = "6.00") }
             compose.onNodeWithTag("expense.total").assertIsDisplayed()
             compose.onNodeWithTag("expense.gallons").assertDoesNotExist()
             val labeled = category in listOf(ExpenseCategory.CAR_CARE, ExpenseCategory.SUPPLIES, ExpenseCategory.OTHER)
@@ -73,7 +76,7 @@ class ExpenseSheetTest {
         }
     }
     @Test fun `recent chips select and New label opens editable single line field`() {
-        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.CAR_CARE), totalCents = 1840,
+        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.CAR_CARE), totalText = "18.40",
             recentLabels = listOf("wipers", "wash"))
         show()
         compose.onNodeWithTag("expense.label.0").performClick().assertIsSelected()
@@ -82,14 +85,38 @@ class ExpenseSheetTest {
         compose.onNodeWithTag("expense.label.1").performScrollTo().performClick().assertIsSelected()
         assertEquals("wash", model.label)
         compose.onNodeWithTag("expense.label.new").performScrollTo().performClick()
+        assertEquals("", model.label)
         compose.onNodeWithTag("expense.label.input").assertIsDisplayed().performTextReplacement("tires")
         assertEquals("tires", model.label)
         compose.onNodeWithTag("expense.label.input").performImeAction()
         compose.onNodeWithTag("expense.label.input").assertDoesNotExist()
         compose.onNodeWithText("Log $18.40 car care").assertIsDisplayed()
+        compose.onNodeWithTag("expense.label.edit").performScrollTo().performClick()
+        compose.onNodeWithTag("expense.label.input").assertIsDisplayed().assertTextEquals("tires")
+    }
+    @Test fun `label field accepts forty code points and refuses longer input`() {
+        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.OTHER), keyboardOpen = true)
+        show()
+        val input = compose.onNodeWithTag("expense.label.input")
+        for (label in listOf("x".repeat(40), "🚗".repeat(40), "x".repeat(39) + "🚗")) {
+            input.performTextReplacement(label); input.assertTextEquals(label)
+            input.performTextReplacement(label + "x"); input.assertTextEquals(label)
+            input.performTextReplacement(label + "🚗"); input.assertTextEquals(label)
+        }
+    }
+    @Test fun `amount field preserves typed digits while cents derive from them`() {
+        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.PARKING), totalText = "6.")
+        show()
+        compose.onNodeWithText("6.").assertIsDisplayed()
+        compose.onNodeWithText("Log $6.00 parking").assertIsDisplayed()
+        assertEquals(600L, model.totalCents)
+        compose.runOnIdle { model = model.copy(totalText = "6.05") }
+        compose.onNodeWithText("6.05").assertIsDisplayed()
+        compose.onNodeWithText("Log $6.05 parking").assertIsDisplayed()
+        assertEquals(605L, model.totalCents)
     }
     @Test fun `failure and Back copy`() {
-        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.PARKING), totalCents = 600, failure = ExpenseFailure.WRITE)
+        model = ExpenseSheetModel(ExpensePick.Expense(ExpenseCategory.PARKING), totalText = "6.00", failure = ExpenseFailure.WRITE)
         show()
         compose.onNodeWithText("Log $6.00 parking").assertIsDisplayed()
         compose.onNodeWithText("Not logged. Try again.").assertIsDisplayed()

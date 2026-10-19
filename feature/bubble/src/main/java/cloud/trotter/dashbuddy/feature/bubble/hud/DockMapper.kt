@@ -6,8 +6,8 @@ object DockMapper {
         if (mode == HudMode.OFFER) return DockModel(emptyList())
         val kinds = when {
             mode != HudMode.RESTING -> listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG)
-            firstRun -> listOf(DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS)
-            else -> listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS)
+            firstRun -> listOf(DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS)
+            else -> listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS)
         }
         return DockModel(kinds
             .map { if (it == DockKind.LOG && logShown) DockKind.NOW else it }
