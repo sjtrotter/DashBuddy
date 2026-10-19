@@ -19,6 +19,7 @@ class DataExportViewModelTest {
 
     private fun viewModel() = DataExportViewModel(
         analyticsRepository = mock<AnalyticsRepository>(),
+        ledgerRepository = mock(),
         logRepository = mock<LogRepository>(),
         context = mock(),
         ioDispatcher = Dispatchers.Unconfined,

@@ -203,16 +203,6 @@ class AppPreferencesDataSourceTest {
     }
 
     @Test
-    fun `count real expenses in kept defaults false and round trips`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "countRealExpensesInKept.preferences_pb")
-        assertEquals(false, source.countRealExpensesInKept.first())
-        source.setCountRealExpensesInKept(true)
-        assertEquals(true, source.countRealExpensesInKept.first())
-        source.setCountRealExpensesInKept(false)
-        assertEquals(false, source.countRealExpensesInKept.first())
-    }
-
-    @Test
     fun `hud pill shows earnings defaults true and round trips`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "hudPillShowsEarnings.preferences_pb")
         assertEquals(true, source.hudPillShowsEarnings.first())

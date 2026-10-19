@@ -42,4 +42,22 @@ class LedgerDaoTest {
         row(11, 110, "wash")
         assertEquals(listOf("wash", "oil"), dao.recentNotes("CAR_CARE", 6).first())
     }
+    @Test fun `export reads every projected row in occurrence order with stored attribution and voids`() = runBlocking {
+        val dao = db.ledgerDao()
+        assertTrue(dao.allExpenses().isEmpty())
+        assertTrue(dao.allFuel().isEmpty())
+        val expenses = listOf(
+            ExpenseRecordEntity(1, "old-dash", 10, "PARKING", 4.0, "meter", 30),
+            ExpenseRecordEntity(2, null, 20, "FOOD", 5.0, null, null),
+        )
+        val fuel = listOf(
+            FuelRecordEntity(3, null, 10, 30.0, null, null, 30),
+            FuelRecordEntity(4, "old-dash", 20, 40.0, 10.0, 100.0, null),
+        )
+        expenses.reversed().forEach { dao.upsertExpense(it) }
+        fuel.reversed().forEach { dao.upsertFuel(it) }
+        assertEquals(expenses, dao.allExpenses())
+        assertEquals(fuel, dao.allFuel())
+    }
+
 }

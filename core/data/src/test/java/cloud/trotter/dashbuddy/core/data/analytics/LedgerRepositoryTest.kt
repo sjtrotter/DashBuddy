@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.core.data.analytics
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.database.event.AppEventDao
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.ExpenseLoggedPayload
@@ -11,6 +13,13 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPaylo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -87,6 +96,47 @@ class LedgerRepositoryTest {
 
         assertEquals(101L, ledger.logExpense("S", ExpenseCategory.FOOD, 5.0, "lunch", 100))
         assertEquals(205L, ledger.logFuel("S", 30.0, null, null, 200))
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun `unassigned rows filter by local day across DST and preserve projection updates`() = runTest {
+        val dao: LedgerDao = mock()
+        val ledger = LedgerRepository(events, dao, mock())
+        val zone = ZoneId.of("America/Chicago")
+        val date = LocalDate.of(2026, 11, 1) // Fall-back day lasts 25 hours.
+        val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val timestamps = listOf(start - 1, start, end - 1, end)
+        val expenses = MutableStateFlow(timestamps.mapIndexed { index, time ->
+            ExpenseRecordEntity(index.toLong(), null, time, "PARKING", 4.5, "meter", null)
+        })
+        val fuel = MutableStateFlow(timestamps.mapIndexed { index, time ->
+            FuelRecordEntity(index.toLong(), null, time, 30.0, 10.0, null, null)
+        })
+        whenever(dao.expensesUnassigned()).thenReturn(expenses)
+        whenever(dao.fuelUnassigned()).thenReturn(fuel)
+        val expenseFrames = mutableListOf<List<ExpenseRecord>>()
+        val fuelFrames = mutableListOf<List<FuelRecord>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            ledger.expensesUnassignedOn(date, zone).collect { expenseFrames += it }
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            ledger.fuelUnassignedOn(date, zone).collect { fuelFrames += it }
+        }
+        runCurrent()
+        assertEquals(listOf(1L, 2L), expenseFrames.last().map { it.eventSequenceId })
+        assertEquals(listOf(1L, 2L), fuelFrames.last().map { it.eventSequenceId })
+        assertEquals(listOf("meter", "meter"), expenseFrames.last().map { it.note })
+        assertEquals(listOf(10.0, 10.0), fuelFrames.last().map { it.gallons })
+
+        expenses.value = listOf(expenses.value[1].copy(voidedAt = end))
+        fuel.value = listOf(fuel.value[1].copy(voidedAt = end))
+        runCurrent()
+        assertEquals(end, expenseFrames.last().single().voidedAt)
+        assertEquals(end, fuelFrames.last().single().voidedAt)
+        assertEquals(null, expenseFrames.last().single().sessionId)
+        assertEquals(null, fuelFrames.last().single().sessionId)
+        verifyNoInteractions(events)
     }
 
     @Test fun `recent labels use the category name and default six from the projection`() = runTest {

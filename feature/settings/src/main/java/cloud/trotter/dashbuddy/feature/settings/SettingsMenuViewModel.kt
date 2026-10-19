@@ -61,9 +61,7 @@ class SettingsMenuViewModel @Inject constructor(
     /** Driving / glance mode (#318) — surfaced on General settings. */
     val glanceMode = appPreferencesRepository.glanceMode
     val odometerPrompts = appPreferencesRepository.odometerPrompts
-    val countRealExpensesInKept = appPreferencesRepository.countRealExpensesInKept
     fun setOdometerPrompts(enabled: Boolean) = viewModelScope.launch { appPreferencesRepository.setOdometerPrompts(enabled) }
-    fun setCountRealExpensesInKept(enabled: Boolean) = viewModelScope.launch { appPreferencesRepository.setCountRealExpensesInKept(enabled) }
     /** Spoken-offer language override (#428 Half B) — surfaced on General settings; null ⇒ system. */
     val ttsLanguageTag = appPreferencesRepository.ttsLanguageTag
     /** Surfaced on Settings home so the Personal Economy nav row shows live $/mi. */

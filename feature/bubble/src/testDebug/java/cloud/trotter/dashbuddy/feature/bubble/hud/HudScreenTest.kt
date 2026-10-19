@@ -198,7 +198,7 @@ internal class HudScreenTest : HudScreenFixture() {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     val presented = region.presentedOffer()
                     val model = HudStateMapper.map(region, Flow.OfferPresented, Platform.DoorDash,
-                        emptyList(), 100.0, 42.5, null, null, false, null, null,
+                        emptyList(), 100.0, 42.5, null, null, null, null,
                         hasActiveCard = snapshot != null, hasOfferCard = presented != null,
                         logOpen = false, gas = GasRowModel(3.5f, true), odometerLoaded = true)
                     HudScreen(model, ribbon = null, onDockClick = {}, stateCard = { Text("State slot") },

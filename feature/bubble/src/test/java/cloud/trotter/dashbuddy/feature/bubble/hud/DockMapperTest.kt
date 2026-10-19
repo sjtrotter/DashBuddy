@@ -99,13 +99,6 @@ class DockMapperTest {
             .items.any { it.kind == DockKind.CASH_TIP })
     }
 
-    @Test fun `expense is disabled at rest when no dash of today would own the entry`() {
-        val rest = DockMapper.map(HudMode.RESTING, odometerLoaded = true, expenseEnabled = false)
-        assertEquals(DockItemState.DISABLED, rest.items.first { it.kind == DockKind.EXPENSE }.state)
-        val live = DockMapper.map(HudMode.LIVE, odometerLoaded = true, expenseEnabled = true)
-        assertEquals(DockItemState.NORMAL, live.items.first { it.kind == DockKind.EXPENSE }.state)
-    }
-
     @Test fun `expense accents only while its strip is visible live and at rest`() {
         for (mode in listOf(HudMode.LIVE, HudMode.RESTING)) {
             assertEquals(DockItemState.ACCENT, DockMapper.map(mode, odometerLoaded = true, expenseCue = true)

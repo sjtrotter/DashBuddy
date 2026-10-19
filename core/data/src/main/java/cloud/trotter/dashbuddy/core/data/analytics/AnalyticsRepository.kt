@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.core.database.analytics.AnalyticsDao
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryTimeTotalsRow
 import cloud.trotter.dashbuddy.core.database.analytics.OfferRecordEntity
@@ -840,7 +842,7 @@ class AnalyticsRepository @Inject constructor(
         }
 
     /**
-     * Build the free-tier CSV export (#319) — deliveries / sessions / summary — for the raw rows in
+     * Build the free-tier CSV export (#319), including the supplied ledger projection rows, for analytics in
      * `[start, end)` (delivery `completedAt` / session `startedAt`). v1 exports all-time (the default
      * full range). Pure formatting is delegated to [CsvExporter]; this only supplies the rows, the
      * device [zone], and the export timestamp. Suspend, one-shot (not a Flow) — an export is a
@@ -852,10 +854,12 @@ class AnalyticsRepository @Inject constructor(
         generatedAtMillis: Long,
         start: Long = Long.MIN_VALUE,
         end: Long = Long.MAX_VALUE,
+        expenses: List<ExpenseRecord> = emptyList(),
+        fuel: List<FuelRecord> = emptyList(),
     ): CsvExporter.Bundle {
         val deliveries = analyticsDao.deliveriesBetween(start, end)
         val sessions = analyticsDao.sessionsBetween(start, end)
-        return CsvExporter.export(deliveries, sessions, zone, generatedAtMillis)
+        return CsvExporter.export(deliveries, sessions, zone, generatedAtMillis, expenses, fuel)
     }
 
     /**

@@ -67,7 +67,6 @@ class BubbleGoalMarkTest {
         whenever(dev.bubbleSessionMode).thenReturn(flowOf(BubbleSessionMode.Default))
         whenever(preferences.glanceMode).thenReturn(flowOf(false))
         whenever(preferences.odometerPrompts).thenReturn(flowOf(true))
-        whenever(preferences.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(preferences.dailyKeptGoalDollars).thenReturn(flowOf(null))
         whenever(preferences.gasPrice).thenReturn(flowOf(null))
         whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))

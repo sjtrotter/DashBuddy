@@ -26,7 +26,7 @@ data class FuelRecord(
  * #1333: the HUD's kept figure. [deliveredNet] is the sum of the dash's delivery `netProfit`
  * with a null net as zero, the hub's per-dash net rule; [cashTips] and [unattributedPay] are
  * `SessionDetail`'s. [expenses] and [fuel] are the dash's non-voided logged totals, kept apart
- * because fuel fill-ups are logs and never enter kept (design §8 ruling 3).
+ * as a separate ledger that never enters kept or the goal.
  */
 data class SessionNet(
     val sessionId: String,
@@ -36,6 +36,5 @@ data class SessionNet(
     val expenses: Double,
     val fuel: Double,
 ) {
-    fun kept(countExpenses: Boolean): Double =
-        deliveredNet + cashTips + unattributedPay - (if (countExpenses) expenses else 0.0)
+    fun kept(): Double = deliveredNet + cashTips + unattributedPay
 }

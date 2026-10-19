@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CsvExporter
+import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.core.data.log.LogRepository
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,7 +23,7 @@ import javax.inject.Inject
 
 /**
  * Drives the free-tier CSV export (#319). Reads the analytics read-model via [AnalyticsRepository],
- * formats it with the pure [CsvExporter], and writes three files into a user-chosen directory
+ * formats it with the pure [CsvExporter], and writes five files into a user-chosen directory
  * (Storage Access Framework tree — no storage permission, no network). The formatting is pure and
  * lives in the data/domain layers; only the SAF write IO is here at the edge.
  *
@@ -32,6 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DataExportViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
+    private val ledgerRepository: LedgerRepository,
     private val logRepository: LogRepository,
     @param:ApplicationContext private val context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
@@ -69,7 +71,7 @@ class DataExportViewModel @Inject constructor(
     private val _logState = MutableStateFlow<LogExportState>(LogExportState.Idle)
     val logState = _logState.asStateFlow()
 
-    /** Export all-time analytics into the SAF directory [treeUri] as three CSV files. */
+    /** Export all-time analytics into the SAF directory [treeUri] as five CSV files. */
     fun export(treeUri: Uri) {
         if (_state.value == ExportState.InProgress) return
         _state.value = ExportState.InProgress
@@ -80,6 +82,8 @@ class DataExportViewModel @Inject constructor(
                     val bundle = analyticsRepository.buildCsvExport(
                         zone = ZoneId.systemDefault(),
                         generatedAtMillis = System.currentTimeMillis(),
+                        expenses = ledgerRepository.allExpenses(),
+                        fuel = ledgerRepository.allFuel(),
                     )
                     writeBundle(treeUri, bundle)
                 }
@@ -168,7 +172,7 @@ class DataExportViewModel @Inject constructor(
         } ?: error("Could not open $name for writing")
     }
 
-    /** Writes the three CSVs into the tree, overwriting same-named files. Returns files written. */
+    /** Writes the five CSVs into the tree, overwriting same-named files. Returns files written. */
     private fun writeBundle(treeUri: Uri, bundle: CsvExporter.Bundle): Int {
         val resolver = context.contentResolver
         val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
@@ -178,6 +182,8 @@ class DataExportViewModel @Inject constructor(
             CsvExporter.DELIVERIES_FILENAME to bundle.deliveriesCsv,
             CsvExporter.SESSIONS_FILENAME to bundle.sessionsCsv,
             CsvExporter.SUMMARY_FILENAME to bundle.summaryCsv,
+            CsvExporter.EXPENSES_FILENAME to bundle.expensesCsv,
+            CsvExporter.FUEL_FILENAME to bundle.fuelCsv,
         ).forEach { (name, content) ->
             // Replace any prior export of the same name so re-exporting isn't cumulative clutter.
             deleteIfExists(treeUri, treeDocId, name)

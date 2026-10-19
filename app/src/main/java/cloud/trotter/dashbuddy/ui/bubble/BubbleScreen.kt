@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
-import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -34,7 +33,6 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val earnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
     val net by viewModel.sessionNet.collectAsStateWithLifecycle()
-    val countExpenses by viewModel.countExpensesInKept.collectAsStateWithLifecycle()
     val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
     val goalDay by viewModel.goalDay.collectAsStateWithLifecycle()
     val goalMark by viewModel.goalMark.collectAsStateWithLifecycle()
@@ -124,16 +122,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     }
     val pendingOffer = region?.presentedOffer()
     val gas = GasRowModel(gasPrice, gasAuto, gasRefreshing, gasError)
-    // The owner rule reads the local date; a minute tick keeps the block honest across midnight at rest.
-    val ownerTick by rememberNow(60_000)
-    val expenseEnabled = remember(region?.session?.sessionId, lastSession, ownerTick) { viewModel.expenseOwner() != null }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, expenseEnabled) {
+        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
-            net, countExpenses, goal, todayProfit, cards.stack.active != null,
+            net, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
-            goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            expenseEnabled = expenseEnabled)
+            goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }

@@ -1,7 +1,7 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
-import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
+import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
 import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
@@ -14,6 +14,8 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.LedgerEntryVoidedPaylo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,6 +82,12 @@ class LedgerRepository @Inject constructor(
         )
     }
 
+    /** Raw projection rows, including voids and stored attribution, for CSV export. */
+    /** Every expense row, oldest first; the export reads this. Domain records: a feature module never sees an entity. */
+    suspend fun allExpenses(): List<ExpenseRecord> = ledgerDao.allExpenses().map { it.toDomain() }
+
+    suspend fun allFuel(): List<FuelRecord> = ledgerDao.allFuel().map { it.toDomain() }
+
     fun recentLabels(category: ExpenseCategory, limit: Int = 6): Flow<List<String>> =
         ledgerDao.recentNotes(category.name, limit)
 
@@ -88,6 +96,19 @@ class LedgerRepository @Inject constructor(
 
     fun fuelForSession(sessionId: String): Flow<List<FuelRecord>> =
         ledgerDao.fuelForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
+
+    /** Unassigned ledger rows belong in the HUD log on their own local day, including voids. */
+    fun expensesUnassignedOn(date: LocalDate, zone: ZoneId): Flow<List<ExpenseRecord>> =
+        ledgerDao.expensesUnassigned().map { rows ->
+            rows.filter { PeriodBounds.localDate(it.occurredAt, zone) == date }
+                .map { it.toDomain() }
+        }
+
+    fun fuelUnassignedOn(date: LocalDate, zone: ZoneId): Flow<List<FuelRecord>> =
+        ledgerDao.fuelUnassigned().map { rows ->
+            rows.filter { PeriodBounds.localDate(it.occurredAt, zone) == date }
+                .map { it.toDomain() }
+        }
 
     /**
      * #1333: the HUD's "kept" source; projector lag is accepted and disclosed on the surface.

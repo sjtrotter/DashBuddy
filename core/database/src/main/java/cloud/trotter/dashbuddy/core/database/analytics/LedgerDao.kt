@@ -65,6 +65,13 @@ abstract class LedgerDao {
     """)
     abstract fun recentNotes(category: String, limit: Int): Flow<List<String>>
 
+    /** All projected rows, including voids, for the export trail. */
+    @Query("SELECT * FROM expense_records ORDER BY occurredAt, eventSequenceId")
+    abstract suspend fun allExpenses(): List<ExpenseRecordEntity>
+
+    @Query("SELECT * FROM fuel_records ORDER BY occurredAt, eventSequenceId")
+    abstract suspend fun allFuel(): List<FuelRecordEntity>
+
     @Query("DELETE FROM expense_records")
     abstract suspend fun deleteAllExpenses()
 

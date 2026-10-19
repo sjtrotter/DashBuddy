@@ -42,7 +42,6 @@ class AppPreferencesRepository @Inject constructor(
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
     val odometerPrompts = dataSource.odometerPrompts
-    val countRealExpensesInKept = dataSource.countRealExpensesInKept
     val dailyKeptGoalDollars = dataSource.dailyKeptGoalDollars
     val hudPillShowsEarnings = dataSource.hudPillShowsEarnings
     val analyticsShowMore = dataSource.analyticsShowMore
@@ -296,7 +295,6 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
 
-    suspend fun setCountRealExpensesInKept(enabled: Boolean) = dataSource.setCountRealExpensesInKept(enabled)
     suspend fun setHudPillShowsEarnings(enabled: Boolean) = dataSource.setHudPillShowsEarnings(enabled)
     suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.setAnalyticsShowMore(enabled)
     suspend fun setVehicleLookupAllowed(allowed: Boolean) = dataSource.setVehicleLookupAllowed(allowed)

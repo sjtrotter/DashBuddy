@@ -12,13 +12,13 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0, 7.0, 20.0),
-        count: Boolean = false, last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
+        last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
         odometerLoaded: Boolean = true, odometerCue: Boolean = false) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
             session = Session("dash", 1_000)),
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
-        countExpenses = count, goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
+        goal = null, todayProfit = null, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
         odometerLoaded = odometerLoaded, odometerCue = odometerCue,
     )
@@ -67,13 +67,8 @@ class HudStateMapperTest {
     }
 
     @Test
-    fun `count expenses preference reaches kept`() {
-        assertEquals(60.0, map(count = true).hero.profit!!, 0.0)
-    }
-
-    @Test
     fun `resting profit per hour is kept over online hours`() {
-        assertEquals(Formats.money(30.0), map(rest = true, count = true).resting!!.profitPerHour)
+        assertEquals(Formats.money(33.5), map(rest = true).resting!!.profitPerHour)
     }
 
     @Test

@@ -37,7 +37,7 @@ class BubbleScreenTest {
         val expense = ExpenseActions(scope, mock(), clock)
         whenever(vm.cashTipActions).thenReturn(tip)
         whenever(vm.expenseActions).thenReturn(expense)
-        whenever(vm.expenseOwner()).thenReturn("dash") // the live dash owns an entry; a mocked owner would be null and grey the block
+        whenever(vm.expenseOwner()).thenReturn("dash") // the live dash owns this entry; a null owner logs unassigned and keeps Expense enabled
         whenever(vm.appState).thenReturn(MutableStateFlow(AppState()))
         whenever(vm.focusedPlatform).thenReturn(MutableStateFlow(Platform.DoorDash))
         whenever(vm.focusedRegion).thenReturn(MutableStateFlow(
@@ -46,7 +46,6 @@ class BubbleScreenTest {
         whenever(vm.sessionEarnings).thenReturn(MutableStateFlow(0.0))
         whenever(vm.lastSession).thenReturn(MutableStateFlow(null))
         whenever(vm.sessionNet).thenReturn(MutableStateFlow(null))
-        whenever(vm.countExpensesInKept).thenReturn(MutableStateFlow(false))
         whenever(vm.dailyGoal).thenReturn(MutableStateFlow(null))
         whenever(vm.goalDay).thenReturn(MutableStateFlow(null))
         whenever(vm.goalMark).thenReturn(MutableStateFlow(MarkRead.Loaded(null)))

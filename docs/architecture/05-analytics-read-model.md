@@ -751,16 +751,14 @@ with `ExpenseCategory.fromStorage`; unknown names in payload JSON or Room fall b
 without losing the expense amount or note. S3b adds `CAR_CARE` (displayed as “Car care”) without a
 schema change. `LedgerDao.recentNotes(category, limit)` derives distinct, non-blank notes from
 non-voided expenses, ordered by their newest surviving occurrence (then sequence id), surfaced
-as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. At rest the dock offers Expense only when today's last dash would own the entry — an unassigned expense would show nowhere on the HUD.
+as `LedgerRepository.recentLabels(category, limit = 6)` (one window-function pass: each note's newest surviving occurrence orders it; blank notes are stored as null by the fold, and `PROJECTOR_VERSION` 17 refolds rows projected before that rule); there is no separate label store. An expense is logged any time; one with no owning dash is unassigned and still shows in the HUD log for its day.
 
 The S3b HUD expense sheet writes Long cents through one cents-to-amount conversion in
 `ExpenseActions`. Gas writes `FUEL_FILLUP`, with required positive gallons parsed once at the
 action boundary (five integer and three fractional digits) and the current `gpsTotalMiles` as
 `odometerMiles`, null until loaded. Other picks write `EXPENSE_LOGGED`; Car care, Supplies and
-Other use the existing note for an optional label. `ExpenseOwner.owner` chooses the active dash,
-else the last dash only if it ended on the current local date, else null. Its last-session argument
-is the existing analytics `SessionRecord` (the live `Session` has no `endedAt`). Expense remains
-absent from the resting dock. Undo voids the committed sequence id; all three HUD notices share
+Other use the existing note for an optional label. `ExpenseOwner.owner` uses the active dash, else none. Existing rows keep their saved attribution.
+Expense is available in both the active and resting docks, including before the first dash. Undo voids the committed sequence id; all three HUD notices share
 one newest-token decision, with a ten-second expense strip and retry after failed undo.
 `pricePerGallon` is derived at read time, null for null or zero gallons, never stored.
 
@@ -770,7 +768,7 @@ unknown or forward target, it is a counted skip with a sequence-id-only `WARN`.
 Cash tips stay `DELIVERY_ADJUSTMENT` through `CorrectionRepository.adjustDelivery`; undo is a
 reversing adjustment with the previous `newCashTip`, or `0.0` when absent; one undo window is open
 at a time. Cash targets a delivery of the focused dash; the projector drops cash on null-session rows.
-Expenses and fills without an active or same-day ended dash carry a null session; the hub does not render ledger rows yet.
+Expenses and fills without an active dash carry a null session; the hub does not render ledger rows yet.
 Commit writes at the tap; the 10 second undo window is UI state. An active-drop tip waits for its
 row, and is dropped with a `WARN` and a log line to the dasher when the task is unassigned or no row
 appears within a bound after the dash ends. ADR-0012 lists four questions open before slice 3,
@@ -788,10 +786,19 @@ combines `sessionDetail` from its injected `AnalyticsRepository` with both total
 the hub's per-dash net terms (delivered net with a null net as zero, cash tips, unattributed pay),
 `SessionNet.expenses`, and `SessionNet.fuel`.
 `AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
-`SessionNet.kept(countExpenses)` subtracts `expenses` only, with `count_real_expenses_in_kept`
-on (default off); `fuel` never enters kept (ADR-0012 open item 3, decided 2026-10-12, shipped in #1333 S2a).
+`SessionNet.kept()` is delivered net plus cash tips plus unattributed pay; expenses and fuel are
+a separate ledger that never enters kept or the goal (2026-10-19 ruling). The deduction preference
+is removed; its old key remains unread in the existing DataStore.
 It is null when `sessionDetail` is null, or when there are no delivery rows and both `cashTips`
 and `unattributedPay` are zero. Expenses alone do not make it non-null; the HUD discloses projector lag.
+`LedgerDao.allExpenses()` / `allFuel()`, surfaced through `LedgerRepository`, read every projection
+row ordered by `occurredAt`, including voids. Settings → Export Data writes `expenses.csv`
+(`date,time,category,label,amount,dash_id,voided`) and `fuel.csv`
+(`date,time,total,gallons,price_per_gallon,odometer_miles,dash_id,voided`) beside `deliveries.csv`,
+`sessions.csv`, and `summary.csv` in the same chosen folder. Dates/times use the device’s local
+zone, labels use the CSV text neutralizer, and dash ids preserve stored attribution (empty when null).
+`summary.csv` appends `expenses_total` and `fuel_total` for non-voided rows; existing figures stay unchanged.
+
 Fuel never changes the economy: no change to `UserEconomy.fuelCostPerMile`, the gas-price preference,
 `NetProfit`, or existing `frozen*` columns. Cost per mile between fills is a read-time figure only.
 No `PROJECTOR_VERSION` bump: these event types are absent from existing history, so the tables start

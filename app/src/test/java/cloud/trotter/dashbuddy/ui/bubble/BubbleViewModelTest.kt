@@ -8,6 +8,9 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
+import cloud.trotter.dashbuddy.core.database.analytics.LedgerDao
+import cloud.trotter.dashbuddy.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.dashbuddy.core.database.analytics.FuelRecordEntity
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
@@ -90,6 +93,7 @@ import org.mockito.kotlin.whenever
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.ZoneId
 
 /**
  * #693 — the bubble's post-dash idle surface reads the analytics read-model, not an in-memory
@@ -118,6 +122,7 @@ class BubbleViewModelTest {
     private val devSettingsRepository: DevSettingsRepository = mock()
 
     private val dispatcher = StandardTestDispatcher()
+    private val clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC)
 
     /** The state the VM reads; tests mutate it to drive multi-app scenarios (#867). */
     private val state = MutableStateFlow(AppState())
@@ -138,10 +143,11 @@ class BubbleViewModelTest {
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
         whenever(odometerRepository.totalMilesFlow).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
-        whenever(appPreferencesRepository.countRealExpensesInKept).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
         whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
         whenever(ledgerRepository.sessionNet(any())).thenReturn(flowOf(null))
+        whenever(ledgerRepository.expensesUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
+        whenever(ledgerRepository.fuelUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(3.50f))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(true))
@@ -161,7 +167,11 @@ class BubbleViewModelTest {
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
         return repo
     }
-    private fun viewModel(garageRepository: GarageRepository = garage(), readingRepository: OdometerReadingRepository = readings()) = BubbleViewModel(
+    private fun viewModel(
+        garageRepository: GarageRepository = garage(),
+        readingRepository: OdometerReadingRepository = readings(),
+        ledger: LedgerRepository = ledgerRepository,
+    ) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
         appStateRepository = appStateRepository,
@@ -172,10 +182,10 @@ class BubbleViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
-        ledgerRepository = ledgerRepository,
+        ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
-        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
+        clock = clock,
     )
 
     @Test
@@ -357,6 +367,58 @@ class BubbleViewModelTest {
         assertEquals(listOf(fuel), vm.logData.value.fuel)
         assertEquals(listOf(delivery), vm.logData.value.deliveries)
         collector.cancel()
+    }
+
+    @Test
+    fun `logData shows today's unassigned rows live but excludes yesterday`() = runTest {
+        checkUnassignedLog(live = true)
+    }
+
+    @Test
+    fun `logData shows today's unassigned rows at rest with no dash but excludes yesterday`() = runTest {
+        checkUnassignedLog(live = false)
+    }
+
+    private suspend fun TestScope.checkUnassignedLog(live: Boolean) {
+        stubNoDashes()
+        val zone = ZoneId.systemDefault()
+        val today = clock.instant().atZone(zone).toLocalDate()
+        val now = clock.millis()
+        val yesterday = today.minusDays(1).atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val expense = ExpenseRecordEntity(20, null, now, "FOOD", 11.4, null, null)
+        val fillup = FuelRecordEntity(30, null, now, 31.9, 10.0, null, null)
+        val expenses = MutableStateFlow(listOf(expense.copy(eventSequenceId = 19, occurredAt = yesterday)))
+        val fuel = MutableStateFlow(listOf(fillup.copy(eventSequenceId = 29, occurredAt = yesterday)))
+        val dao: LedgerDao = mock()
+        whenever(dao.expensesUnassigned()).thenReturn(expenses)
+        whenever(dao.fuelUnassigned()).thenReturn(fuel)
+        whenever(dao.expensesForSession(any())).thenReturn(flowOf(emptyList()))
+        whenever(dao.fuelForSession(any())).thenReturn(flowOf(emptyList()))
+        whenever(analyticsRepository.sessionDetail(any())).thenReturn(flowOf(null))
+        if (live) state.value = earningsState("session-dd")
+        // Exercise the real repository filter so a wrong date or zone cannot be hidden by a stub.
+        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao, analyticsRepository))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
+        runCurrent()
+        assertEquals(LogData.Empty, vm.logData.value)
+
+        expenses.value += expense
+        fuel.value += fillup
+        runCurrent()
+        assertEquals(listOf(ExpenseRecord(20, null, now, ExpenseCategory.FOOD, 11.4, null, null)), vm.logData.value.expenses)
+        assertEquals(listOf(FuelRecord(30, null, now, 31.9, 10.0, null, null)), vm.logData.value.fuel)
+
+        expenses.value = expenses.value.map { if (it.eventSequenceId == 20L) it.copy(voidedAt = now + 1) else it }
+        fuel.value = fuel.value.map { if (it.eventSequenceId == 30L) it.copy(voidedAt = now + 1) else it }
+        runCurrent()
+        assertEquals(now + 1, vm.logData.value.expenses.single().voidedAt)
+        assertEquals(now + 1, vm.logData.value.fuel.single().voidedAt)
+        if (live) {
+            state.value = AppState()
+            runCurrent()
+            assertEquals(20L, vm.logData.value.expenses.single().eventSequenceId)
+            assertEquals(30L, vm.logData.value.fuel.single().eventSequenceId)
+        }
     }
 
     @Test

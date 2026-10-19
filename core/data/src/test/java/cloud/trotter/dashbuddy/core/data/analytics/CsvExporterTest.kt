@@ -1,6 +1,10 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
+import java.time.Instant
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
 import org.junit.Assert.assertEquals
@@ -302,6 +306,74 @@ class CsvExporterTest {
         assertEquals("DRIVER_SET", rows[2].split(",")[5])
         assertTrue(out.summaryCsv.contains("total_driver_set_earnings,12.50"))
         assertFalse(out.summaryCsv.contains("total_reported_earnings,"))
+    }
+
+    private val ledgerZone = ZoneId.of("America/Chicago")
+    private val ledgerAt = Instant.parse("2026-10-19T04:59:00Z").toEpochMilli()
+    private val expenses = listOf(
+        ExpenseRecord(2, "dash-2", ledgerAt + 120_000, ExpenseCategory.SUPPLIES, 12.5, "Bags, \"large\"", null),
+        ExpenseRecord(1, null, ledgerAt, ExpenseCategory.PARKING, 4.0, null, ledgerAt + 180_000),
+    )
+    private val fuel = listOf(FuelRecord(3, null, ledgerAt + 180_000, 30.0, null, 1234.5, null))
+
+    private fun ledgerExport() = CsvExporter.export(
+        emptyList(), emptyList(), ledgerZone, generatedAt, expenses, fuel,
+    )
+
+    @Test fun expenses_golden_preservesVoidsLabelsAttributionAndLocalDate() {
+        assertEquals(
+            "date,time,category,label,amount,dash_id,voided\n" +
+                "2026-10-18,23:59:00,PARKING,,4.00,,true\n" +
+                "2026-10-19,00:01:00,SUPPLIES,\"Bags, \"\"large\"\"\",12.50,dash-2,false\n",
+            ledgerExport().expensesCsv,
+        )
+    }
+
+    @Test fun fuel_golden_missingGallonsLeavesPriceEmpty() {
+        assertEquals(
+            "date,time,total,gallons,price_per_gallon,odometer_miles,dash_id,voided\n" +
+                "2026-10-19,00:02:00,30.00,,,1234.50,,false\n",
+            ledgerExport().fuelCsv,
+        )
+    }
+
+    @Test fun ledgerText_neutralizesFormulaLeadersIncludingLabelsAndDashIds() {
+        for (leader in listOf("=", "+", "-", "@", "\t", "\r")) {
+            val out = CsvExporter.export(
+                emptyList(), emptyList(), utc, generatedAt,
+                // The category cell is an enum name, safe by construction; only text cells take the probe.
+                listOf(expenses.first().copy(note = leader + "label", sessionId = leader + "dash")),
+                listOf(fuel.first().copy(sessionId = leader + "dash")),
+            )
+            // CR triggers RFC quoting after the force-text prefix; other leaders stay unquoted.
+            fun cell(value: String) = if (leader == "\r") "\"'$leader$value\"" else "'$leader$value"
+            assertTrue(out.expensesCsv.contains(",${expenses.first().category.name},${cell("label")},12.50,${cell("dash")},false\n"))
+            assertTrue(out.fuelCsv.endsWith(",${cell("dash")},false\n"))
+        }
+    }
+
+    @Test fun fuel_sortedAndVoidedRowsRemainWithDerivedPrice() {
+        val out = CsvExporter.export(
+            emptyList(), emptyList(), ledgerZone, generatedAt,
+            fuel = listOf(fuel.first(), fuel.first().copy(
+                eventSequenceId = 4, sessionId = "old-dash", occurredAt = ledgerAt,
+                totalAmount = 36.0, gallons = 10.0, odometerMiles = null, voidedAt = ledgerAt + 1,
+            )),
+        )
+        assertEquals("2026-10-18,23:59:00,36.00,10.000,3.600,,old-dash,true", out.fuelCsv.lines()[1])
+        assertTrue(out.summaryCsv.endsWith("expenses_total,0.00\nfuel_total,30.00\n"))
+    }
+
+    @Test fun ledgerSummary_appendsOnlyNonVoidedTotalsToExistingFigures() {
+        val original = CsvExporter.export(listOf(delivery(1, "S")), listOf(session()), utc, generatedAt)
+        val out = CsvExporter.export(listOf(delivery(1, "S")), listOf(session()), utc, generatedAt, expenses, fuel)
+        assertEquals(original.deliveriesCsv, out.deliveriesCsv)
+        assertEquals(original.sessionsCsv, out.sessionsCsv)
+        assertEquals(
+            original.summaryCsv.removeSuffix("expenses_total,0.00\nfuel_total,0.00\n") +
+                "expenses_total,12.50\nfuel_total,30.00\n",
+            out.summaryCsv,
+        )
     }
 
 }

@@ -8,6 +8,7 @@ import java.time.Clock
 import cloud.trotter.dashbuddy.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
 import java.time.LocalDate
+import java.time.ZoneId
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
@@ -89,7 +90,7 @@ class BubbleViewModel @Inject constructor(
     internal fun recentLabels(category: cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory) =
         ledgerRepository.recentLabels(category)
     internal fun expenseOwner() = cloud.trotter.dashbuddy.feature.bubble.hud.expense.owner(
-        focusedRegion.value?.session?.sessionId, lastSession.value, clock.millis(), java.time.ZoneId.systemDefault())
+        focusedRegion.value?.session?.sessionId)
 
     internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, analyticsRepository, clock)
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark
@@ -306,6 +307,19 @@ class BubbleViewModel @Inject constructor(
             }) { it.toList() }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Entries without a dash follow their own day, even when there are no session cards. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val unassignedLogData = ZoneId.systemDefault().let { zone ->
+        currentLocalDateFlow(zone = zone, now = clock::millis)
+            .distinctUntilChanged()
+            .flatMapLatest { date ->
+                combine(
+                    ledgerRepository.expensesUnassignedOn(date, zone),
+                    ledgerRepository.fuelUnassignedOn(date, zone),
+                ) { expenses, fuel -> LogData(expenses = expenses, fuel = fuel) }
+            }
+    }
+
     /** Only the log slot subscribes to the projections. Events come from the cards' shared read. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val logData: StateFlow<LogData> = sessionEvents
@@ -328,7 +342,8 @@ class BubbleViewModel @Inject constructor(
             ) { events, projections ->
                 projections.copy(events = events.flatMap { it.second })
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
+        }.combine(unassignedLogData) { sessions, unassigned -> sessions + unassigned }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
 
     /**
      * The folded completed cards for every displayed session — one list in the normal modes, N in
@@ -394,13 +409,9 @@ class BubbleViewModel @Inject constructor(
         if (id == null) flowOf(null) else ledgerRepository.sessionNet(id)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val countExpensesInKept = appPreferencesRepository.countRealExpensesInKept
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
     val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyKeptGoalDollars
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // S3 adds date-ranged logged expenses so the goal also follows the deduction setting.
     /** Deduplicate wakeups; each new day subscribes with fresh bounds and pairs its own total. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow().distinctUntilChanged().flatMapLatest { date ->
