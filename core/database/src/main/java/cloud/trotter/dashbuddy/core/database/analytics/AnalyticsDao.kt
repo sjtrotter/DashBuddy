@@ -60,6 +60,10 @@ interface AnalyticsDao {
     @Query("SELECT * FROM analytics_projection_state WHERE id = 1")
     suspend fun getWatermark(): AnalyticsProjectionStateEntity?
 
+    /** Observe the last folded sequence, or null before the first fold. */
+    @Query("SELECT * FROM analytics_projection_state WHERE id = 1")
+    fun watermark(): Flow<AnalyticsProjectionStateEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setWatermark(state: AnalyticsProjectionStateEntity)
 

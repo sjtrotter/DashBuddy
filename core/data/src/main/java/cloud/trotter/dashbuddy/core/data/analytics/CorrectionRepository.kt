@@ -89,6 +89,7 @@ class CorrectionRepository @Inject constructor(
      *
      * Validation: at least one new-value field OR [note] must be non-null (a note-only annotation is
      * valid, #688 F6); money is > 0 where present, tip/cash ≥ 0, miles ≥ 0.
+     * Returns the appended sequence id for the HUD undo window.
      */
     suspend fun adjustDelivery(
         targetEventSequenceId: Long,
@@ -99,7 +100,7 @@ class CorrectionRepository @Inject constructor(
         newCashTip: Double? = null,
         newMiles: Double? = null,
         note: String? = null,
-    ) {
+    ): Long {
         require(
             newStoreName != null || newPay != null || newTip != null ||
                 newCashTip != null || newMiles != null || note != null,
@@ -110,7 +111,7 @@ class CorrectionRepository @Inject constructor(
         require(newTip == null || (newTip.isFinite() && newTip >= 0.0)) { "newTip must be finite and non-negative" }
         require(newCashTip == null || (newCashTip.isFinite() && newCashTip >= 0.0)) { "newCashTip must be finite and non-negative" }
         require(newMiles == null || (newMiles.isFinite() && newMiles >= 0.0)) { "newMiles must be finite and non-negative" }
-        appEventRepo.appendUserEvent(
+        val sequenceId = appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.DELIVERY_ADJUSTMENT,
                 occurredAt = System.currentTimeMillis(),
@@ -129,6 +130,7 @@ class CorrectionRepository @Inject constructor(
         )
         // P7: no note/store text — counts/ids only.
         Timber.tag(TAG).i("DELIVERY_ADJUSTMENT appended for delivery seq %d", targetEventSequenceId)
+        return sequenceId
     }
 
     /**

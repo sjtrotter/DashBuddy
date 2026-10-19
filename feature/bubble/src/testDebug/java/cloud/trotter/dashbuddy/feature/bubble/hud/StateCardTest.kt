@@ -237,4 +237,35 @@ class StateCardTest {
         val mark = compose.onNodeWithTag("track.pin.mark", useUnmergedTree = true).getBoundsInRoot()
         org.junit.Assert.assertTrue("mark ${'$'}mark overlaps anchor ${'$'}anchor", mark.left >= anchor.right)
     }
+    @Test fun `the pending foot shows the logged amount, not the total`() {
+        val strip = cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel(
+            700L, "Store", 71L, clock.millis + 10_000L, 1L)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    // Delivery total includes $2 already recorded plus the $7 just logged.
+                    StateCard(StateCardModel.Receipt("Store", T0, emptyList(), null, 9.0), null, strip.amountCents)
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText("Cash tip $7.00 pending").assertIsDisplayed()
+        compose.onNodeWithText("Cash tip $9.00 pending").assertDoesNotExist()
+    }
+    @Test fun `pending cash tip foot follows confirmed projection lag`() {
+        val pending = mutableStateOf<Long?>(700L)
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock) {
+                    StateCard(StateCardModel.DropoffArrived(facts, T0), null, pending.value)
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText("Cash tip $7.00 pending").assertIsDisplayed()
+        compose.runOnIdle { pending.value = null }
+        settle()
+        compose.onNodeWithTag("state.foot.cashTip").assertDoesNotExist()
+    }
+
 }

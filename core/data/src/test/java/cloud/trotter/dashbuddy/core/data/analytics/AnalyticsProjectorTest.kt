@@ -770,6 +770,57 @@ class AnalyticsProjectorTest {
     }
 
     @Test
+    fun `a cash-only adjustment leaves receipt reprice open and cash outside pay and net`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_100,
+            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newCashTip = 6.0),
+        )
+        projector().catchUp()
+        assertNull(analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
+
+        insertReprice(at = 3_400)
+        projector().catchUp()
+        val row = analyticsDao.deliveryRecord(seq)!!
+        assertNull(row.driverAdjustedAt)
+        assertEquals(3_400L, row.receiptRepricedAt)
+        assertEquals("DROP_SHARE", row.payBasis)
+        assertEquals(16.70, row.realizedPay!!, 1e-9)
+        assertEquals(7.0, row.tip!!, 1e-9)
+        assertEquals(16.70 - 5.0 * 0.25, row.netProfit!!, 1e-9)
+        assertEquals(6.0, row.cashTip!!, 1e-9)
+
+        // Version 15 stamped cash-only edits; launch must rebuild that ownership from events.
+        analyticsDao.upsertDelivery(row.copy(driverAdjustedAt = 3_100))
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(
+            watermarkSequenceId = analyticsDao.getWatermark()!!.watermarkSequenceId, projectorVersion = 15))
+        projector().catchUp()
+        assertEquals(row, analyticsDao.deliveryRecord(seq))
+        assertEquals(16, analyticsDao.getWatermark()!!.projectorVersion)
+    }
+
+    @Test
+    fun `a zero cash adjustment clears cash and does not claim pay ownership`() = runBlocking {
+        val seq = seedCollapsedReceiptJob()
+        projector().catchUp()
+        val before = analyticsDao.deliveryRecord(seq)!!
+        // Both Undo on a never-tipped row and removal of an existing tip leave no cash lock.
+        for (cash in listOf(0.0, 6.0, 0.0)) {
+            insert(
+                AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_100,
+                DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newCashTip = cash),
+            )
+            projector().catchUp()
+            val row = analyticsDao.deliveryRecord(seq)!!
+            if (cash == 0.0) assertNull(row.cashTip) else assertEquals(cash, row.cashTip!!, 0.0)
+            assertNull(row.driverAdjustedAt)
+            assertEquals(before.realizedPay, row.realizedPay)
+            assertEquals(before.netProfit, row.netProfit)
+        }
+    }
+
+    @Test
     fun `a re-price whose target row does not exist is a counted skip, never a crash (#1033)`() = runBlocking {
         seedCollapsedReceiptJob()
         projector().catchUp()
@@ -821,6 +872,7 @@ class AnalyticsProjectorTest {
 
         val d = analyticsDao.deliveryRecord(seq)!!
         assertEquals(21.0, d.realizedPay!!, 1e-9)
+        assertEquals(3_100L, d.driverAdjustedAt)
         assertEquals("USER_CORRECTED", d.payBasis)
         assertNull("the re-price was skipped, so no marker", d.receiptRepricedAt)
     }
@@ -985,7 +1037,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(15, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(16, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -2198,7 +2250,7 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        assertEquals(15, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(16, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
     @Test

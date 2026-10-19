@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +20,7 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
-fun StateCard(model: StateCardModel?, kept: Double?) {
+fun StateCard(model: StateCardModel?, kept: Double?, pendingCashTip: Long? = null) {
     if (model == null) return
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp)) {
         when (model) {
@@ -27,6 +28,11 @@ fun StateCard(model: StateCardModel?, kept: Double?) {
             is StateCardModel.TaskCard -> TaskCard(model)
             is StateCardModel.Shopping -> ShoppingCard(model)
             is StateCardModel.Receipt -> ReceiptCard(model)
+        }
+        if (pendingCashTip != null && (model is StateCardModel.DropoffArrived || model is StateCardModel.Receipt)) {
+            Text(stringResource(R.string.hud_cash_tip_pending, Formats.money(pendingCashTip / 100.0)),
+                Modifier.testTag("state.foot.cashTip"), color = AppTheme.colors.accent,
+                style = MaterialTheme.typography.labelSmall)
         }
     }
 }

@@ -50,6 +50,22 @@ class AnalyticsRepositoryTest {
     @After
     fun tearDown() = db.close()
 
+    @Test
+    fun `deliveryById reads the current row on each call and permits a missing target`() = runBlocking {
+        assertNull(repo.deliveryById(9))
+        val stored = delivery(9, "dash", "job", "Panera Bread", 8.0, 6.0, base, cashTip = 5.0)
+        dao.upsertDelivery(stored)
+        val found = repo.deliveryById(9)!!
+        assertEquals(9L, found.eventSequenceId)
+        assertEquals("dash", found.sessionId)
+        assertEquals("T9", found.taskId)
+        assertEquals("Panera Bread", found.storeName)
+        assertEquals(5.0, found.cashTip!!, 0.0)
+        dao.upsertDelivery(stored.copy(cashTip = 0.0))
+        assertEquals(0.0, repo.deliveryById(9)!!.cashTip!!, 0.0)
+        assertNull(repo.deliveryById(10))
+    }
+
     private fun delivery(
         seq: Long,
         sessionId: String?,

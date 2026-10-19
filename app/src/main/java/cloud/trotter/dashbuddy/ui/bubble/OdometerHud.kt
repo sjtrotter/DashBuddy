@@ -32,6 +32,8 @@ internal class OdometerHud(
         }
     }
 
+    fun dismiss() { entry.open = false }
+
     /** Back inside the sheet: one page up, or closed from the reading page. */
     fun back() { entry.back(viewModel.garage.value?.active != null) }
 
@@ -103,7 +105,7 @@ internal class OdometerHud(
     }
 
     @Composable
-    fun RestingFooter() {
+    fun RestingFooter(onOpen: () -> Unit = ::openSheet) {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
         if (!loaded) return
         val garage by viewModel.garage.collectAsStateWithLifecycle()
@@ -113,7 +115,7 @@ internal class OdometerHud(
         val reconciliation = remember(readings, vehicle) {
             readings?.let { list -> vehicle?.id?.let { MileageReconciliation.latest(list, it) } }
         }
-        OdometerFooter(vehicle, lastReading, reconciliation, ::openSheet)
+        OdometerFooter(vehicle, lastReading, reconciliation, onOpen)
     }
 
     /** The start-window cue ticks once a minute while its window is open. */

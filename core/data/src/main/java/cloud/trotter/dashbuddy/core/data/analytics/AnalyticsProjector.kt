@@ -433,7 +433,11 @@ class AnalyticsProjector @Inject constructor(
         val newStore = adj.newStoreName ?: row.storeName
         val newPay = reqNewPay ?: row.realizedPay
         val newTip = reqNewTip ?: row.tip
-        val newCashTip = if (cashRejected) row.cashTip else (adj.newCashTip ?: row.cashTip)
+        val newCashTip = if (cashRejected) row.cashTip else when (val cash = adj.newCashTip) {
+            null -> row.cashTip
+            0.0 -> null
+            else -> cash
+        }
         val newMiles = adj.newMiles ?: row.realizedMiles
         val manual = row.payBasis == PayBasis.MANUAL
         val payChanged = reqNewPay != null
@@ -476,13 +480,11 @@ class AnalyticsProjector @Inject constructor(
                 netProfit = net,
                 storeKey = if (storeChanged) null else row.storeKey,
                 storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
-                // #1033 round 6: stamp only a MONETARY edit that actually APPLIED — a store/note-only
-                // correction says nothing about the money, and a term the guards above rejected
-                // changed nothing. `payBasis` alone could not carry this: a TIP-ONLY edit deliberately
-                // leaves the basis intact (#688 VET F1), so the re-price's basis guard never saw it.
+                // Pay, tip, and miles edits own the receipt economics. A cash-only edit owns
+                // the cash column, which the re-price never touches, so it is not pay ownership.
+                // A tip-only edit leaves payBasis intact (#688), so it still needs this stamp.
                 driverAdjustedAt = if (
-                    reqNewPay != null || reqNewTip != null || adj.newMiles != null ||
-                    (adj.newCashTip != null && !cashRejected)
+                    reqNewPay != null || reqNewTip != null || adj.newMiles != null
                 ) {
                     occurredAt
                 } else {
@@ -1068,7 +1070,7 @@ class AnalyticsProjector @Inject constructor(
         // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
         // 14: #1108 — per-job mileage budgets and session completion high-water allocation
         // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills readings surviving the bounded map)
-        // #1333: no PROJECTOR_VERSION bump; new ledger tables are empty for all existing history.
-        private const val PROJECTOR_VERSION = 15
+        // #1333: refold cash-only ownership and zero cash as no cash.
+        private const val PROJECTOR_VERSION = 16
     }
 }

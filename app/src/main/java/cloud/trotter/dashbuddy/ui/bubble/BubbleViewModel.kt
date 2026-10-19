@@ -14,6 +14,7 @@ import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.analytics.CorrectionRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
@@ -73,15 +74,20 @@ class BubbleViewModel @Inject constructor(
     appEventRepo: AppEventRepo,
     private val appPreferencesRepository: AppPreferencesRepository,
     private val fuelPriceRepository: FuelPriceRepository,
-    analyticsRepository: AnalyticsRepository,
+    private val analyticsRepository: AnalyticsRepository,
+    correctionRepository: CorrectionRepository,
     ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
     strategyRepository: StrategyRepository,
     private val appStateRepository: AppStateRepository,
     private val garageRepository: GarageRepository,
     odometerReadingRepository: OdometerReadingRepository,
-    clock: Clock,
+    private val clock: Clock,
 ) : ViewModel() {
+
+    internal val cashTipActions = CashTipActions(viewModelScope, correctionRepository, analyticsRepository, clock)
+    internal val projectionWatermark get() = analyticsRepository.projectionWatermark
+    internal fun cashTipDeliveries(sessionId: String) = analyticsRepository.deliveriesForSession(sessionId)
 
     private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
     val garage: StateFlow<Garage?> = garageRepository.garage

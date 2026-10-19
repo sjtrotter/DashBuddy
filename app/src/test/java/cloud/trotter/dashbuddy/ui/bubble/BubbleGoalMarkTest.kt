@@ -89,6 +89,7 @@ class BubbleGoalMarkTest {
         analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
         garageRepository = garage(), odometerReadingRepository = readings(),
+        correctionRepository = mock(),
         clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
     @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {

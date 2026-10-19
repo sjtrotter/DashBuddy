@@ -45,6 +45,21 @@ fun rememberNow(tickMs: Long = 1000L): State<Long> {
 }
 
 /**
+ * One delay to the deadline, no polling. Reads [LocalNowProvider]; tests move the clock
+ * and mainClock together as for [rememberNow].
+ */
+@Composable
+fun rememberDeadlinePassed(deadlineMs: Long): State<Boolean> {
+    val clock = LocalNowProvider.current
+    return produceState(initialValue = clock.millis() >= deadlineMs, deadlineMs, clock) {
+        if (!value) {
+            delay((deadlineMs - clock.millis()).coerceAtLeast(0))
+            value = true
+        }
+    }
+}
+
+/**
  * A remembered wall-clock formatter honoring the device's 12/24-hour setting
  * (e.g. "3:42 PM" / "15:42"). Remembered per composition — the old private
  * copy allocated a new lambda every recomposition under a 1-Hz ticker.

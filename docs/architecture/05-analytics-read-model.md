@@ -498,7 +498,7 @@ advance the anchor; null-odometer anchors don't advance, so miles roll forward; 
 into `delivery_records.{milesToStore,milesToDropoff}`. A drop's `milesToStore` claims one store leg
 of its job (exact store-form match, else FIFO; claim-once — a shared-store sibling gets null, no
 fabricated split). Measured legs stay as provenance, including the existing legacy completion's
-retirement of already-closed store legs; they need not sum to the allocated miles.
+retirement of already-closed store legs; they need not sum to the allocated miles. **The HUD's cash tip (#1333 S3a)** is one `DELIVERY_ADJUSTMENT` with `newCashTip = previous + entered` through `CorrectionRepository.adjustDelivery`, and its Undo is a second adjustment restoring the previous value (0.0 when there was none); the HUD does not apply the drill-down's cash-locked rule, and the undo window is UI state (the committed sequence id and a deadline), never a column.
 
 **Forward allocation (#1108, Room v18→v19, `PROJECTOR_VERSION` 13→14):** per-job AND per-session
 budgets use positive-delta accumulation. Each `JobMileageBudget` stores `lastOdometer`, `measured`,
