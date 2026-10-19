@@ -7,29 +7,26 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.DecimalEntry
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.UndoStripModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import timber.log.Timber
 import java.time.Clock
 
 internal data class ExpenseCommit(val strip: UndoStripModel, val entryId: Long)
 
 /** Writes finish even if the bubble disappears. Only durable append ids arm Undo. */
-internal class ExpenseActions(private val scope: CoroutineScope, private val ledger: LedgerRepository,
+internal class ExpenseActions(scope: CoroutineScope, private val ledger: LedgerRepository,
     private val clock: Clock) {
-    private val writing = MutableStateFlow(false)
-    val busy = writing.asStateFlow()
     private val failure = MutableStateFlow(ExpenseFailure.NONE)
     val failed = failure.asStateFlow()
     private val undoState = MutableStateFlow<ExpenseCommit?>(null)
     val undo = undoState.asStateFlow()
-    private val events = MutableSharedFlow<ExpenseCommit>(replay = 1, extraBufferCapacity = 1)
-    val committed = events.asSharedFlow()
+    private val writer = EntryWriter<ExpenseCommit>(scope, "Expense") { failure.value = ExpenseFailure.WRITE }
+    val busy = writer.busy
+    val committed = writer.committed
 
     fun reopen() { failure.value = ExpenseFailure.NONE }
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun committedHandled() { events.resetReplayCache() }
+    fun committedHandled() = writer.committedHandled()
 
     fun logExpense(owner: String?, category: ExpenseCategory, cents: Long, label: String?, entryId: Long = 0) {
-        if (writing.value || cents <= 0) return
+        if (busy.value || cents <= 0) return
         val note = label?.trim()?.takeIf { it.isNotEmpty() }?.let {
             it.substring(0, it.offsetByCodePoints(0, minOf(it.codePointCount(0, it.length), ExpenseLabel.MAX_CODE_POINTS)))
         }
@@ -39,7 +36,7 @@ internal class ExpenseActions(private val scope: CoroutineScope, private val led
     }
 
     fun logFuel(owner: String?, cents: Long, gallons: String, gpsMiles: Double?, entryId: Long = 0) {
-        if (writing.value || cents <= 0) return
+        if (busy.value || cents <= 0) return
         // Validate the same bounded buffer as the UI; parse once at the write boundary.
         val entry = runCatching { DecimalEntry(gallons) }.getOrNull() ?: return
         if (!entry.positive) return
@@ -51,21 +48,22 @@ internal class ExpenseActions(private val scope: CoroutineScope, private val led
 
     private fun commit(pick: ExpensePick, cents: Long, label: String?, entryId: Long,
         append: suspend (Double, Long) -> Long) {
-        write {
+        writer.write {
+            failure.value = ExpenseFailure.NONE
             val sequenceId = append(cents / 100.0, clock.millis())
             val commit = ExpenseCommit(UndoStripModel(cents, label, sequenceId,
                 clock.millis() + UndoStripModel.WINDOW_MS, HudNoticeOrder.next(),
                 whatLabel = pick.labelResource, whereFallback = null), entryId)
             undoState.value = commit
-            events.emit(commit)
+            writer.commit(commit)
         }
     }
 
     fun undo(commit: ExpenseCommit) {
-        if (writing.value || undoState.value != commit ||
+        if (busy.value || undoState.value != commit ||
             (!commit.strip.failed && clock.millis() >= commit.strip.deadline)) return
         undoState.value = commit.copy(strip = commit.strip.copy(busy = true, failed = false))
-        write(reportToSheet = false, onFailure = {
+        writer.write(reportFailure = false, onFailure = {
             undoState.value = commit.copy(strip = commit.strip.copy(busy = false, failed = true,
                 token = HudNoticeOrder.next()))
         }) {
@@ -76,21 +74,5 @@ internal class ExpenseActions(private val scope: CoroutineScope, private val led
 
     fun undoExpired(commit: ExpenseCommit) {
         if (undoState.value == commit && !commit.strip.busy && !commit.strip.failed) undoState.value = null
-    }
-
-    private fun write(reportToSheet: Boolean = true, onFailure: () -> Unit = {}, action: suspend () -> Unit) {
-        writing.value = true
-        if (reportToSheet) failure.value = ExpenseFailure.NONE
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                withContext(NonCancellable) { action() }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                if (reportToSheet) failure.value = ExpenseFailure.WRITE
-                onFailure()
-                Timber.tag("Expense").w("%s", error.javaClass.simpleName)
-            } finally { writing.value = false }
-        }
     }
 }

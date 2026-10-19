@@ -13,6 +13,16 @@ class GoalEntryStateTest {
         entry.show(); entry.dismiss(); assertFalse(entry.open)
     }
 
+    @Test fun `show on an open entry preserves its pending completion identity`() {
+        val entry = GoalEntryState()
+        assertTrue(entry.show())
+        val id = entry.entryId
+        assertFalse(entry.show())
+        assertEquals(id, entry.entryId)
+        entry.saved(id)
+        assertFalse(entry.open)
+    }
+
     @Test fun `open and pending completion identity are saved and restored`() {
         for (wasOpen in listOf(false, true)) {
             val entry = GoalEntryState().apply { show(); if (!wasOpen) dismiss() }

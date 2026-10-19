@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 internal class GoalHud(private val viewModel: BubbleViewModel, private val entry: GoalEntryState,
     private val closeLog: () -> Unit) {
     val open get() = entry.open
-    fun openSheet() { closeLog(); viewModel.goalActions.reopen(); entry.show() }
+    fun openSheet() { closeLog(); if (entry.show()) viewModel.goalActions.reopen() }
     fun back() = entry.back()
     fun dismiss() = entry.dismiss()
 

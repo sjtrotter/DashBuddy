@@ -1,6 +1,5 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
-import androidx.lifecycle.ViewModelStore
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
@@ -20,6 +19,7 @@ import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.feature.bubble.hud.GoalCelebrationResolver
 import cloud.trotter.dashbuddy.feature.bubble.hud.GoalMetMark
+import cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper
 import cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillState
 import cloud.trotter.dashbuddy.feature.bubble.hud.HudMode
 import cloud.trotter.dashbuddy.feature.bubble.hud.MarkRead
@@ -107,23 +107,22 @@ class BubbleGoalMarkTest {
         doSuspendableAnswer { invocation -> stored.value = invocation.getArgument<Double?>(0) }
             .whenever(preferences).setDailyKeptGoalDollars(anyOrNull())
         val vm = model()
-        val activity = ViewModelStore().apply { put("bubble", vm) }
         val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dailyGoal.collect {} }
         runCurrent()
         vm.goalActions.set(150); runCurrent()
         assertEquals(150.0, vm.dailyGoal.value)
-        assertTrue(cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2)
+        assertTrue(GoalPillMapper.map(vm.dailyGoal.value, 71.2)
             is GoalPillState.InProgress)
         vm.goalActions.set(50); runCurrent()
         assertEquals(GoalPillState.Met,
-            cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+            GoalPillMapper.map(vm.dailyGoal.value, 71.2))
         vm.goalActions.clear(); runCurrent()
         assertNull(vm.dailyGoal.value)
         assertEquals(GoalPillState.NoGoal,
-            cloud.trotter.dashbuddy.feature.bubble.hud.GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+            GoalPillMapper.map(vm.dailyGoal.value, 71.2))
         verify(appState, never()).setGoalMetMark(any())
         verify(events, never()).appendUserEvent(any(), anyOrNull())
-        read.cancel(); activity.clear()
+        read.cancel()
     }
     @Test fun `a new view model after collapse sees the pending mark`() = runTest(dispatcher) {
         val releaseWrite = CompletableDeferred<Unit>()
@@ -139,14 +138,12 @@ class BubbleGoalMarkTest {
         val day = LocalDate.of(2026, 10, 18)
         val key = GoalMetMark.key(day, 79.0)
         val first = model(repository)
-        val activity = ViewModelStore().apply { put("bubble", first) }
         val firstRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { first.goalMark.collect {} }
         runCurrent()
         first.goalCelebrated(key)
         runCurrent()
         assertEquals(MarkRead.Loaded(key), first.goalMark.value)
         firstRead.cancel()
-        activity.clear() // BubbleScreen collapses and finishes its Activity.
         val second = model(repository)
         val resolved = mutableListOf<String?>()
         val secondRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -161,7 +158,7 @@ class BubbleGoalMarkTest {
         assertTrue(resolved.all { it == null })
         releaseWrite.complete(Unit)
         runCurrent()
-        assertEquals(key, persisted.value) // The first Activity's destruction did not cancel the write.
+        assertEquals(key, persisted.value) // The write outlives the first collector.
         assertTrue(resolved.all { it == null })
         secondRead.cancel()
     }

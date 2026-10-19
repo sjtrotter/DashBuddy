@@ -94,6 +94,41 @@ class GoalActionsTest {
         actions.reopen(); assertFalse(actions.failed.value)
     }
 
+    @Test fun `second pill open during a preset write preserves its close receipt`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        doSuspendableAnswer { gate.await() }.whenever(preferences).setDailyKeptGoalDollars(125.0)
+        val actions = GoalActions(backgroundScope, preferences)
+        val vm: BubbleViewModel = mock()
+        whenever(vm.goalActions).thenReturn(actions)
+        val entry = GoalEntryState()
+        val hud = GoalHud(vm, entry) {}
+        hud.openSheet()
+        val id = entry.entryId
+        actions.set(125, id)
+        hud.openSheet()
+        assertEquals(id, entry.entryId)
+        assertTrue(actions.busy.value)
+        gate.complete(Unit); runCurrent(); consume(actions, entry)
+        assertFalse(hud.open)
+        assertFalse(actions.busy.value)
+        verify(preferences, times(1)).setDailyKeptGoalDollars(125.0)
+    }
+
+    @Test fun `second pill open preserves failure until the entry is reopened`() = runTest {
+        whenever(preferences.setDailyKeptGoalDollars(125.0)).thenThrow(IllegalStateException())
+        val actions = GoalActions(backgroundScope, preferences)
+        val vm: BubbleViewModel = mock()
+        whenever(vm.goalActions).thenReturn(actions)
+        val hud = GoalHud(vm, GoalEntryState()) {}
+        hud.openSheet()
+        actions.set(125); runCurrent()
+        assertTrue(actions.failed.value)
+        hud.openSheet()
+        assertTrue(actions.failed.value)
+        hud.dismiss(); hud.openSheet()
+        assertFalse(actions.failed.value)
+    }
+
     @Test fun `slow preset cannot dismiss a newly opened goal entry`() = runTest {
         doSuspendableAnswer { delay(100) }.whenever(preferences).setDailyKeptGoalDollars(100.0)
         val entry = GoalEntryState(true)

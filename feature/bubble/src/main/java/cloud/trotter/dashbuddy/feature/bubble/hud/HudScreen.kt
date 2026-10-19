@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
@@ -49,20 +51,27 @@ fun HudScreen(
             PhaseStrip(state.stripColor, state.mode == HudMode.RESTING || state.paused)
             Column(Modifier.fillMaxSize().padding(start = 22.dp, end = 16.dp, bottom = 12.dp)) {
                 val showingLog = state.logOpen || state.mode == HudMode.LOG
-                Box {
-                    // Behind header controls so the goal pill can replace the expense subcard.
-                    if (sheetOpen && sheetCompact && !showingLog && state.mode != HudMode.OFFER) {
-                        Box(Modifier.matchParentSize().testTag("hud.sheet.outside.header")
+                val dismissHeader = sheetOpen && sheetCompact && !showingLog && state.mode != HudMode.OFFER
+                val goalClick = onGoalClick?.let { route ->
+                    { onSheetOutsideDismiss(); route() }
+                }
+                // The hero has just one control: its pill consumes the tap; the rest dismisses.
+                Column(if (dismissHeader) Modifier.pointerInput(onSheetOutsideDismiss) {
+                    detectTapGestures { onSheetOutsideDismiss() }
+                } else Modifier) {
+                    Box {
+                        Column {
+                            HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
+                            if (state.mode != HudMode.OFFER) TopRow(state.top)
+                        }
+                        // In front of the header controls, so an outside tap cannot switch platforms.
+                        if (dismissHeader) Box(Modifier.matchParentSize().testTag("hud.sheet.outside.header")
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                                 onClick = onSheetOutsideDismiss))
                     }
-                    Column {
-                        HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
-                        if (state.mode != HudMode.OFFER) {
-                            TopRow(state.top)
-                            if (showingLog) CompactHeroRow(state.hero, onGoalClick)
-                            else HeroRow(state.hero, onGoalCelebrated, onGoalClick)
-                        }
+                    if (state.mode != HudMode.OFFER) {
+                        if (showingLog) CompactHeroRow(state.hero, goalClick)
+                        else HeroRow(state.hero, onGoalCelebrated, goalClick)
                     }
                 }
                 if (state.mode == HudMode.OFFER) {

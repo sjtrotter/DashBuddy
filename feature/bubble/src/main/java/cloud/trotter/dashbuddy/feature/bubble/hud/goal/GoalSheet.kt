@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.feature.bubble.hud.goal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -51,58 +52,68 @@ fun GoalSheet(
                 Text(stringResource(R.string.hud_goal_clear), color = c.bad, style = MaterialTheme.typography.labelMedium)
             }
         }
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
-            StepButton("goal.minus", stringResource(R.string.hud_goal_minus), "−",
-                !model.busy && GoalBounds.canDecrease(goal)) { GoalBounds.minus(goal)?.let(onSet) }
-            Text(goal?.let { Formats.money0(it.toDouble()) } ?: EMPTY_VALUE,
-                style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.testTag("goal.figure"))
-            StepButton("goal.plus", stringResource(R.string.hud_goal_plus), "+",
-                !model.busy && GoalBounds.canIncrease(goal)) { onSet(GoalBounds.plus(goal)) }
-        }
-        // Real progress content occupies the fixed frame's slack, with presets anchored below it.
-        Column(Modifier.fillMaxWidth().weight(1f).testTag("goal.progress").padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.Bottom) {
-            if (goal != null) {
-                val fill = when (progress) {
-                    GoalPillState.Met -> 1f
-                    is GoalPillState.InProgress -> progress.progress
-                    else -> 0f
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            // Keep progress visible before assigning the remaining height to the controls.
+            val controlsHeight = (maxHeight - 56.dp).coerceAtLeast(0.dp)
+            Column(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxWidth().heightIn(max = controlsHeight)) {
+                    Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            StepButton("goal.minus", stringResource(R.string.hud_goal_minus), "−",
+                                !model.busy && GoalBounds.canDecrease(goal)) { GoalBounds.minus(goal)?.let(onSet) }
+                            Text(goal?.let { Formats.money0(it.toDouble()) } ?: EMPTY_VALUE,
+                                style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.testTag("goal.figure"))
+                            StepButton("goal.plus", stringResource(R.string.hud_goal_plus), "+",
+                                !model.busy && GoalBounds.canIncrease(goal)) { onSet(GoalBounds.plus(goal)) }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            for (preset in listOf(100, 125, 150, 175, 200)) {
+                                val selected = goal == preset
+                                Box(Modifier.heightIn(min = 44.dp).testTag("goal.preset.$preset")
+                                    .semantics { this.selected = selected }.clip(CircleShape)
+                                    .clickable(enabled = !model.busy, role = Role.Button) { onPreset(preset) },
+                                    contentAlignment = Alignment.Center) {
+                                    AppChip(Formats.money0(preset.toDouble()),
+                                        color = if (selected) c.accentText else c.text,
+                                        container = if (selected) c.accent else c.surface3)
+                                }
+                            }
+                        }
+                        if (model.failed) Text(stringResource(R.string.hud_goal_failed),
+                            color = c.warn, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-                Box(Modifier.fillMaxWidth().height(6.dp).testTag("goal.bar")
-                    .semantics { progressBarRangeInfo = ProgressBarRangeInfo(fill, 0f..1f) }
-                    .clip(CircleShape).background(c.surface3)) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth(fill)
-                        .background(if (progress == GoalPillState.Met) c.good else c.accent))
-                }
-                Spacer(Modifier.height(6.dp))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(R.string.hud_goal_profit_today, model.todayProfit?.let(Formats::money) ?: EMPTY_VALUE),
-                    color = c.text2, style = MaterialTheme.typography.labelSmall)
-                if (goal != null) Text(when (progress) {
-                    GoalPillState.Met -> stringResource(R.string.hud_goal_met)
-                    is GoalPillState.InProgress -> stringResource(R.string.hud_goal_remaining, progress.remaining)
-                    else -> EMPTY_VALUE
-                }, color = c.text2, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            for (preset in listOf(100, 125, 150, 175, 200)) {
-                val selected = goal == preset
-                Box(Modifier.heightIn(min = 44.dp).testTag("goal.preset.$preset")
-                    .semantics { this.selected = selected }.clip(CircleShape)
-                    .clickable(enabled = !model.busy, role = Role.Button) { onPreset(preset) },
-                    contentAlignment = Alignment.Center) {
-                    AppChip(Formats.money0(preset.toDouble()),
-                        color = if (selected) c.accentText else c.text,
-                        container = if (selected) c.accent else c.surface3)
+                // The progress block owns spare height and stays visible while controls scroll.
+                Column(Modifier.fillMaxWidth().weight(1f).heightIn(min = 56.dp).testTag("goal.progress").padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.Bottom) {
+                    if (goal != null) {
+                        val fill = when (progress) {
+                            GoalPillState.Met -> 1f
+                            is GoalPillState.InProgress -> progress.progress
+                            else -> 0f
+                        }
+                        Box(Modifier.fillMaxWidth().height(6.dp).testTag("goal.bar")
+                            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(fill, 0f..1f) }
+                            .clip(CircleShape).background(c.surface3)) {
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(fill)
+                                .background(if (progress == GoalPillState.Met) c.good else c.accent))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(stringResource(R.string.hud_goal_profit_today, model.todayProfit?.let(Formats::money) ?: EMPTY_VALUE),
+                            color = c.text2, style = MaterialTheme.typography.labelSmall)
+                        if (goal != null) Text(when (progress) {
+                            GoalPillState.Met -> stringResource(R.string.hud_goal_met)
+                            is GoalPillState.InProgress -> stringResource(R.string.hud_goal_to_go, progress.remaining)
+                            else -> EMPTY_VALUE
+                        }, color = c.text2, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }
-        if (model.failed) Text(stringResource(R.string.hud_goal_failed),
-            color = c.warn, style = MaterialTheme.typography.labelSmall)
     }
 }
 

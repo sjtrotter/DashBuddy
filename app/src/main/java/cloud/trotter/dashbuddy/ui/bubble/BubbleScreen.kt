@@ -131,13 +131,27 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     // The owner rule reads the local date; a minute tick keeps the block honest across midnight at rest.
     val ownerTick by rememberNow(60_000)
     val expenseEnabled = remember(region?.session?.sessionId, lastSession, ownerTick) { viewModel.expenseOwner() != null }
+    // Keep the closing frame silent even when the saved preset and close arrive together.
+    var goalSheetWasOpen by rememberSaveable { mutableStateOf(false) }
+    var editedGoalKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val pillGoal = GoalPillMapper.map(goal, todayProfit)
+    val metGoalKey = if (pillGoal == GoalPillState.Met)
+        goalDay?.date?.let { date -> goal?.let { GoalMetMark.key(date, it) } } else null
+    val editKey = if (goalHud.open || goalSheetWasOpen) metGoalKey else editedGoalKey
+    SideEffect {
+        editedGoalKey = if (todayProfit != null && pillGoal != GoalPillState.Met) null else editKey
+        goalSheetWasOpen = goalHud.open
+    }
+    val silentGoalMark = GoalCelebrationResolver.markAfterEditing(
+        pillGoal, goalDay?.date, goal, goalMark, goalHud.open, editKey)
+    LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, expenseEnabled) {
+        net, countExpenses, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, expenseEnabled, goalHud.open, editKey) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, countExpenses, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            expenseEnabled = expenseEnabled)
+            expenseEnabled = expenseEnabled, goalSheetOpen = goalHud.open, editedGoalKey = editKey)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }

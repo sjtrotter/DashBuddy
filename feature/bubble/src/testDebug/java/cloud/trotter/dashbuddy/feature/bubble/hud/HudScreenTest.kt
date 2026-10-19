@@ -368,6 +368,48 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
     }
 
+    @Test
+    @Config(sdk = [35], qualifiers = "w411dp-h900dp")
+    fun `compact expense intercepts platform pointer taps and lets the goal pill replace it`() {
+        var route by mutableStateOf<String?>("EXPENSE")
+        var selected by mutableStateOf(Platform.DoorDash)
+        var switches = 0
+        val callbacks = mutableListOf<String>()
+        compose.setContent {
+            DashBuddyTheme {
+                CompositionLocalProvider(LocalNowProvider provides clock, LocalReducedMotion provides true) {
+                    Box(Modifier.width(400.dp).height(760.dp)) {
+                        HudScreen(state().copy(platform = selected,
+                            switchable = listOf(Platform.DoorDash, Platform.Uber)), null, {},
+                            onSelectPlatform = { selected = it; switches++ },
+                            onGoalClick = { callbacks += "goal"; route = "GOAL" },
+                            sheetOpen = route != null, sheetCompact = route == "EXPENSE",
+                            onSheetOutsideDismiss = { callbacks += "dismiss"; route = null },
+                            sheet = {
+                                when (route) {
+                                    "EXPENSE" -> ExpenseSubcard {}
+                                    "GOAL" -> GoalSheet(GoalSheetModel(150, 71.2), {}, {}, {})
+                                    else -> Unit
+                                }
+                            })
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onNodeWithText(Platform.Uber.shortName, ignoreCase = true).performTouchInput { click() }; settle()
+        compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+        assertEquals(Platform.DoorDash, selected)
+        assertEquals(0, switches)
+        assertEquals(listOf("dismiss"), callbacks)
+        compose.runOnIdle { route = "EXPENSE"; callbacks.clear() }; settle()
+        compose.onNodeWithTag("hud.goal").performTouchInput { click() }; settle()
+        compose.onNodeWithTag("expense.subcard").assertDoesNotExist()
+        compose.onNodeWithTag("goal.sheet").assertIsDisplayed()
+        assertEquals(listOf("dismiss", "goal"), callbacks)
+        assertEquals(0, switches)
+    }
+
     @Test fun `gas Undo stays displayed and tappable below the compact subcard live and at rest`() {
         var resting by mutableStateOf(false)
         var open by mutableStateOf(true)
@@ -467,11 +509,11 @@ internal class HudScreenTest : HudScreenFixture() {
         val preset = compose.onNodeWithTag("goal.preset.100").getBoundsInRoot()
         assertTrue(progress.top >= compose.onNodeWithTag("goal.figure").getBoundsInRoot().bottom)
         assertTrue(bar.top >= progress.top && bar.bottom <= progress.bottom)
-        assertTrue(progress.bottom <= preset.top)
+        assertTrue(preset.bottom <= progress.top)
         compose.runOnIdle { height = 760.dp }; settle()
         assertEquals(progress.height + 160.dp, compose.onNodeWithTag("goal.progress").getBoundsInRoot().height)
         assertEquals(bar.top + 160.dp, compose.onNodeWithTag("goal.bar").getBoundsInRoot().top)
-        assertEquals(preset.top + 160.dp, compose.onNodeWithTag("goal.preset.100").getBoundsInRoot().top)
+        assertEquals(preset.top, compose.onNodeWithTag("goal.preset.100").getBoundsInRoot().top)
     }
 
     @Test

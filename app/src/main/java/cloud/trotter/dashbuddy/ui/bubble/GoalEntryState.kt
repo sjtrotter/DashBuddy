@@ -11,7 +11,12 @@ internal class GoalEntryState(open: Boolean = false) {
     var entryId = 0L
         private set
 
-    fun show() { entryId++; open = true }
+    fun show(): Boolean {
+        if (open) return false
+        entryId++
+        open = true
+        return true
+    }
     fun dismiss() { entryId++; open = false }
     fun back() = dismiss()
 

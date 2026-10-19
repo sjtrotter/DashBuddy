@@ -3,6 +3,8 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -12,6 +14,7 @@ import androidx.compose.ui.unit.height
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.feature.bubble.hud.goal.*
+import cloud.trotter.dashbuddy.domain.state.*
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -120,6 +123,32 @@ class GoalSheetTest {
         compose.runOnIdle { model = model.copy(goalDollars = null) }
         compose.onNodeWithTag("goal.bar").assertDoesNotExist()
         compose.onNodeWithText("Profit today $EMPTY_VALUE").assertIsDisplayed()
+    }
+
+    @Test fun `short HUD at large font keeps the bar and both progress lines displayed`() {
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.8f),
+                LocalReducedMotion provides true) {
+                DashBuddyTheme {
+                    Box(Modifier.width(400.dp).height(480.dp)) {
+                        val state = HudStateMapper.map(
+                            region = PlatformRegion(Platform.DoorDash, Mode.Online, Session("live", 1_000)),
+                            flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
+                            earnings = 100.0, miles = 42.5, lastSession = null, net = null,
+                            countExpenses = false, goal = 150.0, todayProfit = 71.2,
+                            hasActiveCard = true, hasOfferCard = false, logOpen = false,
+                            gas = GasRowModel(3.5f, true), odometerLoaded = true, goalSheetOpen = true)
+                        HudScreen(state, null, {}, sheetOpen = true,
+                            sheet = { GoalSheet(model, {}, {}, {}) })
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("goal.bar").assertIsDisplayed()
+        assertEquals(6.dp, compose.onNodeWithTag("goal.bar").getBoundsInRoot().height)
+        compose.onNodeWithText("Profit today $71.20").assertIsDisplayed()
+        compose.onNodeWithText("$79 to go").assertIsDisplayed()
+        assertTrue(compose.onNodeWithTag("goal.progress").getBoundsInRoot().height >= 56.dp)
     }
 
     @Test fun `busy disables every write and failure appears under presets`() {
