@@ -206,4 +206,20 @@ class FormatsTest {
             org.junit.Assert.assertEquals("money renders $rendered for $v", fromMoney, Formats.cents(v))
         }
     }
+    @Test fun `money or cents under a dollar reads cents`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("69¢", Formats.moneyOrCents(0.69))
+    }
+    @Test fun `money or cents at a dollar reads dollars`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("$1.00", Formats.moneyOrCents(1.0))
+    }
+    @Test fun `negative under a dollar reads negative cents`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("-69¢", Formats.moneyOrCents(-0.69))
+    }
+    @Test fun `money or cents rounding to a dollar reads dollars`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("$1.00", Formats.moneyOrCents(0.999))
+    }
 }

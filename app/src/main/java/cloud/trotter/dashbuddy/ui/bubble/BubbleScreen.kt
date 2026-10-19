@@ -16,7 +16,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.FullChatView
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.dashbuddy.feature.bubble.cards.FlowCardItem
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
@@ -39,6 +38,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val gasAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val gasRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
+    val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
     var logOpen by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
@@ -88,10 +88,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             StateCard(model, state.hero.profit)
         },
         offer = {
-            cards.stack.active?.let { active ->
-                FlowCardItem(active, isActive = true, expanded = true, onToggleExpand = {},
-                    platformLabel = cards.platformLabels[active.id],
-                    onAccept = { viewModel.acceptOffer() }, onDecline = { viewModel.declineOffer() })
+            region?.presentedOffer()?.let { pending ->
+                val offerModel = remember(pending, region?.activeJob, cards.stack.completed, config) {
+                    OfferCardMapper.map(pending, region?.activeJob, cards.stack.completed, config)
+                }
+                OfferCard(offerModel, viewModel::acceptOffer, viewModel::declineOffer)
             }
         },
         log = { FullChatView(messages) },

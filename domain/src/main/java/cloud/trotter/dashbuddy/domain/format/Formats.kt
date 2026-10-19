@@ -43,6 +43,12 @@ object Formats {
     /** "$7.50" — standard money. A negative renders `-$65.94` (see [signedMoney]). */
     fun money(amount: Double): String = signedMoney(amount, decimals = 2)
 
+    /** Cents below a dollar, using the same cent rounding as money. */
+    fun moneyOrCents(amount: Double): String {
+        val cents = cents(amount)
+        return if (abs(cents) < 100) "${cents}¢" else money(amount)
+    }
+
     /** Split the canonical money text; fraction includes the locale decimal separator. */
     fun moneyParts(amount: Double): MoneyParts {
         val text = money(amount)

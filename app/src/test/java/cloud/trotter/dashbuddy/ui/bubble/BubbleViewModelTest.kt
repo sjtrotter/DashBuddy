@@ -5,6 +5,24 @@ import cloud.trotter.dashbuddy.domain.analytics.AnalyticsPeriod
 import cloud.trotter.dashbuddy.domain.analytics.PeriodEconomics
 import cloud.trotter.dashbuddy.domain.analytics.SessionNet
 import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
+import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluator
+import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer
+import cloud.trotter.dashbuddy.domain.model.order.OrderType
+import cloud.trotter.dashbuddy.domain.model.order.ParsedOrder
+import cloud.trotter.dashbuddy.domain.pipeline.Observation
+import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
+import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.ParsedFields
+import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.domain.state.Flow
+import cloud.trotter.dashbuddy.domain.state.OfferIntent
+import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardMapper
+import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardModel
+import org.mockito.kotlin.argumentCaptor
+import org.junit.Assert.assertTrue
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.event.AppEventRepo
 import cloud.trotter.dashbuddy.core.data.fuel.FuelPriceRepository
@@ -63,6 +81,8 @@ import org.mockito.kotlin.whenever
 @OptIn(ExperimentalCoroutinesApi::class)
 class BubbleViewModelTest {
 
+    private val strategyRepository: StrategyRepository = mock()
+    private val configFlow = MutableStateFlow<EvaluationConfig?>(EvaluationConfig())
     private val chatRepository: ChatRepository = mock()
     private val odometerRepository: OdometerRepository = mock()
     private val stateManager: StateManagerV2 = mock()
@@ -88,6 +108,7 @@ class BubbleViewModelTest {
         Dispatchers.setMain(dispatcher)
         // Init-time flow accessors — the VM builds several stateIn() flows in its property initializers.
         whenever(stateManager.state).thenReturn(state)
+        whenever(strategyRepository.evaluationConfig).thenReturn(configFlow)
         whenever(devSettingsRepository.bubbleSessionMode).thenReturn(modeFlow)
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
@@ -107,6 +128,7 @@ class BubbleViewModelTest {
 
     private fun viewModel() = BubbleViewModel(
         chatRepository = chatRepository,
+        strategyRepository = strategyRepository,
         odometerRepository = odometerRepository,
         stateManager = stateManager,
         appEventRepo = appEventRepo,
@@ -625,5 +647,41 @@ class BubbleViewModelTest {
 
         assertEquals(Platform.DoorDash, vm.focusedPlatform.value)
         job.cancel()
+    }
+    @Test
+    fun `combined offer is never written`() = runTest {
+        stubNoDashes()
+        val platform = Platform.DoorDash
+        val parsed = ParsedOffer("real-addon", payAmount = 7.0, distanceMiles = 2.1,
+            quoteBasis = OfferQuoteBasis.INCREMENTAL,
+            orders = listOf(ParsedOrder(0, OrderType.PICKUP, "New", 1, false, emptySet())))
+        val pending = PendingOffer(parsed.offerHash, ParsedFields.OfferFields(parsedOffer = parsed),
+            presentedAt = 1_000, returnFlow = Flow.TaskPickupNavigation, sourceRuleId = "doordash.screen.offer")
+        val active = Job("job", listOf("Old"), "before", startedAt = 0,
+            acceptedOffers = listOf(AcceptedOfferEconomics("before", payAmount = 10.0, netPay = 8.0,
+                estMinutes = 20.0, distanceMiles = 5.0, storeHints = listOf("Old"), acceptedAt = 0)))
+        val region = PlatformRegion(platform, Mode.Online, Session("dash", 0),
+            activeJob = active, pendingOffers = listOf(pending))
+        state.value = AppState(regions = Regions(
+            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = platform), platforms = mapOf(platform to region)))
+        val vm = viewModel()
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.focusedPlatform.collect {} }
+        runCurrent()
+        var evaluatedHash: String? = null
+        val displayed = OfferCardMapper.map(pending, active, emptyList(), vm.evaluationConfig.value) { offer, config ->
+            evaluatedHash = offer.offerHash
+            OfferEvaluator().evaluate(offer, config)
+        }
+        assertTrue(displayed is OfferCardModel.Combined)
+        assertEquals("combined:real-addon", evaluatedHash)
+        vm.acceptOffer()
+        val dispatched = argumentCaptor<Observation>()
+        verify(stateManager).dispatch(dispatched.capture())
+        val action = dispatched.firstValue as Observation.UiInput
+        assertEquals(OfferIntent.ACCEPT, action.action)
+        assertEquals("real-addon", action.offerHash)
+        assertEquals(platform, action.targetPlatform)
+        assertEquals(pending, state.value.regions.platforms[platform]?.presentedOffer())
+        collector.cancel()
     }
 }

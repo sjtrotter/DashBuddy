@@ -33,7 +33,7 @@
     <string name="flow_card_net_secondary_format">Net %1$s</string>
     <string name="flow_card_distance_secondary_format" translatable="false">%1$s mi</string>
     <string name="flow_card_per_mile_secondary_format" translatable="false">%1$s/mi</string>
-    <string name="flow_card_badge_shop_and_deliver">Shop &amp; Deliver</string>
+    <string name="flow_card_badge_shop_and_deliver">Shop and deliver</string>
     <string name="flow_card_timer_dwell_label">Wait</string>
     <string name="flow_card_timer_at_door_sub">at door</string>
     <string name="flow_card_timer_at_store_sub">at store</string>
@@ -147,4 +147,32 @@
     <string name="hud_track_cd_late">Due %1$s, %2$d min late</string>
     <string name="hud_track_cd_open">No deadline</string>
     <string name="hud_dock_cd_suggested">Suggested</string>
+    <string name="hud_offer_left">left</string>
+    <string name="hud_offer_cd_left">%1$s left</string>
+    <string name="hud_offer_profit">profit</string>
+    <string name="hud_offer_loss">loss</string>
+    <string name="hud_offer_car">car</string>
+    <string name="hud_offer_distance_unknown">distance unknown</string>
+    <string name="hud_offer_unit_mi">mi</string>
+    <string name="hud_offer_rate_hr">/hr</string>
+    <string name="hud_offer_rate_mi">/mi</string>
+    <string name="hud_offer_rate_ea">ea</string>
+    <plurals name="hud_offer_items"><item quantity="one">item</item><item quantity="other">items</item></plurals>
+    <plurals name="hud_offer_stops"><item quantity="one">stop</item><item quantity="other">stops</item></plurals>
+    <string name="hud_offer_added">+%1$s added</string>
+    <string name="hud_offer_was">was %1$d</string>
+    <string name="hud_offer_addon">Add-on</string>
+    <string name="hud_offer_addon_note">Added to your current job. No score: the card gives only what this stop adds.</string>
+    <string name="hud_offer_cd_score">Score %1$d</string>
+    <string name="hud_offer_cd_no_score">No score</string>
+    <string name="hud_offer_cd_bar">Profit %1$s, car %2$s</string>
+    <string name="hud_offer_cd_bar_loss">Loss %1$s, car %2$s</string>
+    <string name="hud_offer_cd_above">Above target</string>
+    <string name="hud_offer_cd_below">Below target</string>
+    <string name="hud_offer_cd_item_target">target from your hourly target</string>
+    <string name="hud_offer_cd_pin">Start</string>
+    <string name="hud_offer_cd_store">Pickup</string>
+    <string name="hud_offer_cd_house">Dropoff</string>
+    <string name="hud_offer_more">+%1$d</string>
+    <string name="hud_offer_cd_more">%1$d more stops</string>
 </resources>

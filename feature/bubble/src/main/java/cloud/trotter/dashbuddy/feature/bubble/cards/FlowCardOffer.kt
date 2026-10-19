@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.component.AppGaugeRing
-import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
@@ -50,10 +49,10 @@ import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.format.formatCountdown
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
-import cloud.trotter.dashbuddy.domain.model.offer.OfferBadge
 import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
-import cloud.trotter.dashbuddy.domain.model.order.OrderBadge
 import cloud.trotter.dashbuddy.feature.bubble.R
+import cloud.trotter.dashbuddy.feature.bubble.formatters.badgeMeta
+import cloud.trotter.dashbuddy.feature.bubble.formatters.offerExpiryColor
 import cloud.trotter.dashbuddy.feature.bubble.formatters.displayLabel
 import cloud.trotter.dashbuddy.feature.bubble.formatters.offerBadgeIcon
 import cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreColor
@@ -294,43 +293,6 @@ private fun BadgeIcon(
     }
 }
 
-/**
- * Maps a badge wire name to its label + brand color for the pill row.
- *
- * The **label** is not this function's to own (#942): every badge is an
- * [OfferBadge]/[OrderBadge] constant carrying a `displayName`, and this map used to keep a second,
- * drifted set of labels that silently missed ≥8 branches — those fell to a lowercased-enum mangle
- * ("Age restricted 21 plus"). Only the synthetic
- * [SHOP_BADGE][FlowCardSnapshot.Offer.SHOP_BADGE] marker, which is no enum constant, keeps a
- * string-resource label of its own.
- *
- * The **color** is the one thing this owns — and it is keyed on the typed enums, not on raw name
- * strings (the #283 stringly-typed shape).
- */
-@Composable
-private fun badgeMeta(name: String, c: AppColors): Pair<String, Color> {
-    if (name == FlowCardSnapshot.Offer.SHOP_BADGE) {
-        return stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
-    }
-    OfferBadge.entries.firstOrNull { it.name == name }?.let { badge ->
-        return badge.displayName to when (badge) {
-            OfferBadge.HIGH_PAYING -> c.good
-            OfferBadge.PRIORITY_ACCESS -> c.stOffer
-            else -> c.neutral
-        }
-    }
-    OrderBadge.entries.firstOrNull { it.name == name }?.let { badge ->
-        return badge.displayName to when (badge) {
-            OrderBadge.RED_CARD -> c.bad
-            OrderBadge.ALCOHOL -> c.warn
-            OrderBadge.LARGE_ORDER, OrderBadge.PIZZA_BAG -> c.neutral
-        }
-    }
-    // Unreachable today — the snapshot's badge list is minted from the two enums plus SHOP — but a
-    // future marker renders as itself rather than vanishing.
-    return name to c.neutral
-}
-
 /** Manual Accept / Decline buttons on the active offer card (#110 Stage 2b). */
 @Composable
 internal fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
@@ -354,11 +316,4 @@ internal fun OfferActionRow(onAccept: () -> Unit, onDecline: () -> Unit) {
             ) { Text(stringResource(R.string.flow_card_action_decline), fontWeight = FontWeight.Bold) }
         }
     }
-}
-
-/** THE offer-expiry color tiers (#406) — previously written twice in this file. */
-private fun offerExpiryColor(frac: Double, c: AppColors): Color = when {
-    frac > 0.45 -> c.good
-    frac > 0.2 -> c.warn
-    else -> c.bad
 }
