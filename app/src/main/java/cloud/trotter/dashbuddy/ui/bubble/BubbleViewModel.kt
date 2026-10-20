@@ -119,7 +119,6 @@ class BubbleViewModel @Inject constructor(
     fun odometerVehicleChangeHandled() = odometerActions.vehicleChangeHandled()
     fun reopenOdometer() = odometerActions.reopen()
     fun saveOdometerReading(miles: Int) { garage.value?.active?.let { odometerActions.save(it.id, miles) } }
-    fun addVehicle(name: String) = odometerActions.add(name)
     fun selectVehicle(id: String) = odometerActions.select(id)
     fun retireVehicle(id: String) = odometerActions.retire(id)
     // Read the committed snapshot when handling a retirement; stateIn may still hold the old car.

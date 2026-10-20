@@ -14,6 +14,8 @@ import cloud.trotter.dashbuddy.domain.state.*
 import cloud.trotter.dashbuddy.feature.bubble.cards.BubbleCards
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
+import cloud.trotter.dashbuddy.ui.main.MainActivity
+import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.junit.After
@@ -23,6 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.time.Clock
 import java.time.Instant
@@ -65,7 +68,7 @@ class BubbleScreenTest {
         whenever(vm.switchablePlatforms).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
         whenever(vm.odometerPrompts).thenReturn(MutableStateFlow(false))
-        whenever(vm.garage).thenReturn(MutableStateFlow(null))
+        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(emptyList(), null, readable = true)))
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.odometerNotice).thenReturn(MutableStateFlow(null))
         whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
@@ -202,7 +205,10 @@ class BubbleScreenTest {
     }
 
     @Test fun `cash tip odometer and expense stay closed after Log then Now`() {
-        show()
+        val civic = Vehicle("civic", "Civic", 0)
+        val vm = model()
+        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, readable = true)))
+        show(vm)
         for (kind in listOf(DockKind.CASH_TIP, DockKind.ODOMETER, DockKind.EXPENSE)) {
             compose.onNodeWithTag("hud.dock.$kind").performClick()
             settle()
@@ -216,6 +222,49 @@ class BubbleScreenTest {
             compose.onNodeWithTag("hud.slot.log").assertDoesNotExist()
             compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
         }
+    }
+
+    @Test fun `the live dock with no vehicle opens the Garage Add form without a sheet`() {
+        val vm = model()
+        show(vm)
+        compose.onNodeWithTag("hud.dock.ODOMETER").performClick(); settle()
+        assertVehicleAddStarted()
+        compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+        verify(vm, never()).reopenOdometer()
+    }
+
+    @Test fun `the resting row Add and empty garage dock open the same Garage Add form`() {
+        val vm = model()
+        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
+        show(vm)
+        for (tag in listOf("hud.vehicle.add", "hud.dock.ODOMETER")) {
+            compose.onNodeWithTag(tag).performClick(); settle()
+            assertVehicleAddStarted()
+            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+        }
+        verify(vm, never()).reopenOdometer()
+    }
+
+    @Test fun `the odometer switcher Add opens the Garage Add form and leaves the switcher open`() {
+        val civic = Vehicle("civic", "Civic", 0)
+        val vm = model()
+        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, readable = true)))
+        show(vm)
+        compose.onNodeWithTag("hud.dock.ODOMETER").performClick(); settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithContentDescription("Switch vehicle").performClick(); settle()
+        compose.onNodeWithTag("vehicle.add").performClick(); settle()
+        assertVehicleAddStarted()
+        compose.onNodeWithTag("vehicle.civic").assertIsDisplayed()
+        compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
+    }
+
+    private fun assertVehicleAddStarted() {
+        val intent = shadowOf(compose.activity).nextStartedActivity
+        assertNotNull(intent)
+        assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertEquals(Screen.VehicleAdd.route, intent.getStringExtra(MainActivity.EXTRA_ROUTE))
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
     }
 
     @Test fun `Back during a pending preset write marks the new goal once without celebrating`() {

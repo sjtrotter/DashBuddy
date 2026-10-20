@@ -30,11 +30,9 @@ import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.KeypadFrame
 @Composable
 fun ColumnScope.OdometerSheet(
     model: OdometerSheetModel,
-    onVehicleNameChange: (String) -> Unit,
     onDigit: (Int) -> Unit,
     onBackspace: () -> Unit,
     onSave: () -> Unit,
-    onAddVehicle: (String) -> Unit,
     onSwitchVehicle: () -> Unit,
     onSelectVehicle: (String) -> Unit,
     onShowAddVehicle: () -> Unit,
@@ -50,8 +48,6 @@ fun ColumnScope.OdometerSheet(
             OdometerWriteFailure.UNREADABLE -> Text(stringResource(R.string.hud_odometer_vehicles_unreadable), color = AppTheme.colors.warn)
         }
         when (page) {
-            OdometerPage.ADD_VEHICLE -> AddVehicleForm(model.vehicleName, onVehicleNameChange,
-                enabled = !model.saving && model.writeFailed != OdometerWriteFailure.UNREADABLE, onBack, onAddVehicle)
             OdometerPage.VEHICLES -> VehicleSwitcher(model.vehicles, model.vehicle?.id, model.saving, onSelectVehicle, onShowAddVehicle, onBack, onRetireVehicle)
             OdometerPage.READING -> {
                 val canSave = model.vehicle != null && OdometerReadingLimit.isValid(model.readingMiles ?: 0) && !model.saving

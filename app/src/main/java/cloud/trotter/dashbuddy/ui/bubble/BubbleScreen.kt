@@ -50,7 +50,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val logOpenState = rememberSaveable { mutableStateOf(false) }
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
-    val odometer = rememberOdometerHud(viewModel, closeLog)
+    val context = LocalContext.current
+    val openVehicleAdd = remember(context) {
+        { context.startActivity(MainActivity.routeIntent(context, Screen.VehicleAdd.route)) }
+    }
+    val odometer = rememberOdometerHud(viewModel, closeLog, openVehicleAdd)
     val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
     val expense = rememberExpenseHud(viewModel, closeLog)
     val goalHud = rememberGoalHud(viewModel, closeLog)
@@ -121,7 +125,6 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     }
     val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer) { { odometer.RestingFooter(openOdometer) } }
     BackHandler(enabled = logOpen) { logOpen = false }
-    val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
         viewModel.collapse.collect { context.findActivity()?.finish() }
     }
@@ -196,7 +199,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             undoVisible = entryUndoVisible,
             restingFooter = odometerFooter,
             onSwapVehicle = { route(EntrySheet.ODOMETER); odometer.openVehicles() },
-            onAddVehicle = { context.startActivity(MainActivity.routeIntent(context, Screen.VehicleAdd.route)) },
+            onAddVehicle = openVehicleAdd,
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             onSelectPlatform = viewModel::selectPlatform,
