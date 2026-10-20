@@ -55,7 +55,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val openInApp: (String) -> Unit = remember(context) {
         { route ->
             context.startActivity(MainActivity.routeIntent(context, route))
-            context.findActivity()?.finish()
+            context.collapseBubble()
         }
     }
     var vehicleMenuOpen by rememberSaveable { mutableStateOf(false) }
@@ -155,7 +155,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer) { { odometer.RestingFooter(openOdometer) } }
     BackHandler(enabled = logOpen) { logOpen = false }
     LaunchedEffect(viewModel, context) {
-        viewModel.collapse.collect { context.findActivity()?.finish() }
+        viewModel.collapse.collect { context.collapseBubble() }
     }
     var gasError by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
@@ -273,6 +273,16 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             },
         )
     }
+}
+
+/**
+ * Collapse the bubble to its icon: the one way the HUD closes itself (Accept, Decline, and every route into
+ * the app). Sending the bubble's task to the back collapses it; finishing the activity would end the bubble's
+ * task, and Android then REMOVES the bubble (`BubbleData.doRemove … reason=TASK_FINISHED`, device log
+ * 2026-10-20), hidden until the next chat line re-posted it a few seconds later (#1379 follow-up).
+ */
+private fun Context.collapseBubble() {
+    findActivity()?.moveTaskToBack(true)
 }
 
 /** Unwrap a Compose context to the hosting Activity. */
