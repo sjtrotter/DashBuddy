@@ -598,6 +598,8 @@ The job closes so the next accept mints fresh (#1312).
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
+The offer heads-up renders the HUD’s `OfferCardModel` (#1333 S2g, option B: no verdict word, badges, trip line or gauge bars; rates on one line), with the ring and pay bar drawn as bitmaps matching the Compose geometry.
+
 Full reference: [`docs/architecture/04-side-effect-engine.md`](docs/architecture/04-side-effect-engine.md).
 
 `SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency (recovery-aware), runs the

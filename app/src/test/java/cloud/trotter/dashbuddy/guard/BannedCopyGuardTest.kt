@@ -54,7 +54,6 @@ class BannedCopyGuardTest {
         val app = "app/src/main/res/values/strings.xml"
         val settings = "feature/settings/src/main/res/values/strings.xml"
         val placeholders = setOf(
-            "$app:bubble_offer_card_metric_placeholder",
             "$app:weekly_plan_window_unpriced_value",
         )
         // Developer-only text (out of copy scope), frozen at its current em-dash count per key.

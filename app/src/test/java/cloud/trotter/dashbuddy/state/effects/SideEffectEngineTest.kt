@@ -656,6 +656,28 @@ class SideEffectEngineTest {
         merchantName = "Chipotle",
     )
 
+    private fun testPendingOffer() = cloud.trotter.dashbuddy.domain.state.PendingOffer(
+        offerHash = "hash-9",
+        offerFields = cloud.trotter.dashbuddy.domain.state.ParsedFields.OfferFields(
+            parsedOffer = cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer("hash-9", payAmount = 7.50, distanceMiles = 3.2)),
+        presentedAt = 0L, evaluation = testEvaluation(),
+        returnFlow = cloud.trotter.dashbuddy.domain.state.Flow.TaskPickupNavigation,
+        sourceRuleId = "doordash.screen.offer",
+    )
+
+    @Test
+    fun `notification uses the pending offer and current nullable config after the delay`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val pending = testPendingOffer()
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), pending,
+            offerHash = "hash-9", platform = Platform.DoorDash))
+        runCurrent()
+        evaluationConfig.value = null
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null), anyOrNull())
+    }
+
     private fun testOfferCard() = FlowCardSnapshot.Offer(
         phaseStartedAt = 0L,
         offerHash = "hash-9",
@@ -672,14 +694,14 @@ class SideEffectEngineTest {
     fun `a resolved offer cancels the pending notification post`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -687,42 +709,42 @@ class SideEffectEngineTest {
         // Evaluation lands (fresh post pending), the deadline moves 200 ms later (refresh-only).
         // The coalesced post must still be the FIRST post — summary + alert — not a silent refresh.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(200)
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false))
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true))
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
     fun `a refresh after the fresh post landed stays a silent refresh (#1104)`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = true))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false))
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true))
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
     fun `an unresolved offer notification still posts after the settle delay`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -730,11 +752,11 @@ class SideEffectEngineTest {
         // The offer heads-up is now a SEPARATE notification (own id), not the self-replacing bubble,
         // so once it has posted, resolution must explicitly dismiss it.
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), offerHash = "hash-9", platform = Platform.DoorDash))
+        engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash))
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()

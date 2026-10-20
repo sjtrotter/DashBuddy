@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.feature.bubble.notification.rateParts
 import cloud.trotter.dashbuddy.feature.bubble.R
 
 @Composable
@@ -30,9 +31,7 @@ internal fun OfferGauge(model: GaugeModel) {
         GaugeKind.MILE -> stringResource(R.string.hud_offer_unit_mi)
         GaugeKind.ITEM -> pluralStringResource(R.plurals.hud_offer_items, model.denominatorText.toIntOrNull() ?: 0)
     }
-    val rateUnit = stringResource(when (model.kind) {
-        GaugeKind.HOUR -> R.string.hud_offer_rate_hr; GaugeKind.MILE -> R.string.hud_offer_rate_mi; GaugeKind.ITEM -> R.string.hud_offer_rate_ea
-    })
+    val rate = model.rateParts()
     val state = model.aboveTarget?.let { stringResource(if (it) R.string.hud_offer_cd_above else R.string.hud_offer_cd_below) }
     val targetNote = if (model.kind == GaugeKind.ITEM && model.tickAt != null)
         stringResource(R.string.hud_offer_cd_item_target) else null
@@ -65,8 +64,8 @@ internal fun OfferGauge(model: GaugeModel) {
             }
         }
         Row(Modifier.width(84.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
-            Text(model.rateText, style = AppTheme.num.lgNum, color = ink)
-            Text(rateUnit, color = c.text3, fontSize = 11.sp)
+            Text(rate.value, style = AppTheme.num.lgNum, color = ink)
+            Text(rate.unit, color = c.text3, fontSize = 11.sp)
         }
     }
 }

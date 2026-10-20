@@ -6,6 +6,8 @@ import cloud.trotter.dashbuddy.domain.config.EvidenceCategory
 import cloud.trotter.dashbuddy.domain.evaluation.OfferEvaluation
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.state.AcceptedOfferEconomics
+import cloud.trotter.dashbuddy.domain.state.Job
+import cloud.trotter.dashbuddy.domain.state.PendingOffer
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -229,13 +231,9 @@ sealed class AppEffect {
      */
     data class PostOfferNotification(
         val evaluation: OfferEvaluation,
-        /**
-         * #578: the rich offer snapshot (badges, score, $/hr/$/mi, expiry anchors) the heads-up
-         * notification renders as a mini offer card — the SAME [FlowCardSnapshot.Offer] the bubble
-         * card uses, so the two can't drift. [evaluation] is still carried for the chat summary +
-         * persona + the BigText fallback.
-         */
+        /** Legacy snapshot retained at the notification boundary; views render [pending]. */
         val offer: FlowCardSnapshot.Offer,
+        val pending: PendingOffer,
         /** Keys the engine's delayed post so [CancelOfferNotification] can abort it (#436). */
         val offerHash: String?,
         /**
@@ -258,6 +256,12 @@ sealed class AppEffect {
          * logs the summary as before. LAST so positional constructions stay valid.
          */
         val refreshOnly: Boolean = false,
+        /**
+         * S2g: the platform's active job at the same step as [pending], so the heads-up maps an add-on
+         * to the same COMBINED card the bubble shows (the bubble passes `region.activeJob`). Null when
+         * no job is open.
+         */
+        val job: Job? = null,
     ) : AppEffect()
 
     /**
