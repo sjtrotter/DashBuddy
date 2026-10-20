@@ -8,6 +8,10 @@ import cloud.trotter.dashbuddy.domain.analytics.ReportSource
 import cloud.trotter.dashbuddy.domain.analytics.SessionReportRule
 import cloud.trotter.dashbuddy.domain.export.Csv
 import cloud.trotter.dashbuddy.domain.export.IrsMileage
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
+import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.Instant
 import java.time.ZoneId
@@ -54,6 +58,7 @@ object CsvExporter {
     const val SUMMARY_FILENAME = "summary.csv"
     const val EXPENSES_FILENAME = "expenses.csv"
     const val FUEL_FILENAME = "fuel.csv"
+    const val UNKNOWN_VEHICLE = "Unknown vehicle"
 
     private val DELIVERY_HEADER = listOf(
         "date", "time", "platform", "store", "gross_pay", "tip", "base_pay", "cash_tip",
@@ -72,13 +77,14 @@ object CsvExporter {
     private val SESSION_HEADER = listOf(
         "start", "end", "platform", "duration_minutes", "reported_earnings", "report_source", "deliveries",
         "offers_received", "offers_accepted", "offers_declined", "offers_timeout",
-        "odometer_start", "odometer_end", "miles",
+        "odometer_start", "odometer_end", "miles", "vehicle_id", "vehicle_label",
     )
 
     /**
      * Build all five CSVs. [deliveries]/[sessions]/[expenses]/[fuel] are the raw rows (any order; sorted here for a
      * stable, chronological export). [zone] is the device's local zone (passed in so this stays
      * pure/testable); [generatedAtMillis] stamps the summary's export time.
+     * [dashVehicles] supplies each dash's stamped vehicle; [vehicles] includes retired entries.
      */
     fun export(
         deliveries: List<DeliveryRecordEntity>,
@@ -87,15 +93,57 @@ object CsvExporter {
         generatedAtMillis: Long,
         expenses: List<ExpenseRecord> = emptyList(),
         fuel: List<FuelRecord> = emptyList(),
+        dashVehicles: List<DashVehicle> = emptyList(),
+        vehicles: List<Vehicle> = emptyList(),
     ): Bundle = Bundle(
         deliveriesCsv = deliveriesCsv(deliveries.sortedBy { it.completedAt }, zone),
-        sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone),
-        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel),
+        sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone, dashVehicles, vehicles),
+        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel, dashVehicles, vehicles),
         expensesCsv = expensesCsv(expenses.sortedBy { it.occurredAt }, zone),
         fuelCsv = fuelCsv(fuel.sortedBy { it.occurredAt }, zone),
     )
 
+    /**
+     * Largest-remainder rounding to hundredths: the returned shares (in hundredths) sum to [total] rounded to
+     * hundredths, so per-vehicle miles reconcile with `total_deductible_miles`. Non-positive parts get 0.
+     */
+    internal fun apportionHundredths(parts: List<Double>, total: Double): List<Long> {
+        val target = Math.round(total * 100.0)
+        val raw = parts.map { (it * 100.0).coerceAtLeast(0.0) }
+        val floors = raw.map { kotlin.math.floor(it).toLong() }.toMutableList()
+        var left = target - floors.sum()
+        val byRemainder = raw.indices.filter { raw[it] > 0.0 }.sortedByDescending { raw[it] - floors[it] }
+        var i = 0
+        while (left > 0 && byRemainder.isNotEmpty()) {
+            floors[byRemainder[i % byRemainder.size]]++
+            left--; i++
+        }
+        return floors
+    }
+
     private fun platformName(wire: String): String = Platform.fromWire(wire)?.displayName ?: wire
+
+    internal fun vehicleLabel(vehicle: Vehicle): String = vehicle.identityName ?: when (vehicle.profile.vehicleType) {
+        VehicleType.CAR -> "Car"
+        VehicleType.HYBRID -> "Hybrid"
+        VehicleType.EV -> "Electric car"
+        VehicleType.MOTORCYCLE -> "Motorcycle"
+        VehicleType.SCOOTER -> "Scooter or moped"
+        VehicleType.E_BIKE -> "E-bike"
+        VehicleType.BICYCLE -> "Bicycle"
+    }
+
+    private data class SessionVehicle(val id: String, val label: String)
+
+    private fun sessionVehicle(
+        session: SessionRecordEntity,
+        dashVehicles: List<DashVehicle>,
+        vehicles: List<Vehicle>,
+    ): SessionVehicle {
+        val id = dashVehicles.firstOrNull { it.sessionId == session.sessionId }?.vehicleId
+        val vehicle = vehicles.firstOrNull { it.id == id }
+        return SessionVehicle(id.orEmpty(), vehicle?.let(::vehicleLabel) ?: UNKNOWN_VEHICLE)
+    }
 
     private fun sessionMiles(s: SessionRecordEntity): Double? {
         val start = s.startOdometer ?: return null
@@ -133,10 +181,16 @@ object CsvExporter {
         return sb.toString()
     }
 
-    private fun sessionsCsv(rows: List<SessionRecordEntity>, zone: ZoneId): String {
+    private fun sessionsCsv(
+        rows: List<SessionRecordEntity>,
+        zone: ZoneId,
+        dashVehicles: List<DashVehicle>,
+        vehicles: List<Vehicle>,
+    ): String {
         val sb = StringBuilder()
         sb.append(Csv.row(SESSION_HEADER.map { Csv.textField(it) })).append('\n')
         for (s in rows) {
+            val vehicle = sessionVehicle(s, dashVehicles, vehicles)
             // Online duration: to the close if known, else the last event seen (still-live / orphaned).
             val durationMillis = (s.endedAt ?: s.lastEventAt) - s.startedAt
             sb.append(
@@ -156,6 +210,8 @@ object CsvExporter {
                         Csv.decimal(s.startOdometer),
                         Csv.decimal(s.lastOdometer),
                         Csv.decimal(sessionMiles(s)),
+                        Csv.textField(vehicle.id),
+                        Csv.textField(vehicle.label),
                     )
                 )
             ).append('\n')
@@ -217,6 +273,8 @@ object CsvExporter {
         generatedAtMillis: Long,
         expenses: List<ExpenseRecord>,
         fuel: List<FuelRecord>,
+        dashVehicles: List<DashVehicle>,
+        vehicles: List<Vehicle>,
     ): String {
         // Deductible miles grouped by the session's own local tax year (ascending).
         val milesByYear: Map<Int, Double> = sessions
@@ -251,6 +309,22 @@ object CsvExporter {
             line("total_deductible_miles", Csv.decimal(miles))
             line("estimated_mileage_deduction", Csv.money(IrsMileage.deduction(miles, year)))
             IrsMileage.fallbackNote(year)?.let { line("rate_note", Csv.textField(it)) }
+            val milesByVehicle = sessions.filter { taxYearOf(it.startedAt, zone) == year }
+                .groupBy { sessionVehicle(it, dashVehicles, vehicles) }
+                .mapValues { (_, group) -> group.sumOf { sessionMiles(it) ?: 0.0 } }
+            val orderedVehicles = milesByVehicle.keys.sortedWith(
+                compareBy<SessionVehicle> { it.label == UNKNOWN_VEHICLE }
+                    .thenBy { it.label }.thenBy { it.id },
+            )
+            // Rounded shares that always add up to the year's rounded total (review r1): each vehicle's miles in
+            // hundredths, rounded down, then the leftover hundredths go to the largest remainders.
+            val shares = apportionHundredths(orderedVehicles.map { milesByVehicle.getValue(it) }, miles)
+            orderedVehicles.forEachIndexed { index, vehicle ->
+                if (milesByVehicle.getValue(vehicle) <= 0.0) return@forEachIndexed
+                line("vehicle_id", Csv.textField(vehicle.id))
+                line("vehicle_label", Csv.textField(vehicle.label))
+                line("vehicle_deductible_miles", Csv.decimal(shares[index] / 100.0))
+            }
         }
         line("total_sessions", Csv.int(sessions.size))
         line("total_deliveries", Csv.int(deliveries.size))

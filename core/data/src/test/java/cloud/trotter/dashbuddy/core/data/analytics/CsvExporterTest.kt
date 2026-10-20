@@ -7,6 +7,10 @@ import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import java.time.Instant
 import cloud.trotter.dashbuddy.core.database.analytics.SessionRecordEntity
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionReportOperation
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.GasCar
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -190,19 +194,113 @@ class CsvExporterTest {
         val lines = out.sessionsCsv.trim().lines()
         assertEquals(
             "start,end,platform,duration_minutes,reported_earnings,report_source,deliveries,offers_received," +
-                "offers_accepted,offers_declined,offers_timeout,odometer_start,odometer_end,miles",
+                "offers_accepted,offers_declined,offers_timeout,odometer_start,odometer_end,miles,vehicle_id,vehicle_label",
             lines[0],
         )
         val cols = lines[1].split(",")
         assertEquals("DoorDash", cols[2])
         assertEquals("DASH_SUMMARY", cols[5])
         assertEquals("60.00", cols[3])        // 1h duration
-        assertEquals("42.00", cols.last())    // 1042 - 1000 miles
+        assertEquals("42.00", cols[13])    // 1042 - 1000 miles
+        assertEquals(listOf("", "Unknown vehicle"), cols.takeLast(2))
+        assertEquals(
+            "2026-07-05T13:03:27,2026-07-05T14:03:27,DoorDash,60.00,55.00,DASH_SUMMARY,3,5,3,1,1,1000.00,1042.00,42.00,,Unknown vehicle",
+            lines[1],
+        )
     }
 
     @Test fun sessionMiles_missingOdometer_isEmpty() {
         val out = CsvExporter.export(emptyList(), listOf(session(startOdo = null, lastOdo = null)), utc, generatedAt)
-        assertEquals("", out.sessionsCsv.trim().lines()[1].split(",").last())
+        assertEquals("", out.sessionsCsv.trim().lines()[1].split(",")[13])
+    }
+
+    @Test fun sessions_stampedVehicle_usesNameThenIdentityThenEveryEnglishType() {
+        val named = Vehicle("named", "My car", 0, GasCar(year = "2020", make = "Toyota", model = "Prius"))
+        val identity = Vehicle("identity", null, 0, GasCar(year = "2020", make = "Toyota", model = "Prius"))
+        val partial = Vehicle("partial", null, 0, GasCar(year = "", make = "Toyota", model = " "))
+        val types = VehicleType.entries.map { Vehicle(it.name, null, 0, it.defaultProfile()) }
+        val vehicles = listOf(named, identity, partial) + types
+        val out = CsvExporter.export(
+            emptyList(), vehicles.map { session(id = it.id) }, utc, generatedAt,
+            dashVehicles = vehicles.map { DashVehicle(it.id, it.id, 0, null) }, vehicles = vehicles,
+        )
+        assertEquals(
+            listOf("My car", "2020 Toyota Prius", "Toyota", "Car", "Hybrid", "Electric car",
+                "Motorcycle", "Scooter or moped", "E-bike", "Bicycle"),
+            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").last() },
+        )
+        assertEquals(vehicles.map { it.id }, out.sessionsCsv.trim().lines().drop(1).map { it.split(",")[14] })
+    }
+
+    @Test fun sessions_unknownRetiredAndMissingVehicles_keepHistoricalAttribution() {
+        val retired = Vehicle("retired", "Old car", 0, retiredAt = 1)
+        val out = CsvExporter.export(
+            emptyList(), listOf("unstamped", "unknown", "retired", "missing").map { session(id = it) }, utc, generatedAt,
+            dashVehicles = listOf(
+                DashVehicle("unknown", null, 0, null), DashVehicle("retired", "retired", 0, null),
+                DashVehicle("missing", "deleted-id", 0, null),
+            ),
+            vehicles = listOf(retired, Vehicle("active-today", "Today's car", 0)),
+        )
+        assertEquals(
+            listOf(listOf("", "Unknown vehicle"), listOf("", "Unknown vehicle"),
+                listOf("retired", "Old car"), listOf("deleted-id", "Unknown vehicle")),
+            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").takeLast(2) },
+        )
+    }
+
+    @Test fun vehicleText_formulaLeadersAreNeutralizedInSessionsAndSummary() {
+        val vehicle = Vehicle("=id", "=SUM(1,2)", 0)
+        val out = CsvExporter.export(
+            emptyList(), listOf(session()), utc, generatedAt,
+            dashVehicles = listOf(DashVehicle("s1", vehicle.id, 0, null)), vehicles = listOf(vehicle),
+        )
+        assertTrue(out.sessionsCsv.contains(",'=id,\"'=SUM(1,2)\"\n"))
+        assertTrue(out.summaryCsv.contains("vehicle_id,'=id\nvehicle_label,\"'=SUM(1,2)\"\n"))
+    }
+
+    @Test fun summary_vehicleMilesPerLocalTaxYear_sumToTotalAndSortUnknownLast() {
+        val zone = ZoneId.of("America/Chicago")
+        val yearEnd = Instant.parse("2026-01-01T00:30:00Z").toEpochMilli() // Still 2025 locally.
+        val rows = listOf(
+            session("z25", yearEnd, startOdo = 0.0, lastOdo = 10.0),
+            session("a25", millisIn(2025), startOdo = 0.0, lastOdo = 20.0),
+            session("z25-again", millisIn(2025), startOdo = 10.0, lastOdo = 15.0),
+            session("unknown25", millisIn(2025), startOdo = 0.0, lastOdo = 7.0),
+            session("a26", millisIn(2026), startOdo = 0.0, lastOdo = 30.0),
+            session("unknown26", millisIn(2026), startOdo = 0.0, lastOdo = 8.0),
+            session("missing26", millisIn(2026), startOdo = 0.0, lastOdo = 9.0),
+            session("no-miles", millisIn(2026), startOdo = null, lastOdo = null),
+        )
+        val stamps = listOf(
+            DashVehicle("z25", "z", 0, null), DashVehicle("z25-again", "z", 0, null),
+            DashVehicle("a25", "a", 0, null), DashVehicle("a26", "a", 0, null),
+            DashVehicle("unknown26", null, 0, null), DashVehicle("missing26", "missing", 0, null),
+            DashVehicle("no-miles", "unused", 0, null),
+        )
+        val vehicles = listOf(Vehicle("z", "Zebra", 0, retiredAt = 1), Vehicle("a", "Alpha", 0),
+            Vehicle("unused", "Unused", 0))
+        val summary = CsvExporter.export(emptyList(), rows, zone, generatedAt,
+            dashVehicles = stamps, vehicles = vehicles).summaryCsv
+        val blocks = summary.split("tax_year,").drop(1)
+        assertEquals(2, blocks.size)
+        for ((index, block) in blocks.withIndex()) {
+            val lines = block.lines()
+            val total = lines.single { it.startsWith("total_deductible_miles,") }.substringAfter(',').toDouble()
+            val vehicleMiles = lines.filter { it.startsWith("vehicle_deductible_miles,") }.map { it.substringAfter(',').toDouble() }
+            assertEquals(total, vehicleMiles.sum(), 0.0)
+            assertEquals(if (index == 0) 42.0 else 47.0, total, 0.0)
+            assertEquals(
+                if (index == 0) listOf("Alpha", "Zebra", "Unknown vehicle")
+                else listOf("Alpha", "Unknown vehicle", "Unknown vehicle"),
+                lines.filter { it.startsWith("vehicle_label,") }.map { it.substringAfter(',') },
+            )
+        }
+        assertTrue(summary.contains("vehicle_id,z\nvehicle_label,Zebra\nvehicle_deductible_miles,15.00\n"))
+        assertTrue(summary.contains("vehicle_id,missing\nvehicle_label,Unknown vehicle\nvehicle_deductible_miles,9.00\n"))
+        assertFalse(summary.contains("Unused"))
+        assertFalse(summary.contains("vehicle_estimated_mileage_deduction"))
+        assertTrue(summary.contains("estimated_mileage_deduction,29.40\nvehicle_id,a\n"))
     }
 
     @Test fun summary_deductionMath() {
@@ -259,6 +357,10 @@ class CsvExporterTest {
         assertTrue(
             summary.contains("rate_note,2027 rate unavailable in DashBuddy; estimate uses 2026 rate."),
         )
+        assertTrue(summary.contains(
+            "rate_note,2027 rate unavailable in DashBuddy; estimate uses 2026 rate.\n" +
+                "vehicle_id,\nvehicle_label,Unknown vehicle\nvehicle_deductible_miles,100.00\n",
+        ))
         // Disclaimer starts with a digit, so no cell in the summary begins with a formula leader.
         summary.trim().lines().forEach { row ->
             assertFalse("formula-leading cell leaked: $row", row.startsWith("=") || row.startsWith("@"))
@@ -376,4 +478,13 @@ class CsvExporterTest {
         )
     }
 
+
+    /** #1387 review r1: per-vehicle miles are rounded so they add up to the year's rounded total. */
+    @Test fun `per vehicle miles add up to the year total after rounding`() {
+        val shares = CsvExporter.apportionHundredths(listOf(1.004, 1.004), 2.008)
+        assertEquals(201L, shares.sum())
+        assertEquals(listOf(100L, 101L), shares.sorted())
+        assertEquals(listOf(33L, 33L, 34L).sum(), CsvExporter.apportionHundredths(listOf(1.0 / 3, 1.0 / 3, 1.0 / 3), 1.0).sum())
+        assertEquals(listOf(0L, 250L), CsvExporter.apportionHundredths(listOf(0.0, 2.5), 2.5))
+    }
 }

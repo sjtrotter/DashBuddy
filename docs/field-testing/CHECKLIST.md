@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] CSV vehicle column (#1387): export, open sessions.csv — dashes since 10-19 show the car's name, older ones 'Unknown vehicle'; summary.csv lists miles per car under each tax year. — Confirmed: 0/2
+
 - [active] Vehicle details (#1383): the gear opens a page with the car's cost per mile, running costs, dashes and miles, and last odometer reading above the form; Edit costs only on the active car; retire a car, find it under Retired, open it and Restore it. — Confirmed: 0/2
 
 - [active] 🆕 NEW — Dash vehicle (#1360): the start line names your active vehicle; switching within ten minutes says 'This dash: <name>' and the HUD chip follows; after ten minutes the chip stays on the dash's vehicle and tapping it shows the lock toast; a change from the Garage still says '<name> from your next dash'; the resting odometer comparison shows car and tracked miles even after reading a second vehicle. — Confirmed: 0/2

@@ -45,6 +45,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.NetProfit
 import cloud.trotter.dashbuddy.domain.model.event.AppEventCodec
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.state.Platform
 import java.time.Instant
 import java.time.ZoneId
@@ -848,6 +850,8 @@ class AnalyticsRepository @Inject constructor(
      * device [zone], and the export timestamp. Suspend, one-shot (not a Flow) — an export is a
      * snapshot the driver takes, not a live surface. No PII: customer/address hashes are excluded by
      * the exporter; store/merchant names are driver-owned and included.
+     * [dashVehicles] and [vehicles] pass through without range filtering: sessions resolve their
+     * historical vehicle by id, including stamps and saved vehicles created outside the range.
      */
     suspend fun buildCsvExport(
         zone: ZoneId,
@@ -856,6 +860,8 @@ class AnalyticsRepository @Inject constructor(
         end: Long = Long.MAX_VALUE,
         expenses: List<ExpenseRecord> = emptyList(),
         fuel: List<FuelRecord> = emptyList(),
+        dashVehicles: List<DashVehicle> = emptyList(),
+        vehicles: List<Vehicle> = emptyList(),
     ): CsvExporter.Bundle {
         val deliveries = analyticsDao.deliveriesBetween(start, end)
         val sessions = analyticsDao.sessionsBetween(start, end)
@@ -863,6 +869,7 @@ class AnalyticsRepository @Inject constructor(
             deliveries, sessions, zone, generatedAtMillis,
             expenses.filter { it.occurredAt >= start && it.occurredAt < end },
             fuel.filter { it.occurredAt >= start && it.occurredAt < end },
+            dashVehicles, vehicles,
         )
     }
 
