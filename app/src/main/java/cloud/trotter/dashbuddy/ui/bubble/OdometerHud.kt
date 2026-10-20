@@ -9,7 +9,6 @@ import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
 import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
-import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
@@ -33,41 +32,27 @@ internal class OdometerHud(
             onAddVehicle()
             return
         }
-        if (entry.show(activeVehicle = garage?.active != null, anyVehicles = garage?.unretired?.isNotEmpty() == true)) {
-            viewModel.reopenOdometer()
-        }
-    }
-
-    fun openVehicles() {
-        if (!viewModel.odometerLoaded.value) return
-        closeLog()
-        if (entry.showVehicles()) {
+        if (entry.show(anyVehicles = garage?.unretired?.isNotEmpty() == true)) {
             viewModel.reopenOdometer()
         }
     }
 
     fun dismiss() { entry.open = false }
 
-    /** Back inside the sheet: one page up, or closed from the reading page. */
-    fun back() { entry.back(viewModel.garage.value?.active != null) }
+    /** Back closes the reading sheet. */
+    fun back() { entry.back() }
 
     @Composable
     fun ObserveEntry() {
         LaunchedEffect(viewModel, entry) {
             viewModel.odometerSaveCompleted.collect {
-                if (entry.page == OdometerPage.READING) entry.open = false
+                entry.open = false
                 viewModel.odometerSaveHandled()
             }
         }
         LaunchedEffect(viewModel, entry) {
-            viewModel.odometerVehicleChanged.collect { change ->
-                when (change) {
-                    VehicleChange.SWITCHED -> entry.vehicleSwitched()
-                    is VehicleChange.RETIRED -> {
-                        val garage = viewModel.garageSnapshot()
-                        entry.vehicleRetired(change.wasActive, garage.active != null, garage.unretired.isNotEmpty())
-                    }
-                }
+            viewModel.odometerVehicleChanged.collect {
+                entry.vehicleSwitched()
                 viewModel.odometerVehicleChangeHandled()
             }
         }
@@ -75,7 +60,7 @@ internal class OdometerHud(
 
     /** Reading validation ticks once a minute for day-granular thresholds and the open span bound. */
     @Composable
-    fun Sheet() {
+    fun Sheet(vehicleChip: @Composable () -> Unit = {}) {
         val garage by viewModel.garage.collectAsStateWithLifecycle()
         val vehicle = garage?.active
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
@@ -83,24 +68,16 @@ internal class OdometerHud(
         val saving by viewModel.odometerSaving.collectAsStateWithLifecycle()
         val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
         val last = vehicle?.let { VehicleOdometerReading.latestFor(readings.orEmpty(), it.id) }
-        val check = if (entry.page == OdometerPage.READING) {
-            val now by rememberNow(60_000)
-            OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, readings.orEmpty()))
-        } else OdometerCheck.Empty
+        val now by rememberNow(60_000)
+        val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, readings.orEmpty()))
         Column(Modifier.fillMaxSize()) {
-            OdometerSheet(OdometerSheetModel(vehicle, garage?.unretired.orEmpty(), entry.reading, last, check, entry.page, saving,
+            OdometerSheet(OdometerSheetModel(vehicle, garage?.unretired.orEmpty(), entry.reading, last, check, saving,
                 writeFailed = if (garage?.readable == false) OdometerWriteFailure.UNREADABLE else writeFailed,
                 gpsLoaded = gpsTotal != null),
                 onDigit = entry::digit, onBackspace = entry::backspace,
                 onSave = { entry.reading?.let(viewModel::saveOdometerReading) },
-                onSwitchVehicle = { entry.page = OdometerPage.VEHICLES },
-                onSelectVehicle = { id ->
-                    if (id == vehicle?.id) {
-                        if (entry.switcherFromRow) entry.vehicleSwitched() else entry.page = OdometerPage.READING
-                    } else viewModel.selectVehicle(id)
-                },
-                onShowAddVehicle = onAddVehicle, onBack = ::back,
-                onRetireVehicle = viewModel::retireVehicle)
+                vehicleChip = vehicleChip,
+                onShowAddVehicle = onAddVehicle, onBack = ::back)
         }
     }
 

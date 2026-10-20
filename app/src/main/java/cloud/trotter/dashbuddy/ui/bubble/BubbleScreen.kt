@@ -1,5 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
+import android.widget.Toast
+import cloud.trotter.dashbuddy.R
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -18,8 +20,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
-import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowInput
-import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowMapper
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleChip
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
@@ -46,14 +47,36 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
     val odometerLoaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
-    val garage by viewModel.garage.collectAsStateWithLifecycle()
-    val dashVehicle by viewModel.dashVehicle.collectAsStateWithLifecycle()
+    val vehicleChip by viewModel.vehicleChip.collectAsStateWithLifecycle()
     val logOpenState = rememberSaveable { mutableStateOf(false) }
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
     val context = LocalContext.current
-    val openVehicleAdd = remember(context) {
-        { context.startActivity(MainActivity.routeIntent(context, Screen.VehicleAdd.route)) }
+    val openInApp: (String) -> Unit = remember(context) {
+        { route ->
+            context.startActivity(MainActivity.routeIntent(context, route))
+            context.findActivity()?.finish()
+        }
+    }
+    var vehicleMenuOpen by rememberSaveable { mutableStateOf(false) }
+    var odometerVehicleMenuOpen by rememberSaveable { mutableStateOf(false) }
+    val dismissVehicleMenus = { vehicleMenuOpen = false; odometerVehicleMenuOpen = false }
+    val selectVehicle: (String) -> Unit = { id ->
+        dismissVehicleMenus()
+        // Review r1: the lock is re-checked at the pick (a menu opened at 9:59 must not swap at 10:01),
+        // and picking the already-active vehicle is a no-op so an entered odometer reading survives.
+        when {
+            viewModel.vehicleSwapLocked() -> Toast.makeText(context, R.string.hud_vehicle_locked, Toast.LENGTH_SHORT).show()
+            id != vehicleChip?.activeId -> viewModel.selectVehicle(id)
+        }
+    }
+    val openVehicleAdd = remember(openInApp) { { openInApp(Screen.VehicleAdd.route) } }
+    val addVehicle = { dismissVehicleMenus(); openVehicleAdd() }
+    val clickVehicleChip: (Boolean) -> Unit = { inSheet ->
+        dismissVehicleMenus()
+        if (viewModel.vehicleSwapLocked()) {
+            Toast.makeText(context, R.string.hud_vehicle_locked, Toast.LENGTH_SHORT).show()
+        } else if (inSheet) odometerVehicleMenuOpen = true else vehicleMenuOpen = true
     }
     val odometer = rememberOdometerHud(viewModel, closeLog, openVehicleAdd)
     val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
@@ -69,8 +92,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             lastSheet = next
         }
     }
-    // The four sheet opens (including the footer and both goal pills) and swap as the fifth route
-    // share the same exclusive rule.
+    // The four sheet opens (including the footer and both goal pills) share the same exclusive rule.
     val openSheet: (EntrySheet?) -> Unit = remember(route, odometer, cashTip, expense, goalHud) {
         { next ->
             if (next != null) route(next)
@@ -92,13 +114,19 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cashTipCue = cashTip.Cue()
     val expenseCue = expense.Cue()
     val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
-    val entrySheet: @Composable ColumnScope.() -> Unit = remember(odometer, cashTip, expense, goalHud, lastSheet) {
-        { when (lastSheet) {
+    LaunchedEffect(odometer.open) { dismissVehicleMenus() }
+    val entrySheet: @Composable ColumnScope.() -> Unit = {
+        when (lastSheet) {
             EntrySheet.CASH_TIP -> cashTip.Sheet()
-            EntrySheet.ODOMETER -> odometer.Sheet()
+            EntrySheet.ODOMETER -> odometer.Sheet {
+                vehicleChip?.let {
+                    VehicleChip(it.forActive(), odometerVehicleMenuOpen, { clickVehicleChip(true) },
+                        dismissVehicleMenus, selectVehicle, addVehicle)
+                }
+            }
             EntrySheet.EXPENSE -> expense.Sheet()
             EntrySheet.GOAL -> goalHud.Sheet()
-        } }
+        }
     }
     val entryUndo: @Composable () -> Unit = remember(odometer, cashTip, expense, viewModel) {
         {
@@ -163,17 +191,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         pillGoal, goalDay?.date, goal, goalMark, goalEditing, editKey)
     LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, garage, dashVehicle) {
+        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, vehicleChip) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            goalSheetOpen = goalEditing, editedGoalKey = editKey, dashVehicle = dashVehicle,
-            vehicle = VehicleRowMapper.map(garage?.let {
-                VehicleRowInput(it.active,
-                    switchable = odometerLoaded && (it.unretired.size > 1 || (it.active == null && it.unretired.isNotEmpty())),
-                    readable = it.readable)
-            }))
+            goalSheetOpen = goalEditing, editedGoalKey = editKey, vehicleChip = vehicleChip)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }
@@ -199,8 +222,11 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             undo = entryUndo,
             undoVisible = entryUndoVisible,
             restingFooter = odometerFooter,
-            onSwapVehicle = { route(EntrySheet.ODOMETER); odometer.openVehicles() },
-            onAddVehicle = openVehicleAdd,
+            vehicleMenuOpen = vehicleMenuOpen,
+            onVehicleChipClick = { clickVehicleChip(false) },
+            onDismissVehicleMenu = dismissVehicleMenus,
+            onSelectVehicle = selectVehicle,
+            onAddVehicle = addVehicle,
             // Matches Material 3 ScaffoldDefaults: system bars plus display cutouts.
             modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
             onSelectPlatform = viewModel::selectPlatform,
@@ -213,7 +239,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
                     DockKind.ODOMETER -> openOdometer()
                     DockKind.LOG -> logOpen = true
                     DockKind.NOW -> logOpen = false
-                    DockKind.SETTINGS -> context.startActivity(MainActivity.routeIntent(context, Screen.SettingsHome.route))
+                    DockKind.SETTINGS -> openInApp(Screen.SettingsHome.route)
                     DockKind.CASH_TIP -> openSheet(EntrySheet.CASH_TIP)
                     DockKind.EXPENSE -> openSheet(EntrySheet.EXPENSE)
                 }

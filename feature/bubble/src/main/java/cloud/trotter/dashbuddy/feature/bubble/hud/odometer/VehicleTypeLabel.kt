@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.feature.bubble.hud.odometer
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -27,3 +30,12 @@ fun vehicleTypeLabel(type: VehicleType): Int = when (type) {
  */
 @Composable
 fun Vehicle.displayName(): String = identityName ?: stringResource(vehicleTypeLabel(profile.vehicleType))
+
+fun vehicleTypeIcon(type: VehicleType): ImageVector = when (type) {
+    VehicleType.CAR, VehicleType.HYBRID -> Icons.Outlined.DirectionsCar
+    VehicleType.EV -> Icons.Outlined.ElectricCar
+    VehicleType.MOTORCYCLE -> Icons.Outlined.TwoWheeler
+    VehicleType.SCOOTER -> Icons.Outlined.Moped
+    VehicleType.E_BIKE -> Icons.Outlined.ElectricBike
+    VehicleType.BICYCLE -> Icons.Outlined.PedalBike
+}

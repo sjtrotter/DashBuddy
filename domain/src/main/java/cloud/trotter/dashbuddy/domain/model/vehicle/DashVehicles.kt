@@ -24,6 +24,10 @@ sealed interface DashVehicleAction {
 }
 
 object DashVehicles {
+    /** The vehicle cannot change while any live dash is past its grace window. */
+    fun swapLocked(live: List<LiveDash>, now: Long, windowMs: Long): Boolean =
+        live.any { now - it.startedAt > windowMs }
+
     /** Durable sequence, not wall-clock order, decides both the first and latest stamp. */
     fun perDash(stamps: List<DashVehicleStamp>): List<DashVehicle> =
         stamps.sortedBy { it.sequenceId }.groupBy { it.sessionId }.values.map { history ->

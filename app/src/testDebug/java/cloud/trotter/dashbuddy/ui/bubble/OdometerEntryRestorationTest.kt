@@ -14,17 +14,17 @@ import org.robolectric.annotation.Config
 class OdometerEntryRestorationTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun `restored row switcher still closes on Back and selection`() {
+    @Test fun `restored reading retains digits until a switch and closes on Back`() {
         val restoration = StateRestorationTester(compose)
         lateinit var entry: OdometerEntryState
         restoration.setContent { entry = rememberOdometerEntryState() }
-        compose.runOnIdle { entry.showVehicles() }
+        compose.runOnIdle { entry.show(anyVehicles = true) }
         restoration.emulateSavedInstanceStateRestore()
         compose.runOnIdle {
             assertTrue(entry.open)
-            entry.back(hasVehicle = true)
+            entry.back()
             assertFalse(entry.open)
-            entry.showVehicles()
+            entry.show(anyVehicles = true)
             entry.digit(5)
         }
         restoration.emulateSavedInstanceStateRestore()
@@ -32,7 +32,7 @@ class OdometerEntryRestorationTest {
             assertTrue(entry.open)
             assertEquals(5, entry.reading)
             entry.vehicleSwitched()
-            assertFalse(entry.open)
+            assertTrue(entry.open)
             assertNull(entry.reading)
         }
     }

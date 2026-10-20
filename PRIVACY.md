@@ -211,6 +211,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
   Since #1360 the event log also stores, per dash, which saved vehicle was active and the app's GPS
   total at that moment (`DASH_VEHICLE`, with the dash id in its payload, the time and START/SWAP kind).
+  The header vehicle chip and swap menu (#1379) use these existing local records; nothing new is read, stored or sent.
   Switching within the first ten minutes can append a new stamp; the latest vehicle wins while the
   first stamp keeps the start time and GPS total. The stamps are part of the event log, so Android backup
   and device transfer include them with the rest of your history; DashBuddy never sends them anywhere

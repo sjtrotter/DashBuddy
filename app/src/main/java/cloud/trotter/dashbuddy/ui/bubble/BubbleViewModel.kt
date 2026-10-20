@@ -71,6 +71,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.*
 import javax.inject.Inject
 
 @HiltViewModel
@@ -91,6 +93,7 @@ class BubbleViewModel @Inject constructor(
     odometerReadingRepository: OdometerReadingRepository,
     dashVehicleRepository: DashVehicleRepository,
     private val clock: Clock,
+    private val vehicleSwapLock: VehicleSwapLock,
 ) : ViewModel() {
 
     internal val expenseActions = ExpenseActions(viewModelScope, ledgerRepository, clock)
@@ -104,7 +107,7 @@ class BubbleViewModel @Inject constructor(
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark
     internal fun cashTipDeliveries(sessionId: String) = analyticsRepository.deliveriesForSession(sessionId)
 
-    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository, clock)
+    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository)
     val garage: StateFlow<Garage?> = garageRepository.garage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings: StateFlow<List<VehicleOdometerReading>?> = odometerReadingRepository.readings
@@ -126,9 +129,7 @@ class BubbleViewModel @Inject constructor(
     fun reopenOdometer() = odometerActions.reopen()
     fun saveOdometerReading(miles: Int) { garage.value?.active?.let { odometerActions.save(it.id, miles) } }
     fun selectVehicle(id: String) = odometerActions.select(id)
-    fun retireVehicle(id: String) = odometerActions.retire(id)
-    // Read the committed snapshot when handling a retirement; stateIn may still hold the old car.
-    suspend fun garageSnapshot(): Garage = garageRepository.garage.first()
+    fun vehicleSwapLocked() = vehicleSwapLock.locked()
 
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
 
@@ -264,10 +265,16 @@ class BubbleViewModel @Inject constructor(
         platform?.let { state.regions.platforms[it] }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val dashVehicle: StateFlow<Vehicle?> = combine(focusedRegion, stamps, garage) { region, stamps, garage ->
+    private val dashVehicle: StateFlow<Vehicle?> = combine(focusedRegion, stamps, garage) { region, stamps, garage ->
         val id = DashVehicles.perDash(stamps).firstOrNull { it.sessionId == region?.session?.sessionId }?.vehicleId
             ?: return@combine null
         garage?.takeIf { it.readable }?.vehicles?.firstOrNull { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val vehicleChip: StateFlow<VehicleChipModel?> = combine(garage, dashVehicle, focusedRegion) { garage, vehicle, region ->
+        VehicleChipMapper.map(garage?.let {
+            VehicleChipInput(it.active, vehicle, region?.session != null, it.vehicles, it.readable)
+        })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Session earnings: carries the last known value forward through states

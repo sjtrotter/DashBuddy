@@ -4,6 +4,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DashVehiclesTest {
+    @Test fun `swap is unlocked without live dashes`() {
+        assertFalse(DashVehicles.swapLocked(emptyList(), 600_101, 600_000))
+    }
+    @Test fun `swap is unlocked at the inclusive window edge`() {
+        assertFalse(DashVehicles.swapLocked(listOf(LiveDash("dash", 100)), 600_100, 600_000))
+    }
+    @Test fun `swap is locked past the window`() {
+        assertTrue(DashVehicles.swapLocked(listOf(LiveDash("dash", 100)), 600_101, 600_000))
+    }
+    @Test fun `one old dash locks both live dashes`() {
+        assertTrue(DashVehicles.swapLocked(listOf(LiveDash("new", 600_100), LiveDash("old", 100)), 600_101, 600_000))
+    }
+
     private fun stamp(session: String = "dash", vehicle: String? = "malibu", gps: Double? = 10.0,
         at: Long = 100, sequence: Long = 1, kind: DashVehicleKind = DashVehicleKind.START) =
         DashVehicleStamp(session, vehicle, gps, at, sequence, kind)

@@ -177,13 +177,11 @@
     <string name="hud_dock_odometer">Odometer</string>
     <string name="hud_keypad_backspace">Backspace</string>
     <string name="hud_odometer_title">Odometer</string>
-    <string name="hud_vehicle_none">No vehicle</string>
-    <string name="hud_vehicle_add">Add</string>
-    <string name="hud_odometer_switch">Switch vehicle</string>
+    <string name="hud_vehicle_none">None</string>
+    <string name="hud_vehicle_unavailable">Unavailable</string>
+    <string name="hud_vehicle_add_menu">Add vehicle…</string>
+    <string name="hud_vehicle_cd_change">%1$s, change vehicle</string>
     <string name="hud_odometer_back">Back</string>
-    <string name="hud_odometer_vehicles">Vehicles</string>
-    <string name="hud_odometer_active">Active</string>
-    <string name="hud_odometer_remove_vehicle">Remove %1$s</string>
     <string name="hud_odometer_add_vehicle">Add vehicle</string>
     <string name="hud_odometer_no_vehicle">No vehicle. Add one to log its odometer.</string>
     <string name="hud_odometer_last">Last %1$s mi, %2$s</string>
