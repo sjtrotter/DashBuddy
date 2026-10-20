@@ -45,13 +45,13 @@ internal abstract class HudScreenFixture {
     )
 
     protected fun state(
-        dashVehicle: cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle? = null,
+        vehicleChip: cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleChipModel? = null,
         flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
         profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false, cashTipCue: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
             Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
-        flow = flow, platform = Platform.DoorDash, switchable = emptyList(), dashVehicle = dashVehicle,
+        flow = flow, platform = Platform.DoorDash, switchable = emptyList(), vehicleChip = vehicleChip,
         earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
         net = profit?.let { SessionNet("live", it, 0.0, 0.0) },
         goal = goal, todayProfit = today,

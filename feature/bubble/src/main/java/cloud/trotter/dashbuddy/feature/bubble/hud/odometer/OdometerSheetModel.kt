@@ -2,8 +2,6 @@ package cloud.trotter.dashbuddy.feature.bubble.hud.odometer
 
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 
-enum class OdometerPage { READING, VEHICLES }
-
 /** Mirrors :app's GarageWriteFailure vocabulary; this feature cannot depend on :app.
  * The editor additionally uses GONE for stale vehicle links.
  */
@@ -16,7 +14,6 @@ data class OdometerSheetModel(
     val readingMiles: Int?,
     val last: LastOdometerReading?,
     val check: OdometerCheck,
-    val page: OdometerPage = OdometerPage.READING,
     val saving: Boolean = false,
     val writeFailed: OdometerWriteFailure = OdometerWriteFailure.NONE,
     val gpsLoaded: Boolean = false,

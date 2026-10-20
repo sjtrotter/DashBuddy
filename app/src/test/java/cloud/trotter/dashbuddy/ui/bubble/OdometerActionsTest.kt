@@ -35,13 +35,11 @@ class OdometerActionsTest {
     private val garage: GarageRepository = mock {
         on { garage } doReturn flowOf(Garage(listOf(Vehicle("civic", "Civic", 0)), "civic", true))
         on { selectVehicle(any()) } doReturn true
-        on { retire(any(), any()) } doReturn true
     }
     private val readings: OdometerReadingRepository = mock()
-    private val clock = Clock.fixed(Instant.ofEpochMilli(100), ZoneOffset.UTC)
 
     @Test fun `successful append publishes the saved notice`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         assertTrue(actions.saving.value)
         runCurrent()
@@ -53,7 +51,7 @@ class OdometerActionsTest {
 
     @Test fun `failed append keeps the sheet available for retry`() = runTest {
         whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         assertNull(actions.notice.value)
@@ -64,7 +62,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a completed save emits once`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         val completions = mutableListOf<Unit>()
         backgroundScope.launch { actions.saveCompleted.collect { completions += it; actions.saveHandled() } }
         runCurrent()
@@ -86,7 +84,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a late collector sees one pending completion`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         val completions = mutableListOf<Unit>()
@@ -96,7 +94,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a handled completion is not replayed`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         val completions = mutableListOf<Unit>()
@@ -113,9 +111,9 @@ class OdometerActionsTest {
     }
 
     @Test fun `a refused select emits nothing`() = runTest {
-        // A stale switcher row: the repository refuses the id, so nothing changed and no event may fire or replay.
+        // A stale menu item: the repository refuses the id, so nothing changed and no event may fire or replay.
         whenever(garage.selectVehicle("stale")).thenReturn(false)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         val changes = mutableListOf<VehicleChange>()
         backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
         runCurrent()
@@ -131,7 +129,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a selected vehicle emits SWITCHED once`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         val changes = mutableListOf<VehicleChange>()
         backgroundScope.launch { actions.vehicleChanged.collect { changes += it } }
         runCurrent()
@@ -141,68 +139,31 @@ class OdometerActionsTest {
         assertEquals(listOf(VehicleChange.SWITCHED), changes)
     }
 
-    @Test fun `retire emits RETIRED once`() = runTest {
-        whenever(garage.retire("civic", 100)).thenReturn(true).thenReturn(false)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        val changes = mutableListOf<VehicleChange>()
-        backgroundScope.launch { actions.vehicleChanged.collect { changes += it; actions.vehicleChangeHandled() } }
-        runCurrent()
-        actions.retire("civic")
-        runCurrent()
-        actions.retire("civic")
-        runCurrent()
-        verify(garage, times(2)).retire("civic", 100)
-        assertEquals(listOf(VehicleChange.RETIRED("civic", true)), changes)
-        assertTrue(actions.vehicleChanged.replayCache.isEmpty())
-        verifyNoInteractions(readings)
-    }
-
-    @Test fun `a failed retire emits nothing and can be retried`() = runTest {
-        whenever(garage.retire("civic", 100)).thenThrow(VehiclesUnreadableException()).thenReturn(true)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        actions.retire("civic")
-        runCurrent()
-        assertTrue(actions.vehicleChanged.replayCache.isEmpty())
-        assertEquals(OdometerWriteFailure.UNREADABLE, actions.failed.value)
-        actions.retire("civic")
-        runCurrent()
-        assertEquals(listOf(VehicleChange.RETIRED("civic", true)), actions.vehicleChanged.replayCache)
-        assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
-    }
-
     @Test fun `a late collector sees a vehicle change until handled`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        for (change in listOf(VehicleChange.SWITCHED, VehicleChange.RETIRED("civic", true))) {
-            when (change) {
-                VehicleChange.SWITCHED -> actions.select("civic")
-                is VehicleChange.RETIRED -> actions.retire(change.id)
-            }
-            runCurrent()
-            val changes = mutableListOf<VehicleChange>()
-            val collector = backgroundScope.launch {
-                actions.vehicleChanged.collect { changes += it; actions.vehicleChangeHandled() }
-            }
-            runCurrent()
-            assertEquals(listOf(change), changes)
-            collector.cancel()
-            val lateChanges = mutableListOf<VehicleChange>()
-            val lateCollector = backgroundScope.launch { actions.vehicleChanged.collect { lateChanges += it } }
-            runCurrent()
-            assertTrue(lateChanges.isEmpty())
-            lateCollector.cancel()
+        val actions = OdometerActions(backgroundScope, garage, readings)
+        actions.select("civic")
+        runCurrent()
+        val changes = mutableListOf<VehicleChange>()
+        val collector = backgroundScope.launch {
+            actions.vehicleChanged.collect { changes += it; actions.vehicleChangeHandled() }
         }
+        runCurrent()
+        assertEquals(listOf(VehicleChange.SWITCHED), changes)
+        collector.cancel()
+        val lateChanges = mutableListOf<VehicleChange>()
+        val lateCollector = backgroundScope.launch { actions.vehicleChanged.collect { lateChanges += it } }
+        runCurrent()
+        assertTrue(lateChanges.isEmpty())
+        lateCollector.cancel()
     }
 
     @Test fun `a vehicle select keeps a save failure visible`() = runTest {
         whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         actions.select("civic")
-        runCurrent()
-        assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
-        actions.retire("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         doSuspendableAnswer { 1L }.whenever(readings).record(any(), any())
@@ -214,7 +175,7 @@ class OdometerActionsTest {
     @Test fun `a successful select clears a select failure`() = runTest {
         whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
             .thenReturn(true)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
@@ -228,7 +189,7 @@ class OdometerActionsTest {
     @Test fun `a refused select keeps a vehicle failure`() = runTest {
         whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
         whenever(garage.selectVehicle("stale")).thenReturn(false)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
@@ -241,7 +202,7 @@ class OdometerActionsTest {
 
     @Test fun `a reading save keeps a vehicle failure visible`() = runTest {
         whenever(garage.selectVehicle("civic")).thenThrow(IllegalStateException("storage unavailable"))
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
@@ -254,7 +215,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `double tap appends only once`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         actions.save("civic", 52_388)
         runCurrent()
@@ -269,7 +230,7 @@ class OdometerActionsTest {
             1L
         }.whenever(readings).record(any(), any())
         val scope = CoroutineScope(coroutineContext + Job())
-        val actions = OdometerActions(scope, garage, readings, clock)
+        val actions = OdometerActions(scope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         assertTrue(actions.saving.value)
@@ -283,15 +244,13 @@ class OdometerActionsTest {
     }
 
     @Test fun `vehicle actions use the garage without writing a reading`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        actions.retire("civic"); runCurrent()
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.select("civic"); runCurrent()
-        verify(garage).retire("civic", 100)
         verify(garage).selectVehicle("civic")
         verifyNoInteractions(readings)
     }
     @Test fun `the notice clears itself after ten seconds`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         val notice = actions.notice.value!!
@@ -304,7 +263,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `a newer notice outlives the older timer`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         val first = actions.notice.value!!
@@ -326,7 +285,7 @@ class OdometerActionsTest {
     }
 
     @Test fun `an identical second save gets its own ten seconds`() = runTest {
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         val first = actions.notice.value!!
@@ -347,14 +306,14 @@ class OdometerActionsTest {
         assertNull(actions.notice.value)
     }
 
-    @Test fun `the reading uses the repository clock instead of the action clock`() = runTest {
+    @Test fun `the reading uses the repository clock`() = runTest {
         val events: AppEventRepo = mock()
         val gps: OdometerRepository = mock()
         whenever(events.getSequencedEventsByType(AppEventType.ODOMETER_READING)).thenReturn(flowOf(emptyList()))
         whenever(gps.totalMiles()).thenReturn(123.5)
         val repositoryClock = Clock.fixed(Instant.ofEpochMilli(900), ZoneOffset.UTC)
         val repository = OdometerReadingRepository(events, gps, repositoryClock)
-        val actions = OdometerActions(backgroundScope, garage, repository, clock)
+        val actions = OdometerActions(backgroundScope, garage, repository)
         actions.save("civic", 52_388)
         runCurrent()
         verify(events).appendUserEvent(AppEvent(AppEventType.ODOMETER_READING, 900, null,
@@ -365,7 +324,7 @@ class OdometerActionsTest {
         // A repository answer runs on the test scheduler and suspends the append for eleven seconds.
         doSuspendableAnswer { delay(11_000); 1L }
             .whenever(readings).record(any(), any())
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.save("civic", 52_388)
         runCurrent()
         advanceTimeBy(11_000)
@@ -385,19 +344,11 @@ class OdometerActionsTest {
 
     @Test fun `an unreadable garage is its own failure`() = runTest {
         whenever(garage.selectVehicle(any())).thenThrow(VehiclesUnreadableException())
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
+        val actions = OdometerActions(backgroundScope, garage, readings)
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.UNREADABLE, actions.failed.value)
         assertFalse(actions.saving.value)
         assertNull(actions.notice.value)
-    }
-
-    @Test fun `retiring a parked car emits its id without marking it active`() = runTest {
-        whenever(garage.retire("parked", 100)).thenReturn(true)
-        val actions = OdometerActions(backgroundScope, garage, readings, clock)
-        actions.retire("parked")
-        runCurrent()
-        assertEquals(listOf(VehicleChange.RETIRED("parked", false)), actions.vehicleChanged.replayCache)
     }
 }

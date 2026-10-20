@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.domain.format.formatShortDate
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.bubble.MutableClock
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.*
 import org.junit.Assert.*
 import java.util.Locale
 import org.junit.After
@@ -85,8 +86,9 @@ class OdometerSheetTest {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     Column(hostModifier) {
                         OdometerSheet(model, onDigit = {}, onBackspace = {}, onSave = { saved++ },
-                            onSwitchVehicle = {}, onSelectVehicle = {}, onShowAddVehicle = { addOpened = true },
-                            onBack = {}, onRetireVehicle = {})
+                            vehicleChip = { VehicleChip(VehicleChipModel(model.vehicle, model.vehicles, model.vehicle?.id, false),
+                                false, {}, {}, {}, {}) },
+                            onShowAddVehicle = { addOpened = true }, onBack = {})
                     }
                 }
             }
@@ -140,17 +142,10 @@ class OdometerSheetTest {
 
     @Test fun `an unreadable garage says so`() {
         model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
-            page = OdometerPage.VEHICLES, writeFailed = OdometerWriteFailure.UNREADABLE)
+            writeFailed = OdometerWriteFailure.UNREADABLE)
         show()
         compose.onNodeWithText("Saved vehicles could not be read.").assertIsDisplayed()
         compose.onNodeWithText("Could not save. Try again.").assertDoesNotExist()
-    }
-    @Test fun `switcher Add vehicle invokes the navigation callback`() {
-        model = model.copy(page = OdometerPage.VEHICLES)
-        show()
-        compose.onNodeWithTag("vehicle.add").performClick()
-        assertTrue(addOpened)
-        compose.onNodeWithTag("vehicle.civic").assertIsDisplayed()
     }
 
     @Test fun `fewer than tracked shows add vehicle link`() {

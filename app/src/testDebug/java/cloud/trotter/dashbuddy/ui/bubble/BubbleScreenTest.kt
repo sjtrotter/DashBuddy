@@ -13,6 +13,8 @@ import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.state.*
 import cloud.trotter.dashbuddy.feature.bubble.cards.BubbleCards
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleChipModel
+import org.robolectric.shadows.ShadowToast
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerWriteFailure
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
@@ -71,7 +73,7 @@ class BubbleScreenTest {
         whenever(vm.garage).thenReturn(MutableStateFlow(Garage(emptyList(), null, readable = true)))
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.stamps).thenReturn(MutableStateFlow(emptyList()))
-        whenever(vm.dashVehicle).thenReturn(MutableStateFlow(null))
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(null, emptyList(), null, false)))
         whenever(vm.odometerNotice).thenReturn(MutableStateFlow(null))
         whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
         whenever(vm.odometerWriteFailed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))
@@ -101,94 +103,57 @@ class BubbleScreenTest {
         settle()
     }
 
-    @Test fun `row swap follows loaded readings and available vehicle alternatives`() {
+    @Test fun `locked chip shows toast and opens no menu`() {
+        val vm = model()
+        whenever(vm.vehicleSwapLocked()).thenReturn(true)
+        show(vm)
+        compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
+        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
+        verify(vm, never()).selectVehicle(any())
+    }
+
+    @Test fun `unlocked chip opens menu and selecting calls existing path once`() {
         val civic = Vehicle("civic", "Civic", 0)
         val bike = Vehicle("bike", "Bike", 1)
-        val garage = MutableStateFlow<Garage?>(Garage(listOf(civic, bike), civic.id, readable = true))
-        val loaded = MutableStateFlow(false)
         val vm = model()
-        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
-        whenever(vm.garage).thenReturn(garage)
-        whenever(vm.odometerLoaded).thenReturn(loaded)
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(civic, listOf(civic, bike), civic.id, false)))
+        whenever(vm.vehicleSwapLocked()).thenReturn(false)
         show(vm)
-        compose.onNodeWithTag("hud.vehicle.row").assertIsDisplayed()
-        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
-        compose.runOnIdle { loaded.value = true }; settle()
-        compose.onNodeWithTag("hud.vehicle.swap").assertIsDisplayed()
-        compose.runOnIdle { garage.value = Garage(listOf(civic), civic.id, readable = true) }; settle()
-        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
-        compose.runOnIdle {
-            garage.value = Garage(listOf(civic, bike.copy(retiredAt = 2)), civic.id, readable = true)
-        }; settle()
-        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
-        compose.runOnIdle { garage.value = Garage(listOf(civic), null, readable = true) }; settle()
-        compose.onNodeWithText("No vehicle").assertIsDisplayed()
-        compose.onNodeWithTag("hud.vehicle.swap").assertIsDisplayed()
-        compose.runOnIdle { loaded.value = false }; settle()
-        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
-        compose.runOnIdle {
-            loaded.value = true
-            garage.value = Garage(emptyList(), null, readable = true)
-        }; settle()
-        compose.onNodeWithTag("hud.vehicle.swap").assertDoesNotExist()
+        compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.menu").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
+        repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
+        verify(vm, times(1)).selectVehicle("bike")
+        verify(vm, times(1)).selectVehicle(any())
     }
 
-    /** The sheet host covers the row while a sheet is open, so the swap can only follow a CLOSED sheet;
-     *  the route step keeps the host from re-showing that earlier sheet's content. */
-    @Test fun `row swap after another sheet was last open shows the switcher, and Back leaves all closed`() {
+    /** Review r1: the lock is re-checked at the pick, so a menu opened inside the window cannot swap after it. */
+    @Test fun `a pick after the window closed shows the toast and does not swap`() {
         val civic = Vehicle("civic", "Civic", 0)
+        val bike = Vehicle("bike", "Bike", 1)
         val vm = model()
-        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
-        whenever(vm.lastSession).thenReturn(MutableStateFlow(SessionRecord(
-            "dash", Platform.DoorDash, clock.millis() - 3_600_000, clock.millis() - 60_000,
-            reportedEarnings = 20.0, reportedDurationMillis = null, miles = 5.0,
-            deliveries = 1, jobsCompleted = 1, offersReceived = 1, offersAccepted = 1, offersDeclined = 0, offersTimeout = 0,
-        )))
-        whenever(vm.garage).thenReturn(MutableStateFlow(
-            Garage(listOf(civic, Vehicle("bike", "Bike", 1)), civic.id, readable = true)))
-        whenever(vm.todayProfit).thenReturn(MutableStateFlow(20.0))
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(civic, listOf(civic, bike), civic.id, false)))
+        whenever(vm.vehicleSwapLocked()).thenReturn(false, true)
         show(vm)
-        for (tag in listOf("hud.dock.CASH_TIP", "hud.dock.EXPENSE", "hud.goal")) {
-            compose.onNodeWithTag(tag).performClick(); settle()
-            compose.mainClock.advanceTimeBy(400)
-            compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
-            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }; settle()
-            compose.mainClock.advanceTimeBy(400)
-            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
-            compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
-            compose.mainClock.advanceTimeBy(400)
-            compose.onNodeWithTag("vehicle.bike").assertIsDisplayed()
-            compose.onNodeWithTag("goal.sheet").assertDoesNotExist()
-            compose.onNodeWithTag("expense.tile.car_care").assertDoesNotExist()
-            compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }; settle()
-            compose.mainClock.advanceTimeBy(400)
-            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
-        }
-    }
-
-    @Test fun `row selection closes for both the active vehicle and a completed switch`() {
-        val civic = Vehicle("civic", "Civic", 0)
-        val vm = model()
-        val changes = MutableSharedFlow<VehicleChange>(extraBufferCapacity = 1)
-        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
-        whenever(vm.garage).thenReturn(MutableStateFlow(
-            Garage(listOf(civic, Vehicle("bike", "Bike", 1)), civic.id, readable = true)))
-        whenever(vm.odometerVehicleChanged).thenReturn(changes)
-        show(vm)
-        compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
-        compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithTag("vehicle.civic").performClick(); settle()
-        compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+        compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
+        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
         verify(vm, never()).selectVehicle(any())
-        compose.onNodeWithTag("hud.vehicle.swap").performClick(); settle()
-        compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithTag("vehicle.bike").performClick(); settle()
-        verify(vm).selectVehicle("bike")
-        compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
-        compose.runOnIdle { assertTrue(changes.tryEmit(VehicleChange.SWITCHED)) }; settle()
-        compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+    }
+
+    /** Review r1: picking the vehicle that is already active changes nothing (an entered reading survives). */
+    @Test fun `picking the active vehicle is a no op`() {
+        val civic = Vehicle("civic", "Civic", 0)
+        val bike = Vehicle("bike", "Bike", 1)
+        val vm = model()
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(civic, listOf(civic, bike), civic.id, false)))
+        whenever(vm.vehicleSwapLocked()).thenReturn(false)
+        show(vm)
+        compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.option.civic").performClick(); settle()
+        repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
+        verify(vm, never()).selectVehicle(any())
     }
 
     @Test fun `typed expense chip reopens the actual entry field prefilled`() {
@@ -235,30 +200,40 @@ class BubbleScreenTest {
         verify(vm, never()).reopenOdometer()
     }
 
-    @Test fun `the resting row Add and empty garage dock open the same Garage Add form`() {
-        val vm = model()
-        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
-        show(vm)
-        for (tag in listOf("hud.vehicle.add", "hud.dock.ODOMETER")) {
-            compose.onNodeWithTag(tag).performClick(); settle()
-            assertVehicleAddStarted()
-            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
-        }
-        verify(vm, never()).reopenOdometer()
+    @Test fun `chip Add starts the Garage Add form and finishes bubble`() {
+        show()
+        compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.add").performClick(); settle()
+        assertVehicleAddStarted()
+        assertTrue(compose.activity.isFinishing)
     }
 
-    @Test fun `the odometer switcher Add opens the Garage Add form and leaves the switcher open`() {
+    @Test fun `odometer chip Add starts the Garage Add form and finishes bubble`() {
         val civic = Vehicle("civic", "Civic", 0)
         val vm = model()
-        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, readable = true)))
+        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, true)))
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(civic, listOf(civic), civic.id, false)))
         show(vm)
         compose.onNodeWithTag("hud.dock.ODOMETER").performClick(); settle()
         compose.mainClock.advanceTimeBy(400)
-        compose.onNodeWithContentDescription("Switch vehicle").performClick(); settle()
-        compose.onNodeWithTag("vehicle.add").performClick(); settle()
+        compose.onNode(hasTestTag("hud.vehicle.chip") and hasAnyAncestor(hasTestTag("odometer.sheet")))
+            .performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.add").performClick(); settle()
         assertVehicleAddStarted()
-        compose.onNodeWithTag("vehicle.civic").assertIsDisplayed()
-        compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
+        assertTrue(compose.activity.isFinishing)
+    }
+
+    @Test fun `Settings starts the app and finishes bubble`() {
+        val vm = model()
+        whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
+        show(vm)
+        compose.onNodeWithTag("hud.dock.SETTINGS").performClick(); settle()
+        val intent = shadowOf(compose.activity).nextStartedActivity
+        assertNotNull(intent)
+        assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertEquals(Screen.SettingsHome.route, intent.getStringExtra(MainActivity.EXTRA_ROUTE))
+        assertTrue(compose.activity.isFinishing)
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
     }
 
     private fun assertVehicleAddStarted() {
@@ -267,6 +242,7 @@ class BubbleScreenTest {
         assertEquals(MainActivity::class.java.name, intent.component?.className)
         assertEquals(Screen.VehicleAdd.route, intent.getStringExtra(MainActivity.EXTRA_ROUTE))
         assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertTrue(compose.activity.isFinishing)
     }
 
     @Test fun `Back during a pending preset write marks the new goal once without celebrating`() {

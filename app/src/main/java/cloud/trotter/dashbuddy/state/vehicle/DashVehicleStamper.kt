@@ -7,7 +7,6 @@ import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicleAction
 import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
-import cloud.trotter.dashbuddy.domain.model.vehicle.LiveDash
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerCue
 import cloud.trotter.dashbuddy.ui.bubble.BubbleManager
 import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
@@ -41,9 +40,7 @@ class DashVehicleStamper @Inject constructor(
     private val postedNext = mutableSetOf<Pair<String, String>>()
 
     fun start(scope: CoroutineScope) {
-        val liveDashes = stateManager.state.map { state ->
-            state.regions.platforms.values.mapNotNull { it.session }.map { LiveDash(it.sessionId, it.startedAt) }
-        }.distinctUntilChanged()
+        val liveDashes = stateManager.state.map { it.liveVehicleDashes() }.distinctUntilChanged()
         val activeVehicleId = garageRepository.garage.map { if (it.readable) it.active?.id else null }
             .distinctUntilChanged()
         scope.launch {

@@ -194,6 +194,7 @@ class BubbleViewModelTest {
         ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
+        vehicleSwapLock = mock(),
         dashVehicleRepository = dashRepository,
         clock = testClock,
     )
@@ -210,19 +211,25 @@ class BubbleViewModelTest {
         whenever(stampRepo.stamps).thenReturn(updates)
         state.value = earningsState("dash")
         val vm = viewModel(garageRepository = garageRepo, dashRepository = stampRepo)
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dashVehicle.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.vehicleChip.collect {} }
         runCurrent()
-        assertEquals(retired, vm.dashVehicle.value)
+        assertNotNull(vm.vehicleChip.value)
+        assertEquals(retired, vm.vehicleChip.value?.shown)
+        assertEquals(listOf(active), vm.vehicleChip.value?.vehicles)
+        assertEquals(active.id, vm.vehicleChip.value?.activeId)
         updates.value += updates.value.single().copy(vehicleId = active.id, sequenceId = 2,
             kind = cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicleKind.SWAP)
         runCurrent()
-        assertEquals(active, vm.dashVehicle.value)
+        assertEquals(active, vm.vehicleChip.value?.shown)
         updates.value += updates.value.last().copy(vehicleId = null, sequenceId = 3)
         runCurrent()
-        assertNull(vm.dashVehicle.value)
+        assertNull(vm.vehicleChip.value?.shown)
         state.value = earningsState("unstamped")
         runCurrent()
-        assertNull(vm.dashVehicle.value)
+        assertNull(vm.vehicleChip.value?.shown)
+        state.value = AppState()
+        runCurrent()
+        assertEquals(active, vm.vehicleChip.value?.shown)
     }
 
     @Test

@@ -94,6 +94,7 @@ class BubbleGoalMarkTest {
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
         garageRepository = garage(), odometerReadingRepository = readings(),
         correctionRepository = mock(),
+        vehicleSwapLock = mock(),
         dashVehicleRepository = dashVehicles(),
         clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
