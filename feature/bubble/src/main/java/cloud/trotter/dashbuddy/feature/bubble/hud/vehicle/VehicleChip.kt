@@ -41,6 +41,13 @@ data class VehicleChipModel(
      * and save to another).
      */
     fun forActive(): VehicleChipModel = copy(shown = vehicles.firstOrNull { it.id == activeId })
+
+    /** Receipt selection belongs to this entry; activeId only supplies the menu check mark here. */
+    fun forEntry(vehicleId: String?): VehicleChipModel {
+        val vehicle = vehicles.firstOrNull { it.id == vehicleId && it.retiredAt == null }
+            ?: vehicles.firstOrNull { it.id == activeId && it.retiredAt == null }
+        return copy(shown = vehicle, activeId = vehicle?.id)
+    }
 }
 
 data class VehicleChipInput(

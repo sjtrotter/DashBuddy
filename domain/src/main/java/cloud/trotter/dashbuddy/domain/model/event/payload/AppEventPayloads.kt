@@ -566,6 +566,7 @@ data class ExpenseLoggedPayload(
     @Serializable(with = ExpenseCategorySerializer::class) val category: ExpenseCategory,
     val amount: Double,
     val note: String? = null,
+    val vehicleId: String? = null,
 ) : AppEventPayload
 
 @Serializable
@@ -575,6 +576,7 @@ data class FuelFillupPayload(
     val gallons: Double? = null,
     /** The app's GPS lifetime total at the fill-up, not a typed car odometer reading. */
     val odometerMiles: Double? = null,
+    val vehicleId: String? = null,
 ) : AppEventPayload
 
 @Serializable

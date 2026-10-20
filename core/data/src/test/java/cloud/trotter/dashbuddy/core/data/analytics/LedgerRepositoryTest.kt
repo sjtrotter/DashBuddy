@@ -158,4 +158,33 @@ class LedgerRepositoryTest {
         verify(dao).recentNotes("CAR_CARE", 2)
         verifyNoInteractions(events)
     }
+    @Test fun `car care and fuel append their entry vehicle on the payload`() = runTest {
+        repo.logExpense("S", ExpenseCategory.CAR_CARE, 18.4, "wipers", 100, "other-car")
+        repo.logFuel("S", 42.0, 11.125, 1234.5, 200, "other-car")
+        val captor = argumentCaptor<AppEvent>()
+        verify(events, times(2)).appendUserEvent(captor.capture(), isNull())
+        assertEquals(ExpenseLoggedPayload("S", ExpenseCategory.CAR_CARE, 18.4, "wipers", "other-car"), captor.firstValue.payload)
+        assertEquals(FuelFillupPayload("S", 42.0, 11.125, 1234.5, "other-car"), captor.secondValue.payload)
+    }
+
+    @Test fun `only car care expenses accept a vehicle id`() {
+        for (category in ExpenseCategory.entries.filter { it != ExpenseCategory.CAR_CARE }) {
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { repo.logExpense("S", category, 1.0, null, 100, "car") }
+            }
+        }
+        verifyNoInteractions(events)
+    }
+
+    @Test fun `projected receipt vehicle ids reach exported domain records`() = runTest {
+        val dao: LedgerDao = mock()
+        whenever(dao.allExpenses()).thenReturn(listOf(
+            ExpenseRecordEntity(1, "S", 100, "CAR_CARE", 18.4, "wipers", null, "car")))
+        whenever(dao.allFuel()).thenReturn(listOf(
+            FuelRecordEntity(2, "S", 200, 42.0, 11.125, 1234.5, null, "car")))
+        val ledger = LedgerRepository(events, dao, mock())
+        assertEquals("car", ledger.allExpenses().single().vehicleId)
+        assertEquals("car", ledger.allFuel().single().vehicleId)
+    }
+
 }

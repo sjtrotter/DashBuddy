@@ -71,4 +71,13 @@ class CorrectionFoldsTest {
             assertNull(result.ledgerVoid)
         }
     }
+    @Test fun `receipt folds carry the entry vehicle and older entries have none`() {
+        val expense = ExpenseLoggedPayload("S", ExpenseCategory.CAR_CARE, 18.4, "wipers", "other-car")
+        val fuel = FuelFillupPayload("S", 42.0, 11.125, 1234.5, "other-car")
+        assertEquals("other-car", fold(AppEventType.EXPENSE_LOGGED, expense).expenseLogged!!.vehicleId)
+        assertEquals("other-car", fold(AppEventType.FUEL_FILLUP, fuel).fuelFillup!!.vehicleId)
+        assertNull(fold(AppEventType.EXPENSE_LOGGED, expense.copy(vehicleId = null)).expenseLogged!!.vehicleId)
+        assertNull(fold(AppEventType.FUEL_FILLUP, fuel.copy(vehicleId = null)).fuelFillup!!.vehicleId)
+    }
+
 }

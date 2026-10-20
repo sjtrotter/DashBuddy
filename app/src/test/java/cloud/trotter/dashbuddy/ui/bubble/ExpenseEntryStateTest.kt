@@ -54,18 +54,18 @@ class ExpenseEntryStateTest {
         val entry = ExpenseEntryState()
         entry.show(); entry.select(ExpensePick.Expense(ExpenseCategory.CAR_CARE))
         val old = entry.entryId
-        entry.label = "wipers"; entry.keyboardOpen = true; entry.digit(8)
+        entry.label = "wipers"; entry.keyboardOpen = true; entry.digit(8); entry.vehicleId = "other-car"
         entry.back(); entry.select(ExpensePick.Fuel)
         assertTrue(entry.entryId > old)
         assertEquals("", entry.label); assertEquals(0L, entry.totalCents)
-        assertFalse(entry.keyboardOpen)
+        assertFalse(entry.keyboardOpen); assertNull(entry.vehicleId)
     }
     @Test fun `saved entry restores page pick buffers field label and keyboard`() {
         val entry = ExpenseEntryState().apply {
             show(); select(ExpensePick.Expense(ExpenseCategory.CAR_CARE))
             digit(1); digit(8); point(); digit(4)
             activeField = ExpenseField.GALLONS; digit(2); point(); digit(3)
-            label = "wipers"; keyboardOpen = true
+            label = "wipers"; keyboardOpen = true; vehicleId = "other-car"
         }
         val saved = with(ExpenseEntryState.Saver) { object : SaverScope { override fun canBeSaved(value: Any) = true }.save(entry) }!!
         val restored = ExpenseEntryState.Saver.restore(saved)!!
@@ -74,6 +74,7 @@ class ExpenseEntryStateTest {
         assertEquals("18.4", restored.totalDigits); assertEquals("2.3", restored.gallonsDigits)
         assertEquals("wipers", restored.label); assertTrue(restored.keyboardOpen)
         assertEquals(entry.entryId, restored.entryId)
+        assertEquals("other-car", restored.vehicleId)
     }
     @Test fun `dock open always returns to subcard with a new entry identity`() {
         val entry = ExpenseEntryState()
@@ -84,5 +85,22 @@ class ExpenseEntryStateTest {
         assertEquals(ExpensePage.SUBCARD, entry.page)
         assertFalse(entry.keyboardOpen); assertTrue(entry.open)
         assertTrue(entry.entryId > old)
+    }
+    @Test fun `old saved entry without vehicle restores following active vehicle`() {
+        val old = listOf(true, ExpensePage.SHEET.name, "FUEL", ExpenseField.TOTAL.name,
+            "42.00", "11.125", "", false, 8L)
+        val restored = ExpenseEntryState.Saver.restore(old)!!
+        assertNull(restored.vehicleId)
+        assertEquals(ExpensePick.Fuel, restored.pick)
+        assertEquals(4200L, restored.totalCents)
+        assertEquals("11.125", restored.gallonsDigits)
+    }
+
+    @Test fun `saved default vehicle restores following active vehicle`() {
+        val entry = ExpenseEntryState().apply { show(); select(ExpensePick.Fuel) }
+        val saved = with(ExpenseEntryState.Saver) { object : SaverScope {
+            override fun canBeSaved(value: Any) = true
+        }.save(entry) }!!
+        assertNull(ExpenseEntryState.Saver.restore(saved)!!.vehicleId)
     }
 }

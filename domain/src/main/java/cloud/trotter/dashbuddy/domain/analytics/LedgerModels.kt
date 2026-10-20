@@ -8,6 +8,7 @@ data class ExpenseRecord(
     val amount: Double,
     val note: String?,
     val voidedAt: Long?,
+    val vehicleId: String? = null,
 )
 
 data class FuelRecord(
@@ -18,6 +19,7 @@ data class FuelRecord(
     val gallons: Double?,
     val odometerMiles: Double?,
     val voidedAt: Long?,
+    val vehicleId: String? = null,
 ) {
     val pricePerGallon: Double? get() = gallons?.takeIf { it > 0 }?.let { totalAmount / it }
 }

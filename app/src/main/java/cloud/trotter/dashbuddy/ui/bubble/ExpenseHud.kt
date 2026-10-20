@@ -3,17 +3,20 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleChip
 import cloud.trotter.dashbuddy.feature.bubble.hud.expense.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
 import kotlinx.coroutines.flow.flowOf
 
 @Stable
 internal class ExpenseHud(private val viewModel: BubbleViewModel, private val entry: ExpenseEntryState,
-    private val closeLog: () -> Unit) {
+    private val closeLog: () -> Unit, private val openVehicleAdd: () -> Unit) {
     val open get() = entry.open
     val compact get() = entry.page == ExpensePage.SUBCARD
     fun openSubcard() { closeLog(); viewModel.expenseActions.reopen(); entry.show() }
@@ -39,6 +42,18 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
             return
         }
         val failure by actions.failed.collectAsStateWithLifecycle()
+        val model by viewModel.vehicleChip.collectAsStateWithLifecycle()
+        var menuOpen by rememberSaveable(entry.entryId) { mutableStateOf(false) }
+        val vehicleChip: (@Composable () -> Unit)? = if (entry.pick == ExpensePick.Fuel ||
+            entry.pick == ExpensePick.Expense(ExpenseCategory.CAR_CARE)) {
+            {
+                model?.let {
+                    VehicleChip(it.forEntry(entry.vehicleId), menuOpen, { menuOpen = true },
+                        { menuOpen = false }, onSelect = { id -> entry.vehicleId = id; menuOpen = false },
+                        onAdd = { menuOpen = false; openVehicleAdd() })
+                }
+            }
+        } else null
         // Keep the GPS source subscribed while entering; read its current value at the tap.
         viewModel.gpsTotalMiles.collectAsStateWithLifecycle()
         val category = (entry.pick as? ExpensePick.Expense)?.category
@@ -56,14 +71,15 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
                     onLabel = { entry.label = it }, onSelectLabel = { closeKeyboard(); entry.label = it }, onNewLabel = { entry.newLabel(recent) },
                     onEditLabel = entry::editLabel,
                     onKeyboardDone = ::closeKeyboard, onDigit = entry::digit, onPoint = entry::point,
-                    onBackspace = entry::backspace, onLog = {
+                    onBackspace = entry::backspace, vehicleChip = vehicleChip, onLog = {
                         closeKeyboard()
                         val owner = viewModel.expenseOwner()
+                        val vehicleId = viewModel.vehicleChip.value?.forEntry(entry.vehicleId)?.activeId
                         when (val pick = entry.pick) {
                             ExpensePick.Fuel -> actions.logFuel(owner, entry.totalCents, entry.gallonsDigits,
-                                viewModel.gpsTotalMiles.value, entry.entryId)
+                                viewModel.gpsTotalMiles.value, entry.entryId, vehicleId)
                             is ExpensePick.Expense -> actions.logExpense(owner, pick.category, entry.totalCents,
-                                entry.label.takeIf { pick.hasLabel }, entry.entryId)
+                                entry.label.takeIf { pick.hasLabel }, entry.entryId, vehicleId)
                         }
                     })
             }
@@ -85,9 +101,9 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
 }
 
 @Composable
-internal fun rememberExpenseHud(viewModel: BubbleViewModel, closeLog: () -> Unit): ExpenseHud {
+internal fun rememberExpenseHud(viewModel: BubbleViewModel, closeLog: () -> Unit, openVehicleAdd: () -> Unit): ExpenseHud {
     val entry = rememberExpenseEntryState()
-    val hud = remember(viewModel, entry) { ExpenseHud(viewModel, entry, closeLog) }
+    val hud = remember(viewModel, entry, closeLog, openVehicleAdd) { ExpenseHud(viewModel, entry, closeLog, openVehicleAdd) }
     hud.Observe()
     return hud
 }

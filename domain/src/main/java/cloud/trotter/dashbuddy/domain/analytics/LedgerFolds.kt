@@ -7,6 +7,7 @@ data class ExpenseLoggedFold(
     val category: ExpenseCategory,
     val amount: Double,
     val note: String?,
+    val vehicleId: String? = null,
 )
 
 data class FuelFillupFold(
@@ -16,6 +17,7 @@ data class FuelFillupFold(
     val totalAmount: Double,
     val gallons: Double?,
     val odometerMiles: Double?,
+    val vehicleId: String? = null,
 )
 
 data class LedgerVoidFold(

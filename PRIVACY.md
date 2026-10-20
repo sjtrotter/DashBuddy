@@ -147,7 +147,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. DashBuddy does not deliver it to the developer. |
-| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
+| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct DashBuddy upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -191,7 +191,12 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - Expenses and fuel fill-ups the dasher logs from the bubble are events in that log and rows in two
   read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the app's tracked miles at the fill-up, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
-  them like the rest of the history (§6). The expense sheet adds no stored field: its label is the
+  them like the rest of the history (§6). Since #1388, car-care and gas receipts also store which saved
+  vehicle they are for (its id, `vehicleId`, on-device), defaulting to the active vehicle. A pick applies
+  to one entry and never switches the active vehicle or the dash's vehicle. Other expense categories
+  and older receipts carry no vehicle. Manual CSV export includes `vehicle_id` and `vehicle_label`
+  in `expenses.csv` and `fuel.csv`, resolving retired vehicles too; an unknown id is labelled
+  "Unknown vehicle", and receipts without an id leave both cells empty. The sheet's label is the
   existing expense note, and its fill-up GPS stamp is the existing `odometerMiles`. Recent-label
   chips are derived from non-voided expense notes, with no second label store. Expense actions
   keep labels out of diagnostic logs entirely; a failed write logs only the exception class at WARN.
@@ -271,6 +276,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r11 (2026-10-20)** — car-care and gas receipts store which saved vehicle they are for
+  (its id, on-device), defaulting to the active vehicle with a per-entry pick (#1388).
+  `expenses.csv` and `fuel.csv` include its id and label in the chosen folder/provider.
+  Receipts created under r10 retain that revision.
 - **r10 (2026-10-20)** — CSV export adds each dash's saved vehicle id and label (the dasher's own text)
   to `sessions.csv` and deductible miles per vehicle per tax year to `summary.csv` (#1387), including
   retired vehicles; unknown vehicles are labelled explicitly. The files go to the chosen folder/provider.

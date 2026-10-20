@@ -2,6 +2,10 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
+import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.cards.CardStack
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
@@ -324,5 +328,34 @@ class LogMapperTest {
             AppEvent(AppEventType.DELIVERY_CONFIRMED, 12_000, "dash", second.copy(arrivedAt = 11_000)),
             AppEvent(AppEventType.DELIVERY_COMPLETED, 12_500, "dash", second.copy(completedAt = 12_500)),
         )
+    }
+    @Test fun `receipt names appear with multiple vehicles including retired but not with one`() {
+        val active = Vehicle("car", "Active car", 0)
+        val retired = active.copy(id = "old", name = "Retired vehicle", retiredAt = 1)
+        val expense = ExpenseRecord(
+            1, "S", 100, ExpenseCategory.CAR_CARE,
+            18.4, "wipers", null, retired.id)
+        val fuel = FuelRecord(2, "S", 200, 42.0, 11.125, 1234.5, null, active.id)
+        fun rows(vehicles: List<Vehicle>, id: String? = retired.id) =
+            LogMapper.map(CardStack(), LogData(expenses = listOf(expense.copy(vehicleId = id)),
+                fuel = listOf(fuel.copy(vehicleId = id)), vehicles = vehicles), emptyList(), null)
+        val named = rows(listOf(active, retired))
+        assertEquals("Retired veh…", (named[0] as ExpenseRow).vehicleName)
+        assertEquals("Retired veh…", (named[1] as FuelRow).vehicleName)
+        val activeRows = rows(listOf(active, retired), active.id)
+        assertEquals("Active car", (activeRows[0] as ExpenseRow).vehicleName)
+        assertEquals("Active car", (activeRows[1] as FuelRow).vehicleName)
+        for (items in listOf(rows(listOf(retired)), rows(emptyList()),
+            rows(listOf(active, retired), null), rows(listOf(active, retired), "unknown"))) {
+            assertNull((items[0] as ExpenseRow).vehicleName)
+            assertNull((items[1] as FuelRow).vehicleName)
+        }
+    }
+    @Test fun `receipt names use the hosts localized type fallback`() {
+        val vehicles = listOf(Vehicle("car", null, 0), Vehicle("other", "Other", 1))
+        val data = LogData(fuel = listOf(FuelRecord(1, null, 100, 42.0, null, null, null, "car")), vehicles = vehicles)
+        val row = LogMapper.map(CardStack(), data, emptyList(), null,
+            vehicleDisplayName = { it.identityName ?: "Voiture" }).single() as FuelRow
+        assertEquals("Voiture", row.vehicleName)
     }
 }

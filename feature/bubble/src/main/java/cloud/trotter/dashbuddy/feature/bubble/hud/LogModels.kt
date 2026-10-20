@@ -7,6 +7,7 @@ import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.state.PhaseColor
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 
 /** S3 shares one window between its strip and the log, and routes both through onUndo. */
 sealed interface UndoTarget {
@@ -21,9 +22,10 @@ data class LogData(
     val deliveries: List<DeliveryRecord> = emptyList(),
     val expenses: List<ExpenseRecord> = emptyList(),
     val fuel: List<FuelRecord> = emptyList(),
+    val vehicles: List<Vehicle> = emptyList(),
 ) {
     operator fun plus(other: LogData) = LogData(events + other.events, deliveries + other.deliveries,
-        expenses + other.expenses, fuel + other.fuel)
+        expenses + other.expenses, fuel + other.fuel, (vehicles + other.vehicles).distinctBy { it.id })
     companion object { val Empty = LogData() }
 }
 
@@ -39,9 +41,10 @@ data class OfferRow(
 ) : LogItem { val dimmed get() = outcome != AppEventType.OFFER_ACCEPTED }
 data class ExpenseRow(
     val sequenceId: Long, override val at: Long, val category: ExpenseCategory,
-    val note: String?, val amount: Double,
+    val note: String?, val amount: Double, val vehicleName: String? = null,
 ) : LogItem { override val key get() = "expense:$sequenceId" }
-data class FuelRow(val sequenceId: Long, override val at: Long, val total: Double, val pricePerGallon: Double?) : LogItem {
+data class FuelRow(val sequenceId: Long, override val at: Long, val total: Double, val pricePerGallon: Double?,
+    val vehicleName: String? = null) : LogItem {
     override val key get() = "fuel:$sequenceId"
 }
 data class DispatcherRow(override val key: String, override val at: Long, val text: String) : LogItem

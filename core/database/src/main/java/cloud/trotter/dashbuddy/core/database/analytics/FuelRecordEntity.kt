@@ -14,4 +14,5 @@ data class FuelRecordEntity(
     val gallons: Double?,
     val odometerMiles: Double?,
     val voidedAt: Long?,
+    val vehicleId: String? = null,
 )

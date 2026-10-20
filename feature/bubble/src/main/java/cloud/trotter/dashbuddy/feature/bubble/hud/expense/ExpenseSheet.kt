@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.core.designsystem.component.AppChip
 import cloud.trotter.dashbuddy.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
+import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.feature.bubble.hud.keypad.Keypad
@@ -47,22 +48,37 @@ fun ColumnScope.ExpenseSheet(
     onPoint: () -> Unit,
     onBackspace: () -> Unit,
     onLog: () -> Unit,
+    vehicleChip: (@Composable () -> Unit)? = null,
 ) {
     val title = stringResource(model.pick.labelResource)
+    val entryChip = vehicleChip.takeIf { model.pick == ExpensePick.Fuel ||
+        model.pick == ExpensePick.Expense(ExpenseCategory.CAR_CARE) }
+    val titleRow: @Composable () -> Unit = {
+        Row(Modifier.testTag("expense.title"), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.hud_odometer_back))
+            }
+            Icon(model.pick.icon, null, Modifier.size(22.dp), tint = AppTheme.colors.text2)
+            Text(title, color = AppTheme.colors.text, style = MaterialTheme.typography.titleSmall)
+            if (entryChip != null) {
+                Spacer(Modifier.width(8.dp))
+                entryChip()
+            }
+        }
+    }
     Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (model.failure == ExpenseFailure.WRITE) Text(stringResource(R.string.hud_expense_failed),
             color = AppTheme.colors.warn, style = MaterialTheme.typography.labelSmall)
         KeypadFrame(title = null, block = {
+            // The receipt chip needs the full width above the fields and fixed-width keypad.
+            if (entryChip != null) {
+                titleRow()
+                Spacer(Modifier.height(8.dp))
+            }
             Row(Modifier.wrapContentHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Row weight shares width only; the scroll content needs its natural height.
                 Column(Modifier.weight(1f).wrapContentHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.testTag("expense.title"), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, stringResource(R.string.hud_odometer_back))
-                        }
-                        Icon(model.pick.icon, null, Modifier.size(22.dp), tint = AppTheme.colors.text2)
-                        Text(title, color = AppTheme.colors.text, style = MaterialTheme.typography.titleSmall)
-                    }
+                    if (entryChip == null) titleRow()
                     if (model.pick.hasLabel) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             model.recentLabels.forEachIndexed { index, label ->
