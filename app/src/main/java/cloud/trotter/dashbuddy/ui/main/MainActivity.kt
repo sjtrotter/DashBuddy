@@ -30,7 +30,8 @@ import timber.log.Timber
 import cloud.trotter.dashbuddy.ui.main.ratings.RatingsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.AboutScreen
 import cloud.trotter.dashbuddy.ui.main.settings.garage.GarageScreen
-import cloud.trotter.dashbuddy.ui.main.settings.garage.VehicleEditScreen
+import cloud.trotter.dashbuddy.ui.main.settings.garage.VehicleAddScreen
+import cloud.trotter.dashbuddy.ui.main.settings.garage.VehicleDetailsScreen
 import cloud.trotter.dashbuddy.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.dashbuddy.feature.settings.CapabilityConsentScreen
 import cloud.trotter.dashbuddy.feature.settings.DataExportScreen
@@ -235,6 +236,7 @@ class MainActivity : ComponentActivity() {
                             EconomySettingsScreen(
                                 onBack = { navController.popBackStack() },
                                 onOpenGarage = { navController.navigate(Screen.Garage.route) },
+                                onOpenVehicle = { id -> navController.navigate(Screen.VehicleEdit.route(id)) },
                             )
                         }
 
@@ -246,14 +248,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.VehicleAdd.route) {
-                            VehicleEditScreen(onDone = { navController.popBackStack() },
-                                onEditCosts = { navController.navigate(Screen.EconomySettings.route) })
+                            VehicleAddScreen(onDone = { navController.popBackStack() })
                         }
                         composable(Screen.VehicleEdit.route,
                             arguments = listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType }),
                         ) {
-                            VehicleEditScreen(onDone = { navController.popBackStack() },
-                                onEditCosts = { navController.navigate(Screen.EconomySettings.route) })
+                            VehicleDetailsScreen(onDone = { navController.popBackStack() },
+                                onAddVehicle = { navController.navigate(Screen.VehicleAdd.route) })
                         }
 
                         // 4. General Settings

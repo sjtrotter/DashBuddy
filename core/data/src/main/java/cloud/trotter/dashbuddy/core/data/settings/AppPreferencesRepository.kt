@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice
+import cloud.trotter.dashbuddy.core.datastore.settings.SaveCapture
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
@@ -17,8 +20,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import java.time.LocalDate
-import kotlinx.coroutines.CancellationException
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -269,7 +270,8 @@ class AppPreferencesRepository @Inject constructor(
      * invariant (#314): this only affects FUTURE evaluations; already-recorded deliveries keep their
      * frozen cost basis.
      */
-    suspend fun updateGasPriceManual(price: Float) = dataSource.updateGasPriceManual(price)
+    suspend fun updateGasPriceManual(price: Float) = updateGasPriceManual(price, null)
+    suspend fun updateGasPriceManual(price: Float, capture: SaveCapture<StoredGasPrice>?) = dataSource.updateGasPriceManual(price, capture)
 
     /**
      * "Resume auto" (#722) — re-enables auto (EIA) fetching AND applies a freshly-fetched price in
@@ -277,28 +279,10 @@ class AppPreferencesRepository @Inject constructor(
      * [updateGasPriceManual]. Frozen-economics invariant (#314): affects only FUTURE evaluations.
      */
     suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
-    suspend fun updateFuelType(type: FuelType) {
-        updateActiveProfile { it.withGas(fuelType = type) }
-        mirrorFuelType(type)
-    }
-    suspend fun updateVehicleClass(type: VehicleClass) {
-        updateActiveProfile { when (it) {
-            is HybridCar -> it.copy(vehicleClass = type.gasClass ?: it.vehicleClass)
-            is GasCar -> LegacyProfile(vehicleClass = type, mpg = it.mpg, fuelType = it.fuelType,
-                year = it.year, make = it.make, model = it.model).toTyped().withCosts(it.wear, it.fixed)
-            else -> it
-        } }
-        mirrorVehicleClass(type)
-    }
     // Deferred saves commit their captured garage profile once, then mirror legacy preferences.
     suspend fun mirrorFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun mirrorVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
 
-    suspend fun updateEstimatedMpg(mpg: Float) {
-        require(mpg.isFinite() && mpg > 0f)
-        updateActiveProfile { it.withGas(mpg = mpg.toDouble()) }
-        dataSource.updateEstimatedMpg(mpg)
-    }
     suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
 
     suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
@@ -336,125 +320,35 @@ class AppPreferencesRepository @Inject constructor(
      */
     suspend fun setTtsLanguageTag(tag: String?) = dataSource.setTtsLanguageTag(tag)
 
-    suspend fun updateEconomySettings(
-        year: String, make: String, model: String, trim: String,
-        mpg: Float, isGasAuto: Boolean, price: Float,
-    ) {
-        updateActiveProfile {
-            when (it) {
-                is GasCar -> it.copy(year = year, make = make, model = model, mpg = mpg.toDouble())
-                is HybridCar -> it.copy(year = year, make = make, model = model, mpg = mpg.toDouble())
-                else -> it
-            }
-        }
-        mirrorEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
-    }
-
-
     suspend fun mirrorEconomySettings(
         year: String, make: String, model: String, trim: String,
         mpg: Float, isGasAuto: Boolean, price: Float,
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
-    // --- Personal Economy v2 writes (#145) ---
-    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(tireSetCost = setCost, tireLifetimeMi = lifetimeMi)) }
-        dataSource.updateTireCost(setCost, lifetimeMi)
-    }
+    suspend fun updatePhoneTotal(value: Double) = updatePhoneTotal(value, null)
+    suspend fun updatePhoneTotal(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updatePhoneTotal(value, capture)
+    suspend fun updatePhoneLines(value: Int) = updatePhoneLines(value, null)
+    suspend fun updatePhoneLines(value: Int, capture: SaveCapture<StoredPreference<Int>>?) = dataSource.updatePhoneLines(value, capture)
+    suspend fun updatePhoneShare(value: Double) = updatePhoneShare(value, null)
+    suspend fun updatePhoneShare(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updatePhoneShare(value, capture)
+    suspend fun updateElectricityPrice(value: Double) = updateElectricityPrice(value, null)
+    suspend fun updateElectricityPrice(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updateElectricityPrice(value, capture)
+    suspend fun setGasPriceAuto(value: Boolean) = setGasPriceAuto(value, null)
+    suspend fun setGasPriceAuto(value: Boolean, capture: SaveCapture<StoredPreference<Boolean>>?) = dataSource.setGasPriceAuto(value, capture)
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) = setTimeConstantOverride(field, value, null)
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.setTimeConstantOverride(field, value, capture)
 
-    suspend fun updateOilCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(oilCost = cost, oilIntervalMi = intervalMi)) }
-        dataSource.updateOilCost(cost, intervalMi)
-    }
-
-    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(brakesCost = cost, brakesIntervalMi = intervalMi)) }
-        dataSource.updateBrakesCost(cost, intervalMi)
-    }
-
-    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(fluidsCost = cost, fluidsIntervalMi = intervalMi)) }
-        dataSource.updateFluidsCost(cost, intervalMi)
-    }
-
-    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(miscYearly = yearly, miscYearlyMi = yearlyMi)) }
-        dataSource.updateMiscMaintenance(yearly, yearlyMi)
-    }
-
-    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(includeDepreciation = include, purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi)) }
-        dataSource.updateDepreciation(include, purchasePrice, totalLifetimeMi)
-    }
-
-    suspend fun updateInsuranceDelta(perMonth: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(insuranceDeltaPerMonth = perMonth)) }
-        dataSource.updateInsuranceDelta(perMonth)
-    }
-
-    suspend fun updateRegistrationDelta(perYear: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(registrationDeltaPerYear = perYear)) }
-        dataSource.updateRegistrationDelta(perYear)
-    }
-
-    private val warnedVehicleWrite = AtomicBoolean(false)
-
-    private suspend fun updateActiveProfile(transform: (VehicleProfile) -> VehicleProfile) {
-        try {
-            garageRepository.updateOrCreateActiveProfile(System.currentTimeMillis(), transform)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            if (warnedVehicleWrite.compareAndSet(false, true)) {
-                Timber.tag("Garage").w("%s", error.javaClass.simpleName)
-            }
-        }
-    }
-
-    suspend fun updateExpectedAnnualMi(miles: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(expectedAnnualMiles = miles)) }
-        dataSource.updateExpectedAnnualMi(miles)
-    }
-
-    suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) =
-        dataSource.updatePhonePlan(total, lines, dashPercent)
-
-    suspend fun updateElectricityPrice(value: Double) = dataSource.updateElectricityPrice(value)
-    suspend fun updateConsumption(value: Double) {
-        require(value.isFinite() && value >= 0)
-        updateActiveProfile { profile -> when (profile) {
-            is ElectricCar -> profile.copy(kwhPer100Mi = value)
-            is ScooterMoped -> if (profile.powertrain == Powertrain.ELECTRIC) profile.copy(kwhPer100Mi = value) else profile
-            is EBike -> profile.copy(whPerMile = value)
-            else -> profile
-        } }
-    }
-    suspend fun updateChain(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(chainCost = cost, chainLifeMi = life))
-    }
-    suspend fun updateBattery(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(batteryCost = cost, batteryLifeMi = life))
-    }
-    suspend fun updateBelt(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(beltCost = cost, beltLifeMi = life))
-    }
-
-    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) =
-        dataSource.setTimeConstantOverride(field, value)
-
-    suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) =
-        dataSource.updateTimeConstants(avgMinPerMile, basePickupMin)
-
-    /** Commits explicit vehicle overrides together, then mirrors all explicit economy fields. */
-    suspend fun persistUserSetEconomy(economy: UserEconomy) {
-        if (EconomyFieldGroups.hasCostOverrides(economy)) {
-            updateActiveProfile { EconomyFieldGroups.updateProfile(it, economy) }
-        }
-        mirrorUserSetEconomy(economy)
-    }
+    suspend fun restoreElectricityPrice(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restoreElectricityPrice(previous, expected, current)
+    suspend fun restorePhoneTotal(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restorePhoneTotal(previous, expected, current)
+    suspend fun restorePhoneLines(previous: StoredPreference<Int>, expected: StoredPreference<Int>, current: () -> Boolean = { true }) = dataSource.restorePhoneLines(previous, expected, current)
+    suspend fun restorePhoneShare(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restorePhoneShare(previous, expected, current)
+    suspend fun restoreGasPriceAuto(previous: StoredPreference<Boolean>, expected: StoredPreference<Boolean>, current: () -> Boolean = { true }) = dataSource.restoreGasPriceAuto(previous, expected, current)
+    suspend fun restoreGasPriceManual(previous: StoredGasPrice, expected: StoredGasPrice, current: () -> Boolean = { true }) = dataSource.restoreGasPriceManual(previous, expected, current)
+    suspend fun restoreTimeConstantOverride(field: EconomyField, previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restoreTimeConstantOverride(field, previous, expected, current)
 
     /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
     suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
+        fun edited(field: EconomyField, value: Double): Double? = value.takeIf { field in economy.userSetFields }
         for (group in EconomyFieldGroups.entries) {
             if (group.fields.none { it in economy.userSetFields }) continue
             when (val value = group.readFromEconomy(economy)) {
@@ -462,16 +356,39 @@ class AppPreferencesRepository @Inject constructor(
                 is EconomyFieldGroups.VehicleClassValue,
                 is EconomyFieldGroups.Mpg,
                 is EconomyFieldGroups.GasPrice -> Unit
-                is EconomyFieldGroups.Tires -> dataSource.updateTireCost(value.cost, value.lifetime)
-                is EconomyFieldGroups.Oil -> dataSource.updateOilCost(value.cost, value.interval)
-                is EconomyFieldGroups.Brakes -> dataSource.updateBrakesCost(value.cost, value.interval)
-                is EconomyFieldGroups.Fluids -> dataSource.updateFluidsCost(value.cost, value.interval)
-                is EconomyFieldGroups.Misc -> dataSource.updateMiscMaintenance(value.yearly, value.miles)
-                is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(value.include, value.price, value.lifetime)
+                is EconomyFieldGroups.Tires -> dataSource.updateTireCost(
+                    edited(EconomyField.TIRE_COST, value.cost),
+                    edited(EconomyField.TIRE_LIFETIME, value.lifetime),
+                )
+                is EconomyFieldGroups.Oil -> dataSource.updateOilCost(
+                    edited(EconomyField.OIL_COST, value.cost),
+                    edited(EconomyField.OIL_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Brakes -> dataSource.updateBrakesCost(
+                    edited(EconomyField.BRAKES_COST, value.cost),
+                    edited(EconomyField.BRAKES_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Fluids -> dataSource.updateFluidsCost(
+                    edited(EconomyField.FLUIDS_COST, value.cost),
+                    edited(EconomyField.FLUIDS_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Misc -> dataSource.updateMiscMaintenance(
+                    edited(EconomyField.MISC_YEARLY, value.yearly),
+                    edited(EconomyField.MISC_YEARLY_MI, value.miles),
+                )
+                is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(
+                    value.include.takeIf { EconomyField.INCLUDE_DEPRECIATION in economy.userSetFields },
+                    edited(EconomyField.PURCHASE_PRICE, value.price),
+                    edited(EconomyField.TOTAL_LIFETIME_MI, value.lifetime),
+                )
                 is EconomyFieldGroups.Insurance -> dataSource.updateInsuranceDelta(value.value)
                 is EconomyFieldGroups.Registration -> dataSource.updateRegistrationDelta(value.value)
                 is EconomyFieldGroups.AnnualMiles -> dataSource.updateExpectedAnnualMi(value.value)
-                is EconomyFieldGroups.Phone -> dataSource.updatePhonePlan(value.total, value.lines, value.percent)
+                is EconomyFieldGroups.Phone -> {
+                    if (EconomyField.PHONE_PLAN_TOTAL in economy.userSetFields) dataSource.updatePhoneTotal(value.total)
+                    if (EconomyField.PHONE_PLAN_LINES in economy.userSetFields) dataSource.updatePhoneLines(value.lines)
+                    if (EconomyField.PHONE_BUSINESS_PERCENT in economy.userSetFields) dataSource.updatePhoneShare(value.percent)
+                }
                 is EconomyFieldGroups.Pace -> dataSource.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, value.value)
                 is EconomyFieldGroups.Chain, is EconomyFieldGroups.Battery,
                 is EconomyFieldGroups.Belt, is EconomyFieldGroups.Consumption -> Unit
@@ -481,10 +398,7 @@ class AppPreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun resetEconomyDefaults() {
-        updateActiveProfile { it.withCosts(WearProfile(), FixedCosts()).withDefaultConsumption() }
-        dataSource.resetEconomyDefaults()
-    }
+    suspend fun resetSharedEconomyDefaults() = dataSource.resetSharedEconomyDefaults()
 
     suspend fun clearPreferences() {
         Timber.tag(TAG).w("Clearing App Preferences")

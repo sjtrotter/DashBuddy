@@ -193,7 +193,7 @@ class DoorDashFullDashE2ETest {
             // ── Frozen economics + rebuild faithfulness ──────────────────────────────────────────
             val incremental = replay.readModel()
             replay.await {
-                replay.appPreferences.updateEconomySettings("2015", "Test", "Car", "", 12f, false, 9.99f)
+                replay.appPreferences.updateGasPriceManual(9.99f)
             }
             val liveCpm = replay.await { replay.appPreferences.userEconomy.first() }.operatingCostPerMile
             assertNotEquals("the economy edit really moved the live cost per mile", offer.estOperatingCostPerMile!!, liveCpm, 1e-6)

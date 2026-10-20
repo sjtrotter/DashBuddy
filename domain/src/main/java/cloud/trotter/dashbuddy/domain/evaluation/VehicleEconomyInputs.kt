@@ -43,7 +43,7 @@ data class VehicleEconomyInputs(
                 f.purchasePrice ?: preset.fixed.purchasePrice ?: 0.0,
                 f.totalLifetimeMi ?: preset.fixed.totalLifetimeMi ?: 1.0,
                 f.insuranceDeltaPerMonth ?: 0.0, f.registrationDeltaPerYear ?: 0.0,
-                f.expectedAnnualMiles ?: shared.expectedAnnualMiles,
+                f.expectedAnnualMiles ?: preset.fixed.expectedAnnualMiles ?: UserEconomy.DEFAULT_ANNUAL_MI,
             )
             fun rate(cost: Double?, life: Double?) = (cost ?: 0.0) / (life ?: 1.0).coerceAtLeast(1.0)
             val energy = when (profile) {

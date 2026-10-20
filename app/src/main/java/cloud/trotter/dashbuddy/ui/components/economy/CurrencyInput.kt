@@ -1,114 +1,76 @@
 package cloud.trotter.dashbuddy.ui.components.economy
 
+import kotlinx.coroutines.Deferred
+import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteResult
+
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import java.util.Locale
 
-/**
- * A currency-style input field. Renders the current value as a $-prefixed
- * decimal; the user can scrub it via a numeric keyboard. Commits every
- * parseable keystroke (live footers update as you type).
- *
- * While the field is FOCUSED the text is the source of truth — the upstream
- * value round-trip must not re-seed it mid-typing (typing "1." used to commit
- * 1.0, round-trip, and reset the text to "1", eating the decimal separator —
- * #350). On blur, the formatted upstream value re-syncs/normalizes the text.
- *
- * Documented duplicate: :feature:setup's wizard/cards/VehicleCard.kt VehicleNumberInput
- * keeps this focus-aware decimal text handling because :feature:setup cannot depend on :app.
- * Keep both in sync; a shared UI module is the follow-up if this boundary changes.
- *
- * Used for: purchase price, insurance/registration deltas, phone plan total.
- */
+internal fun nonnegativeNumber(text: String): Double? =
+    text.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
+
 @Composable
 fun CurrencyInput(
     label: String,
     value: Double,
-    onValueChange: (Double) -> Unit,
+    onValueChange: NumberSave,
     modifier: Modifier = Modifier,
     suffix: String? = null,
     showCurrencySymbol: Boolean = true,
+    enabled: Boolean = true,
+    supportingText: String? = null,
+    fieldKey: String = label,
+    integer: Boolean = false,
+    valid: (String) -> Double? = ::nonnegativeNumber,
 ) {
-    var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(if (showCurrencySymbol) editableAmount(value) else value.toString().removeSuffix(".0")) }
-    LaunchedEffect(value, isFocused, showCurrencySymbol) {
-        if (!isFocused) text = if (showCurrencySymbol) editableAmount(value) else value.toString().removeSuffix(".0")
-    }
-
+    val session = LocalEditSession.current
+    val formatted = if (showCurrencySymbol) editableAmount(value) else value.toString().removeSuffix(".0")
+    val state = session.field(fieldKey, formatted, { valid(it) != null }) { onValueChange(requireNotNull(valid(it))) }
+    val finish = session.finisher(fieldKey)
+    val focusManager = LocalFocusManager.current
     OutlinedTextField(
-        value = text,
-        onValueChange = { input ->
-            text = input
-            input.toDoubleOrNull()?.let(onValueChange)
-        },
+        value = state.text,
+        onValueChange = { session.edit(fieldKey, it) },
         label = { Text(label) },
         prefix = if (showCurrencySymbol) ({ Text("$") }) else null,
         suffix = suffix?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        supportingText = supportingText?.let { { Text(it) } },
+        isError = state.error,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = if (integer) KeyboardType.Number else KeyboardType.Decimal,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { finish(); focusManager.clearFocus() }),
         singleLine = true,
-        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
-    )
-}
-
-/**
- * A non-currency decimal input field. Same shape (and the same focus-aware
- * text handling, #350) as [CurrencyInput] but no `$` prefix. Use this for any
- * value that isn't money (e.g. minutes, miles).
- */
-
-/**
- * An integer-style input field with a custom label. No prefix. Same
- * focus-aware text handling as [CurrencyInput] (#350).
- * Used for: phone plan line count, etc.
- */
-@Composable
-fun IntegerInput(
-    label: String,
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf(value.toString()) }
-    LaunchedEffect(value, isFocused) {
-        if (!isFocused) text = value.toString()
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = { input ->
-            text = input
-            input.toIntOrNull()?.let(onValueChange)
+        modifier = modifier.onFocusChanged {
+            if (state.focused && !it.isFocused) finish()
+            session.focus(fieldKey, it.isFocused)
         },
-        label = { Text(label) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        modifier = modifier.onFocusChanged { isFocused = it.isFocused },
     )
 }
 
-// Input-field machine string (#467): the editable amount the field round-trips
-// via toDoubleOrNull — Locale.US, trailing zeros trimmed ("5.5", "0"), NOT the
-// display money SSOT (Formats.money, which renders "$5.50"). Renamed from
-// formatCurrency to avoid confusion with the removed display formatter.
-//
-// `internal` (#1034): the weekly plan's dollar-goal dialog seeds a digits-and-dot
-// field the same way, and MUST NOT reach for a display formatter to do it — on a
-// non-Latin-digit device the seed would come back un-parseable. One machine-string
-// owner for every money field in the module.
+@Composable
+fun IntegerInput(label: String, value: Int, onValueChange: (Int) -> Deferred<WriteResult>,
+    modifier: Modifier = Modifier, enabled: Boolean = true, fieldKey: String = label) =
+    CurrencyInput(label, value.toDouble(), { onValueChange(it.toInt()) }, modifier,
+        showCurrencySymbol = false, enabled = enabled, fieldKey = fieldKey, integer = true,
+        valid = { it.toIntOrNull()?.takeIf { value -> value >= 1 }?.toDouble() })
+
 internal fun editableAmount(value: Double): String =
     if (value == 0.0) "0" else String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
 
 @Composable
-fun DecimalInput(label: String, value: Double, onValueChange: (Double) -> Unit) =
-    CurrencyInput(label, value, { if (it.isFinite() && it >= 0) onValueChange(it) }, showCurrencySymbol = false)
+fun DecimalInput(label: String, value: Double, onValueChange: NumberSave,
+    enabled: Boolean = true, supportingText: String? = null, fieldKey: String = label) =
+    CurrencyInput(label, value, onValueChange, showCurrencySymbol = false,
+        enabled = enabled, supportingText = supportingText, fieldKey = fieldKey)

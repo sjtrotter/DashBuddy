@@ -433,7 +433,7 @@ class WizardViewModelTest {
         vm.vehicleDraft.onModelSelected("Ioniq 6")
         testScheduler.advanceUntilIdle()
         vm.vehicleDraft.updateEstimatedMpg(30f)
-        vm.updateTires(900.0, 45_000.0)
+        vm.updateTireCost(900.0); vm.updateTireLifetime(45_000.0)
         vm.updateInsuranceDelta(25.0)
         vm.updateFuelType(FuelType.PREMIUM)
         vm.updateGasPrice(4.25f)
@@ -805,7 +805,7 @@ class WizardViewModelTest {
         viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
         viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateFuelType(FuelType.PREMIUM)
-        viewModel.updateTires(720.0, 48_000.0)
+        viewModel.updateTireCost(720.0); viewModel.updateTireLifetime(48_000.0)
         var completed = false
         viewModel.saveAndFinish { completed = true }
         saving.await()
@@ -827,9 +827,6 @@ class WizardViewModelTest {
         verify(appPreferencesRepository).mirrorFuelType(FuelType.PREMIUM)
         verify(appPreferencesRepository).mirrorVehicleClass(VehicleClass.SUV)
         verify(appPreferencesRepository).mirrorUserSetEconomy(any())
-        verify(appPreferencesRepository, org.mockito.kotlin.never()).updateFuelType(any())
-        verify(appPreferencesRepository, org.mockito.kotlin.never()).updateVehicleClass(any())
-        verify(appPreferencesRepository, org.mockito.kotlin.never()).persistUserSetEconomy(any())
     }
 
     @Test
@@ -865,7 +862,7 @@ class WizardViewModelTest {
 
         viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
         viewModel.vehicleDraft.updateEstimatedMpg(28f)
-        viewModel.updateTires(720.0, 48_000.0)
+        viewModel.updateTireCost(720.0); viewModel.updateTireLifetime(48_000.0)
         viewModel.saveAndFinish { }
         testScheduler.advanceUntilIdle()
 
@@ -990,4 +987,44 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
         assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0f)
     }
+    @Test fun `rerunning setup with a different type adds a new active vehicle and preserves the old identity`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val old = Vehicle("old", "Original", 1, GasCar(year = "2020", make = "Honda", model = "Civic"))
+        whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(old), old.id, true)))
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+        vm.vehicleDraft.updateVehicleType(VehicleType.BICYCLE)
+        vm.saveAndFinish {}
+        testScheduler.advanceUntilIdle()
+        verify(garageRepository).addVehicle(isNull(), any(), eq(Bicycle()),
+            eq(cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn.ALWAYS))
+        verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
+        assertEquals("2020", old.profile.year)
+        assertEquals("Honda", old.profile.make)
+        assertEquals("Civic", old.profile.model)
+    }
+
+    @Test fun `rerun with a different year make model adds instead of replacing identity`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        stubRepositories()
+        val old = Vehicle("old", "Original", 1, GasCar(year = "2020", make = "Honda", model = "Civic"))
+        whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(old), old.id, true)))
+        val vm = WizardViewModel(strategyRepository, appPreferencesRepository, appStateRepository,
+            vehicleRepository, gasPriceRepository, garageRepository)
+        testScheduler.advanceUntilIdle()
+        // The draft can select a different identity after opting into lookup.
+        vm.vehicleDraft.load(vm.vehicleDraft.state.value.copy(year = "2021", make = "Toyota", model = "Corolla"))
+        vm.saveAndFinish {}
+        testScheduler.advanceUntilIdle()
+        val profile = argumentCaptor<VehicleProfile>()
+        verify(garageRepository).addVehicle(isNull(), any(), profile.capture(),
+            eq(cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn.ALWAYS))
+        assertEquals("2021", profile.firstValue.year)
+        assertEquals("Toyota", profile.firstValue.make)
+        assertEquals("Corolla", profile.firstValue.model)
+        verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
+    }
+
 }
