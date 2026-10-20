@@ -77,6 +77,11 @@ class BubbleGoalMarkTest {
         whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null, readable = true)))
         return repo
     }
+    private fun dashVehicles(): cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository = mock()
+        whenever(repo.stamps).thenReturn(flowOf(emptyList()))
+        return repo
+    }
     private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
         val repo: cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository = mock()
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
@@ -89,6 +94,7 @@ class BubbleGoalMarkTest {
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
         garageRepository = garage(), odometerReadingRepository = readings(),
         correctionRepository = mock(),
+        dashVehicleRepository = dashVehicles(),
         clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
     )
     @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {

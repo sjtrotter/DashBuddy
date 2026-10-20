@@ -5,6 +5,7 @@ import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.state.Flow
 import cloud.trotter.dashbuddy.domain.state.Mode
 import cloud.trotter.dashbuddy.domain.state.Platform
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.state.PlatformRegion
 import cloud.trotter.dashbuddy.domain.state.presentation
 import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleRowModel
@@ -21,6 +22,7 @@ object HudStateMapper {
         odometerLoaded: Boolean, odometerCue: Boolean = false, expenseCue: Boolean = false,
         goalSheetOpen: Boolean = false, editedGoalKey: String? = null,
         vehicle: VehicleRowModel? = null,
+        dashVehicle: Vehicle? = null,
     ): HudUiState {
         val mode = HudModeResolver.resolve(flow, region?.mode, region?.session != null, hasActiveCard, hasOfferCard, logOpen)
         val firstRun = region?.session == null && lastSession == null
@@ -45,6 +47,7 @@ object HudStateMapper {
         return HudUiState(mode, paused, flow.presentation.stripColor,
             if (atRest) lastSession?.platform else platform, switchable, top,
             HeroModel(profit, goalState, celebration, markLoading = mark == MarkRead.Loading), dock,
-            resting, firstRun, gas, logOpen, vehicle)
+            resting, firstRun, gas, logOpen, vehicle,
+            dashVehicle.takeIf { mode == HudMode.LIVE || mode == HudMode.OFFER })
     }
 }

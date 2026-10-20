@@ -580,6 +580,17 @@ data class FuelFillupPayload(
 @Serializable
 data class LedgerEntryVoidedPayload(val targetEventSequenceId: Long) : AppEventPayload
 
+/** Which saved vehicle drove a dash; the event itself has no session attribution. */
+@Serializable
+data class DashVehiclePayload(
+    val sessionId: String,
+    /** Null when no vehicle can be named at the dash's start. */
+    val vehicleId: String?,
+    val gpsTotalMiles: Double?,
+    /** A DashVehicleKind name; unknown values are read as SWAP. */
+    val kind: String,
+) : AppEventPayload
+
 /** The typed car miles and the app's own GPS stamp, without session or platform attribution. */
 @Serializable
 data class OdometerReadingPayload(

@@ -70,6 +70,8 @@ class BubbleScreenTest {
         whenever(vm.odometerPrompts).thenReturn(MutableStateFlow(false))
         whenever(vm.garage).thenReturn(MutableStateFlow(Garage(emptyList(), null, readable = true)))
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
+        whenever(vm.stamps).thenReturn(MutableStateFlow(emptyList()))
+        whenever(vm.dashVehicle).thenReturn(MutableStateFlow(null))
         whenever(vm.odometerNotice).thenReturn(MutableStateFlow(null))
         whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
         whenever(vm.odometerWriteFailed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))

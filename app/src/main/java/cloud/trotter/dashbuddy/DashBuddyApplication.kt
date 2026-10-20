@@ -65,6 +65,9 @@ class DashBuddyApplication : Application(), Configuration.Provider {
     lateinit var strategyRepository: cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 
     @Inject
+    lateinit var dashVehicleStamper: cloud.trotter.dashbuddy.state.vehicle.DashVehicleStamper
+
+    @Inject
     lateinit var shadowStoreChainLogger: cloud.trotter.dashbuddy.state.shadow.ShadowStoreChainLogger
 
     @Inject
@@ -184,6 +187,8 @@ class DashBuddyApplication : Application(), Configuration.Provider {
         // 3. Initialize State
         stateManagerV2.initialize()
         Timber.i("StateManagerV2 initialized.")
+
+        dashVehicleStamper.start(applicationScope)
 
         // 3b. Shadow store-chain projection (#159 / #526 Step 3): debug-only, log-only — observe
         // completed jobs and log the offer→pickup→dropoff→payout chain so we can verify store

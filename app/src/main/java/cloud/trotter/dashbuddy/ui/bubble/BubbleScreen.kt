@@ -47,6 +47,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
     val odometerLoaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
     val garage by viewModel.garage.collectAsStateWithLifecycle()
+    val dashVehicle by viewModel.dashVehicle.collectAsStateWithLifecycle()
     val logOpenState = rememberSaveable { mutableStateOf(false) }
     var logOpen by logOpenState
     val closeLog = remember(logOpenState) { { logOpenState.value = false } }
@@ -162,12 +163,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         pillGoal, goalDay?.date, goal, goalMark, goalEditing, editKey)
     LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, garage) {
+        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, garage, dashVehicle) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            goalSheetOpen = goalEditing, editedGoalKey = editKey,
+            goalSheetOpen = goalEditing, editedGoalKey = editKey, dashVehicle = dashVehicle,
             vehicle = VehicleRowMapper.map(garage?.let {
                 VehicleRowInput(it.active,
                     switchable = odometerLoaded && (it.unretired.size > 1 || (it.active == null && it.unretired.isNotEmpty())),
