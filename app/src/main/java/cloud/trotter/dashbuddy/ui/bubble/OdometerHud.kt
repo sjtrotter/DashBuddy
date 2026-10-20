@@ -3,6 +3,7 @@ package cloud.trotter.dashbuddy.ui.bubble
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
@@ -55,6 +56,20 @@ internal class OdometerHud(
                 entry.vehicleSwitched()
                 viewModel.odometerVehicleChangeHandled()
             }
+        }
+        // A typed reading belongs to the vehicle it was typed for. The collapsed bubble keeps its sheet, and
+        // the active vehicle can change elsewhere (the app's Garage), so any change of the active vehicle
+        // clears the draft; otherwise Save would record it against the new vehicle (#1379 follow-up review).
+        val garage by viewModel.garage.collectAsStateWithLifecycle()
+        val loaded = garage != null
+        val activeId = garage?.active?.id
+        val seenActive = rememberSaveable { mutableStateOf<String?>(null) }
+        val seen = rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(loaded, activeId) {
+            if (!loaded) return@LaunchedEffect
+            if (seen.value && seenActive.value != activeId) entry.vehicleSwitched()
+            seenActive.value = activeId
+            seen.value = true
         }
     }
 
