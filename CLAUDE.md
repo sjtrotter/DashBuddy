@@ -130,7 +130,9 @@ copy authoritative, documented at both sites (`common_content_desc_back` #99, `@
 Shipped: `:feature:settings` (#99); `:feature:setup` (#98 — wizard VM/model/step cards; #1359 slice A made `wizard/vehicle/VehicleDraft` +
 `VehicleDraftState` the vehicle form's one owner — the EPA lookup cascade, type/class/powertrain and EV-trim changes, and the
 five vehicle-shaped user-set fields — rendered by `VehicleCard(step, draft, actions, …)`, hosted by the wizard and by the
-`:app` Garage editor (`ui/main/settings/garage/`, #1359 slice B); the cost drafts stay in `WizardState` and land in the saved profile; the
+`:app` Garage editor (`ui/main/settings/garage/`, #1359 slice B); the Garage list is an Android two-part row
+(radio + name selects; divider + gear opens the details, where Retire lives) and honours the mid-dash swap lock (#1379);
+the cost drafts stay in `WizardState` and land in the saved profile; the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
 `:app`); `:feature:dashboard` (#97, reshaped by #977/#981/#1024 — Home's presentational composables

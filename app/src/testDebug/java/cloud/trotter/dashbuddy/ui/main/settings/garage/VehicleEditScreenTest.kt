@@ -10,6 +10,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
+import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.flow
@@ -22,13 +23,17 @@ import org.junit.runner.RunWith
 import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class VehicleEditScreenTest {
     @get:Rule val compose = createComposeRule()
     private val repository: GarageRepository = mock()
+    private val lock: VehicleSwapLock = mock()
     private val lookup: VehicleRepository = mock()
     private val preferences: AppPreferencesRepository = mock {
         on { userEconomy } doReturn flowOf(UserEconomy())
@@ -40,11 +45,11 @@ class VehicleEditScreenTest {
     private lateinit var vm: VehicleEditViewModel
     private var done = false
 
-    private fun showEditor() {
+    private fun showEditor(editing: Boolean = true) {
         whenever(repository.garage).thenReturn(flow { emit(loaded.await()) })
         compose.runOnIdle {
-            vm = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to vehicle.id)),
-                repository, lookup, preferences, Clock.systemUTC())
+            vm = VehicleEditViewModel(SavedStateHandle(if (editing) mapOf(Screen.VehicleEdit.ARG to vehicle.id) else emptyMap()),
+                repository, lookup, preferences, Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC), lock)
         }
         compose.setContent { DashBuddyTheme { VehicleEditScreen(onDone = { done = true }, viewModel = vm) } }
     }
@@ -53,6 +58,49 @@ class VehicleEditScreenTest {
         compose.runOnIdle { loaded.complete(Garage(listOf(vehicle), vehicle.id, true)) }
         compose.waitUntil { vm.loaded.value && !vm.busy.value }
         compose.waitForIdle()
+    }
+
+    @Test fun `retire is in edit details with cancel and confirmation returning to list`() {
+        runBlocking { whenever(repository.retire(vehicle.id, 1234)).thenReturn(true) }
+        showEditor()
+        compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
+        finishLoading()
+        compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithText("Retire Original? Its readings stay.").assertIsDisplayed()
+        runBlocking { verify(repository, never()).retire(any(), any()) }
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Retire Original? Its readings stay.").assertDoesNotExist()
+        compose.onNodeWithText("Retire vehicle").performClick()
+        compose.onNodeWithText("Retire").performClick()
+        compose.waitUntil { done }
+        runBlocking { verify(repository, times(1)).retire(vehicle.id, 1234) }
+    }
+
+    @Test fun `locked active retire shows shared toast and keeps details open`() {
+        whenever(lock.locked()).thenReturn(true)
+        showEditor()
+        finishLoading()
+        compose.onNodeWithText("Retire vehicle").performScrollTo().performClick()
+        compose.onNodeWithText("Retire").performClick()
+        compose.waitForIdle()
+        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        runBlocking { verify(repository, never()).retire(any(), any()) }
+        assertFalse(done)
+        compose.onNodeWithText("Retire vehicle").assertIsEnabled()
+        compose.runOnIdle { assertEquals(GarageWriteFailure.NONE, vm.failure.value) }
+    }
+
+    @Test fun `Add has no retire button`() {
+        showEditor(editing = false)
+        finishLoading()
+        compose.onNodeWithText("Retire vehicle").assertDoesNotExist()
+    }
+
+    @Test fun `unreadable editor disables retire`() {
+        showEditor()
+        compose.runOnIdle { loaded.complete(Garage(emptyList(), null, false)) }
+        compose.waitUntil { vm.failure.value == GarageWriteFailure.UNREADABLE }
+        compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
     }
 
     @Test fun `type taps are inert before load and during save but work after load`() {
@@ -70,6 +118,7 @@ class VehicleEditScreenTest {
         compose.waitUntil { vm.busy.value }
         compose.onNodeWithText("Car").performScrollTo().assertIsNotEnabled().performTouchInput { click() }
         compose.runOnIdle { assertEquals(VehicleType.BICYCLE, vm.draft.state.value.profile.vehicleType) }
+        compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
         compose.runOnIdle { saved.complete(true) }
         compose.waitUntil { done }
     }
@@ -105,5 +154,6 @@ class VehicleEditScreenTest {
         compose.onNodeWithText("This vehicle was retired.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithText("Bicycle").assertIsNotEnabled()
+        compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
     }
 }

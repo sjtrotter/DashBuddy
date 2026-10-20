@@ -836,7 +836,8 @@
     <string name="garage_vehicle_gone">This vehicle was retired.</string>
     <string name="garage_add">Add vehicle</string>
     <string name="garage_vehicle_details">%1$s · %2$s</string>
-    <string name="garage_retire_vehicle">Retire %1$s</string>
+    <string name="garage_vehicle_settings">%1$s settings</string>
+    <string name="garage_retire_vehicle_button">Retire vehicle</string>
     <string name="garage_retire_confirmation">Retire %1$s? Its readings stay.</string>
     <string name="garage_cancel">Cancel</string>
     <string name="garage_retire">Retire</string>

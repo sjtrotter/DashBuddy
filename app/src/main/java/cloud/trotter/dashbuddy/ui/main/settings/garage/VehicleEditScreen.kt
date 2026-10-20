@@ -1,14 +1,15 @@
 package cloud.trotter.dashbuddy.ui.main.settings.garage
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -19,6 +20,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppTheme
 import cloud.trotter.dashbuddy.feature.setup.wizard.cards.VehicleCard
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +30,14 @@ fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hilt
     val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val failure by viewModel.failure.collectAsStateWithLifecycle()
+    val vehicle by viewModel.vehicle.collectAsStateWithLifecycle()
+    var retiring by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    LaunchedEffect(viewModel, context) {
+        viewModel.retireLocked.collect {
+            Toast.makeText(context, R.string.hud_vehicle_locked, Toast.LENGTH_SHORT).show()
+        }
+    }
     val enabled = loaded && !busy && failure != GarageWriteFailure.UNREADABLE && failure != GarageWriteFailure.GONE
     Scaffold(topBar = {
         TopAppBar(title = {
@@ -62,7 +72,28 @@ fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hilt
                 modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.vehicle_edit_save))
             }
+            if (viewModel.isEditing) {
+                OutlinedButton(onClick = { retiring = true }, enabled = enabled,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.garage_retire_vehicle_button))
+                }
+            }
         }
+    }
+    if (retiring) vehicle?.let { target ->
+        AlertDialog(
+            onDismissRequest = { retiring = false },
+            text = { Text(stringResource(R.string.garage_retire_confirmation, target.displayName())) },
+            dismissButton = {
+                TextButton(onClick = { retiring = false }) { Text(stringResource(R.string.garage_cancel)) }
+            },
+            confirmButton = {
+                TextButton(enabled = enabled, onClick = { retiring = false; viewModel.retire(onDone) }) {
+                    Text(stringResource(R.string.garage_retire))
+                }
+            },
+        )
     }
 }
 
