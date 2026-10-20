@@ -200,15 +200,27 @@ class BubbleScreenTest {
         verify(vm, never()).reopenOdometer()
     }
 
-    @Test fun `chip Add starts the Garage Add form and finishes bubble`() {
+    /** #1379 follow-up: Accept and Decline collapse the bubble through the same helper, never finish it. */
+    @Test fun `an offer action collapses the bubble without removing it`() {
+        val collapse = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val vm = model()
+        whenever(vm.collapse).thenReturn(collapse)
+        show(vm)
+        collapse.tryEmit(Unit); settle()
+        assertTrue(shadowOf(compose.activity).isTaskMovedToBack)
+        assertFalse(compose.activity.isFinishing)
+    }
+
+    @Test fun `chip Add starts the Garage Add form and collapses the bubble`() {
         show()
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
         compose.onNodeWithTag("hud.vehicle.add").performClick(); settle()
         assertVehicleAddStarted()
-        assertTrue(compose.activity.isFinishing)
+        assertTrue("the bubble collapses", shadowOf(compose.activity).isTaskMovedToBack)
+        assertFalse("the bubble is not removed", compose.activity.isFinishing)
     }
 
-    @Test fun `odometer chip Add starts the Garage Add form and finishes bubble`() {
+    @Test fun `odometer chip Add starts the Garage Add form and collapses the bubble`() {
         val civic = Vehicle("civic", "Civic", 0)
         val vm = model()
         whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, true)))
@@ -220,10 +232,11 @@ class BubbleScreenTest {
             .performClick(); settle()
         compose.onNodeWithTag("hud.vehicle.add").performClick(); settle()
         assertVehicleAddStarted()
-        assertTrue(compose.activity.isFinishing)
+        assertTrue("the bubble collapses", shadowOf(compose.activity).isTaskMovedToBack)
+        assertFalse("the bubble is not removed", compose.activity.isFinishing)
     }
 
-    @Test fun `Settings starts the app and finishes bubble`() {
+    @Test fun `Settings starts the app and collapses the bubble`() {
         val vm = model()
         whenever(vm.focusedRegion).thenReturn(MutableStateFlow(null))
         show(vm)
@@ -232,7 +245,8 @@ class BubbleScreenTest {
         assertNotNull(intent)
         assertEquals(MainActivity::class.java.name, intent.component?.className)
         assertEquals(Screen.SettingsHome.route, intent.getStringExtra(MainActivity.EXTRA_ROUTE))
-        assertTrue(compose.activity.isFinishing)
+        assertTrue("the bubble collapses", shadowOf(compose.activity).isTaskMovedToBack)
+        assertFalse("the bubble is not removed", compose.activity.isFinishing)
         assertNull(shadowOf(compose.activity).nextStartedActivity)
     }
 
@@ -242,7 +256,8 @@ class BubbleScreenTest {
         assertEquals(MainActivity::class.java.name, intent.component?.className)
         assertEquals(Screen.VehicleAdd.route, intent.getStringExtra(MainActivity.EXTRA_ROUTE))
         assertNull(shadowOf(compose.activity).nextStartedActivity)
-        assertTrue(compose.activity.isFinishing)
+        assertTrue("the bubble collapses", shadowOf(compose.activity).isTaskMovedToBack)
+        assertFalse("the bubble is not removed", compose.activity.isFinishing)
     }
 
     @Test fun `Back during a pending preset write marks the new goal once without celebrating`() {

@@ -40,8 +40,9 @@ class OdometerHudSheetTest {
     private val selections = mutableListOf<String>()
     private val vm: BubbleViewModel = mock()
 
+    private val garage = MutableStateFlow(Garage(listOf(civic, bike), civic.id, true))
     private fun show() {
-        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic, bike), civic.id, true)))
+        whenever(vm.garage).thenReturn(garage)
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.gpsTotalMiles).thenReturn(MutableStateFlow(100.0))
         whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
@@ -68,6 +69,20 @@ class OdometerHudSheetTest {
         settle()
     }
     private fun settle() { compose.waitForIdle(); compose.mainClock.advanceTimeBy(100) }
+
+    /** #1379 follow-up review: a switch made elsewhere (the app's Garage) clears the draft typed for the old vehicle. */
+    @Test fun `a vehicle switch from outside the bubble clears the typed reading`() {
+        show()
+        compose.onNodeWithTag("odometer.reading").assertTextEquals("52")
+        garage.value = Garage(listOf(civic, bike), bike.id, true); settle()
+        compose.onNodeWithTag("odometer.reading").assertTextEquals("—")
+    }
+
+    @Test fun `the same active vehicle keeps the typed reading`() {
+        show()
+        garage.value = Garage(listOf(civic, bike), civic.id, true); settle()
+        compose.onNodeWithTag("odometer.reading").assertTextEquals("52")
+    }
 
     @Test fun `sheet hosts chip menu and Add callback without a switcher page`() {
         show()
