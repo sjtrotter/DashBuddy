@@ -73,9 +73,10 @@ class EconomySettingsScreenTest {
                 economy.value = economy.value.copy(phonePlanLines = it.getArgument(0))
                 StoredPreference(previous, true)
             }
-            whenever(preferences.restorePhoneLines(any())).doAnswer {
+            whenever(preferences.restorePhoneLines(any(), any(), any())).doAnswer {
                 val previous = it.getArgument<StoredPreference<Int>>(0)
                 economy.value = economy.value.copy(phonePlanLines = requireNotNull(previous.value))
+                true
             }
         }
         show(null, preferences)

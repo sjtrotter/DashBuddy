@@ -119,18 +119,31 @@ class EditSessionTest {
         assertNull(field.awaiting)
     }
 
-    @Test fun `a failed submission is reported and retry can acknowledge it`() = runTest {
+    @Test fun `writer alone retries while text stays dirty until the final result`() = runTest {
+        val writer = VehicleCostWriter(backgroundScope)
         val session = EditSession(backgroundScope)
-        var result = WriteResult.FAILED
-        val field = session.field("cost", "60", { true }) { CompletableDeferred(result) }
+        var calls = 0
+        val release = CompletableDeferred<Unit>()
+        val field = session.field("cost", "60", { true }) {
+            writer.write { if (++calls == 1) error("failure"); release.await(); true }
+        }
         session.edit("cost", "25")
         assertFalse(session.finishAll())
         assertTrue(field.edited)
-        result = WriteResult.SAVED
-        session.retryFailed()
+        assertEquals("25", field.text)
+        assertEquals("25", field.awaiting)
+        writer.retry()
+        val leave = backgroundScope.async { session.finishAll() }
+        runCurrent()
+        assertFalse(leave.isCompleted)
+        assertTrue(field.edited)
+        session.field("cost", "60", { true }) { error("Must not resubmit") }
+        assertEquals("25", field.text)
+        release.complete(Unit)
+        runCurrent()
+        assertTrue(leave.await())
+        assertEquals(2, calls)
         assertFalse(field.edited)
-        assertTrue(session.finishAll())
-        session.field("cost", "99", { true }) { CompletableDeferred(WriteResult.SAVED) }
-        assertEquals("99", field.text)
+        assertNull(field.awaiting)
     }
 }

@@ -58,7 +58,7 @@ class VehicleCostTransformsTest {
             val original = GasCar(wear = WearProfile(oilCost = prior, oilIntervalMi = 5000.25))
             val saved = VehicleCostTransforms.oilCost(original, 65.0)
             val later = VehicleCostTransforms.oilInterval(saved, 7000.5)
-            val undone = VehicleCostTransforms.restoreOilCost(later, prior)
+            val undone = requireNotNull(VehicleCostTransforms.restoreOilCost(later, prior, 65.0))
             assertEquals(original.copy(wear = original.wear.copy(oilIntervalMi = 7000.5)), undone)
             assertEquals(prior != null, EconomyField.OIL_COST in EconomyFieldGroups.userSetFields(undone))
         }
@@ -66,15 +66,21 @@ class VehicleCostTransformsTest {
 
     @Test fun `propulsion and depreciation undo restore null overrides for all applicable types`() {
         for (original in listOf(GasCar(), HybridCar(), Motorcycle(), ScooterMoped())) {
-            assertEquals(original, VehicleCostTransforms.restoreMpg(VehicleCostTransforms.mpg(original, 45.0), null))
-            assertEquals(original, VehicleCostTransforms.restoreFuel(VehicleCostTransforms.fuel(original, FuelType.PREMIUM), FuelType.REGULAR))
+            assertEquals(original, VehicleCostTransforms.restoreMpg(VehicleCostTransforms.mpg(original, 45.0), null, 45.0))
+            assertEquals(original, VehicleCostTransforms.restoreFuel(VehicleCostTransforms.fuel(original, FuelType.PREMIUM), FuelType.REGULAR, FuelType.PREMIUM))
         }
         for (original in listOf(ElectricCar(), ScooterMoped(powertrain = Powertrain.ELECTRIC), EBike())) {
-            assertEquals(original, VehicleCostTransforms.restoreConsumption(VehicleCostTransforms.consumption(original, 40.0), null))
+            assertEquals(original, VehicleCostTransforms.restoreConsumption(VehicleCostTransforms.consumption(original, 40.0), null, 40.0))
         }
         val original = GasCar(fixed = FixedCosts(purchasePrice = 12000.25))
         assertEquals(original, VehicleCostTransforms.restoreDepreciationInclude(
-            VehicleCostTransforms.depreciationInclude(original, false), null))
+            VehicleCostTransforms.depreciationInclude(original, false), null, false))
+    }
+
+    @Test fun `oil restore refuses a later value or missing override`() {
+        val later = GasCar(wear = WearProfile(oilCost = 70.0))
+        assertNull(VehicleCostTransforms.restoreOilCost(later, 50.0, 65.0))
+        assertNull(VehicleCostTransforms.restoreOilCost(GasCar(), 50.0, 65.0))
     }
 
 }

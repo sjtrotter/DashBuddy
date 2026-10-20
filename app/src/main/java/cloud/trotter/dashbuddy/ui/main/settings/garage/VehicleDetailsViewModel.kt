@@ -82,12 +82,20 @@ class VehicleDetailsViewModel @Inject constructor(
     private fun rejected() = CompletableDeferred(WriteResult.REJECTED)
 
     fun nameField(): EditSession.Field = edits.field("NAME", vehicle.value?.name.orEmpty(), { true }) { text ->
+        var captured: LastSaveUndo? = null
+        val name = text.trim().ifBlank { null }
         if (canEdit()) undoState.write {
-            var previous: String? = null
-            val saved = garageRepository.updateName(id) { previous = it; text.trim().ifBlank { null } }
-            if (saved) LastSaveUndo.captured("NAME", R.string.vehicle_edit_name, previous) { old ->
-                garageRepository.updateName(id) { old }
-            } else null
+            val saved = garageRepository.updateName(id) { stored ->
+                if (captured == null) captured = LastSaveUndo.checked("NAME", R.string.vehicle_edit_name, stored) { old, current ->
+                    var matched = false
+                    val exists = garageRepository.updateName(id) {
+                        if (current() && it == name) { matched = true; old } else it
+                    }
+                    exists && matched
+                }
+                name
+            }
+            if (saved) captured else null
         } else rejected()
     }
     fun setName(value: String) {
@@ -102,18 +110,29 @@ class VehicleDetailsViewModel @Inject constructor(
 
     private fun <T> edit(key: String, label: Int, previous: (VehicleProfile) -> T,
         transform: (VehicleProfile) -> VehicleProfile,
-        restore: (VehicleProfile, T) -> VehicleProfile): Deferred<WriteResult> =
-        if (canEdit()) undoState.write {
-            var captured: LastSaveUndo? = null
+        restore: (VehicleProfile, T, T) -> VehicleProfile?): Deferred<WriteResult> {
+        if (!canEdit()) return rejected()
+        var captured: LastSaveUndo? = null
+        return undoState.write {
             val saved = garageRepository.updateProfile(id) { stored ->
-                val prior = previous(stored)
-                captured = LastSaveUndo.captured(key, label, prior) { old ->
-                    garageRepository.updateProfile(id) { restore(it, old) }
+                val updated = transform(stored)
+                if (captured == null) {
+                    val prior = previous(stored)
+                    val expected = previous(updated)
+                    captured = LastSaveUndo.checked(key, label, prior) { old, current ->
+                        var matched = false
+                        val exists = garageRepository.updateProfile(id) {
+                            val restored = if (current()) restore(it, old, expected) else null
+                            if (restored != null) { matched = true; restored } else it
+                        }
+                        exists && matched
+                    }
                 }
-                transform(stored)
+                updated
             }
             if (saved) captured else null
-        } else rejected()
+        }
+    }
 
     private fun VehicleProfile.consumptionOverride(): Double? = when (this) {
         is ElectricCar -> kwhPer100Mi
@@ -172,16 +191,25 @@ class VehicleDetailsViewModel @Inject constructor(
         { it.fixed.includeDepreciation }, { VehicleCostTransforms.depreciationInclude(it, value) }, VehicleCostTransforms::restoreDepreciationInclude)
     fun setFuelType(value: FuelType) = edit("FUEL_TYPE", R.string.economy_editor_fuel_type_title,
         { it.gasFuel ?: FuelType.REGULAR }, { VehicleCostTransforms.fuel(it, value) }, VehicleCostTransforms::restoreFuel)
-    fun setOdometerShown(shown: Boolean): Deferred<WriteResult> =
-        if (canEdit()) undoState.write {
-            var previous: Boolean? = null
-            val saved = garageRepository.updateOdometerShown(id) { previous = it; shown }
-            if (saved) LastSaveUndo.captured("ODOMETER", R.string.vehicle_odometer_title, previous) { old ->
-                garageRepository.updateOdometerShown(id) { old }
-            } else null
-        } else rejected()
+    fun setOdometerShown(shown: Boolean): Deferred<WriteResult> {
+        if (!canEdit()) return rejected()
+        var captured: LastSaveUndo? = null
+        return undoState.write {
+            val saved = garageRepository.updateOdometerShown(id) { stored ->
+                if (captured == null) captured = LastSaveUndo.checked("ODOMETER", R.string.vehicle_odometer_title, stored) { old, current ->
+                    var matched = false
+                    val exists = garageRepository.updateOdometerShown(id) {
+                        if (current() && it == shown) { matched = true; old } else it
+                    }
+                    exists && matched
+                }
+                shown
+            }
+            if (saved) captured else null
+        }
+    }
 
-    fun retry() { writer.retry(); edits.retryFailed() }
+    fun retry() { writer.retry() }
     fun resumeEditing() { undoState.resume(); _busy.value = false; edits.acceptingEdits = true }
     suspend fun discardChanges() {
         clearUndo()
@@ -257,6 +285,7 @@ class VehicleDetailsViewModel @Inject constructor(
 
     fun restore(onDone: () -> Unit) {
         if (!canWrite() || !retired.value || _busy.value) return
+        undoState.invalidate()
         _busy.value = true
         writer.write {
             try { garageRepository.restore(id).also { if (it) onDone() } }

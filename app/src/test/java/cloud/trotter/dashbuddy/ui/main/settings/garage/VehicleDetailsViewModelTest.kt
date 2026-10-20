@@ -561,7 +561,7 @@ class VehicleDetailsViewModelTest {
         }
     }
 
-    @Test fun `undo lands after an already queued sibling save and preserves that save`() = runTest {
+    @Test fun `any sibling submission invalidates undo before its held write acknowledges`() = runTest {
         val vm = model("car", Garage(listOf(Vehicle("car", null, 1)), "car", true))
         runCurrent()
         var stored: VehicleProfile = GasCar(wear = WearProfile(oilIntervalMi = 5000.25))
@@ -581,12 +581,12 @@ class VehicleDetailsViewModelTest {
         vm.setOilInterval(7000.5)
         runCurrent()
         val restore = vm.undo(firstUndo)
-        assertFalse(restore.isCompleted)
+        assertNull(vm.lastSaveUndo.value)
+        assertEquals(WriteResult.REJECTED, restore.await())
         release.complete(Unit)
         runCurrent()
-        assertEquals(WriteResult.SAVED, restore.await())
-        assertEquals(listOf(65.0, 65.0, null), order)
-        assertNull(stored.wear.oilCost)
+        assertEquals(listOf(65.0, 65.0), order)
+        assertEquals(65.0, stored.wear.oilCost)
         assertEquals(7000.5, stored.wear.oilIntervalMi)
         assertEquals("OIL_INTERVAL", vm.lastSaveUndo.value?.key)
     }
@@ -663,6 +663,51 @@ class VehicleDetailsViewModelTest {
         assertEquals(GarageWriteFailure.NONE, vm.failure.value)
         assertEquals(50.0, stored.wear.oilCost)
         assertNull(vm.lastSaveUndo.value)
+    }
+
+    @Test fun `oil undo disappears when 70 is submitted and a queued restore cannot revert it`() = runTest {
+        val vm = model("car", Garage(listOf(Vehicle("car", null, 1)), "car", true))
+        runCurrent()
+        var stored: VehicleProfile = GasCar(wear = WearProfile(oilCost = 50.0))
+        var release = CompletableDeferred<Unit>().also { it.complete(Unit) }
+        whenever(garage.updateProfile(eq("car"), any<(VehicleProfile) -> VehicleProfile>())).doSuspendableAnswer {
+            release.await()
+            stored = it.getArgument<(VehicleProfile) -> VehicleProfile>(1)(stored)
+            true
+        }
+        vm.setOilCost(65.0); runCurrent()
+        val offer = requireNotNull(vm.lastSaveUndo.value)
+        release = CompletableDeferred()
+        vm.setOilCost(70.0)
+        assertNull(vm.lastSaveUndo.value) // synchronous, before the write even starts
+        assertEquals(WriteResult.REJECTED, vm.undo(offer).await())
+        runCurrent()
+        release.complete(Unit); runCurrent()
+        assertEquals(70.0, stored.wear.oilCost)
+
+        vm.setOilCost(65.0); runCurrent()
+        release = CompletableDeferred()
+        val queuedUndo = vm.undo(requireNotNull(vm.lastSaveUndo.value))
+        runCurrent() // Restore entered the repository, waiting for its write lock.
+        vm.setOilCost(70.0)
+        release.complete(Unit); runCurrent()
+        assertEquals(WriteResult.CHANGED, queuedUndo.await())
+        assertEquals(70.0, stored.wear.oilCost)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+    }
+
+    @Test fun `oil restore compares current raw value inside the garage transform`() = runTest {
+        val vm = model("car", Garage(listOf(Vehicle("car", null, 1)), "car", true))
+        runCurrent()
+        var stored: VehicleProfile = GasCar(wear = WearProfile(oilCost = 50.0))
+        whenever(garage.updateProfile(eq("car"), any<(VehicleProfile) -> VehicleProfile>())).doAnswer {
+            stored = it.getArgument<(VehicleProfile) -> VehicleProfile>(1)(stored); true
+        }
+        vm.setOilCost(65.0); runCurrent()
+        stored = cloud.trotter.dashbuddy.core.data.settings.VehicleCostTransforms.oilCost(stored, 70.0)
+        val undo = vm.undo(requireNotNull(vm.lastSaveUndo.value)); runCurrent()
+        assertEquals(WriteResult.CHANGED, undo.await())
+        assertEquals(70.0, stored.wear.oilCost)
     }
 
 }

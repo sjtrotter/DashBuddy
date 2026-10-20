@@ -6,6 +6,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteSubmission
 import androidx.compose.ui.res.stringResource
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.ui.main.settings.garage.VehicleCostWriter
@@ -20,11 +23,15 @@ class LastSaveUndo private constructor(
     val key: String,
     @param:StringRes val labelRes: Int,
     val priorState: Any?,
-    internal val restore: suspend () -> Boolean,
+    internal val restore: suspend (() -> Boolean) -> Boolean,
 ) {
     companion object {
         fun <T> captured(key: String, @StringRes labelRes: Int, previous: T,
             restore: suspend (T) -> Boolean) = LastSaveUndo(key, labelRes, previous) { restore(previous) }
+
+        fun <T> checked(key: String, @StringRes labelRes: Int, previous: T,
+            restore: suspend (T, () -> Boolean) -> Boolean) =
+            LastSaveUndo(key, labelRes, previous) { current -> restore(previous, current) }
     }
 }
 
@@ -32,10 +39,11 @@ class LastSaveUndo private constructor(
 class LastSaveUndoState(private val writer: VehicleCostWriter, private val edits: EditSession) {
     private val _lastSave = MutableStateFlow<LastSaveUndo?>(null)
     val lastSave = _lastSave.asStateFlow()
-    private var epoch = 0
+    @Volatile private var epoch = 0
     private var offering = true
 
     fun write(action: suspend () -> LastSaveUndo?): Deferred<WriteResult> {
+        invalidate()
         val acceptedEpoch = epoch
         val offer = offering
         return writer.write {
@@ -48,26 +56,41 @@ class LastSaveUndoState(private val writer: VehicleCostWriter, private val edits
     fun undo(expected: LastSaveUndo): Deferred<WriteResult> {
         if (_lastSave.value !== expected) return CompletableDeferred(WriteResult.REJECTED)
         _lastSave.value = null
+        val acceptedEpoch = epoch
         edits.discard(expected.key)
-        return writer.write { expected.restore() }
+        return writer.writeResult {
+            if (acceptedEpoch != epoch || !expected.restore { acceptedEpoch == epoch }) WriteResult.CHANGED else WriteResult.SAVED
+        }
     }
 
     fun dismiss(expected: LastSaveUndo) { if (_lastSave.value === expected) _lastSave.value = null }
-    fun clear() { epoch++; _lastSave.value = null; offering = false }
+    fun invalidate() { epoch++; _lastSave.value = null }
+    fun clear() { invalidate(); offering = false }
     fun resume() { offering = true }
 }
 
 @Composable
 fun LastSaveUndoSnackbar(save: LastSaveUndo?, host: SnackbarHostState,
-    onUndo: (LastSaveUndo) -> Unit, onDismiss: (LastSaveUndo) -> Unit) {
+    onUndo: (LastSaveUndo) -> Deferred<WriteResult>, onDismiss: (LastSaveUndo) -> Unit) {
     val message = save?.let { stringResource(R.string.economy_field_saved, stringResource(it.labelRes)) }
     val action = stringResource(R.string.economy_field_undo)
+    val scope = rememberCoroutineScope()
     LaunchedEffect(save, host) {
         if (save != null && message != null) {
             when (host.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Short)) {
-                SnackbarResult.ActionPerformed -> onUndo(save)
+                SnackbarResult.ActionPerformed -> {
+                    val submission = onUndo(save)
+                    scope.launch {
+                        showUndoResult(submission, host)
+                    }
+                }
                 SnackbarResult.Dismissed -> onDismiss(save)
             }
         }
     }
+}
+
+internal suspend fun showUndoResult(submission: Deferred<WriteResult>, host: SnackbarHostState) {
+    val result = (submission as? WriteSubmission)?.completion?.await() ?: submission.await()
+    if (result == WriteResult.CHANGED) host.showSnackbar("Couldn't undo. The value changed.")
 }

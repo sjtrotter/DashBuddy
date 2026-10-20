@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -172,24 +174,24 @@ class VehicleEconomyPreferenceTest {
         val absent = repo.updatePhoneLines(3)
         assertNull(absent.value)
         assertFalse(absent.userSet)
-        repo.restorePhoneLines(absent)
+        repo.restorePhoneLines(absent, StoredPreference(3, true))
         assertNull(source.phonePlanLines.first())
         assertFalse(EconomyField.PHONE_PLAN_LINES.name in source.userSetEconomyFields.first())
         repo.updatePhoneLines(2)
         val previous = repo.updatePhoneLines(3)
         assertEquals(2, previous.value)
         assertTrue(previous.userSet)
-        repo.restorePhoneLines(previous)
+        repo.restorePhoneLines(previous, StoredPreference(3, true))
         assertEquals(2, source.phonePlanLines.first())
         assertEquals(125.0, source.phonePlanTotal.first())
         assertEquals(45.0, source.phoneBusinessPercent.first())
         assertTrue(EconomyField.PHONE_PLAN_LINES.name in source.userSetEconomyFields.first())
         // A raw stored value can exist without its user-set marker.
-        source.restorePhoneLines(cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference(2, false))
+        source.restorePhoneLines(StoredPreference(2, false), StoredPreference(2, true))
         val unmarked = repo.updatePhoneLines(3)
         assertEquals(2, unmarked.value)
         assertFalse(unmarked.userSet)
-        repo.restorePhoneLines(unmarked)
+        repo.restorePhoneLines(unmarked, StoredPreference(3, true))
         assertEquals(2, source.phonePlanLines.first())
         assertFalse(EconomyField.PHONE_PLAN_LINES.name in source.userSetEconomyFields.first())
         assertEquals(125.0, source.phonePlanTotal.first())
@@ -197,29 +199,32 @@ class VehicleEconomyPreferenceTest {
         assertTrue(garage.garage.first().vehicles.isEmpty())
     }
 
-    @Test fun `tariff time and gas undo restore values and markers without reverting the auto switch`() = runTest {
+    @Test fun `tariff time and gas undo restore all values and markers and reject changed auto`() = runTest {
         val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("other-undo.preferences_pb") }))
         val electricity = source.updateElectricityPrice(.25)
-        source.restoreElectricityPrice(electricity)
+        source.restoreElectricityPrice(electricity, StoredPreference(.25, true))
         assertNull(source.electricityPricePerKwh.first())
         val time = source.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, 4.0)
-        source.restoreTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, time)
+        source.restoreTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, time, StoredPreference(4.0, true))
         assertNull(source.avgMinPerMile.first())
         assertTrue(source.userSetEconomyFields.first().isEmpty())
         source.updateGasPriceAuto(3.25f)
         val gas = source.updateGasPriceManual(4.0f)
         assertFalse(source.isGasPriceAuto.first())
-        source.restoreGasPriceManual(gas)
+        val expected = StoredGasPrice(StoredPreference(4.0f, false), StoredPreference(false, false))
+        assertTrue(source.restoreGasPriceManual(gas, expected))
         assertEquals(3.25f, source.gasPrice.first())
-        assertFalse(source.isGasPriceAuto.first())
+        assertTrue(source.isGasPriceAuto.first())
+        val next = source.updateGasPriceManual(4.0f)
         source.setGasPriceAuto(true)
-        source.restoreGasPriceManual(gas)
+        assertFalse(source.restoreGasPriceManual(next, expected))
+        assertEquals(4.0f, source.gasPrice.first())
         assertTrue(source.isGasPriceAuto.first())
         val auto = source.setGasPriceAuto(false)
-        source.restoreGasPriceAuto(auto)
+        source.restoreGasPriceAuto(auto, StoredPreference(false, false))
         assertTrue(source.isGasPriceAuto.first())
-        assertEquals(3.25f, source.gasPrice.first())
+        assertEquals(4.0f, source.gasPrice.first())
     }
 
 }

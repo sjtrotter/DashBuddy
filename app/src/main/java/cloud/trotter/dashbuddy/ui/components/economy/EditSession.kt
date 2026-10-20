@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.components.economy
 
 import androidx.compose.runtime.*
 import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteResult
+import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteSubmission
 import kotlinx.coroutines.*
 
 typealias NumberSave = (Double) -> Deferred<WriteResult>
@@ -67,7 +68,7 @@ class EditSession(private val scope: CoroutineScope) {
 
     fun finish(key: String): Deferred<WriteResult> {
         val field = fields[key] ?: return CompletableDeferred(WriteResult.SAVED)
-        field.attempt?.let { return it }
+        field.attempt?.let { return (it as? WriteSubmission)?.attempt ?: it }
         if (!field.edited) return CompletableDeferred(WriteResult.SAVED)
         if (!field.valid(field.text)) {
             field.error = true
@@ -82,11 +83,16 @@ class EditSession(private val scope: CoroutineScope) {
         field.edited = false
         field.awaiting = text
         CoroutineScope(scope.coroutineContext + NonCancellable).launch(start = CoroutineStart.UNDISPATCHED) {
-            val result = submission.await()
+            var result = submission.await()
+            if (result == WriteResult.FAILED && submission is WriteSubmission) {
+                if (epoch == generation && revision == field.revision) field.edited = true
+                result = submission.completion.await()
+            }
             if (epoch == generation && revision == field.revision) {
                 field.awaiting = null
                 if (result == WriteResult.SAVED) {
                     field.attempt = null
+                    field.edited = false
                     field.text = field.stored
                 } else field.edited = true
             }
@@ -98,15 +104,6 @@ class EditSession(private val scope: CoroutineScope) {
     fun submitAll(): List<Deferred<WriteResult>> = fields.keys.toList().map(::finish)
 
     suspend fun finishAll(): Boolean = submitAll().map { it.await() }.all { it == WriteResult.SAVED }
-
-    /** Retry only previously submitted buffers; unrelated unfinished text stays unfinished. */
-    fun retryFailed() {
-        val failed = fields.filterValues { it.edited && it.attempt?.isCompleted == true }.keys.toList()
-        failed.forEach { key ->
-            fields.getValue(key).attempt = null
-            finish(key)
-        }
-    }
 
     fun discard(key: String) {
         fields[key]?.let {

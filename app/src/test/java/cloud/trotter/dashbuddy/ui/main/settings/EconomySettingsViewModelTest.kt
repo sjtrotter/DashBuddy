@@ -54,8 +54,8 @@ class EconomySettingsViewModelTest {
         val release = CompletableDeferred<Unit>()
         var total = 80.0
         var lines = 1
-        whenever(preferences.updatePhoneTotal(125.0)).doSuspendableAnswer { release.await(); val old = total; total = 125.0; StoredPreference(old, true) }
-        whenever(preferences.updatePhoneLines(3)).doSuspendableAnswer { val old = lines; lines = 3; StoredPreference(old, true) }
+        whenever(preferences.updatePhoneTotal(eq(125.0), any())).doSuspendableAnswer { release.await(); val old = total; total = 125.0; StoredPreference(old, true) }
+        whenever(preferences.updatePhoneLines(eq(3), any())).doSuspendableAnswer { val old = lines; lines = 3; StoredPreference(old, true) }
         val vm = model()
         val first = vm.setPhoneTotal(125.0)
         val second = vm.setPhoneLines(3)
@@ -68,16 +68,16 @@ class EconomySettingsViewModelTest {
         assertEquals(WriteResult.SAVED, second.await())
         assertEquals(125.0, total, 0.0)
         assertEquals(3, lines)
-        verify(preferences, never()).updatePhoneShare(any())
+        verify(preferences, never()).updatePhoneShare(any(), any())
     }
 
     @Test fun `finished field and unfinished leave field survive owner cancellation`() = runTest {
         val release = CompletableDeferred<Unit>()
         val writes = mutableListOf<Double>()
-        whenever(preferences.updatePhoneTotal(any())).doSuspendableAnswer {
+        whenever(preferences.updatePhoneTotal(any(), any())).doSuspendableAnswer {
             release.await(); writes += it.getArgument<Double>(0); StoredPreference(80.0, true)
         }
-        whenever(preferences.updateElectricityPrice(any())).doSuspendableAnswer {
+        whenever(preferences.updateElectricityPrice(any(), any())).doSuspendableAnswer {
             writes += it.getArgument<Double>(0); StoredPreference(0.15, false)
         }
         val vm = model()
@@ -99,7 +99,7 @@ class EconomySettingsViewModelTest {
     @Test fun `reset discards typed text and runs after accepted writes despite a late blur`() = runTest {
         val release = CompletableDeferred<Unit>()
         var stored = 80.0
-        whenever(preferences.updatePhoneTotal(any())).doSuspendableAnswer {
+        whenever(preferences.updatePhoneTotal(any(), any())).doSuspendableAnswer {
             release.await(); val old = stored; stored = it.getArgument(0); StoredPreference(old, true)
         }
         whenever(preferences.resetSharedEconomyDefaults()).doSuspendableAnswer { stored = 80.0 }
@@ -117,12 +117,12 @@ class EconomySettingsViewModelTest {
         vm.edits.finishAll()
         runCurrent()
         assertEquals(80.0, stored, 0.0)
-        verify(preferences, times(1)).updatePhoneTotal(any())
+        verify(preferences, times(1)).updatePhoneTotal(any(), any())
         verify(garage, never()).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>())
     }
 
     @Test fun `a failed shared write prevents leave until retry or discard`() = runTest {
-        whenever(preferences.updatePhoneTotal(125.0)).thenThrow(IllegalStateException())
+        whenever(preferences.updatePhoneTotal(eq(125.0), any())).thenThrow(IllegalStateException())
         val vm = model()
         vm.edits.field("total", "80", { true }) { vm.setPhoneTotal(it.toDouble()) }
         vm.edits.edit("total", "125")
@@ -134,7 +134,8 @@ class EconomySettingsViewModelTest {
     }
 
     @Test fun `phone lines undo uses captured two lines and never writes total or share`() = runTest {
-        whenever(preferences.updatePhoneLines(3)).thenReturn(StoredPreference(2, true))
+        whenever(preferences.updatePhoneLines(eq(3), any())).thenReturn(StoredPreference(2, true))
+        whenever(preferences.restorePhoneLines(any(), any(), any())).thenReturn(true)
         val vm = model()
         vm.setPhoneLines(3); runCurrent()
         val undo = requireNotNull(vm.lastSaveUndo.value)
@@ -145,16 +146,16 @@ class EconomySettingsViewModelTest {
         val restore = vm.undo(undo)
         lateBlur(); runCurrent()
         assertEquals(WriteResult.SAVED, restore.await())
-        verify(preferences).restorePhoneLines(StoredPreference(2, true))
-        verify(preferences, never()).updatePhoneTotal(any())
-        verify(preferences, never()).updatePhoneShare(any())
-        verify(preferences, times(1)).updatePhoneLines(any())
+        verify(preferences).restorePhoneLines(eq(StoredPreference(2, true)), eq(StoredPreference(3, true)), any())
+        verify(preferences, never()).updatePhoneTotal(any(), any())
+        verify(preferences, never()).updatePhoneShare(any(), any())
+        verify(preferences, times(1)).updatePhoneLines(any(), any())
         assertNull(vm.lastSaveUndo.value)
     }
 
     @Test fun `shared latest offer is replaced and reset and leave suppress queued offers`() = runTest {
-        whenever(preferences.updatePhoneLines(any())).thenReturn(StoredPreference(2, true))
-        whenever(preferences.updatePhoneTotal(any())).thenReturn(StoredPreference(80.0, true))
+        whenever(preferences.updatePhoneLines(any(), any())).thenReturn(StoredPreference(2, true))
+        whenever(preferences.updatePhoneTotal(any(), any())).thenReturn(StoredPreference(80.0, true))
         val vm = model()
         vm.setPhoneLines(3); runCurrent()
         val first = requireNotNull(vm.lastSaveUndo.value)
@@ -164,12 +165,70 @@ class EconomySettingsViewModelTest {
         assertEquals(GarageWriteFailure.NONE, vm.resetDefaults())
         assertNull(vm.lastSaveUndo.value)
         val release = CompletableDeferred<Unit>()
-        whenever(preferences.updatePhoneLines(4)).doSuspendableAnswer { release.await(); StoredPreference(3, true) }
+        whenever(preferences.updatePhoneLines(eq(4), any())).doSuspendableAnswer { release.await(); StoredPreference(3, true) }
         vm.setPhoneLines(4); runCurrent()
         val leave = async(start = CoroutineStart.UNDISPATCHED) { vm.finishAndAwait() }
         release.complete(Unit); runCurrent()
         assertEquals(GarageWriteFailure.NONE, leave.await())
         assertNull(vm.lastSaveUndo.value)
+    }
+
+    @Test fun `phone unset retry writes exactly twice and undo restores the single capture`() = runTest {
+        var stored = StoredPreference<Double>(null, false)
+        var writes = 0
+        var captures = 0
+        val release = CompletableDeferred<Unit>()
+        whenever(preferences.updatePhoneTotal(eq(100.0), any())).doSuspendableAnswer {
+            val capture = it.getArgument<cloud.trotter.dashbuddy.core.datastore.settings.SaveCapture<StoredPreference<Double>>>(1)
+            val previous = capture.capture { captures++; stored }
+            if (++writes == 1) error("first write failed")
+            release.await()
+            stored = StoredPreference(100.0, true)
+            previous
+        }
+        whenever(preferences.restorePhoneTotal(any(), any(), any())).doAnswer {
+            val current = it.getArgument<() -> Boolean>(2)
+            if (current() && stored == it.getArgument<StoredPreference<Double>>(1)) {
+                stored = it.getArgument(0); true
+            } else false
+        }
+        val vm = model()
+        val field = vm.edits.field("PHONE_PLAN_TOTAL", "80", { true }) { vm.setPhoneTotal(it.toDouble()) }
+        vm.edits.edit("PHONE_PLAN_TOTAL", "100")
+        val first = vm.edits.finish("PHONE_PLAN_TOTAL")
+        runCurrent()
+        assertEquals(WriteResult.FAILED, first.await())
+        assertEquals(GarageWriteFailure.RETRY, vm.awaitIdle())
+        assertTrue(field.edited)
+        assertNull(vm.lastSaveUndo.value)
+        vm.retry(); runCurrent()
+        assertEquals("100", field.text)
+        assertTrue(field.edited)
+        release.complete(Unit); runCurrent()
+        assertEquals(2, writes)
+        assertEquals(1, captures)
+        assertFalse(field.edited)
+        val undo = vm.undo(requireNotNull(vm.lastSaveUndo.value))
+        runCurrent()
+        assertEquals(WriteResult.SAVED, undo.await())
+        assertEquals(StoredPreference<Double>(null, false), stored)
+    }
+
+    @Test fun `manual gas undo restores both price and auto and reports changed state`() = runTest {
+        val prior = cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice(StoredPreference(3.50f, false), StoredPreference(true, false))
+        val expected = cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice(StoredPreference(3.75f, false), StoredPreference(false, false))
+        whenever(preferences.updateGasPriceManual(eq(3.75f), any())).thenReturn(prior)
+        whenever(preferences.restoreGasPriceManual(eq(prior), eq(expected), any())).thenReturn(true)
+        val vm = model()
+        vm.setGasPrice(3.75); runCurrent()
+        val undo = vm.undo(requireNotNull(vm.lastSaveUndo.value)); runCurrent()
+        assertEquals(WriteResult.SAVED, undo.await())
+        verify(preferences).restoreGasPriceManual(eq(prior), eq(expected), any())
+        vm.setGasPrice(3.75); runCurrent()
+        whenever(preferences.restoreGasPriceManual(any(), any(), any())).thenReturn(false)
+        val changed = vm.undo(requireNotNull(vm.lastSaveUndo.value)); runCurrent()
+        assertEquals(WriteResult.CHANGED, changed.await())
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
     }
 
 }

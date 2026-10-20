@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.datastore.settings.SaveCapture
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
@@ -80,29 +83,34 @@ class EconomySettingsViewModel @Inject constructor(
 
     private var finishing = false
 
-    private fun <T> sharedWrite(key: String, label: Int, action: suspend () -> T,
-        restore: suspend (T) -> Unit): Deferred<WriteResult> =
-        if (!_busy.value || finishing) undoState.write {
-            val previous = action()
-            LastSaveUndo.captured(key, label, previous) { restore(it); true }
-        } else CompletableDeferred(WriteResult.REJECTED)
+    private fun <T> sharedWrite(key: String, label: Int, action: suspend (SaveCapture<T>) -> T,
+        restore: suspend (T, () -> Boolean) -> Boolean): Deferred<WriteResult> {
+        if (_busy.value && !finishing) return CompletableDeferred(WriteResult.REJECTED)
+        val capture = SaveCapture<T>()
+        return undoState.write {
+            val previous = action(capture)
+            LastSaveUndo.checked(key, label, previous, restore)
+        }
+    }
 
     fun setTimeConstantOverride(field: EconomyField, value: Double?) = sharedWrite(field.name,
         if (field == EconomyField.AVG_MIN_PER_MILE) R.string.economy_time_pace else R.string.economy_time_overhead,
-        { repo.setTimeConstantOverride(field, value) }, { repo.restoreTimeConstantOverride(field, it) })
+        { repo.setTimeConstantOverride(field, value, it) },
+        { old, current -> repo.restoreTimeConstantOverride(field, old, StoredPreference(value, value != null), current) })
     fun setElectricityPrice(value: Double) = sharedWrite("ELECTRICITY_PRICE", R.string.vehicle_facts_electricity_price,
-        { repo.updateElectricityPrice(value) }, { repo.restoreElectricityPrice(it) })
+        { repo.updateElectricityPrice(value, it) }, { old, current -> repo.restoreElectricityPrice(old, StoredPreference(value, true), current) })
     fun setGasPrice(value: Double) = sharedWrite("GAS_PRICE", R.string.economy_shared_gas_price,
-        { repo.updateGasPriceManual(value.toFloat()) }, { repo.restoreGasPriceManual(it) })
+        { repo.updateGasPriceManual(value.toFloat(), it) },
+        { old, current -> repo.restoreGasPriceManual(old, StoredGasPrice(StoredPreference(value.toFloat(), old.price.userSet), StoredPreference(false, false)), current) })
     fun setGasAuto(value: Boolean) = sharedWrite("GAS_AUTO", R.string.economy_shared_auto_gas_price,
-        { repo.setGasPriceAuto(value) }, { repo.restoreGasPriceAuto(it) })
+        { repo.setGasPriceAuto(value, it) }, { old, current -> repo.restoreGasPriceAuto(old, StoredPreference(value, false), current) })
     fun setPhoneTotal(value: Double) = sharedWrite("PHONE_PLAN_TOTAL", R.string.economy_editor_phone_plan_total_label,
-        { repo.updatePhoneTotal(value) }, { repo.restorePhoneTotal(it) })
+        { repo.updatePhoneTotal(value, it) }, { old, current -> repo.restorePhoneTotal(old, StoredPreference(value, true), current) })
     fun setPhoneLines(value: Int) = sharedWrite("PHONE_PLAN_LINES", R.string.economy_editor_phone_lines_label,
-        { repo.updatePhoneLines(value) }, { repo.restorePhoneLines(it) })
+        { repo.updatePhoneLines(value, it) }, { old, current -> repo.restorePhoneLines(old, StoredPreference(value, true), current) })
     fun setPhoneShare(value: Double) = sharedWrite("PHONE_BUSINESS_PERCENT", R.string.economy_undo_phone_share,
-        { repo.updatePhoneShare(value) }, { repo.restorePhoneShare(it) })
-    fun retry() { writer.retry(); edits.retryFailed() }
+        { repo.updatePhoneShare(value, it) }, { old, current -> repo.restorePhoneShare(old, StoredPreference(value, true), current) })
+    fun retry() { writer.retry() }
     fun resumeEditing() { undoState.resume(); _busy.value = false; edits.acceptingEdits = true }
     suspend fun discardChanges() {
         clearUndo()

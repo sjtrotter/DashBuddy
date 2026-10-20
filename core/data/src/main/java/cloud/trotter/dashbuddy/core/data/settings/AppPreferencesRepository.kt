@@ -1,6 +1,8 @@
 package cloud.trotter.dashbuddy.core.data.settings
 
 import cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice
+import cloud.trotter.dashbuddy.core.datastore.settings.SaveCapture
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
@@ -268,7 +270,8 @@ class AppPreferencesRepository @Inject constructor(
      * invariant (#314): this only affects FUTURE evaluations; already-recorded deliveries keep their
      * frozen cost basis.
      */
-    suspend fun updateGasPriceManual(price: Float) = dataSource.updateGasPriceManual(price)
+    suspend fun updateGasPriceManual(price: Float) = updateGasPriceManual(price, null)
+    suspend fun updateGasPriceManual(price: Float, capture: SaveCapture<StoredGasPrice>?) = dataSource.updateGasPriceManual(price, capture)
 
     /**
      * "Resume auto" (#722) — re-enables auto (EIA) fetching AND applies a freshly-fetched price in
@@ -322,20 +325,26 @@ class AppPreferencesRepository @Inject constructor(
         mpg: Float, isGasAuto: Boolean, price: Float,
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
-    suspend fun updatePhoneTotal(value: Double) = dataSource.updatePhoneTotal(value)
-    suspend fun updatePhoneLines(value: Int) = dataSource.updatePhoneLines(value)
-    suspend fun updatePhoneShare(value: Double) = dataSource.updatePhoneShare(value)
-    suspend fun updateElectricityPrice(value: Double) = dataSource.updateElectricityPrice(value)
-    suspend fun setGasPriceAuto(value: Boolean) = dataSource.setGasPriceAuto(value)
-    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) = dataSource.setTimeConstantOverride(field, value)
+    suspend fun updatePhoneTotal(value: Double) = updatePhoneTotal(value, null)
+    suspend fun updatePhoneTotal(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updatePhoneTotal(value, capture)
+    suspend fun updatePhoneLines(value: Int) = updatePhoneLines(value, null)
+    suspend fun updatePhoneLines(value: Int, capture: SaveCapture<StoredPreference<Int>>?) = dataSource.updatePhoneLines(value, capture)
+    suspend fun updatePhoneShare(value: Double) = updatePhoneShare(value, null)
+    suspend fun updatePhoneShare(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updatePhoneShare(value, capture)
+    suspend fun updateElectricityPrice(value: Double) = updateElectricityPrice(value, null)
+    suspend fun updateElectricityPrice(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updateElectricityPrice(value, capture)
+    suspend fun setGasPriceAuto(value: Boolean) = setGasPriceAuto(value, null)
+    suspend fun setGasPriceAuto(value: Boolean, capture: SaveCapture<StoredPreference<Boolean>>?) = dataSource.setGasPriceAuto(value, capture)
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) = setTimeConstantOverride(field, value, null)
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.setTimeConstantOverride(field, value, capture)
 
-    suspend fun restoreElectricityPrice(previous: StoredPreference<Double>) = dataSource.restoreElectricityPrice(previous)
-    suspend fun restorePhoneTotal(previous: StoredPreference<Double>) = dataSource.restorePhoneTotal(previous)
-    suspend fun restorePhoneLines(previous: StoredPreference<Int>) = dataSource.restorePhoneLines(previous)
-    suspend fun restorePhoneShare(previous: StoredPreference<Double>) = dataSource.restorePhoneShare(previous)
-    suspend fun restoreGasPriceAuto(previous: StoredPreference<Boolean>) = dataSource.restoreGasPriceAuto(previous)
-    suspend fun restoreGasPriceManual(previous: StoredPreference<Float>) = dataSource.restoreGasPriceManual(previous)
-    suspend fun restoreTimeConstantOverride(field: EconomyField, previous: StoredPreference<Double>) = dataSource.restoreTimeConstantOverride(field, previous)
+    suspend fun restoreElectricityPrice(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restoreElectricityPrice(previous, expected, current)
+    suspend fun restorePhoneTotal(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restorePhoneTotal(previous, expected, current)
+    suspend fun restorePhoneLines(previous: StoredPreference<Int>, expected: StoredPreference<Int>, current: () -> Boolean = { true }) = dataSource.restorePhoneLines(previous, expected, current)
+    suspend fun restorePhoneShare(previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restorePhoneShare(previous, expected, current)
+    suspend fun restoreGasPriceAuto(previous: StoredPreference<Boolean>, expected: StoredPreference<Boolean>, current: () -> Boolean = { true }) = dataSource.restoreGasPriceAuto(previous, expected, current)
+    suspend fun restoreGasPriceManual(previous: StoredGasPrice, expected: StoredGasPrice, current: () -> Boolean = { true }) = dataSource.restoreGasPriceManual(previous, expected, current)
+    suspend fun restoreTimeConstantOverride(field: EconomyField, previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restoreTimeConstantOverride(field, previous, expected, current)
 
     /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
     suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
