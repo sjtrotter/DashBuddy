@@ -64,7 +64,7 @@ object DashVehicles {
         return miles
     }
 
-    /** Start once, allow latest-wins swaps within the first stamp's grace window. */
+    /** Start once; allow latest-wins swaps while the dash itself is inside the grace window. */
     fun decide(
         live: List<LiveDash>, activeVehicleId: String?, stamps: List<DashVehicleStamp>,
         now: Long, windowMs: Long,
@@ -77,7 +77,9 @@ object DashVehicles {
                 stamped == null -> listOf(DashVehicleAction.Stamp(dash.sessionId,
                     vehicle.takeIf { now - dash.startedAt <= windowMs }, DashVehicleKind.START))
                 vehicle == null || stamped.vehicleId == vehicle -> emptyList()
-                now - stamped.startedAt <= windowMs -> listOf(
+                // The window runs from the dash's own start, never from a stamp: a dash first seen late
+                // carries a late unknown START, and a restart must not reopen the swap window from it (review r2).
+                now - dash.startedAt <= windowMs -> listOf(
                     DashVehicleAction.Stamp(dash.sessionId, vehicle, DashVehicleKind.SWAP),
                     DashVehicleAction.ThisDash(dash.sessionId, vehicle),
                 )

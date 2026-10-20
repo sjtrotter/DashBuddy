@@ -1,103 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- #583: full offer card (expanded ~252dp) — verdict banner + score gauge (bitmap) + $/hr + live
-     countdown + metrics + badges + store + brand-styled Accept/Decline. RemoteViews-legal only.
-     #1254: Accept left, Decline right (native decline is right-side on both platforms). -->
+<!-- #1333 S2g option B. RemoteViews widgets only; decorated style supplies side padding. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingTop="2dp"
-    android:paddingBottom="4dp">
-
-    <TextView
-        android:id="@+id/notif_offer_verdict"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:textColor="#FFFFFFFF"
-        android:textStyle="bold"
-        android:textSize="13sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="6dp">
-
-        <ImageView
-            android:id="@+id/notif_offer_gauge"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginEnd="10dp" />
-
-        <TextView
-            android:id="@+id/notif_offer_rate"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-            android:textStyle="bold"
-            android:textSize="20sp" />
-
-        <Chronometer
-            android:id="@+id/notif_offer_countdown"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-            android:textStyle="bold" />
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingTop="4dp" android:paddingBottom="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="28dp"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/notif_offer_store" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1" android:textSize="18sp"
+            android:ellipsize="end" android:maxLines="1" />
+        <Chronometer android:id="@+id/notif_offer_countdown" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:textSize="20sp" android:textStyle="bold" />
+        <TextView android:id="@+id/notif_offer_left" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:layout_marginStart="4dp" android:textSize="13sp" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/notif_offer_metrics"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:textAppearance="@style/TextAppearance.Compat.Notification.Line2" />
-
-    <LinearLayout
-        android:id="@+id/notif_offer_badges"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="6dp">
-
-        <ImageView android:id="@+id/notif_badge_0" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
-        <ImageView android:id="@+id/notif_badge_1" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
-        <ImageView android:id="@+id/notif_badge_2" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
-        <ImageView android:id="@+id/notif_badge_3" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
-        <ImageView android:id="@+id/notif_badge_4" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginEnd="6dp" android:visibility="gone" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp"
+        android:layout_marginTop="10dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/notif_offer_hero" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1"
+            android:includeFontPadding="false" android:textStyle="bold" />
+        <ImageView android:id="@+id/notif_offer_gauge" android:layout_width="64dp" android:layout_height="64dp" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/notif_offer_store"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textAppearance="@style/TextAppearance.Compat.Notification.Info" />
-
+    <ImageView android:id="@+id/notif_offer_bar" android:layout_width="match_parent"
+        android:layout_height="34dp" android:layout_marginTop="12dp" android:scaleType="fitXY" />
+    <LinearLayout android:id="@+id/notif_offer_rates" android:layout_width="match_parent"
+        android:layout_height="24dp" android:layout_marginTop="12dp" android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView android:id="@+id/notif_offer_rate_0" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1" android:gravity="start"
+            android:maxLines="1" android:includeFontPadding="false" />
+        <TextView android:id="@+id/notif_offer_rate_1" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center"
+            android:maxLines="1" android:includeFontPadding="false" />
+        <TextView android:id="@+id/notif_offer_rate_2" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1" android:gravity="end"
+            android:maxLines="1" android:includeFontPadding="false" />
+        <TextView android:id="@+id/notif_offer_addon" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:textSize="15sp" android:maxLines="1"
+            android:visibility="gone" android:includeFontPadding="false" />
+    </LinearLayout>
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="40dp"
         android:orientation="horizontal"
         android:layoutDirection="ltr"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="14dp">
 
         <!-- #1254: Accept LEFT, Decline RIGHT — both platforms' native decline is a right-side
              target (DoorDash top-right, Uber card top-right X); our banner floats over DoorDash's. -->
         <TextView
             android:id="@+id/notif_btn_accept"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:background="@drawable/notif_btn_accept"
             android:gravity="center"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp"
             android:text="Accept"
             android:textColor="#0B0F14"
             android:textSize="15sp"
@@ -106,13 +62,11 @@
         <TextView
             android:id="@+id/notif_btn_decline"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:layout_marginStart="24dp"
             android:background="@drawable/notif_btn_decline"
             android:gravity="center"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp"
             android:text="Decline"
             android:textColor="#E6EDF3"
             android:textSize="15sp" />

@@ -156,8 +156,8 @@ internal fun EffectMap.diffOfferLifecycle(
                 add(
                     AppEffect.PostOfferNotification(
                         refreshOnly = true,
-                        evaluation = eval, offer = offerCardOf(nextOffer, eval), offerHash = nextOffer.offerHash,
-                        platform = nextOffer.platform, sessionId = sessionId,
+                        evaluation = eval, offer = offerCardOf(nextOffer, eval), pending = nextOffer, offerHash = nextOffer.offerHash,
+                        platform = nextOffer.platform, sessionId = sessionId, job = next.activeJob,
                     )
                 )
             }
@@ -175,7 +175,8 @@ internal fun EffectMap.diffOfferLifecycle(
         // re-evaluates on each variant is read aloud exactly once, not on every re-quote.
         add(
             AppEffect.PostOfferNotification(
-                landedEval, offerCard, nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
+                landedEval, offerCard, nextOffer, nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
+                job = next.activeJob,
             )
         )
         if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(landedEval))

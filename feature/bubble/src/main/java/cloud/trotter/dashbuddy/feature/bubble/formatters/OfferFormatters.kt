@@ -9,7 +9,6 @@ import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import cloud.trotter.dashbuddy.feature.bubble.R
 import cloud.trotter.dashbuddy.core.designsystem.theme.AppColors
 import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
 import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
@@ -67,23 +66,6 @@ fun offerScoreColor(score: Double, c: AppColors): Color = when {
 /** [offerScoreColor] as an ARGB int for the notification gauge ring (#583). */
 fun offerScoreArgb(score: Double): Int =
     offerScoreColor(score, darkAppColors()).toArgb()
-
-/**
- * SSOT (#461/#578) badge enum name → `ic_badge_*` drawable, shared by the bubble offer card and the
- * rich offer notification. null = no icon (the SHOP cart + item count is handled by each caller).
- */
-fun offerBadgeIcon(name: String): Int? = when (name) {
-    "HIGH_PAYING" -> R.drawable.ic_badge_dollar_plus
-    "PRIORITY_ACCESS" -> R.drawable.ic_badge_priority_access
-    "COLLECT_CASH" -> R.drawable.ic_badge_collect_cash
-    "RED_CARD" -> R.drawable.ic_badge_red_card
-    "LARGE_ORDER" -> R.drawable.ic_badge_large_order
-    "PIZZA_BAG" -> R.drawable.ic_badge_pizza_bag
-    "ALCOHOL", "INCLUDES_ALCOHOL" -> R.drawable.ic_badge_alcohol
-    "CHECK_RECIPIENT_ID", "AGE_RESTRICTED_18_PLUS", "AGE_RESTRICTED_21_PLUS",
-    "CONTAINS_RESTRICTED_ITEMS" -> R.drawable.ic_badge_id_check
-    else -> null
-}
 
 /** The persona that voices an offer verdict's notification (moved from the engine, #436). */
 fun OfferEvaluation.notificationPersona(): ChatPersona = when (action) {

@@ -94,6 +94,11 @@ class DashVehiclesTest {
         assertEquals(listOf(DashVehicleAction.NextDash("dash", "malibu")), decide("malibu", listOf(stamp(),
             stamp(vehicle = "civic", at = 600_000, sequence = 2, kind = DashVehicleKind.SWAP)), now = 600_101))
     }
+    /** Review r2 (Sol): first seen at minute 11 → START(null) stamped then; a restart at minute 12 with B active must not swap. */
+    @Test fun `a late unknown start never reopens the swap window after a restart`() {
+        val late = stamp(vehicle = null, at = 660_100)
+        assertEquals(listOf(DashVehicleAction.NextDash("dash", "civic")), decide("civic", listOf(late), now = 720_100))
+    }
     @Test fun `same vehicle does nothing`() { assertTrue(decide(stamps = listOf(stamp())).isEmpty()) }
     @Test fun `unstamped past window starts unknown never with todays active vehicle`() {
         assertEquals(listOf(DashVehicleAction.Stamp("dash", null, DashVehicleKind.START)), decide(now = 600_101))

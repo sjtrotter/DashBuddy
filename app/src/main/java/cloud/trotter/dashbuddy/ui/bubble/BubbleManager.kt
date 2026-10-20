@@ -1,6 +1,18 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import android.app.Notification
+import androidx.compose.ui.graphics.toArgb
+import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
+import cloud.trotter.dashbuddy.domain.evaluation.EvaluationConfig
+import cloud.trotter.dashbuddy.domain.state.Job as DeliveryJob
+import cloud.trotter.dashbuddy.domain.state.PendingOffer
+import cloud.trotter.dashbuddy.feature.bubble.PayBarLabels
+import cloud.trotter.dashbuddy.feature.bubble.payBarBitmap
+import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardMapper
+import cloud.trotter.dashbuddy.feature.bubble.hud.OfferCardModel
+import cloud.trotter.dashbuddy.feature.bubble.hud.PayBarModel
+import cloud.trotter.dashbuddy.feature.bubble.notification.*
+import cloud.trotter.dashbuddy.feature.bubble.R as BubbleR
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -30,19 +42,13 @@ import cloud.trotter.dashbuddy.feature.bubble.scoreGaugeBitmap
 import cloud.trotter.dashbuddy.feature.bubble.formatters.getIconResId // <-- Your new UI Formatter!
 import cloud.trotter.dashbuddy.feature.bubble.formatters.notificationPersona
 import cloud.trotter.dashbuddy.feature.bubble.formatters.toNotificationSummary
-import cloud.trotter.dashbuddy.feature.bubble.formatters.displayLabel
-import cloud.trotter.dashbuddy.feature.bubble.formatters.offerBadgeIcon
 import cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreArgb
-import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictArgb
-import cloud.trotter.dashbuddy.feature.bubble.formatters.offerVerdictLabel
-import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.OdometerCue
-import cloud.trotter.dashbuddy.domain.model.offer.OfferQuoteBasis
-import cloud.trotter.dashbuddy.domain.model.offer.joinDisplayStores
 import android.os.SystemClock
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -482,6 +488,10 @@ class BubbleManager @Inject constructor(
          * chat summary (a second "offer posted" row per moved deadline is not a milestone).
          */
         refreshOnly: Boolean = false,
+        pending: PendingOffer,
+        config: EvaluationConfig?,
+        /** The platform's active job at the offer's step: an add-on maps to the bubble's COMBINED card. */
+        job: DeliveryJob? = null,
     ) {
         val summary = evaluation.toNotificationSummary()
         val persona = evaluation.notificationPersona()
@@ -494,19 +504,20 @@ class BubbleManager @Inject constructor(
             Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
             scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
         }
-        showOfferHeadsUp(offer, summary, persona, platform)
+        val card = OfferCardMapper.map(pending, job = job, completed = emptyList(), config = config)
+        showOfferHeadsUp(card, pending.offerHash, summary, persona, platform)
     }
 
     /**
      * #457/#578: the actionable offer surface — a separate, **non-bubble** heads-up notification (own
      * channel + id, no `BubbleMetadata`) that floats over DoorDash so Accept/Decline fire while the
      * offer window is still live. #578 makes it a rich "mini offer card" via `DecoratedCustomViewStyle`
-     * + custom [RemoteViews] (verdict banner, $/hr, metrics, score, badges, live countdown) instead of
+     * + custom [RemoteViews] (gross pay, ring, pay bar, rates, live countdown) instead of
      * a plain text line. The custom views use ONLY RemoteViews-legal widgets, so they can't fail
      * inflation and regress the #457 action surface; `setContentText` keeps a text body for surfaces
      * that don't render custom views (Wear/Auto). Dismissed by [cancelOfferNotification].
      */
-    private fun showOfferHeadsUp(offer: FlowCardSnapshot.Offer, summary: CharSequence, persona: ChatPersona, platform: Platform) {
+    private fun showOfferHeadsUp(card: OfferCardModel, offerHash: String, summary: CharSequence, persona: ChatPersona, platform: Platform) {
         val openBubble = Intent(context, BubbleActivity::class.java).apply { action = Intent.ACTION_VIEW }
         val contentIntent = PendingIntent.getActivity(
             context, REQUEST_CODE_OFFER_CONTENT, openBubble,
@@ -525,141 +536,99 @@ class BubbleManager @Inject constructor(
             .setAutoCancel(true)
             .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false, platform))
-            .setCustomHeadsUpContentView(buildOfferCardView(offer, R.layout.notif_offer_compact, expanded = false, platform))
-            .setCustomBigContentView(buildOfferCardView(offer, R.layout.notif_offer_expanded, expanded = true, platform))
+            .setCustomContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform))
+            .setCustomHeadsUpContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform))
+            .setCustomBigContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_expanded, expanded = true, platform))
         // #583: Accept/Decline are now brand-styled TextViews INSIDE the custom card
         // (wired via setOnClickPendingIntent in buildOfferCardView), not the system action row —
         // the two can't coexist without doubling the buttons. Field-gated: if a dash shows the
         // in-card buttons don't fire from the floating heads-up, revert to addAction(offerAction(…)).
         // #438 B4: per-offer id so two concurrent offers don't clobber each other's banner.
-        notificationManager.notify(offerNotificationId(offer.offerHash), builder.build())
+        notificationManager.notify(offerNotificationId(offerHash), builder.build())
     }
 
-    /**
-     * #578/#583: populate a `notif_offer_*` [RemoteViews] from the offer card snapshot. Colors/
-     * countdown/badges/gauge are set at runtime (RemoteViews can't use theme attrs — badges would
-     * render black otherwise). Score → a Canvas-drawn ring [scoreGaugeBitmap] pushed via
-     * `setImageViewBitmap` (RemoteViews can't draw an arc); countdown → a self-ticking
-     * [Chronometer]; Accept/Decline → brand-styled `TextView`s wired with `setOnClickPendingIntent`.
-     */
-    // Null-safe money/distance for the notification card — the placeholder when a metric didn't parse.
-    private fun money(d: Double?) = d?.let { Formats.money(it) } ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
-    private fun money0(d: Double?) = d?.let { Formats.money0(it) } ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
-    private fun miles(d: Double?) = d?.let { context.getString(R.string.bubble_offer_card_miles, Formats.decimal(it)) }
-        ?: context.getString(R.string.bubble_offer_card_metric_placeholder)
-
+    /** Option B: every displayed figure comes from the same model as the HUD. */
     private fun buildOfferCardView(
-        offer: FlowCardSnapshot.Offer,
+        card: OfferCardModel,
+        offerHash: String,
         layoutRes: Int,
         expanded: Boolean,
         platform: Platform,
     ): RemoteViews {
+        val model = OfferNotificationModel.from(card)
+        val colors = darkAppColors()
+        val metrics = context.resources.displayMetrics
+        // Pixels per sp at the user's font scale (DisplayMetrics.scaledDensity is deprecated on API 34+).
+        val pxPerSp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1f, metrics)
         val rv = RemoteViews(context.packageName, layoutRes)
-        val action = offer.evaluationAction?.let { runCatching { OfferAction.valueOf(it) }.getOrNull() }
-        val verdictArgb = offerVerdictArgb(action)
-        val incremental = offer.quoteBasis == OfferQuoteBasis.INCREMENTAL
-        val addonFigures = if (incremental) buildList {
-            offer.payAmount?.let { add(context.getString(R.string.bubble_offer_addon_pay, money(it))) }
-            offer.distanceMiles?.let { add(context.getString(R.string.bubble_offer_addon_distance, Formats.decimal(it))) }
-            offer.incrementalMinutes?.let { add(context.getString(R.string.bubble_offer_addon_minutes, it)) }
-        }.joinToString(" · ") else ""
-
-        // Verdict banner is expanded-only by design; the collapsed heads-up conveys the verdict
-        // through the gauge ring color (the compact layout has no verdict view).
-        if (expanded) {
-            rv.setTextViewText(
-                R.id.notif_offer_verdict,
-                if (incremental) context.getString(R.string.bubble_offer_addon_reason)
-                else offer.qualityLevel?.displayLabel()?.let { "${offerVerdictLabel(action)} · $it" }
-                    ?: offerVerdictLabel(action),
-            )
-            rv.setInt(R.id.notif_offer_verdict, "setBackgroundColor", verdictArgb)
-        }
-        rv.setTextViewText(
-            R.id.notif_offer_rate,
-            if (incremental) context.getString(R.string.bubble_offer_addon_title)
-            else context.getString(R.string.bubble_offer_card_rate_per_hr, money0(offer.dollarsPerHour)),
-        )
-        if (!expanded) {
-            rv.setTextViewText(
-                R.id.notif_offer_sub,
-                if (incremental) addonFigures else context.getString(
-                    R.string.bubble_offer_card_sub_compact,
-                    money(offer.netPayAmount), money(offer.dollarsPerMile), miles(offer.distanceMiles),
-                ),
-            )
-        }
-
-        val expiresAt = offer.expiresAt
+        rv.setTextViewText(R.id.notif_offer_hero, offerNotificationHero(model.pay, expanded, pxPerSp))
+        rv.setTextColor(R.id.notif_offer_countdown, colors.good.toArgb())
+        val expiresAt = model.expiresAt
         if (expiresAt != null) {
             rv.setChronometerCountDown(R.id.notif_offer_countdown, true)
-            rv.setChronometer(
-                R.id.notif_offer_countdown,
-                SystemClock.elapsedRealtime() + (expiresAt - System.currentTimeMillis()),
-                null, true,
-            )
-            rv.setViewVisibility(R.id.notif_offer_countdown, View.VISIBLE)
-        } else {
-            rv.setViewVisibility(R.id.notif_offer_countdown, View.GONE)
+            rv.setChronometer(R.id.notif_offer_countdown,
+                SystemClock.elapsedRealtime() + (expiresAt - System.currentTimeMillis()), null, true)
         }
-
-        // Score gauge ring — drawn to a bitmap (RemoteViews can't draw an arc). Sized to the slot
-        // (larger on the expanded card); hidden when the offer didn't score.
-        val scoreValue = offer.evaluationScore
-        if (scoreValue != null) {
-            val gaugeDp = if (expanded) 56 else 40
-            val gaugePx = (gaugeDp * context.resources.displayMetrics.density).toInt()
-            rv.setImageViewBitmap(
-                R.id.notif_offer_gauge,
-                scoreGaugeBitmap(scoreValue.toInt(), offerScoreArgb(scoreValue), gaugePx),
-            )
-            rv.setViewVisibility(R.id.notif_offer_gauge, View.VISIBLE)
-        } else {
-            rv.setViewVisibility(R.id.notif_offer_gauge, View.GONE)
+        rv.setViewVisibility(R.id.notif_offer_countdown, if (expiresAt != null) View.VISIBLE else View.GONE)
+        model.ring?.let { ring ->
+            rv.setImageViewBitmap(R.id.notif_offer_gauge, scoreGaugeBitmap(ring.score,
+                ring.score?.let { offerScoreArgb(it.toDouble()) } ?: colors.neutral.toArgb(),
+                ((if (expanded) 64 else 40) * metrics.density).toInt()))
+            rv.setContentDescription(R.id.notif_offer_gauge, ring.score?.let {
+                context.getString(BubbleR.string.hud_offer_cd_score, it)
+            } ?: context.getString(BubbleR.string.hud_offer_cd_no_score))
         }
+        rv.setViewVisibility(R.id.notif_offer_gauge, if (model.ring != null) View.VISIBLE else View.GONE)
 
-        // Brand-styled Accept/Decline (both layouts) — fire the same broadcast as the old action row.
-        rv.setOnClickPendingIntent(
-            R.id.notif_btn_decline,
-            offerActionPendingIntent(OfferIntent.DECLINE, platform, offer.offerHash),
-        )
-        rv.setOnClickPendingIntent(
-            R.id.notif_btn_accept,
-            offerActionPendingIntent(OfferIntent.ACCEPT, platform, offer.offerHash),
-        )
-
+        // Preserve the per-offer action identity, including the native Accept-left/Decline-right order.
+        rv.setOnClickPendingIntent(R.id.notif_btn_decline,
+            offerActionPendingIntent(OfferIntent.DECLINE, platform, offerHash))
+        rv.setOnClickPendingIntent(R.id.notif_btn_accept,
+            offerActionPendingIntent(OfferIntent.ACCEPT, platform, offerHash))
+        val labels = PayBarLabels(context.getString(BubbleR.string.hud_offer_profit),
+            context.getString(BubbleR.string.hud_offer_loss), context.getString(BubbleR.string.hud_offer_car),
+            context.getString(BubbleR.string.hud_offer_distance_unknown))
         if (expanded) {
-            rv.setTextViewText(
-                R.id.notif_offer_metrics,
-                if (incremental) addonFigures else context.getString(
-                    R.string.bubble_offer_card_metrics_expanded,
-                    money(offer.netPayAmount), money(offer.payAmount),
-                    miles(offer.distanceMiles), money(offer.dollarsPerMile),
-                ),
-            )
-            // Badges into fixed slots, tinted with the verdict color so they're visible on any
-            // notification background (theme-attr fills don't resolve in the remote process).
-            val slots = listOf(
-                R.id.notif_badge_0, R.id.notif_badge_1, R.id.notif_badge_2,
-                R.id.notif_badge_3, R.id.notif_badge_4,
-            )
-            val icons = offer.badges.mapNotNull { offerBadgeIcon(it) }.distinct().take(slots.size)
-            slots.forEachIndexed { i, slot ->
-                val icon = icons.getOrNull(i)
-                if (icon != null) {
-                    rv.setImageViewResource(slot, icon)
-                    rv.setInt(slot, "setColorFilter", verdictArgb)
-                    rv.setViewVisibility(slot, View.VISIBLE)
-                } else {
-                    rv.setViewVisibility(slot, View.GONE)
-                }
+            rv.setTextViewText(R.id.notif_offer_store,
+                model.store ?: context.getString(BubbleR.string.flow_card_offer_fallback_store))
+            rv.setTextColor(R.id.notif_offer_store, colors.text.toArgb())
+            rv.setTextViewText(R.id.notif_offer_left, context.getString(BubbleR.string.hud_offer_left))
+            rv.setTextColor(R.id.notif_offer_left, colors.text2.toArgb())
+            rv.setViewVisibility(R.id.notif_offer_left, if (expiresAt != null) View.VISIBLE else View.GONE)
+            val bitmap = model.bar?.let {
+                payBarBitmap(it, (metrics.widthPixels - (8 + 8 + 16 + 16) * metrics.density).toInt(),
+                    (34 * metrics.density).toInt(), metrics.density, labels)
             }
-            val stores = offer.storeNames.joinDisplayStores()
-            val items = if (offer.itemCount > 1) {
-                context.getString(R.string.bubble_offer_card_items_suffix, offer.itemCount)
-            } else ""
-            rv.setTextViewText(R.id.notif_offer_store, (stores + items).trim())
+            rv.setImageViewBitmap(R.id.notif_offer_bar, bitmap)
+            rv.setViewVisibility(R.id.notif_offer_bar, if (bitmap != null) View.VISIBLE else View.GONE)
+            val description = when (val bar = model.bar) {
+                is PayBarModel.Split -> context.getString(BubbleR.string.hud_offer_cd_bar,
+                    Formats.money(bar.profitCents / 100.0), Formats.money(bar.carCents / 100.0))
+                is PayBarModel.Loss -> context.getString(BubbleR.string.hud_offer_cd_bar_loss,
+                    Formats.money(bar.lossCents / 100.0), Formats.money(bar.carCents / 100.0))
+                PayBarModel.DistanceUnknown -> labels.distanceUnknown
+                else -> ""
+            }
+            rv.setContentDescription(R.id.notif_offer_bar, description)
+            listOf(R.id.notif_offer_rate_0, R.id.notif_offer_rate_1, R.id.notif_offer_rate_2)
+                .forEachIndexed { index, id ->
+                    val rate = model.rates.getOrNull(index)
+                    rv.setViewVisibility(id, if (rate != null) View.VISIBLE else View.GONE)
+                    rate?.let { rv.setTextViewText(id, offerNotificationRate(it, pxPerSp)) }
+                }
+            rv.setViewVisibility(R.id.notif_offer_addon, if (model.addOnFigures != null) View.VISIBLE else View.GONE)
+            rv.setTextViewText(R.id.notif_offer_addon, model.addOnFigures)
+            rv.setTextColor(R.id.notif_offer_addon, colors.text.toArgb())
+        } else {
+            val profit = when (val bar = model.bar) {
+                is PayBarModel.Split -> offerNotificationFigure(Formats.money(bar.profitCents / 100.0),
+                    " " + labels.profit, 14, 10, colors.good.toArgb(), scaledDensity = pxPerSp)
+                is PayBarModel.Loss -> offerNotificationFigure(Formats.money(bar.lossCents / 100.0),
+                    " " + labels.loss, 14, 10, colors.bad.toArgb(), scaledDensity = pxPerSp)
+                else -> null
+            }
+            rv.setViewVisibility(R.id.notif_offer_profit, if (profit != null) View.VISIBLE else View.GONE)
+            rv.setTextViewText(R.id.notif_offer_profit, profit)
         }
         return rv
     }
