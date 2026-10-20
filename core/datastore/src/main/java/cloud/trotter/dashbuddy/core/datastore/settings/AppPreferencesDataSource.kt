@@ -383,56 +383,46 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit { it[Keys.ELECTRICITY_PRICE_PER_KWH] = value; it.markUserSet(EconomyField.ELECTRICITY_PRICE) }
     }
 
-    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
-        ds.edit {
-            it[Keys.TIRE_SET_COST] = setCost
-            it[Keys.TIRE_LIFETIME_MI] = lifetimeMi
-            it.markUserSet(EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME)
+    suspend fun updateTireCost(setCost: Double?, lifetimeMi: Double?) {
+        ds.edit { prefs ->
+            setCost?.let { prefs[Keys.TIRE_SET_COST] = it; prefs.markUserSet(EconomyField.TIRE_COST) }
+            lifetimeMi?.let { prefs[Keys.TIRE_LIFETIME_MI] = it; prefs.markUserSet(EconomyField.TIRE_LIFETIME) }
         }
     }
 
-    suspend fun updateOilCost(cost: Double, intervalMi: Double) {
-        ds.edit {
-            it[Keys.OIL_COST] = cost
-            it[Keys.OIL_INTERVAL_MI] = intervalMi
-            it.markUserSet(EconomyField.OIL_COST, EconomyField.OIL_INTERVAL)
+    suspend fun updateOilCost(cost: Double?, intervalMi: Double?) {
+        ds.edit { prefs ->
+            cost?.let { prefs[Keys.OIL_COST] = it; prefs.markUserSet(EconomyField.OIL_COST) }
+            intervalMi?.let { prefs[Keys.OIL_INTERVAL_MI] = it; prefs.markUserSet(EconomyField.OIL_INTERVAL) }
         }
     }
 
-    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) {
-        ds.edit {
-            it[Keys.BRAKES_COST] = cost
-            it[Keys.BRAKES_INTERVAL_MI] = intervalMi
-            it.markUserSet(EconomyField.BRAKES_COST, EconomyField.BRAKES_INTERVAL)
+    suspend fun updateBrakesCost(cost: Double?, intervalMi: Double?) {
+        ds.edit { prefs ->
+            cost?.let { prefs[Keys.BRAKES_COST] = it; prefs.markUserSet(EconomyField.BRAKES_COST) }
+            intervalMi?.let { prefs[Keys.BRAKES_INTERVAL_MI] = it; prefs.markUserSet(EconomyField.BRAKES_INTERVAL) }
         }
     }
 
-    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) {
-        ds.edit {
-            it[Keys.FLUIDS_COST] = cost
-            it[Keys.FLUIDS_INTERVAL_MI] = intervalMi
-            it.markUserSet(EconomyField.FLUIDS_COST, EconomyField.FLUIDS_INTERVAL)
+    suspend fun updateFluidsCost(cost: Double?, intervalMi: Double?) {
+        ds.edit { prefs ->
+            cost?.let { prefs[Keys.FLUIDS_COST] = it; prefs.markUserSet(EconomyField.FLUIDS_COST) }
+            intervalMi?.let { prefs[Keys.FLUIDS_INTERVAL_MI] = it; prefs.markUserSet(EconomyField.FLUIDS_INTERVAL) }
         }
     }
 
-    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) {
-        ds.edit {
-            it[Keys.MISC_YEARLY] = yearly
-            it[Keys.MISC_YEARLY_MI] = yearlyMi
-            it.markUserSet(EconomyField.MISC_YEARLY, EconomyField.MISC_YEARLY_MI)
+    suspend fun updateMiscMaintenance(yearly: Double?, yearlyMi: Double?) {
+        ds.edit { prefs ->
+            yearly?.let { prefs[Keys.MISC_YEARLY] = it; prefs.markUserSet(EconomyField.MISC_YEARLY) }
+            yearlyMi?.let { prefs[Keys.MISC_YEARLY_MI] = it; prefs.markUserSet(EconomyField.MISC_YEARLY_MI) }
         }
     }
 
-    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) {
-        ds.edit {
-            it[Keys.INCLUDE_DEPRECIATION] = include
-            it[Keys.PURCHASE_PRICE] = purchasePrice
-            it[Keys.TOTAL_LIFETIME_MI] = totalLifetimeMi
-            it.markUserSet(
-                EconomyField.INCLUDE_DEPRECIATION,
-                EconomyField.PURCHASE_PRICE,
-                EconomyField.TOTAL_LIFETIME_MI,
-            )
+    suspend fun updateDepreciation(include: Boolean?, purchasePrice: Double?, totalLifetimeMi: Double?) {
+        ds.edit { prefs ->
+            include?.let { prefs[Keys.INCLUDE_DEPRECIATION] = it; prefs.markUserSet(EconomyField.INCLUDE_DEPRECIATION) }
+            purchasePrice?.let { prefs[Keys.PURCHASE_PRICE] = it; prefs.markUserSet(EconomyField.PURCHASE_PRICE) }
+            totalLifetimeMi?.let { prefs[Keys.TOTAL_LIFETIME_MI] = it; prefs.markUserSet(EconomyField.TOTAL_LIFETIME_MI) }
         }
     }
 

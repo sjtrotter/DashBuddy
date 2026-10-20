@@ -192,64 +192,96 @@ class WizardViewModel @Inject constructor(
         }
     }
 
-    fun updateChain(cost: Double, life: Double) = _state.update {
-        it.copy(chainCost = cost, chainLifeMi = life, userSetEconomyFields = it.userSetEconomyFields + setOf(EconomyField.CHAIN_COST, EconomyField.CHAIN_LIFETIME))
+    fun updateChain(cost: Double?, life: Double?) = _state.update {
+        it.copy(
+            chainCost = cost ?: it.chainCost, chainLifeMi = life ?: it.chainLifeMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.CHAIN_COST.takeIf { cost != null },
+                EconomyField.CHAIN_LIFETIME.takeIf { life != null },
+            ),
+        )
     }
-    fun updateBattery(cost: Double, life: Double) = _state.update {
-        it.copy(batteryCost = cost, batteryLifeMi = life, userSetEconomyFields = it.userSetEconomyFields + setOf(EconomyField.BATTERY_COST, EconomyField.BATTERY_LIFETIME))
+    fun updateBattery(cost: Double?, life: Double?) = _state.update {
+        it.copy(
+            batteryCost = cost ?: it.batteryCost, batteryLifeMi = life ?: it.batteryLifeMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.BATTERY_COST.takeIf { cost != null },
+                EconomyField.BATTERY_LIFETIME.takeIf { life != null },
+            ),
+        )
     }
-    fun updateBelt(cost: Double, life: Double) = _state.update {
-        it.copy(beltCost = cost, beltLifeMi = life, userSetEconomyFields = it.userSetEconomyFields + setOf(EconomyField.BELT_COST, EconomyField.BELT_LIFETIME))
+    fun updateBelt(cost: Double?, life: Double?) = _state.update {
+        it.copy(
+            beltCost = cost ?: it.beltCost, beltLifeMi = life ?: it.beltLifeMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.BELT_COST.takeIf { cost != null },
+                EconomyField.BELT_LIFETIME.takeIf { life != null },
+            ),
+        )
     }
 
     // --- Personal Economy v2 setters (#145) ---
-    fun updateTires(setCost: Double, lifetimeMi: Double) = _state.update {
+    fun updateTires(setCost: Double?, lifetimeMi: Double?) = _state.update {
         it.copy(
-            tireSetCost = setCost, tireLifetimeMi = lifetimeMi,
-            userSetEconomyFields = it.userSetEconomyFields +
-                setOf(EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME),
+            tireSetCost = setCost ?: it.tireSetCost, tireLifetimeMi = lifetimeMi ?: it.tireLifetimeMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.TIRE_COST.takeIf { setCost != null },
+                EconomyField.TIRE_LIFETIME.takeIf { lifetimeMi != null },
+            ),
         )
     }
 
-    fun updateOilChange(cost: Double, intervalMi: Double) = _state.update {
+    fun updateOilChange(cost: Double?, intervalMi: Double?) = _state.update {
         it.copy(
-            oilCost = cost, oilIntervalMi = intervalMi,
-            userSetEconomyFields = it.userSetEconomyFields +
-                setOf(EconomyField.OIL_COST, EconomyField.OIL_INTERVAL),
+            oilCost = cost ?: it.oilCost, oilIntervalMi = intervalMi ?: it.oilIntervalMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.OIL_COST.takeIf { cost != null },
+                EconomyField.OIL_INTERVAL.takeIf { intervalMi != null },
+            ),
         )
     }
 
-    fun updateBrakes(cost: Double, intervalMi: Double) = _state.update {
+    fun updateBrakes(cost: Double?, intervalMi: Double?) = _state.update {
         it.copy(
-            brakesCost = cost, brakesIntervalMi = intervalMi,
-            userSetEconomyFields = it.userSetEconomyFields +
-                setOf(EconomyField.BRAKES_COST, EconomyField.BRAKES_INTERVAL),
+            brakesCost = cost ?: it.brakesCost, brakesIntervalMi = intervalMi ?: it.brakesIntervalMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.BRAKES_COST.takeIf { cost != null },
+                EconomyField.BRAKES_INTERVAL.takeIf { intervalMi != null },
+            ),
         )
     }
 
-    fun updateFluids(cost: Double, intervalMi: Double) = _state.update {
+    fun updateFluids(cost: Double?, intervalMi: Double?) = _state.update {
         it.copy(
-            fluidsCost = cost, fluidsIntervalMi = intervalMi,
-            userSetEconomyFields = it.userSetEconomyFields +
-                setOf(EconomyField.FLUIDS_COST, EconomyField.FLUIDS_INTERVAL),
+            fluidsCost = cost ?: it.fluidsCost, fluidsIntervalMi = intervalMi ?: it.fluidsIntervalMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.FLUIDS_COST.takeIf { cost != null },
+                EconomyField.FLUIDS_INTERVAL.takeIf { intervalMi != null },
+            ),
         )
     }
 
-    fun updateMiscRepairs(yearly: Double, yearlyMi: Double) = _state.update {
+    fun updateMiscRepairs(yearly: Double?, yearlyMi: Double?) = _state.update {
         it.copy(
-            miscYearly = yearly, miscYearlyMi = yearlyMi,
-            userSetEconomyFields = it.userSetEconomyFields +
-                setOf(EconomyField.MISC_YEARLY, EconomyField.MISC_YEARLY_MI),
+            miscYearly = yearly ?: it.miscYearly, miscYearlyMi = yearlyMi ?: it.miscYearlyMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.MISC_YEARLY.takeIf { yearly != null },
+                EconomyField.MISC_YEARLY_MI.takeIf { yearlyMi != null },
+            ),
         )
     }
 
-    fun updateDepreciation(include: Boolean, price: Double, lifetimeMi: Double) = _state.update {
+    fun updateDepreciationInclude(include: Boolean) = _state.update {
+        it.copy(includeDepreciation = include,
+            userSetEconomyFields = it.userSetEconomyFields + EconomyField.INCLUDE_DEPRECIATION)
+    }
+
+    fun updateDepreciationValues(price: Double?, lifetimeMi: Double?) = _state.update {
         it.copy(
-            includeDepreciation = include, purchasePrice = price, totalLifetimeMi = lifetimeMi,
-            userSetEconomyFields = it.userSetEconomyFields + setOf(
-                EconomyField.INCLUDE_DEPRECIATION,
-                EconomyField.PURCHASE_PRICE,
-                EconomyField.TOTAL_LIFETIME_MI,
+            purchasePrice = price ?: it.purchasePrice, totalLifetimeMi = lifetimeMi ?: it.totalLifetimeMi,
+            userSetEconomyFields = it.userSetEconomyFields + listOfNotNull(
+                EconomyField.PURCHASE_PRICE.takeIf { price != null },
+                EconomyField.TOTAL_LIFETIME_MI.takeIf { lifetimeMi != null },
             ),
         )
     }

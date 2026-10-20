@@ -865,7 +865,18 @@
     <string name="bubble_chat_vehicle_this_dash">This dash: %1$s</string>
     <string name="bubble_chat_vehicle_next_dash">%1$s from your next dash</string>
     <string name="hud_vehicle_locked">Vehicle can\'t change during a dash</string>
-    <!-- Vehicle details (#1383). -->
+    <!-- Live vehicle details (#1385). -->
+    <string name="vehicle_details_title">Vehicle details</string>
+    <string name="vehicle_details_identity">%1$s · %2$s</string>
+    <string name="vehicle_details_identity_hint">To drive a different vehicle, add it as a new one.</string>
+    <string name="vehicle_details_costs">This car\'s costs</string>
+    <string name="vehicle_details_electricity_hint">Applies to all electric vehicles</string>
+    <string name="vehicle_details_saving">Saving…</string>
+    <string name="vehicle_details_not_saved">Not saved.</string>
+    <string name="vehicle_details_retry">Try again</string>
+    <string name="vehicle_details_unsaved">Some changes were not saved.</string>
+    <string name="vehicle_details_discard">Discard</string>
+    <!-- Vehicle facts (#1383). -->
     <string name="vehicle_restore">Restore vehicle</string>
     <string name="garage_retired_header">Retired (%1$s)</string>
     <string name="garage_retired_date">Retired %1$s</string>

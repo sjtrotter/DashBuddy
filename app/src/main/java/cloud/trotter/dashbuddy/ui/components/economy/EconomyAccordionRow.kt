@@ -45,6 +45,7 @@ fun EconomyAccordionRow(
     isUserSet: Boolean,
     modifier: Modifier = Modifier,
     initiallyExpanded: Boolean = false,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
@@ -55,7 +56,7 @@ fun EconomyAccordionRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
+                .clickable(enabled = enabled) { expanded = !expanded }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         ) {
             Icon(
