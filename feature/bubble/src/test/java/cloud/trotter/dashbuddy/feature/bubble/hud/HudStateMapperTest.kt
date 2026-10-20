@@ -13,7 +13,7 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 class HudStateMapperTest {
     private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0),
         last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
-        odometerLoaded: Boolean = true, odometerCue: Boolean = false,
+        odometerLoaded: Boolean = true, odometerCue: Boolean = false, odometerShown: Boolean = true,
         goal: Double? = null, today: Double? = null, goalSheetOpen: Boolean = false,
         editedGoalKey: String? = null) = HudStateMapper.map(
         region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
@@ -22,10 +22,23 @@ class HudStateMapperTest {
         earnings = 90.0, miles = 20.0, lastSession = last, net = net,
         goal = goal, todayProfit = today, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
-        odometerLoaded = odometerLoaded, odometerCue = odometerCue,
+        odometerLoaded = odometerLoaded, odometerCue = odometerCue, odometerShown = odometerShown,
         goalDay = java.time.LocalDate.of(2026, 10, 18), mark = MarkRead.Loaded(null),
         goalSheetOpen = goalSheetOpen, editedGoalKey = editedGoalKey,
     )
+
+    @Test fun `odometer visibility reaches resting first run live and log docks`() {
+        for (rest in listOf(false, true)) {
+            for (last in listOf(null, lastDash())) {
+                for (logOpen in listOf(false, true)) {
+                    val hidden = map(rest = rest, last = last, logOpen = logOpen, odometerCue = true, odometerShown = false)
+                    val shown = map(rest = rest, last = last, logOpen = logOpen, odometerCue = true)
+                    assertFalse(hidden.dock.items.any { it.kind == DockKind.ODOMETER })
+                    assertEquals(shown.dock.items.filter { it.kind != DockKind.ODOMETER }, hidden.dock.items)
+                }
+            }
+        }
+    }
 
     @Test fun `goal sheet suppression reaches the hero while Met remains visible`() {
         val open = map(goal = 90.0, today = 96.0, goalSheetOpen = true)

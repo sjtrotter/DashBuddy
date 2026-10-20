@@ -232,6 +232,13 @@ enum class VehicleType {
         BICYCLE -> Bicycle()
     }
 }
+enum class OdometerSupport { BUILT_IN, OPTIONAL }
+
+val VehicleType.odometerSupport: OdometerSupport get() = when (this) {
+    VehicleType.CAR, VehicleType.HYBRID, VehicleType.EV, VehicleType.MOTORCYCLE, VehicleType.SCOOTER -> OdometerSupport.BUILT_IN
+    VehicleType.E_BIKE, VehicleType.BICYCLE -> OdometerSupport.OPTIONAL
+}
+
 val VehicleProfile.vehicleType: VehicleType get() = when (this) {
     is GasCar -> VehicleType.CAR
     is HybridCar -> VehicleType.HYBRID

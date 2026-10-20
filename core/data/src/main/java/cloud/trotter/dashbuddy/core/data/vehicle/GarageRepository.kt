@@ -145,6 +145,19 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
+    suspend fun setOdometerShown(id: String, shown: Boolean): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
+        if (index < 0) return@withLock false
+        val edited = list[index].copy(odometerShown = shown)
+        if (edited == list[index]) return@withLock true
+        val updated = list.toMutableList()
+        updated[index] = edited
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     suspend fun retire(id: String, now: Long): Boolean = mutex.withLock {
         val saved = savedForWrite()
         val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()

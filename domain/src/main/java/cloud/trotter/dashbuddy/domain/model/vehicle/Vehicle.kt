@@ -10,12 +10,16 @@ data class Vehicle(
     val createdAt: Long,
     val profile: VehicleProfile = GasCar(),
     val retiredAt: Long? = null,
+    val odometerShown: Boolean? = null,
     val legacyExtras: Map<String, JsonElement> = emptyMap(),
 ) {
     init {
         require(id.isNotBlank())
         require(name == null || (name == name.trim() && name.codePointCount(0, name.length) in 1..MAX_NAME_CODE_POINTS))
     }
+
+    // Computed without a backing field: kotlinx.serialization skips it; no @Transient is needed.
+    val showsOdometer: Boolean get() = odometerShown ?: (profile.vehicleType.odometerSupport == OdometerSupport.BUILT_IN)
 
     val identityName: String? get() = name ?: listOfNotNull(profile.year, profile.make, profile.model)
         .filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
@@ -24,6 +28,9 @@ data class Vehicle(
         const val MAX_NAME_CODE_POINTS = 30
     }
 }
+
+/** No active vehicle keeps the existing odometer entry point, including Add vehicle. */
+fun odometerShownFor(active: Vehicle?): Boolean = active?.showsOdometer ?: true
 
 /** A car comparison, never a measurement or a session anchor. */
 data class LastOdometerReading(

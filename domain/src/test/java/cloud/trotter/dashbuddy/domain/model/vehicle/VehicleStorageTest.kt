@@ -62,6 +62,36 @@ class VehicleStorageTest {
         assertEquals(vehicles, VehicleStorage.decode(raw))
     }
 
+    @Test fun `a v2 vehicle without odometerShown decodes to null and round trips`() {
+        val raw = """{"version":2,"vehicles":[{"id":"bike","name":null,"createdAt":1,"profile":{"type":"bicycle"}}]}"""
+        val decoded = VehicleStorage.decode(raw)!!.single()
+        assertNull(decoded.odometerShown)
+        assertFalse(decoded.showsOdometer)
+        val encoded = VehicleStorage.encode(listOf(decoded))
+        assertFalse(encoded.contains("\"showsOdometer\""))
+        assertEquals(listOf(decoded), VehicleStorage.decode(encoded))
+        assertNull(VehicleStorage.decode(encoded)!!.single().odometerShown)
+    }
+
+    @Test fun `a v2 vehicle with explicit false round trips`() {
+        val raw = """{"version":2,"vehicles":[{"id":"car","name":null,"createdAt":1,"odometerShown":false}]}"""
+        val decoded = VehicleStorage.decode(raw)!!.single()
+        assertEquals(false, decoded.odometerShown)
+        assertFalse(decoded.showsOdometer)
+        val encoded = VehicleStorage.encode(listOf(decoded))
+        assertTrue(encoded.contains("\"odometerShown\":false"))
+        assertEquals(listOf(decoded), VehicleStorage.decode(encoded))
+    }
+
+    @Test fun `odometerShown is not a v1 key and stays in legacy extras`() {
+        val raw = """[{"id":"car","name":null,"createdAt":1,"odometerShown":false}]"""
+        val decoded = VehicleStorage.decode(raw)!!.single()
+        assertNull(decoded.odometerShown)
+        assertTrue(decoded.showsOdometer)
+        assertEquals(kotlinx.serialization.json.JsonPrimitive(false), decoded.legacyExtras["odometerShown"])
+        assertEquals(listOf(decoded), VehicleStorage.decode(VehicleStorage.encode(listOf(decoded))))
+    }
+
     @Test fun `old vehicle json uses a default profile and keeps its name`() {
         val old = """[{"id":"one","name":"Civic","createdAt":100}]"""
         val decoded = VehicleStorage.decode(old)!!.single()

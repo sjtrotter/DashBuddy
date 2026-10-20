@@ -208,7 +208,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
   gas cars, hybrids and motorcycles; coolant for EVs; chain for motorcycles and bicycles; battery replacement for
   e-bikes; belt for scooters; and miscellaneous upkeep where applicable. Depreciation, purchase price, lifetime miles,
   insurance and registration deltas and annual miles remain optional fixed-cost inputs. Scooters also save gas or
-  electric powertrain. The electricity tariff (`electricityPricePerKwh`) is shared in app preferences, not on a vehicle.
+  electric powertrain. Since #1361 the vehicle record also holds an optional odometer-visibility setting
+  (`odometerShown`): unset follows the type's default, and the vehicle page's Odometer switch stores
+  an explicit choice. It controls the bubble's odometer block, cue, start line and resting footer;
+  nothing new is read or sent. The electricity tariff (`electricityPricePerKwh`) is shared in app preferences, not on a vehicle.
   Vehicle details and the Retired section (#1383) use these existing local records; nothing new is read, stored or sent.
   Restoring clears the retired mark on the existing vehicle record and keeps its readings and the active selection.
   A retired mark is kept when you remove a vehicle (its readings stay). Older entries are read into the typed shape
