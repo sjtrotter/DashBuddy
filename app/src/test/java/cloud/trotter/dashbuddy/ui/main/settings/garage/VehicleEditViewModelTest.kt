@@ -1,7 +1,12 @@
 package cloud.trotter.dashbuddy.ui.main.settings.garage
 
+import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
+import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
 import androidx.lifecycle.SavedStateHandle
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
@@ -35,6 +40,9 @@ class VehicleEditViewModelTest {
     private val lookup: VehicleRepository = mock()
     private val preferences: AppPreferencesRepository = mock()
     private val lock: VehicleSwapLock = mock()
+    private val dashVehicles: DashVehicleRepository = mock()
+    private val readings: OdometerReadingRepository = mock()
+    private val odometer: OdometerRepository = mock()
     private val clock = Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC)
 
     @Before fun setUp() { Dispatchers.setMain(StandardTestDispatcher()) }
@@ -50,10 +58,152 @@ class VehicleEditViewModelTest {
         whenever(garage.addVehicle(anyOrNull(), any(), any(), any())).thenReturn(Vehicle("new", null, 1234))
         whenever(garage.updateVehicle(any(), anyOrNull(), any())).thenReturn(true)
         whenever(preferences.userEconomy).thenReturn(flowOf(economy))
+        whenever(preferences.sharedEconomy).thenReturn(flowOf(SharedEconomy.from(economy)))
         whenever(preferences.vehicleLookupAllowed).thenReturn(flowOf(lookupAllowed))
         whenever(lookup.getYears()).thenReturn(listOf("2020", "2021"))
+        whenever(dashVehicles.stamps).thenReturn(flowOf(emptyList()))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
+        whenever(odometer.totalMilesFlow).thenReturn(flowOf(null))
         return VehicleEditViewModel(SavedStateHandle(id?.let { mapOf(Screen.VehicleEdit.ARG to it) } ?: emptyMap()),
-            garage, lookup, preferences, clock, lock)
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+    }
+
+    @Test fun `retired vehicle loads facts and restore writes and completes`() = runTest {
+        val target = Vehicle("old", "Old", 1, retiredAt = 2)
+        val vm = model("old", Garage(listOf(target), null, true))
+        runCurrent()
+        assertTrue(vm.loaded.value)
+        assertTrue(vm.retired.value)
+        assertFalse(vm.isActive.value)
+        assertEquals(2L, vm.facts.value!!.retiredAt)
+        assertEquals(VehicleUsage(0, null), vm.facts.value!!.usage)
+        whenever(garage.restore("old")).thenReturn(true)
+        var done = 0
+        vm.restore { done++ }
+        vm.restore { fail("Busy restore must not complete") }
+        runCurrent()
+        verify(garage, times(1)).restore("old")
+        verify(garage, never()).selectVehicle(any())
+        verify(lock, never()).locked()
+        assertEquals(1, done)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+    }
+
+    @Test fun `refused restore reports gone and keeps details open`() = runTest {
+        val target = Vehicle("old", "Old", 1, retiredAt = 2)
+        val vm = model("old", Garage(listOf(target), null, true))
+        runCurrent()
+        whenever(garage.restore("old")).thenReturn(false)
+        vm.restore { fail("Refused restore must not complete") }
+        runCurrent()
+        assertEquals(GarageWriteFailure.GONE, vm.failure.value)
+        assertFalse(vm.busy.value)
+    }
+
+    @Test fun `facts are null in Add and restore does nothing`() = runTest {
+        val vm = model()
+        runCurrent()
+        assertNull(vm.facts.value)
+        assertFalse(vm.retired.value)
+        assertFalse(vm.isActive.value)
+        vm.restore { fail("Add must not restore") }
+        runCurrent()
+        verify(garage, never()).restore(any())
+    }
+
+    @Test fun `facts follow shared costs stamps GPS and latest reading for the loaded vehicle`() = runTest {
+        val target = Vehicle("car", "Car", 1, GasCar(mpg = 25.0))
+        val vmEconomy = MutableStateFlow(SharedEconomy(gasPricePerGallon = 3.0))
+        val stamps = MutableStateFlow(listOf(DashVehicleStamp("dash", "car", 10.0, 1, 1, DashVehicleKind.START)))
+        val gps = MutableStateFlow<Double?>(30.0)
+        val readingsFlow = MutableStateFlow(listOf(VehicleOdometerReading("other", LastOdometerReading(99, null, 3), 3),
+            VehicleOdometerReading("car", LastOdometerReading(52388, 20.0, 2), 2)))
+        val garageFlow = MutableStateFlow(Garage(listOf(target), "car", true))
+        whenever(garage.garage).thenReturn(garageFlow)
+        whenever(preferences.sharedEconomy).thenReturn(vmEconomy)
+        whenever(preferences.vehicleLookupAllowed).thenReturn(flowOf(false))
+        whenever(dashVehicles.stamps).thenReturn(stamps)
+        whenever(odometer.totalMilesFlow).thenReturn(gps)
+        whenever(readings.readings).thenReturn(readingsFlow)
+        val vm = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to "car")),
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+        runCurrent()
+        assertTrue(vm.isActive.value)
+        assertEquals(VehicleUsage(1, 20.0), vm.facts.value!!.usage)
+        assertEquals(52388, vm.facts.value!!.lastReading!!.readingMiles)
+        assertEquals(0.12, vm.facts.value!!.energyPerMile, 0.0)
+        gps.value = 40.0
+        vmEconomy.value = SharedEconomy(gasPricePerGallon = 4.0)
+        runCurrent()
+        assertEquals(VehicleUsage(1, 30.0), vm.facts.value!!.usage)
+        assertEquals(0.16, vm.facts.value!!.energyPerMile, 0.0)
+        stamps.value = stamps.value + DashVehicleStamp("other", null, 35.0, 3, 3, DashVehicleKind.START)
+        readingsFlow.value = readingsFlow.value + VehicleOdometerReading("car", LastOdometerReading(52400, 40.0, 4), 4)
+        runCurrent()
+        assertEquals(VehicleUsage(1, 25.0), vm.facts.value!!.usage)
+        assertEquals(52400, vm.facts.value!!.lastReading!!.readingMiles)
+        garageFlow.value = Garage(listOf(target.copy(profile = GasCar(mpg = 50.0))), "car", true)
+        runCurrent()
+        assertEquals(0.08, vm.facts.value!!.energyPerMile, 0.0)
+        garageFlow.value = garageFlow.value.copy(vehicles = listOf(target.copy(retiredAt = 5)), activeId = null)
+        runCurrent()
+        assertTrue(vm.retired.value)
+        assertFalse(vm.isActive.value)
+        assertEquals(5L, vm.facts.value!!.retiredAt)
+    }
+
+    /** #1383 review: the page builds a car's figures from the shared settings, never the active car's overrides. */
+    @Test fun `another vehicle's facts ignore the active vehicle's annual mileage`() = runTest {
+        val active = Vehicle("a", "A", 1, GasCar(fixed = FixedCosts(expectedAnnualMiles = 20_000.0)))
+        val viewed = Vehicle("b", "B", 2, GasCar(fixed = FixedCosts(insuranceDeltaPerMonth = 100.0)))
+        model("b", Garage(listOf(active, viewed), "a", true),
+            economy = UserEconomy(expectedAnnualMiles = 20_000.0))
+        whenever(preferences.sharedEconomy).thenReturn(flowOf(SharedEconomy(expectedAnnualMiles = 10_000.0)))
+        val fresh = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to "b")),
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+        runCurrent()
+        val expected = VehicleEconomyInputs.from(viewed.profile, SharedEconomy(expectedAnnualMiles = 10_000.0)).fixedPerMile
+        assertEquals(expected, fresh.facts.value!!.fixedPerMile, 1e-9)
+        assertEquals(0.12, fresh.facts.value!!.fixedPerMile, 1e-9)
+    }
+
+    /** #1383 review: Save merges onto the vehicle as stored now, so an Edit costs round trip survives a rename. */
+    @Test fun `save after an economy edit keeps the newly stored cost`() = runTest {
+        val before = Vehicle("car", "Car", 1, GasCar(wear = WearProfile(tireSetCost = 800.0)))
+        val garageFlow = MutableStateFlow(Garage(listOf(before), "car", true))
+        model("car", Garage(listOf(before), "car", true))
+        whenever(garage.garage).thenReturn(garageFlow)
+        val fresh = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to "car")),
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+        runCurrent()
+        garageFlow.value = Garage(listOf(before.copy(profile = GasCar(wear = WearProfile(tireSetCost = 1000.0)))), "car", true)
+        runCurrent()
+        fresh.setName("Renamed")
+        fresh.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).updateVehicle(eq("car"), eq("Renamed"), saved.capture())
+        assertEquals(1000.0, saved.firstValue.wear.tireSetCost)
+    }
+
+    /** #1383 review r2: a consumption changed through Edit costs survives a later rename and Save. */
+    @Test fun `save keeps an EV consumption changed elsewhere while the page was open`() = runTest {
+        val before = Vehicle("ev", "EV", 1, ElectricCar(kwhPer100Mi = 27.0))
+        val garageFlow = MutableStateFlow(Garage(listOf(before), "ev", true))
+        model("ev", Garage(listOf(before), "ev", true),
+            economy = UserEconomy(userSetFields = setOf(EconomyField.KWH_PER_100_MI)))
+        whenever(garage.garage).thenReturn(garageFlow)
+        val fresh = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to "ev")),
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+        runCurrent()
+        garageFlow.value = Garage(listOf(before.copy(profile = ElectricCar(kwhPer100Mi = 29.0))), "ev", true)
+        runCurrent()
+        fresh.setName("Renamed")
+        fresh.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).updateVehicle(eq("ev"), eq("Renamed"), saved.capture())
+        assertEquals(29.0, (saved.firstValue as ElectricCar).kwhPer100Mi)
     }
 
     @Test fun `retire writes clock time and completes once`() = runTest {
@@ -265,15 +415,14 @@ class VehicleEditViewModelTest {
         clearInvocations(preferences)
         vm.save {}
         runCurrent()
-        verify(preferences).updateElectricityPrice(.31)
+        // #1383 review r2: an unchanged form rewrites nothing; the stored $0.31 survives because Save leaves it alone.
+        verify(preferences, never()).updateElectricityPrice(any())
         verifyNoMoreInteractions(preferences)
     }
 
-    @Test fun `unknown or retired id reports gone at load while unreadable remains distinct`() = runTest {
-        val retired = Vehicle("retired", "Retired", 1, retiredAt = 2)
+    @Test fun `unknown id reports gone at load while unreadable remains distinct`() = runTest {
         listOf(
             "missing" to Garage(emptyList(), null, true),
-            "retired" to Garage(listOf(retired), null, true),
             null to Garage(emptyList(), null, false),
         ).forEach { (id, stored) ->
             val vm = model(id, stored)

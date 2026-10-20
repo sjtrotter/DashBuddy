@@ -27,6 +27,41 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 
 class GarageRepositoryTest {
+    @Test fun `restore clears retired mark keeps selection and refuses unknown or unretired without writes`() = runTest {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                writes++
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val repo = GarageRepository(VehicleDataSource(store))
+        val old = repo.addVehicle("Old", 1, ElectricCar(kwhPer100Mi = 27.0))
+        val active = repo.addVehicle("Active", 2)
+        assertTrue(repo.retire(old.id, 3))
+        val beforeRestore = store.writes
+        assertTrue(repo.restore(old.id))
+        assertEquals(beforeRestore + 1, store.writes)
+        assertEquals(active.id, repo.garage.first().activeId)
+        assertEquals(old, repo.garage.first().vehicles.first { it.id == old.id })
+        val restored = repo.garage.first()
+        assertFalse(repo.restore("missing"))
+        assertFalse(repo.restore(active.id))
+        assertFalse(repo.restore(old.id))
+        assertEquals(beforeRestore + 1, store.writes)
+        assertEquals(restored, repo.garage.first())
+    }
+
+    @Test fun `restore in a garage without an active vehicle keeps no selection`() = runTest {
+        val repo = garage(backgroundScope)
+        val old = repo.addVehicle("Old", 1)
+        repo.retire(old.id, 2)
+        assertTrue(repo.restore(old.id))
+        assertNull(repo.garage.first().activeId)
+        assertEquals(listOf(old), repo.garage.first().unretired)
+    }
+
     @get:Rule val tmp = TemporaryFolder()
     private fun garage(scope: CoroutineScope) = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
         scope = scope, produceFile = { tmp.newFile("vehicles.preferences_pb") })))

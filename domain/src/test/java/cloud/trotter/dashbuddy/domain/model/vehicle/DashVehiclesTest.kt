@@ -4,6 +4,44 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DashVehiclesTest {
+    @Test fun `usage counts latest vehicles across four dashes and sums their own GPS spans`() {
+        val stamps = listOf(stamp("a", "civic", 10.0), stamp("b", "civic", 30.0, sequence = 2),
+            stamp("c", "malibu", 45.0, sequence = 3), stamp("d", "civic", 70.0, sequence = 4),
+            stamp("a", "malibu", 99.0, sequence = 5, kind = DashVehicleKind.SWAP))
+        val history = DashVehicles.perDash(stamps)
+        assertEquals(VehicleUsage(2, 45.0), DashVehicles.usageFor(history, "malibu", 100.0))
+        assertEquals(VehicleUsage(2, 45.0), DashVehicles.usageFor(history, "civic", 100.0))
+    }
+
+    @Test fun `usage unknown vehicle dash bounds the previous span`() {
+        val history = listOf(DashVehicle("a", "car", 1, 10.0), DashVehicle("b", null, 2, 30.0))
+        assertEquals(VehicleUsage(1, 20.0), DashVehicles.usageFor(history, "car", 100.0))
+    }
+
+    @Test fun `usage open last span uses GPS now and skips it when unknown`() {
+        val history = listOf(DashVehicle("a", "car", 1, 10.0))
+        assertEquals(VehicleUsage(1, 15.0), DashVehicles.usageFor(history, "car", 25.0))
+        assertEquals(VehicleUsage(1, null), DashVehicles.usageFor(history, "car", null))
+        assertEquals(VehicleUsage(1, 0.0), DashVehicles.usageFor(history, "car", 10.0))
+    }
+
+    @Test fun `usage skips unknown start and end without losing dash count or later known spans`() {
+        val history = listOf(DashVehicle("a", "car", 1, 10.0), DashVehicle("b", "car", 2, null),
+            DashVehicle("c", "car", 3, 40.0))
+        assertEquals(VehicleUsage(3, 20.0), DashVehicles.usageFor(history, "car", 60.0))
+        assertEquals(VehicleUsage(3, null), DashVehicles.usageFor(history, "car", null))
+    }
+
+    @Test fun `usage without stamped dashes has no count or known miles`() {
+        assertEquals(VehicleUsage(0, null), DashVehicles.usageFor(emptyList(), "car", 100.0))
+    }
+
+    @Test fun `usage skips reset and non finite GPS spans`() {
+        for (end in listOf(5.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertEquals(VehicleUsage(1, null), DashVehicles.usageFor(listOf(DashVehicle("a", "car", 1, 10.0)), "car", end))
+        }
+    }
+
     @Test fun `swap is unlocked without live dashes`() {
         assertFalse(DashVehicles.swapLocked(emptyList(), 600_101, 600_000))
     }

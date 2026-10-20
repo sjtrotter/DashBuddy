@@ -246,12 +246,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Screen.VehicleAdd.route) {
-                            VehicleEditScreen(onDone = { navController.popBackStack() })
+                            VehicleEditScreen(onDone = { navController.popBackStack() },
+                                onEditCosts = { navController.navigate(Screen.EconomySettings.route) })
                         }
                         composable(Screen.VehicleEdit.route,
                             arguments = listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType }),
                         ) {
-                            VehicleEditScreen(onDone = { navController.popBackStack() })
+                            VehicleEditScreen(onDone = { navController.popBackStack() },
+                                onEditCosts = { navController.navigate(Screen.EconomySettings.route) })
                         }
 
                         // 4. General Settings

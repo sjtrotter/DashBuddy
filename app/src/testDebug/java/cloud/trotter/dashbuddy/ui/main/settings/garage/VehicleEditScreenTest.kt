@@ -4,6 +4,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.SavedStateHandle
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
@@ -33,10 +37,15 @@ import java.time.ZoneOffset
 class VehicleEditScreenTest {
     @get:Rule val compose = createComposeRule()
     private val repository: GarageRepository = mock()
+    private val dashVehicles: DashVehicleRepository = mock { on { stamps } doReturn flowOf(emptyList()) }
+    private val readings: OdometerReadingRepository = mock { on { readings } doReturn flowOf(emptyList()) }
+    private val odometer: OdometerRepository = mock { on { totalMilesFlow } doReturn flowOf(null) }
+    private var editCosts = false
     private val lock: VehicleSwapLock = mock()
     private val lookup: VehicleRepository = mock()
     private val preferences: AppPreferencesRepository = mock {
         on { userEconomy } doReturn flowOf(UserEconomy())
+        on { sharedEconomy } doReturn flowOf(cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy())
         on { vehicleLookupAllowed } doReturn flowOf(false)
     }
     private val vehicle = Vehicle("car", "Original", 1, GasCar(
@@ -49,15 +58,53 @@ class VehicleEditScreenTest {
         whenever(repository.garage).thenReturn(flow { emit(loaded.await()) })
         compose.runOnIdle {
             vm = VehicleEditViewModel(SavedStateHandle(if (editing) mapOf(Screen.VehicleEdit.ARG to vehicle.id) else emptyMap()),
-                repository, lookup, preferences, Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC), lock)
+                repository, lookup, preferences, Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC), lock, dashVehicles, readings, odometer)
         }
-        compose.setContent { DashBuddyTheme { VehicleEditScreen(onDone = { done = true }, viewModel = vm) } }
+        compose.setContent { DashBuddyTheme { VehicleEditScreen(onDone = { done = true }, onEditCosts = { editCosts = true }, viewModel = vm) } }
     }
 
-    private fun finishLoading() {
-        compose.runOnIdle { loaded.complete(Garage(listOf(vehicle), vehicle.id, true)) }
-        compose.waitUntil { vm.loaded.value && !vm.busy.value }
+    private fun finishLoading(retired: Boolean = false, active: Boolean = true) {
+        compose.runOnIdle {
+            loaded.complete(Garage(listOf(if (retired) vehicle.copy(retiredAt = 2) else vehicle),
+                vehicle.id.takeIf { active && !retired }, true))
+        }
+        compose.waitUntil { vm.loaded.value && !vm.busy.value && (!vm.isEditing || vm.facts.value != null) }
         compose.waitForIdle()
+    }
+
+    @Test fun `details show this car and cost per mile above the form`() {
+        showEditor()
+        finishLoading()
+        compose.onNodeWithText("This car").assertIsDisplayed()
+        val cost = compose.onNodeWithText("Cost per mile").fetchSemanticsNode()
+        val name = compose.onNodeWithText("Name").fetchSemanticsNode()
+        assertTrue(cost.positionInRoot.y < name.positionInRoot.y)
+        compose.onNodeWithText(Formats.money(vm.facts.value!!.costPerMile) + " est.").assertIsDisplayed()
+        compose.onNodeWithText("Edit costs").performScrollTo().performClick()
+        assertTrue(editCosts)
+    }
+
+    @Test fun `non active details have no edit costs`() {
+        showEditor()
+        finishLoading(active = false)
+        compose.onNodeWithText("This car").assertIsDisplayed()
+        compose.onNodeWithText("Edit costs").assertDoesNotExist()
+        compose.onNodeWithText("Name").assertExists()
+    }
+
+    @Test fun `retired details show facts and restore without the form`() {
+        runBlocking { whenever(repository.restore(vehicle.id)).thenReturn(true) }
+        showEditor()
+        finishLoading(retired = true)
+        compose.onNodeWithText("This car").assertIsDisplayed()
+        compose.onNodeWithText("Edit costs").assertDoesNotExist()
+        compose.onNodeWithText("Name").assertDoesNotExist()
+        compose.onNodeWithText("Bicycle").assertDoesNotExist()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithText("Retire vehicle").assertDoesNotExist()
+        compose.onNodeWithText("Restore vehicle").performScrollTo().assertIsEnabled().performClick()
+        compose.waitUntil { done }
+        runBlocking { verify(repository).restore(vehicle.id) }
     }
 
     @Test fun `retire is in edit details with cancel and confirmation returning to list`() {
@@ -94,6 +141,7 @@ class VehicleEditScreenTest {
         showEditor(editing = false)
         finishLoading()
         compose.onNodeWithText("Retire vehicle").assertDoesNotExist()
+        compose.onNodeWithText("This car").assertDoesNotExist()
     }
 
     @Test fun `unreadable editor disables retire`() {
@@ -109,10 +157,10 @@ class VehicleEditScreenTest {
             whenever(repository.updateVehicle(any(), anyOrNull(), any())).doSuspendableAnswer { saved.await() }
         }
         showEditor()
-        compose.onNodeWithText("Bicycle").assertIsNotEnabled().performTouchInput { click() }
+        compose.onNodeWithText("Bicycle").performScrollTo().assertIsNotEnabled().performTouchInput { click() }
         compose.runOnIdle { assertEquals(VehicleType.CAR, vm.draft.state.value.profile.vehicleType) }
         finishLoading()
-        compose.onNodeWithText("Bicycle").assertIsEnabled().performClick()
+        compose.onNodeWithText("Bicycle").performScrollTo().assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(VehicleType.BICYCLE, vm.draft.state.value.profile.vehicleType) }
         compose.onNodeWithText("Save").performScrollTo().performClick()
         compose.waitUntil { vm.busy.value }
@@ -128,9 +176,9 @@ class VehicleEditScreenTest {
         finishLoading()
         val note = "Changing the type resets the cost figures to the type's presets. Edit them in Economy."
         compose.onNodeWithText(note).assertDoesNotExist()
-        compose.onNodeWithText("Bicycle").performClick()
+        compose.onNodeWithText("Bicycle").performScrollTo().performClick()
         compose.onNodeWithText(note).assertExists()
-        compose.onNodeWithText("Car").performClick()
+        compose.onNodeWithText("Car").performScrollTo().performClick()
         compose.onNodeWithText(note).assertDoesNotExist()
     }
 
@@ -138,7 +186,7 @@ class VehicleEditScreenTest {
         runBlocking { whenever(repository.updateVehicle(any(), anyOrNull(), any())).thenReturn(true) }
         showEditor()
         finishLoading()
-        compose.onNodeWithText("Name").performTextReplacement("😀".repeat(40))
+        compose.onNodeWithText("Name").performScrollTo().performTextReplacement("😀".repeat(40))
         compose.onNodeWithText("30 / 30").assertIsDisplayed()
         compose.runOnIdle { assertEquals("😀".repeat(30), vm.name.value) }
         compose.onNodeWithText("Save").performScrollTo().performClick()
@@ -153,7 +201,7 @@ class VehicleEditScreenTest {
         compose.waitUntil { vm.failure.value == GarageWriteFailure.GONE }
         compose.onNodeWithText("This vehicle was retired.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Save").assertIsNotEnabled()
-        compose.onNodeWithText("Bicycle").assertIsNotEnabled()
+        compose.onNodeWithText("Bicycle").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
     }
 }

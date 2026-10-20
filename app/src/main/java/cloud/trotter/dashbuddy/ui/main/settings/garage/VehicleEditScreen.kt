@@ -24,13 +24,16 @@ import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hiltViewModel()) {
+fun VehicleEditScreen(onDone: () -> Unit, onEditCosts: () -> Unit, viewModel: VehicleEditViewModel = hiltViewModel()) {
     val name by viewModel.name.collectAsStateWithLifecycle()
     val draft by viewModel.draft.state.collectAsStateWithLifecycle()
     val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val failure by viewModel.failure.collectAsStateWithLifecycle()
     val vehicle by viewModel.vehicle.collectAsStateWithLifecycle()
+    val facts by viewModel.facts.collectAsStateWithLifecycle()
+    val retired by viewModel.retired.collectAsStateWithLifecycle()
+    val isActive by viewModel.isActive.collectAsStateWithLifecycle()
     var retiring by remember { mutableStateOf(false) }
     val context = LocalContext.current
     LaunchedEffect(viewModel, context) {
@@ -49,34 +52,46 @@ fun VehicleEditScreen(onDone: () -> Unit, viewModel: VehicleEditViewModel = hilt
         })
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            OutlinedTextField(value = name, onValueChange = { viewModel.setName(it.cappedVehicleName()) },
-                label = { Text(stringResource(R.string.vehicle_edit_name)) },
-                supportingText = {
-                    val count = name.codePointCount(0, name.length)
-                    Text(stringResource(if (count >= Vehicle.MAX_NAME_CODE_POINTS - 5) {
-                        R.string.vehicle_edit_name_counter
-                    } else R.string.vehicle_edit_name_hint, count, Vehicle.MAX_NAME_CODE_POINTS))
-                },
-                singleLine = true, enabled = enabled,
-                modifier = Modifier.fillMaxWidth())
-            VehicleCard(step = WizardStep.VEHICLE, draft = draft, actions = viewModel.draft,
-                onAllowVehicleLookup = viewModel::allowLookup, showStepHeader = false, scrollable = false,
-                enabled = enabled, typeNote = {
-                    if (viewModel.resetsCosts(draft.profile.vehicleType)) {
-                        Text(stringResource(R.string.vehicle_edit_type_resets_costs),
-                            style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.text2)
-                    }
-                })
-            GarageFailure(failure)
-            Button(onClick = { viewModel.save(onDone) }, enabled = enabled,
-                modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.vehicle_edit_save))
+            facts?.let {
+                VehicleFacts(it, onEditCosts = if (isActive && !retired) onEditCosts else null)
+                Spacer(Modifier.height(16.dp))
             }
-            if (viewModel.isEditing) {
-                OutlinedButton(onClick = { retiring = true }, enabled = enabled,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            if (retired) {
+                GarageFailure(failure)
+                Button(onClick = { viewModel.restore(onDone) }, enabled = enabled,
                     modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.garage_retire_vehicle_button))
+                    Text(stringResource(R.string.vehicle_restore))
+                }
+            } else {
+                OutlinedTextField(value = name, onValueChange = { viewModel.setName(it.cappedVehicleName()) },
+                    label = { Text(stringResource(R.string.vehicle_edit_name)) },
+                    supportingText = {
+                        val count = name.codePointCount(0, name.length)
+                        Text(stringResource(if (count >= Vehicle.MAX_NAME_CODE_POINTS - 5) {
+                            R.string.vehicle_edit_name_counter
+                        } else R.string.vehicle_edit_name_hint, count, Vehicle.MAX_NAME_CODE_POINTS))
+                    },
+                    singleLine = true, enabled = enabled,
+                    modifier = Modifier.fillMaxWidth())
+                VehicleCard(step = WizardStep.VEHICLE, draft = draft, actions = viewModel.draft,
+                    onAllowVehicleLookup = viewModel::allowLookup, showStepHeader = false, scrollable = false,
+                    enabled = enabled, typeNote = {
+                        if (viewModel.resetsCosts(draft.profile.vehicleType)) {
+                            Text(stringResource(R.string.vehicle_edit_type_resets_costs),
+                                style = MaterialTheme.typography.labelSmall, color = AppTheme.colors.text2)
+                        }
+                    })
+                GarageFailure(failure)
+                Button(onClick = { viewModel.save(onDone) }, enabled = enabled,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.vehicle_edit_save))
+                }
+                if (viewModel.isEditing) {
+                    OutlinedButton(onClick = { retiring = true }, enabled = enabled,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.garage_retire_vehicle_button))
+                    }
                 }
             }
         }
