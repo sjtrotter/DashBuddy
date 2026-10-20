@@ -13,6 +13,8 @@ internal class ExpenseEntryState {
     var page by mutableStateOf(ExpensePage.SUBCARD)
     var pick by mutableStateOf<ExpensePick>(ExpensePick.Fuel)
         private set
+    /** Null follows the active vehicle until Log. */
+    var vehicleId by mutableStateOf<String?>(null)
     var activeField by mutableStateOf(ExpenseField.TOTAL)
     var totalDigits by mutableStateOf("")
         private set
@@ -44,6 +46,7 @@ internal class ExpenseEntryState {
     fun select(pick: ExpensePick) {
         entryId++
         this.pick = pick
+        vehicleId = null
         activeField = ExpenseField.TOTAL
         totalDigits = ""; gallonsDigits = ""; label = ""; keyboardOpen = false
         page = ExpensePage.SHEET
@@ -76,7 +79,7 @@ internal class ExpenseEntryState {
             save = { listOf(it.open, it.page.name, when (val pick = it.pick) {
                 ExpensePick.Fuel -> "FUEL"
                 is ExpensePick.Expense -> pick.category.name
-            }, it.activeField.name, it.totalDigits, it.gallonsDigits, it.label, it.keyboardOpen, it.entryId) },
+            }, it.activeField.name, it.totalDigits, it.gallonsDigits, it.label, it.keyboardOpen, it.entryId, it.vehicleId.orEmpty()) },
             restore = { values -> ExpenseEntryState().apply {
                 open = values[0] as Boolean
                 page = ExpensePage.valueOf(values[1] as String)
@@ -85,6 +88,7 @@ internal class ExpenseEntryState {
                 activeField = ExpenseField.valueOf(values[3] as String)
                 totalDigits = values[4] as String; gallonsDigits = values[5] as String
                 label = values[6] as String; keyboardOpen = values[7] as Boolean; entryId = values[8] as Long
+                vehicleId = (values.getOrNull(9) as? String)?.takeIf { it.isNotEmpty() }
             } },
         )
     }

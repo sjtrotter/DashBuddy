@@ -42,6 +42,7 @@ internal object CorrectionFolds {
                 category = p.category,
                 amount = p.amount,
                 note = p.note?.takeIf { it.isNotBlank() },
+                vehicleId = p.vehicleId,
             ),
         )
     }
@@ -62,6 +63,7 @@ internal object CorrectionFolds {
                 totalAmount = p.totalAmount,
                 gallons = p.gallons,
                 odometerMiles = p.odometerMiles,
+                vehicleId = p.vehicleId,
             ),
         )
     }

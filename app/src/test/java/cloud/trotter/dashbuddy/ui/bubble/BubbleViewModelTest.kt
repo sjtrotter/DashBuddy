@@ -363,6 +363,23 @@ class BubbleViewModelTest {
         assertEquals(1, collections)
     }
 
+    @Test fun `logData keeps all garage vehicles including retired and follows garage updates`() = runTest(dispatcher) {
+        stubNoDashes()
+        val active = Vehicle("new", "Civic", 0)
+        val retired = Vehicle("old", "Malibu", 1, retiredAt = 2)
+        val updates = MutableStateFlow(Garage(listOf(active, retired), active.id, true))
+        val repo: GarageRepository = mock()
+        whenever(repo.garage).thenReturn(updates)
+        val vm = viewModel(garageRepository = repo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
+        runCurrent()
+        assertEquals(listOf(active, retired), vm.logData.value.vehicles)
+        updates.value = updates.value.copy(vehicles = listOf(active.copy(name = "Renamed"), retired))
+        runCurrent()
+        assertEquals("Renamed", vm.logData.value.vehicles.first().name)
+        assertEquals(retired, vm.logData.value.vehicles.last())
+    }
+
     @Test
     fun `logData merges events deliveries and ledger rows for the displayed dash`() = runTest {
         stubNoDashes()

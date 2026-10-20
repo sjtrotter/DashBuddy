@@ -389,6 +389,7 @@ class BubbleViewModel @Inject constructor(
                 projections.copy(events = events.flatMap { it.second })
             }.combine(unassignedLogData(sources)) { sessions, unassigned -> sessions + unassigned }
         }
+        .combine(garage) { data, garage -> data.copy(vehicles = garage?.vehicles.orEmpty()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LogData.Empty)
 
     /**

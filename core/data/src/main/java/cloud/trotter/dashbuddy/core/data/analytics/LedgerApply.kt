@@ -14,7 +14,7 @@ private const val TAG = "Projector"
 internal suspend fun LedgerDao.applyExpenseLogged(fold: ExpenseLoggedFold): Boolean {
     upsertExpense(ExpenseRecordEntity(
         fold.eventSequenceId, fold.sessionId, fold.occurredAt, fold.category.name,
-        fold.amount, fold.note, voidedAt = null,
+        fold.amount, fold.note, voidedAt = null, vehicleId = fold.vehicleId,
     ))
     return false
 }
@@ -23,7 +23,7 @@ internal suspend fun LedgerDao.applyExpenseLogged(fold: ExpenseLoggedFold): Bool
 internal suspend fun LedgerDao.applyFuelFillup(fold: FuelFillupFold): Boolean {
     upsertFuel(FuelRecordEntity(
         fold.eventSequenceId, fold.sessionId, fold.occurredAt, fold.totalAmount,
-        fold.gallons, fold.odometerMiles, voidedAt = null,
+        fold.gallons, fold.odometerMiles, voidedAt = null, vehicleId = fold.vehicleId,
     ))
     return false
 }

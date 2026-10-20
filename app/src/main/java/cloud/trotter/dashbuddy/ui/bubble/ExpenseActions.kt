@@ -25,24 +25,25 @@ internal class ExpenseActions(scope: CoroutineScope, private val ledger: LedgerR
     fun reopen() { failure.value = ExpenseFailure.NONE }
     fun committedHandled() = writer.committedHandled()
 
-    fun logExpense(owner: String?, category: ExpenseCategory, cents: Long, label: String?, entryId: Long = 0) {
+    fun logExpense(owner: String?, category: ExpenseCategory, cents: Long, label: String?, entryId: Long = 0, vehicleId: String? = null) {
         if (busy.value || cents <= 0) return
         val note = label?.trim()?.takeIf { it.isNotEmpty() }?.let {
             it.substring(0, it.offsetByCodePoints(0, minOf(it.codePointCount(0, it.length), ExpenseLabel.MAX_CODE_POINTS)))
         }
         commit(ExpensePick.Expense(category), cents, note, entryId) { amount, now ->
-            ledger.logExpense(owner, category, amount, note, now)
+            ledger.logExpense(owner, category, amount, note, now,
+                vehicleId.takeIf { category == ExpenseCategory.CAR_CARE })
         }
     }
 
-    fun logFuel(owner: String?, cents: Long, gallons: String, gpsMiles: Double?, entryId: Long = 0) {
+    fun logFuel(owner: String?, cents: Long, gallons: String, gpsMiles: Double?, entryId: Long = 0, vehicleId: String? = null) {
         if (busy.value || cents <= 0) return
         // Validate the same bounded buffer as the UI; parse once at the write boundary.
         val entry = runCatching { DecimalEntry(gallons) }.getOrNull() ?: return
         if (!entry.positive) return
         val parsedGallons = gallons.toDoubleOrNull() ?: return
         commit(ExpensePick.Fuel, cents, null, entryId) { amount, now ->
-            ledger.logFuel(owner, amount, parsedGallons, gpsMiles, now)
+            ledger.logFuel(owner, amount, parsedGallons, gpsMiles, now, vehicleId)
         }
     }
 

@@ -2408,4 +2408,27 @@ class AnalyticsProjectorTest {
         assertEquals(readingId, analyticsDao.getWatermark()!!.watermarkSequenceId)
     }
 
+    @Test
+    fun `receipt vehicles project and survive void and refold while old events stay null`() = runBlocking {
+        val expenseId = insert(AppEventType.EXPENSE_LOGGED, "S", 100,
+            ExpenseLoggedPayload("S", ExpenseCategory.CAR_CARE, 18.4, "wipers", "other-car"))
+        insert(AppEventType.FUEL_FILLUP, "S", 200, FuelFillupPayload("S", 42.0, 11.125, 1234.5, "other-car"))
+        insert(AppEventType.EXPENSE_LOGGED, "S", 300, ExpenseLoggedPayload("S", ExpenseCategory.FOOD, 5.0))
+        insert(AppEventType.FUEL_FILLUP, "S", 400, FuelFillupPayload("S", 30.0))
+        insert(AppEventType.LEDGER_ENTRY_VOIDED, null, 500, LedgerEntryVoidedPayload(expenseId))
+        val projector = projector()
+        projector.catchUp()
+        val ledger = db.ledgerDao()
+        val expenses = ledger.expensesForSession("S").first()
+        val fuel = ledger.fuelForSession("S").first()
+        assertEquals(listOf("other-car", null), expenses.map { it.vehicleId })
+        assertEquals(listOf("other-car", null), fuel.map { it.vehicleId })
+        assertEquals(500L, expenses.first().voidedAt)
+        assertEquals(1234.5, fuel.first().odometerMiles!!, 0.0)
+        analyticsDao.setWatermark(analyticsDao.getWatermark()!!.copy(projectorVersion = 99))
+        projector.catchUp()
+        assertEquals(expenses, ledger.expensesForSession("S").first())
+        assertEquals(fuel, ledger.fuelForSession("S").first())
+    }
+
 }

@@ -40,4 +40,21 @@ class VehicleChipMapperTest {
         assertEquals("😀".repeat(11) + "…", chipName("😀".repeat(13)))
         assertEquals("ab😀…", chipName("ab😀cd", max = 4))
     }
+    @Test fun `entry vehicle defaults and stale selections fall back to active`() {
+        val old = civic.copy(id = "old", retiredAt = 2)
+        val model = VehicleChipMapper.map(input(live = true))!!.copy(vehicles = listOf(civic, bike, old))
+        for (id in listOf(null, "unknown", old.id)) {
+            assertEquals(civic, model.forEntry(id).shown)
+            assertEquals(civic.id, model.forEntry(id).activeId)
+        }
+        assertEquals(bike, model.forEntry(bike.id).shown)
+        assertEquals(bike.id, model.forEntry(bike.id).activeId)
+        assertEquals(civic.id, model.activeId)
+    }
+    @Test fun `entry with no active vehicle or unreadable garage stays empty`() {
+        assertNull(VehicleChipModel(null, emptyList(), null, false).forEntry("missing").shown)
+        val unavailable = VehicleChipMapper.map(input(readable = false))!!
+        assertEquals(unavailable, unavailable.forEntry(bike.id))
+    }
+
 }

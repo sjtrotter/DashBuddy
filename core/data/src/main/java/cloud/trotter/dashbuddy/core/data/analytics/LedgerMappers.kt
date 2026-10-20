@@ -7,9 +7,9 @@ import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
 import cloud.trotter.dashbuddy.domain.analytics.FuelRecord
 
 internal fun ExpenseRecordEntity.toDomain() = ExpenseRecord(
-    eventSequenceId, sessionId, occurredAt, ExpenseCategory.fromStorage(category), amount, note, voidedAt,
+    eventSequenceId, sessionId, occurredAt, ExpenseCategory.fromStorage(category), amount, note, voidedAt, vehicleId,
 )
 
 internal fun FuelRecordEntity.toDomain() = FuelRecord(
-    eventSequenceId, sessionId, occurredAt, totalAmount, gallons, odometerMiles, voidedAt,
+    eventSequenceId, sessionId, occurredAt, totalAmount, gallons, odometerMiles, voidedAt, vehicleId,
 )

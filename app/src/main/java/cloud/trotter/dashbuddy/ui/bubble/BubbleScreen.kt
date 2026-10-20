@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.feature.bubble.hud.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.undo.*
 import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.VehicleChip
+import cloud.trotter.dashbuddy.feature.bubble.hud.odometer.displayName
 import cloud.trotter.dashbuddy.ui.main.MainActivity
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
@@ -83,7 +84,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     }
     val odometer = rememberOdometerHud(viewModel, closeLog, openVehicleAdd)
     val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
-    val expense = rememberExpenseHud(viewModel, closeLog)
+    val expense = rememberExpenseHud(viewModel, closeLog, openVehicleAdd)
     val goalHud = rememberGoalHud(viewModel, closeLog)
     var lastSheet by rememberSaveable { mutableStateOf(EntrySheet.ODOMETER) }
     val route: (EntrySheet) -> Unit = remember(odometer, cashTip, expense, goalHud) {
@@ -266,8 +267,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             log = {
                 val logData by viewModel.logData.collectAsStateWithLifecycle()
                 val messages by viewModel.messages.collectAsStateWithLifecycle()
-                val items = remember(cards.stack, logData, messages, model, region?.activeJob) {
+                val items = remember(cards.stack, logData, messages, model, region?.activeJob, context) {
                     LogMapper.map(cards.stack, logData, messages, model,
+                        vehicleDisplayName = { it.displayName(context) },
                         liveLinks = region?.activeJob?.let { job ->
                             mapOf(job.jobId to job.acceptedOffers.mapNotNull { it.offerHash }.toSet())
                         }.orEmpty())

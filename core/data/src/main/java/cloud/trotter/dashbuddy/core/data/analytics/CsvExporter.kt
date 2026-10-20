@@ -67,11 +67,12 @@ object CsvExporter {
     )
 
     private val EXPENSE_HEADER = listOf(
-        "date", "time", "category", "label", "amount", "dash_id", "voided",
+        "date", "time", "category", "label", "amount", "dash_id", "voided", "vehicle_id", "vehicle_label",
     )
 
     private val FUEL_HEADER = listOf(
         "date", "time", "total", "gallons", "price_per_gallon", "tracked_miles", "dash_id", "voided",
+        "vehicle_id", "vehicle_label",
     )
 
     private val SESSION_HEADER = listOf(
@@ -99,8 +100,8 @@ object CsvExporter {
         deliveriesCsv = deliveriesCsv(deliveries.sortedBy { it.completedAt }, zone),
         sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone, dashVehicles, vehicles),
         summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel, dashVehicles, vehicles),
-        expensesCsv = expensesCsv(expenses.sortedBy { it.occurredAt }, zone),
-        fuelCsv = fuelCsv(fuel.sortedBy { it.occurredAt }, zone),
+        expensesCsv = expensesCsv(expenses.sortedBy { it.occurredAt }, zone, vehicles),
+        fuelCsv = fuelCsv(fuel.sortedBy { it.occurredAt }, zone, vehicles),
     )
 
     /**
@@ -223,7 +224,7 @@ object CsvExporter {
         return sb.toString()
     }
 
-    private fun expensesCsv(rows: List<ExpenseRecord>, zone: ZoneId): String = buildString {
+    private fun expensesCsv(rows: List<ExpenseRecord>, zone: ZoneId, vehicles: List<Vehicle>): String = buildString {
         append(Csv.row(EXPENSE_HEADER.map { Csv.textField(it) })).append('\n')
         for (r in rows) {
             append(Csv.row(listOf(
@@ -234,11 +235,13 @@ object CsvExporter {
                 Csv.money(r.amount),
                 Csv.textField(r.sessionId),
                 Csv.textField((r.voidedAt != null).toString()),
+                Csv.textField(r.vehicleId),
+                Csv.textField(r.vehicleId?.let { id -> vehicles.firstOrNull { it.id == id }?.let(::vehicleLabel) ?: UNKNOWN_VEHICLE }),
             ))).append('\n')
         }
     }
 
-    private fun fuelCsv(rows: List<FuelRecord>, zone: ZoneId): String = buildString {
+    private fun fuelCsv(rows: List<FuelRecord>, zone: ZoneId, vehicles: List<Vehicle>): String = buildString {
         append(Csv.row(FUEL_HEADER.map { Csv.textField(it) })).append('\n')
         for (r in rows) {
             append(Csv.row(listOf(
@@ -250,6 +253,8 @@ object CsvExporter {
                 Csv.decimal(r.odometerMiles),
                 Csv.textField(r.sessionId),
                 Csv.textField((r.voidedAt != null).toString()),
+                Csv.textField(r.vehicleId),
+                Csv.textField(r.vehicleId?.let { id -> vehicles.firstOrNull { it.id == id }?.let(::vehicleLabel) ?: UNKNOWN_VEHICLE }),
             ))).append('\n')
         }
     }

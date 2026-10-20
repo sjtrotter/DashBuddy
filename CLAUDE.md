@@ -686,7 +686,7 @@ A pay-less row that drove miles carries `net = −cost` (#1133; `realizedPay` st
 A paid null-net row retains its gross pay; `payWithoutNet` excludes that pay from MoneyWentModel's
 `gross − net` car-cost calculation (#1108 saturation), with cash already cancelling separately.
 
-`SessionNet.kept` is delivered net plus cash tips plus unattributed pay; expenses are a separate ledger that never enters kept or the goal. Fuel also stays separate. New expenses and fill-ups belong to the active dash, else none; existing rows keep their attribution. CSV export adds `expenses.csv` and `fuel.csv` with voided rows retained, and non-voided ledger totals in `summary.csv`.
+`SessionNet.kept` is delivered net plus cash tips plus unattributed pay; expenses are a separate ledger that never enters kept or the goal. Fuel also stays separate. New expenses and fill-ups belong to the active dash, else none; existing rows keep their attribution. Car-care expenses and fill-ups record the saved vehicle they are for (`vehicleId`, default active), with a per-entry pick that never switches the active or dash vehicle (#1388; Room v21, nullable columns, no refold). Other categories and older entries have no vehicle. CSV export adds `expenses.csv` and `fuel.csv` with final `vehicle_id`/`vehicle_label` columns and voided rows retained, and non-voided ledger totals in `summary.csv`.
 
 **Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
 no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's

@@ -8,6 +8,8 @@ import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.state.UNKNOWN_STORE
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.feature.bubble.hud.vehicle.chipName
 
 /** Pure presentation fold. Projection values own money and voids; events own attribution and times. */
 object LogMapper {
@@ -15,6 +17,8 @@ object LogMapper {
         cards: CardStack, data: LogData, chat: List<ChatMessage>, live: StateCardModel?,
         pendingTips: List<PendingCashTip> = emptyList(), undo: UndoWindow? = null,
         liveLinks: Map<String, Set<String>> = emptyMap(),
+        // The host supplies displayName for localized vehicle-type fallbacks.
+        vehicleDisplayName: (Vehicle) -> String? = { it.identityName },
     ): List<LogItem> {
         val tips = CashTipFold.fold(data.events, data.deliveries)
         val groups = JobGrouper.group(cards, data.events, liveLinks)
@@ -85,12 +89,15 @@ object LogMapper {
                 rows += OfferRow(offer.id, offer.phaseEndedAt ?: offer.phaseStartedAt,
                     offer.storeNames.takeIf { it.isNotEmpty() }?.joinToString(" + "), offer.payAmount, offer.distanceMiles, outcome)
             }
+        fun vehicleName(id: String?): String? = if (data.vehicles.size >= 2) {
+            data.vehicles.firstOrNull { it.id == id }?.let(vehicleDisplayName)?.let { chipName(it) }
+        } else null
         rows += data.expenses.filter { it.voidedAt == null }.map {
             ExpenseRow(it.eventSequenceId, it.occurredAt, it.category,
-                it.note?.takeIf(LogChatFilter::safeText), it.amount)
+                it.note?.takeIf(LogChatFilter::safeText), it.amount, vehicleName(it.vehicleId))
         }
         rows += data.fuel.filter { it.voidedAt == null }.map {
-            FuelRow(it.eventSequenceId, it.occurredAt, it.totalAmount, it.pricePerGallon)
+            FuelRow(it.eventSequenceId, it.occurredAt, it.totalAmount, it.pricePerGallon, vehicleName(it.vehicleId))
         }
         rows += chat.mapNotNull { msg ->
             LogChatFilter.kept(msg)?.let { DispatcherRow("chat:${msg.id}", msg.timestamp, it) }
