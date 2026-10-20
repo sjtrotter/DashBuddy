@@ -159,6 +159,18 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
+    /** Restore the existing record without changing the garage selection. */
+    suspend fun restore(id: String): Boolean = mutex.withLock {
+        val saved = savedForWrite()
+        val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
+        val index = list.indexOfFirst { it.id == id && it.retiredAt != null }
+        if (index < 0) return@withLock false
+        val updated = list.toMutableList()
+        updated[index] = updated[index].copy(retiredAt = null)
+        saveForWrite(updated, saved.activeId)
+        true
+    }
+
     private suspend fun vehiclesForWrite(): List<Vehicle> {
         val saved = savedForWrite()
         return readVehicles(saved.json) ?: throw VehiclesUnreadableException()

@@ -34,6 +34,25 @@ class GarageScreenTest {
         }
     }
 
+    @Test fun `retired section starts closed expands and opens retired details without selection`() {
+        val retired = Vehicle("old", "Old car", 1, retiredAt = 2)
+        selected.value = selected.value!!.copy(vehicles = selected.value!!.vehicles + retired)
+        val edited = mutableListOf<String>()
+        show { edited += it }
+        compose.onNodeWithTag("garage.retired.header").assertIsDisplayed()
+        compose.onNodeWithText("Retired (1)").assertIsDisplayed()
+        compose.onNodeWithTag("garage.retired.old").assertDoesNotExist()
+        compose.onNodeWithTag("garage.retired.header").performClick()
+        compose.onNodeWithTag("garage.retired.old").assertIsDisplayed().performClick()
+        assertEquals(listOf("old"), edited)
+        compose.onNodeWithContentDescription("Old car settings").assertDoesNotExist()
+        compose.onAllNodes(isSelectable()).assertCountEquals(2)
+        verify(vm, never()).select(any())
+        verify(vm, never()).swapLocked()
+        compose.onNodeWithTag("garage.retired.header").performClick()
+        compose.onNodeWithTag("garage.retired.old").assertDoesNotExist()
+    }
+
     @Test fun `locked select shows shared toast and calls no select`() {
         whenever(vm.swapLocked()).thenReturn(true)
         show()

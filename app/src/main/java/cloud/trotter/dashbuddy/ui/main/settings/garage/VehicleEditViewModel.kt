@@ -5,9 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.ActivateOn
+import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehicleRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
+import cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.dashbuddy.core.data.location.OdometerRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
@@ -26,6 +30,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * Edits one garage vehicle, which need not be active. Never writes the legacy app_prefs
@@ -41,6 +50,9 @@ class VehicleEditViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val clock: Clock,
     private val lock: VehicleSwapLock,
+    dashVehicleRepository: DashVehicleRepository,
+    odometerReadingRepository: OdometerReadingRepository,
+    odometerRepository: OdometerRepository,
 ) : ViewModel() {
     private val vehicleId: String? = savedStateHandle[Screen.VehicleEdit.ARG]
     val isEditing = vehicleId != null
@@ -56,7 +68,26 @@ class VehicleEditViewModel @Inject constructor(
     private val _loaded = MutableStateFlow(false)
     val loaded = _loaded.asStateFlow()
     private val _vehicle = MutableStateFlow<Vehicle?>(null)
-    val vehicle = _vehicle.asStateFlow()
+    private val garageState: StateFlow<Garage?> = garageRepository.garage
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    // The form loads once; facts follow stored costs when returning from Economy.
+    val vehicle: StateFlow<Vehicle?> = combine(_vehicle, garageState) { loadedVehicle, garage ->
+        loadedVehicle?.let { loaded -> garage?.vehicles?.firstOrNull { it.id == loaded.id } }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val retired: StateFlow<Boolean> = vehicle.map { it?.retiredAt != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val isActive: StateFlow<Boolean> = garageState.map { vehicleId != null && it?.active?.id == vehicleId }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val facts: StateFlow<VehicleFactsModel?> = if (isEditing) combine(
+        vehicle, appPreferencesRepository.sharedEconomy, dashVehicleRepository.stamps,
+        odometerRepository.totalMilesFlow, odometerReadingRepository.readings,
+    ) { loadedVehicle, economy, stamps, gpsNow, readings ->
+        loadedVehicle?.let {
+            VehicleFactsMapper.map(it, economy,
+                DashVehicles.usageFor(DashVehicles.perDash(stamps), it.id, gpsNow),
+                VehicleOdometerReading.latestFor(readings, it.id))
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null) else MutableStateFlow(null)
     private val lockedRetire = Channel<Unit>(Channel.BUFFERED)
     val retireLocked = lockedRetire.receiveAsFlow()
     private var storedProfile: VehicleProfile? = null
@@ -67,9 +98,9 @@ class VehicleEditViewModel @Inject constructor(
         writer.write(refused = GarageWriteFailure.GONE) {
             val garage = garageRepository.garage.first()
             if (!garage.readable) throw VehiclesUnreadableException()
-            val vehicle = vehicleId?.let { id -> garage.unretired.firstOrNull { it.id == id } }
+            val vehicle = vehicleId?.let { id -> garage.vehicles.firstOrNull { it.id == id } }
             if (isEditing && vehicle == null) return@write false
-            val shared = SharedEconomy.from(appPreferencesRepository.userEconomy.first())
+            val shared = appPreferencesRepository.sharedEconomy.first()
             val profile = vehicle?.profile ?: GasCar()
             storedProfile = vehicle?.profile
             val economy = UserEconomy.from(VehicleEconomyInputs.from(profile, shared), shared)
@@ -87,7 +118,10 @@ class VehicleEditViewModel @Inject constructor(
         }
     }
 
-    fun resetsCosts(type: VehicleType): Boolean = storedProfile?.let { it.vehicleType != type } ?: false
+    /** The vehicle as stored NOW (it follows Economy edits made through Edit costs), else as first loaded. */
+    private fun currentProfile(): VehicleProfile? = vehicle.value?.profile ?: storedProfile
+
+    fun resetsCosts(type: VehicleType): Boolean = currentProfile()?.let { it.vehicleType != type } ?: false
 
     fun setName(name: String) {
         if (name.codePointCount(0, name.length) <= Vehicle.MAX_NAME_CODE_POINTS) _name.value = name
@@ -129,12 +163,22 @@ class VehicleEditViewModel @Inject constructor(
         }
     }
 
+    fun restore(onDone: () -> Unit) {
+        val id = vehicleId ?: return
+        if (!canWrite()) return
+        writer.write(refused = GarageWriteFailure.GONE, onDone = onDone) {
+            garageRepository.restore(id)
+        }
+    }
+
     fun save(onDone: () -> Unit) {
         if (!canWrite()) return
         val state = draft.state.value
         val name = _name.value.trim().ifBlank { null }
         var profile = state.profile()
-        storedProfile?.takeIf { it.vehicleType == profile.vehicleType }?.let { stored ->
+        // Merge onto the vehicle as stored now, not as first loaded: an Edit costs round trip must survive a
+        // later rename and Save (#1383 review).
+        currentProfile()?.takeIf { it.vehicleType == profile.vehicleType }?.let { stored ->
             // A type round trip clears draft overrides; defaults must not replace stored values.
             val edits = UserEconomy(
                 vehicleClass = state.vehicleClass, vehicleMpg = state.mpg.toDouble(),

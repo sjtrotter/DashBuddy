@@ -16,6 +16,7 @@ data class DashVehicleStamp(
 /** Latest vehicle wins; the first stamp retains the dash's time and GPS origin. */
 data class DashVehicle(val sessionId: String, val vehicleId: String?, val startedAt: Long, val startGps: Double?)
 data class LiveDash(val sessionId: String, val startedAt: Long)
+data class VehicleUsage(val dashes: Int, val miles: Double?)
 
 sealed interface DashVehicleAction {
     data class Stamp(val sessionId: String, val vehicleId: String?, val kind: DashVehicleKind) : DashVehicleAction
@@ -24,6 +25,22 @@ sealed interface DashVehicleAction {
 }
 
 object DashVehicles {
+    /** Count latest-vehicle dashes; only spans with both GPS boundaries contribute miles. */
+    fun usageFor(dashes: List<DashVehicle>, vehicleId: String, gpsNow: Double?): VehicleUsage {
+        var count = 0
+        var miles: Double? = null
+        dashes.forEachIndexed { index, dash ->
+            if (dash.vehicleId != vehicleId) return@forEachIndexed
+            count++
+            val start = dash.startGps ?: return@forEachIndexed
+            val end = if (index == dashes.lastIndex) gpsNow else dashes[index + 1].startGps
+            if (end != null && start.isFinite() && end.isFinite() && end >= start) {
+                miles = (miles ?: 0.0) + (end - start)
+            }
+        }
+        return VehicleUsage(count, miles)
+    }
+
     /** The vehicle cannot change while any live dash is past its grace window. */
     fun swapLocked(live: List<LiveDash>, now: Long, windowMs: Long): Boolean =
         live.any { now - it.startedAt > windowMs }

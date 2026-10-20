@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.main.settings.garage
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
@@ -9,8 +10,11 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,6 +26,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
+import cloud.trotter.dashbuddy.domain.format.Formats
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.ui.components.vehicle.vehicleTypeLabel
 import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
@@ -66,6 +71,7 @@ fun GarageList(
     onEdit: (String) -> Unit,
     onAdd: () -> Unit,
 ) {
+    var retiredExpanded by rememberSaveable { mutableStateOf(false) }
     val unreadable = garage?.readable == false || failure == GarageWriteFailure.UNREADABLE
     val enabled = garage != null && !unreadable && !busy
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -104,6 +110,29 @@ fun GarageList(
                         )
                         IconButton(onClick = { onEdit(vehicle.id) }, enabled = enabled) {
                             Icon(Icons.Outlined.Settings, stringResource(R.string.garage_vehicle_settings, name))
+                        }
+                    }
+                }
+                val retired = garage.vehicles.filter { it.retiredAt != null }
+                if (retired.isNotEmpty()) {
+                    item {
+                        Row(Modifier.fillMaxWidth().testTag("garage.retired.header")
+                            .clickable { retiredExpanded = !retiredExpanded }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(stringResource(R.string.garage_retired_header, Formats.commaInt(retired.size)),
+                                modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Icon(if (retiredExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                stringResource(if (retiredExpanded) R.string.economy_accordion_content_desc_collapse
+                                    else R.string.economy_accordion_content_desc_expand))
+                        }
+                    }
+                    if (retiredExpanded) items(retired, key = { it.id }) { vehicle ->
+                        Column(Modifier.fillMaxWidth().testTag("garage.retired.${vehicle.id}")
+                            .clickable(enabled = enabled) { onEdit(vehicle.id) }.padding(vertical = 12.dp)) {
+                            Text(vehicle.displayName(), style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.garage_retired_date, vehicleFactsDate(requireNotNull(vehicle.retiredAt))),
+                                style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

@@ -117,7 +117,13 @@ class AppPreferencesRepository @Inject constructor(
      *
      * Combine fans into 4 sub-tuples (DataStore's `combine` is limited to ~5 args).
      */
-    val userEconomy: Flow<UserEconomy> = combine(
+    /**
+     * The settings every vehicle shares (gas price, electricity tariff, time model, phone plan, the
+     * user-set marks), BEFORE any vehicle is laid on top. One owner: [userEconomy] (the offer
+     * evaluator's economy) and the Garage details page both build a vehicle's figures from it, so one
+     * car's overrides never leak into another's (#1383 review).
+     */
+    val sharedEconomy: Flow<SharedEconomy> = combine(
         // Identity + fuel + time
         combine(
             legacyVehicleClass,
@@ -201,9 +207,11 @@ class AppPreferencesRepository @Inject constructor(
     .combine(dataSource.electricityPricePerKwh) { base, tariff ->
         base.copy(electricityPricePerKwh = tariff ?: SharedEconomy.DEFAULT_ELECTRICITY_PRICE_PER_KWH)
     }
-    .combine(dataSource.legacyVehicleProfile) { base, legacy -> base to legacy }
-    .combine(garageRepository.garage) { (base, legacy), garage ->
-        val shared = SharedEconomy.from(base)
+    .map { SharedEconomy.from(it) }
+
+    val userEconomy: Flow<UserEconomy> = sharedEconomy
+    .combine(dataSource.legacyVehicleProfile) { shared, legacy -> shared to legacy }
+    .combine(garageRepository.garage) { (shared, legacy), garage ->
         val profile = garage.active?.profile ?: legacy ?: GasCar()
         UserEconomy.from(VehicleEconomyInputs.from(profile, shared), shared).copy(activeVehicleId = garage.active?.id)
     }
