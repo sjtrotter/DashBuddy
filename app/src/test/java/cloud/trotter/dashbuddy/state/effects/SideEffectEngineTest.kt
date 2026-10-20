@@ -675,7 +675,7 @@ class SideEffectEngineTest {
         evaluationConfig.value = null
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null))
+        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null), anyOrNull())
     }
 
     private fun testOfferCard() = FlowCardSnapshot.Offer(
@@ -701,7 +701,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -716,8 +716,8 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull())
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -731,8 +731,8 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull())
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -744,7 +744,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
     }
 
     @Test
@@ -756,7 +756,7 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()
