@@ -108,11 +108,15 @@ object CsvExporter {
      * hundredths, so per-vehicle miles reconcile with `total_deductible_miles`. Non-positive parts get 0.
      */
     internal fun apportionHundredths(parts: List<Double>, total: Double): List<Long> {
-        val target = Math.round(total * 100.0)
-        val raw = parts.map { (it * 100.0).coerceAtLeast(0.0) }
-        val floors = raw.map { kotlin.math.floor(it).toLong() }.toMutableList()
+        // The target is read back from the very string `total_deductible_miles` prints, so the two can never
+        // disagree (review r2: 1.005 * 100.0 is 100.4999… in binary, while "%.2f" prints 1.01).
+        val target = java.math.BigDecimal(Csv.decimal(total)).movePointRight(2).longValueExact()
+        // Exact decimal arithmetic on each part's shortest decimal form, never binary multiplication.
+        val raw = parts.map { java.math.BigDecimal.valueOf(it.coerceAtLeast(0.0)).movePointRight(2) }
+        val floors = raw.map { it.setScale(0, java.math.RoundingMode.FLOOR).longValueExact() }.toMutableList()
         var left = target - floors.sum()
-        val byRemainder = raw.indices.filter { raw[it] > 0.0 }.sortedByDescending { raw[it] - floors[it] }
+        val byRemainder = raw.indices.filter { raw[it].signum() > 0 }
+            .sortedByDescending { raw[it].subtract(java.math.BigDecimal.valueOf(floors[it])) }
         var i = 0
         while (left > 0 && byRemainder.isNotEmpty()) {
             floors[byRemainder[i % byRemainder.size]]++

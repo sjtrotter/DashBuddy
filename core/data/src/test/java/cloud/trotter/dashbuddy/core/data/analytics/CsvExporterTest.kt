@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.core.data.analytics
 
+import cloud.trotter.dashbuddy.domain.export.Csv
 import cloud.trotter.dashbuddy.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseRecord
 import cloud.trotter.dashbuddy.domain.analytics.ExpenseCategory
@@ -486,5 +487,8 @@ class CsvExporterTest {
         assertEquals(listOf(100L, 101L), shares.sorted())
         assertEquals(listOf(33L, 33L, 34L).sum(), CsvExporter.apportionHundredths(listOf(1.0 / 3, 1.0 / 3, 1.0 / 3), 1.0).sum())
         assertEquals(listOf(0L, 250L), CsvExporter.apportionHundredths(listOf(0.0, 2.5), 2.5))
+        // Review r2: one vehicle at 1.005 mi prints 1.01 like the year total, not 1.00.
+        assertEquals(listOf(101L), CsvExporter.apportionHundredths(listOf(1.005), 1.005))
+        assertEquals(Csv.decimal(1.005), Csv.decimal(CsvExporter.apportionHundredths(listOf(1.005), 1.005)[0] / 100.0))
     }
 }
