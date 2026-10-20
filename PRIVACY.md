@@ -204,7 +204,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   e-bikes; belt for scooters; and miscellaneous upkeep where applicable. Depreciation, purchase price, lifetime miles,
   insurance and registration deltas and annual miles remain optional fixed-cost inputs. Scooters also save gas or
   electric powertrain. The electricity tariff (`electricityPricePerKwh`) is shared in app preferences, not on a vehicle.
-  Vehicle details and the Retired section (#1383) use these existing local records; nothing new is read, stored or sent.
+  Vehicle details, including live name and cost edits (#1385), and the Retired section (#1383) use these existing local records; nothing new is read, stored or sent.
   Restoring clears the retired mark on the existing vehicle record and keeps its readings and the active selection.
   A retired mark is kept when you remove a vehicle (its readings stay). Older entries are read into the typed shape
   with every value kept; unknown and incompatible fields ride along unread in the vehicle's `legacyExtras` map. The first time the app runs after this

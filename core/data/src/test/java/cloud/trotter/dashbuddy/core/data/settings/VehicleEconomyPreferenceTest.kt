@@ -26,6 +26,65 @@ import org.junit.rules.TemporaryFolder
 class VehicleEconomyPreferenceTest {
     @get:Rule val tmp = TemporaryFolder()
 
+    @Test fun `paired repository writes mirror only non-null halves and mark only edited fields`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("partial-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("partial-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        garage.addVehicle("Car", 1L, GasCar(wear = WearProfile(oilIntervalMi = 5000.25)))
+        val writes = listOf<suspend (Double?, Double?) -> Unit>(
+            repo::updateTireCost, repo::updateOilCost, repo::updateBrakesCost,
+            repo::updateFluidsCost, repo::updateMiscMaintenance,
+        )
+        val costs = listOf(source.tireSetCost, source.oilCost, source.brakesCost, source.fluidsCost, source.miscYearly)
+        val intervals = listOf(source.tireLifetimeMi, source.oilIntervalMi, source.brakesIntervalMi,
+            source.fluidsIntervalMi, source.miscYearlyMi)
+        val costFields = listOf(EconomyField.TIRE_COST, EconomyField.OIL_COST, EconomyField.BRAKES_COST,
+            EconomyField.FLUIDS_COST, EconomyField.MISC_YEARLY)
+        val intervalFields = listOf(EconomyField.TIRE_LIFETIME, EconomyField.OIL_INTERVAL, EconomyField.BRAKES_INTERVAL,
+            EconomyField.FLUIDS_INTERVAL, EconomyField.MISC_YEARLY_MI)
+        for (index in writes.indices) {
+            writes[index](65.0, null)
+            assertEquals(65.0, costs[index].first())
+            assertNull(intervals[index].first())
+            assertTrue(costFields[index].name in source.userSetEconomyFields.first())
+            assertFalse(intervalFields[index].name in source.userSetEconomyFields.first())
+        }
+        assertEquals(5000.25, garage.garage.first().active!!.profile.wear.oilIntervalMi)
+        for (index in writes.indices) {
+            writes[index](null, 5000.25)
+            writes[index](70.0, null)
+            assertEquals(5000.25, intervals[index].first())
+            writes[index](null, 6000.0)
+            assertEquals(70.0, costs[index].first())
+            assertEquals(6000.0, intervals[index].first())
+            assertTrue(intervalFields[index].name in source.userSetEconomyFields.first())
+        }
+    }
+
+    @Test fun `depreciation mirrors keep the switch price and lifetime independent`() = runTest {
+        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("depreciation-prefs.preferences_pb") }))
+        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
+            produceFile = { tmp.newFile("depreciation-garage.preferences_pb") })))
+        val repo = AppPreferencesRepository(source, garage)
+        garage.addVehicle("Car", 1L, GasCar(fixed = FixedCosts(purchasePrice = 10000.25, totalLifetimeMi = 200000.25)))
+        repo.updateDepreciationInclude(false)
+        assertNull(source.purchasePrice.first())
+        assertNull(source.totalLifetimeMi.first())
+        assertEquals(setOf(EconomyField.INCLUDE_DEPRECIATION.name), source.userSetEconomyFields.first())
+        repo.updateDepreciationValues(12000.0, null)
+        repo.updateDepreciationInclude(true)
+        assertEquals(12000.0, source.purchasePrice.first())
+        assertNull(source.totalLifetimeMi.first())
+        assertEquals(200000.25, garage.garage.first().active!!.profile.fixed.totalLifetimeMi)
+        repo.updateDepreciationValues(null, 180000.0)
+        assertEquals(true, source.includeDepreciation.first())
+        assertEquals(12000.0, source.purchasePrice.first())
+        assertEquals(180000.0, source.totalLifetimeMi.first())
+    }
+
     @Test fun `active profile owns car costs while gas and phone remain shared`() = runTest {
         val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("prefs.preferences_pb") }))
@@ -175,7 +234,7 @@ class VehicleEconomyPreferenceTest {
         assertEquals(false, source.isGasPriceAuto.first())
         assertEquals(3.75f, source.gasPrice.first())
         assertEquals(720.0, source.tireSetCost.first())
-        assertEquals(48_000.0, source.tireLifetimeMi.first())
+        assertNull(source.tireLifetimeMi.first())
         assertEquals(80.0, source.phonePlanTotal.first())
         assertEquals(2, source.phonePlanLines.first())
         assertEquals(50.0, source.phoneBusinessPercent.first())
@@ -183,7 +242,7 @@ class VehicleEconomyPreferenceTest {
         assertNull(source.oilCost.first())
         assertNull(source.basePickupMin.first())
         assertTrue(source.userSetEconomyFields.first().containsAll(setOf(
-            EconomyField.TIRE_COST.name, EconomyField.TIRE_LIFETIME.name,
+            EconomyField.TIRE_COST.name,
             EconomyField.PHONE_PLAN_TOTAL.name, EconomyField.PHONE_PLAN_LINES.name,
             EconomyField.PHONE_BUSINESS_PERCENT.name, EconomyField.AVG_MIN_PER_MILE.name,
         )))
@@ -222,7 +281,7 @@ class VehicleEconomyPreferenceTest {
         assertEquals(720.0, source.tireSetCost.first())
         assertEquals(48_000.0, source.tireLifetimeMi.first())
         assertEquals(85.0, source.oilCost.first())
-        assertEquals(7_500.0, source.oilIntervalMi.first())
+        assertNull(source.oilIntervalMi.first())
         assertEquals(34.0, repo.userEconomy.first().vehicleMpg, 0.0)
         assertEquals(720.0, repo.userEconomy.first().tireSetCost, 0.0)
         assertEquals(before, vehicleSource.stored.first())

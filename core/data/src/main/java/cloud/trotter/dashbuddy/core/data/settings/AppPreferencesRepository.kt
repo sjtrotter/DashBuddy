@@ -278,7 +278,7 @@ class AppPreferencesRepository @Inject constructor(
      */
     suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
     suspend fun updateFuelType(type: FuelType) {
-        updateActiveProfile { it.withGas(fuelType = type) }
+        updateActiveProfile { VehicleCostTransforms.fuel(it, type) }
         mirrorFuelType(type)
     }
     suspend fun updateVehicleClass(type: VehicleClass) {
@@ -296,7 +296,7 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun updateEstimatedMpg(mpg: Float) {
         require(mpg.isFinite() && mpg > 0f)
-        updateActiveProfile { it.withGas(mpg = mpg.toDouble()) }
+        updateActiveProfile { VehicleCostTransforms.mpg(it, mpg.toDouble()) }
         dataSource.updateEstimatedMpg(mpg)
     }
     suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
@@ -357,43 +357,48 @@ class AppPreferencesRepository @Inject constructor(
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
 
     // --- Personal Economy v2 writes (#145) ---
-    suspend fun updateTireCost(setCost: Double, lifetimeMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(tireSetCost = setCost, tireLifetimeMi = lifetimeMi)) }
+    suspend fun updateTireCost(setCost: Double?, lifetimeMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.tires(it, setCost, lifetimeMi) }
         dataSource.updateTireCost(setCost, lifetimeMi)
     }
 
-    suspend fun updateOilCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(oilCost = cost, oilIntervalMi = intervalMi)) }
+    suspend fun updateOilCost(cost: Double?, intervalMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.oil(it, cost, intervalMi) }
         dataSource.updateOilCost(cost, intervalMi)
     }
 
-    suspend fun updateBrakesCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(brakesCost = cost, brakesIntervalMi = intervalMi)) }
+    suspend fun updateBrakesCost(cost: Double?, intervalMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.brakes(it, cost, intervalMi) }
         dataSource.updateBrakesCost(cost, intervalMi)
     }
 
-    suspend fun updateFluidsCost(cost: Double, intervalMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(fluidsCost = cost, fluidsIntervalMi = intervalMi)) }
+    suspend fun updateFluidsCost(cost: Double?, intervalMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.fluids(it, cost, intervalMi) }
         dataSource.updateFluidsCost(cost, intervalMi)
     }
 
-    suspend fun updateMiscMaintenance(yearly: Double, yearlyMi: Double) {
-        updateActiveProfile { it.withCosts(wear = it.wear.copy(miscYearly = yearly, miscYearlyMi = yearlyMi)) }
+    suspend fun updateMiscMaintenance(yearly: Double?, yearlyMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.misc(it, yearly, yearlyMi) }
         dataSource.updateMiscMaintenance(yearly, yearlyMi)
     }
 
-    suspend fun updateDepreciation(include: Boolean, purchasePrice: Double, totalLifetimeMi: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(includeDepreciation = include, purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi)) }
-        dataSource.updateDepreciation(include, purchasePrice, totalLifetimeMi)
+    suspend fun updateDepreciationInclude(include: Boolean) {
+        updateActiveProfile { VehicleCostTransforms.depreciationInclude(it, include) }
+        dataSource.updateDepreciation(include, null, null)
+    }
+
+    suspend fun updateDepreciationValues(purchasePrice: Double?, totalLifetimeMi: Double?) {
+        updateActiveProfile { VehicleCostTransforms.depreciationValues(it, purchasePrice, totalLifetimeMi) }
+        dataSource.updateDepreciation(null, purchasePrice, totalLifetimeMi)
     }
 
     suspend fun updateInsuranceDelta(perMonth: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(insuranceDeltaPerMonth = perMonth)) }
+        updateActiveProfile { VehicleCostTransforms.insurance(it, perMonth) }
         dataSource.updateInsuranceDelta(perMonth)
     }
 
     suspend fun updateRegistrationDelta(perYear: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(registrationDeltaPerYear = perYear)) }
+        updateActiveProfile { VehicleCostTransforms.registration(it, perYear) }
         dataSource.updateRegistrationDelta(perYear)
     }
 
@@ -412,7 +417,7 @@ class AppPreferencesRepository @Inject constructor(
     }
 
     suspend fun updateExpectedAnnualMi(miles: Double) {
-        updateActiveProfile { it.withCosts(fixed = it.fixed.copy(expectedAnnualMiles = miles)) }
+        updateActiveProfile { VehicleCostTransforms.annualMiles(it, miles) }
         dataSource.updateExpectedAnnualMi(miles)
     }
 
@@ -422,21 +427,16 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun updateElectricityPrice(value: Double) = dataSource.updateElectricityPrice(value)
     suspend fun updateConsumption(value: Double) {
         require(value.isFinite() && value >= 0)
-        updateActiveProfile { profile -> when (profile) {
-            is ElectricCar -> profile.copy(kwhPer100Mi = value)
-            is ScooterMoped -> if (profile.powertrain == Powertrain.ELECTRIC) profile.copy(kwhPer100Mi = value) else profile
-            is EBike -> profile.copy(whPerMile = value)
-            else -> profile
-        } }
+        updateActiveProfile { profile -> VehicleCostTransforms.consumption(profile, value) }
     }
-    suspend fun updateChain(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(chainCost = cost, chainLifeMi = life))
+    suspend fun updateChain(cost: Double?, life: Double?) = updateActiveProfile {
+        VehicleCostTransforms.chain(it, cost, life)
     }
-    suspend fun updateBattery(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(batteryCost = cost, batteryLifeMi = life))
+    suspend fun updateBattery(cost: Double?, life: Double?) = updateActiveProfile {
+        VehicleCostTransforms.battery(it, cost, life)
     }
-    suspend fun updateBelt(cost: Double, life: Double) = updateActiveProfile {
-        it.withCosts(wear = it.wear.copy(beltCost = cost, beltLifeMi = life))
+    suspend fun updateBelt(cost: Double?, life: Double?) = updateActiveProfile {
+        VehicleCostTransforms.belt(it, cost, life)
     }
 
     suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) =
@@ -455,6 +455,7 @@ class AppPreferencesRepository @Inject constructor(
 
     /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
     suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
+        fun edited(field: EconomyField, value: Double): Double? = value.takeIf { field in economy.userSetFields }
         for (group in EconomyFieldGroups.entries) {
             if (group.fields.none { it in economy.userSetFields }) continue
             when (val value = group.readFromEconomy(economy)) {
@@ -462,12 +463,31 @@ class AppPreferencesRepository @Inject constructor(
                 is EconomyFieldGroups.VehicleClassValue,
                 is EconomyFieldGroups.Mpg,
                 is EconomyFieldGroups.GasPrice -> Unit
-                is EconomyFieldGroups.Tires -> dataSource.updateTireCost(value.cost, value.lifetime)
-                is EconomyFieldGroups.Oil -> dataSource.updateOilCost(value.cost, value.interval)
-                is EconomyFieldGroups.Brakes -> dataSource.updateBrakesCost(value.cost, value.interval)
-                is EconomyFieldGroups.Fluids -> dataSource.updateFluidsCost(value.cost, value.interval)
-                is EconomyFieldGroups.Misc -> dataSource.updateMiscMaintenance(value.yearly, value.miles)
-                is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(value.include, value.price, value.lifetime)
+                is EconomyFieldGroups.Tires -> dataSource.updateTireCost(
+                    edited(EconomyField.TIRE_COST, value.cost),
+                    edited(EconomyField.TIRE_LIFETIME, value.lifetime),
+                )
+                is EconomyFieldGroups.Oil -> dataSource.updateOilCost(
+                    edited(EconomyField.OIL_COST, value.cost),
+                    edited(EconomyField.OIL_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Brakes -> dataSource.updateBrakesCost(
+                    edited(EconomyField.BRAKES_COST, value.cost),
+                    edited(EconomyField.BRAKES_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Fluids -> dataSource.updateFluidsCost(
+                    edited(EconomyField.FLUIDS_COST, value.cost),
+                    edited(EconomyField.FLUIDS_INTERVAL, value.interval),
+                )
+                is EconomyFieldGroups.Misc -> dataSource.updateMiscMaintenance(
+                    edited(EconomyField.MISC_YEARLY, value.yearly),
+                    edited(EconomyField.MISC_YEARLY_MI, value.miles),
+                )
+                is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(
+                    value.include.takeIf { EconomyField.INCLUDE_DEPRECIATION in economy.userSetFields },
+                    edited(EconomyField.PURCHASE_PRICE, value.price),
+                    edited(EconomyField.TOTAL_LIFETIME_MI, value.lifetime),
+                )
                 is EconomyFieldGroups.Insurance -> dataSource.updateInsuranceDelta(value.value)
                 is EconomyFieldGroups.Registration -> dataSource.updateRegistrationDelta(value.value)
                 is EconomyFieldGroups.AnnualMiles -> dataSource.updateExpectedAnnualMi(value.value)

@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] Live vehicle details (#1385): open a car's gear: heading shows year/make/model and type with no way to change them; change its oil cost, leave the field, back out and reopen — it stuck, no Save button; typing '2' on the way to '25' never saves 2; a change on the Economy screen shows on the details page. — Confirmed: 0/2
+
 - [active] Vehicle details (#1383): the gear opens a page with the car's cost per mile, running costs, dashes and miles, and last odometer reading above the form; Edit costs only on the active car; retire a car, find it under Retired, open it and Restore it. — Confirmed: 0/2
 
 - [active] 🆕 NEW — Dash vehicle (#1360): the start line names your active vehicle; switching within ten minutes says 'This dash: <name>' and the HUD chip follows; after ten minutes the chip stays on the dash's vehicle and tapping it shows the lock toast; a change from the Garage still says '<name> from your next dash'; the resting odometer comparison shows car and tracked miles even after reading a second vehicle. — Confirmed: 0/2

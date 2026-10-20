@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 
 /**
@@ -69,75 +70,79 @@ class EconomySettingsViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TimeConstantsUiState())
 
-    fun setTimeConstantOverride(field: EconomyField, value: Double?) = viewModelScope.launch {
+    fun setTimeConstantOverride(field: EconomyField, value: Double?) = viewModelScope.launch(NonCancellable) {
         repo.setTimeConstantOverride(field, value)
     }
 
-    fun setVehicleClass(vc: VehicleClass) = viewModelScope.launch {
+    fun setVehicleClass(vc: VehicleClass) = viewModelScope.launch(NonCancellable) {
         repo.updateVehicleClass(vc)
     }
 
-    fun setMpg(mpg: Double) = viewModelScope.launch {
+    fun setMpg(mpg: Double) = viewModelScope.launch(NonCancellable) {
         if (mpg.isFinite() && mpg > 0.0 && mpg <= Float.MAX_VALUE) {
             repo.updateEstimatedMpg(mpg.toFloat())
         }
     }
 
-    fun setFuelType(fuelType: FuelType) = viewModelScope.launch {
+    fun setFuelType(fuelType: FuelType) = viewModelScope.launch(NonCancellable) {
         repo.updateFuelType(fuelType)
     }
 
-    fun setChain(cost: Double, life: Double) = viewModelScope.launch { repo.updateChain(cost, life) }
-    fun setBattery(cost: Double, life: Double) = viewModelScope.launch { repo.updateBattery(cost, life) }
-    fun setBelt(cost: Double, life: Double) = viewModelScope.launch { repo.updateBelt(cost, life) }
-    fun setConsumption(value: Double) = viewModelScope.launch { repo.updateConsumption(value) }
-    fun setElectricityPrice(value: Double) = viewModelScope.launch { repo.updateElectricityPrice(value) }
+    fun setChain(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateChain(cost, life) }
+    fun setBattery(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateBattery(cost, life) }
+    fun setBelt(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateBelt(cost, life) }
+    fun setConsumption(value: Double) = viewModelScope.launch(NonCancellable) { repo.updateConsumption(value) }
+    fun setElectricityPrice(value: Double) = viewModelScope.launch(NonCancellable) { repo.updateElectricityPrice(value) }
 
-    fun setTires(setCost: Double, lifetimeMi: Double) = viewModelScope.launch {
+    fun setTires(setCost: Double?, lifetimeMi: Double?) = viewModelScope.launch(NonCancellable) {
         repo.updateTireCost(setCost, lifetimeMi)
     }
 
-    fun setOil(cost: Double, intervalMi: Double) = viewModelScope.launch {
+    fun setOil(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
         repo.updateOilCost(cost, intervalMi)
     }
 
-    fun setBrakes(cost: Double, intervalMi: Double) = viewModelScope.launch {
+    fun setBrakes(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
         repo.updateBrakesCost(cost, intervalMi)
     }
 
-    fun setFluids(cost: Double, intervalMi: Double) = viewModelScope.launch {
+    fun setFluids(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
         repo.updateFluidsCost(cost, intervalMi)
     }
 
-    fun setMiscRepairs(yearly: Double, yearlyMi: Double) = viewModelScope.launch {
+    fun setMiscRepairs(yearly: Double?, yearlyMi: Double?) = viewModelScope.launch(NonCancellable) {
         repo.updateMiscMaintenance(yearly, yearlyMi)
     }
 
-    fun setDepreciation(include: Boolean, price: Double, lifetimeMi: Double) = viewModelScope.launch {
-        repo.updateDepreciation(include, price, lifetimeMi)
+    fun setDepreciationInclude(include: Boolean) = viewModelScope.launch(NonCancellable) {
+        repo.updateDepreciationInclude(include)
     }
 
-    fun setInsurance(perMonth: Double) = viewModelScope.launch {
+    fun setDepreciationValues(price: Double?, lifetimeMi: Double?) = viewModelScope.launch(NonCancellable) {
+        repo.updateDepreciationValues(price, lifetimeMi)
+    }
+
+    fun setInsurance(perMonth: Double) = viewModelScope.launch(NonCancellable) {
         repo.updateInsuranceDelta(perMonth)
     }
 
-    fun setRegistration(perYear: Double) = viewModelScope.launch {
+    fun setRegistration(perYear: Double) = viewModelScope.launch(NonCancellable) {
         repo.updateRegistrationDelta(perYear)
     }
 
-    fun setExpectedAnnualMiles(miles: Double) = viewModelScope.launch {
+    fun setExpectedAnnualMiles(miles: Double) = viewModelScope.launch(NonCancellable) {
         repo.updateExpectedAnnualMi(miles)
     }
 
-    fun setPhone(total: Double, lines: Int, dashPercent: Double) = viewModelScope.launch {
+    fun setPhone(total: Double, lines: Int, dashPercent: Double) = viewModelScope.launch(NonCancellable) {
         repo.updatePhonePlan(total, lines, dashPercent)
     }
 
-    fun setTimeConstants(avgMinPerMile: Double, basePickupMin: Double) = viewModelScope.launch {
+    fun setTimeConstants(avgMinPerMile: Double, basePickupMin: Double) = viewModelScope.launch(NonCancellable) {
         repo.updateTimeConstants(avgMinPerMile, basePickupMin)
     }
 
-    fun resetDefaults() = viewModelScope.launch {
+    fun resetDefaults() = viewModelScope.launch(NonCancellable) {
         repo.resetEconomyDefaults()
     }
 }
