@@ -42,7 +42,7 @@ class GarageDisplayNameTest {
         )
         compose.setContent {
             DashBuddyTheme {
-                GarageList(Garage(vehicles, "identity", true), false, GarageWriteFailure.NONE, {}, {}, {}, {})
+                GarageList(Garage(vehicles, "identity", true), false, GarageWriteFailure.NONE, {}, {}, {})
             }
         }
         compose.onAllNodesWithText("2020 Honda Civic", substring = true).assertCountEquals(1)

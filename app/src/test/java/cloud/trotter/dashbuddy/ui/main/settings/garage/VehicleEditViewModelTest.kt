@@ -10,11 +10,15 @@ import cloud.trotter.dashbuddy.core.data.vehicle.VehiclesUnreadableException
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
+import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -30,6 +34,7 @@ class VehicleEditViewModelTest {
     private val garage: GarageRepository = mock()
     private val lookup: VehicleRepository = mock()
     private val preferences: AppPreferencesRepository = mock()
+    private val lock: VehicleSwapLock = mock()
     private val clock = Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC)
 
     @Before fun setUp() { Dispatchers.setMain(StandardTestDispatcher()) }
@@ -48,7 +53,115 @@ class VehicleEditViewModelTest {
         whenever(preferences.vehicleLookupAllowed).thenReturn(flowOf(lookupAllowed))
         whenever(lookup.getYears()).thenReturn(listOf("2020", "2021"))
         return VehicleEditViewModel(SavedStateHandle(id?.let { mapOf(Screen.VehicleEdit.ARG to it) } ?: emptyMap()),
-            garage, lookup, preferences, clock)
+            garage, lookup, preferences, clock, lock)
+    }
+
+    @Test fun `retire writes clock time and completes once`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val vm = model("target", Garage(listOf(target), "target", true))
+        runCurrent()
+        whenever(garage.retire("target", 1234)).thenReturn(true)
+        var done = 0
+        vm.retire { done++ }
+        runCurrent()
+        verify(garage).retire("target", 1234)
+        assertEquals(1, done)
+        assertFalse(vm.busy.value)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+    }
+
+    /** Review r1 (Sol): a vehicle already retired elsewhere reports GONE instead of a silent, enabled screen. */
+    @Test fun `retiring a vehicle the repository refuses reports gone and stays`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val vm = model("target", Garage(listOf(target), "target", true))
+        runCurrent()
+        whenever(garage.retire("target", 1234)).thenReturn(false)
+        vm.retire { fail("A refused retire must not complete") }
+        runCurrent()
+        assertEquals(GarageWriteFailure.GONE, vm.failure.value)
+        assertFalse(vm.busy.value)
+    }
+
+    @Test fun `retiring active vehicle while locked reports lock without a write or completion`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val vm = model("target", Garage(listOf(target), "target", true))
+        runCurrent()
+        whenever(lock.locked()).thenReturn(true)
+        val reported = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { vm.retireLocked.first() }
+        vm.retire { fail("Locked retire must not complete") }
+        runCurrent()
+        assertTrue(reported.isCompleted)
+        verify(garage, never()).retire(any(), any())
+        assertFalse(vm.busy.value)
+        assertEquals(GarageWriteFailure.NONE, vm.failure.value)
+    }
+
+    @Test fun `non active vehicle retires while locked`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val active = Vehicle("active", "Other", 2)
+        val vm = model("target", Garage(listOf(target, active), "active", true))
+        runCurrent()
+        whenever(lock.locked()).thenReturn(true)
+        whenever(garage.retire("target", 1234)).thenReturn(true)
+        var done = false
+        val reported = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { vm.retireLocked.first() }
+        vm.retire { done = true }
+        runCurrent()
+        verify(garage).retire("target", 1234)
+        assertTrue(done)
+        assertFalse(reported.isCompleted)
+    }
+
+    @Test fun `retire checks current active vehicle rather than the loaded selection`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val other = Vehicle("other", "Other", 2)
+        val stored = Garage(listOf(target, other), "other", true)
+        val vm = model("target", stored)
+        runCurrent()
+        val updates = MutableStateFlow(stored.copy(activeId = "target"))
+        whenever(garage.garage).thenReturn(updates)
+        whenever(lock.locked()).thenReturn(true)
+        vm.retire { fail("Now-active vehicle must not retire while locked") }
+        runCurrent()
+        verify(garage, never()).retire(any(), any())
+    }
+
+    @Test fun `retire failures stay in editor and use writer failure vocabulary`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val vm = model("target", Garage(listOf(target), "target", true))
+        runCurrent()
+        whenever(garage.retire(any(), any())).thenThrow(IllegalStateException()).thenThrow(VehiclesUnreadableException())
+        vm.retire { fail("Failed retire must not complete") }
+        runCurrent()
+        assertEquals(GarageWriteFailure.RETRY, vm.failure.value)
+        vm.retire { fail("Unreadable retire must not complete") }
+        runCurrent()
+        assertEquals(GarageWriteFailure.UNREADABLE, vm.failure.value)
+    }
+
+    @Test fun `retire is inert in Add and while loading busy or unreadable`() = runTest {
+        val target = Vehicle("target", "Commute", 1)
+        val vm = model("target", Garage(listOf(target), "target", true))
+        vm.retire { fail("Loading editor must not complete") }
+        runCurrent()
+        val release = CompletableDeferred<Boolean>()
+        whenever(garage.retire(any(), any())).doSuspendableAnswer { release.await() }
+        vm.retire {}
+        vm.retire { fail("Second retire must not complete") }
+        runCurrent()
+        verify(garage, times(1)).retire("target", 1234)
+        release.complete(true)
+        runCurrent()
+        val add = model()
+        runCurrent()
+        clearInvocations(garage)
+        add.retire { fail("Add must not retire") }
+        val unreadable = model("target", Garage(emptyList(), null, false))
+        runCurrent()
+        clearInvocations(garage)
+        unreadable.retire { fail("Unreadable editor must not complete") }
+        runCurrent()
+        verifyNoInteractions(garage)
     }
 
     @Test fun `add saves the draft EV consumption and trimmed name without legacy mirrors`() = runTest {

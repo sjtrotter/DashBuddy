@@ -16,13 +16,16 @@ import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraft
 import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftState
+import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 
 /**
  * Edits one garage vehicle, which need not be active. Never writes the legacy app_prefs
@@ -37,6 +40,7 @@ class VehicleEditViewModel @Inject constructor(
     vehicleRepository: VehicleRepository,
     private val appPreferencesRepository: AppPreferencesRepository,
     private val clock: Clock,
+    private val lock: VehicleSwapLock,
 ) : ViewModel() {
     private val vehicleId: String? = savedStateHandle[Screen.VehicleEdit.ARG]
     val isEditing = vehicleId != null
@@ -51,6 +55,10 @@ class VehicleEditViewModel @Inject constructor(
     val failure = writer.failure
     private val _loaded = MutableStateFlow(false)
     val loaded = _loaded.asStateFlow()
+    private val _vehicle = MutableStateFlow<Vehicle?>(null)
+    val vehicle = _vehicle.asStateFlow()
+    private val lockedRetire = Channel<Unit>(Channel.BUFFERED)
+    val retireLocked = lockedRetire.receiveAsFlow()
     private var storedProfile: VehicleProfile? = null
     // If the separate tariff write fails, retry this vehicle instead of adding a duplicate.
     private var addedVehicleId: String? = null
@@ -73,6 +81,7 @@ class VehicleEditViewModel @Inject constructor(
                 lookupAllowed = lookupAllowed,
             ))
             _name.value = vehicle?.name.orEmpty()
+            _vehicle.value = vehicle
             _loaded.value = true
             true
         }
@@ -99,6 +108,24 @@ class VehicleEditViewModel @Inject constructor(
             appPreferencesRepository.setVehicleLookupAllowed(true)
             draft.allowLookup()
             true
+        }
+    }
+
+    fun retire(onDone: () -> Unit) {
+        val id = vehicleId ?: return
+        if (!canWrite()) return
+        // Review r1: a repository refusal (the vehicle is already retired, e.g. from another editor) reports
+        // GONE like Save does; a lock refusal is the toast only, so it neither leaves the screen nor shows GONE.
+        var lockedOut = false
+        writer.write(refused = GarageWriteFailure.GONE, onDone = { if (!lockedOut) onDone() }) {
+            val garage = garageRepository.garage.first()
+            if (!garage.readable) throw VehiclesUnreadableException()
+            if (garage.active?.id == id && lock.locked()) {
+                lockedOut = true
+                lockedRetire.trySend(Unit)
+                return@write true
+            }
+            garageRepository.retire(id, clock.millis())
         }
     }
 

@@ -1,6 +1,6 @@
 package cloud.trotter.dashbuddy.ui.main.settings.garage
 
-import androidx.compose.foundation.clickable
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,11 +8,13 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,7 @@ fun GarageScreen(
     val garage by viewModel.garage.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val failure by viewModel.failure.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     Scaffold(topBar = {
         TopAppBar(title = { Text(stringResource(R.string.garage_title)) }, navigationIcon = {
             IconButton(onClick = onBack) {
@@ -43,7 +46,13 @@ fun GarageScreen(
         })
     }) { padding ->
         Box(Modifier.padding(padding)) {
-            GarageList(garage, busy, failure, viewModel::select, viewModel::retire, onEdit, onAdd)
+            GarageList(garage, busy, failure, onSelect = { id ->
+                when {
+                    id == garage?.active?.id -> Unit
+                    viewModel.swapLocked() -> Toast.makeText(context, R.string.hud_vehicle_locked, Toast.LENGTH_SHORT).show()
+                    else -> viewModel.select(id)
+                }
+            }, onEdit = onEdit, onAdd = onAdd)
         }
     }
 }
@@ -54,11 +63,9 @@ fun GarageList(
     busy: Boolean,
     failure: GarageWriteFailure,
     onSelect: (String) -> Unit,
-    onRetire: (String) -> Unit,
     onEdit: (String) -> Unit,
     onAdd: () -> Unit,
 ) {
-    var retiringId by remember { mutableStateOf<String?>(null) }
     val unreadable = garage?.readable == false || failure == GarageWriteFailure.UNREADABLE
     val enabled = garage != null && !unreadable && !busy
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -74,20 +81,29 @@ fun GarageList(
                     } else ""
                     val selected = garage.active?.id == vehicle.id
                     Row(
-                        Modifier.fillMaxWidth().selectable(selected = selected, enabled = enabled,
-                            role = Role.RadioButton, onClick = { onSelect(vehicle.id) }).padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = selected, onClick = null, enabled = enabled)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(name, style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.clickable(enabled = enabled, onClick = { onEdit(vehicle.id) }))
-                            Text(if (identity.isBlank()) type else stringResource(R.string.garage_vehicle_details, type, identity),
-                                style = MaterialTheme.typography.bodyMedium)
+                        Row(
+                            Modifier.weight(1f).selectable(selected = selected, enabled = enabled,
+                                role = Role.RadioButton, onClick = { onSelect(vehicle.id) }),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selected, onClick = null, enabled = enabled)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(name, style = MaterialTheme.typography.titleMedium)
+                                Text(if (identity.isBlank()) type else stringResource(R.string.garage_vehicle_details, type, identity),
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
-                        IconButton(onClick = { retiringId = vehicle.id }, enabled = enabled) {
-                            Icon(Icons.Outlined.Delete, stringResource(R.string.garage_retire_vehicle, name))
+                        VerticalDivider(
+                            modifier = Modifier.padding(horizontal = 8.dp).height(32.dp)
+                                .testTag("garage.vehicle.divider.${vehicle.id}"),
+                            thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                        IconButton(onClick = { onEdit(vehicle.id) }, enabled = enabled) {
+                            Icon(Icons.Outlined.Settings, stringResource(R.string.garage_vehicle_settings, name))
                         }
                     }
                 }
@@ -98,21 +114,6 @@ fun GarageList(
         Button(onClick = onAdd, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.garage_add))
         }
-    }
-    garage?.unretired?.firstOrNull { it.id == retiringId }?.let { vehicle ->
-        val name = vehicle.displayName()
-        AlertDialog(
-            onDismissRequest = { retiringId = null },
-            text = { Text(stringResource(R.string.garage_retire_confirmation, name)) },
-            dismissButton = {
-                TextButton(onClick = { retiringId = null }) { Text(stringResource(R.string.garage_cancel)) }
-            },
-            confirmButton = {
-                TextButton(enabled = enabled, onClick = { retiringId = null; onRetire(vehicle.id) }) {
-                    Text(stringResource(R.string.garage_retire))
-                }
-            },
-        )
     }
 }
 

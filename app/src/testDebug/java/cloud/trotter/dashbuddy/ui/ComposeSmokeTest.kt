@@ -6,6 +6,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.isSelectable
@@ -92,35 +98,34 @@ class ComposeSmokeTest {
     }
 
     @Test
-    fun `garage shows vehicles active selection and retire confirmation`() {
-        var retired: String? = null
-        var edited: String? = null
-        var selected: String? = null
+    fun `garage name selects and separate gear opens details with divider and no trash`() {
+        val edited = mutableListOf<String>()
+        val selected = mutableListOf<String>()
         compose.setContent {
             DashBuddyTheme {
                 GarageList(
                     garage = Garage(listOf(Vehicle("civic", "Civic", 1), Vehicle("truck", "Truck", 2)), "civic", true),
                     busy = false, failure = GarageWriteFailure.NONE,
-                    onSelect = { selected = it }, onRetire = { retired = it }, onEdit = { edited = it }, onAdd = {},
+                    onSelect = { selected += it }, onEdit = { edited += it }, onAdd = {},
                 )
             }
         }
         compose.onNodeWithText("Civic").assertIsDisplayed()
         compose.onNodeWithText("Truck").assertIsDisplayed()
         compose.onAllNodes(isSelectable())[0].assertIsSelected()
-        compose.onAllNodes(isSelectable())[1].assertIsNotSelected().performClick()
-        assertEquals("truck", selected)
-        compose.onNodeWithText("Civic").performClick()
-        assertEquals("civic", edited)
-        assertEquals("truck", selected)
-        compose.onNodeWithContentDescription("Retire Civic").performClick()
-        compose.onNodeWithText("Retire Civic? Its readings stay.").assertIsDisplayed()
-        assertEquals(null, retired)
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Retire Civic? Its readings stay.").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Retire Civic").performClick()
-        compose.onNodeWithText("Retire").performClick()
-        assertEquals("civic", retired)
+        compose.onAllNodes(isSelectable())[1].assertIsNotSelected()
+        compose.onNodeWithText("Truck").performClick()
+        assertEquals(listOf("truck"), selected)
+        assertEquals(emptyList<String>(), edited)
+        compose.onNodeWithContentDescription("Civic settings").performClick()
+        assertEquals(listOf("civic"), edited)
+        assertEquals(listOf("truck"), selected)
+        for (id in listOf("civic", "truck")) {
+            compose.onNodeWithTag("garage.vehicle.divider.$id")
+                .assertIsDisplayed().assertWidthIsEqualTo(1.dp).assertHeightIsEqualTo(32.dp)
+        }
+        compose.onAllNodes(hasContentDescription("Retire", substring = true)).assertCountEquals(0)
+        compose.onNodeWithText("Retire").assertDoesNotExist()
     }
 
     private class MutableClock(var millis: Long) : Clock() {

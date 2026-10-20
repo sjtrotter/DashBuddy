@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
+import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.time.Clock
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 @HiltViewModel
 class GarageViewModel @Inject constructor(
     private val garageRepository: GarageRepository,
-    private val clock: Clock,
+    private val lock: VehicleSwapLock,
 ) : ViewModel() {
     val garage: StateFlow<Garage?> = garageRepository.garage.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null,
@@ -24,5 +24,5 @@ class GarageViewModel @Inject constructor(
     val failure = writer.failure
 
     fun select(id: String) = writer.write { garageRepository.selectVehicle(id) }
-    fun retire(id: String) = writer.write { garageRepository.retire(id, clock.millis()) }
+    fun swapLocked(): Boolean = lock.locked()
 }
