@@ -125,4 +125,14 @@ class ExpenseActionsTest {
         actions.undoExpired(actions.undo.value!!)
         assertNull(actions.undo.value)
     }
+    @Test fun `receipt vehicle is kept for car care and gas and cleared for all other expenses`() = runTest {
+        val actions = actions(backgroundScope)
+        for (category in ExpenseCategory.entries) {
+            actions.logExpense("dash", category, 100, null, vehicleId = "other-car"); runCurrent()
+            val payload = appended().last().payload as ExpenseLoggedPayload
+            assertEquals(if (category == ExpenseCategory.CAR_CARE) "other-car" else null, payload.vehicleId)
+        }
+        actions.logFuel("dash", 4200, "11.125", 1234.567, vehicleId = "other-car"); runCurrent()
+        assertEquals(FuelFillupPayload("dash", 42.0, 11.125, 1234.567, "other-car"), appended().last().payload)
+    }
 }

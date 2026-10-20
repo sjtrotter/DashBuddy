@@ -37,11 +37,16 @@ internal fun LogThinRow(item: LogItem) {
                     is ExpenseRow -> {
                         val category = stringResource(ExpensePick.Expense(item.category).labelResource)
                         val label = item.note?.takeIf { it.isNotBlank() }?.let { "$category · $it" } ?: category
-                        Text(stringResource(R.string.hud_log_expense, label),
-                            color = c.text2, fontSize = 14.sp)
+                        Column {
+                            Text(stringResource(R.string.hud_log_expense, label), color = c.text2, fontSize = 14.sp)
+                            item.vehicleName?.let { Text(it, color = c.neutral, fontSize = 12.sp) }
+                        }
                     }
-                    is FuelRow -> LogText(logTextParts(if (item.pricePerGallon != null) R.string.hud_log_gas_price else R.string.hud_log_gas_total,
-                        listOf(LogTextPart(Formats.money(item.pricePerGallon ?: item.total)))), color = c.neutral)
+                    is FuelRow -> Column {
+                        LogText(logTextParts(if (item.pricePerGallon != null) R.string.hud_log_gas_price else R.string.hud_log_gas_total,
+                            listOf(LogTextPart(Formats.money(item.pricePerGallon ?: item.total)))), color = c.neutral)
+                        item.vehicleName?.let { Text(it, color = c.neutral, fontSize = 12.sp) }
+                    }
                     is DispatcherRow -> Text(item.text, color = c.neutral, fontSize = 12.sp)
                     is JobCardModel -> Unit
                 }

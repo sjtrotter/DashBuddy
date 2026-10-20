@@ -14,4 +14,5 @@ data class ExpenseRecordEntity(
     val amount: Double,
     val note: String?,
     val voidedAt: Long?,
+    val vehicleId: String? = null,
 )

@@ -114,6 +114,7 @@ import cloud.trotter.dashbuddy.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 17, to = 18),
         AutoMigration(from = 18, to = 19), // #1108 machine mileage allocation basis
         AutoMigration(from = 19, to = 20), // #1333 ledger tables
+        AutoMigration(from = 20, to = 21), // #1388 nullable vehicleId on both ledger tables; no refold
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -143,7 +144,7 @@ abstract class DashBuddyDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 20
+        const val VERSION = 21
     }
 
 }

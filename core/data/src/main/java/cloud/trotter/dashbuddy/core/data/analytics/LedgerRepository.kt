@@ -32,14 +32,16 @@ class LedgerRepository @Inject constructor(
         amount: Double,
         note: String?,
         occurredAt: Long,
+        vehicleId: String? = null,
     ): Long {
         require(amount.isFinite() && amount > 0) { "amount must be finite and positive" }
+        require(vehicleId == null || category == ExpenseCategory.CAR_CARE) { "only car care expenses can name a vehicle" }
         return appEventRepo.appendUserEvent(
             AppEvent(
                 type = AppEventType.EXPENSE_LOGGED,
                 occurredAt = occurredAt,
                 sessionId = sessionId,
-                payload = ExpenseLoggedPayload(sessionId, category, amount, note),
+                payload = ExpenseLoggedPayload(sessionId, category, amount, note, vehicleId),
             ),
             metadataJson = null,
         )
@@ -52,6 +54,7 @@ class LedgerRepository @Inject constructor(
         gallons: Double?,
         odometerMiles: Double?,
         occurredAt: Long,
+        vehicleId: String? = null,
     ): Long {
         require(totalAmount.isFinite() && totalAmount > 0) { "totalAmount must be finite and positive" }
         require(gallons == null || (gallons.isFinite() && gallons > 0)) { "gallons must be finite and positive" }
@@ -63,7 +66,7 @@ class LedgerRepository @Inject constructor(
                 type = AppEventType.FUEL_FILLUP,
                 occurredAt = occurredAt,
                 sessionId = sessionId,
-                payload = FuelFillupPayload(sessionId, totalAmount, gallons, odometerMiles),
+                payload = FuelFillupPayload(sessionId, totalAmount, gallons, odometerMiles, vehicleId),
             ),
             metadataJson = null,
         )

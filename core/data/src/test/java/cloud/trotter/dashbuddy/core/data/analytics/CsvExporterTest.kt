@@ -425,17 +425,17 @@ class CsvExporterTest {
 
     @Test fun expenses_golden_preservesVoidsLabelsAttributionAndLocalDate() {
         assertEquals(
-            "date,time,category,label,amount,dash_id,voided\n" +
-                "2026-10-18,23:59:00,PARKING,,4.00,,true\n" +
-                "2026-10-19,00:01:00,SUPPLIES,\"Bags, \"\"large\"\"\",12.50,dash-2,false\n",
+            "date,time,category,label,amount,dash_id,voided,vehicle_id,vehicle_label\n" +
+                "2026-10-18,23:59:00,PARKING,,4.00,,true,,\n" +
+                "2026-10-19,00:01:00,SUPPLIES,\"Bags, \"\"large\"\"\",12.50,dash-2,false,,\n",
             ledgerExport().expensesCsv,
         )
     }
 
     @Test fun fuel_golden_missingGallonsLeavesPriceEmpty() {
         assertEquals(
-            "date,time,total,gallons,price_per_gallon,tracked_miles,dash_id,voided\n" +
-                "2026-10-19,00:02:00,30.00,,,1234.50,,false\n",
+            "date,time,total,gallons,price_per_gallon,tracked_miles,dash_id,voided,vehicle_id,vehicle_label\n" +
+                "2026-10-19,00:02:00,30.00,,,1234.50,,false,,\n",
             ledgerExport().fuelCsv,
         )
     }
@@ -450,8 +450,8 @@ class CsvExporterTest {
             )
             // CR triggers RFC quoting after the force-text prefix; other leaders stay unquoted.
             fun cell(value: String) = if (leader == "\r") "\"'$leader$value\"" else "'$leader$value"
-            assertTrue(out.expensesCsv.contains(",${expenses.first().category.name},${cell("label")},12.50,${cell("dash")},false\n"))
-            assertTrue(out.fuelCsv.endsWith(",${cell("dash")},false\n"))
+            assertTrue(out.expensesCsv.contains(",${expenses.first().category.name},${cell("label")},12.50,${cell("dash")},false,,\n"))
+            assertTrue(out.fuelCsv.endsWith(",${cell("dash")},false,,\n"))
         }
     }
 
@@ -463,7 +463,7 @@ class CsvExporterTest {
                 totalAmount = 36.0, gallons = 10.0, odometerMiles = null, voidedAt = ledgerAt + 1,
             )),
         )
-        assertEquals("2026-10-18,23:59:00,36.00,10.000,3.600,,old-dash,true", out.fuelCsv.lines()[1])
+        assertEquals("2026-10-18,23:59:00,36.00,10.000,3.600,,old-dash,true,,", out.fuelCsv.lines()[1])
         assertTrue(out.summaryCsv.endsWith("expenses_total,0.00\nfuel_total,30.00\n"))
     }
 
@@ -490,5 +490,36 @@ class CsvExporterTest {
         // Review r2: one vehicle at 1.005 mi prints 1.01 like the year total, not 1.00.
         assertEquals(listOf(101L), CsvExporter.apportionHundredths(listOf(1.005), 1.005))
         assertEquals(Csv.decimal(1.005), Csv.decimal(CsvExporter.apportionHundredths(listOf(1.005), 1.005)[0] / 100.0))
+    }
+    @Test fun receiptVehicles_knownRetiredUnknownAndNone() {
+        val known = Vehicle("car", "Daily car", 0)
+        val retired = Vehicle("old", "Old car", 1, retiredAt = 2)
+        val ids = listOf(known.id, retired.id, "missing", null)
+        val out = CsvExporter.export(emptyList(), emptyList(), utc, generatedAt,
+            expenses = ids.mapIndexed { i, id -> expenses.first().copy(eventSequenceId = i.toLong(),
+                occurredAt = ledgerAt + i, category = ExpenseCategory.CAR_CARE, vehicleId = id) },
+            fuel = ids.mapIndexed { i, id -> fuel.first().copy(eventSequenceId = i.toLong(),
+                occurredAt = ledgerAt + i, vehicleId = id) },
+            vehicles = listOf(known, retired))
+        val expected = listOf(
+            listOf("car", "Daily car"), listOf("old", "Old car"),
+            listOf("missing", CsvExporter.UNKNOWN_VEHICLE), listOf("", ""))
+        for (csv in listOf(out.expensesCsv, out.fuelCsv)) {
+            assertEquals(listOf("vehicle_id", "vehicle_label"), csv.lineSequence().first().split(',').takeLast(2))
+            assertEquals(expected, csv.trimEnd('\n').lines().drop(1).map { it.split(',').takeLast(2) })
+        }
+    }
+
+    @Test fun receiptVehicleText_neutralizesIdsAndLabels() {
+        for (leader in listOf("=", "+", "-", "@", "\t", "\r")) {
+            val vehicle = Vehicle(leader + "id", if (leader in listOf("\t", "\r")) null else leader + "SUM(1,2)", 0,
+                GasCar(make = leader + "SUM(1,2)"))
+            val out = CsvExporter.export(emptyList(), emptyList(), utc, generatedAt,
+                expenses = listOf(expenses.first().copy(vehicleId = vehicle.id)),
+                fuel = listOf(fuel.first().copy(vehicleId = vehicle.id)), vehicles = listOf(vehicle))
+            val suffix = ",${Csv.textField(vehicle.id)},${Csv.textField(CsvExporter.vehicleLabel(vehicle))}\n"
+            assertTrue(out.expensesCsv.endsWith(suffix))
+            assertTrue(out.fuelCsv.endsWith(suffix))
+        }
     }
 }
