@@ -91,6 +91,8 @@ class VehicleEditViewModel @Inject constructor(
     private val lockedRetire = Channel<Unit>(Channel.BUFFERED)
     val retireLocked = lockedRetire.receiveAsFlow()
     private var storedProfile: VehicleProfile? = null
+    /** The form as loaded: Save applies only what the dasher changed on this page since (#1383 review r2). */
+    private var loadedDraft: VehicleDraftState? = null
     // If the separate tariff write fails, retry this vehicle instead of adding a duplicate.
     private var addedVehicleId: String? = null
 
@@ -111,6 +113,7 @@ class VehicleEditViewModel @Inject constructor(
                 trim = "", mpg = (profile.gasMpg ?: profile.resolvedConsumption().mpg).toFloat(),
                 lookupAllowed = lookupAllowed,
             ))
+            loadedDraft = draft.state.value
             _name.value = vehicle?.name.orEmpty()
             _vehicle.value = vehicle
             _loaded.value = true
@@ -120,6 +123,17 @@ class VehicleEditViewModel @Inject constructor(
 
     /** The vehicle as stored NOW (it follows Economy edits made through Edit costs), else as first loaded. */
     private fun currentProfile(): VehicleProfile? = vehicle.value?.profile ?: storedProfile
+
+    private fun changedFields(state: VehicleDraftState): Set<EconomyField> {
+        val loaded = loadedDraft ?: return VehicleDraftState.fields
+        return buildSet {
+            if (state.vehicleClass != loaded.vehicleClass) add(EconomyField.VEHICLE_CLASS)
+            if (state.mpg != loaded.mpg) add(EconomyField.VEHICLE_MPG)
+            if (state.kwhPer100Mi != loaded.kwhPer100Mi) add(EconomyField.KWH_PER_100_MI)
+            if (state.whPerMile != loaded.whPerMile) add(EconomyField.WH_PER_MILE)
+            if (state.electricityPricePerKwh != loaded.electricityPricePerKwh) add(EconomyField.ELECTRICITY_PRICE)
+        }
+    }
 
     fun resetsCosts(type: VehicleType): Boolean = currentProfile()?.let { it.vehicleType != type } ?: false
 
@@ -174,6 +188,9 @@ class VehicleEditViewModel @Inject constructor(
     fun save(onDone: () -> Unit) {
         if (!canWrite()) return
         val state = draft.state.value
+        // Fields marked as the dasher's own but untouched on this page keep the value stored now: an Edit costs
+        // round trip (consumption, the shared electricity tariff) must not be overwritten by the form's stale copy.
+        val changed = changedFields(state)
         val name = _name.value.trim().ifBlank { null }
         var profile = state.profile()
         // Merge onto the vehicle as stored now, not as first loaded: an Edit costs round trip must survive a
@@ -184,7 +201,7 @@ class VehicleEditViewModel @Inject constructor(
                 vehicleClass = state.vehicleClass, vehicleMpg = state.mpg.toDouble(),
                 kwhPer100Mi = state.kwhPer100Mi, whPerMile = state.whPerMile,
                 electricityPricePerKwh = state.electricityPricePerKwh,
-                userSetFields = state.userSetFields intersect VehicleDraftState.fields,
+                userSetFields = state.userSetFields intersect VehicleDraftState.fields intersect changed,
             )
             // A scooter's powertrain is part of its shape, not a field group: carry a changed one over
             // so its consumption fields become applicable before the user-set edits are applied.
@@ -212,7 +229,7 @@ class VehicleEditViewModel @Inject constructor(
             } else {
                 if (!garageRepository.updateVehicle(id, name, profile)) return@write false
             }
-            if (EconomyField.ELECTRICITY_PRICE in state.userSetFields) {
+            if (EconomyField.ELECTRICITY_PRICE in state.userSetFields && EconomyField.ELECTRICITY_PRICE in changed) {
                 appPreferencesRepository.updateElectricityPrice(state.electricityPricePerKwh)
             }
             true

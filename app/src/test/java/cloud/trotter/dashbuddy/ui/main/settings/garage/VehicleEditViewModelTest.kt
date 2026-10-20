@@ -186,6 +186,26 @@ class VehicleEditViewModelTest {
         assertEquals(1000.0, saved.firstValue.wear.tireSetCost)
     }
 
+    /** #1383 review r2: a consumption changed through Edit costs survives a later rename and Save. */
+    @Test fun `save keeps an EV consumption changed elsewhere while the page was open`() = runTest {
+        val before = Vehicle("ev", "EV", 1, ElectricCar(kwhPer100Mi = 27.0))
+        val garageFlow = MutableStateFlow(Garage(listOf(before), "ev", true))
+        model("ev", Garage(listOf(before), "ev", true),
+            economy = UserEconomy(userSetFields = setOf(EconomyField.KWH_PER_100_MI)))
+        whenever(garage.garage).thenReturn(garageFlow)
+        val fresh = VehicleEditViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to "ev")),
+            garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+        runCurrent()
+        garageFlow.value = Garage(listOf(before.copy(profile = ElectricCar(kwhPer100Mi = 29.0))), "ev", true)
+        runCurrent()
+        fresh.setName("Renamed")
+        fresh.save {}
+        runCurrent()
+        val saved = argumentCaptor<VehicleProfile>()
+        verify(garage).updateVehicle(eq("ev"), eq("Renamed"), saved.capture())
+        assertEquals(29.0, (saved.firstValue as ElectricCar).kwhPer100Mi)
+    }
+
     @Test fun `retire writes clock time and completes once`() = runTest {
         val target = Vehicle("target", "Commute", 1)
         val vm = model("target", Garage(listOf(target), "target", true))
@@ -395,7 +415,8 @@ class VehicleEditViewModelTest {
         clearInvocations(preferences)
         vm.save {}
         runCurrent()
-        verify(preferences).updateElectricityPrice(.31)
+        // #1383 review r2: an unchanged form rewrites nothing; the stored $0.31 survives because Save leaves it alone.
+        verify(preferences, never()).updateElectricityPrice(any())
         verifyNoMoreInteractions(preferences)
     }
 
