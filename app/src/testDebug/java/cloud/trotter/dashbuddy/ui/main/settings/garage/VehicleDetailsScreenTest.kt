@@ -97,7 +97,7 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Retire Original? Its readings stay.").assertDoesNotExist()
         compose.onNodeWithText("Retire vehicle").performClick()
         compose.onNodeWithText("Retire").performClick()
-        compose.waitUntil { done }
+        compose.waitForIdle(); compose.waitUntil(5_000) { done }
         runBlocking { verify(repository, times(1)).retire(vehicle.id, 1234) }
     }
 
@@ -229,7 +229,7 @@ class VehicleDetailsScreenTest {
         assertFalse(done)
         runBlocking { verify(repository, never()).retire(any(), any()) }
         compose.runOnIdle { release.complete(Unit) }
-        compose.waitUntil { done }
+        compose.waitForIdle(); compose.waitUntil(5_000) { done }
         runBlocking {
             inOrder(repository) {
                 verify(repository).updateName(eq(vehicle.id), argThat { this("Original") == "New name" })
