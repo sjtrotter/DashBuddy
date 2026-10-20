@@ -147,7 +147,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. DashBuddy does not deliver it to the developer. |
-| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names, plus logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
+| CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct DashBuddy upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -217,7 +217,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   Switching within the first ten minutes can append a new stamp; the latest vehicle wins while the
   first stamp keeps the start time and GPS total. The stamps are part of the event log, so Android backup
   and device transfer include them with the rest of your history; DashBuddy never sends them anywhere
-  itself, and they add no export column. Vehicle names in the start and switch lines are not logged.
+  itself. Since #1387, a manual CSV export includes the dash's vehicle id and label in `sessions.csv`
+  and deductible miles per vehicle per tax year in `summary.csv`; dashes without a known saved vehicle
+  are labelled "Unknown vehicle". Vehicle names in the start and switch lines are not logged.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
   over the same span, counting only that vehicle's dash miles when stamps cover the span (older or
   uncovered spans keep the original comparison rules); car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
@@ -269,6 +271,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r10 (2026-10-20)** — CSV export adds each dash's saved vehicle id and label (the dasher's own text)
+  to `sessions.csv` and deductible miles per vehicle per tax year to `summary.csv` (#1387), including
+  retired vehicles; unknown vehicles are labelled explicitly. The files go to the chosen folder/provider.
+  Receipts created under r9 retain that revision.
 - **r9 (2026-10-19)** — per-dash vehicle stamps store the saved vehicle id and the app's GPS total
   in the event log (#1360; backed up and transferred with the database), with a ten-minute grace to change the vehicle. Stamps support
   per-vehicle tracked-mile comparisons; nothing new is sent and no export column is added.

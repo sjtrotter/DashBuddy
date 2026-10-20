@@ -9,12 +9,16 @@ import cloud.trotter.dashbuddy.core.data.analytics.AnalyticsRepository
 import cloud.trotter.dashbuddy.core.data.analytics.CsvExporter
 import cloud.trotter.dashbuddy.core.data.analytics.LedgerRepository
 import cloud.trotter.dashbuddy.core.data.log.LogRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.di.IoDispatcher
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -35,6 +39,8 @@ class DataExportViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val ledgerRepository: LedgerRepository,
     private val logRepository: LogRepository,
+    private val dashVehicleRepository: DashVehicleRepository,
+    private val garageRepository: GarageRepository,
     @param:ApplicationContext private val context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -84,6 +90,8 @@ class DataExportViewModel @Inject constructor(
                         generatedAtMillis = System.currentTimeMillis(),
                         expenses = ledgerRepository.allExpenses(),
                         fuel = ledgerRepository.allFuel(),
+                        dashVehicles = DashVehicles.perDash(dashVehicleRepository.stamps.first()),
+                        vehicles = garageRepository.garage.first().let { if (it.readable) it.vehicles else emptyList() },
                     )
                     writeBundle(treeUri, bundle)
                 }

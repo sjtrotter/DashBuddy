@@ -790,7 +790,8 @@ More numbers reveals the remaining figures and controls. Both ViewModels read th
 with no optimistic local copy. `HowNumbersWorkFooter` owns base and screen-specific notes in one disclosure;
 `PlanProgress` remains a VIEW of `WeeklyPlanGrade`. Home uses a neutral prior-week total; an in-progress
 hub window suppresses percentage changes, while completed windows retain them. Every §9 thin-data state states its reason in a named place. The free-tier **CSV
-export** (#319) is a row-level read (merchant names exported, customer/address hashes excluded).
+export** (#319) is a row-level read (merchant names exported, customer/address hashes excluded); sessions carry
+the dash's vehicle id and label, and the summary splits deductible miles per vehicle per tax year (#1387).
 
 ## Development Principles
 
