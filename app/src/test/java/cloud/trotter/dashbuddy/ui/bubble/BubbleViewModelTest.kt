@@ -164,6 +164,11 @@ class BubbleViewModelTest {
         whenever(repo.garage).thenReturn(flowOf(cloud.trotter.dashbuddy.core.data.vehicle.Garage(emptyList(), null, readable = true)))
         return repo
     }
+    private fun dashVehicles(): cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository {
+        val repo: cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository = mock()
+        whenever(repo.stamps).thenReturn(flowOf(emptyList()))
+        return repo
+    }
     private fun readings(): cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository {
         val repo: cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository = mock()
         whenever(repo.readings).thenReturn(flowOf(emptyList()))
@@ -174,6 +179,7 @@ class BubbleViewModelTest {
         readingRepository: OdometerReadingRepository = readings(),
         ledger: LedgerRepository = ledgerRepository,
         testClock: Clock = clock,
+        dashRepository: cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository = dashVehicles(),
     ) = BubbleViewModel(
         chatRepository = chatRepository,
         strategyRepository = strategyRepository,
@@ -188,8 +194,36 @@ class BubbleViewModelTest {
         ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
+        dashVehicleRepository = dashRepository,
         clock = testClock,
     )
+
+    @Test fun `dash vehicle follows focused stamp including retired vehicles and clears when unknown or unstamped`() = runTest(dispatcher) {
+        stubNoDashes()
+        val retired = Vehicle("old", "Malibu", 0, retiredAt = 1)
+        val active = Vehicle("new", "Civic", 1)
+        val garageRepo: GarageRepository = mock()
+        whenever(garageRepo.garage).thenReturn(flowOf(Garage(listOf(active, retired), active.id, true)))
+        val stampRepo: cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository = mock()
+        val updates = MutableStateFlow(listOf(cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicleStamp(
+            "dash", retired.id, 10.0, 100, 1, cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicleKind.START)))
+        whenever(stampRepo.stamps).thenReturn(updates)
+        state.value = earningsState("dash")
+        val vm = viewModel(garageRepository = garageRepo, dashRepository = stampRepo)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dashVehicle.collect {} }
+        runCurrent()
+        assertEquals(retired, vm.dashVehicle.value)
+        updates.value += updates.value.single().copy(vehicleId = active.id, sequenceId = 2,
+            kind = cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicleKind.SWAP)
+        runCurrent()
+        assertEquals(active, vm.dashVehicle.value)
+        updates.value += updates.value.last().copy(vehicleId = null, sequenceId = 3)
+        runCurrent()
+        assertNull(vm.dashVehicle.value)
+        state.value = earningsState("unstamped")
+        runCurrent()
+        assertNull(vm.dashVehicle.value)
+    }
 
     @Test
     fun `garage and odometer derivations share one garage collection`() = runTest(dispatcher) {

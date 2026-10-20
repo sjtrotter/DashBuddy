@@ -74,7 +74,7 @@ class BubbleManagerSessionAttributionTest {
 
     private class Fixture(val manager: BubbleManager, val chatRepository: ChatRepository)
 
-    private fun buildFixture(): Fixture {
+    private fun buildFixture(savedGarage: Garage = Garage(emptyList(), null, readable = true)): Fixture {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
@@ -82,7 +82,7 @@ class BubbleManagerSessionAttributionTest {
         val garage: GarageRepository = mock()
         val readings: OdometerReadingRepository = mock()
         whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
-        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(garage.garage).thenReturn(flowOf(savedGarage))
         whenever(readings.readings).thenReturn(flowOf(emptyList()))
         val stateManager: StateManagerV2 = mock()
         val state = MutableStateFlow(stateWithDoorDashActive())
@@ -139,6 +139,40 @@ class BubbleManagerSessionAttributionTest {
 
         verifyBlocking(chatRepository, timeout(5_000)) {
             saveMessage(eq(uberSession), any(), any())
+        }
+    }
+
+    @Test fun `start line names the readable active vehicle`() {
+        val vehicle = cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle("malibu", "Malibu", 0)
+        val fixture = buildFixture(Garage(listOf(vehicle), vehicle.id, true))
+        fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
+        verifyBlocking(fixture.chatRepository, timeout(5_000)) {
+            saveMessage(doorDashSession, "Started Dashing in Malibu", ChatPersona.Dispatcher)
+        }
+    }
+
+    @Test fun `start line without an active vehicle keeps existing copy`() {
+        val fixture = buildFixture()
+        fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
+        verifyBlocking(fixture.chatRepository, timeout(5_000)) {
+            saveMessage(doorDashSession, "Started Dashing", ChatPersona.Dispatcher)
+        }
+    }
+
+    @Test fun `start line with an unreadable garage keeps existing copy`() {
+        val vehicle = cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle("malibu", "Malibu", 0)
+        val fixture = buildFixture(Garage(listOf(vehicle), vehicle.id, false))
+        fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
+        verifyBlocking(fixture.chatRepository, timeout(5_000)) {
+            saveMessage(doorDashSession, "Started Dashing", ChatPersona.Dispatcher)
+        }
+    }
+
+    @Test fun `vehicle line uses dispatcher and its originating session`() {
+        val fixture = buildFixture()
+        fixture.manager.postVehicleLine(uberSession, "This dash: Civic")
+        verifyBlocking(fixture.chatRepository, timeout(5_000)) {
+            saveMessage(uberSession, "This dash: Civic", ChatPersona.Dispatcher)
         }
     }
 

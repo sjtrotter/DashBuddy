@@ -1,6 +1,7 @@
 package cloud.trotter.dashbuddy.ui.bubble
 
 import cloud.trotter.dashbuddy.core.data.state.AppStateRepository
+import cloud.trotter.dashbuddy.core.data.vehicle.DashVehicleRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.OdometerReadingRepository
@@ -31,7 +32,9 @@ import cloud.trotter.dashbuddy.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.dashbuddy.domain.model.event.AppEvent
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.AppState
 import cloud.trotter.dashbuddy.domain.state.OfferIntent
@@ -86,6 +89,7 @@ class BubbleViewModel @Inject constructor(
     private val appStateRepository: AppStateRepository,
     private val garageRepository: GarageRepository,
     odometerReadingRepository: OdometerReadingRepository,
+    dashVehicleRepository: DashVehicleRepository,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -105,6 +109,8 @@ class BubbleViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings: StateFlow<List<VehicleOdometerReading>?> = odometerReadingRepository.readings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val stamps = dashVehicleRepository.stamps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val odometerLoaded: StateFlow<Boolean> = combine(garage, odometerReadings) { garage, readings ->
         garage != null && readings != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -256,6 +262,12 @@ class BubbleViewModel @Inject constructor(
     // The focused platform's region — drives all mode composables
     val focusedRegion = combine(stateManager.state, focusedPlatform) { state, platform ->
         platform?.let { state.regions.platforms[it] }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val dashVehicle: StateFlow<Vehicle?> = combine(focusedRegion, stamps, garage) { region, stamps, garage ->
+        val id = DashVehicles.perDash(stamps).firstOrNull { it.sessionId == region?.session?.sessionId }?.vehicleId
+            ?: return@combine null
+        garage?.takeIf { it.readable }?.vehicles?.firstOrNull { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Session earnings: carries the last known value forward through states

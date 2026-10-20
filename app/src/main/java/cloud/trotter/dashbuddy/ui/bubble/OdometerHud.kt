@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
+import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
 import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheck
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
@@ -124,8 +125,9 @@ internal class OdometerHud(
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
         val vehicle = garage?.active
         val lastReading = vehicle?.let { VehicleOdometerReading.latestFor(readings.orEmpty(), it.id) }
-        val reconciliation = remember(readings, vehicle) {
-            readings?.let { list -> vehicle?.id?.let { MileageReconciliation.latest(list, it) } }
+        val stamps by viewModel.stamps.collectAsStateWithLifecycle()
+        val reconciliation = remember(readings, vehicle, stamps) {
+            readings?.let { list -> vehicle?.id?.let { MileageReconciliation.latest(list, it, DashVehicles.perDash(stamps)) } }
         }
         OdometerFooter(vehicle, lastReading, reconciliation, onOpen)
     }

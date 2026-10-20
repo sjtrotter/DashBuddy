@@ -21,6 +21,7 @@ import cloud.trotter.dashbuddy.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.JobAcceptMismatchPayload
 import cloud.trotter.dashbuddy.domain.model.event.payload.OdometerReadingPayload
+import cloud.trotter.dashbuddy.domain.model.event.payload.DashVehiclePayload
 import kotlinx.serialization.json.Json
 
 /**
@@ -50,6 +51,7 @@ object AppEventCodec {
         is ManualDeliveryPayload -> json.encodeToString(payload)
         is PayAdjustmentPayload -> json.encodeToString(payload)
         is ExpenseLoggedPayload -> json.encodeToString(payload)
+        is DashVehiclePayload -> json.encodeToString(payload)
         is OdometerReadingPayload -> json.encodeToString(payload)
         is FuelFillupPayload -> json.encodeToString(payload)
         is LedgerEntryVoidedPayload -> json.encodeToString(payload)
@@ -106,6 +108,8 @@ object AppEventCodec {
                 json.decodeFromString<PayAdjustmentPayload>(payloadJson)
 
             AppEventType.EXPENSE_LOGGED -> json.decodeFromString<ExpenseLoggedPayload>(payloadJson)
+
+            AppEventType.DASH_VEHICLE -> json.decodeFromString<DashVehiclePayload>(payloadJson)
 
             AppEventType.ODOMETER_READING -> json.decodeFromString<OdometerReadingPayload>(payloadJson)
 

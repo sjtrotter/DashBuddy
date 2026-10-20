@@ -209,8 +209,15 @@ identity export. Vehicle/default resets preserve these learned preferences.
   change it copies the car you entered in the setup wizard into the garage, once, and never adds a duplicate.
   A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
+  Since #1360 the event log also stores, per dash, which saved vehicle was active and the app's GPS
+  total at that moment (`DASH_VEHICLE`, with the dash id in its payload, the time and START/SWAP kind).
+  Switching within the first ten minutes can append a new stamp; the latest vehicle wins while the
+  first stamp keeps the start time and GPS total. The stamps are part of the event log, so Android backup
+  and device transfer include them with the rest of your history; DashBuddy never sends them anywhere
+  itself, and they add no export column. Vehicle names in the start and switch lines are not logged.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
-  over the same span; car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
+  over the same span, counting only that vehicle's dash miles when stamps cover the span (older or
+  uncovered spans keep the original comparison rules); car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
   and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
   include both, like the rest of the history and preferences (§6).
 - The `odometer_prompts` app preference stores whether DashBuddy reminds you to log a reading: the
@@ -259,6 +266,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r9 (2026-10-19)** — per-dash vehicle stamps store the saved vehicle id and the app's GPS total
+  in the event log (#1360; backed up and transferred with the database), with a ten-minute grace to change the vehicle. Stamps support
+  per-vehicle tracked-mile comparisons; nothing new is sent and no export column is added.
+  Receipts created under r8 retain that revision.
 - **r8 (2026-10-19)** — CSV export includes logged expenses and fill-ups, including voided entries, in
   `expenses.csv` and `fuel.csv`. Amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up
   go to the chosen folder/provider; no customer data. Receipts created under r7 retain that revision.

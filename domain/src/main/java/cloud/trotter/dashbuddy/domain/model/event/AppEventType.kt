@@ -56,6 +56,9 @@ enum class AppEventType {
     FUEL_FILLUP,
     /** A platform-free car comparison; never enters any read model. */
     ODOMETER_READING,
+
+    /** #1360: which vehicle drove a dash; bookkeeping, never a session row */
+    DASH_VEHICLE,
     /** #1333: Voids an expense or fuel entry. */
     LEDGER_ENTRY_VOIDED,
     SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays

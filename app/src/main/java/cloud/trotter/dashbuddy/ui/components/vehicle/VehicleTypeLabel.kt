@@ -1,8 +1,9 @@
 package cloud.trotter.dashbuddy.ui.components.vehicle
 
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import cloud.trotter.dashbuddy.domain.model.vehicle.vehicleType
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleType
@@ -26,4 +27,6 @@ fun vehicleTypeLabel(type: VehicleType): Int = when (type) {
  * cannot depend on `:app`.
  */
 @Composable
-fun Vehicle.displayName(): String = identityName ?: stringResource(vehicleTypeLabel(profile.vehicleType))
+fun Vehicle.displayName(): String = displayName(LocalContext.current)
+
+fun Vehicle.displayName(context: Context): String = identityName ?: context.getString(vehicleTypeLabel(profile.vehicleType))

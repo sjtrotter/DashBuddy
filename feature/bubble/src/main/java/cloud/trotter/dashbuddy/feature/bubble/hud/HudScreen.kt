@@ -64,7 +64,7 @@ fun HudScreen(
                 } else Modifier) {
                     Box {
                         Column {
-                            HudHead(state.platform, state.switchable, state.paused, onSelectPlatform)
+                            HudHead(state.platform, state.switchable, state.paused, state.dashVehicle, onSelectPlatform)
                             if (state.mode != HudMode.OFFER) TopRow(state.top)
                         }
                         // In front of the header controls, so an outside tap cannot switch platforms.

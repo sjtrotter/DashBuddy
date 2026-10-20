@@ -4,6 +4,47 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MileageReconciliationTest {
+    @Test fun `Sol unknown dash after retiring A keeps B at ten car ten tracked zero other`() {
+        val dashes = DashVehicles.perDash(listOf(
+            DashVehicleStamp("a", "A", 100.0, 0, 1, DashVehicleKind.START),
+            DashVehicleStamp("b", null, 120.0, 60_000, 2, DashVehicleKind.START)))
+        // B is added eleven minutes into dash b; its selection must not relabel that dash.
+        assertEquals(listOf(DashVehicleAction.NextDash("b", "B")), DashVehicles.decide(
+            listOf(LiveDash("b", 60_000)), "B", listOf(
+                DashVehicleStamp("b", null, 120.0, 60_000, 2, DashVehicleKind.START)),
+            now = 12 * 60_000, windowMs = 10 * 60_000))
+        val readings = listOf(reading(12, 1_000, 130.0, "B"), reading(20, 1_010, 140.0, "B"))
+        val result = MileageReconciliation.latest(readings, "B", dashes)!!
+        assertEquals(10, result.carMiles)
+        assertEquals(10.0, result.trackedMiles, 0.0)
+        assertEquals(0.0, result.otherMiles, 0.0)
+        assertEquals(MileageReconciliation.latest(readings, "B"), result)
+        assertNull(MileageReconciliation.latest(readings + reading(15, 5_000, 135.0, "A"), "B", dashes))
+    }
+    @Test fun `covering stamps count only this vehicles dash miles despite another vehicles reading`() {
+        val dashes = DashVehicles.perDash(listOf(
+            DashVehicleStamp("a", "civic", 100.0, 90, 1, DashVehicleKind.START),
+            DashVehicleStamp("b", "other", 120.0, 100, 2, DashVehicleKind.START),
+            DashVehicleStamp("c", "civic", 140.0, 150, 3, DashVehicleKind.START)))
+        val result = MileageReconciliation.latest(pair + reading(150, 1_000, 130.0, "other"), "civic", dashes)!!
+        assertEquals(59, result.carMiles)
+        assertEquals(37.3, result.trackedMiles, 0.00001)
+        assertEquals(90 * 60_000L, result.since)
+    }
+    @Test fun `a span before the first stamp keeps both original computation and withholding`() {
+        val dashes = listOf(DashVehicle("a", "civic", 100, 101.0))
+        assertEquals(compare(), MileageReconciliation.latest(pair, "civic", dashes))
+        val mixed = pair + reading(150, 1_000, 130.0, "other")
+        assertNull(compare(mixed))
+        assertEquals(compare(mixed), MileageReconciliation.latest(mixed, "civic", dashes))
+    }
+    @Test fun `null or reset dash boundaries keep original comparison rules`() {
+        for (gps in listOf(null, 100.0, 90.0)) {
+            val dashes = listOf(DashVehicle("a", "civic", 90, 100.0), DashVehicle("b", "other", 150, gps))
+            assertEquals(compare(), MileageReconciliation.latest(pair, "civic", dashes))
+            assertNull(MileageReconciliation.latest(pair + reading(150, 1_000, 130.0, "other"), "civic", dashes))
+        }
+    }
     private var sequence = 0L
     private fun reading(at: Long, miles: Int, gps: Double?, id: String = "civic") =
         VehicleOdometerReading(id, LastOdometerReading(miles, gps, at * 60_000), ++sequence)

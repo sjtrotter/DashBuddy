@@ -858,4 +858,7 @@
     <string name="economy_settings_vehicle_description">%1$s · %2$s</string>
     <string name="economy_settings_vehicle_empty">No vehicle</string>
     <string name="economy_settings_vehicle_garage">Garage</string>
+    <string name="bubble_chat_session_started_vehicle">Started %1$s in %2$s</string>
+    <string name="bubble_chat_vehicle_this_dash">This dash: %1$s</string>
+    <string name="bubble_chat_vehicle_next_dash">%1$s from your next dash</string>
 </resources>

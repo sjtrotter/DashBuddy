@@ -73,7 +73,7 @@ class BubbleManagerTest {
     private fun reading(at: Long, vehicleId: String = vehicle.id, sequence: Long = 1L) =
         VehicleOdometerReading(vehicleId, LastOdometerReading(52_388, 100.0, at), sequence)
 
-    private fun assertCue(fixture: Fixture) {
+    private fun assertCue(fixture: Fixture, expectedLine: String = "Started Dashing in Car") {
         fixture.manager.startSession(sessionId, Platform.DoorDash.name)
         val notifications = argumentCaptor<Notification>()
         verify(fixture.notifications, timeout(5_000).times(2))
@@ -83,7 +83,7 @@ class BubbleManagerTest {
             saveMessage(eq(sessionId), texts.capture(), eq(ChatPersona.Dispatcher))
         }
         verifyNoMoreInteractions(fixture.chat)
-        assertTrue(texts.firstValue.startsWith("Started "))
+        assertEquals(expectedLine, texts.firstValue)
         assertEquals(listOf(listOf(texts.firstValue), listOf(texts.firstValue, "Log your odometer")), notifications.allValues.map {
             val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(it)!!
             assertEquals(RuntimeEnvironment.getApplication().getString(R.string.bubble_notification_conversation_title),
@@ -107,6 +107,29 @@ class BubbleManagerTest {
         verify(fixture.notifications, after(100).times(1)).notify(eq(BubbleManager.BUBBLE_NOTIFICATION_ID), notification.capture())
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification.firstValue)!!
         assertEquals(listOf(texts.firstValue), style.messages.map { it.text.toString() })
+    }
+
+    @Test fun `vehicle start and switch lines never log the vehicle name even at debug`() {
+        val name = "PrivateVehicleName1360"
+        val messages = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val tree = object : timber.log.Timber.DebugTree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) { messages.add(message) }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            val fixture = fixture(enabled = false, active = vehicle.copy(name = name))
+            fixture.manager.startSession(sessionId, Platform.DoorDash.name)
+            verifyBlocking(fixture.chat, timeout(5_000)) {
+                saveMessage(sessionId, "Started Dashing in $name", ChatPersona.Dispatcher)
+            }
+            fixture.manager.postVehicleLine(sessionId, "This dash: $name")
+            verifyBlocking(fixture.chat, timeout(5_000)) {
+                saveMessage(sessionId, "This dash: $name", ChatPersona.Dispatcher)
+            }
+            assertTrue(messages.none { name in it })
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
     }
 
     @Test fun `an unreadable garage posts the Started line only`() {
@@ -140,7 +163,7 @@ class BubbleManagerTest {
     }
 
     @Test fun `no vehicle yet posts the odometer line`() {
-        assertCue(fixture(active = null))
+        assertCue(fixture(active = null), expectedLine = "Started Dashing")
     }
 
     @Test fun `a recent reading for another vehicle does not suppress the line`() {

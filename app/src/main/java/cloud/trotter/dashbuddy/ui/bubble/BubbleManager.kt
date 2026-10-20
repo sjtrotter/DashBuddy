@@ -26,6 +26,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
@@ -187,19 +188,27 @@ class BubbleManager @Inject constructor(
         val verb = sessionVerb(platformName)
         // One Clock rule: cue comparisons share the injected clock used to stamp readings.
         val now = clock.millis()
-        val startedLine = context.getString(R.string.bubble_chat_session_started, verb)
-        val started = enqueueMessage(
-            startedLine,
-            ChatPersona.Dispatcher, expand = false, sessionId = sessionId,
-        )
         scope.launch {
+            val garage = try {
+                garageRepository.garage.first()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.tag("Bubble").w("%s", error.javaClass.simpleName)
+                null
+            }
+            val active = garage?.takeIf { it.readable }?.active
+            val startedLine = if (active != null) {
+                context.getString(R.string.bubble_chat_session_started_vehicle, verb, active.displayName(context))
+            } else context.getString(R.string.bubble_chat_session_started, verb)
+            val started = enqueueMessage(startedLine, ChatPersona.Dispatcher, expand = false,
+                sessionId = sessionId, logText = false)
             try {
                 // Keep the cue notification after the persisted session-start line.
                 started.join()
                 val enabled = appPreferencesRepository.odometerPrompts.first()
-                val garage = garageRepository.garage.first()
                 // An unreadable garage is not "no vehicle": the sheet says the vehicles could not be read, so no cue.
-                if (!garage.readable) return@launch
+                if (garage == null || !garage.readable) return@launch
                 val vehicle = garage.active
                 val readings = odometerReadingRepository.readings.first()
                 val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
@@ -287,15 +296,20 @@ class BubbleManager @Inject constructor(
         enqueueMessage(text, persona, expand, sessionId)
     }
 
+    /** Vehicle names stay in on-device chat, never in diagnostic logs. */
+    fun postVehicleLine(sessionId: String, text: String) {
+        enqueueMessage(text, ChatPersona.Dispatcher, expand = false, sessionId = sessionId, logText = false)
+    }
+
     /** The save job lets session-start copy await its preceding history line. */
     private fun enqueueMessage(
-        text: CharSequence, persona: ChatPersona, expand: Boolean, sessionId: String?,
+        text: CharSequence, persona: ChatPersona, expand: Boolean, sessionId: String?, logText: Boolean = true,
     ): Job {
         // #551 P7: chat text can carry raw merchant/store text ("Pickup: <store>"), so the
         // shareable INFO stream logs a counts-only milestone; the raw body stays on DEBUG.
         // #772: the persona itself logs as its PII-safe logLabel (kind, not displayName) on INFO+.
         Timber.tag("Chat").i("message posted [%s] (%d chars)", persona.logLabel, text.length)
-        Timber.tag("Chat").d("[%s]: %s", persona.displayName, text)
+        if (logText) Timber.tag("Chat").d("[%s]: %s", persona.displayName, text)
 
         // 2. UPDATED: Launched in a coroutine because the Repository is pure suspend now!
         val saved = scope.launch {
