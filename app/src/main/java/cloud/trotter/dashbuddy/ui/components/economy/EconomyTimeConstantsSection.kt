@@ -1,24 +1,18 @@
 package cloud.trotter.dashbuddy.ui.components.economy
 
+import kotlinx.coroutines.Deferred
+import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteResult
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cloud.trotter.dashbuddy.R
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
@@ -46,14 +40,15 @@ data class TimeConstantsUiState(
 @Composable
 fun EconomyTimeConstantsSection(
     state: TimeConstantsUiState,
-    onOverrideChange: (EconomyField, Double?) -> Unit,
+    onOverrideChange: (EconomyField, Double?) -> Deferred<WriteResult>,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.economy_time_title), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.economy_time_help), style = MaterialTheme.typography.bodySmall)
-        TimeOverrideControl(EconomyField.AVG_MIN_PER_MILE, state.paceOverride, onOverrideChange)
-        TimeOverrideControl(EconomyField.BASE_PICKUP_MIN, state.overheadOverride, onOverrideChange)
+        TimeOverrideControl(EconomyField.AVG_MIN_PER_MILE, state.paceOverride, onOverrideChange, enabled)
+        TimeOverrideControl(EconomyField.BASE_PICKUP_MIN, state.overheadOverride, onOverrideChange, enabled)
         state.platforms.forEach { row ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(row.platform.displayName, style = MaterialTheme.typography.titleSmall)
@@ -77,36 +72,24 @@ fun EconomyTimeConstantsSection(
 private fun TimeOverrideControl(
     field: EconomyField,
     value: Double?,
-    onOverrideChange: (EconomyField, Double?) -> Unit,
+    onOverrideChange: (EconomyField, Double?) -> Deferred<WriteResult>,
+    enabled: Boolean,
 ) {
-    // Editing buffer only; resolved economy and persistence remain outside composition.
-    var draft by rememberSaveable(field, value) { mutableStateOf(value?.toString().orEmpty()) }
-    val parsed = draft.replace(',', '.').toDoubleOrNull()
-    val valid = parsed != null && parsed.isFinite() &&
-        if (field == EconomyField.AVG_MIN_PER_MILE) parsed > 0 else parsed >= 0
+    val session = LocalEditSession.current
     Column {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            label = { Text(stringResource(if (field == EconomyField.AVG_MIN_PER_MILE)
-                R.string.economy_time_pace else R.string.economy_time_overhead)) },
-            placeholder = { Text(stringResource(R.string.economy_time_automatic)) },
-            isError = draft.isNotBlank() && !valid,
-            supportingText = {
-                if (draft.isNotBlank() && !valid) Text(stringResource(if (field == EconomyField.AVG_MIN_PER_MILE)
-                    R.string.economy_time_invalid_pace else R.string.economy_time_invalid_overhead))
-            },
+        CurrencyInput(
+            label = stringResource(if (field == EconomyField.AVG_MIN_PER_MILE)
+                R.string.economy_time_pace else R.string.economy_time_overhead),
+            value = value ?: if (field == EconomyField.AVG_MIN_PER_MILE) 2.5 else 0.0,
+            onValueChange = { onOverrideChange(field, it) },
+            fieldKey = field.name, showCurrencySymbol = false, enabled = enabled,
+            valid = { text -> nonnegativeNumber(text)?.takeIf {
+                field != EconomyField.AVG_MIN_PER_MILE || it > 0
+            } },
         )
-        Row {
-            TextButton(enabled = valid, onClick = { onOverrideChange(field, parsed) }) {
-                Text(stringResource(R.string.economy_time_set_override))
-            }
-            TextButton(onClick = { draft = ""; onOverrideChange(field, null) }) {
-                Text(stringResource(R.string.economy_time_use_automatic))
-            }
-        }
+        TextButton(enabled = enabled, onClick = {
+            session.discard(field.name)
+            onOverrideChange(field, null)
+        }) { Text(stringResource(R.string.economy_time_use_automatic)) }
     }
 }

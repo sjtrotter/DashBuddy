@@ -82,17 +82,17 @@ class StrategyRepositoryTimeConstantsTest {
         assertTrue(source.learnedTimeConstants.first { it.isEmpty() }.isEmpty())
     }
 
-    @Test fun `persistUserSetEconomy marks only the time field the user actually set`() = runTest {
+    @Test fun `mirrorUserSetEconomy marks only the time field the user actually set`() = runTest {
         val ds = PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("independent.preferences_pb") })
         val source = AppPreferencesDataSource(ds)
         val repo = AppPreferencesRepository(source, garage())
-        repo.persistUserSetEconomy(UserEconomy(avgMinutesPerMile = 3.0,
+        repo.mirrorUserSetEconomy(UserEconomy(avgMinutesPerMile = 3.0,
             userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE)))
         assertEquals(setOf(EconomyField.AVG_MIN_PER_MILE.name), source.userSetEconomyFields.first())
         assertNull(source.basePickupMin.first())
         repo.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, null)
-        repo.persistUserSetEconomy(UserEconomy(basePickupMinutes = 0.0,
+        repo.mirrorUserSetEconomy(UserEconomy(basePickupMinutes = 0.0,
             userSetFields = setOf(EconomyField.BASE_PICKUP_MIN)))
         assertEquals(setOf(EconomyField.BASE_PICKUP_MIN.name), source.userSetEconomyFields.first())
         assertNull(source.avgMinPerMile.first())

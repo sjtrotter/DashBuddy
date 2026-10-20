@@ -7,25 +7,31 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.selects.select
 import timber.log.Timber
 
-/** One ordered write path for a details page. A failed head blocks every later write. */
+enum class WriteResult { SAVED, FAILED, REJECTED, DISCARDED }
+
+/** Ordered settings writes. A failed head blocks successors until retry or discard. */
 class VehicleCostWriter(scope: CoroutineScope) {
-    private val writes = Channel<suspend () -> Boolean>(Channel.UNLIMITED)
+    private class Write(val action: suspend () -> Boolean) {
+        val result = CompletableDeferred<WriteResult>()
+    }
+    private val writes = Channel<Write>(Channel.UNLIMITED)
+    private val outstanding = linkedSetOf<Write>()
     private val discards = Channel<CompletableDeferred<Unit>>(Channel.UNLIMITED)
     private val retries = Channel<Unit>(Channel.CONFLATED)
     private val closed = CompletableDeferred<Unit>()
     private val _pending = MutableStateFlow(0)
-    val pending: StateFlow<Int> = _pending.asStateFlow()
+    val pending = _pending.asStateFlow()
     private val _failure = MutableStateFlow(GarageWriteFailure.NONE)
-    val failure: StateFlow<GarageWriteFailure> = _failure.asStateFlow()
+    val failure = _failure.asStateFlow()
 
     init {
-        // The consumer outlives cancellation only to finish accepted commits. Owner completion
-        // closes its input and releases a failed head; it never waits forever for a retry.
         scope.coroutineContext[Job]?.invokeOnCompletion { writes.close(); closed.complete(Unit) }
         CoroutineScope(scope.coroutineContext + NonCancellable).launch(start = CoroutineStart.UNDISPATCHED) {
             try {
-                queue@ for (action in writes) {
-                    while (!runWrite(action)) {
+                queue@ for (write in writes) {
+                    while (!runWrite(write.action)) {
+                        // Release every waiter on failure, including successors blocked by this head.
+                        outstanding.toList().forEach { it.result.complete(WriteResult.FAILED) }
                         var discarded: CompletableDeferred<Unit>? = null
                         val command = select {
                             retries.onReceive { 1 }
@@ -34,25 +40,45 @@ class VehicleCostWriter(scope: CoroutineScope) {
                         }
                         if (command == 0) break@queue
                         if (command == -1) {
-                            while (writes.tryReceive().isSuccess) _pending.update { it - 1 }
-                            _pending.update { it - 1 }
+                            while (writes.tryReceive().isSuccess) Unit
+                            outstanding.toList().forEach { it.result.complete(WriteResult.DISCARDED) }
+                            outstanding.clear()
+                            _pending.value = 0
                             _failure.value = GarageWriteFailure.NONE
                             discarded?.complete(Unit)
                             continue@queue
                         }
                     }
-                    _pending.update { it - 1 }
+                    write.result.complete(WriteResult.SAVED)
+                    outstanding.remove(write)
+                    _pending.value = outstanding.size
                 }
             } finally {
                 writes.close()
+                outstanding.toList().forEach { it.result.complete(WriteResult.REJECTED) }
+                outstanding.clear()
                 _pending.value = 0
             }
         }
     }
 
-    fun write(action: suspend () -> Boolean) {
-        _pending.update { it + 1 }
-        if (!writes.trySend(action).isSuccess) _pending.update { it - 1 }
+    /** Acceptance is synchronous; accepted actions outlive the owner's scope. */
+    fun write(action: suspend () -> Boolean): Deferred<WriteResult> {
+        val write = Write(action)
+        if (closed.isCompleted) {
+            write.result.complete(WriteResult.REJECTED)
+            return write.result
+        }
+        outstanding.add(write)
+        _pending.value = outstanding.size
+        if (!writes.trySend(write).isSuccess) {
+            outstanding.remove(write)
+            _pending.value = outstanding.size
+            write.result.complete(WriteResult.REJECTED)
+        } else if (_failure.value != GarageWriteFailure.NONE) {
+            write.result.complete(WriteResult.FAILED)
+        }
+        return write.result
     }
 
     private suspend fun runWrite(action: suspend () -> Boolean): Boolean = withContext(NonCancellable) {
@@ -71,13 +97,15 @@ class VehicleCostWriter(scope: CoroutineScope) {
         }
     }
 
-    /** Returns on a failed head too, so leaving can offer retry or discard without hanging. */
-    suspend fun awaitIdle() {
+    /** A failed head releases the host to show Try again / Discard. */
+    suspend fun awaitIdle(): GarageWriteFailure {
         combine(pending, failure) { count, error -> count == 0 || error != GarageWriteFailure.NONE }.first { it }
+        return failure.value
     }
 
     suspend fun discard() {
-        if (_failure.value == GarageWriteFailure.NONE) return
+        if (_failure.value == GarageWriteFailure.NONE) { awaitIdle(); if (_failure.value == GarageWriteFailure.NONE) return }
+        if (closed.isCompleted) return
         val completed = CompletableDeferred<Unit>()
         discards.send(completed)
         completed.await()

@@ -212,8 +212,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   (`odometerShown`): unset follows the type's default, and the vehicle page's Odometer switch stores
   an explicit choice. It controls the bubble's odometer block, cue, start line and resting footer;
   nothing new is read or sent. The electricity tariff (`electricityPricePerKwh`) is shared in app preferences, not on a vehicle.
-  Vehicle details and the Retired section (#1383) use these existing local records; nothing new is read, stored or sent.
-  Vehicle details, including live name and cost edits (#1385), and the Retired section (#1383) use these existing local records; nothing new is read, stored or sent.
+  The vehicle details page is the only live editor of a vehicle's name and costs (#1385); Economy edits shared settings
+  and links to that page. These editors, their resets and the Retired section (#1383) use the existing local records;
+  nothing new is read, stored or sent.
   Restoring clears the retired mark on the existing vehicle record and keeps its readings and the active selection.
   A retired mark is kept when you remove a vehicle (its readings stay). Older entries are read into the typed shape
   with every value kept; unknown and incompatible fields ride along unread in the vehicle's `legacyExtras` map. The first time the app runs after this

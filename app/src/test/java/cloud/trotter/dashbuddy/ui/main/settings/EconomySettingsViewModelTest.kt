@@ -1,223 +1,175 @@
 package cloud.trotter.dashbuddy.ui.main.settings
 
+import cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.ViewModelStore
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.cancel
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
-import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
-import cloud.trotter.dashbuddy.core.data.vehicle.Garage
-import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
-import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
+import cloud.trotter.dashbuddy.core.data.vehicle.*
+import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
+import cloud.trotter.dashbuddy.ui.main.settings.garage.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
-import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import org.mockito.kotlin.doSuspendableAnswer
-import org.mockito.kotlin.verify
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
+import org.mockito.kotlin.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class EconomySettingsViewModelTest {
-    @get:Rule val tmp = TemporaryFolder()
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
-    @Test
-    fun `vehicle heading follows active selection and retirement`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val car = Vehicle("car", "Car", 1)
-        val bicycle = Vehicle("bicycle", "Bicycle", 2, Bicycle())
-        val updates = MutableStateFlow(Garage(listOf(car, bicycle), car.id, true))
-        val garage: GarageRepository = mock()
-        whenever(garage.garage).thenReturn(updates)
-        val preferences: AppPreferencesRepository = mock()
-        whenever(preferences.userEconomy).thenReturn(flowOf(cloud.trotter.dashbuddy.domain.evaluation.UserEconomy()))
-        whenever(preferences.fuelType).thenReturn(flowOf(FuelType.REGULAR))
-        val strategy: StrategyRepository = mock()
+    private val preferences: AppPreferencesRepository = mock()
+    private val garage: GarageRepository = mock()
+    private val strategy: StrategyRepository = mock()
+    @Before fun setup() {
+        Dispatchers.setMain(StandardTestDispatcher())
+        whenever(preferences.userEconomy).thenReturn(flowOf(UserEconomy()))
+        whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
-        val vm = EconomySettingsViewModel(preferences, strategy, garage)
+    }
+    @After fun teardown() { Dispatchers.resetMain() }
+    private fun model() = EconomySettingsViewModel(preferences, strategy, garage)
+
+    @Test fun `vehicle row follows outside switches without any writes`() = runTest {
+        val a = Vehicle("a", "A", 1)
+        val b = Vehicle("b", "B", 2, Bicycle())
+        val updates = MutableStateFlow(Garage(listOf(a, b), a.id, true))
+        whenever(garage.garage).thenReturn(updates)
+        val vm = model()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.activeVehicle.collect {} }
         runCurrent()
-        assertEquals(car, vm.activeVehicle.value)
-        updates.value = updates.value.copy(activeId = bicycle.id)
+        assertEquals(a, vm.activeVehicle.value)
+        updates.value = updates.value.copy(activeId = b.id)
         runCurrent()
-        assertEquals(bicycle, vm.activeVehicle.value)
-        updates.value = Garage(listOf(car, bicycle.copy(retiredAt = 3)), null, true)
+        assertEquals(b, vm.activeVehicle.value)
+        updates.value = updates.value.copy(activeId = null)
         runCurrent()
-        assertEquals(null, vm.activeVehicle.value)
+        assertNull(vm.activeVehicle.value)
+        verify(garage, never()).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>())
     }
 
-    @Test
-    fun `the economy editor writes the active vehicle's profile`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope,
-            produceFile = { tmp.newFile("vehicles.preferences_pb") },
-        )))
-        val preferences = AppPreferencesRepository(AppPreferencesDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope,
-            produceFile = { tmp.newFile("app.preferences_pb") },
-        )), garage)
-        val inactive = garage.addVehicle("Old car", 1L, LegacyProfile(vehicleClass = VehicleClass.COMPACT).toTyped())
-        val active = garage.addVehicle("Current car", 2L, LegacyProfile(vehicleClass = VehicleClass.SEDAN).toTyped())
-        val strategy: StrategyRepository = mock()
-        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
-        val viewModel = EconomySettingsViewModel(preferences, strategy, garage)
-
-        viewModel.setVehicleClass(VehicleClass.SUV)
-        viewModel.setMpg(27.5)
-        viewModel.setFuelType(FuelType.DIESEL)
-        viewModel.setTires(720.0, 48_000.0)
-        viewModel.setOil(85.0, 7_500.0)
-        viewModel.setBrakes(600.0, 50_000.0)
-        viewModel.setFluids(125.0, 30_000.0)
-        viewModel.setMiscRepairs(800.0, 12_000.0)
-        viewModel.setDepreciationInclude(true)
-        viewModel.setDepreciationValues(28_000.0, 180_000.0)
-        viewModel.setInsurance(75.0)
-        viewModel.setRegistration(120.0)
-        viewModel.setExpectedAnnualMiles(15_000.0)
-        viewModel.setPhone(80.0, 2, 50.0)
-        advanceUntilIdle()
-
-        val vehicles = garage.garage.first().vehicles
-        val saved = vehicles.first { it.id == active.id }.profile
-        assertEquals(VehicleClass.SUV, saved.legacyClass)
-        assertEquals(27.5, saved.gasMpg)
-        assertEquals(FuelType.DIESEL, saved.gasFuel)
-        assertEquals(720.0, saved.wear.tireSetCost)
-        assertEquals(48_000.0, saved.wear.tireLifetimeMi)
-        assertEquals(85.0, saved.wear.oilCost)
-        assertEquals(7_500.0, saved.wear.oilIntervalMi)
-        assertEquals(600.0, saved.wear.brakesCost)
-        assertEquals(50_000.0, saved.wear.brakesIntervalMi)
-        assertEquals(125.0, saved.wear.fluidsCost)
-        assertEquals(30_000.0, saved.wear.fluidsIntervalMi)
-        assertEquals(800.0, saved.wear.miscYearly)
-        assertEquals(12_000.0, saved.wear.miscYearlyMi)
-        assertEquals(true, saved.fixed.includeDepreciation)
-        assertEquals(28_000.0, saved.fixed.purchasePrice)
-        assertEquals(180_000.0, saved.fixed.totalLifetimeMi)
-        assertEquals(75.0, saved.fixed.insuranceDeltaPerMonth)
-        assertEquals(120.0, saved.fixed.registrationDeltaPerYear)
-        assertEquals(15_000.0, saved.fixed.expectedAnnualMiles)
-        assertEquals(inactive.profile, vehicles.first { it.id == inactive.id }.profile)
-        assertEquals(80.0, preferences.userEconomy.first().phonePlanTotal, 0.0)
-    }
-    @Test fun `partial pair and depreciation commits preserve profile values and preference mirrors`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope, produceFile = { tmp.newFile("partial-vehicles.preferences_pb") })))
-        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope, produceFile = { tmp.newFile("partial-app.preferences_pb") }))
-        val preferences = AppPreferencesRepository(source, garage)
-        garage.addVehicle("Car", 1L, GasCar(wear = WearProfile(oilCost = 60.0, oilIntervalMi = 5000.25),
-            fixed = FixedCosts(includeDepreciation = true, purchasePrice = 10000.25, totalLifetimeMi = 200000.25)))
-        source.updateOilCost(60.0, 5000.25)
-        val strategy: StrategyRepository = mock()
-        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
-        val vm = EconomySettingsViewModel(preferences, strategy, garage)
-
-        vm.setOil(65.0, null).join()
-        assertEquals(5000.25, garage.garage.first().active!!.profile.wear.oilIntervalMi)
-        assertEquals(5000.25, source.oilIntervalMi.first())
-        vm.setOil(null, 6000.0).join()
-        vm.setDepreciationValues(12000.0, null)
-        vm.setDepreciationInclude(false)
-        advanceUntilIdle()
-
-        val saved = garage.garage.first().active!!.profile
-        assertEquals(65.0, saved.wear.oilCost)
-        assertEquals(6000.0, saved.wear.oilIntervalMi)
-        assertEquals(65.0, source.oilCost.first())
-        assertEquals(6000.0, source.oilIntervalMi.first())
-        assertEquals(false, saved.fixed.includeDepreciation)
-        assertEquals(12000.0, saved.fixed.purchasePrice)
-        assertEquals(200000.25, saved.fixed.totalLifetimeMi)
-        assertEquals(12000.0, source.purchasePrice.first())
-        assertEquals(false, source.includeDepreciation.first())
-        assertNull(source.totalLifetimeMi.first())
-        vm.viewModelScope.cancel()
-    }
-
-    @Test fun `disposal commit queued before onCleared survives scope cancellation`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope, produceFile = { tmp.newFile("close-vehicles.preferences_pb") })))
-        val source = AppPreferencesDataSource(PreferenceDataStoreFactory.create(
-            scope = backgroundScope, produceFile = { tmp.newFile("close-app.preferences_pb") }))
-        val preferences = AppPreferencesRepository(source, garage)
-        garage.addVehicle("Car", 1L, GasCar(wear = WearProfile(oilIntervalMi = 5000.25)))
-        val strategy: StrategyRepository = mock()
-        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
-        val vm = EconomySettingsViewModel(preferences, strategy, garage)
-        val store = ViewModelStore().apply { put("economy", vm) }
-
-        val write = vm.setOil(65.0, null)
-        // Simulate disposal dispatch followed immediately by the screen being popped.
-        store.clear()
-        assertTrue(vm.viewModelScope.coroutineContext[kotlinx.coroutines.Job]!!.isCancelled)
-        write.join()
-        assertFalse(write.isCancelled)
-        assertEquals(65.0, garage.garage.first().active!!.profile.wear.oilCost)
-        assertEquals(5000.25, garage.garage.first().active!!.profile.wear.oilIntervalMi)
-        assertEquals(65.0, source.oilCost.first())
-        assertNull(source.oilIntervalMi.first())
-
-        // Disposal can also arrive after cancellation has already happened.
-        vm.setDepreciationValues(12000.0, null).join()
-        assertEquals(12000.0, source.purchasePrice.first())
-    }
-
-    @Test fun `a suspended repository commit finishes after the view model scope is cancelled`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val preferences: AppPreferencesRepository = mock()
-        whenever(preferences.userEconomy).thenReturn(flowOf(cloud.trotter.dashbuddy.domain.evaluation.UserEconomy()))
-        whenever(preferences.fuelType).thenReturn(flowOf(FuelType.REGULAR))
-        val garage: GarageRepository = mock()
-        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, true)))
-        val strategy: StrategyRepository = mock()
-        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow(null))
+    @Test fun `phone total then lines keeps both while the displayed total is stale`() = runTest {
         val release = CompletableDeferred<Unit>()
-        var landed = false
-        whenever(preferences.updateTireCost(65.0, null)).doSuspendableAnswer {
-            release.await()
-            landed = true
-        }
-        val vm = EconomySettingsViewModel(preferences, strategy, garage)
-        val write = vm.setTires(65.0, null)
+        var total = 80.0
+        var lines = 1
+        whenever(preferences.updatePhoneTotal(125.0)).doSuspendableAnswer { release.await(); val old = total; total = 125.0; StoredPreference(old, true) }
+        whenever(preferences.updatePhoneLines(3)).doSuspendableAnswer { val old = lines; lines = 3; StoredPreference(old, true) }
+        val vm = model()
+        val first = vm.setPhoneTotal(125.0)
+        val second = vm.setPhoneLines(3)
         runCurrent()
-        verify(preferences).updateTireCost(65.0, null)
-        assertFalse(landed)
+        assertFalse(first.isCompleted)
+        assertFalse(second.isCompleted)
+        release.complete(Unit)
+        runCurrent()
+        assertEquals(WriteResult.SAVED, first.await())
+        assertEquals(WriteResult.SAVED, second.await())
+        assertEquals(125.0, total, 0.0)
+        assertEquals(3, lines)
+        verify(preferences, never()).updatePhoneShare(any())
+    }
+
+    @Test fun `finished field and unfinished leave field survive owner cancellation`() = runTest {
+        val release = CompletableDeferred<Unit>()
+        val writes = mutableListOf<Double>()
+        whenever(preferences.updatePhoneTotal(any())).doSuspendableAnswer {
+            release.await(); writes += it.getArgument<Double>(0); StoredPreference(80.0, true)
+        }
+        whenever(preferences.updateElectricityPrice(any())).doSuspendableAnswer {
+            writes += it.getArgument<Double>(0); StoredPreference(0.15, false)
+        }
+        val vm = model()
+        vm.edits.field("total", "80", { true }) { vm.setPhoneTotal(it.toDouble()) }
+        vm.edits.field("tariff", "0.15", { true }) { vm.setElectricityPrice(it.toDouble()) }
+        vm.edits.edit("total", "125")
+        vm.edits.finish("total")
+        vm.edits.edit("tariff", "0.25")
+        val leave = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { vm.finishAndAwait() }
+        runCurrent()
         vm.viewModelScope.cancel()
         release.complete(Unit)
-        write.join()
-        assertTrue(landed)
-        assertFalse(write.isCancelled)
+        runCurrent()
+        assertEquals(GarageWriteFailure.NONE, leave.await())
+        assertEquals(listOf(125.0, .25), writes)
+        assertEquals(WriteResult.REJECTED, vm.setPhoneTotal(90.0).await())
+    }
+
+    @Test fun `reset discards typed text and runs after accepted writes despite a late blur`() = runTest {
+        val release = CompletableDeferred<Unit>()
+        var stored = 80.0
+        whenever(preferences.updatePhoneTotal(any())).doSuspendableAnswer {
+            release.await(); val old = stored; stored = it.getArgument(0); StoredPreference(old, true)
+        }
+        whenever(preferences.resetSharedEconomyDefaults()).doSuspendableAnswer { stored = 80.0 }
+        val vm = model()
+        vm.setPhoneTotal(125.0)
+        vm.edits.field("total", "80", { true }) { vm.setPhoneTotal(it.toDouble()) }
+        vm.edits.edit("total", "999")
+        val lateBlur = vm.edits.finisher("total")
+        val reset = backgroundScope.async(start = CoroutineStart.UNDISPATCHED) { vm.resetDefaults() }
+        lateBlur()
+        release.complete(Unit)
+        runCurrent()
+        assertEquals(GarageWriteFailure.NONE, reset.await())
+        lateBlur()
+        vm.edits.finishAll()
+        runCurrent()
+        assertEquals(80.0, stored, 0.0)
+        verify(preferences, times(1)).updatePhoneTotal(any())
+        verify(garage, never()).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>())
+    }
+
+    @Test fun `a failed shared write prevents leave until retry or discard`() = runTest {
+        whenever(preferences.updatePhoneTotal(125.0)).thenThrow(IllegalStateException())
+        val vm = model()
+        vm.edits.field("total", "80", { true }) { vm.setPhoneTotal(it.toDouble()) }
+        vm.edits.edit("total", "125")
+        val leave = async { vm.finishAndAwait() }
+        runCurrent()
+        assertEquals(GarageWriteFailure.RETRY, leave.await())
+        vm.discardChanges()
+        assertEquals(GarageWriteFailure.NONE, vm.awaitIdle())
+    }
+
+    @Test fun `phone lines undo uses captured two lines and never writes total or share`() = runTest {
+        whenever(preferences.updatePhoneLines(3)).thenReturn(StoredPreference(2, true))
+        val vm = model()
+        vm.setPhoneLines(3); runCurrent()
+        val undo = requireNotNull(vm.lastSaveUndo.value)
+        assertEquals("PHONE_PLAN_LINES", undo.key)
+        vm.edits.field("PHONE_PLAN_LINES", "3", { true }) { vm.setPhoneLines(it.toInt()) }
+        vm.edits.edit("PHONE_PLAN_LINES", "9")
+        val lateBlur = vm.edits.finisher("PHONE_PLAN_LINES")
+        val restore = vm.undo(undo)
+        lateBlur(); runCurrent()
+        assertEquals(WriteResult.SAVED, restore.await())
+        verify(preferences).restorePhoneLines(StoredPreference(2, true))
+        verify(preferences, never()).updatePhoneTotal(any())
+        verify(preferences, never()).updatePhoneShare(any())
+        verify(preferences, times(1)).updatePhoneLines(any())
+        assertNull(vm.lastSaveUndo.value)
+    }
+
+    @Test fun `shared latest offer is replaced and reset and leave suppress queued offers`() = runTest {
+        whenever(preferences.updatePhoneLines(any())).thenReturn(StoredPreference(2, true))
+        whenever(preferences.updatePhoneTotal(any())).thenReturn(StoredPreference(80.0, true))
+        val vm = model()
+        vm.setPhoneLines(3); runCurrent()
+        val first = requireNotNull(vm.lastSaveUndo.value)
+        vm.setPhoneTotal(125.0); runCurrent()
+        assertEquals("PHONE_PLAN_TOTAL", vm.lastSaveUndo.value?.key)
+        assertEquals(WriteResult.REJECTED, vm.undo(first).await())
+        assertEquals(GarageWriteFailure.NONE, vm.resetDefaults())
+        assertNull(vm.lastSaveUndo.value)
+        val release = CompletableDeferred<Unit>()
+        whenever(preferences.updatePhoneLines(4)).doSuspendableAnswer { release.await(); StoredPreference(3, true) }
+        vm.setPhoneLines(4); runCurrent()
+        val leave = async(start = CoroutineStart.UNDISPATCHED) { vm.finishAndAwait() }
+        release.complete(Unit); runCurrent()
+        assertEquals(GarageWriteFailure.NONE, leave.await())
+        assertNull(vm.lastSaveUndo.value)
     }
 
 }

@@ -236,6 +236,7 @@ class MainActivity : ComponentActivity() {
                             EconomySettingsScreen(
                                 onBack = { navController.popBackStack() },
                                 onOpenGarage = { navController.navigate(Screen.Garage.route) },
+                                onOpenVehicle = { id -> navController.navigate(Screen.VehicleEdit.route(id)) },
                             )
                         }
 

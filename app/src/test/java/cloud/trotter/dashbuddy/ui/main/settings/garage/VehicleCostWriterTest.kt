@@ -113,4 +113,27 @@ class VehicleCostWriterTest {
         runCurrent()
         assertTrue(saved)
     }
+    @Test fun `each accepted submission acknowledges equal-value success and reports failure`() = runTest {
+        val writer = VehicleCostWriter(backgroundScope)
+        val equal = writer.write { true }
+        runCurrent()
+        assertEquals(WriteResult.SAVED, equal.await())
+        val failed = writer.write { error("failure") }
+        val blocked = writer.write { true }
+        runCurrent()
+        assertEquals(WriteResult.FAILED, failed.await())
+        assertEquals(WriteResult.FAILED, blocked.await())
+        assertEquals(GarageWriteFailure.RETRY, writer.awaitIdle())
+    }
+
+    @Test fun `a submission after close is explicitly rejected`() = runTest {
+        val owner = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val writer = VehicleCostWriter(owner)
+        owner.cancel()
+        runCurrent()
+        val rejected = writer.write { fail("Closed writer must not execute"); true }
+        assertEquals(WriteResult.REJECTED, rejected.await())
+        assertEquals(0, writer.pending.value)
+    }
+
 }

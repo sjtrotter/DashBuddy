@@ -165,4 +165,14 @@ class VehicleEconomyTest {
             assertFalse(EconomyField.VEHICLE_MPG in result.userSetFields)
         }
     }
+    @Test fun `annual miles default belongs to the vehicle rather than a legacy shared mirror`() {
+        val shared = SharedEconomy(expectedAnnualMiles = 99000.0)
+        val profile = GasCar(fixed = FixedCosts(insuranceDeltaPerMonth = 100.0))
+        val resolved = economy(profile, shared)
+        assertEquals(UserEconomy.DEFAULT_ANNUAL_MI, resolved.expectedAnnualMiles, 0.0)
+        assertEquals(1200.0 / UserEconomy.DEFAULT_ANNUAL_MI, resolved.insuranceCostPerMile, 1e-12)
+        val explicit = economy(profile.copy(fixed = profile.fixed.copy(expectedAnnualMiles = 12000.0)), shared)
+        assertEquals(12000.0, explicit.expectedAnnualMiles, 0.0)
+    }
+
 }

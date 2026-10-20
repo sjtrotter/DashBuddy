@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Raw absence and the field marker are captured atomically, without a rendered default. */
+data class StoredPreference<T>(val value: T?, val userSet: Boolean)
+
 /** The legacy count_real_expenses_in_kept key is no longer read; DataStore ignores it. */
 @Singleton
 class AppPreferencesDataSource @Inject constructor(
@@ -245,6 +248,20 @@ class AppPreferencesDataSource @Inject constructor(
             (this[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()) + fields.map { it.name }
     }
 
+    private fun <T> Preferences.capture(key: Preferences.Key<T>, field: EconomyField? = null) =
+        StoredPreference(this[key], field != null &&
+            (this[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()).any { EconomyField.fromPersistedName(it) == field })
+
+    private fun <T> MutablePreferences.restore(key: Preferences.Key<T>, field: EconomyField?, previous: StoredPreference<T>) {
+        if (previous.value == null) remove(key) else this[key] = previous.value
+        if (field != null) {
+            val others = (this[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet()).filterNot {
+                EconomyField.fromPersistedName(it) == field
+            }.toSet()
+            this[Keys.USER_SET_ECONOMY_FIELDS] = if (previous.userSet) others + field.name else others
+        }
+    }
+
     suspend fun updateGasPrice(price: Float) {
         ds.edit { it[Keys.GAS_PRICE] = price }
     }
@@ -254,11 +271,17 @@ class AppPreferencesDataSource @Inject constructor(
      * price AND flips auto OFF in one edit, so the daily EIA worker won't clobber the manual value on
      * its next run. Same store / same keys the economy wizard owns — no second gas-price copy.
      */
-    suspend fun updateGasPriceManual(price: Float) {
+    suspend fun updateGasPriceManual(price: Float): StoredPreference<Float> {
+        lateinit var previous: StoredPreference<Float>
         ds.edit {
+            previous = it.capture(Keys.GAS_PRICE, EconomyField.GAS_PRICE)
             it[Keys.GAS_PRICE] = price
             it[Keys.IS_GAS_PRICE_AUTO] = false
         }
+        return previous
+    }
+    suspend fun restoreGasPriceManual(previous: StoredPreference<Float>) {
+        ds.edit { it.restore(Keys.GAS_PRICE, EconomyField.GAS_PRICE, previous) }
     }
 
     /**
@@ -378,9 +401,18 @@ class AppPreferencesDataSource @Inject constructor(
     // Each write atomically marks the affected EconomyField(s) as user-set so the UI
     // can show a "(default)" badge on still-default fields.
 
-    suspend fun updateElectricityPrice(value: Double) {
+    suspend fun updateElectricityPrice(value: Double): StoredPreference<Double> {
         require(value.isFinite() && value >= 0)
-        ds.edit { it[Keys.ELECTRICITY_PRICE_PER_KWH] = value; it.markUserSet(EconomyField.ELECTRICITY_PRICE) }
+        lateinit var previous: StoredPreference<Double>
+        ds.edit {
+            previous = it.capture(Keys.ELECTRICITY_PRICE_PER_KWH, EconomyField.ELECTRICITY_PRICE)
+            it[Keys.ELECTRICITY_PRICE_PER_KWH] = value
+            it.markUserSet(EconomyField.ELECTRICITY_PRICE)
+        }
+        return previous
+    }
+    suspend fun restoreElectricityPrice(previous: StoredPreference<Double>) {
+        ds.edit { it.restore(Keys.ELECTRICITY_PRICE_PER_KWH, EconomyField.ELECTRICITY_PRICE, previous) }
     }
 
     suspend fun updateTireCost(setCost: Double?, lifetimeMi: Double?) {
@@ -447,21 +479,56 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
-    suspend fun updatePhonePlan(total: Double, lines: Int, dashPercent: Double) {
+    suspend fun updatePhoneTotal(value: Double): StoredPreference<Double> {
+        require(value.isFinite() && value >= 0)
+        lateinit var previous: StoredPreference<Double>
         ds.edit {
-            it[Keys.PHONE_PLAN_TOTAL] = total
-            it[Keys.PHONE_PLAN_LINES] = lines
-            it[Keys.PHONE_BUSINESS_PERCENT] = dashPercent
-            it.markUserSet(
-                EconomyField.PHONE_PLAN_TOTAL,
-                EconomyField.PHONE_PLAN_LINES,
-                EconomyField.PHONE_BUSINESS_PERCENT,
-            )
+            previous = it.capture(Keys.PHONE_PLAN_TOTAL, EconomyField.PHONE_PLAN_TOTAL)
+            it[Keys.PHONE_PLAN_TOTAL] = value
+            it.markUserSet(EconomyField.PHONE_PLAN_TOTAL)
         }
+        return previous
+    }
+    suspend fun restorePhoneTotal(previous: StoredPreference<Double>) {
+        ds.edit { it.restore(Keys.PHONE_PLAN_TOTAL, EconomyField.PHONE_PLAN_TOTAL, previous) }
+    }
+    suspend fun updatePhoneLines(value: Int): StoredPreference<Int> {
+        require(value >= 1)
+        lateinit var previous: StoredPreference<Int>
+        ds.edit {
+            previous = it.capture(Keys.PHONE_PLAN_LINES, EconomyField.PHONE_PLAN_LINES)
+            it[Keys.PHONE_PLAN_LINES] = value
+            it.markUserSet(EconomyField.PHONE_PLAN_LINES)
+        }
+        return previous
+    }
+    suspend fun restorePhoneLines(previous: StoredPreference<Int>) {
+        ds.edit { it.restore(Keys.PHONE_PLAN_LINES, EconomyField.PHONE_PLAN_LINES, previous) }
+    }
+    suspend fun updatePhoneShare(value: Double): StoredPreference<Double> {
+        require(value.isFinite() && value in 0.0..100.0)
+        lateinit var previous: StoredPreference<Double>
+        ds.edit {
+            previous = it.capture(Keys.PHONE_BUSINESS_PERCENT, EconomyField.PHONE_BUSINESS_PERCENT)
+            it[Keys.PHONE_BUSINESS_PERCENT] = value
+            it.markUserSet(EconomyField.PHONE_BUSINESS_PERCENT)
+        }
+        return previous
+    }
+    suspend fun restorePhoneShare(previous: StoredPreference<Double>) {
+        ds.edit { it.restore(Keys.PHONE_BUSINESS_PERCENT, EconomyField.PHONE_BUSINESS_PERCENT, previous) }
+    }
+    suspend fun setGasPriceAuto(value: Boolean): StoredPreference<Boolean> {
+        lateinit var previous: StoredPreference<Boolean>
+        ds.edit { previous = it.capture(Keys.IS_GAS_PRICE_AUTO); it[Keys.IS_GAS_PRICE_AUTO] = value }
+        return previous
+    }
+    suspend fun restoreGasPriceAuto(previous: StoredPreference<Boolean>) {
+        ds.edit { it.restore(Keys.IS_GAS_PRICE_AUTO, null, previous) }
     }
 
     /** Each global override owns its value and marker independently. Null restores automatic. */
-    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?) {
+    suspend fun setTimeConstantOverride(field: EconomyField, value: Double?): StoredPreference<Double> {
         val key = when (field) {
             EconomyField.AVG_MIN_PER_MILE -> Keys.AVG_MIN_PER_MILE
             EconomyField.BASE_PICKUP_MIN -> Keys.BASE_PICKUP_MIN
@@ -469,7 +536,9 @@ class AppPreferencesDataSource @Inject constructor(
         }
         require(value == null || (value.isFinite() &&
             if (field == EconomyField.AVG_MIN_PER_MILE) value > 0 else value >= 0))
+        lateinit var previous: StoredPreference<Double>
         ds.edit { prefs ->
+            previous = prefs.capture(key, field)
             if (value == null) {
                 prefs.remove(key)
                 prefs[Keys.USER_SET_ECONOMY_FIELDS] =
@@ -481,6 +550,16 @@ class AppPreferencesDataSource @Inject constructor(
                 prefs.markUserSet(field)
             }
         }
+        return previous
+    }
+
+    suspend fun restoreTimeConstantOverride(field: EconomyField, previous: StoredPreference<Double>) {
+        val key = when (field) {
+            EconomyField.AVG_MIN_PER_MILE -> Keys.AVG_MIN_PER_MILE
+            EconomyField.BASE_PICKUP_MIN -> Keys.BASE_PICKUP_MIN
+            else -> throw IllegalArgumentException("Not a time constant: $field")
+        }
+        ds.edit { it.restore(key, field, previous) }
     }
 
     suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) {
@@ -490,6 +569,25 @@ class AppPreferencesDataSource @Inject constructor(
             it[Keys.AVG_MIN_PER_MILE] = avgMinPerMile
             it[Keys.BASE_PICKUP_MIN] = basePickupMin
             it.markUserSet(EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN)
+        }
+    }
+
+    /** Shared settings only; legacy vehicle keys and their markers stay intact. */
+    suspend fun resetSharedEconomyDefaults() {
+        val shared = setOf(EconomyField.ELECTRICITY_PRICE, EconomyField.PHONE_PLAN_TOTAL,
+            EconomyField.PHONE_PLAN_LINES, EconomyField.PHONE_BUSINESS_PERCENT,
+            EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN, EconomyField.GAS_PRICE)
+        ds.edit { prefs ->
+            prefs.remove(Keys.GAS_PRICE)
+            prefs.remove(Keys.IS_GAS_PRICE_AUTO)
+            prefs.remove(Keys.ELECTRICITY_PRICE_PER_KWH)
+            prefs.remove(Keys.PHONE_PLAN_TOTAL)
+            prefs.remove(Keys.PHONE_PLAN_LINES)
+            prefs.remove(Keys.PHONE_BUSINESS_PERCENT)
+            prefs.remove(Keys.AVG_MIN_PER_MILE)
+            prefs.remove(Keys.BASE_PICKUP_MIN)
+            prefs[Keys.USER_SET_ECONOMY_FIELDS] = (prefs[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet())
+                .filterNot { EconomyField.fromPersistedName(it) in shared }.toSet()
         }
     }
 

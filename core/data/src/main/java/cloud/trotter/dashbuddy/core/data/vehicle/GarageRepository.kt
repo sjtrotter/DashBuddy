@@ -132,12 +132,15 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
     }
 
     /** Like addVehicle, Vehicle validates the trimmed name's code-point limit before any write. */
-    suspend fun rename(id: String, name: String?): Boolean = mutex.withLock {
+    suspend fun rename(id: String, name: String?): Boolean = updateName(id) { name?.trim() }
+
+    /** The name transform sees the value actually replaced under the same lock as profile writes. */
+    suspend fun updateName(id: String, transform: (String?) -> String?): Boolean = mutex.withLock {
         val saved = savedForWrite()
         val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
         val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
         if (index < 0) return@withLock false
-        val renamed = list[index].copy(name = name?.trim())
+        val renamed = list[index].copy(name = transform(list[index].name))
         if (renamed == list[index]) return@withLock true
         val updated = list.toMutableList()
         updated[index] = renamed
@@ -145,12 +148,14 @@ class GarageRepository @Inject constructor(private val dataSource: VehicleDataSo
         true
     }
 
-    suspend fun setOdometerShown(id: String, shown: Boolean): Boolean = mutex.withLock {
+    suspend fun setOdometerShown(id: String, shown: Boolean): Boolean = updateOdometerShown(id) { shown }
+
+    suspend fun updateOdometerShown(id: String, transform: (Boolean?) -> Boolean?): Boolean = mutex.withLock {
         val saved = savedForWrite()
         val list = readVehicles(saved.json) ?: throw VehiclesUnreadableException()
         val index = list.indexOfFirst { it.id == id && it.retiredAt == null }
         if (index < 0) return@withLock false
-        val edited = list[index].copy(odometerShown = shown)
+        val edited = list[index].copy(odometerShown = transform(list[index].odometerShown))
         if (edited == list[index]) return@withLock true
         val updated = list.toMutableList()
         updated[index] = edited

@@ -3,17 +3,16 @@ package cloud.trotter.dashbuddy.ui.main.settings
 import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.data.strategy.StrategyRepository
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
-import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantSeeds
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
-import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
-import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.state.Platform
 import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsPlatformUiState
 import cloud.trotter.dashbuddy.ui.components.economy.TimeConstantsUiState
@@ -23,13 +22,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.economy.LastSaveUndo
+import cloud.trotter.dashbuddy.ui.components.economy.LastSaveUndoState
+import cloud.trotter.dashbuddy.ui.components.economy.EditSession
+import cloud.trotter.dashbuddy.ui.main.settings.garage.*
 
-/**
- * Backs the Personal Economy settings screen. Vehicle-shaped fields are
- * persisted on the active garage profile by [AppPreferencesRepository].
- */
+/** Owns live shared settings; vehicle values are edited by their ID-addressed details page. */
 @HiltViewModel
 class EconomySettingsViewModel @Inject constructor(
     private val repo: AppPreferencesRepository,
@@ -47,11 +47,19 @@ class EconomySettingsViewModel @Inject constructor(
         UserEconomy(),
     )
 
-    val fuelType = repo.fuelType.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        FuelType.REGULAR,
-    )
+    private val writer = VehicleCostWriter(viewModelScope)
+    val edits = EditSession(viewModelScope)
+    val pending = writer.pending
+    val failure = writer.failure
+    private val undoState = LastSaveUndoState(writer, edits)
+    val lastSaveUndo = undoState.lastSave
+    fun undo(save: LastSaveUndo) = if (!_busy.value) undoState.undo(save) else CompletableDeferred(WriteResult.REJECTED)
+    fun dismissUndo(save: LastSaveUndo) = undoState.dismiss(save)
+    fun clearUndo() = undoState.clear()
+    fun enterScreen() = undoState.resume()
+    private val _busy = MutableStateFlow(false)
+    val busy = _busy.asStateFlow()
+    val gasAuto = repo.isGasPriceAuto.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val timeConstants = strategyRepository.evaluationConfig.filterNotNull().map { config ->
         val economy = config.userEconomy
@@ -70,79 +78,56 @@ class EconomySettingsViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TimeConstantsUiState())
 
-    fun setTimeConstantOverride(field: EconomyField, value: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.setTimeConstantOverride(field, value)
+    private var finishing = false
+
+    private fun <T> sharedWrite(key: String, label: Int, action: suspend () -> T,
+        restore: suspend (T) -> Unit): Deferred<WriteResult> =
+        if (!_busy.value || finishing) undoState.write {
+            val previous = action()
+            LastSaveUndo.captured(key, label, previous) { restore(it); true }
+        } else CompletableDeferred(WriteResult.REJECTED)
+
+    fun setTimeConstantOverride(field: EconomyField, value: Double?) = sharedWrite(field.name,
+        if (field == EconomyField.AVG_MIN_PER_MILE) R.string.economy_time_pace else R.string.economy_time_overhead,
+        { repo.setTimeConstantOverride(field, value) }, { repo.restoreTimeConstantOverride(field, it) })
+    fun setElectricityPrice(value: Double) = sharedWrite("ELECTRICITY_PRICE", R.string.vehicle_facts_electricity_price,
+        { repo.updateElectricityPrice(value) }, { repo.restoreElectricityPrice(it) })
+    fun setGasPrice(value: Double) = sharedWrite("GAS_PRICE", R.string.economy_shared_gas_price,
+        { repo.updateGasPriceManual(value.toFloat()) }, { repo.restoreGasPriceManual(it) })
+    fun setGasAuto(value: Boolean) = sharedWrite("GAS_AUTO", R.string.economy_shared_auto_gas_price,
+        { repo.setGasPriceAuto(value) }, { repo.restoreGasPriceAuto(it) })
+    fun setPhoneTotal(value: Double) = sharedWrite("PHONE_PLAN_TOTAL", R.string.economy_editor_phone_plan_total_label,
+        { repo.updatePhoneTotal(value) }, { repo.restorePhoneTotal(it) })
+    fun setPhoneLines(value: Int) = sharedWrite("PHONE_PLAN_LINES", R.string.economy_editor_phone_lines_label,
+        { repo.updatePhoneLines(value) }, { repo.restorePhoneLines(it) })
+    fun setPhoneShare(value: Double) = sharedWrite("PHONE_BUSINESS_PERCENT", R.string.economy_undo_phone_share,
+        { repo.updatePhoneShare(value) }, { repo.restorePhoneShare(it) })
+    fun retry() { writer.retry(); edits.retryFailed() }
+    fun resumeEditing() { undoState.resume(); _busy.value = false; edits.acceptingEdits = true }
+    suspend fun discardChanges() {
+        clearUndo()
+        edits.discardAll()
+        writer.discard()
     }
-
-    fun setVehicleClass(vc: VehicleClass) = viewModelScope.launch(NonCancellable) {
-        repo.updateVehicleClass(vc)
+    suspend fun awaitIdle() = writer.awaitIdle()
+    suspend fun finishAndAwait(): GarageWriteFailure = withContext(NonCancellable) {
+        clearUndo()
+        edits.acceptingEdits = false
+        _busy.value = true
+        finishing = true
+        val submissions = try { edits.submitAll() } finally { finishing = false }
+        val finished = submissions.map { it.await() }.all { it == WriteResult.SAVED }
+        val result = writer.awaitIdle()
+        if (!finished && result == GarageWriteFailure.NONE) GarageWriteFailure.RETRY else result
     }
-
-    fun setMpg(mpg: Double) = viewModelScope.launch(NonCancellable) {
-        if (mpg.isFinite() && mpg > 0.0 && mpg <= Float.MAX_VALUE) {
-            repo.updateEstimatedMpg(mpg.toFloat())
-        }
-    }
-
-    fun setFuelType(fuelType: FuelType) = viewModelScope.launch(NonCancellable) {
-        repo.updateFuelType(fuelType)
-    }
-
-    fun setChain(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateChain(cost, life) }
-    fun setBattery(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateBattery(cost, life) }
-    fun setBelt(cost: Double?, life: Double?) = viewModelScope.launch(NonCancellable) { repo.updateBelt(cost, life) }
-    fun setConsumption(value: Double) = viewModelScope.launch(NonCancellable) { repo.updateConsumption(value) }
-    fun setElectricityPrice(value: Double) = viewModelScope.launch(NonCancellable) { repo.updateElectricityPrice(value) }
-
-    fun setTires(setCost: Double?, lifetimeMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateTireCost(setCost, lifetimeMi)
-    }
-
-    fun setOil(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateOilCost(cost, intervalMi)
-    }
-
-    fun setBrakes(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateBrakesCost(cost, intervalMi)
-    }
-
-    fun setFluids(cost: Double?, intervalMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateFluidsCost(cost, intervalMi)
-    }
-
-    fun setMiscRepairs(yearly: Double?, yearlyMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateMiscMaintenance(yearly, yearlyMi)
-    }
-
-    fun setDepreciationInclude(include: Boolean) = viewModelScope.launch(NonCancellable) {
-        repo.updateDepreciationInclude(include)
-    }
-
-    fun setDepreciationValues(price: Double?, lifetimeMi: Double?) = viewModelScope.launch(NonCancellable) {
-        repo.updateDepreciationValues(price, lifetimeMi)
-    }
-
-    fun setInsurance(perMonth: Double) = viewModelScope.launch(NonCancellable) {
-        repo.updateInsuranceDelta(perMonth)
-    }
-
-    fun setRegistration(perYear: Double) = viewModelScope.launch(NonCancellable) {
-        repo.updateRegistrationDelta(perYear)
-    }
-
-    fun setExpectedAnnualMiles(miles: Double) = viewModelScope.launch(NonCancellable) {
-        repo.updateExpectedAnnualMi(miles)
-    }
-
-    fun setPhone(total: Double, lines: Int, dashPercent: Double) = viewModelScope.launch(NonCancellable) {
-        repo.updatePhonePlan(total, lines, dashPercent)
-    }
-
-    fun setTimeConstants(avgMinPerMile: Double, basePickupMin: Double) = viewModelScope.launch(NonCancellable) {
-        repo.updateTimeConstants(avgMinPerMile, basePickupMin)
-    }
-
-    fun resetDefaults() = viewModelScope.launch(NonCancellable) {
-        repo.resetEconomyDefaults()
+    suspend fun resetDefaults(): GarageWriteFailure = withContext(NonCancellable) {
+        clearUndo()
+        _busy.value = true
+        edits.acceptingEdits = false
+        edits.discardAll()
+        val reset = writer.write { repo.resetSharedEconomyDefaults(); true }
+        val result = writer.awaitIdle()
+        resumeEditing()
+        if (reset.await() != WriteResult.SAVED && result == GarageWriteFailure.NONE) GarageWriteFailure.RETRY else result
     }
 }

@@ -16,6 +16,7 @@ import cloud.trotter.dashbuddy.state.vehicle.VehicleSwapLock
 import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -51,8 +52,8 @@ class VehicleDetailsScreenTest {
     private lateinit var vm: VehicleDetailsViewModel
     private var done = false
 
-    private fun showEditor() {
-        whenever(repository.garage).thenReturn(flow { emit(loaded.await()) })
+    private fun showEditor(updates: MutableStateFlow<Garage>? = null) {
+        whenever(repository.garage).thenReturn(updates ?: flow { emit(loaded.await()) })
         compose.runOnIdle {
             vm = VehicleDetailsViewModel(SavedStateHandle(mapOf(Screen.VehicleEdit.ARG to vehicle.id)),
                 repository, preferences, Clock.fixed(Instant.ofEpochMilli(1234), ZoneOffset.UTC), lock, dashVehicles, readings, odometer)
@@ -60,9 +61,9 @@ class VehicleDetailsScreenTest {
         compose.setContent { DashBuddyTheme { VehicleDetailsScreen(onDone = { done = true }, onAddVehicle = { addVehicle = true }, viewModel = vm) } }
     }
 
-    private fun finishLoading(retired: Boolean = false, active: Boolean = true) {
+    private fun finishLoading(retired: Boolean = false, active: Boolean = true, profile: VehicleProfile = vehicle.profile) {
         compose.runOnIdle {
-            loaded.complete(Garage(listOf(if (retired) vehicle.copy(retiredAt = 2) else vehicle),
+            loaded.complete(Garage(listOf(vehicle.copy(profile = profile, retiredAt = if (retired) 2L else null)),
                 vehicle.id.takeIf { active && !retired }, true))
         }
         compose.waitUntil { vm.loaded.value && vm.facts.value != null }
@@ -143,6 +144,7 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Add vehicle").performScrollTo().performClick()
         compose.waitForIdle()
         compose.waitUntil { addVehicle }
+        compose.onNodeWithText("Name").assertIsEnabled()
     }
 
     @Test fun `failed write shows leave dialog and discard leaves`() {
@@ -152,7 +154,7 @@ class VehicleDetailsScreenTest {
         }
         showEditor()
         finishLoading()
-        compose.runOnIdle { vm.setOil(25.0, 5000.0) }
+        compose.runOnIdle { vm.setOilCost(25.0) }
         compose.waitUntil { vm.failure.value == GarageWriteFailure.RETRY }
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Some changes were not saved.").assertIsDisplayed()
@@ -164,11 +166,11 @@ class VehicleDetailsScreenTest {
     @Test fun `leave dialog retry waits then navigates`() {
         runBlocking {
             whenever(repository.updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>()))
-                .thenThrow(IllegalStateException()).thenReturn(true)
+                .thenThrow(IllegalStateException()).thenAnswer { it.getArgument<(VehicleProfile) -> VehicleProfile>(1)(GasCar()); true }
         }
         showEditor()
         finishLoading()
-        compose.runOnIdle { vm.setOil(25.0, 5000.0) }
+        compose.runOnIdle { vm.setOilCost(25.0) }
         compose.waitUntil { vm.failure.value == GarageWriteFailure.RETRY }
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(hasText("Try again") and hasAnyAncestor(isDialog())).performClick()
@@ -184,4 +186,134 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Add vehicle").assertIsNotEnabled()
         compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
     }
+    @Test fun `odometer follows facts and toggles immediately without navigation`() {
+        runBlocking { whenever(repository.updateOdometerShown(eq(vehicle.id), argThat { this(null) == false })).thenReturn(true) }
+        showEditor()
+        compose.onNodeWithText("Odometer").assertDoesNotExist()
+        finishLoading()
+        val toggle = compose.onNodeWithText("Odometer")
+        toggle.performScrollTo().assertIsEnabled().assertIsOn()
+        compose.onNodeWithText("Show odometer readings in the bubble").assertIsDisplayed()
+        val fact = compose.onNodeWithText("Cost per mile").fetchSemanticsNode()
+        assertTrue(fact.positionInRoot.y < toggle.fetchSemanticsNode().positionInRoot.y)
+        toggle.performClick()
+        compose.waitForIdle()
+        runBlocking {
+            verify(repository).updateOdometerShown(eq(vehicle.id), argThat { this(null) == false })
+            verify(repository, never()).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>())
+        }
+        assertFalse(done)
+    }
+
+    @Test fun `retired page has no odometer switch`() {
+        showEditor()
+        finishLoading(retired = true)
+        compose.onNodeWithText("Odometer").assertDoesNotExist()
+    }
+
+    @Test fun `retire finishes typed name and cost and awaits acceptance before retirement`() {
+        val release = CompletableDeferred<Unit>()
+        runBlocking {
+            whenever(repository.updateName(eq(vehicle.id), argThat { this("Original") == "New name" })).doSuspendableAnswer { release.await(); true }
+            whenever(repository.updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>())).doAnswer { it.getArgument<(VehicleProfile) -> VehicleProfile>(1)(GasCar()); true }
+            whenever(repository.retire(vehicle.id, 1234)).thenReturn(true)
+        }
+        showEditor()
+        finishLoading()
+        compose.onNodeWithText("Name").performTextReplacement("New name")
+        compose.onNodeWithText("Oil changes").performScrollTo().performClick()
+        compose.onNodeWithText("Each").performScrollTo().performTextReplacement("65")
+        compose.onNodeWithText("Retire vehicle").performScrollTo().performClick()
+        compose.onNodeWithText("Retire").performClick()
+        compose.waitForIdle()
+        assertFalse(done)
+        runBlocking { verify(repository, never()).retire(any(), any()) }
+        compose.runOnIdle { release.complete(Unit) }
+        compose.waitUntil { done }
+        runBlocking {
+            inOrder(repository) {
+                verify(repository).updateName(eq(vehicle.id), argThat { this("Original") == "New name" })
+                verify(repository).updateProfile(eq(vehicle.id), any<(VehicleProfile) -> VehicleProfile>())
+                verify(repository).retire(vehicle.id, 1234)
+            }
+        }
+    }
+
+    @Test fun `failed typed name prevents retire and shows unsaved dialog`() {
+        runBlocking { whenever(repository.updateName(eq(vehicle.id), argThat { this("Original") == "New name" })).thenThrow(IllegalStateException()) }
+        showEditor()
+        finishLoading()
+        compose.onNodeWithText("Name").performTextReplacement("New name")
+        compose.onNodeWithText("Retire vehicle").performScrollTo().performClick()
+        compose.onNodeWithText("Retire").performClick()
+        compose.onNodeWithText("Some changes were not saved.").assertIsDisplayed()
+        runBlocking { verify(repository, never()).retire(any(), any()) }
+        assertFalse(done)
+    }
+
+    @Test fun `electricity price is read only and directs shared edits to Economy`() {
+        showEditor()
+        finishLoading(profile = ElectricCar())
+        compose.onNodeWithText("Shared. Change it on the Economy screen.").performScrollTo().assertIsDisplayed()
+        compose.onAllNodes(hasSetTextAction() and hasText("Electricity price")).assertCountEquals(0)
+    }
+
+    @Test fun `reset has the vehicle-only confirmation`() {
+        showEditor()
+        finishLoading()
+        compose.onNodeWithText("Reset to estimates").performScrollTo().performClick()
+        compose.onNodeWithText("Reset this vehicle's costs to the estimates? Its name, type and fuel economy stay.").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        runBlocking { verify(repository, never()).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>()) }
+    }
+
+
+    @Test fun `finished oil field offers snackbar undo and restores the shown estimate`() {
+        val initial = vehicle.copy(profile = GasCar(wear = WearProfile(oilIntervalMi = 5000.25)))
+        val updates = MutableStateFlow(Garage(listOf(initial), vehicle.id, true))
+        runBlocking {
+            whenever(repository.updateProfile(eq(vehicle.id), any<(VehicleProfile) -> VehicleProfile>())).doAnswer {
+                val current = updates.value.vehicles.single()
+                val changed = it.getArgument<(VehicleProfile) -> VehicleProfile>(1)(current.profile)
+                updates.value = updates.value.copy(vehicles = listOf(current.copy(profile = changed)))
+                true
+            }
+        }
+        showEditor(updates)
+        compose.waitUntil { vm.economy.value != null }
+        compose.onNodeWithText("Oil changes").performScrollTo().performClick()
+        val input = compose.onNode(hasSetTextAction() and hasText("Each"))
+        input.performScrollTo().performTextReplacement("65")
+        compose.onNodeWithText("Oil cost saved").assertDoesNotExist()
+        input.performImeAction()
+        compose.onNodeWithText("Oil cost saved").assertIsDisplayed()
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitUntil { updates.value.vehicles.single().profile.wear.oilCost == null }
+        input.assertTextContains("60")
+        compose.onNodeWithText("Oil cost saved").assertDoesNotExist()
+        assertEquals(5000.25, updates.value.vehicles.single().profile.wear.oilIntervalMi)
+    }
+
+    @Test fun `name finished field offers Name saved and undo restores displayed name`() {
+        val updates = MutableStateFlow(Garage(listOf(vehicle), vehicle.id, true))
+        runBlocking {
+            whenever(repository.updateName(eq(vehicle.id), any())).doAnswer {
+                val current = updates.value.vehicles.single()
+                val name = it.getArgument<(String?) -> String?>(1)(current.name)
+                updates.value = updates.value.copy(vehicles = listOf(current.copy(name = name)))
+                true
+            }
+        }
+        showEditor(updates)
+        compose.waitUntil { vm.vehicle.value != null }
+        val input = compose.onNode(hasSetTextAction() and hasText("Name"))
+        input.performTextReplacement("Renamed")
+        input.performImeAction()
+        compose.onNodeWithText("Name saved").assertIsDisplayed()
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitUntil { updates.value.vehicles.single().name == "Original" }
+        input.assertTextContains("Original")
+        compose.onNodeWithText("Name saved").assertDoesNotExist()
+    }
+
 }

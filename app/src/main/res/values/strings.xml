@@ -212,7 +212,7 @@
     <string name="settings_home_item_strategy_subtitle">Rules, priorities, test offer</string>
     <string name="settings_home_economy_true_cost_format" translatable="false">Estimated costs: %1$s/mi</string>
     <string name="settings_home_economy_defaults_suffix_format">" · %1$d defaults"</string>
-    <string name="settings_home_economy_fallback_subtitle">Tires, oil, depreciation, insurance, phone</string>
+    <string name="settings_home_economy_fallback_subtitle">Gas, electricity, phone, time</string>
     <string name="settings_home_item_economy_title">Car costs</string>
     <string name="settings_home_group_data_privacy">Data &amp; Privacy</string>
     <string name="settings_home_item_evidence_title">Screenshots</string>
@@ -870,7 +870,7 @@
     <string name="vehicle_details_identity">%1$s · %2$s</string>
     <string name="vehicle_details_identity_hint">To drive a different vehicle, add it as a new one.</string>
     <string name="vehicle_details_costs">This car\'s costs</string>
-    <string name="vehicle_details_electricity_hint">Applies to all electric vehicles</string>
+    <string name="vehicle_details_electricity_hint">Shared. Change it on the Economy screen.</string>
     <string name="vehicle_details_saving">Saving…</string>
     <string name="vehicle_details_not_saved">Not saved.</string>
     <string name="vehicle_details_retry">Try again</string>
@@ -912,4 +912,26 @@
     <string name="vehicle_facts_depreciation_per_mile">Depreciation per mile</string>
     <string name="vehicle_facts_insurance">Insurance delta</string>
     <string name="vehicle_facts_registration">Registration delta</string>
+    <string name="vehicle_details_reset">Reset to estimates</string>
+    <string name="vehicle_details_reset_confirmation">Reset this vehicle\'s costs to the estimates? Its name, type and fuel economy stay.</string>
+    <string name="economy_shared_gas_price">Gas price</string>
+    <string name="economy_shared_auto_gas_price">Auto gas price</string>
+    <string name="economy_field_saved">%1$s saved</string>
+    <string name="economy_field_undo">Undo</string>
+    <string name="economy_undo_tire_cost">Tire cost</string>
+    <string name="economy_undo_tire_lifetime">Tire lifetime</string>
+    <string name="economy_undo_oil_cost">Oil cost</string>
+    <string name="economy_undo_oil_interval">Oil interval</string>
+    <string name="economy_undo_brakes_cost">Brakes cost</string>
+    <string name="economy_undo_brakes_interval">Brakes interval</string>
+    <string name="economy_undo_fluids_cost">Fluids cost</string>
+    <string name="economy_undo_fluids_interval">Fluids interval</string>
+    <string name="economy_undo_lifetime_miles">Lifetime miles</string>
+    <string name="economy_undo_chain_cost">Chain cost</string>
+    <string name="economy_undo_chain_lifetime">Chain lifetime</string>
+    <string name="economy_undo_battery_cost">Battery cost</string>
+    <string name="economy_undo_battery_lifetime">Battery lifetime</string>
+    <string name="economy_undo_belt_cost">Belt cost</string>
+    <string name="economy_undo_belt_lifetime">Belt lifetime</string>
+    <string name="economy_undo_phone_share">Business share</string>
 </resources>

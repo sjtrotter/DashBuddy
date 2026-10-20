@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.ui.components.economy
 
+import kotlinx.coroutines.Deferred
+import cloud.trotter.dashbuddy.ui.main.settings.garage.WriteResult
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,9 +15,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,37 +32,37 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 
-/**
- * The shared personal-economy editor (#357): the ten cost accordions used by
- * BOTH the setup wizard's ECONOMY_COSTS step and the Personal Economy settings
- * screen. Defined exactly once so the two surfaces can never diverge again.
- *
- * Pure data-in / lambdas-out: values and derived per-mile summaries come from
- * [economy] (the wizard builds a live [UserEconomy] from its draft state; the
- * settings screen passes the persisted one), edits flow up through the
- * per-section callbacks. Chrome — Card vs Scaffold, headers, footers — stays
- * with the caller. [VehicleClassPicker] and [TrueCostFooter] live here too
- * because both surfaces render them identically.
- */
+/** Vehicle costs, shared by the live details host and the staged wizard. */
 @Composable
 fun EconomyEditor(
     economy: UserEconomy,
-    onTiresChange: (setCost: Double?, lifetimeMi: Double?) -> Unit,
-    onOilChange: (cost: Double?, intervalMi: Double?) -> Unit,
-    onBrakesChange: (cost: Double?, intervalMi: Double?) -> Unit,
-    onFluidsChange: (cost: Double?, intervalMi: Double?) -> Unit,
-    onMiscChange: (yearly: Double?, yearlyMi: Double?) -> Unit,
-    onDepreciationIncludeChange: (Boolean) -> Unit,
-    onDepreciationValuesChange: (price: Double?, lifetimeMi: Double?) -> Unit,
-    onInsuranceChange: (perMonth: Double) -> Unit,
-    onRegistrationChange: (perYear: Double) -> Unit,
-    onPhoneChange: (total: Double, lines: Int, dashPercent: Double) -> Unit,
-    onExpectedAnnualMilesChange: (miles: Double) -> Unit,
-    onChainChange: (Double?, Double?) -> Unit = { _, _ -> },
-    onBatteryChange: (Double?, Double?) -> Unit = { _, _ -> },
-    onBeltChange: (Double?, Double?) -> Unit = { _, _ -> },
-    onConsumptionChange: (Double) -> Unit = {},
-    onElectricityPriceChange: (Double) -> Unit = {},
+    onTireCostChange: NumberSave = { stagedSave {} },
+    onTireLifetimeChange: NumberSave = { stagedSave {} },
+    onOilCostChange: NumberSave = { stagedSave {} },
+    onOilIntervalChange: NumberSave = { stagedSave {} },
+    onBrakesCostChange: NumberSave = { stagedSave {} },
+    onBrakesIntervalChange: NumberSave = { stagedSave {} },
+    onFluidsCostChange: NumberSave = { stagedSave {} },
+    onFluidsIntervalChange: NumberSave = { stagedSave {} },
+    onMiscYearlyChange: NumberSave = { stagedSave {} },
+    onMiscMilesChange: NumberSave = { stagedSave {} },
+    onDepreciationIncludeChange: (Boolean) -> Unit = {},
+    onPurchasePriceChange: NumberSave = { stagedSave {} },
+    onLifetimeMilesChange: NumberSave = { stagedSave {} },
+    onInsuranceChange: NumberSave = { stagedSave {} },
+    onRegistrationChange: NumberSave = { stagedSave {} },
+    onPhoneTotalChange: NumberSave = { stagedSave {} },
+    onPhoneLinesChange: (Int) -> Deferred<WriteResult> = { stagedSave {} },
+    onPhoneShareChange: (Double) -> Unit = {},
+    onExpectedAnnualMilesChange: NumberSave = { stagedSave {} },
+    onChainCostChange: NumberSave = { stagedSave {} },
+    onChainLifetimeChange: NumberSave = { stagedSave {} },
+    onBatteryCostChange: NumberSave = { stagedSave {} },
+    onBatteryLifetimeChange: NumberSave = { stagedSave {} },
+    onBeltCostChange: NumberSave = { stagedSave {} },
+    onBeltLifetimeChange: NumberSave = { stagedSave {} },
+    onConsumptionChange: NumberSave = { stagedSave {} },
+    onElectricityPriceChange: NumberSave = { stagedSave {} },
     showShared: Boolean = true,
     enabled: Boolean = true,
 ) {
@@ -71,11 +72,17 @@ fun EconomyEditor(
         DecimalInput(
             label = stringResource(if (EconomyField.WH_PER_MILE in fields) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi),
             value = if (EconomyField.WH_PER_MILE in fields) economy.whPerMile else economy.kwhPer100Mi,
-            onValueChange = onConsumptionChange, enabled = enabled,
+            onValueChange = onConsumptionChange, enabled = enabled, fieldKey = "CONSUMPTION",
         )
-        DecimalInput(label = stringResource(R.string.vehicle_electricity_price), value = economy.electricityPricePerKwh,
-            onValueChange = onElectricityPriceChange, enabled = enabled,
-            supportingText = if (showShared) null else stringResource(R.string.vehicle_details_electricity_hint))
+        if (showShared) DecimalInput(label = stringResource(R.string.vehicle_electricity_price), value = economy.electricityPricePerKwh,
+            onValueChange = onElectricityPriceChange, enabled = enabled, fieldKey = "ELECTRICITY_PRICE")
+        else {
+            Row(Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.vehicle_facts_electricity_price), Modifier.weight(1f))
+                Text(Formats.money(economy.electricityPricePerKwh) + "/kWh")
+            }
+            Text(stringResource(R.string.vehicle_details_electricity_hint), style = MaterialTheme.typography.bodySmall)
+        }
     }
 
 
@@ -88,7 +95,8 @@ fun EconomyEditor(
         PairedCurrencyAndIntervalInput(
             costLabel = stringResource(R.string.economy_editor_tires_cost_label),
             costValue = economy.tireSetCost,
-            onValueChange = onTiresChange, enabled = enabled,
+            onCostChange = onTireCostChange, onIntervalChange = onTireLifetimeChange,
+            costKey = "TIRE_COST", intervalKey = "TIRE_LIFETIME", enabled = enabled,
             intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
             intervalValue = economy.tireLifetimeMi
         )
@@ -104,7 +112,8 @@ fun EconomyEditor(
         PairedCurrencyAndIntervalInput(
             costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.oilCost,
-            onValueChange = onOilChange, enabled = enabled,
+            onCostChange = onOilCostChange, onIntervalChange = onOilIntervalChange,
+            costKey = "OIL_COST", intervalKey = "OIL_INTERVAL", enabled = enabled,
             intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.oilIntervalMi
         )
@@ -121,7 +130,8 @@ fun EconomyEditor(
         PairedCurrencyAndIntervalInput(
             costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.brakesCost,
-            onValueChange = onBrakesChange, enabled = enabled,
+            onCostChange = onBrakesCostChange, onIntervalChange = onBrakesIntervalChange,
+            costKey = "BRAKES_COST", intervalKey = "BRAKES_INTERVAL", enabled = enabled,
             intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.brakesIntervalMi
         )
@@ -137,7 +147,8 @@ fun EconomyEditor(
         PairedCurrencyAndIntervalInput(
             costLabel = stringResource(R.string.economy_editor_each_label),
             costValue = economy.fluidsCost,
-            onValueChange = onFluidsChange, enabled = enabled,
+            onCostChange = onFluidsCostChange, onIntervalChange = onFluidsIntervalChange,
+            costKey = "FLUIDS_COST", intervalKey = "FLUIDS_INTERVAL", enabled = enabled,
             intervalLabel = stringResource(R.string.economy_editor_every_label),
             intervalValue = economy.fluidsIntervalMi
         )
@@ -155,7 +166,8 @@ fun EconomyEditor(
         PairedCurrencyAndIntervalInput(
             costLabel = stringResource(R.string.economy_editor_misc_cost_label),
             costValue = economy.miscYearly,
-            onValueChange = onMiscChange, enabled = enabled,
+            onCostChange = onMiscYearlyChange, onIntervalChange = onMiscMilesChange,
+            costKey = "MISC_YEARLY", intervalKey = "MISC_YEARLY_MI", enabled = enabled,
             intervalLabel = stringResource(R.string.economy_editor_misc_interval_label),
             intervalValue = economy.miscYearlyMi,
             intervalSuffix = stringResource(R.string.economy_editor_misc_interval_suffix),
@@ -170,7 +182,8 @@ fun EconomyEditor(
             summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.chainCostPerMile)),
             isUserSet = EconomyField.CHAIN_COST in userSet || EconomyField.CHAIN_LIFETIME in userSet) {
             PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
-                costValue = economy.chainCost, onValueChange = onChainChange, enabled = enabled,
+                costValue = economy.chainCost, onCostChange = onChainCostChange, onIntervalChange = onChainLifetimeChange,
+                costKey = "CHAIN_COST", intervalKey = "CHAIN_LIFETIME", enabled = enabled,
                 intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
                 intervalValue = economy.chainLifeMi)
         }
@@ -181,7 +194,8 @@ fun EconomyEditor(
             summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.batteryCostPerMile)),
             isUserSet = EconomyField.BATTERY_COST in userSet || EconomyField.BATTERY_LIFETIME in userSet) {
             PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
-                costValue = economy.batteryCost, onValueChange = onBatteryChange, enabled = enabled,
+                costValue = economy.batteryCost, onCostChange = onBatteryCostChange, onIntervalChange = onBatteryLifetimeChange,
+                costKey = "BATTERY_COST", intervalKey = "BATTERY_LIFETIME", enabled = enabled,
                 intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
                 intervalValue = economy.batteryLifeMi)
         }
@@ -192,7 +206,8 @@ fun EconomyEditor(
             summary = stringResource(R.string.economy_editor_per_mile_format, Formats.money3(economy.beltCostPerMile)),
             isUserSet = EconomyField.BELT_COST in userSet || EconomyField.BELT_LIFETIME in userSet) {
             PairedCurrencyAndIntervalInput(costLabel = stringResource(R.string.economy_editor_each_label),
-                costValue = economy.beltCost, onValueChange = onBeltChange, enabled = enabled,
+                costValue = economy.beltCost, onCostChange = onBeltCostChange, onIntervalChange = onBeltLifetimeChange,
+                costKey = "BELT_COST", intervalKey = "BELT_LIFETIME", enabled = enabled,
                 intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
                 intervalValue = economy.beltLifeMi)
         }
@@ -221,7 +236,8 @@ fun EconomyEditor(
             PairedCurrencyAndIntervalInput(
                 costLabel = stringResource(R.string.economy_editor_purchase_price_label),
                 costValue = economy.purchasePrice,
-                onValueChange = onDepreciationValuesChange, enabled = enabled,
+                onCostChange = onPurchasePriceChange, onIntervalChange = onLifetimeMilesChange,
+                costKey = "PURCHASE_PRICE", intervalKey = "TOTAL_LIFETIME_MI", enabled = enabled,
                 intervalLabel = stringResource(R.string.economy_editor_lifetime_label),
                 intervalValue = economy.totalLifetimeMi,
                 helperText = stringResource(R.string.economy_editor_depreciation_helper),
@@ -238,7 +254,7 @@ fun EconomyEditor(
         CurrencyInput(enabled = enabled,
             label = stringResource(R.string.economy_editor_insurance_label),
             value = economy.insuranceDeltaPerMonth,
-            onValueChange = onInsuranceChange,
+            onValueChange = onInsuranceChange, fieldKey = "INSURANCE_DELTA",
             suffix = stringResource(R.string.economy_editor_per_month_suffix),
         )
         Text(
@@ -257,7 +273,7 @@ fun EconomyEditor(
         CurrencyInput(enabled = enabled,
             label = stringResource(R.string.economy_editor_registration_label),
             value = economy.registrationDeltaPerYear,
-            onValueChange = onRegistrationChange,
+            onValueChange = onRegistrationChange, fieldKey = "REGISTRATION_DELTA",
             suffix = stringResource(R.string.economy_editor_per_year_suffix),
         )
         Text(
@@ -267,56 +283,7 @@ fun EconomyEditor(
         )
     }
 
-    // -------- Phone & data --------
-    if (showShared) {
-    EconomyAccordionRow(enabled = enabled,
-        title = stringResource(R.string.economy_editor_phone_title),
-        summary = stringResource(R.string.economy_editor_per_mile_asterisk_format, Formats.money3(economy.phoneCostPerMile)),
-        isUserSet = EconomyField.PHONE_PLAN_TOTAL in userSet ||
-            EconomyField.PHONE_PLAN_LINES in userSet ||
-            EconomyField.PHONE_BUSINESS_PERCENT in userSet,
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CurrencyInput(enabled = enabled,
-                label = stringResource(R.string.economy_editor_phone_plan_total_label),
-                value = economy.phonePlanTotal,
-                onValueChange = {
-                    onPhoneChange(it, economy.phonePlanLines, economy.phoneBusinessPercent)
-                },
-                suffix = stringResource(R.string.economy_editor_per_month_suffix),
-                modifier = Modifier.weight(1f),
-            )
-            IntegerInput(enabled = enabled,
-                label = stringResource(R.string.economy_editor_phone_lines_label),
-                value = economy.phonePlanLines,
-                onValueChange = {
-                    onPhoneChange(economy.phonePlanTotal, it, economy.phoneBusinessPercent)
-                },
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Text(stringResource(R.string.economy_editor_phone_business_percent_format, economy.phoneBusinessPercent.toInt()))
-        Slider(enabled = enabled,
-            value = economy.phoneBusinessPercent.toFloat(),
-            onValueChange = {
-                onPhoneChange(economy.phonePlanTotal, economy.phonePlanLines, it.toDouble())
-            },
-            valueRange = 0f..100f,
-        )
-        val perLine = economy.phonePlanTotal / economy.phonePlanLines.coerceAtLeast(1)
-        Text(
-            text = stringResource(
-                R.string.economy_editor_phone_per_line_format,
-                Formats.money(perLine),
-                economy.phoneBusinessPercent.toInt(),
-                Formats.money(perLine * economy.phoneBusinessPercent / 100.0),
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-
-    }
+    if (showShared) SharedPhoneInputs(economy, onPhoneTotalChange, onPhoneLinesChange, onPhoneShareChange, enabled)
 
     // -------- Expected annual gig miles --------
     EconomyAccordionRow(enabled = enabled,
@@ -329,12 +296,9 @@ fun EconomyEditor(
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
         )
-        Slider(enabled = enabled,
-            value = economy.expectedAnnualMiles.toFloat(),
-            onValueChange = { onExpectedAnnualMilesChange(it.toDouble()) },
-            valueRange = 500f..30_000f,
-            steps = 58, // 500-mile increments
-        )
+        DecimalInput(label = stringResource(R.string.economy_editor_annual_miles_title),
+            value = economy.expectedAnnualMiles, onValueChange = onExpectedAnnualMilesChange,
+            enabled = enabled, fieldKey = "EXPECTED_ANNUAL_MI")
         Text(
             text = stringResource(R.string.economy_editor_annual_miles_helper),
             style = MaterialTheme.typography.bodySmall,
@@ -368,21 +332,73 @@ fun VehicleClassPicker(
     }
 }
 
+/** Shared settings use the same independent phone fields as the staged wizard. */
+@Composable
+fun SharedPhoneInputs(
+    economy: UserEconomy,
+    onPhoneTotalChange: NumberSave,
+    onPhoneLinesChange: (Int) -> Deferred<WriteResult>,
+    onPhoneShareChange: (Double) -> Unit,
+    enabled: Boolean = true,
+) {
+    val userSet = economy.userSetFields
+    EconomyAccordionRow(enabled = enabled,
+        title = stringResource(R.string.economy_editor_phone_title),
+        summary = stringResource(R.string.economy_editor_per_mile_asterisk_format, Formats.money3(economy.phoneCostPerMile)),
+        isUserSet = EconomyField.PHONE_PLAN_TOTAL in userSet ||
+            EconomyField.PHONE_PLAN_LINES in userSet ||
+            EconomyField.PHONE_BUSINESS_PERCENT in userSet,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CurrencyInput(enabled = enabled,
+                label = stringResource(R.string.economy_editor_phone_plan_total_label),
+                value = economy.phonePlanTotal,
+                onValueChange = onPhoneTotalChange, fieldKey = "PHONE_PLAN_TOTAL",
+                suffix = stringResource(R.string.economy_editor_per_month_suffix),
+                modifier = Modifier.weight(1f),
+            )
+            IntegerInput(enabled = enabled,
+                label = stringResource(R.string.economy_editor_phone_lines_label),
+                value = economy.phonePlanLines,
+                onValueChange = onPhoneLinesChange, fieldKey = "PHONE_PLAN_LINES",
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(stringResource(R.string.economy_editor_phone_business_percent_format, economy.phoneBusinessPercent.toInt()))
+        Slider(enabled = enabled,
+            value = economy.phoneBusinessPercent.toFloat(),
+            onValueChange = {
+                onPhoneShareChange(it.toDouble())
+            },
+            valueRange = 0f..100f,
+        )
+        val perLine = economy.phonePlanTotal / economy.phonePlanLines.coerceAtLeast(1)
+        Text(
+            text = stringResource(
+                R.string.economy_editor_phone_per_line_format,
+                Formats.money(perLine),
+                economy.phoneBusinessPercent.toInt(),
+                Formats.money(perLine * economy.phoneBusinessPercent / 100.0),
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+}
+
 /** Vehicle-specific inputs shared by settings and other economy surfaces. */
 @Composable
 fun VehicleMpgAndFuelInputs(
     mpg: Double,
     fuelType: FuelType,
-    onMpgChange: (Double) -> Unit,
+    onMpgChange: NumberSave,
     onFuelTypeChange: (FuelType) -> Unit,
     enabled: Boolean = true,
 ) {
-    val state = remember { FinishedNumberState(mpg.toString()) { text ->
-        nonnegativeNumber(text)?.takeIf { it > 0 }
-    } }
-    SideEffect { state.sync(mpg.toString()) }
-    FinishedNumberField(stringResource(R.string.economy_editor_mpg_label), state,
-        { state.commit(onMpgChange) }, Modifier.fillMaxWidth(), enabled = enabled)
+    CurrencyInput(stringResource(R.string.economy_editor_mpg_label), mpg, onMpgChange,
+        Modifier.fillMaxWidth(), showCurrencySymbol = false, enabled = enabled, fieldKey = "VEHICLE_MPG",
+        valid = { nonnegativeNumber(it)?.takeIf { value -> value > 0 } })
     Text(
         text = stringResource(R.string.economy_editor_fuel_type_title),
         style = MaterialTheme.typography.titleSmall,
@@ -427,25 +443,11 @@ fun TrueCostFooter(operatingCostPerMile: Double) {
 @Preview(showBackground = true, heightDp = 1200)
 @Composable
 private fun EconomyEditorPreview() = DashBuddyTheme {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            val economy = UserEconomy()
-            VehicleClassPicker(selected = economy.vehicleClass, onClassChange = {})
-            EconomyEditor(
-                economy = economy,
-                onTiresChange = { _, _ -> },
-                onOilChange = { _, _ -> },
-                onBrakesChange = { _, _ -> },
-                onFluidsChange = { _, _ -> },
-                onMiscChange = { _, _ -> },
-                onDepreciationIncludeChange = {},
-                onDepreciationValuesChange = { _, _ -> },
-                onInsuranceChange = {},
-                onRegistrationChange = {},
-                onPhoneChange = { _, _, _ -> },
-                onExpectedAnnualMilesChange = {},
-            )
-            TrueCostFooter(operatingCostPerMile = economy.operatingCostPerMile)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val session = remember { EditSession(scope) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalEditSession provides session) {
+        Column(Modifier.padding(16.dp)) {
+            EconomyEditor(UserEconomy())
         }
     }
 }

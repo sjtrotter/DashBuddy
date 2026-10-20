@@ -1,5 +1,8 @@
 package cloud.trotter.dashbuddy.ui.main.settings.garage
 
+import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.ui.components.economy.LastSaveUndo
+import cloud.trotter.dashbuddy.ui.components.economy.LastSaveUndoState
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,9 +18,9 @@ import cloud.trotter.dashbuddy.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
 import javax.inject.Inject
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
+import cloud.trotter.dashbuddy.ui.components.economy.EditSession
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -59,107 +62,205 @@ class VehicleDetailsViewModel @Inject constructor(
             VehicleOdometerReading.latestFor(readings, it.id)) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val _name = MutableStateFlow("")
-    val name = _name.asStateFlow()
-    private var nameDirty = false
-    private var nameFocused = false
-    private var renameJob: Job? = null
-    private var statusBusy = false
+    val edits = EditSession(viewModelScope)
+    private val undoState = LastSaveUndoState(writer, edits)
+    val lastSaveUndo = undoState.lastSave
+    fun undo(save: LastSaveUndo) = if (canEdit()) undoState.undo(save) else rejected()
+    fun dismissUndo(save: LastSaveUndo) = undoState.dismiss(save)
+    fun clearUndo() = undoState.clear()
+    fun enterScreen() = undoState.resume()
+    private val _busy = MutableStateFlow(false)
+    val busy = _busy.asStateFlow()
+    private var finishing = false
+    private var retirementQueued = false
     private val lockedRetire = Channel<Unit>(Channel.BUFFERED)
     val retireLocked = lockedRetire.receiveAsFlow()
 
-    init {
-        viewModelScope.launch {
-            combine(vehicle, pending) { target, count -> target to count }.collect { (target, count) ->
-                if (target != null && !nameDirty && !nameFocused && count == 0) _name.value = target.name.orEmpty()
-            }
-        }
-    }
-
     private fun canWrite() = vehicle.value != null &&
         failure.value != GarageWriteFailure.UNREADABLE && failure.value != GarageWriteFailure.GONE
-    private fun canEdit() = canWrite() && !retired.value
+    private fun canEdit() = canWrite() && !retired.value && (!_busy.value || finishing)
+    private fun rejected() = CompletableDeferred(WriteResult.REJECTED)
 
+    fun nameField(): EditSession.Field = edits.field("NAME", vehicle.value?.name.orEmpty(), { true }) { text ->
+        if (canEdit()) undoState.write {
+            var previous: String? = null
+            val saved = garageRepository.updateName(id) { previous = it; text.trim().ifBlank { null } }
+            if (saved) LastSaveUndo.captured("NAME", R.string.vehicle_edit_name, previous) { old ->
+                garageRepository.updateName(id) { old }
+            } else null
+        } else rejected()
+    }
     fun setName(value: String) {
-        if (!canEdit()) return
-        _name.value = value.cappedVehicleName()
-        nameDirty = true
-        renameJob?.cancel()
-        renameJob = viewModelScope.launch { delay(400); flushName() }
+        if (canEdit()) { nameField(); edits.edit("NAME", value.cappedVehicleName()) }
     }
-
     fun nameFocusChanged(focused: Boolean) {
-        if (nameFocused && !focused) flushName()
-        nameFocused = focused
-        if (!focused && !nameDirty && pending.value == 0) _name.value = vehicle.value?.name.orEmpty()
+        val field = nameField()
+        if (field.focused && !focused) edits.finish("NAME")
+        edits.focus("NAME", focused)
+    }
+    fun flushName() { edits.finish("NAME") }
+
+    private fun <T> edit(key: String, label: Int, previous: (VehicleProfile) -> T,
+        transform: (VehicleProfile) -> VehicleProfile,
+        restore: (VehicleProfile, T) -> VehicleProfile): Deferred<WriteResult> =
+        if (canEdit()) undoState.write {
+            var captured: LastSaveUndo? = null
+            val saved = garageRepository.updateProfile(id) { stored ->
+                val prior = previous(stored)
+                captured = LastSaveUndo.captured(key, label, prior) { old ->
+                    garageRepository.updateProfile(id) { restore(it, old) }
+                }
+                transform(stored)
+            }
+            if (saved) captured else null
+        } else rejected()
+
+    private fun VehicleProfile.consumptionOverride(): Double? = when (this) {
+        is ElectricCar -> kwhPer100Mi
+        is ScooterMoped -> kwhPer100Mi
+        is EBike -> whPerMile
+        else -> null
     }
 
-    fun flushName() {
-        renameJob?.cancel()
-        renameJob = null
-        if (!nameDirty || !canEdit()) return
-        nameDirty = false
-        val value = _name.value.trim().ifBlank { null }
-        writer.write { garageRepository.rename(id, value) }
+    fun setTireCost(value: Double) = edit("TIRE_COST", R.string.economy_undo_tire_cost,
+        { it.wear.tireSetCost }, { VehicleCostTransforms.tireCost(it, value) }, VehicleCostTransforms::restoreTireCost)
+    fun setTireLifetime(value: Double) = edit("TIRE_LIFETIME", R.string.economy_undo_tire_lifetime,
+        { it.wear.tireLifetimeMi }, { VehicleCostTransforms.tireLifetime(it, value) }, VehicleCostTransforms::restoreTireLifetime)
+    fun setOilCost(value: Double) = edit("OIL_COST", R.string.economy_undo_oil_cost,
+        { it.wear.oilCost }, { VehicleCostTransforms.oilCost(it, value) }, VehicleCostTransforms::restoreOilCost)
+    fun setOilInterval(value: Double) = edit("OIL_INTERVAL", R.string.economy_undo_oil_interval,
+        { it.wear.oilIntervalMi }, { VehicleCostTransforms.oilInterval(it, value) }, VehicleCostTransforms::restoreOilInterval)
+    fun setBrakesCost(value: Double) = edit("BRAKES_COST", R.string.economy_undo_brakes_cost,
+        { it.wear.brakesCost }, { VehicleCostTransforms.brakesCost(it, value) }, VehicleCostTransforms::restoreBrakesCost)
+    fun setBrakesInterval(value: Double) = edit("BRAKES_INTERVAL", R.string.economy_undo_brakes_interval,
+        { it.wear.brakesIntervalMi }, { VehicleCostTransforms.brakesInterval(it, value) }, VehicleCostTransforms::restoreBrakesInterval)
+    fun setFluidsCost(value: Double) = edit("FLUIDS_COST", R.string.economy_undo_fluids_cost,
+        { it.wear.fluidsCost }, { VehicleCostTransforms.fluidsCost(it, value) }, VehicleCostTransforms::restoreFluidsCost)
+    fun setFluidsInterval(value: Double) = edit("FLUIDS_INTERVAL", R.string.economy_undo_fluids_interval,
+        { it.wear.fluidsIntervalMi }, { VehicleCostTransforms.fluidsInterval(it, value) }, VehicleCostTransforms::restoreFluidsInterval)
+    fun setMiscYearly(value: Double) = edit("MISC_YEARLY", R.string.economy_editor_misc_cost_label,
+        { it.wear.miscYearly }, { VehicleCostTransforms.miscYearly(it, value) }, VehicleCostTransforms::restoreMiscYearly)
+    fun setMiscMiles(value: Double) = edit("MISC_YEARLY_MI", R.string.economy_editor_misc_interval_label,
+        { it.wear.miscYearlyMi }, { VehicleCostTransforms.miscMiles(it, value) }, VehicleCostTransforms::restoreMiscMiles)
+    fun setPurchasePrice(value: Double) = edit("PURCHASE_PRICE", R.string.economy_editor_purchase_price_label,
+        { it.fixed.purchasePrice }, { VehicleCostTransforms.purchasePrice(it, value) }, VehicleCostTransforms::restorePurchasePrice)
+    fun setLifetimeMiles(value: Double) = edit("TOTAL_LIFETIME_MI", R.string.economy_undo_lifetime_miles,
+        { it.fixed.totalLifetimeMi }, { VehicleCostTransforms.lifetimeMiles(it, value) }, VehicleCostTransforms::restoreLifetimeMiles)
+    fun setInsurance(value: Double) = edit("INSURANCE_DELTA", R.string.economy_editor_insurance_title,
+        { it.fixed.insuranceDeltaPerMonth }, { VehicleCostTransforms.insurance(it, value) }, VehicleCostTransforms::restoreInsurance)
+    fun setRegistration(value: Double) = edit("REGISTRATION_DELTA", R.string.economy_editor_registration_title,
+        { it.fixed.registrationDeltaPerYear }, { VehicleCostTransforms.registration(it, value) }, VehicleCostTransforms::restoreRegistration)
+    fun setExpectedAnnualMiles(value: Double) = edit("EXPECTED_ANNUAL_MI", R.string.economy_editor_annual_miles_title,
+        { it.fixed.expectedAnnualMiles }, { VehicleCostTransforms.annualMiles(it, value) }, VehicleCostTransforms::restoreAnnualMiles)
+    fun setChainCost(value: Double) = edit("CHAIN_COST", R.string.economy_undo_chain_cost,
+        { it.wear.chainCost }, { VehicleCostTransforms.chainCost(it, value) }, VehicleCostTransforms::restoreChainCost)
+    fun setChainLifetime(value: Double) = edit("CHAIN_LIFETIME", R.string.economy_undo_chain_lifetime,
+        { it.wear.chainLifeMi }, { VehicleCostTransforms.chainLifetime(it, value) }, VehicleCostTransforms::restoreChainLifetime)
+    fun setBatteryCost(value: Double) = edit("BATTERY_COST", R.string.economy_undo_battery_cost,
+        { it.wear.batteryCost }, { VehicleCostTransforms.batteryCost(it, value) }, VehicleCostTransforms::restoreBatteryCost)
+    fun setBatteryLifetime(value: Double) = edit("BATTERY_LIFETIME", R.string.economy_undo_battery_lifetime,
+        { it.wear.batteryLifeMi }, { VehicleCostTransforms.batteryLifetime(it, value) }, VehicleCostTransforms::restoreBatteryLifetime)
+    fun setBeltCost(value: Double) = edit("BELT_COST", R.string.economy_undo_belt_cost,
+        { it.wear.beltCost }, { VehicleCostTransforms.beltCost(it, value) }, VehicleCostTransforms::restoreBeltCost)
+    fun setBeltLifetime(value: Double) = edit("BELT_LIFETIME", R.string.economy_undo_belt_lifetime,
+        { it.wear.beltLifeMi }, { VehicleCostTransforms.beltLifetime(it, value) }, VehicleCostTransforms::restoreBeltLifetime)
+    fun setConsumption(value: Double) = edit("CONSUMPTION", if (vehicle.value?.profile is EBike) R.string.vehicle_wh_per_mile else R.string.vehicle_kwh_per_100_mi,
+        { it.consumptionOverride() }, { VehicleCostTransforms.consumption(it, value) }, VehicleCostTransforms::restoreConsumption)
+    fun setMpg(value: Double) = edit("VEHICLE_MPG", R.string.economy_editor_mpg_label,
+        { it.gasMpg }, { VehicleCostTransforms.mpg(it, value) }, VehicleCostTransforms::restoreMpg)
+    fun setDepreciationInclude(value: Boolean) = edit("INCLUDE_DEPRECIATION", R.string.economy_editor_depreciation_include_label,
+        { it.fixed.includeDepreciation }, { VehicleCostTransforms.depreciationInclude(it, value) }, VehicleCostTransforms::restoreDepreciationInclude)
+    fun setFuelType(value: FuelType) = edit("FUEL_TYPE", R.string.economy_editor_fuel_type_title,
+        { it.gasFuel ?: FuelType.REGULAR }, { VehicleCostTransforms.fuel(it, value) }, VehicleCostTransforms::restoreFuel)
+    fun setOdometerShown(shown: Boolean): Deferred<WriteResult> =
+        if (canEdit()) undoState.write {
+            var previous: Boolean? = null
+            val saved = garageRepository.updateOdometerShown(id) { previous = it; shown }
+            if (saved) LastSaveUndo.captured("ODOMETER", R.string.vehicle_odometer_title, previous) { old ->
+                garageRepository.updateOdometerShown(id) { old }
+            } else null
+        } else rejected()
+
+    fun retry() { writer.retry(); edits.retryFailed() }
+    fun resumeEditing() { undoState.resume(); _busy.value = false; edits.acceptingEdits = true }
+    suspend fun discardChanges() {
+        clearUndo()
+        edits.discardAll()
+        writer.discard()
+        retirementQueued = false
     }
 
-    private fun edit(transform: (VehicleProfile) -> VehicleProfile) {
-        if (canEdit()) writer.write { garageRepository.updateProfile(id, transform) }
-    }
-
-    fun setTires(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.tires(it, cost, miles) }
-    fun setOil(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.oil(it, cost, miles) }
-    fun setBrakes(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.brakes(it, cost, miles) }
-    fun setFluids(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.fluids(it, cost, miles) }
-    fun setMiscRepairs(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.misc(it, cost, miles) }
-    fun setDepreciationInclude(include: Boolean) = edit { VehicleCostTransforms.depreciationInclude(it, include) }
-    fun setDepreciationValues(price: Double?, miles: Double?) = edit { VehicleCostTransforms.depreciationValues(it, price, miles) }
-    fun setInsurance(value: Double) = edit { VehicleCostTransforms.insurance(it, value) }
-    fun setRegistration(value: Double) = edit { VehicleCostTransforms.registration(it, value) }
-    fun setExpectedAnnualMiles(value: Double) = edit { VehicleCostTransforms.annualMiles(it, value) }
-    fun setChain(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.chain(it, cost, miles) }
-    fun setBattery(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.battery(it, cost, miles) }
-    fun setBelt(cost: Double?, miles: Double?) = edit { VehicleCostTransforms.belt(it, cost, miles) }
-    fun setConsumption(value: Double) = edit { VehicleCostTransforms.consumption(it, value) }
-    fun setMpg(value: Double) = edit { VehicleCostTransforms.mpg(it, value) }
-    fun setFuelType(value: FuelType) = edit { VehicleCostTransforms.fuel(it, value) }
-    fun setElectricityPrice(value: Double) {
-        if (canEdit()) writer.write { appPreferencesRepository.updateElectricityPrice(value); true }
-    }
-
-    fun retry() = writer.retry()
-    suspend fun discardChanges() = writer.discard()
-    suspend fun awaitIdle(): GarageWriteFailure {
-        flushName()
-        writer.awaitIdle()
-        return when {
-            garage.value?.readable == false -> GarageWriteFailure.UNREADABLE
-            garage.value?.vehicles?.none { it.id == id } == true -> GarageWriteFailure.GONE
-            else -> writer.failure.value
+    /** Accept every unfinished field before the first suspension, including the name. */
+    suspend fun finishAndAwait(): GarageWriteFailure = withContext(NonCancellable) {
+        clearUndo()
+        _busy.value = true
+        edits.acceptingEdits = false
+        finishing = true
+        val submissions = try { edits.submitAll() } finally { finishing = false }
+        val finished = submissions.map { it.await() }.all { it == WriteResult.SAVED }
+        val result = writer.awaitIdle()
+        when {
+            !finished && result == GarageWriteFailure.NONE -> GarageWriteFailure.RETRY
+            else -> result
         }
     }
 
-    fun retire(onDone: () -> Unit) {
-        if (!canEdit() || pending.value > 0 || statusBusy) return
-        statusBusy = true
-        writer.write {
-            try {
+    suspend fun awaitIdle(): GarageWriteFailure = writer.awaitIdle()
+
+    suspend fun resetEstimates(): GarageWriteFailure = withContext(NonCancellable) {
+        clearUndo()
+        if (!canEdit()) return@withContext GarageWriteFailure.GONE
+        _busy.value = true
+        edits.acceptingEdits = false
+        edits.discardAll()
+        val reset = writer.write { garageRepository.updateProfile(id) { it.withCosts(WearProfile(), FixedCosts()) } }
+        val result = writer.awaitIdle()
+        resumeEditing()
+        if (reset.await() != WriteResult.SAVED && result == GarageWriteFailure.NONE) GarageWriteFailure.RETRY else result
+    }
+
+    fun retire(onDone: () -> Unit) = retire(onDone, {})
+
+    fun retire(onDone: () -> Unit, onFailure: () -> Unit) {
+        // Retry resumes the retained retirement action; it must never enqueue retirement twice.
+        if (retirementQueued) {
+            if (_busy.value) return
+            _busy.value = true
+            edits.acceptingEdits = false
+            viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                if (writer.awaitIdle() != GarageWriteFailure.NONE) onFailure()
+                resumeEditing()
+            }
+            return
+        }
+        if (!canEdit()) return
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            if (finishAndAwait() != GarageWriteFailure.NONE) {
+                onFailure()
+                resumeEditing()
+                return@launch
+            }
+            retirementQueued = true
+            val result = writer.write {
                 val stored = garageRepository.garage.first()
                 if (!stored.readable) throw VehiclesUnreadableException()
                 if (stored.active?.id == id && lock.locked()) {
+                    retirementQueued = false
                     lockedRetire.trySend(Unit)
                     true
                 } else garageRepository.retire(id, clock.millis()).also { if (it) onDone() }
-            } finally { statusBusy = false }
+            }
+            if (result.await() != WriteResult.SAVED) onFailure()
+            resumeEditing()
         }
     }
 
     fun restore(onDone: () -> Unit) {
-        if (!canWrite() || !retired.value || pending.value > 0 || statusBusy) return
-        statusBusy = true
+        if (!canWrite() || !retired.value || _busy.value) return
+        _busy.value = true
         writer.write {
             try { garageRepository.restore(id).also { if (it) onDone() } }
-            finally { statusBusy = false }
+            finally { resumeEditing() }
         }
     }
 }

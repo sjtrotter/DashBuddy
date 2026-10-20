@@ -92,7 +92,7 @@ class VehicleAddViewModelTest {
         runCurrent()
         vm.draft.updateVehicleType(VehicleType.EV)
         vm.draft.updateElectricityPrice(.24)
-        whenever(preferences.updateElectricityPrice(.24)).thenThrow(IllegalStateException()).thenReturn(Unit)
+        whenever(preferences.updateElectricityPrice(.24)).thenThrow(IllegalStateException()).thenReturn(cloud.trotter.dashbuddy.core.datastore.settings.StoredPreference(null, false))
         var done = 0
         vm.save { done++ }
         runCurrent()

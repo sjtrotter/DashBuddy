@@ -23,6 +23,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import cloud.trotter.dashbuddy.ui.components.economy.EditSession
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -64,6 +65,12 @@ fun WizardScreen(
 
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()
+    val costsSession = remember(viewModel) { EditSession(coroutineScope) }
+    androidx.activity.compose.BackHandler(enabled = pagerState.currentPage > 0) {
+        coroutineScope.launch {
+            if (costsSession.finishAll()) pagerState.animateScrollToPage(pagerState.currentPage - 1)
+        }
+    }
 
     val isCherryPicker = state.strategy == OfferStrategy.CHERRY_PICKER
 
@@ -92,6 +99,7 @@ fun WizardScreen(
                 currentStep = pagerState.currentPage,
                 totalSteps = steps.size,
                 onSkip = {
+                    costsSession.discardAll()
                     skippedSetup = true
                     showCompletionSheet = true
                 }
@@ -102,14 +110,18 @@ fun WizardScreen(
                 showBack = pagerState.currentPage > 0,
                 isLastStep = pagerState.currentPage == steps.size - 1,
                 onBackClick = {
-                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    coroutineScope.launch { if (costsSession.finishAll()) pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                 },
                 onNextClick = {
-                    if (pagerState.currentPage < steps.size - 1) {
-                        coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                    } else {
-                        skippedSetup = false
-                        showCompletionSheet = true
+                    coroutineScope.launch {
+                        if (costsSession.finishAll()) {
+                            if (pagerState.currentPage < steps.size - 1) {
+                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                            } else {
+                                skippedSetup = false
+                                showCompletionSheet = true
+                            }
+                        }
                     }
                 }
             )
@@ -151,21 +163,32 @@ fun WizardScreen(
                             state = state,
                             vehicle = vehicle,
                             onClassChange = viewModel.vehicleDraft::updateVehicleClass,
-                            onTiresChange = viewModel::updateTires,
-                            onOilChange = viewModel::updateOilChange,
-                            onBrakesChange = viewModel::updateBrakes,
-                            onFluidsChange = viewModel::updateFluids,
-                            onMiscChange = viewModel::updateMiscRepairs,
-                            onDepreciationIncludeChange = viewModel::updateDepreciationInclude,
-                            onDepreciationValuesChange = viewModel::updateDepreciationValues,
+                            session = costsSession,
+                            onChainCostChange = viewModel::updateChainCost,
+                            onChainLifetimeChange = viewModel::updateChainLifetime,
+                            onBatteryCostChange = viewModel::updateBatteryCost,
+                            onBatteryLifetimeChange = viewModel::updateBatteryLifetime,
+                            onBeltCostChange = viewModel::updateBeltCost,
+                            onBeltLifetimeChange = viewModel::updateBeltLifetime,
+                            onTireCostChange = viewModel::updateTireCost,
+                            onTireLifetimeChange = viewModel::updateTireLifetime,
+                            onOilCostChange = viewModel::updateOilCost,
+                            onOilIntervalChange = viewModel::updateOilInterval,
+                            onBrakesCostChange = viewModel::updateBrakesCost,
+                            onBrakesIntervalChange = viewModel::updateBrakesInterval,
+                            onFluidsCostChange = viewModel::updateFluidsCost,
+                            onFluidsIntervalChange = viewModel::updateFluidsInterval,
+                            onMiscYearlyChange = viewModel::updateMiscYearly,
+                            onMiscMilesChange = viewModel::updateMiscMiles,
+                            onPurchasePriceChange = viewModel::updatePurchasePrice,
+                            onLifetimeMilesChange = viewModel::updateLifetimeMiles,
                             onInsuranceChange = viewModel::updateInsuranceDelta,
                             onRegistrationChange = viewModel::updateRegistrationDelta,
-                            onPhoneChange = viewModel::updatePhonePlan,
                             onExpectedAnnualMilesChange = viewModel::updateExpectedAnnualMiles,
-                            onTimeConstantsChange = viewModel::updateTimeConstants,
-                            onChainChange = viewModel::updateChain,
-                            onBatteryChange = viewModel::updateBattery,
-                            onBeltChange = viewModel::updateBelt,
+                            onPhoneTotalChange = viewModel::updatePhoneTotal,
+                            onPhoneLinesChange = viewModel::updatePhoneLines,
+                            onPhoneShareChange = viewModel::updatePhoneShare,
+                            onDepreciationIncludeChange = viewModel::updateDepreciationInclude,
                             onConsumptionChange = viewModel.vehicleDraft::updateConsumption,
                             onElectricityPriceChange = viewModel.vehicleDraft::updateElectricityPrice,
                         )
@@ -299,14 +322,17 @@ fun WizardScreen(
                                 viewModel.skipAndFinish(onComplete)
                             }
                         } else {
-                            saving = true
-                            viewModel.saveAndFinish {
-                                saving = false
-                                if (viewModel.vehicleSaveFailed.replayCache.isNotEmpty()) {
-                                    vehicleSaveFailed = true
-                                    viewModel.vehicleSaveFailureHandled()
-                                } else {
-                                    onComplete()
+                            coroutineScope.launch {
+                                if (!costsSession.finishAll()) return@launch
+                                saving = true
+                                viewModel.saveAndFinish {
+                                    saving = false
+                                    if (viewModel.vehicleSaveFailed.replayCache.isNotEmpty()) {
+                                        vehicleSaveFailed = true
+                                        viewModel.vehicleSaveFailureHandled()
+                                    } else {
+                                        onComplete()
+                                    }
                                 }
                             }
                         }
