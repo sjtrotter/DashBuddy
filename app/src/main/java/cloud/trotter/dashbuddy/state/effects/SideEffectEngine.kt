@@ -523,7 +523,8 @@ class SideEffectEngine @Inject constructor(
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
                         effect.offer, effect.evaluation, effect.platform, effect.sessionId,
-                        refreshOnly = !fresh,
+                        refreshOnly = !fresh, pending = effect.pending, job = effect.job,
+                        config = strategyRepository.evaluationConfig.value,
                     )
                 }
                 val pending = PendingOfferPost(job, fresh)

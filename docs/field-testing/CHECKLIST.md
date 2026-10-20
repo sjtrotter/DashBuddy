@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] Offer heads-up (#1333 S2g): expanded shows store and countdown, the gross pay with the score ring, the pay bar with profit and car pills, the three rates on one line, Accept and Decline, nothing clipped at your font size; collapsed shows ring, gross, profit and countdown with the buttons; the figures match the bubble's offer card. — Confirmed: 0/2
+
 - [active] 🆕 NEW — Resting HUD names the active car; swap opens the switcher; Add opens the Garage form in the app (#1359) — Confirmed: 0/2
 
 - [active] 🆕 NEW — Settings → Garage lists the car, switching makes the Economy screen follow it, retiring keeps the readings (#1359) — Confirmed: 0/2

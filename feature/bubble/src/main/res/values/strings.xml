@@ -104,9 +104,6 @@
     <string name="hud_offer_car">car</string>
     <string name="hud_offer_distance_unknown">distance unknown</string>
     <string name="hud_offer_unit_mi">mi</string>
-    <string name="hud_offer_rate_hr">/hr</string>
-    <string name="hud_offer_rate_mi">/mi</string>
-    <string name="hud_offer_rate_ea">/ea</string>
     <plurals name="hud_offer_items"><item quantity="one">item</item><item quantity="other">items</item></plurals>
     <plurals name="hud_offer_stops"><item quantity="one">stop</item><item quantity="other">stops</item></plurals>
     <string name="hud_offer_added">+%1$s added</string>

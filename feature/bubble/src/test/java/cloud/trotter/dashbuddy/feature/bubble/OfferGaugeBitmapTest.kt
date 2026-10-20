@@ -26,7 +26,7 @@ class OfferGaugeBitmapTest {
     @Test
     fun `out-of-range scores do not throw and still render`() {
         // Below 0 and above 100 are clamped internally; the call must not crash.
-        for (score in listOf(-50, 0, 50, 100, 250)) {
+        for (score in listOf(null, -50, 0, 50, 100, 250)) {
             val bmp = scoreGaugeBitmap(score = score, ringArgb = Color.RED, sizePx = 80)
             assertEquals(80, bmp.width)
         }

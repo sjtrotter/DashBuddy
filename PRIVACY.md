@@ -55,6 +55,8 @@ In release builds, declining Screen events retains the supported-package subscri
 
 ### 2.3 Notifications
 
+The offer heads-up redesign (#1333 S2g) reads, stores and sends nothing new; the store name already appeared in the notification.
+
 A separate `NotificationListenerService` reads the delivery apps' notifications (offer pushes, arrival and
 pause notices, earnings notices) and recognizes them against the same ruleset (`core/pipeline/.../notification`).
 A notification from a package that is not an enabled platform is dropped before anything is read

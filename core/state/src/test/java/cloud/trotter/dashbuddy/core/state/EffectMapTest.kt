@@ -277,6 +277,8 @@ class EffectMapTest {
         val posts = effects.filterIsInstance<AppEffect.PostOfferNotification>()
         assertEquals("Exactly one PostOfferNotification", 1, posts.size)
         assertEquals("Carries the landed evaluation", testEvaluation, posts[0].evaluation)
+        assertEquals(next.regions.platforms[Platform.DoorDash]!!.pendingOffers.last(), posts[0].pending)
+        assertEquals("Carries the platform's active job (S2g review r1)", next.regions.platforms[Platform.DoorDash]!!.activeJob, posts[0].job)
         // Keys the engine's delayed post so an offer-resolved cancel can abort it (#436).
         assertEquals("Carries the offer hash", "hash-123", posts[0].offerHash)
         // #578: also carries the rich offer card snapshot (same offerHash + the eval's score/action)

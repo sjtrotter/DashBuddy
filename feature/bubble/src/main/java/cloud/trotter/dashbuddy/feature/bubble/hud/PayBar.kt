@@ -31,8 +31,8 @@ internal fun PayBar(model: PayBarModel) {
     val loss = (model as? PayBarModel.Loss)?.lossCents
     val car = when (model) { is PayBarModel.Split -> model.carCents; is PayBarModel.Loss -> model.carCents; else -> null }
     val description = when (model) {
-        is PayBarModel.Split -> stringResource(R.string.hud_offer_cd_bar, money(model.profitCents), money(model.carCents))
-        is PayBarModel.Loss -> stringResource(R.string.hud_offer_cd_bar_loss, money(model.lossCents), money(model.carCents))
+        is PayBarModel.Split -> stringResource(R.string.hud_offer_cd_bar, payBarMoney(model.profitCents), payBarMoney(model.carCents))
+        is PayBarModel.Loss -> stringResource(R.string.hud_offer_cd_bar_loss, payBarMoney(model.lossCents), payBarMoney(model.carCents))
         PayBarModel.DistanceUnknown -> stringResource(R.string.hud_offer_distance_unknown)
         PayBarModel.Unscored -> ""
     }
@@ -53,9 +53,9 @@ internal fun PayBar(model: PayBarModel) {
         Row(Modifier.fillMaxSize().padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             if (profit != null || loss != null) {
-                PayPill(money(profit ?: loss!!), stringResource(if (loss != null) R.string.hud_offer_loss else R.string.hud_offer_profit),
+                PayPill(payBarMoney(profit ?: loss!!), stringResource(if (loss != null) R.string.hud_offer_loss else R.string.hud_offer_profit),
                     if (loss != null) c.bad else c.good, true)
-                car?.let { PayPill(money(it), stringResource(R.string.hud_offer_car), c.warn, false) }
+                car?.let { PayPill(payBarMoney(it), stringResource(R.string.hud_offer_car), c.warn, false) }
             } else if (model == PayBarModel.DistanceUnknown) {
                 Text(stringResource(R.string.hud_offer_distance_unknown), color = c.neutral, fontSize = 14.sp)
             }
@@ -63,7 +63,7 @@ internal fun PayBar(model: PayBarModel) {
     }
 }
 
-private fun money(cents: Long) = Formats.money(cents / 100.0)
+internal fun payBarMoney(cents: Long) = Formats.money(cents / 100.0)
 
 @Composable
 private fun PayPill(value: String, label: String, ink: Color, primary: Boolean) {

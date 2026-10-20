@@ -18,13 +18,13 @@ import cloud.trotter.dashbuddy.core.designsystem.theme.darkAppColors
  * is the SSOT [cloud.trotter.dashbuddy.feature.bubble.formatters.offerScoreArgb]. Drawn on a filled card-colored
  * disc so it reads the same regardless of the (system-controlled) notification background.
  */
-fun scoreGaugeBitmap(score: Int, ringArgb: Int, sizePx: Int): Bitmap {
+fun scoreGaugeBitmap(score: Int?, ringArgb: Int, sizePx: Int): Bitmap {
     val colors = darkAppColors()
     val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val cx = sizePx / 2f
-    val stroke = sizePx * 0.12f
-    val pad = stroke / 2f + sizePx * 0.04f
+    val stroke = sizePx * RingGeometry.STROKE_RATIO
+    val pad = stroke / 2f
     val rect = RectF(pad, pad, sizePx - pad, sizePx - pad)
 
     // Self-contained disc so the ring/number read on any notification theme.
@@ -38,17 +38,23 @@ fun scoreGaugeBitmap(score: Int, ringArgb: Int, sizePx: Int): Bitmap {
     }
     canvas.drawArc(rect, -90f, 360f, false, ring.apply { color = colors.surface3.toArgb() })
     canvas.drawArc(
-        rect, -90f, 360f * (score.coerceIn(0, 100) / 100f), false,
+        rect, -90f, 360f * ((score ?: 0).coerceIn(0, 100) / 100f), false,
         ring.apply { color = ringArgb },
     )
 
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = colors.text.toArgb()
         textAlign = Paint.Align.CENTER
-        textSize = sizePx * 0.34f
+        textSize = sizePx * RingGeometry.FIGURE_RATIO
         typeface = Typeface.DEFAULT_BOLD
     }
     val baseline = cx - (text.descent() + text.ascent()) / 2f
-    canvas.drawText(score.toString(), cx, baseline, text)
+    canvas.drawText(score?.toString() ?: "—", cx, baseline, text)
     return bmp
+}
+
+/** Ratios of the HUD’s 64 dp ring (7 dp stroke and 22 sp figure). */
+object RingGeometry {
+    const val STROKE_RATIO = 7f / 64f
+    const val FIGURE_RATIO = 22f / 64f
 }

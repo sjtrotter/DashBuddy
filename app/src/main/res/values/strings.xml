@@ -591,16 +591,6 @@
     <string name="bubble_session_verb_fallback_named">driving for %1$s</string>
     <string name="bubble_session_verb_fallback_unnamed">driving</string>
     <string name="bubble_welcome_message">Ready. Start a dash in your delivery app.</string>
-    <string name="bubble_offer_card_rate_per_hr">%1$s/hr</string>
-    <string name="bubble_offer_card_sub_compact">Net %1$s · %2$s/mi · %3$s</string>
-    <string name="bubble_offer_card_metrics_expanded">Net %1$s · Pay %2$s · %3$s · %4$s/mi</string>
-    <string name="bubble_offer_card_items_suffix">" · %1$d items"</string>
-    <!-- BubbleManager.miles() — %1$s is the formatted distance. -->
-    <string name="bubble_offer_card_miles">%1$s mi</string>
-    <!-- Null-safe metric placeholder for the offer card's money()/money0()/miles() helpers when a
-         value didn't parse. -->
-    <string name="bubble_offer_card_metric_placeholder" translatable="false">—</string>
-
     <!-- ui/main/dashboard/DashboardViewModel.kt -->
     <string name="dashboard_status_offline">Offline</string>
     <string name="dashboard_status_session_complete">Dash ended</string>
@@ -815,11 +805,6 @@
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest dashes are your %1$d newest, whatever period is picked; amounts are reported totals (your corrections included), cash shown separately.</string>
     <string name="time_tab_unattributed_note">No delivery attached: online time and miles after your last delivery, and dashes with no delivery.</string>
-    <string name="bubble_offer_addon_title">Add-on · no verdict</string>
-    <string name="bubble_offer_addon_reason">Only what the add-on adds</string>
-    <string name="bubble_offer_addon_pay">+%1$s pay</string>
-    <string name="bubble_offer_addon_distance">+%1$s mi</string>
-    <string name="bubble_offer_addon_minutes">+%1$d min</string>
     <string name="tts_offer_addon_template">Add-on at %1$s. %2$s dollars more, %3$s more miles. No verdict.</string>
     <plurals name="tts_offer_addon_minutes">
         <item quantity="one">%1$d more minute.</item>

@@ -81,7 +81,12 @@ class BubbleManagerChatLogTest {
         val tree = RecordingTree()
         Timber.plant(tree)
         try {
-            manager.postOfferNotification(offer, evaluation, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash, "sess-1", refreshOnly = true)
+            manager.postOfferNotification(offer, evaluation, cloud.trotter.dashbuddy.domain.state.Platform.DoorDash, "sess-1", refreshOnly = true,
+                pending = cloud.trotter.dashbuddy.domain.state.PendingOffer("h1",
+                    cloud.trotter.dashbuddy.domain.state.ParsedFields.OfferFields(parsedOffer =
+                        cloud.trotter.dashbuddy.domain.model.offer.ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5)),
+                    1_000L, evaluation, returnFlow = cloud.trotter.dashbuddy.domain.state.Flow.TaskPickupNavigation),
+                config = null)
         } finally {
             Timber.uproot(tree)
         }
