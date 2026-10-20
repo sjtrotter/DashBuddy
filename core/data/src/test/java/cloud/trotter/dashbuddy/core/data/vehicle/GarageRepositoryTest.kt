@@ -460,7 +460,48 @@ class GarageRepositoryTest {
         assertEquals(beforeRetired, repo.garage.first())
     }
 
-    @Test fun `rename and updateVehicle refuse unreadable vehicles without a write`() = runTest {
+    @Test fun `setOdometerShown persists explicit choices and writes only changed live vehicles`() = runTest {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            var writes = 0
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                writes++
+                return transform(data.value).also { data.value = it }
+            }
+        }
+        val source = VehicleDataSource(store)
+        val repo = GarageRepository(source)
+        val bike = repo.addVehicle("Bike", 1, Bicycle())
+        val car = repo.addVehicle("Car", 2)
+        // Even a choice matching the default must persist as a Boolean rather than null.
+        assertTrue(repo.setOdometerShown(bike.id, false))
+        assertEquals(3, store.writes)
+        assertEquals(bike.copy(odometerShown = false), repo.garage.first().vehicles.first())
+        assertEquals(car, repo.garage.first().active)
+        val beforeNoOp = source.stored.first()
+        assertTrue(repo.setOdometerShown(bike.id, false))
+        assertFalse(repo.setOdometerShown("missing", true))
+        assertEquals(3, store.writes)
+        assertEquals(beforeNoOp, source.stored.first())
+
+        assertTrue(repo.setOdometerShown(bike.id, true))
+        assertEquals(4, store.writes)
+        assertTrue(repo.garage.first().vehicles.first().showsOdometer)
+        assertTrue(repo.setOdometerShown(car.id, true))
+        assertEquals(true, repo.garage.first().active!!.odometerShown)
+        assertTrue(repo.setOdometerShown(car.id, false))
+        assertFalse(repo.garage.first().active!!.showsOdometer)
+        assertTrue(repo.updateProfile(car.id, Bicycle()))
+        assertEquals(false, repo.garage.first().active!!.odometerShown)
+        repo.retire(bike.id, 3)
+        val beforeRetired = repo.garage.first()
+        val writes = store.writes
+        assertFalse(repo.setOdometerShown(bike.id, false))
+        assertEquals(writes, store.writes)
+        assertEquals(beforeRetired, repo.garage.first())
+    }
+
+    @Test fun `rename updateVehicle and setOdometerShown refuse unreadable vehicles without a write`() = runTest {
         val source = VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("rename-corrupt.preferences_pb") }))
         source.save("invalid json", "one")
@@ -468,6 +509,7 @@ class GarageRepositoryTest {
         val before = source.stored.first()
         assertTrue(runCatching { repo.rename("one", "Name") }.exceptionOrNull() is VehiclesUnreadableException)
         assertTrue(runCatching { repo.updateVehicle("one", "Name", Bicycle()) }.exceptionOrNull() is VehiclesUnreadableException)
+        assertTrue(runCatching { repo.setOdometerShown("one", false) }.exceptionOrNull() is VehiclesUnreadableException)
         assertEquals(before, source.stored.first())
     }
 
@@ -545,6 +587,7 @@ class GarageRepositoryTest {
                 }
                 assertTrue(runCatching { repo.addVehicle("Truck", 100) }.exceptionOrNull() is VehiclesUnreadableException)
                 assertTrue(runCatching { repo.selectVehicle("civic") }.exceptionOrNull() is VehiclesUnreadableException)
+                assertTrue(runCatching { repo.setOdometerShown("civic", false) }.exceptionOrNull() is VehiclesUnreadableException)
                 assertTrue(runCatching { repo.updateOrCreateActiveProfile(100) { it.withGas(mpg = 20.0) } }
                     .exceptionOrNull() is VehiclesUnreadableException)
                 assertTrue(runCatching { repo.seedFrom(LegacyProfile().toTyped(), 100) }

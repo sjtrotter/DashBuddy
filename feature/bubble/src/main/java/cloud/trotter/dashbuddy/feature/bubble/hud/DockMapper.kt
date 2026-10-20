@@ -2,7 +2,7 @@ package cloud.trotter.dashbuddy.feature.bubble.hud
 
 object DockMapper {
     fun map(mode: HudMode, firstRun: Boolean = false, cashTipCue: Boolean = false, logShown: Boolean = mode == HudMode.LOG,
-        odometerLoaded: Boolean, odometerCue: Boolean = false, expenseCue: Boolean = false): DockModel {
+        odometerLoaded: Boolean, odometerCue: Boolean = false, expenseCue: Boolean = false, odometerShown: Boolean = true): DockModel {
         if (mode == HudMode.OFFER) return DockModel(emptyList())
         val kinds = when {
             mode != HudMode.RESTING -> listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG)
@@ -10,6 +10,7 @@ object DockMapper {
             else -> listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS)
         }
         return DockModel(kinds
+            .filter { odometerShown || it != DockKind.ODOMETER }
             .map { if (it == DockKind.LOG && logShown) DockKind.NOW else it }
             .map { kind ->
                 DockItem(kind, when {

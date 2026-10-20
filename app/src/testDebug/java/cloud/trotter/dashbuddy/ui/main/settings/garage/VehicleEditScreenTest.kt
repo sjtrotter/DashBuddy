@@ -72,6 +72,28 @@ class VehicleEditScreenTest {
         compose.waitForIdle()
     }
 
+    @Test fun `odometer switch appears after facts and toggling writes immediately`() {
+        runBlocking { whenever(repository.setOdometerShown(vehicle.id, false)).thenReturn(true) }
+        showEditor()
+        compose.onNodeWithText("Odometer").assertDoesNotExist()
+        finishLoading()
+        val toggle = compose.onNodeWithText("Odometer")
+        toggle.performScrollTo().assertIsEnabled().assertIsOn()
+        compose.onNodeWithText("Show odometer readings in the bubble").assertIsDisplayed()
+        val facts = compose.onNodeWithText("Cost per mile").fetchSemanticsNode()
+        val switch = toggle.fetchSemanticsNode()
+        val name = compose.onNodeWithText("Name").fetchSemanticsNode()
+        assertTrue(facts.positionInRoot.y < switch.positionInRoot.y)
+        assertTrue(switch.positionInRoot.y < name.positionInRoot.y)
+        toggle.performClick()
+        compose.waitForIdle()
+        runBlocking {
+            verify(repository).setOdometerShown(vehicle.id, false)
+            verify(repository, never()).updateVehicle(any(), anyOrNull(), any())
+        }
+        assertFalse(done)
+    }
+
     @Test fun `details show this car and cost per mile above the form`() {
         showEditor()
         finishLoading()
@@ -96,6 +118,7 @@ class VehicleEditScreenTest {
         runBlocking { whenever(repository.restore(vehicle.id)).thenReturn(true) }
         showEditor()
         finishLoading(retired = true)
+        compose.onNodeWithText("Odometer").assertDoesNotExist()
         compose.onNodeWithText("This car").assertIsDisplayed()
         compose.onNodeWithText("Edit costs").assertDoesNotExist()
         compose.onNodeWithText("Name").assertDoesNotExist()
@@ -140,6 +163,7 @@ class VehicleEditScreenTest {
     @Test fun `Add has no retire button`() {
         showEditor(editing = false)
         finishLoading()
+        compose.onNodeWithText("Odometer").assertDoesNotExist()
         compose.onNodeWithText("Retire vehicle").assertDoesNotExist()
         compose.onNodeWithText("This car").assertDoesNotExist()
     }

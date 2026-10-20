@@ -26,6 +26,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.domain.model.vehicle.odometerShownFor
 import cloud.trotter.dashbuddy.ui.components.vehicle.displayName
 import cloud.trotter.dashbuddy.core.data.chat.ChatRepository
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
@@ -210,6 +211,7 @@ class BubbleManager @Inject constructor(
                 // An unreadable garage is not "no vehicle": the sheet says the vehicles could not be read, so no cue.
                 if (garage == null || !garage.readable) return@launch
                 val vehicle = garage.active
+                if (!odometerShownFor(vehicle)) return@launch
                 val readings = odometerReadingRepository.readings.first()
                 val last = vehicle?.let { VehicleOdometerReading.latestFor(readings, it.id) }
                 if (OdometerCue.shows(enabled, startedAt = now, endedAt = null, last = last, loaded = true, now = now)) {

@@ -2,6 +2,7 @@ package cloud.trotter.dashbuddy.ui.bubble
 
 import android.widget.Toast
 import cloud.trotter.dashbuddy.R
+import cloud.trotter.dashbuddy.domain.model.vehicle.odometerShownFor
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -46,6 +47,8 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
+    val garage by viewModel.garage.collectAsStateWithLifecycle()
+    val odometerShown = odometerShownFor(garage?.takeIf { it.readable }?.active)
     val odometerLoaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
     val vehicleChip by viewModel.vehicleChip.collectAsStateWithLifecycle()
     val logOpenState = rememberSaveable { mutableStateOf(false) }
@@ -113,7 +116,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val openOdometer = remember(openSheet) { { openSheet(EntrySheet.ODOMETER) } }
     val cashTipCue = cashTip.Cue()
     val expenseCue = expense.Cue()
-    val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt)
+    val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt, odometerShown)
     LaunchedEffect(odometer.open) { dismissVehicleMenus() }
     val entrySheet: @Composable ColumnScope.() -> Unit = {
         when (lastSheet) {
@@ -152,7 +155,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             tipVisible || expenseVisible || odometerVisible
         }
     }
-    val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer) { { odometer.RestingFooter(openOdometer) } }
+    val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer, odometerShown) { { odometer.RestingFooter(openOdometer, odometerShown) } }
     BackHandler(enabled = logOpen) { logOpen = false }
     LaunchedEffect(viewModel, context) {
         viewModel.collapse.collect { context.collapseBubble() }
@@ -191,12 +194,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         pillGoal, goalDay?.date, goal, goalMark, goalEditing, editKey)
     LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
     val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, vehicleChip) {
+        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerShown, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, vehicleChip) {
         HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
             net, goal, todayProfit, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
-            goalSheetOpen = goalEditing, editedGoalKey = editKey, vehicleChip = vehicleChip)
+            goalSheetOpen = goalEditing, editedGoalKey = editKey, vehicleChip = vehicleChip, odometerShown = odometerShown)
     }
     val ribbon = remember(cards.stack, region?.session?.startedAt) {
         region?.session?.startedAt?.let { RibbonMapper.map(cards.stack, it) }

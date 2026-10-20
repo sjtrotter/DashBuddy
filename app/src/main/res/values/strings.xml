@@ -844,6 +844,8 @@
     <string name="garage_save_failed">Couldn\'t save. Try again.</string>
     <!-- Same wording as :feature:bubble hud_odometer_vehicles_unreadable. -->
     <string name="garage_vehicles_unreadable">Saved vehicles could not be read.</string>
+    <string name="vehicle_odometer_title">Odometer</string>
+    <string name="vehicle_odometer_summary">Show odometer readings in the bubble</string>
     <string name="vehicle_edit_title">Edit vehicle</string>
     <string name="vehicle_edit_add_title">Add vehicle</string>
     <string name="vehicle_edit_name">Name</string>

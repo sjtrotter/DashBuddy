@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import cloud.trotter.dashbuddy.core.data.vehicle.Garage
 import cloud.trotter.dashbuddy.domain.analytics.SessionRecord
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.Bicycle
 import cloud.trotter.dashbuddy.core.data.settings.AppPreferencesRepository
 import cloud.trotter.dashbuddy.core.designsystem.theme.DashBuddyTheme
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
@@ -101,6 +102,28 @@ class BubbleScreenTest {
             }
         }
         settle()
+    }
+
+    @Test fun `stored odometer visibility updates the dock while the vehicle chip stays reachable`() {
+        val bike = Vehicle("bike", "Bike", 1, Bicycle())
+        val garage = MutableStateFlow<Garage?>(Garage(listOf(bike), bike.id, true))
+        val vm = model()
+        whenever(vm.garage).thenReturn(garage)
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(bike, listOf(bike), bike.id, false)))
+        whenever(vm.vehicleSwapLocked()).thenReturn(false)
+        show(vm)
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertDoesNotExist()
+        compose.onNodeWithTag("hud.vehicle.chip").assertIsDisplayed().performClick(); settle()
+        compose.onNodeWithTag("hud.vehicle.menu").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
+        garage.value = Garage(listOf(bike.copy(odometerShown = true)), bike.id, true); settle()
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertIsDisplayed()
+        garage.value = Garage(listOf(bike), bike.id, true); settle()
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertDoesNotExist()
+        garage.value = Garage(emptyList(), null, false); settle()
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertIsDisplayed()
+        garage.value = Garage(emptyList(), null, true); settle()
+        compose.onNodeWithTag("hud.dock.ODOMETER").assertIsDisplayed()
     }
 
     @Test fun `locked chip shows toast and opens no menu`() {

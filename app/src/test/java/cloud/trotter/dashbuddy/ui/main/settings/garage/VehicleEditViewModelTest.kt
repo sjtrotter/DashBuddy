@@ -53,8 +53,9 @@ class VehicleEditViewModelTest {
         stored: Garage = Garage(emptyList(), null, true),
         economy: UserEconomy = UserEconomy(),
         lookupAllowed: Boolean = false,
+        storedFlow: kotlinx.coroutines.flow.Flow<Garage> = flowOf(stored),
     ): VehicleEditViewModel {
-        whenever(garage.garage).thenReturn(flowOf(stored))
+        whenever(garage.garage).thenReturn(storedFlow)
         whenever(garage.addVehicle(anyOrNull(), any(), any(), any())).thenReturn(Vehicle("new", null, 1234))
         whenever(garage.updateVehicle(any(), anyOrNull(), any())).thenReturn(true)
         whenever(preferences.userEconomy).thenReturn(flowOf(economy))
@@ -66,6 +67,67 @@ class VehicleEditViewModelTest {
         whenever(odometer.totalMilesFlow).thenReturn(flowOf(null))
         return VehicleEditViewModel(SavedStateHandle(id?.let { mapOf(Screen.VehicleEdit.ARG to it) } ?: emptyMap()),
             garage, lookup, preferences, clock, lock, dashVehicles, readings, odometer)
+    }
+
+    @Test fun `odometer visibility follows stored vehicle and writes without changing the Save draft`() = runTest {
+        val target = Vehicle("bike", "Bike", 1, Bicycle())
+        val active = Vehicle("car", "Car", 2)
+        val stored = MutableStateFlow(Garage(listOf(target, active), active.id, true))
+        val vm = model(target.id, storedFlow = stored)
+        assertNull(vm.odometerShown.value)
+        vm.setOdometerShown(true) // Loading drops the write.
+        runCurrent()
+        assertEquals(false, vm.odometerShown.value)
+        vm.setName("Draft name")
+        vm.draft.updateVehicleType(VehicleType.EV)
+        val draft = vm.draft.state.value
+        whenever(garage.setOdometerShown(target.id, true)).thenReturn(true)
+        vm.setOdometerShown(true)
+        vm.setOdometerShown(false) // Busy drops this write.
+        runCurrent()
+        verify(garage, times(1)).setOdometerShown(target.id, true)
+        verify(garage, never()).setOdometerShown(target.id, false)
+        assertEquals(false, vm.odometerShown.value) // Store, rather than draft or an optimistic value.
+        stored.value = stored.value.copy(vehicles = listOf(target.copy(odometerShown = true), active))
+        runCurrent()
+        assertEquals(true, vm.odometerShown.value)
+        assertEquals("Draft name", vm.name.value)
+        assertEquals(draft, vm.draft.state.value)
+        verify(garage, never()).updateVehicle(any(), anyOrNull(), any())
+        verify(lock, never()).locked()
+    }
+
+    @Test fun `refused odometer write uses GarageWriter failure path`() = runTest {
+        val target = Vehicle("car", "Car", 1)
+        val vm = model(target.id, Garage(listOf(target), target.id, true))
+        runCurrent()
+        whenever(garage.setOdometerShown(target.id, false)).thenReturn(false)
+        vm.setOdometerShown(false)
+        runCurrent()
+        assertEquals(GarageWriteFailure.GONE, vm.failure.value)
+        assertEquals(true, vm.odometerShown.value)
+        assertFalse(vm.busy.value)
+    }
+
+    @Test fun `unreadable odometer write uses GarageWriter failure path`() = runTest {
+        val target = Vehicle("car", "Car", 1)
+        val vm = model(target.id, Garage(listOf(target), target.id, true))
+        runCurrent()
+        whenever(garage.setOdometerShown(target.id, false)).thenThrow(VehiclesUnreadableException())
+        vm.setOdometerShown(false)
+        runCurrent()
+        assertEquals(GarageWriteFailure.UNREADABLE, vm.failure.value)
+        assertEquals(true, vm.odometerShown.value)
+        assertFalse(vm.busy.value)
+    }
+
+    @Test fun `Add has no odometer state and cannot write a visibility choice`() = runTest {
+        val vm = model()
+        runCurrent()
+        assertNull(vm.odometerShown.value)
+        vm.setOdometerShown(false)
+        runCurrent()
+        verify(garage, never()).setOdometerShown(any(), any())
     }
 
     @Test fun `retired vehicle loads facts and restore writes and completes`() = runTest {

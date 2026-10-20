@@ -11,6 +11,31 @@ import cloud.trotter.dashbuddy.domain.model.cards.*
 import cloud.trotter.dashbuddy.domain.model.event.AppEventType
 
 class DockMapperTest {
+    @Test fun `hidden odometer is removed from resting first run and every live dock`() {
+        for (mode in HudMode.entries) {
+            for (firstRun in listOf(false, true)) {
+                for (logShown in listOf(false, true)) {
+                    for (loaded in listOf(false, true)) {
+                        val shown = DockMapper.map(mode, firstRun = firstRun, logShown = logShown,
+                            odometerLoaded = loaded, odometerCue = true, odometerShown = true)
+                        val hidden = DockMapper.map(mode, firstRun = firstRun, logShown = logShown,
+                            odometerLoaded = loaded, odometerCue = true, odometerShown = false)
+                        assertEquals(shown.items.filter { it.kind != DockKind.ODOMETER }, hidden.items)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun `explicitly shown odometer keeps today's dock lists`() {
+        for (mode in HudMode.entries) {
+            for (firstRun in listOf(false, true)) {
+                assertEquals(DockMapper.map(mode, firstRun = firstRun, odometerLoaded = true),
+                    DockMapper.map(mode, firstRun = firstRun, odometerLoaded = true, odometerShown = true))
+            }
+        }
+    }
+
     @Test fun `odometer lights while the cue holds`() {
         for (mode in HudMode.entries.filter { it != HudMode.OFFER }) {
             for (cue in listOf(false, true)) {

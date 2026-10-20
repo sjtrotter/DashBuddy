@@ -9,6 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.dashbuddy.core.designsystem.time.rememberNow
 import cloud.trotter.dashbuddy.core.designsystem.time.LocalNowProvider
 import cloud.trotter.dashbuddy.domain.model.vehicle.DashVehicles
+import cloud.trotter.dashbuddy.domain.model.vehicle.odometerShownFor
 import cloud.trotter.dashbuddy.domain.model.vehicle.MileageReconciliation
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerCheckInput
 import cloud.trotter.dashbuddy.domain.model.vehicle.OdometerReadingCheck
@@ -110,10 +111,11 @@ internal class OdometerHud(
     }
 
     @Composable
-    fun RestingFooter(onOpen: () -> Unit = ::openSheet) {
+    fun RestingFooter(onOpen: () -> Unit = ::openSheet, odometerShown: Boolean = true) {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
         if (!loaded) return
         val garage by viewModel.garage.collectAsStateWithLifecycle()
+        if (!odometerShown || !odometerShownFor(garage?.takeIf { it.readable }?.active)) return
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
         val vehicle = garage?.active
         val lastReading = vehicle?.let { VehicleOdometerReading.latestFor(readings.orEmpty(), it.id) }
@@ -126,9 +128,10 @@ internal class OdometerHud(
 
     /** The start-window cue ticks once a minute while its window is open. */
     @Composable
-    fun Cue(startedAt: Long?, endedAt: Long?): Boolean {
+    fun Cue(startedAt: Long?, endedAt: Long?, odometerShown: Boolean = true): Boolean {
         val loaded by viewModel.odometerLoaded.collectAsStateWithLifecycle()
         val garage by viewModel.garage.collectAsStateWithLifecycle()
+        if (!odometerShown || !odometerShownFor(garage?.takeIf { it.readable }?.active)) return false
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
         val lastReading = garage?.active?.let { VehicleOdometerReading.latestFor(readings.orEmpty(), it.id) }
         val prompts by viewModel.odometerPrompts.collectAsStateWithLifecycle()

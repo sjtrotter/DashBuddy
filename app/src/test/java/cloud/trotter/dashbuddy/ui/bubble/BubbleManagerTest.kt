@@ -13,6 +13,7 @@ import cloud.trotter.dashbuddy.core.state.StateManagerV2
 import cloud.trotter.dashbuddy.domain.model.chat.ChatPersona
 import cloud.trotter.dashbuddy.domain.model.vehicle.LastOdometerReading
 import cloud.trotter.dashbuddy.domain.model.vehicle.Vehicle
+import cloud.trotter.dashbuddy.domain.model.vehicle.EBike
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleOdometerReading
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.flow.Flow
@@ -130,6 +131,18 @@ class BubbleManagerTest {
         } finally {
             timber.log.Timber.uproot(tree)
         }
+    }
+
+    @Test fun `an active e-bike posts only the Started line`() {
+        assertNoCue(fixture(active = vehicle.copy(profile = EBike())))
+    }
+
+    @Test fun `an active e-bike with its switch on posts the odometer line`() {
+        assertCue(fixture(active = vehicle.copy(profile = EBike(), odometerShown = true)))
+    }
+
+    @Test fun `a car with its switch off posts only the Started line`() {
+        assertNoCue(fixture(active = vehicle.copy(odometerShown = false)))
     }
 
     @Test fun `an unreadable garage posts the Started line only`() {

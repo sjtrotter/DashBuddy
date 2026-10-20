@@ -74,6 +74,8 @@ class VehicleEditViewModel @Inject constructor(
     val vehicle: StateFlow<Vehicle?> = combine(_vehicle, garageState) { loadedVehicle, garage ->
         loadedVehicle?.let { loaded -> garage?.vehicles?.firstOrNull { it.id == loaded.id } }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val odometerShown: StateFlow<Boolean?> = vehicle.map { it?.showsOdometer }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val retired: StateFlow<Boolean> = vehicle.map { it?.retiredAt != null }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val isActive: StateFlow<Boolean> = garageState.map { vehicleId != null && it?.active?.id == vehicleId }
@@ -156,6 +158,14 @@ class VehicleEditViewModel @Inject constructor(
             appPreferencesRepository.setVehicleLookupAllowed(true)
             draft.allowLookup()
             true
+        }
+    }
+
+    fun setOdometerShown(shown: Boolean) {
+        val id = vehicleId ?: return
+        if (!canWrite()) return
+        writer.write(refused = GarageWriteFailure.GONE) {
+            garageRepository.setOdometerShown(id, shown)
         }
     }
 

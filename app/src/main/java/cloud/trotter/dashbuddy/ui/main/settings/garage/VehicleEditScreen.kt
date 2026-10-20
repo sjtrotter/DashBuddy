@@ -56,6 +56,10 @@ fun VehicleEditScreen(onDone: () -> Unit, onEditCosts: () -> Unit, viewModel: Ve
                 VehicleFacts(it, onEditCosts = if (isActive && !retired) onEditCosts else null)
                 Spacer(Modifier.height(16.dp))
             }
+            if (viewModel.isEditing && vehicle != null && !retired) {
+                val odometerShown by viewModel.odometerShown.collectAsStateWithLifecycle()
+                odometerShown?.let { VehicleOdometerSwitch(it, enabled, viewModel::setOdometerShown) }
+            }
             if (retired) {
                 GarageFailure(failure)
                 Button(onClick = { viewModel.restore(onDone) }, enabled = enabled,

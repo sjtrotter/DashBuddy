@@ -21,6 +21,8 @@ The `?` suffix in `[must-watch?]` / `[superseded?]` marks a proposal, not an add
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [active] Odometer capability (#1361): make a bicycle or e-bike active — the dock has no Odometer block, no start-of-dash odometer line, no resting odometer footer; turn its Odometer switch on in Garage and they return; a car shows them by default. — Confirmed: 0/2
+
 - [active] CSV vehicle column (#1387): export, open sessions.csv — dashes since 10-19 show the car's name, older ones 'Unknown vehicle'; summary.csv lists miles per car under each tax year. — Confirmed: 0/2
 
 - [active] Vehicle details (#1383): the gear opens a page with the car's cost per mile, running costs, dashes and miles, and last odometer reading above the form; Edit costs only on the active car; retire a car, find it under Retired, open it and Restore it. — Confirmed: 0/2
