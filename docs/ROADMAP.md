@@ -5,7 +5,7 @@
 this doc rots (#946: the previous revision sat untouched from 07-12 to 10-04; the agreed cadence is
 **every PR that changes a bucket updates this file**, same rule as `CLAUDE.md`). Companions:
 `CLAUDE.md` (architecture summary), `docs/architecture/0N-*.md` (receipt-level references),
-`docs/field-testing/README.md` (the live checklist).
+`docs/field-testing/CHECKLIST.md` (the live checklist index; dated logs in `docs/field-testing/README.md`).
 
 ## Where the project is (one paragraph)
 

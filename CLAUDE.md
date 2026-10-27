@@ -1441,25 +1441,28 @@ Rules, in precedence order:
 
 **At the START of a field-testing session** — when the developer signals they're about to
 dash or are starting a field test (e.g. "starting a field test", "about to dash", "heading
-out", "field testing now", "what should I look for") — **first read the
-`docs/field-testing/CHECKLIST.md` (§1 must-watch first), and
-report it back concisely**: tell the developer, in plain terms, what to watch for and how to
+out", "field testing now", "what should I look for") — **first read §1 of the index
+`docs/field-testing/CHECKLIST.md` and the item files it links (each item is a file under
+`docs/field-testing/checklist/open/`; `grep -l '^status: must-watch' docs/field-testing/checklist/open/*`
+lists the must-watch ones), and report it back concisely**: tell the developer, in plain terms, what to watch for and how to
 tell if each item is working. This is the primary job of a field-testing agent launched on
 the phone before a dash. Keep it short and glanceable — they're about to be driving.
 
 **Each checklist item needs two independent field confirmations before it's validated** — a
 single dash can pass by luck or miss the edge case. Track with a `- Confirmed: N/2` sub-line
-in `docs/field-testing/CHECKLIST.md` (§1 must-watch first), noting each sighting's date/conditions.
-Keep 2/2 items in §5 and record the evidence in the dated session log; report broken findings
-there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
+in the item's file under `docs/field-testing/checklist/open/` (plus its `confirmed:` header line and
+its index line in `CHECKLIST.md`), noting each sighting's date/conditions. At 2/2, `git mv` the file
+to `checklist/closed/` with `status: field-validated`, move its index line to §5, and record the
+evidence in the dated session log; report broken findings there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
 desk-verified + 3 clean incidental dashes — pending the dev's confirmation); never record an unwitnessed confirmation.
 An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are the dev's.
 
 **Closing the loop — add items when work needs field validation.** Whenever you open a PR or
 close an issue for a change that **needs or would benefit from field validation** — on-dash
 behavior, bubble/HUD changes, recognition rules or parsers, or anything verified only against
-captured data — **also add a matching item to `docs/field-testing/CHECKLIST.md`
-(§1 must-watch first)** (what to watch + how to tell it's working + the PR/issue number, starting at
+captured data — **also add a matching item: a new file in `docs/field-testing/checklist/open/`
+(the four header lines `status:`/`section:`/`issues:`/`confirmed:`, a blank line, then the item) plus
+its line in the `docs/field-testing/CHECKLIST.md` index** (what to watch + how to tell it's working + the PR/issue number, starting at
 `Confirmed: 0/2`). Treat this as part of finishing the PR/closing the issue, not an
 afterthought — it's how field-validation work reaches the developer on the next dash.
 
@@ -1468,8 +1471,9 @@ any of: "this is a field testing log", "dashing log", "field log", "on-dash test
 or just rattling off bugs/UX observations from time spent driving — the right action is to
 **record, not fix**:
 
-1. **Add an entry to `docs/field-testing/README.md`**, newest first, following the format
-   documented at the top of that file (Date / Platform(s) tested / Branch under test / Field
+1. **Add a new file `docs/field-testing/sessions/YYYY-MM-DD-<slug>.md` and its line at the top of
+   the `## Sessions` index in `docs/field-testing/README.md`**, following the format documented at
+   the top of that README (Date / Platform(s) tested / Branch under test / Field
    conditions / sectioned observations). Item numbers are session-local — reset to #1 each
    session.
 2. **Don't start implementing — but desk-side exploration is encouraged.** Reading the
