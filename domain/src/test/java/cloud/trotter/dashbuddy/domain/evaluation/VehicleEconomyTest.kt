@@ -133,16 +133,16 @@ class VehicleEconomyTest {
 
     @Test fun `draft overrides preserve untouched nulls and commit explicit cost groups`() {
         val original = GasCar(make = "Honda", mpg = 31.0, wear = WearProfile(oilCost = 90.0))
-        val draft = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
-            includeDepreciation = false, purchasePrice = 25_000.0, totalLifetimeMi = 180_000.0,
-            insuranceDeltaPerMonth = 0.0,
+        val draft = EconomyDraft(wear = WearProfile(tireSetCost = 720.0, tireLifetimeMi = 48_000.0),
+            fixed = FixedCosts(includeDepreciation = false, purchasePrice = 25_000.0, totalLifetimeMi = 180_000.0,
+                insuranceDeltaPerMonth = 0.0),
             userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PURCHASE_PRICE, EconomyField.INSURANCE_DELTA))
         assertEquals(original.copy(wear = original.wear.copy(tireSetCost = 720.0),
             fixed = original.fixed.copy(purchasePrice = 25_000.0, insuranceDeltaPerMonth = 0.0)), EconomyFieldGroups.updateProfile(original, draft))
         assertEquals(original.copy(wear = original.wear.copy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0),
             fixed = original.fixed.copy(purchasePrice = 25_000.0, insuranceDeltaPerMonth = 0.0)),
             EconomyFieldGroups.updateProfile(original, draft.copy(userSetFields = draft.userSetFields + EconomyField.TIRE_LIFETIME)))
-        assertEquals(original, EconomyFieldGroups.updateProfile(original, UserEconomy(userSetFields = setOf(EconomyField.PHONE_PLAN_TOTAL))))
+        assertEquals(original, EconomyFieldGroups.updateProfile(original, EconomyDraft(userSetFields = setOf(EconomyField.PHONE_PLAN_TOTAL))))
     }
 
     @Test fun `every EconomyField belongs to exactly one group and inactive writes are ignored`() {
@@ -150,9 +150,9 @@ class VehicleEconomyTest {
         assertEquals(EconomyField.entries.toSet(), fields.toSet())
         assertEquals(EconomyField.entries.size, fields.size)
         val bike = Bicycle()
-        assertEquals(bike, EconomyFieldGroups.updateProfile(bike, UserEconomy(oilCost = 100.0,
+        assertEquals(bike, EconomyFieldGroups.updateProfile(bike, EconomyDraft(wear = WearProfile(oilCost = 100.0),
             userSetFields = setOf(EconomyField.OIL_COST))))
-        val draft = UserEconomy(chainCost = 70.0, chainLifeMi = 4_000.0, batteryCost = 600.0, batteryLifeMi = 20_000.0,
+        val draft = EconomyDraft(wear = WearProfile(chainCost = 70.0, chainLifeMi = 4_000.0, batteryCost = 600.0, batteryLifeMi = 20_000.0),
             userSetFields = setOf(EconomyField.CHAIN_COST, EconomyField.BATTERY_COST))
         val result = EconomyFieldGroups.updateProfile(EBike(), draft)
         assertEquals(WearProfile(chainCost = 70.0, batteryCost = 600.0), result.wear)

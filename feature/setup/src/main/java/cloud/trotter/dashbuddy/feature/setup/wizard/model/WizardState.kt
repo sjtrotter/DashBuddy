@@ -12,9 +12,6 @@ import cloud.trotter.dashbuddy.domain.evaluation.*
  * Represents the volatile UI state of the Setup Wizard before it is committed to DataStore.
  */
 data class WizardState(
-    val chainCost: Double = 0.0, val chainLifeMi: Double = 1.0,
-    val batteryCost: Double = 0.0, val batteryLifeMi: Double = 1.0,
-    val beltCost: Double = 0.0, val beltLifeMi: Double = 1.0,
     // Gas Variables
     val fuelType: FuelType = FuelType.REGULAR,
     val isGasPriceAuto: Boolean = false,
@@ -23,22 +20,32 @@ data class WizardState(
     val fetchedGasPrices: Map<FuelType, Float> = emptyMap(),
 
     // Personal Economy v2 — operating cost components (#145)
-    val tireSetCost: Double = VehicleClass.SEDAN.tireSetCost,
-    val tireLifetimeMi: Double = VehicleClass.SEDAN.tireLifetimeMi,
-    val oilCost: Double = VehicleClass.SEDAN.oilCost,
-    val oilIntervalMi: Double = VehicleClass.SEDAN.oilIntervalMi,
-    val brakesCost: Double = VehicleClass.SEDAN.brakesCost,
-    val brakesIntervalMi: Double = VehicleClass.SEDAN.brakesIntervalMi,
-    val fluidsCost: Double = VehicleClass.SEDAN.fluidsCost,
-    val fluidsIntervalMi: Double = VehicleClass.SEDAN.fluidsIntervalMi,
-    val miscYearly: Double = VehicleClass.SEDAN.miscYearly,
-    val miscYearlyMi: Double = VehicleClass.SEDAN.miscYearlyMi,
-    val includeDepreciation: Boolean = true,
-    val purchasePrice: Double = VehicleClass.SEDAN.purchasePrice,
-    val totalLifetimeMi: Double = VehicleClass.SEDAN.totalLifetimeMi,
-    val insuranceDeltaPerMonth: Double = 0.0,
-    val registrationDeltaPerYear: Double = 0.0,
-    val expectedAnnualMiles: Double = UserEconomy.DEFAULT_ANNUAL_MI,
+    val wear: WearProfile = WearProfile(
+        tireSetCost = VehicleClass.SEDAN.tireSetCost,
+        tireLifetimeMi = VehicleClass.SEDAN.tireLifetimeMi,
+        oilCost = VehicleClass.SEDAN.oilCost,
+        oilIntervalMi = VehicleClass.SEDAN.oilIntervalMi,
+        brakesCost = VehicleClass.SEDAN.brakesCost,
+        brakesIntervalMi = VehicleClass.SEDAN.brakesIntervalMi,
+        fluidsCost = VehicleClass.SEDAN.fluidsCost,
+        fluidsIntervalMi = VehicleClass.SEDAN.fluidsIntervalMi,
+        miscYearly = VehicleClass.SEDAN.miscYearly,
+        miscYearlyMi = VehicleClass.SEDAN.miscYearlyMi,
+        chainCost = 0.0,
+        chainLifeMi = 1.0,
+        batteryCost = 0.0,
+        batteryLifeMi = 1.0,
+        beltCost = 0.0,
+        beltLifeMi = 1.0,
+    ),
+    val fixed: FixedCosts = FixedCosts(
+        includeDepreciation = true,
+        purchasePrice = VehicleClass.SEDAN.purchasePrice,
+        totalLifetimeMi = VehicleClass.SEDAN.totalLifetimeMi,
+        insuranceDeltaPerMonth = 0.0,
+        registrationDeltaPerYear = 0.0,
+        expectedAnnualMiles = UserEconomy.DEFAULT_ANNUAL_MI,
+    ),
     val phonePlanTotal: Double = UserEconomy.DEFAULT_PHONE_PLAN_TOTAL,
     val phonePlanLines: Int = UserEconomy.DEFAULT_PHONE_PLAN_LINES,
     val phoneBusinessPercent: Double = UserEconomy.DEFAULT_PHONE_BUSINESS_PERCENT,
@@ -66,8 +73,20 @@ data class WizardState(
     val maxItems: Float = 15.0f // Shopping
 )
 
+private fun WizardState.sharedDraft(vehicle: VehicleDraftState): SharedEconomy = SharedEconomy(
+    gasPricePerGallon = gasPrice.toDouble(),
+    electricityPricePerKwh = vehicle.electricityPricePerKwh,
+    avgMinutesPerMile = avgMinutesPerMile,
+    basePickupMinutes = basePickupMinutes,
+    phonePlanTotal = phonePlanTotal,
+    phonePlanLines = phonePlanLines,
+    phoneBusinessPercent = phoneBusinessPercent,
+    expectedAnnualMiles = fixed.expectedAnnualMiles ?: UserEconomy.DEFAULT_ANNUAL_MI,
+    userSetFields = userSetEconomyFields + vehicle.userSetFields,
+)
+
 /**
- * Projects the wizard's in-memory economy edits onto a [UserEconomy] — the single
+ * Projects the wizard's in-memory economy edits onto an [EconomyDraft] — the single
  * owner of this conversion (#357). The ECONOMY_COSTS card uses it to drive live
  * $/mi summaries and "(default)" badges; [cloud.trotter.dashbuddy.feature.setup.wizard.WizardViewModel.saveAndFinish]
  * commits its vehicle overrides in one targeted profile write and mirrors the
@@ -75,51 +94,42 @@ data class WizardState(
  * [userSetEconomyFields] together with the vehicle draft's fields so the repository
  * persists exactly the fields the user touched.
  */
-private fun WizardState.draftEconomy(vehicle: VehicleDraftState): UserEconomy = UserEconomy(
+private fun WizardState.draft(vehicle: VehicleDraftState): EconomyDraft = EconomyDraft(
     vehicleClass = vehicle.vehicleClass,
-    kwhPer100Mi = vehicle.kwhPer100Mi, whPerMile = vehicle.whPerMile, electricityPricePerKwh = vehicle.electricityPricePerKwh,
-    chainCost = chainCost, chainLifeMi = chainLifeMi, batteryCost = batteryCost, batteryLifeMi = batteryLifeMi,
-    beltCost = beltCost, beltLifeMi = beltLifeMi,
-    vehicleMpg = vehicle.mpg.toDouble(),
-    gasPricePerGallon = gasPrice.toDouble(),
-    avgMinutesPerMile = avgMinutesPerMile,
-    basePickupMinutes = basePickupMinutes,
-    tireSetCost = tireSetCost, tireLifetimeMi = tireLifetimeMi,
-    oilCost = oilCost, oilIntervalMi = oilIntervalMi,
-    brakesCost = brakesCost, brakesIntervalMi = brakesIntervalMi,
-    fluidsCost = fluidsCost, fluidsIntervalMi = fluidsIntervalMi,
-    miscYearly = miscYearly, miscYearlyMi = miscYearlyMi,
-    includeDepreciation = includeDepreciation,
-    purchasePrice = purchasePrice, totalLifetimeMi = totalLifetimeMi,
-    insuranceDeltaPerMonth = insuranceDeltaPerMonth,
-    registrationDeltaPerYear = registrationDeltaPerYear,
-    expectedAnnualMiles = expectedAnnualMiles,
-    phonePlanTotal = phonePlanTotal,
-    phonePlanLines = phonePlanLines,
-    phoneBusinessPercent = phoneBusinessPercent,
+    mpg = vehicle.mpg.toDouble(),
+    kwhPer100Mi = vehicle.kwhPer100Mi,
+    whPerMile = vehicle.whPerMile,
+    wear = wear,
+    fixed = fixed,
+    shared = sharedDraft(vehicle),
     userSetFields = userSetEconomyFields + vehicle.userSetFields,
 )
 
 fun WizardState.toVehicleProfile(vehicle: VehicleDraftState): VehicleProfile =
-    EconomyFieldGroups.updateProfile(vehicle.profile(), draftEconomy(vehicle).copy(userSetFields = userSetEconomyFields))
+    EconomyFieldGroups.updateProfile(vehicle.profile(), draft(vehicle).copy(userSetFields = userSetEconomyFields))
 
 fun WizardState.toUserEconomy(vehicle: VehicleDraftState): UserEconomy {
-    val shared = SharedEconomy.from(draftEconomy(vehicle))
+    val shared = sharedDraft(vehicle)
     return UserEconomy.from(VehicleEconomyInputs.from(toVehicleProfile(vehicle), shared), shared)
+}
+
+/**
+ * The draft the legacy preference mirror saves. Its user-set fields are the resolved vehicle's, as
+ * [UserEconomy.from] computes them: the saved profile's applicable overrides plus the shared fields, so a cost
+ * edited before a type change that no longer applies is not mirrored.
+ */
+fun WizardState.toEconomyDraft(vehicle: VehicleDraftState): EconomyDraft {
+    val draft = draft(vehicle)
+    return draft.copy(userSetFields = EconomyFieldGroups.userSetFields(toVehicleProfile(vehicle)) +
+        draft.userSetFields.filter { it !in EconomyFieldGroups.vehicleFields })
 }
 
 fun WizardState.withTypeDefaults(vehicle: VehicleDraftState): WizardState {
     val resolved = toUserEconomy(vehicle)
+    val detail = resolved.vehicleInputs?.disclosure ?: return this
     return copy(
-        tireSetCost = resolved.tireSetCost, tireLifetimeMi = resolved.tireLifetimeMi,
-        oilCost = resolved.oilCost, oilIntervalMi = resolved.oilIntervalMi,
-        brakesCost = resolved.brakesCost, brakesIntervalMi = resolved.brakesIntervalMi,
-        fluidsCost = resolved.fluidsCost, fluidsIntervalMi = resolved.fluidsIntervalMi,
-        miscYearly = resolved.miscYearly, miscYearlyMi = resolved.miscYearlyMi,
-        purchasePrice = resolved.purchasePrice, totalLifetimeMi = resolved.totalLifetimeMi,
-        chainCost = resolved.chainCost, chainLifeMi = resolved.chainLifeMi,
-        batteryCost = resolved.batteryCost, batteryLifeMi = resolved.batteryLifeMi,
-        beltCost = resolved.beltCost, beltLifeMi = resolved.beltLifeMi,
+        wear = detail.wear,
+        fixed = fixed.copy(purchasePrice = detail.fixed.purchasePrice, totalLifetimeMi = detail.fixed.totalLifetimeMi),
         avgMinutesPerMile = resolved.avgMinutesPerMile, basePickupMinutes = resolved.basePickupMinutes,
     )
 }

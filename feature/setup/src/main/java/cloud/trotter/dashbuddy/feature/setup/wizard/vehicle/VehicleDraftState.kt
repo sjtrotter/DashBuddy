@@ -1,5 +1,6 @@
 package cloud.trotter.dashbuddy.feature.setup.wizard.vehicle
 
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyDraft
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
@@ -40,9 +41,9 @@ data class VehicleDraftState(
         ) else profile
         if (EconomyField.VEHICLE_MPG in userSetFields) edited = edited.withGas(mpg = mpg.toDouble())
         val consumptionFields = setOf(EconomyField.KWH_PER_100_MI, EconomyField.WH_PER_MILE)
-        val economy = UserEconomy(kwhPer100Mi = kwhPer100Mi, whPerMile = whPerMile,
+        val draft = EconomyDraft(kwhPer100Mi = kwhPer100Mi, whPerMile = whPerMile,
             userSetFields = userSetFields intersect consumptionFields)
-        return EconomyFieldGroups.updateProfile(edited, economy)
+        return EconomyFieldGroups.updateProfile(edited, draft)
     }
 
     companion object {

@@ -8,6 +8,7 @@ import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.dashbuddy.domain.analytics.WindowGranularity
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyFieldGroups
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyDraft
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.VehicleEconomyInputs
@@ -347,11 +348,11 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun restoreTimeConstantOverride(field: EconomyField, previous: StoredPreference<Double>, expected: StoredPreference<Double>, current: () -> Boolean = { true }) = dataSource.restoreTimeConstantOverride(field, previous, expected, current)
 
     /** Legacy app_prefs writes only; deferred editors own their targeted garage write. */
-    suspend fun mirrorUserSetEconomy(economy: UserEconomy) {
-        fun edited(field: EconomyField, value: Double): Double? = value.takeIf { field in economy.userSetFields }
+    suspend fun mirrorUserSetEconomy(draft: EconomyDraft) {
+        fun edited(field: EconomyField, value: Double): Double? = value.takeIf { field in draft.userSetFields }
         for (group in EconomyFieldGroups.entries) {
-            if (group.fields.none { it in economy.userSetFields }) continue
-            when (val value = group.readFromEconomy(economy)) {
+            if (group.fields.none { it in draft.userSetFields }) continue
+            when (val value = group.read(draft)) {
                 // These have dedicated mirror methods used by deferred editors.
                 is EconomyFieldGroups.VehicleClassValue,
                 is EconomyFieldGroups.Mpg,
@@ -377,7 +378,7 @@ class AppPreferencesRepository @Inject constructor(
                     edited(EconomyField.MISC_YEARLY_MI, value.miles),
                 )
                 is EconomyFieldGroups.Depreciation -> dataSource.updateDepreciation(
-                    value.include.takeIf { EconomyField.INCLUDE_DEPRECIATION in economy.userSetFields },
+                    value.include.takeIf { EconomyField.INCLUDE_DEPRECIATION in draft.userSetFields },
                     edited(EconomyField.PURCHASE_PRICE, value.price),
                     edited(EconomyField.TOTAL_LIFETIME_MI, value.lifetime),
                 )
@@ -385,9 +386,9 @@ class AppPreferencesRepository @Inject constructor(
                 is EconomyFieldGroups.Registration -> dataSource.updateRegistrationDelta(value.value)
                 is EconomyFieldGroups.AnnualMiles -> dataSource.updateExpectedAnnualMi(value.value)
                 is EconomyFieldGroups.Phone -> {
-                    if (EconomyField.PHONE_PLAN_TOTAL in economy.userSetFields) dataSource.updatePhoneTotal(value.total)
-                    if (EconomyField.PHONE_PLAN_LINES in economy.userSetFields) dataSource.updatePhoneLines(value.lines)
-                    if (EconomyField.PHONE_BUSINESS_PERCENT in economy.userSetFields) dataSource.updatePhoneShare(value.percent)
+                    if (EconomyField.PHONE_PLAN_TOTAL in draft.userSetFields) dataSource.updatePhoneTotal(value.total)
+                    if (EconomyField.PHONE_PLAN_LINES in draft.userSetFields) dataSource.updatePhoneLines(value.lines)
+                    if (EconomyField.PHONE_BUSINESS_PERCENT in draft.userSetFields) dataSource.updatePhoneShare(value.percent)
                 }
                 is EconomyFieldGroups.Pace -> dataSource.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, value.value)
                 is EconomyFieldGroups.Chain, is EconomyFieldGroups.Battery,

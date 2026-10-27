@@ -9,7 +9,8 @@ import cloud.trotter.dashbuddy.core.datastore.settings.StoredGasPrice
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
 import cloud.trotter.dashbuddy.domain.model.vehicle.VehicleClass
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
-import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyDraft
+import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
 import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import kotlinx.coroutines.CancellationException
@@ -82,9 +83,9 @@ class VehicleEconomyPreferenceTest {
         garage.selectVehicle(first.id)
         garage.selectVehicle(second.id)
         val before = garage.garage.first()
-        val economy = UserEconomy(tireSetCost = 720.0, tireLifetimeMi = 48_000.0,
-            phonePlanTotal = 80.0, phonePlanLines = 2, phoneBusinessPercent = 50.0,
-            avgMinutesPerMile = 3.0,
+        val economy = EconomyDraft(wear = WearProfile(tireSetCost = 720.0, tireLifetimeMi = 48_000.0),
+            shared = SharedEconomy(phonePlanTotal = 80.0, phonePlanLines = 2, phoneBusinessPercent = 50.0,
+                avgMinutesPerMile = 3.0),
             userSetFields = setOf(EconomyField.TIRE_COST, EconomyField.PHONE_PLAN_TOTAL, EconomyField.AVG_MIN_PER_MILE))
 
         repo.mirrorFuelType(FuelType.PREMIUM)
@@ -121,8 +122,8 @@ class VehicleEconomyPreferenceTest {
             produceFile = { tmp.newFile("shared-prefs.preferences_pb") }))
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("shared-garage.preferences_pb") })))
-        AppPreferencesRepository(source, garage).mirrorUserSetEconomy(UserEconomy(
-            avgMinutesPerMile = 3.0, userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE),
+        AppPreferencesRepository(source, garage).mirrorUserSetEconomy(EconomyDraft(
+            shared = SharedEconomy(avgMinutesPerMile = 3.0), userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE),
         ))
         assertTrue(garage.garage.first().vehicles.isEmpty())
         assertEquals(3.0, source.avgMinPerMile.first())

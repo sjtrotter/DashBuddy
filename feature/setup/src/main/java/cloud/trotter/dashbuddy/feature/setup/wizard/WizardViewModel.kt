@@ -18,7 +18,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.FuelType
 import cloud.trotter.dashbuddy.domain.model.vehicle.*
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardState
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.WizardStep
-import cloud.trotter.dashbuddy.feature.setup.wizard.model.toUserEconomy
+import cloud.trotter.dashbuddy.feature.setup.wizard.model.toEconomyDraft
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.toVehicleProfile
 import cloud.trotter.dashbuddy.feature.setup.wizard.model.withTypeDefaults
 import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraft
@@ -136,9 +136,6 @@ class WizardViewModel @Inject constructor(
             ))
             _state.update { currentState ->
                 currentState.copy(
-                    chainCost = storedEconomy.chainCost, chainLifeMi = storedEconomy.chainLifeMi,
-                    batteryCost = storedEconomy.batteryCost, batteryLifeMi = storedEconomy.batteryLifeMi,
-                    beltCost = storedEconomy.beltCost, beltLifeMi = storedEconomy.beltLifeMi,
                     fuelType = currentFuelType,
                     isGasPriceAuto = currentGasAuto,
                     gasPrice = currentGasPrice,
@@ -153,22 +150,8 @@ class WizardViewModel @Inject constructor(
                     maxItems = maxItemsRule?.targetValue ?: 15.0f,
 
                     // Personal Economy v2 (#145)
-                    tireSetCost = storedEconomy.tireSetCost,
-                    tireLifetimeMi = storedEconomy.tireLifetimeMi,
-                    oilCost = storedEconomy.oilCost,
-                    oilIntervalMi = storedEconomy.oilIntervalMi,
-                    brakesCost = storedEconomy.brakesCost,
-                    brakesIntervalMi = storedEconomy.brakesIntervalMi,
-                    fluidsCost = storedEconomy.fluidsCost,
-                    fluidsIntervalMi = storedEconomy.fluidsIntervalMi,
-                    miscYearly = storedEconomy.miscYearly,
-                    miscYearlyMi = storedEconomy.miscYearlyMi,
-                    includeDepreciation = storedEconomy.includeDepreciation,
-                    purchasePrice = storedEconomy.purchasePrice,
-                    totalLifetimeMi = storedEconomy.totalLifetimeMi,
-                    insuranceDeltaPerMonth = storedEconomy.insuranceDeltaPerMonth,
-                    registrationDeltaPerYear = storedEconomy.registrationDeltaPerYear,
-                    expectedAnnualMiles = storedEconomy.expectedAnnualMiles,
+                    wear = storedEconomy.vehicleInputs?.disclosure?.wear ?: currentState.wear,
+                    fixed = storedEconomy.vehicleInputs?.disclosure?.fixed ?: currentState.fixed,
                     phonePlanTotal = storedEconomy.phonePlanTotal,
                     phonePlanLines = storedEconomy.phonePlanLines,
                     phoneBusinessPercent = storedEconomy.phoneBusinessPercent,
@@ -193,91 +176,91 @@ class WizardViewModel @Inject constructor(
     }
 
     fun updateChainCost(value: Double) = _state.update {
-        it.copy(chainCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.CHAIN_COST)
+        it.copy(wear = it.wear.copy(chainCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.CHAIN_COST)
     }
 
     fun updateChainLifetime(value: Double) = _state.update {
-        it.copy(chainLifeMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.CHAIN_LIFETIME)
+        it.copy(wear = it.wear.copy(chainLifeMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.CHAIN_LIFETIME)
     }
 
     fun updateBatteryCost(value: Double) = _state.update {
-        it.copy(batteryCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BATTERY_COST)
+        it.copy(wear = it.wear.copy(batteryCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BATTERY_COST)
     }
 
     fun updateBatteryLifetime(value: Double) = _state.update {
-        it.copy(batteryLifeMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BATTERY_LIFETIME)
+        it.copy(wear = it.wear.copy(batteryLifeMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BATTERY_LIFETIME)
     }
 
     fun updateBeltCost(value: Double) = _state.update {
-        it.copy(beltCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BELT_COST)
+        it.copy(wear = it.wear.copy(beltCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BELT_COST)
     }
 
     fun updateBeltLifetime(value: Double) = _state.update {
-        it.copy(beltLifeMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BELT_LIFETIME)
+        it.copy(wear = it.wear.copy(beltLifeMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BELT_LIFETIME)
     }
 
     fun updateTireCost(value: Double) = _state.update {
-        it.copy(tireSetCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.TIRE_COST)
+        it.copy(wear = it.wear.copy(tireSetCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.TIRE_COST)
     }
 
     fun updateTireLifetime(value: Double) = _state.update {
-        it.copy(tireLifetimeMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.TIRE_LIFETIME)
+        it.copy(wear = it.wear.copy(tireLifetimeMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.TIRE_LIFETIME)
     }
 
     fun updateOilCost(value: Double) = _state.update {
-        it.copy(oilCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.OIL_COST)
+        it.copy(wear = it.wear.copy(oilCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.OIL_COST)
     }
 
     fun updateOilInterval(value: Double) = _state.update {
-        it.copy(oilIntervalMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.OIL_INTERVAL)
+        it.copy(wear = it.wear.copy(oilIntervalMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.OIL_INTERVAL)
     }
 
     fun updateBrakesCost(value: Double) = _state.update {
-        it.copy(brakesCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BRAKES_COST)
+        it.copy(wear = it.wear.copy(brakesCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BRAKES_COST)
     }
 
     fun updateBrakesInterval(value: Double) = _state.update {
-        it.copy(brakesIntervalMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BRAKES_INTERVAL)
+        it.copy(wear = it.wear.copy(brakesIntervalMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.BRAKES_INTERVAL)
     }
 
     fun updateFluidsCost(value: Double) = _state.update {
-        it.copy(fluidsCost = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.FLUIDS_COST)
+        it.copy(wear = it.wear.copy(fluidsCost = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.FLUIDS_COST)
     }
 
     fun updateFluidsInterval(value: Double) = _state.update {
-        it.copy(fluidsIntervalMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.FLUIDS_INTERVAL)
+        it.copy(wear = it.wear.copy(fluidsIntervalMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.FLUIDS_INTERVAL)
     }
 
     fun updateMiscYearly(value: Double) = _state.update {
-        it.copy(miscYearly = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.MISC_YEARLY)
+        it.copy(wear = it.wear.copy(miscYearly = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.MISC_YEARLY)
     }
 
     fun updateMiscMiles(value: Double) = _state.update {
-        it.copy(miscYearlyMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.MISC_YEARLY_MI)
+        it.copy(wear = it.wear.copy(miscYearlyMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.MISC_YEARLY_MI)
     }
 
     fun updateDepreciationInclude(value: Boolean) = _state.update {
-        it.copy(includeDepreciation = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.INCLUDE_DEPRECIATION)
+        it.copy(fixed = it.fixed.copy(includeDepreciation = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.INCLUDE_DEPRECIATION)
     }
 
     fun updatePurchasePrice(value: Double) = _state.update {
-        it.copy(purchasePrice = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.PURCHASE_PRICE)
+        it.copy(fixed = it.fixed.copy(purchasePrice = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.PURCHASE_PRICE)
     }
 
     fun updateLifetimeMiles(value: Double) = _state.update {
-        it.copy(totalLifetimeMi = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.TOTAL_LIFETIME_MI)
+        it.copy(fixed = it.fixed.copy(totalLifetimeMi = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.TOTAL_LIFETIME_MI)
     }
 
     fun updateInsuranceDelta(value: Double) = _state.update {
-        it.copy(insuranceDeltaPerMonth = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.INSURANCE_DELTA)
+        it.copy(fixed = it.fixed.copy(insuranceDeltaPerMonth = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.INSURANCE_DELTA)
     }
 
     fun updateRegistrationDelta(value: Double) = _state.update {
-        it.copy(registrationDeltaPerYear = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.REGISTRATION_DELTA)
+        it.copy(fixed = it.fixed.copy(registrationDeltaPerYear = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.REGISTRATION_DELTA)
     }
 
     fun updateExpectedAnnualMiles(value: Double) = _state.update {
-        it.copy(expectedAnnualMiles = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.EXPECTED_ANNUAL_MI)
+        it.copy(fixed = it.fixed.copy(expectedAnnualMiles = value), userSetEconomyFields = it.userSetEconomyFields + EconomyField.EXPECTED_ANNUAL_MI)
     }
 
     fun updatePhoneTotal(value: Double) = _state.update {
@@ -432,7 +415,6 @@ class WizardViewModel @Inject constructor(
             val finalState = _state.value
             val vehicle = vehicleDraft.state.value
 
-            val economy = finalState.toUserEconomy(vehicle)
             try {
                 // Capture the save target now; later switches do not redirect this draft.
                 val garage = garageRepository.garage.first()
@@ -455,7 +437,7 @@ class WizardViewModel @Inject constructor(
 
             appPreferencesRepository.mirrorFuelType(finalState.fuelType)
             appPreferencesRepository.mirrorVehicleClass(vehicle.vehicleClass)
-            appPreferencesRepository.mirrorUserSetEconomy(economy)
+            appPreferencesRepository.mirrorUserSetEconomy(finalState.toEconomyDraft(vehicle))
 
             appPreferencesRepository.mirrorEconomySettings(
                 vehicle.year, vehicle.make,

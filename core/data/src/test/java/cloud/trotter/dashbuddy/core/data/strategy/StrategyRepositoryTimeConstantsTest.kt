@@ -7,11 +7,12 @@ import cloud.trotter.dashbuddy.core.data.vehicle.GarageRepository
 import cloud.trotter.dashbuddy.core.datastore.settings.AppPreferencesDataSource
 import cloud.trotter.dashbuddy.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.dashbuddy.core.datastore.vehicle.VehicleDataSource
+import cloud.trotter.dashbuddy.domain.evaluation.EconomyDraft
+import cloud.trotter.dashbuddy.domain.evaluation.SharedEconomy
 import cloud.trotter.dashbuddy.domain.evaluation.EconomyField
 import cloud.trotter.dashbuddy.domain.evaluation.LearnedTimeConstants
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantPair
 import cloud.trotter.dashbuddy.domain.evaluation.TimeConstantSeeds
-import cloud.trotter.dashbuddy.domain.evaluation.UserEconomy
 import cloud.trotter.dashbuddy.domain.state.Platform
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
@@ -87,12 +88,12 @@ class StrategyRepositoryTimeConstantsTest {
             produceFile = { tmp.newFile("independent.preferences_pb") })
         val source = AppPreferencesDataSource(ds)
         val repo = AppPreferencesRepository(source, garage())
-        repo.mirrorUserSetEconomy(UserEconomy(avgMinutesPerMile = 3.0,
+        repo.mirrorUserSetEconomy(EconomyDraft(shared = SharedEconomy(avgMinutesPerMile = 3.0),
             userSetFields = setOf(EconomyField.AVG_MIN_PER_MILE)))
         assertEquals(setOf(EconomyField.AVG_MIN_PER_MILE.name), source.userSetEconomyFields.first())
         assertNull(source.basePickupMin.first())
         repo.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, null)
-        repo.mirrorUserSetEconomy(UserEconomy(basePickupMinutes = 0.0,
+        repo.mirrorUserSetEconomy(EconomyDraft(shared = SharedEconomy(basePickupMinutes = 0.0),
             userSetFields = setOf(EconomyField.BASE_PICKUP_MIN)))
         assertEquals(setOf(EconomyField.BASE_PICKUP_MIN.name), source.userSetEconomyFields.first())
         assertNull(source.avgMinPerMile.first())
