@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #624, #598
-confirmed: 0/2
 
-- [review] **🔒 PLEDGE FIX — dropoff-reminder screen capture now masks the address (#624).**
+- **🔒 PLEDGE FIX — dropoff-reminder screen capture now masks the address (#624).**
   Hit the "Deliver to door of ‹address›" reminder card on a dropoff and capture it. **Working looks
   like:** the envelope shows `Deliver to door of [redacted:‹4hex›]` — the street/apt gone. (This was
   a live raw-address leak the #598 sha256 gate couldn't catch.) A defense-in-depth backstop also

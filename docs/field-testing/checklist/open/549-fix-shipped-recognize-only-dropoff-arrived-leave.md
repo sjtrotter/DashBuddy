@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #549, #574
-confirmed: unspecified
 
-- [active] **🔬 FIX SHIPPED (recognize-only) — dropoff-arrived 'Leave it at the door' card now recognized (#549, PR #574). READ THE LOG / WATCH UNKNOWNs.**
+- **🔬 FIX SHIPPED (recognize-only) — dropoff-arrived 'Leave it at the door' card now recognized (#549, PR #574). READ THE LOG / WATCH UNKNOWNs.**
   A dropoff-arrival card whose instruction is *not* "Hand it to recipient" (e.g. "Leave it at the
   door", a refined map pin, "Complete delivery steps") was falling to **UNKNOWN** — the state machine
   got no clean dropoff signal and leaned on the grace window. Now recognized (customer name + address

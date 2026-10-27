@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1200
-confirmed: 1/2
 
-- [active] **Trusted UNKNOWN captures (#1200):** Share UNKNOWN captures ON → after a dash with UNKNOWN screens the status
+- **Trusted UNKNOWN captures (#1200):** Share UNKNOWN captures ON → after a dash with UNKNOWN screens the status
   reads `Captures shared: <queued> queued · <n> sent last run` and the server's cluster detail page shows a wireframe (0/2).
   UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details,
   and the server operator can read them. Trusted installs are the operator's own device today.

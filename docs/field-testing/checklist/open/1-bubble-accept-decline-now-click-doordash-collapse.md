@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #1, #3
-confirmed: 0/2
 
-- [review] **Bubble Accept/Decline now click DoorDash + collapse (re-test of 2026-06-09 #1 + #3, PR pending).**
+- **Bubble Accept/Decline now click DoorDash + collapse (re-test of 2026-06-09 #1 + #3, PR pending).**
   The click was searching the wrong window (`rootInActiveWindow` = the bubble); now it searches **all**
   windows, and the collapse cast was fixed (`findActivity`). To test: open the bubble (tap its head,
   since auto-expand is still off — that's the separate notification work), then on an offer tap

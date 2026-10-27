@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #981
-confirmed: 0/2
 
-- [review] **🆕 NEW — #981 — Weekly Plan + the Sunday notification (redesign stage 6).** A whole new screen,
+- **🆕 NEW — #981 — Weekly Plan + the Sunday notification (redesign stage 6).** A whole new screen,
   reached two ways: the Sunday-evening notification, and (once you save a plan) a row on Home.
   Six things to check.
   (a) **Getting there:** Home shows no plan row until you save one. Reach the screen the first time

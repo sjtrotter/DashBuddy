@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #602
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — a shade-tapped Accept/Decline now retries instead of dying on "No live windows" (#602).**
+- **🔧 FIX SHIPPED — a shade-tapped Accept/Decline now retries instead of dying on "No live windows" (#602).**
   A notification-action tap (heads-up Accept/Decline) can reach the click handler while a SystemUI
   takeover (notification shade, lock screen) is still covering DoorDash — the field receipt showed
   a tap landing ~16ms after the press, with the window reappearing ~0.5-1s later once the shade

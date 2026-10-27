@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #94, #313
-confirmed: 0/2
 
-- [review] **Brand theme — HUD legibility & numerals (#94 / #313, PR pending).** With the
+- **Brand theme — HUD legibility & numerals (#94 / #313, PR pending).** With the
   new fixed brand palette + Hanken/Space Grotesk fonts, glance at the bubble HUD
   while driving: confirm it's **legible at a glance** in the dark, the phase/status
   colors read correctly (WAITING green · OFFER blue · PICKUP/DELIVERING green ·

@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / other
 issues: #356, #384
-confirmed: 0/2
 
-- [review] **Platform toggles now take effect live — no app restart (#356, PR #384).**
+- **Platform toggles now take effect live — no app restart (#356, PR #384).**
   All notification/accessibility gating now reads one shared enabled-platforms state. To check:
   mid-session, toggle a platform OFF in DashBuddy settings — its notifications should stop
   reaching the HUD/log immediately (next notification, not next restart); toggle back ON and

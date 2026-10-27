@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #1090
-confirmed: unspecified
 
-- [active] **"Dash paused" push is recognized (#1090):** after a dash in which you paused, the pull's
+- **"Dash paused" push is recognized (#1090):** after a dash in which you paused, the pull's
   `captures/doordash/notification/` should hold NO UNKNOWN envelope reading "Your current dash has been
   paused" — the envelope lands under `notification/dash_paused/` instead — and `app.log` carries
   `Rule LOG [NOTIFICATION_RECEIVED]: DASH_PAUSED_PUSH` (a DEBUG line; the `log` verb writes NO

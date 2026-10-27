@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #462
-confirmed: 0/2
 
-- [review] **Order-ready push notification now recognized (#462).** The "‹name›'s order is ready for pickup
+- **Order-ready push notification now recognized (#462).** The "‹name›'s order is ready for pickup
   at ‹store›" push arrives on the `dasher-notification-background` channel (it was UNKNOWN before).
   Working = when DoorDash sends the order-ready notification, the log shows it classified
   (`ORDER_READY`), not UNKNOWN — and the customer name is never stored (the rule logs a constant).

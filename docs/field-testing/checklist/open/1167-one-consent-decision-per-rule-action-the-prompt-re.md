@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1167
-confirmed: 1/2
 
-- [active] **🆕 NEW — one consent decision per rule action; the prompt re-collects once (#1167).** The grant
+- **🆕 NEW — one consent decision per rule action; the prompt re-collects once (#1167).** The grant
   store's key shape changed (one key per (rule, action), pinned to every branch's binding
   definition), so the v2 migration clears every stored grant AND denial on the first launch of this
   build and the front door asks again. **How to tell it works:**

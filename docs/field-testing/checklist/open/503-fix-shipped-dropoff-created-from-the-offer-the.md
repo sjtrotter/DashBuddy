@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #503
-confirmed: unspecified
 
-- [active] **✅ FIX SHIPPED — dropoff created from the offer; the premature "Customer" card root (#503 slice 3). CONFIRM ON DASH.**
+- **✅ FIX SHIPPED — dropoff created from the offer; the premature "Customer" card root (#503 slice 3). CONFIRM ON DASH.**
   The drop-off is now a known subtask created at **offer-accept** (customer TBD), and the dropoff screen
   RESOLVES the real customer onto it — instead of a phantom dropoff minted before its customer is known.
   **Confirm on dash: 0/2 —** a drop-off card should show the **real customer** (a short 6-char hash

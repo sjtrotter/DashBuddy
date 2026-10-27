@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #786, #869, #251
-confirmed: 0/2
 
-- [review] **🆕 NEW — #786 / PR #869 — Uber decline click rule (the X is recognized).**
+- **🆕 NEW — #786 / PR #869 — Uber decline click rule (the X is recognized).**
   The offer card's textless dismiss-X now latches `declineCommittedAt` → declines record as
   `OFFER_DECLINED` instead of the timeout ignorance-default. **What to watch (Uber):** the bubble's
   Dispatch line says "Offer Declined" on your X taps; **THE CRITICAL GUARD — an Uber dash with a

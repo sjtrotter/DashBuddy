@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / other
 issues: #991, #428
-confirmed: 1/2
 
-- [active] **🆕 NEW — #991 (P0) — the spoken offer verdict went silent and stayed silent.** From 08-06
+- **🆕 NEW — #991 (P0) — the spoken offer verdict went silent and stayed silent.** From 08-06
   16:28 onward every single `speak()` call returned `-1` (15 of 15 across three dashes; 11 of 11
   had succeeded on 08-01/08-02), each one logging `WARN/Tts: speak returned -1 — abandoning audio
   focus`. Offers were still evaluated, carded and notified the whole time — **only the voice

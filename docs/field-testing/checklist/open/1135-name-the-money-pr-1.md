@@ -1,9 +1,7 @@
 status: must-watch
-section: §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 issues: #1135
-confirmed: 0/2
 
-- [must-watch] **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
+- **Name the money (#1135 PR 1):** Money tab → the "what you earned" bar has four segments (base pay /
   tips / not itemized / not matched) and NO "Bonuses & other"; its legend dollars, minus any "DashBuddy recorded … more than
   was reported" line beneath it, sum to the Earned figure above it to the cent; a stacked job's un-split receipt shows under "not itemized" with "estimated from
   the offer" named when the row was priced from the offer; a dash whose summary exceeded its deliveries

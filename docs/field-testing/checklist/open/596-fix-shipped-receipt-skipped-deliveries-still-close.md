@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #596, #499, #503
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — receipt-skipped deliveries still close + log a completion, and the next offer starts a NEW job (#596).**
+- **🔧 FIX SHIPPED — receipt-skipped deliveries still close + log a completion, and the next offer starts a NEW job (#596).**
   DoorDash routinely skips the post-delivery receipt (the next offer chains straight over the drop);
   pre-#596 that was the machine's ONLY job-exit, so the delivery never logged `DELIVERY_COMPLETED`
   and the never-closed job absorbed later independent offers (06-29 Pizza Hut job swallowed the next

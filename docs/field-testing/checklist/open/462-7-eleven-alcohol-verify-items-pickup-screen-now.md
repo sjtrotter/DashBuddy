@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #462, #12
-confirmed: 0/2
 
-- [review] **7-Eleven / alcohol "Verify items" pickup screen now recognized (#462, first slice).**
+- **7-Eleven / alcohol "Verify items" pickup screen now recognized (#462, first slice).**
   The store "Verify items for <name>" screen (with "Do not open sealed bags" / "Can't verify
   items" / the item list) classified UNKNOWN — the 7-Eleven alcohol pickup from the 2026-06-12
   dash (field-log #12). It's now a recognized `pickup_verify_items` screen mapped to

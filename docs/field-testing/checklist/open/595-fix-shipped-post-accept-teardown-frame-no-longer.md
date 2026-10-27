@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #595
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — post-accept teardown frame no longer mints a ghost offer (#595). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — post-accept teardown frame no longer mints a ghost offer (#595). CONFIRM ON DASH.**
   The collapsing offer card after an accept (pay/distance/Accept/Decline chrome, no store rows, a
   raw UUID where the store name goes) re-parsed as a NEW "Unknown Store" offer that REPLACED the
   real accept — bogus TTS ("Accept. Unknown Store. 56/hr…"), a bogus [Good Offer] chat card, then

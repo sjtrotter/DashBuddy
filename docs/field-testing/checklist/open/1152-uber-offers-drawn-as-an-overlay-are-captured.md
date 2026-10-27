@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1152, #251, #826
-confirmed: 0/2
 
-- [active] **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
+- **🆕 NEW — Uber offers drawn as an overlay are captured, whatever has focus (#1152).** Uber draws its
   offer as a floating system overlay above other apps; it used to be read only when it had focus.
   Now a large system-layer window from an ENABLED overlay platform is a candidate (size ≥ ¼ of the
   screen, package verified). **Needs Uber enabled and an Uber offer arriving while DoorDash (or

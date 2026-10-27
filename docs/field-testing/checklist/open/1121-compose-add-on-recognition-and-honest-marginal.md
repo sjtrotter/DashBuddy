@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1121, #1302, #1119
-confirmed: 0/2
 
-- [active] **🆕 NEW — Compose ADD-ON recognition and honest marginal figures (#1121).**
+- **🆕 NEW — Compose ADD-ON recognition and honest marginal figures (#1121).**
   **On-dash:** an add-on shows and speaks once: add-on, extra pay/distance/time, no rate-based verdict,
   no net or rate; shopping opt-out, protect-stats, and merchant BLOCK preferences still apply in that
   order. A countdown redraw must not repeat speech. Decline through the sheet and timeout must return

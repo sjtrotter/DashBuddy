@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #342, #1054
-confirmed: 0/2
 
-- [review] **Paused dash auto-expires when the pause clock runs out (#342).** The pause-safety timer
+- **Paused dash auto-expires when the pause clock runs out (#342).** The pause-safety timer
   used to fire into a void (routed to no platform region) — now it reaches the paused region.
   If you pause mid-dash and deliberately DON'T resume: once the pause duration lapses, the HUD
   should flip out of PAUSED on its own (offline with grace) without needing a DoorDash screen

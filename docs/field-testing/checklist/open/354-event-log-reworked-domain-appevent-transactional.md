@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #354, #300, #119, #382
-confirmed: 0/2
 
-- [review] **Event log reworked: domain AppEvent + transactional insert + obs-derived timestamps (#354/#300/#119, PR #382).**
+- **Event log reworked: domain AppEvent + transactional insert + obs-derived timestamps (#354/#300/#119, PR #382).**
   The bubble HUD's completed-card stack now renders from payloads decoded at the repository
   (was: Gson inside the mapper), `app_events.occurredAt` is the observation timestamp (was: wall
   clock at execution), and each event row + its idempotency mark commit in one transaction. To

@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #653, #673, #498, #501
-confirmed: unspecified
 
-- [active] **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
+- **🆕 NEW — identity-less completions now firewalled at PostTask exit (#653 / PR #673): watch a
   no-name drop for a MISSING completion.** The PostTask-exit `DELIVERY_COMPLETED` mint now mirrors
   the close-out path's #498 identity firewall: a dropoff task that never acquired a customer
   name/address hash mints no completion. Field history says identity-less dropoff tasks are

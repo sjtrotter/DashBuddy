@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / recognition
 issues: #796, #837, #806, #815, #865, #910, #926
-confirmed: 1/2
 
-- [active] **🆕 NEW — #796 / PR #837 — DoorDash recognition-gap batch (11 rules).** Dropoff issue
+- **🆕 NEW — #796 / PR #837 — DoorDash recognition-gap batch (11 rules).** Dropoff issue
   menu/resolution, task feedback, receipt photo, barcode confirm/failed, navigate-to-zone loading,
   and the Quality Rate / Dasher Rewards family now recognize (all recognize-only; zero state
   impact expected).

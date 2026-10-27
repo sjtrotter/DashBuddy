@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #858, #876
-confirmed: 0/2
 
-- [review] **🆕 NEW — #858 / PR #876 — expiring Uber cards no longer mint offers.**
+- **🆕 NEW — #858 / PR #876 — expiring Uber cards no longer mint offers.**
   The "This request is no longer available" dying card is UNKNOWN or a recognize-only Trip Radar
   board frame with no `state` block: no state, no offer. **What to watch (Uber):** an offer that expires on screen produces no new offer row, no TTS
   read of the error text, no "(offer replaced)" churn on the live offer. **Desk:** zero

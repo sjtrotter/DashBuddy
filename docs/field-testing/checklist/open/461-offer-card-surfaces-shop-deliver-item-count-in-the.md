@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #461, #1, #2
-confirmed: 1/2
 
-- [active] **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
+- **Offer card surfaces Shop & Deliver: item count in the hero row + a SHOP badge (#461 a/b).**
   The item count moved from a small footer caption up to the hero row (beside the score ring /
   $/hr), and a Shop & Deliver offer now shows a "Shop & Deliver" badge pill. On a shop offer:
   working = the item count is prominent in the hero and a "Shop & Deliver" pill shows; a plain

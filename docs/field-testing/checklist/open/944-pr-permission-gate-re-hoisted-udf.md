@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / other
 issues: #944, #957
-confirmed: 0/2
 
-- [review] **🆕 NEW — #944 / PR #957 — permission gate re-hoisted (UDF).** The permission bottom sheet's
+- **🆕 NEW — #944 / PR #957 — permission gate re-hoisted (UDF).** The permission bottom sheet's
   behavior should be unchanged: it opens when permissions are missing, advances card-by-card as
   each is granted, closes cleanly when all are granted — and, the edge the refactor specifically
   defends, RE-OPENS with a fresh (not stale) card queue after revoking a permission from system

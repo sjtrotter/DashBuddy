@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #998, #1127
-confirmed: 0/2
 
-- [active] **🆕 NEW — a return order must record its return pay (#998).** Fielded 09-14: an alcohol delivery
+- **🆕 NEW — a return order must record its return pay (#998).** Fielded 09-14: an alcohol delivery
   refused at the door became a return order; DoorDash priced the return leg separately (`Return pay
   $10.93`, its own receipt 10 min later) and the row kept only the original base pay. **On-dash:** if a
   delivery is refused or cancelled at the door and DoorDash asks you to return the order, note the

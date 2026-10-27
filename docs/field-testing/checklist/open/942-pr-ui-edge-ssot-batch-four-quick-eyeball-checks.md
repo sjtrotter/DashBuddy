@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #942, #953
-confirmed: 0/2
 
-- [review] **🆕 NEW — #942 / PR #953 — UI-edge SSOT batch (four quick eyeball checks, one dash).**
+- **🆕 NEW — #942 / PR #953 — UI-edge SSOT batch (four quick eyeball checks, one dash).**
   1. **Store-join parity:** on a stacked offer, the heads-up notification and the bubble card name
      the stores identically (`Store A & Store B`) — the notification used to say `+`.
   2. **Verdict word:** a manual-review verdict reads `REVIEW` on the bubble offer card (was

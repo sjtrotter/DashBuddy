@@ -1,9 +1,7 @@
 status: superseded
-section: §5 Field-validated / retired / Superseded (dev-confirmed 2026-10-07 — the replacing redesign is named on each; the #657 earnings-freshness check is retained in §2)
 issues: #320, #316, #1024, #1027
-confirmed: 0/2
 
-- [superseded] **✨ NEW — the home screen now shows a live "This dash" glance + entry tiles (#320/#316).**
+- **✨ NEW — the home screen now shows a live "This dash" glance + entry tiles (#320/#316).**
   Open the DashBuddy main app (not the bubble) **while a dash is running**. **Working looks like:**
   the "Ready to Dash" area shows three stat tiles — **True Net** (green when positive), **Net/hr**,
   **Miles** — and the Net/hr + its sub-timer **tick up every second** without needing a state change

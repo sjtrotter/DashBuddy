@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #498, #1, #2, #503
-confirmed: unspecified
 
-- [active] **✅ FIX SHIPPED — "ghost offer" with EMPTY parse logged as a card (#498). CONFIRM ON DASH.**
+- **✅ FIX SHIPPED — "ghost offer" with EMPTY parse logged as a card (#498). CONFIRM ON DASH.**
   Fixed by gating the `offer_popup` rule on a parsed `payAmount` (a blank/chrome-only frame with no
   pay is no longer recognized as an offer; proven by `GhostOfferReplayTest` replaying the real
   16:31:52 ghost capture — now classifies UNKNOWN, emits no OFFER_RECEIVED). **Confirm on dash: 0/2 —**

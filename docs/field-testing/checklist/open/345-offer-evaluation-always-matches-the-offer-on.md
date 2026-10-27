@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #345
-confirmed: 0/2
 
-- [review] **Offer evaluation always matches the offer on screen (#345).** Evaluations are now
+- **Offer evaluation always matches the offer on screen (#345).** Evaluations are now
   hash-correlated, so a rapidly replaced offer can't inherit the previous offer's verdict —
   the heads-up notification + spoken read should always describe the CURRENT offer's economics.
   Watch for any mismatch between the card's numbers and what's spoken/notified, especially when

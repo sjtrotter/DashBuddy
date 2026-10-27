@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #315, #659, #694
-confirmed: 1/2
 
-- [active] **🆕 NEW — Analytics tile now opens the Money tab (#315 H1 / Money tab v1).**
+- **🆕 NEW — Analytics tile now opens the Money tab (#315 H1 / Money tab v1).**
   From the home screen tap the **Analytics** tile: it should open a real hub (back arrow) with a
   **Money / Patterns / Decisions / Time** tab bar (the last three show a "coming soon" card). On
   **Money**, pick **Today / Week / Month / Lifetime** and confirm the figures re-anchor: the earnings

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #297, #1, #5
-confirmed: 1/2
 
-- [active] **Bubble HUD no longer crashes on arrival-bearing dropoffs (#297).** Complete a
+- **Bubble HUD no longer crashes on arrival-bearing dropoffs (#297).** Complete a
   dropoff with an explicit arrival step — a **photo**, **PIN entry**,
   **hand-it-to-customer**, or **alcohol ID-scan** delivery (these fire both
   `DELIVERY_ARRIVED` and `DELIVERY_CONFIRMED`). The bubble must **not** crash, and

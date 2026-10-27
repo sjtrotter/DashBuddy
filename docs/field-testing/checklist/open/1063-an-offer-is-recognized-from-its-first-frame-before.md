@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1063, #595, #830, #1104, #1114, #1118, #1069
-confirmed: 1/2
 
-- [active] **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
+- **🆕 NEW — #1063 — an offer is recognized from its FIRST frame, before the Decline
   button inflates.** DoorDash lands the offer card in two beats: the collar animation drops the
   sheet (store leg, pay, distance, deadline, live Accept + countdown) and the decline control
   inflates a beat later. `offer_popup` required a literal `Decline` node, so that first beat fell

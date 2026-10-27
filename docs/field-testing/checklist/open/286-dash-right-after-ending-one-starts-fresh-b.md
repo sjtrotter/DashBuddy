@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #286, #279, #290, #4, #5
-confirmed: 1/2
 
-- [active] **New dash right after ending one starts fresh (#286 / #279-B / #290).** End a
+- **New dash right after ending one starts fresh (#286 / #279-B / #290).** End a
   dash, then start a new one within ~10s. The bubble should treat it as a
   **brand-new dash** (fresh session / earnings reset), not "Session resumed
   (grace)". Cover **both** start paths, because they emit the fresh-dash signal

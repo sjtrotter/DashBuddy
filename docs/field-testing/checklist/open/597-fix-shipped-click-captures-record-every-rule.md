@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #597
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — click captures record every rule-matched tap + UNKNOWN cap re-arms after quiet (#597). READ THE PULL AFTER A DASH.**
+- **🔧 FIX SHIPPED — click captures record every rule-matched tap + UNKNOWN cap re-arms after quiet (#597). READ THE PULL AFTER A DASH.**
   The week-long a11y process turned two per-process guards into forever-guards: click captures
   deduped to zero by day 3 (repeat taps hash identically), and the UNKNOWN cap (200) went blind
   for the rest of the week once hit. Now: **rule-matched** clicks (accept/decline/confirm…) are

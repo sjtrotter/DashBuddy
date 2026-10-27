@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1165
-confirmed: 1/2
 
-- [active] **🆕 NEW — the dash-controls sheet recognizes as `timeline` on a per-offer dash with no task (#1165).**
+- **🆕 NEW — the dash-controls sheet recognizes as `timeline` on a per-offer dash with no task (#1165).**
   Open the dash controls (the "Current dash" sheet with Pause orders / End dash) on a dash with no
   scheduled end and no active task. **How to tell it works:** the capture lands under
   `accessibility.window/timeline/`, not `UNKNOWN/`; its parse carries `sessionEarnings` equal to the

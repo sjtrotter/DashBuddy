@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #343
-confirmed: 0/2
 
-- [review] **Deadline countdowns still correct under the new transform clock (#343).** Time parsing
+- **Deadline countdowns still correct under the new transform clock (#343).** Time parsing
   (`parseDeadline`/`parseTime`) is now anchored to the observation's instant instead of the
   wall clock at evaluation time (replay determinism; the 05-19 "1434:38 ghost countdown" class).
   Live behavior should be identical — confirm pickup/dropoff "by HH:MM" countdowns on the cards

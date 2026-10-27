@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #603, #526
-confirmed: 0/2
 
-- [review] **🔧 FIX SHIPPED — dropoff handoff waits for the completion CTA + stacked leg-2 drops get their own nav (#603). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — dropoff handoff waits for the completion CTA + stacked leg-2 drops get their own nav (#603). CONFIRM ON DASH.**
   Two coupled fixes for the false-early "arrived" + silent second-drop pair:
   (a) **No more false ARRIVED at the start of the drive.** `dropoff_handoff` used to fire
   `task:dropoff:arrived` the instant nav started, because it keyed only on the "Hand it to

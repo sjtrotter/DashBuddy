@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1188
-confirmed: 0/2
 
-- [active] **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's
+- **Classify & draft a real UNKNOWN cluster (#1188, server v0.11.0):** on the VPN dashboard open a cluster from today's
   dash that has a trusted capture → "Classify & draft" → pick the class, mark two id anchors + the parse fields → Preview
   shows a JSON5 draft (or a refusal naming the weak node) → Save (TOTP) → the detail page shows the class chip and the
   draft link; paste the draft into the platform's surface file and run `AllMatchersSuite` — it should recognise the

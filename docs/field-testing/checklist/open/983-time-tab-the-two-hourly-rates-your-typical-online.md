@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #983
-confirmed: 0/2
 
-- [review] **🆕 NEW — #983 — Time tab: the two hourly rates, your typical online hour, gap stats
+- **🆕 NEW — #983 — Time tab: the two hourly rates, your typical online hour, gap stats
   (redesign stage 7/7 — the epic's last build).** Analytics → **Time**, after a dash or two.
   Four things to check.
   (a) **NET PER HOUR** shows two tiles: *While working* and *Whole shift*, each with its own

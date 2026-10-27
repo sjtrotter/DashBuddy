@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #604, #619
-confirmed: 0/2
 
-- [review] **🔧 FIX SHIPPED — rule effects from notifications key per-arrival, not per-install (#604), AND
+- **🔧 FIX SHIPPED — rule effects from notifications key per-arrival, not per-install (#604), AND
   FrameGate no longer collapses two distinct notification arrivals sharing a contentless identity
   (#619). CONFIRM ON DASH.**
   A rule-declared log effect attached to a notification with no `dedupeKey` (e.g.

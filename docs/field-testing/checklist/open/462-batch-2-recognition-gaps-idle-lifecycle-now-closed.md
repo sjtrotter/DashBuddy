@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #462
-confirmed: 0/2
 
-- [review] **Batch-2 recognition gaps — idle/lifecycle (#462, now CLOSED).** The last UNKNOWN screens are
+- **Batch-2 recognition gaps — idle/lifecycle (#462, now CLOSED).** The last UNKNOWN screens are
   recognized: the **"Navigate to zone / We'll look for orders along the way / Spot saved until …"**
   repositioning card (now a recognized idle screen, and the "Spot saved until HH:MM" countdown
   should populate); the **scheduled-dash slot picker** ("Start time / End Time"); the **dropoff

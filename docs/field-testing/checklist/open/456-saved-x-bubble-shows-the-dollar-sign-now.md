@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #456, #3
-confirmed: 1/2
 
-- [active] **"Saved: $X" bubble shows the dollar sign now (#456).**
+- **"Saved: $X" bubble shows the dollar sign now (#456).**
   The post-delivery earnings bubble rendered `Saved: 5.50` (no `$`) because the state layer had
   its own money formatter that omitted it. Both local formatters are gone — money now formats
   through one `:domain` `Formats.money` SSOT. On a dash, after a delivery: working = the "Saved"

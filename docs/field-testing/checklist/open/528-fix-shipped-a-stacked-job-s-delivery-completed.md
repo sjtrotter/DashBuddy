@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #528
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — a stacked job's DELIVERY_COMPLETED rows now carry per-drop realized pay (#528 Slice A). READ THE DB AFTER A DASH.**
+- **🔧 FIX SHIPPED — a stacked job's DELIVERY_COMPLETED rows now carry per-drop realized pay (#528 Slice A). READ THE DB AFTER A DASH.**
   Before, on a multi-store/multi-drop stack, the single combined receipt was attached to just ONE
   drop (it absorbed the whole total) and every other drop's `DELIVERY_COMPLETED` row recorded null
   pay. Now each row carries `dropRealizedPay` = the exact per-store tip matched to that drop + an

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #1000, #1013
-confirmed: 1/2
 
-- [active] **🆕 NEW — #1000 (PR #1013) — a blown-through pickup still links its offer to the job.** Watch
+- **🆕 NEW — #1000 (PR #1013) — a blown-through pickup still links its offer to the job.** Watch
   for a dash where a pickup is arrived-but-never-confirmed followed by a normal delivery
   completion. **Desk:** `SELECT linkedJobId, storeKey FROM offer_records WHERE offerHash =
   '<the accepted offer's hash>'` — non-null `linkedJobId` with a **null** `storeKey` is correct

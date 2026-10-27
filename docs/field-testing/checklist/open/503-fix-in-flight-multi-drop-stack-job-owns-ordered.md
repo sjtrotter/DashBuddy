@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #503, #523, #501
-confirmed: unspecified
 
-- [active] **🔧 FIX IN FLIGHT — multi-drop stack: Job owns ordered dropoffs, routed by customer name (#503 slice 3b, PR #523). CONFIRM ON DASH.**
+- **🔧 FIX IN FLIGHT — multi-drop stack: Job owns ordered dropoffs, routed by customer name (#503 slice 3b, PR #523). CONFIRM ON DASH.**
   The structural multi-drop fix: an offer pre-creates **one dropoff placeholder per order**, and each
   dropoff screen routes to its own customer subtask by the **stable name hash** (addresses drift).
   **Confirm on a STACKED / multi-drop dash: 0/2 —** a 2-order stack should show **exactly two** dropoff

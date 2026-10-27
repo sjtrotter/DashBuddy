@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #810, #818, #700, #1078, #1095
-confirmed: 1/2
 
-- [active] **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
+- **🆕 NEW — #810 B1 / PR #818 — JOB_ACCEPT_MISMATCH close tripwire.** A job closing with more accepted
   offers than accounted physical orders now emits one `JOB_ACCEPT_MISMATCH` event + a `StateMachine` WARN
   (the 07-19 session-114 invisible-unassign class is no longer silent).
   **What to watch:** if a dash includes a chat/support-path unassign (no confirmation screen), expect the

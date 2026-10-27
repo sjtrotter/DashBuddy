@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #599
-confirmed: unspecified
 
-- [active] **🔒 FIX SHIPPED — Crimson Savings Jar balance notification is now pledge-BLOCKED (#599). READ THE PULL AFTER A DASH.**
+- **🔒 FIX SHIPPED — Crimson Savings Jar balance notification is now pledge-BLOCKED (#599). READ THE PULL AFTER A DASH.**
   The dasher's Crimson/DasherDirect balance notification was being recognized and captured raw
   (9 files found on the 06-25→30 pull — deleted from the device). The rule is now sensitive
   (priority 0, `parse: sensitive`) — the shared content gate drops it before capture and the

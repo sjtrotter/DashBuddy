@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #765, #799, #979, #1024
-confirmed: 0/2
 
-- [review] **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
+- **🆕 NEW — Patterns tab store cards: glanceable face + detail bottom sheet (#765 / PR #799).**
   The store report cards were redesigned: the card **face** now shows only store name + location chip
   and three plain-language numbers (Net / Usual wait / Deliveries) — no "median"/"p95" vocabulary —
   with a `>` chevron affordance. Tapping a card opens a **bottom sheet** with the full detail (pickups,

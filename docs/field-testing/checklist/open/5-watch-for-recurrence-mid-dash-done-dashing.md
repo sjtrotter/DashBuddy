@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #5
-confirmed: unspecified
 
-- [active] **⚠️ WATCH FOR RECURRENCE — mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5, root cause confirmed, fix NOT yet shipped).** Confirmed once on 06-06: a
+- **⚠️ WATCH FOR RECURRENCE — mid-dash "Done Dashing!" + odometer reset (2026-06-06 #5, root cause confirmed, fix NOT yet shipped).** Confirmed once on 06-06: a
   transient **"Start your scheduled dash"** (`idle_scheduled_dash_ready`,
   `modeHint:offline`) frame seen **during an active pickup/delivery** armed the 10s
   `SESSION_END` grace; after an app-switch the dash **ended** (`DASH_STOP early_offline`)

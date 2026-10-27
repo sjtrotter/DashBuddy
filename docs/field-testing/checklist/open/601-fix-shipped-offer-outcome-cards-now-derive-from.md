@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #601, #594
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — offer outcome cards now derive from the committed outcome, not the tap (#601).
+- **🔧 FIX SHIPPED — offer outcome cards now derive from the committed outcome, not the tap (#601).
   DELIBERATE UX CHANGE — CONFIRM ON DASH.**
   Before, tapping Accept/Decline printed "Offer Accepted"/"Offer Declined" immediately, from the
   click alone — a second, independent code path from the one that logs the outcome to the ledger

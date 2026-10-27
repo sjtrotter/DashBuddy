@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #315, #773, #979, #763
-confirmed: 1/2
 
-- [active] **🆕 NEW — Analytics → Patterns tab: store report cards + net-$/hr heatmap (#315 H5 / PR).**
+- **🆕 NEW — Analytics → Patterns tab: store report cards + net-$/hr heatmap (#315 H5 / PR).**
   The Patterns tab (Analytics hub, no period selector — it's lifetime/rate-based) now renders two real
   sections: (A) **store report cards** newest-visited-first, one per resolved store — chain name + a
   location chip (the running key, or a "location unknown" chip for chain-only entities), pickup/delivery

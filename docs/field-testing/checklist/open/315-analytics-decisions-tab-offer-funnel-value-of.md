@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #315
-confirmed: 1/2
 
-- [active] **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
+- **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
   In the Analytics hub tap the **Decisions** tab and pick a period (Today / Week / Month / Lifetime).
   Three sections should appear: an **offer funnel** (a stacked Accepted / Declined / Timed-out bar +
   legend, with the **acceptance rate** as the big headline and the offer count under it), a **value of

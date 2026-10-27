@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #659, #668, #1133, #1219
-confirmed: 0/2
 
-- [review] **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
+- **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
   (#659).** After the v10 refold, open **Analytics → Money** on a period whose deliveries all carry
   the frozen fuel/non-fuel split (a period entirely dashed after the #668 data-side merge should
   qualify): the waterfall should show **4 rows** — Gross → −Fuel → −Non-fuel → Net — and Fuel +

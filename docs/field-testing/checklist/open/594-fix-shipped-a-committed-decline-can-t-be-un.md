@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #594
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — a committed decline can't be un-declined by a later Accept (#594). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — a committed decline can't be un-declined by a later Accept (#594). CONFIRM ON DASH.**
   Field 06-30 16:59 (BK $6.25, seq 226/227): declined the offer, confirmed the decline on the sheet
   (committed server-side), then hit DoorDash's "Review offer" → Accept ~1.2 s later — the app logged
   **OFFER_ACCEPTED** and flashed both "Offer Declined" and "Offer Accepted", while DoorDash's own dash

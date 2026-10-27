@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #1024, #1026
-confirmed: 0/2
 
-- [review] **🆕 NEW — #1024 part 2 (PR #1026) — Money tab: one number, one place.** Open Analytics on a
+- **🆕 NEW — #1024 part 2 (PR #1026) — Money tab: one number, one place.** Open Analytics on a
   dashed week. Working: kept appears exactly once (the big number), gross exactly once (`$X came
   in.`), deliveries/miles only in the grey facts line; five bordered cards at most (money story,
   rates+day chart, by platform, needs a look, recent sessions) then ONE `How these numbers work`

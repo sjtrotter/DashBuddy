@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #461, #531
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — offer card icon badges + co-icon-text shop badge [cart N] (#461, PR #531). CONFIRM ON DASH.**
   The offer card's badges are now **icons** (red card, alcohol, large order, priority, etc., tinted by
   brand color), and the **Shop & Deliver** badge is the shopping-chat **cart icon + the item count**
   (`[🛒 N]`) — the count moved off the $/hr hero onto the badge. **Confirm on dash: 0/2 —** on a

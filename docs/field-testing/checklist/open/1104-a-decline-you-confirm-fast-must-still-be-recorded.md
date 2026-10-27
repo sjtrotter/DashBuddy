@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1104, #1110, #1118, #1119
-confirmed: 1/2
 
-- [active] **🆕 NEW — a decline you confirm fast must still be recorded as a decline, not a timeout.** Five of
+- **🆕 NEW — a decline you confirm fast must still be recorded as a decline, not a timeout.** Five of
   the 09-10/09-11 pull's seven `OFFER_TIMEOUT`s were real declines: the dasher's tap on the confirm
   sheet's **Decline offer** button arrived 62–171 ms before that sheet's own frame was admitted, so
   the click rule (`screenIs: offer_popup_confirm_decline`) did not match, the click fell to UNKNOWN,

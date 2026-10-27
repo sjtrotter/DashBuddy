@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #312
-confirmed: 0/2
 
-- [review] **`nav_arriving` screen now recognized — confirm it fires + gauge frequency
+- **`nav_arriving` screen now recognized — confirm it fires + gauge frequency
   (PR #312).** The in-app nav "Arriving at \<destination\>" / "Arriving soon"
   overlay was UNKNOWN; it now classifies as `nav_arriving` (neutral — no behavior
   change yet). On a dash, glance at whether this screen actually appears as you

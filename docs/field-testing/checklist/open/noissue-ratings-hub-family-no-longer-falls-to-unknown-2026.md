@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues:
-confirmed: 0/2
 
-- [review] **Ratings-hub family no longer falls to UNKNOWN (2026-07-30 corpus pass).** Three recognition
+- **Ratings-hub family no longer falls to UNKNOWN (2026-07-30 corpus pass).** Three recognition
   gaps in DoorDash 0.230.0's redesigned Ratings area were closed against the 07-29 pull. All three
   are **desk-verifiable from the next pull alone** — no dev-eyes needed on the road. Open the
   in-app Ratings area during a dash (or any time the app is running with capture on), tap into a

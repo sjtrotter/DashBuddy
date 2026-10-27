@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #660
-confirmed: 0/2
 
-- [review] **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
+- **🆕 NEW — categorize a "(No session)" orphan delivery into its real dash (#660 piece 2).**
   The Money-tab "(No session): $X across N deliveries" callout is now **tappable** — it opens an
   orphan list; tapping a delivery opens a session picker (ended dashes within ±48 h of the drop, same
   platform, nearest first). Confirming assigns the orphan to that dash. A `DELIVERY_SESSION_ASSIGN`

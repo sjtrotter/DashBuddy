@@ -1,9 +1,7 @@
 status: field-validated
-section: §5 Field-validated / retired
 issues: #749, #996
-confirmed: 2/2
 
-- [field-validated] **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
+- **🆕 NEW — a same-customer double-order job closes at its receipt; the next offer is its OWN job (#749).**
   A job where **both orders go to the same customer** (the offer card literally says so — e.g. Willie's +
   Sonic to one person) mints two dropoff placeholders but only ONE physical drop. Before #749 that leftover
   placeholder kept the job "open" forever, so the **next offer folded into the finished job** and its pay

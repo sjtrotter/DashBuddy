@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #159, #739, #315
-confirmed: 0/2
 
-- [review] **🆕 NEW — multi-store-from-one-receipt keying: both stores keyed from a single end-of-job receipt, no downgrade on payout-less close (#159 / PR #739).**
+- **🆕 NEW — multi-store-from-one-receipt keying: both stores keyed from a single end-of-job receipt, no downgrade on payout-less close (#159 / PR #739).**
   Narrowed scope: the basic-keying half retired 2/2 (07-17 + 07-18/19 — all deliveries carry real running
   keys, no more empty `…|target|` segments). What's left is the harder multi-store case. **How to tell it's
   working (desk-side, after a multi-store stack — e.g. the Target+Maple case):** BOTH stores should be

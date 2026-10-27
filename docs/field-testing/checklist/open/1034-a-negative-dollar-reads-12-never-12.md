@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Re-aged by whole-item blame (a sub-line note after 2026-08-25 counts as touched) — newest first
 issues: #1034, #1044
-confirmed: 0/2
 
-- [active] **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
+- **🆕 NEW — #1034 — a negative dollar reads `-$12`, never `$-12`.** `Formats.money`/`money0`/
   `money3` put the sign before the `$` now, so this shows up anywhere a figure can go negative.
   Two places to glance at: (a) **the bubble HUD's `$/hr` hero** on a bad offer, or on an overdue
   task's running-at line — when the verdict is "drop it" and the hero is red, it should read

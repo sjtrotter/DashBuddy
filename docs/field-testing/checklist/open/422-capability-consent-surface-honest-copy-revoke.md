@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / other
 issues: #422, #417, #863, #1167, #843
-confirmed: 0/2
 
-- [review] **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
+- **🆕 NEW — Capability consent surface: honest copy + revoke aborts automation to manual (#422 PR 3).**
   Settings → Data & Privacy → **Automation & Consent** now lists, per bundled ruleset source, every
   automation tap the rules enable (Accept, Decline, Confirm a decline, Open the pay breakdown) with a
   Google-Play-consistent disclosure header and one grant/revoke switch each. Bundled (asset) capabilities

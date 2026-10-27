@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #857, #872, #874, #875
-confirmed: 0/2
 
-- [review] **🆕 NEW — #857 / PR #872 — Uber offline detection is now positive-evidence (idle_map rewrite).**
+- **🆕 NEW — #857 / PR #872 — Uber offline detection is now positive-evidence (idle_map rewrite).**
   A partial render can no longer forge Online→Offline; a genuine offline home still recognizes via
   "You're offline" / "You're ready to go online" / the GO button; deliberate toggles ride the
   go_offline click. Deliberate bias: believe-online (a false offline destroyed sessions; a delayed

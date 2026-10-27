@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #458, #1
-confirmed: 0/2
 
-- [review] **No transient double drop-off card at the door (#458).**
+- **No transient double drop-off card at the door (#458).**
   On an arrival-bearing dropoff (hand-it-to-customer / photo / PIN) the same delivery briefly
   rendered as TWO cards during the at-door window (a frozen completed copy + the live one). The
   stack now drops the frozen twin when it shares the active card's id. On a dash: working = at

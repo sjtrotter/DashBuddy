@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #110
-confirmed: 0/2
 
-- [review] **Notification text now formatted (verdict bold/colored/larger, headline bold) (#110, PR pending).**
+- **Notification text now formatted (verdict bold/colored/larger, headline bold) (#110, PR pending).**
   The heads-up offer notification's text is now an Android `SpannableString` — verdict word (ACCEPT /
   DECLINE / REVIEW) bold, ~1.2× size, colored good/warn/bad; the `$X/hr net` headline bold. To check:
   on an offer, **look at the heads-up notification** and note what actually renders — (a) is the

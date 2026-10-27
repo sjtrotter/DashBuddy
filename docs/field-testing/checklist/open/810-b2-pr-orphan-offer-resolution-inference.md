@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #810, #847, #818
-confirmed: 0/2
 
-- [review] **🆕 NEW — #810-B2 / PR #847 — orphan offer resolution (inference + attestation).**
+- **🆕 NEW — #810-B2 / PR #847 — orphan offer resolution (inference + attestation).**
   **What to watch:** after any dash where the `JOB_ACCEPT_MISMATCH` WARN fires (chat-path unassign
   class), the Money tab shows the review callout; the drill-down lists the job's accepted offers
   and attesting one marks it unassigned (undo stays reachable while the group is listed).

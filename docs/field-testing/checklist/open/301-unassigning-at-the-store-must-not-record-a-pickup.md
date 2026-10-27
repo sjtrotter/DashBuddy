@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #301, #1128, #810
-confirmed: 0/2
 
-- [active] **🆕 NEW — unassigning at the store must not record a pickup (#301).** **On-dash (deliberate):** if you
+- **🆕 NEW — unassigning at the store must not record a pickup (#301).** **On-dash (deliberate):** if you
   ever have to unassign at a store, take the `Help → I have an issue → Unassign order` path. **Desk:**
   one `TASK_UNASSIGNED`, no `PICKUP_CONFIRMED` for that task, no `pickup_records` dwell row, and the
   accepted offer resolved rather than left an orphan (09-15 session 568 recorded a phantom

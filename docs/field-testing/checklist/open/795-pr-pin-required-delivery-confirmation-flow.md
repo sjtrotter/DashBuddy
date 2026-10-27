@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #795, #834
-confirmed: 0/2
 
-- [review] **🆕 NEW — #795 / PR #834 — PIN-required delivery confirmation flow + plainMask.** The Enter-PIN
+- **🆕 NEW — #795 / PR #834 — PIN-required delivery confirmation flow + plainMask.** The Enter-PIN
   keypad modal and intro sheet now recognize (`dropoff_pin_keypad`/`dropoff_pin_intro`,
   recognize-only), and the entered PIN masks to a **plain** `[redacted]` (no 4-hex suffix — a
   bounded PIN is brute-recoverable from 4 hex).

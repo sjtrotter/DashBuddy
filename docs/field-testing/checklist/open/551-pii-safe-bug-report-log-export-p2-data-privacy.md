@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / other
 issues: #551
-confirmed: 0/2
 
-- [review] **🆕 NEW — PII-safe bug-report log export (#551 P2): Data & Privacy → Export Data → Export log.**
+- **🆕 NEW — PII-safe bug-report log export (#551 P2): Data & Privacy → Export Data → Export log.**
   After a real dash (with at least one recognized offer/delivery so INFO milestones exist), go to
   Settings → Data & Privacy → Export Data, scroll to "Export a bug report", pick a folder, export.
   How to tell it's working: (1) open `dashbuddy-log.txt` and **grep your shop's merchant name — ZERO

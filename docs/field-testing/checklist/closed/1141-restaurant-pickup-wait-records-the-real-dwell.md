@@ -1,9 +1,7 @@
 status: field-validated
-section: §5 Field-validated / retired
 issues: #1141, #1306
-confirmed: 2/2
 
-- [field-validated] **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
+- **Restaurant pickup wait records the real dwell (#1141):** on a restaurant pickup where you tap
   "Arrived at store" and wait, the pull's `pickup_records` dwell for that stop should reflect the real
   wait (minutes, not 0.0), and `PICKUP_ARRIVED` should appear within a few seconds of the
   "Stay in your car / Merchant notified of your arrival" screen.

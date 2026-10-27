@@ -1,9 +1,7 @@
 status: must-watch
-section: §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 issues: #919
-confirmed: 1/2
 
-- [must-watch] **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
+- **Chat compose box never persists raw (#919):** after a dash in which you typed in the DoorDash chat,
   no file under `captures/doordash/accessibility.click/UNKNOWN/` or `accessibility.window/UNKNOWN/`
   carries a `message_input` node or an `android.widget.EditText` node with readable `text` — the field
   reads `[redacted]` — and `app.log` shows `Capture backstop: UNKNOWN click node carried customer PII (… input=edittext-class)` (or `input=editable`);

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #460, #324, #2
-confirmed: 1/2
 
-- [active] **Pickup/Delivery task cards redesigned to the co-hero design (#460/#324).** The task cards
+- **Pickup/Delivery task cards redesigned to the co-hero design (#460/#324).** The task cards
   no longer show a single countdown + caption — they now have the **dual co-hero**: LEFT = the
   phase timer (counts DOWN to the deadline as "To go", then flips to "Dwell" counting UP once you
   arrive, with "at store"/"at door"), RIGHT = **"Running at $X/hr"** — the live realized rate from

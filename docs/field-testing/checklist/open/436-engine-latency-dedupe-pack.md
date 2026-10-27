@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #436, #10
-confirmed: 0/2
 
-- [review] **Engine latency + dedupe pack (#436).**
+- **Engine latency + dedupe pack (#436).**
   Four behaviors to watch: (a) accepting/declining an offer FAST (inside ~1s of the verdict
   landing) should no longer pop a stale Accept/Decline heads-up afterwards; (b) offer verdicts
   should land a touch quicker (config no longer read cold per offer); (c) relaunching the app

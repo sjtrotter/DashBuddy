@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #564, #570
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — add-on offer no longer fabricates a $0 "completion" (#564, PR #570). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — add-on offer no longer fabricates a $0 "completion" (#564, PR #570). CONFIRM ON DASH.**
   06-21 seq98: accepting a **mid-stack add-on** offer (a new order added while a pickup was in
   flight) misrecognized the offer's transient frame as a delivery summary and logged a **fake $0,
   customer-less completion** of the not-yet-picked-up store — corrupting earnings. Fixed two ways

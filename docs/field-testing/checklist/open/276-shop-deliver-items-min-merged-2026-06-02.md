@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #276
-confirmed: 1/2
 
-- [active] **Shop & Deliver items/min (#276, merged 2026-06-02).** On a real Shop &
+- **Shop & Deliver items/min (#276, merged 2026-06-02).** On a real Shop &
   Deliver, open the bubble pickup card and confirm it shows
   `shop {shopped}/{total} · {N.N}/min` (not a bare item count), that the pace
   **ticks** while shopping, and that on the DoorDash screen

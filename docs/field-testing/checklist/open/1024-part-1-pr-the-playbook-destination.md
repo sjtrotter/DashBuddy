@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #1024, #1025
-confirmed: 0/2
 
-- [review] **🆕 NEW — #1024 part 1 (PR #1025) — the Playbook destination.** Open Home → **Playbook** tile.
+- **🆕 NEW — #1024 part 1 (PR #1025) — the Playbook destination.** Open Home → **Playbook** tile.
   Check: (a) *This week's plan* shows `Xh worked in your windows · $Y kept of the $Z you planned
   for` and each window row flips to **Done** after its end hour (leave the screen open across an
   hour boundary — it should re-render without leaving); (b) the heatmap outlines exactly the hours

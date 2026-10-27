@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #501, #738
-confirmed: 0/2
 
-- [review] **🆕 NEW — GoPuff zone-arrival screens recognized (recognize-only, no state effect) (#501 item 3 / PR #738).**
+- **🆕 NEW — GoPuff zone-arrival screens recognized (recognize-only, no state effect) (#501 item 3 / PR #738).**
   The GoPuff "Navigate to zone" / "Arrived at store" screens (the `go_to_store_action_view` CTA card)
   are now recognized as `pickup_zone_arrival` instead of landing in UNKNOWN. **How to tell it's working
   on a GoPuff (DoorDash Drive) run:** after the dash, the zone-arrival frames should NOT appear in the

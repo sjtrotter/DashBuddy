@@ -1,9 +1,7 @@
 status: superseded
-section: §5 Field-validated / retired / Superseded (dev-confirmed 2026-10-07 — the replacing redesign is named on each; the #657 earnings-freshness check is retained in §2)
 issues: #314, #320, #1024, #1027
-confirmed: 0/2
 
-- [superseded] **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
+- **🆕 NEW — the home screen's top glance is now REAL "Today" totals from the read model (#314 PR3, completes #314).**
   Open the DashBuddy main app (not the bubble). **Working looks like:** the top row of three stat
   tiles — **True Net · Net/hr · Miles**, each sub-labelled **"Today"** — shows your **whole day's**
   frozen net (Σ each completed delivery's frozen net + any unattributed pay), not just the current

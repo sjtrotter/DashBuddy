@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1107, #1110
-confirmed: 0/2
 
-- [active] **🆕 NEW — the 8.97.8 "Drop off steps" wrapper masks the customer's instruction body (#1107 — PR
+- **🆕 NEW — the 8.97.8 "Drop off steps" wrapper masks the customer's instruction body (#1107 — PR
   #1110).** The wrapper page 8.97.8 routes leave-at-door through shipped a gate code, cross streets
   and a landmark raw to UNKNOWN capture on 09-13 (that entry's Bug 1). It is now recognized as
   `dropoff_step_instructions` with its `description_text_view` body plain-masked whole (and the id on

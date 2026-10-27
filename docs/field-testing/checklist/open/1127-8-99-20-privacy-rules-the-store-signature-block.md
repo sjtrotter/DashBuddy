@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1127, #1128, #1139, #1022
-confirmed: 0/2
 
-- [active] **8.99.20 privacy rules (#1127 / #1128 / #1139) + the store-signature block (#1022):** on the next dash, if any of
+- **8.99.20 privacy rules (#1127 / #1128 / #1139) + the store-signature block (#1022):** on the next dash, if any of
   these surfaces appears — the "Can't hand order to customer" steps page, the pickup "What do you want to do next?"
   sheet, the stacked-job "Select an Order" picker, or a return-order store-employee signature pad — the pull should
   show the first three as RECOGNIZED envelopes (`dropoff_customer_unavailable`, `pickup_resolution_options`,

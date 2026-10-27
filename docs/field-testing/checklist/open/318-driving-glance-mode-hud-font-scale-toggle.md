@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #318
-confirmed: unspecified
 
-- [active] **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
+- **🆕 NEW — driving/glance-mode HUD font-scale toggle (#318).** Flip "Driving glance mode" on in
   Settings → General while a dash is running (or the bubble is up). The bubble HUD's text — the
   hero $/hr, task timers, captions, everything — should visibly grow (~12%) immediately, with no
   restart of the app or the dash. Toggle it back off and the text should shrink back immediately.

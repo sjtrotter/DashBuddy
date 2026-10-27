@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #916, #1226
-confirmed: 1/2
 
-- [active] **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
+- **Bubble lifecycle is visible in the shareable stream (#916):** after a dash, `grep -h 'Bubble' shareable.log`
   shows session start/end, `bubble post requested … canBubble=true` / `bubble post returned`, and activity
   create/start/stop/destroy; swiping the bubble's NOTIFICATION out of the shade logs `bubble notification
   removed (deleteIntent)` (dragging the chathead to the X does NOT — that is #1226). Use the sequence to

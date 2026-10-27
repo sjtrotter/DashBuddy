@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #501, #743
-confirmed: 0/2
 
-- [review] **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
+- **🆕 NEW — GoPuff / multi-order drop-off confirm card recognized (#501 items 1-2 / PR #743).**
   The "Confirm you have the correct order before drop-off / Mix-ups frequently occur…" card that
   appears before a drop on a **multi-order Dash** (GoPuff Drive batches AND ordinary multi-merchant
   grocery batches) is now a recognized screen (`dropoff_multi_order_confirm`) instead of falling to

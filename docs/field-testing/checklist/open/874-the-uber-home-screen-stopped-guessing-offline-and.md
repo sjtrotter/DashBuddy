@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #874, #875, #857, #872
-confirmed: 0/2
 
-- [review] **🆕 NEW — #874 / #875 — the Uber HOME screen stopped guessing "offline", and the nav-less
+- **🆕 NEW — #874 / #875 — the Uber HOME screen stopped guessing "offline", and the nav-less
   offline card is now recognized.** Sibling of #857/PR #872, one rule down: `home_dashboard`
   branch 3 claimed offline whenever the bottom nav existed and the words "You're online" did not
   — so a half-drawn online dashboard, or a *Trip Details* screen stacked over it, forged the same

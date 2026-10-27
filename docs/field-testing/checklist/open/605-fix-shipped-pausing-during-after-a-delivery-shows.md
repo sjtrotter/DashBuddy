@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #605
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — pausing during/after a delivery shows exactly one "Dash Paused!", no phantom "resumed" flap (#605). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — pausing during/after a delivery shows exactly one "Dash Paused!", no phantom "resumed" flap (#605). CONFIRM ON DASH.**
   DoorDash's pause sheet is a modal on top of the just-completed delivery summary, so accessibility
   frames alternate `dash_paused` (paused) ↔ `delivery_summary_collapsed` (online) for a few seconds.
   Before #605 the state machine flipped mode on every edge — re-minting `DASH_PAUSED` + "Dash Paused!"

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #431
-confirmed: 1/2
 
-- [active] **Session-end grace — summary no longer ends the dash instantly (#431).**
+- **Session-end grace — summary no longer ends the dash instantly (#431).**
   The dash-summary screen now arms a ~2.5s authoritative grace (cancellable by a task-flow
   frame) instead of ending the session on the spot, and grace commits fire on a timer instead
   of waiting for the next event. Watch: (a) the post-dash summary still attributes to the

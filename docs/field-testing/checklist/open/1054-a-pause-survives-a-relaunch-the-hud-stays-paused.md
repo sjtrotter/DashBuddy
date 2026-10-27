@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1054
-confirmed: 0/2
 
-- [active] **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
+- **🆕 NEW — #1054 — a pause survives a relaunch: the HUD stays PAUSED, and the dash still ends on
   its own when the countdown runs out.** Two behaviours that used to be broken in opposite
   directions. A graced resume is now DROPPED on restore (it is 8 s of *un-contradicted* observation,
   and dead process time is not that), so a relaunch mid-pause must NOT come back Online — a phantom

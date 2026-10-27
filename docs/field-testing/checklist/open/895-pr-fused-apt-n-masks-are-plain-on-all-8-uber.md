@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #895, #927, #825, #986
-confirmed: 0/2
 
-- [review] **🆕 NEW — #895 / PR #927 — fused `Apt <n>` masks are plain on all 8 uber+doordash surfaces
+- **🆕 NEW — #895 / PR #927 — fused `Apt <n>` masks are plain on all 8 uber+doordash surfaces
   (desk-only).** The `Apt [redacted:<4hex>]` form (brute-recoverable ~10⁴ alphabet) is gone;
   the fused subpremise masks as `Apt [redacted]` with no hex on
   `dropoff_pin_entry`/`dropoff_handoff`/`dropoff_pre_arrival`/`dropoff_pre_arrival_completion` +

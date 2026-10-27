@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #979, #1, #2, #1024
-confirmed: 0/2
 
-- [review] **🆕 NEW — #979 — Patterns: ALL-TIME badge, heatmap Rate/Hours toggle, store leaderboard
+- **🆕 NEW — #979 — Patterns: ALL-TIME badge, heatmap Rate/Hours toggle, store leaderboard
   (redesign stage 5).** Open Analytics → Patterns. Three things to check.
   (a) **ALL TIME badge:** an `All time` chip sits at the very top with the caption "patterns need
   history — this tab always reads your whole record" — and paging the header `‹ ›` pager above must

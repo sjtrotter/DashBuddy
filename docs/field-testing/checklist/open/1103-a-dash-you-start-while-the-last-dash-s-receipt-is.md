@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1103, #1111
-confirmed: 0/2
 
-- [active] **🆕 NEW — a dash you start while the last dash's receipt is still on screen must not inherit its
+- **🆕 NEW — a dash you start while the last dash's receipt is still on screen must not inherit its
   money.** Fielded twice on 09-10/09-11: the previous dash's `delivery_summary_collapsed` sheet was
   still up 14 ms (and 251 ms) after `DASH_START`, the settle gate parked its `sessionEarnings` read
   inside the NEW session, and a `SESSION_PAY_SETTLE` three seconds later committed it — session 483

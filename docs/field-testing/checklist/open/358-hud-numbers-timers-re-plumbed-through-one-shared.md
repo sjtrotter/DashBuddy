@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #358, #386
-confirmed: 0/2
 
-- [review] **HUD numbers/timers re-plumbed through one shared format/time kit (#358, PR #386).**
+- **HUD numbers/timers re-plumbed through one shared format/time kit (#358, PR #386).**
   All bubble-card money, distance, countdown, and duration strings now come from
   `:core:designsystem` helpers, and the phase chip switched to brand tokens. On a normal dash,
   glance-check: (a) card money/mi/min strings look exactly as before (en-US should be visually

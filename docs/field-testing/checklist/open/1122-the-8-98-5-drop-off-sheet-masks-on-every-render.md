@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1122, #1123, #1125
-confirmed: 1/2
 
-- [active] **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
+- **🆕 NEW — the 8.98.5 drop-off sheet masks on every render that keeps a stable row (#1122 + #1123).** The 09-20 pull
   shipped two Pledge leaks from the same sheet: a raw customer name in the bottom bar of a
   `dropoff_pre_arrival` envelope (the id-less node the rule's id-anchored entry never saw — #1123),
   and three header-less / partial renders of the workflow sheet that fell UNKNOWN with the whole

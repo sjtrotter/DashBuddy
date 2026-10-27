@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #722, #693, #763
-confirmed: 1/2
 
-- [active] **🆕 NEW — bubble gas quick-edit is mode-adaptive: refresh (AUTO) vs. Resume auto (MANUAL) (#722 / PR).**
+- **🆕 NEW — bubble gas quick-edit is mode-adaptive: refresh (AUTO) vs. Resume auto (MANUAL) (#722 / PR).**
   **Where to find it:** the idle dashboard card, shown whenever OFFLINE with no active dash (the
   #722/#693 reachability fix — a completed session's timeline no longer hides it; the full timeline
   now appears only while actively dashing, plus in the analytics drill-down).

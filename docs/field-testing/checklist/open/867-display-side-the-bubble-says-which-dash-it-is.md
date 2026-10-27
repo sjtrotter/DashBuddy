@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #867, #873
-confirmed: 1/2
 
-- [active] **🆕 NEW — #867 (display side) — the bubble says WHICH dash it is showing, and you can switch it.**
+- **🆕 NEW — #867 (display side) — the bubble says WHICH dash it is showing, and you can switch it.**
   With two platforms online the HUD used to follow whichever app produced the last frame, unlabeled
   — a DoorDash "Declined" chip read as the Uber offer you had just acted on. Now: platform chips on
   every card + the chat header whenever ≥2 dashes are live, a manual **Showing DD | UBER** chip row

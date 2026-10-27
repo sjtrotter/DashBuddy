@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #762, #784
-confirmed: 0/2
 
-- [review] **🆕 NEW — WATCH (accepted residual): coarse-only Uber trip may leave its job open past the receipt (#762 D2 / PR #784).**
+- **🆕 NEW — WATCH (accepted residual): coarse-only Uber trip may leave its job open past the receipt (#762 D2 / PR #784).**
   A marker-less `on_job_view` frame between the post-trip receipt and idle walks the flow
   PostTask→TaskActive→Idle and suppresses the receipt-exit job close when NO leg screen ever activated
   a task (coarse-only trip). Chosen fail direction is absorption (job stays open; closes at session end)

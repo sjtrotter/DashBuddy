@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #319, #689
-confirmed: 1/2
 
-- [active] **🆕 NEW — CSV data export (#319).** Settings → Data & Privacy → "Export Data (CSV)" → tap
+- **🆕 NEW — CSV data export (#319).** Settings → Data & Privacy → "Export Data (CSV)" → tap
   "Choose folder & export" and pick a folder (e.g. Downloads). Three files should appear:
   `deliveries.csv`, `sessions.csv`, `summary.csv`. Open each in a spreadsheet app: deliveries should
   have one row per completed drop (date/time, platform, store, pay, tip, miles, minutes, net…),

@@ -1,9 +1,7 @@
 status: field-validated
-section: §5 Field-validated / retired
 issues: #1069
-confirmed: 2/2
 
-- [field-validated] **Same-store consecutive offers are two offers (#1069):** after a dash with two H-E-B (same store)
+- **Same-store consecutive offers are two offers (#1069):** after a dash with two H-E-B (same store)
   offers back to back, `app_events` holds TWO `OFFER_RECEIVED` rows with two `offerHash`es, the first
   offer's outcome reads DECLINED/TIMEOUT on its own row (never 'enriched' into the second), and the
   bubble spoke both. — KNOWN one-time effect: an offer restored from a pre-#1069 snapshot (install mid-dash / crash-recovery across the upgrade) keeps its old store key, so its next re-render logs one spurious `OFFER_TIMEOUT "Replaced by new offer"` + re-speak — not a regression.

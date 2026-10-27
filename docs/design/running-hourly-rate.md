@@ -12,7 +12,7 @@ offer evaluator ($/hr at accept, `domain/.../evaluation/OfferEvaluator.kt`), the
 event log we'd mine for history (`core/database/.../event/AppEventEntity.kt` +
 `domain/.../model/event/payload/AppEventPayloads.kt`), and the field-testing
 "Bubble HUD live $/hr is inflated right after accept" research note
-(`docs/field-testing/README.md`).
+(`docs/field-testing/sessions/2026-05-16-doordash-session.md`, item 2).
 
 ---
 

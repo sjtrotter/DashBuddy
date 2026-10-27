@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Re-aged by whole-item blame (a sub-line note after 2026-08-25 counts as touched) — newest first
 issues: #428, #845
-confirmed: 0/2
 
-- [active] **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
+- **🆕 NEW — #428-B / PR #845 — multi-language TTS (system locale + settings override).**
   **What to watch:** Settings → Voice → Spoken offer language set to Español → the next offer reads
   in Spanish (voice AND words together); System default on an English phone stays English; if the
   es voice pack is missing the read falls back to English (one WARN in the log, never silence).

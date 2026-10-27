@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #1024, #1027
-confirmed: 0/2
 
-- [review] **🆕 NEW — #1024 part 3 (PR #1027) — Home is four blocks.** One **Today** card (kept big → net/hr
+- **🆕 NEW — #1024 part 3 (PR #1027) — Home is four blocks.** One **Today** card (kept big → net/hr
   online · drops · miles · On dash/Online → plan strip), one **This week** card (net + delta +
   sparkline + `Recap →`, the plan row if one is saved, `NEEDS A LOOK` if the week flagged), one row
   of four equal-height tiles, one footer. Working if: net appears once per scope; `Recap →` opens

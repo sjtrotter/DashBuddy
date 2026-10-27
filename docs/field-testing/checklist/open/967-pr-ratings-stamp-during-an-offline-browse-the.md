@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #967, #968
-confirmed: unspecified
 
-- [active] **🆕 NEW — #967 / PR #968 — ratings stamp during an Offline browse (the early-return fix).**
+- **🆕 NEW — #967 / PR #968 — ratings stamp during an Offline browse (the early-return fix).**
   The pre-fix bug: `updateLifecycle`'s Offline early-return sat ABOVE the opportunistic ratings
   stamp, so browsing the Ratings hub while DoorDash mode = Offline silently produced NO fresh
   `ratings.capturedAt` stamp — opportunistic capture only worked mid-dash. Fielded on the very

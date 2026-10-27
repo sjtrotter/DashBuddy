@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1059
-confirmed: 0/2
 
-- [active] **🆕 NEW — #1059 — the Persona verification flow, the Red Card wallet and the passport
+- **🆕 NEW — #1059 — the Persona verification flow, the Red Card wallet and the passport
   scanner are now blocked at the matcher layer.** Three of the dasher's OWN surfaces were
   reaching UNKNOWN capture: the embedded Persona selfie / ID-verification camera (12 envelopes
   on 08-27), the "Your Red Card" wallet screen (3), and the PASSPORT variant of the ID-scan

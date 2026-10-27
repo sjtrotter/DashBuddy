@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #110
-confirmed: 0/2
 
-- [review] **Offer card redesign — visuals (#110 Stage 1, PR pending).** When an offer arrives, glance
+- **Offer card redesign — visuals (#110 Stage 1, PR pending).** When an offer arrives, glance
   at the bubble offer card and confirm the new layout reads at a glance: a **score ring** (green/
   amber/red by score) beside the **net $/hr** hero; a **verdict banner** (ACCEPT / DECLINE /
   MANUAL REVIEW + one-line reason + quality chip, tinted to match); **badge pills** when present

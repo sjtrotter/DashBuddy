@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #315
-confirmed: 1/2
 
-- [active] **🆕 NEW — Analytics Money tab: earnings-by-day chart + header CSV export icon (#315 H6).**
+- **🆕 NEW — Analytics Money tab: earnings-by-day chart + header CSV export icon (#315 H6).**
   Open **Analytics → Money** and pick **Week** or **Month**: a new **"EARNINGS BY DAY"** card should
   appear as the **second** card (right under the gross hero), a bar per day of the period — 7 bars for
   Week (labelled M/T/W…), ~28–31 for Month (only the 1/5/10/15/20/25/30 labelled). The **best-earning

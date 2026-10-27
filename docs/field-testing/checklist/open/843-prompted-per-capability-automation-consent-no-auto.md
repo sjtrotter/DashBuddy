@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / other
 issues: #843, #417
-confirmed: 1/2
 
-- [active] **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
+- **🆕 NEW — #843 — prompted per-capability automation consent (no auto-grant).** Automations are
   no longer pre-granted; each must be consented to individually via a prompt at the app's front
   door (Google Play policy). On upgrade, a one-shot migration clears the old auto-grants, so every
   automation starts OFF.

@@ -1,9 +1,7 @@
 status: active
-section: §2 Active
 issues: #1311
-confirmed: 0/2
 
-- [active] **🆕 NEW — no 5-second ghost dash after End dash (#1311).** End a dash, dismiss the
+- **🆕 NEW — no 5-second ghost dash after End dash (#1311).** End a dash, dismiss the
   summary, and let the dash-controls sheet briefly reappear before the idle map. The session list
   and per-day stats must show only the ended dash, with no new zero-offer dash or start bubble.
   A real re-dash still starts after sustained Online screens, anchored to the first hint; an offer

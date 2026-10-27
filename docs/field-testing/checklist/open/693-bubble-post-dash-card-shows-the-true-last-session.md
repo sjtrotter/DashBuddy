@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #693, #722
-confirmed: 1/2
 
-- [active] **🆕 NEW — bubble post-dash card shows the TRUE last session + gas/vehicle quick actions (#693 / PR).**
+- **🆕 NEW — bubble post-dash card shows the TRUE last session + gas/vehicle quick actions (#693 / PR).**
   The idle bubble card now reads the analytics read-model (`recentSessions(1)`) instead of an in-memory
   capture that could miss a dash. **Primary check — the $0 repro:** end a dash that earned nothing (accept
   one order then unassign, or just go online→offline with no completions), collapse the bubble, then reopen

@@ -1,9 +1,7 @@
 status: field-validated
-section: §5 Field-validated / retired
 issues: #302, #276, #4
-confirmed: 2/2
 
-- [field-validated] **Shop & Deliver items/min reaches `total/total` at the end (#302).** On a
+- **Shop & Deliver items/min reaches `total/total` at the end (#302).** On a
   Shop & Deliver order, when you finish shopping (add the last item / reach
   "To shop (0)") the bubble shop card should read **`shop total/total`** — not
   `total−1/total` — and the items/min pace should reflect the full count. This was

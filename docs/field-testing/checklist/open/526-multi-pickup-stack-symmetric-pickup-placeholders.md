@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #526, #565
-confirmed: 0/2
 
-- [review] **🆕 NEW — multi-pickup stack: symmetric pickup placeholders + store re-attribution (#526 / PR).**
+- **🆕 NEW — multi-pickup stack: symmetric pickup placeholders + store re-attribution (#526 / PR).**
   Accept a **multi-store stack** (two+ orders from DIFFERENT stores in one offer — e.g. the 07-05
   Bill Miller BBQ + Mama Margies). Watch the whole run: both pickups AND both drops.
   How to tell it's working: (1) **both pickups get confirmed** — each store's pickup shows a

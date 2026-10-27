@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #3, #286, #290, #2
-confirmed: 0/2
 
-- [review] **App-switch mid-dash → "Session resumed (grace)" → dash + task continuity
+- **App-switch mid-dash → "Session resumed (grace)" → dash + task continuity
   (2026-06-03 #3).** The bubble's `"Session resumed (grace)"` message
   (`EffectMap.kt:319`) fires when a region goes Offline then back Online within
   ~10s on the **same** session. An app-switch return can trip this (DashBuddy

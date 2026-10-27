@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #888, #595, #922, #989
-confirmed: 0/2
 
-- [review] **🆕 NEW — #888 — eight DoorDash screens that used to fall to UNKNOWN are now recognized.**
+- **🆕 NEW — #888 — eight DoorDash screens that used to fall to UNKNOWN are now recognized.**
   All eight are **recognize-only** (no state claim, no parse), so the only intended change is that
   the frames stop landing in the UNKNOWN capture pile. The list: the post-accept **"accepting"
   spinner** (every accept was losing its own follow-frame), the mid-shop **pay-adjustment sheet**

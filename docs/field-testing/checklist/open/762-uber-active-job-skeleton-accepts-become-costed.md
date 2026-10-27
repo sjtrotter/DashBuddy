@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #762, #784, #785, #786, #826, #827
-confirmed: 0/2
 
-- [review] **🆕 NEW — Uber active-job skeleton: accepts become costed jobs at trip start; honest "ON JOB" badge (#762 D2 / PR #784). NEEDS UBER ENABLED.**
+- **🆕 NEW — Uber active-job skeleton: accepts become costed jobs at trip start; honest "ON JOB" badge (#762 D2 / PR #784). NEEDS UBER ENABLED.**
   `active_trip` (the coarse `on_job_view` screen) now declares the phase-less `task:active` flow, and the
   accept grace is per-platform (Uber 600s vs the old global 120s). Together: an accepted Uber offer is
   consumed into a fully-costed job within seconds of accept instead of expiring into an uncosted corpse

@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1115
-confirmed: 0/2
 
-- [active] **🆕 NEW — the offer card's Decline target must stay bound on 8.97.8.** **On-dash:** when the heads-up
+- **🆕 NEW — the offer card's Decline target must stay bound on 8.97.8.** **On-dash:** when the heads-up
   notification's **Decline** button does nothing (you have to decline in the DoorDash card yourself),
   note it. **Desk:** `bindShortfall{doordash.screen.offer_popup#declineButton}` should be 0 and
   `No 'declineButton' target bound` should not appear (09-13→15: 3 such WARNs plus a

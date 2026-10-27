@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1160, #1145
-confirmed: 0/2
 
-- [active] **🆕 NEW — chat header and chat preview are masked in captures (PR #1160 / #1145).** Desk check on a
+- **🆕 NEW — chat header and chat preview are masked in captures (PR #1160 / #1145).** Desk check on a
   debug pull; nothing on the dash looks different. **How to tell it works:**
   1. A capture of the live DoorDash chat list (the conversation row with the customer's name and their
      last message) shows the `tvTitle` value as `[redacted:<4hex>]` — the 4 hex equal the first 4 of that

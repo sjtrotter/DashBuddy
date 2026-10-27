@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #427, #426, #830, #859
-confirmed: 0/2
 
-- [review] **Per-offer dedupe now engages (#427).**
+- **Per-offer dedupe now engages (#427).**
   Offer screenshot/log dedupe keys used to resolve to one shared literal, so a second distinct
   offer within 60s was silently swallowed. Now keyed per-offer via `{parsedHash}`. Watch on a
   busy dash (with Evidence master + offers enabled, see #426 item): two different offers

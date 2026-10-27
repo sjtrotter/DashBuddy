@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Re-aged by whole-item blame (a sub-line note after 2026-08-25 counts as touched) — newest first
 issues: #752, #757, #736
-confirmed: 0/2
 
-- [active] **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
+- **🆕 NEW — unassign an order AFTER pickup (dropoff phase) also produces NO paid artifact (#752 / PR #757).**
   Companion to #736: when the unassign happens while a **dropoff** is active (or was just grace-retired
   en route to the customer — e.g. a help/idle screen interrupted the drive, the retire grace fired,
   then you unassigned), the app now retro-marks **that drop** as unassigned instead of a sibling

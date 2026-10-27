@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1133, #1219
-confirmed: 0/2
 
-- [active] **Desk-first — #1133 (PR #1219): pay-less rows carry their car cost.** After the first launch on this
+- **Desk-first — #1133 (PR #1219): pay-less rows carry their car cost.** After the first launch on this
   build (projector v12 refold), the hub's "where your money went" card should show the gas/wear split
   for a week whose drops all carry a split (the guard no longer trips falsely), "kept" moves down by the
   receipt-less drops' mileage cost, and a receipt-less drop in a session drill-down reads pay `—` with

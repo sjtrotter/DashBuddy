@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #578, #583
-confirmed: unspecified
 
-- [active] **👁 VISUAL-ONLY — rich offer notification looks right: gauge ring, countdown, badges (#578/#583). CONFIRM BY EYE.**
+- **👁 VISUAL-ONLY — rich offer notification looks right: gauge ring, countdown, badges (#578/#583). CONFIRM BY EYE.**
   The mechanical halves are validated (buttons fire from the floating heads-up; the card posts
   with live PendingIntents; zero RemoteViews errors across a full week) — what desk data cannot
   see is the **rendering**. **Confirm on dash: 0/2 —** (a) the score shows as a **filled circular

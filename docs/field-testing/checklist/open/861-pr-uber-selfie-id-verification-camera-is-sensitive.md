@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #861, #868
-confirmed: 0/2
 
-- [review] **🆕 NEW — #861 / PR #868 — Uber selfie ID-verification camera is sensitive-blocked.**
+- **🆕 NEW — #861 / PR #868 — Uber selfie ID-verification camera is sensitive-blocked.**
   **Desk only:** next pull has ZERO selfie-flow UNKNOWN envelopes (`facecamera` ids /
   "Fit your face in the guide"); `sensitiveDropped` increments across that window instead.
   - Confirmed: 0/2

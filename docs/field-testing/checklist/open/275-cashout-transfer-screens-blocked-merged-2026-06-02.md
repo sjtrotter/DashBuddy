@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #275
-confirmed: 0/2
 
-- [review] **Cashout / transfer screens blocked (#275, merged 2026-06-02).** Open the
+- **Cashout / transfer screens blocked (#275, merged 2026-06-02).** Open the
   DasherDirect/Crimson balance, a card-details screen, or initiate an instant
   transfer and confirm the bubble does **nothing** (sensitive → skipped),
   rather than reacting to it.

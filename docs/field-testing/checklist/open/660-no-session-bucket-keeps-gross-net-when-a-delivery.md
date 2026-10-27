@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #660
-confirmed: 0/2
 
-- [review] **"(No session)" bucket keeps gross ≥ net when a delivery lands without a session (#660 piece
+- **"(No session)" bucket keeps gross ≥ net when a delivery lands without a session (#660 piece
   1).** Only reproducible if a dash produces a `sessionId IS NULL` delivery row (e.g. a straggler
   DELIVERY_COMPLETED after the app/service restarted mid-dash, or any other path that loses
   session context) — may not fire on a normal dash. If it does happen: on the Money tab for the

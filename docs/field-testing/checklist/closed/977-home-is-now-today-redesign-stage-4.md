@@ -1,9 +1,7 @@
 status: superseded
-section: §5 Field-validated / retired / Superseded (dev-confirmed 2026-10-07 — the replacing redesign is named on each; the #657 earnings-freshness check is retained in §2)
 issues: #977, #978, #1024, #1027
-confirmed: 0/2
 
-- [superseded] **🆕 NEW — #977 — Home is now "Today" (redesign stage 4).** Open the app's home screen (not the
+- **🆕 NEW — #977 — Home is now "Today" (redesign stage 4).** Open the app's home screen (not the
   bubble). Top to bottom it should read: **date + a live clock + a status pill** (the pill's word is
   the same status vocabulary the old card showed — Ready / Looking for offers / Heading to Pickup…),
   then **TODAY'S PLAN**, **SO FAR TODAY**, **THIS WEEK**, any review chores, then the four entry

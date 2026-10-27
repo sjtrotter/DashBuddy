@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / other
 issues: #350
-confirmed: 0/2
 
-- [review] **Economy fields keep the decimal point while typing (#350; desk-verifiable, no dash
+- **Economy fields keep the decimal point while typing (#350; desk-verifiable, no dash
   needed).** In Settings → Personal Economy (or the wizard's costs step), type `12.5` into any
   cost field — the `.` must survive (the value round-trip used to reset the text mid-typing and
   eat the separator). Also confirm: the live `$ /mi` footer still updates per keystroke, and the

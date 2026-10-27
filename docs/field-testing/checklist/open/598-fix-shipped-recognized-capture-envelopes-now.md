@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #598, #346, #623, #624, #620
-confirmed: unspecified
 
-- [active] **🔒 FIX SHIPPED — recognized capture envelopes now redact customer PII at the device edge (#598, incl. audit F1/F2 coverage extension).**
+- **🔒 FIX SHIPPED — recognized capture envelopes now redact customer PII at the device edge (#598, incl. audit F1/F2 coverage extension).**
   Pre-#598 the recognized-screen captures on disk carried raw `Deliver to ‹name›`, full street
   addresses, and gate codes — PII was hashed only in the parse output, raw on disk. Now rules
   DECLARE a `redact` block and the capture stage masks those node texts in the serialized envelope

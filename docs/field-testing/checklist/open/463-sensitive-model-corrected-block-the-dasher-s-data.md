@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #463, #485
-confirmed: 0/2
 
-- [review] **Sensitive model corrected — block the DASHER's data + ID/signature IMAGES; HASH customers (#463/#485).**
+- **Sensitive model corrected — block the DASHER's data + ID/signature IMAGES; HASH customers (#463/#485).**
   The privacy rule is now: block the **dasher's own** sensitive screens (DasherDirect Savings /
   banking — plaintext balances) and the **document-image capture surfaces** (the license-SCAN
   camera + the SIGNATURE pad/handoff), regardless of whose; but **recognize** the alcohol

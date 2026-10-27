@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #650, #688
-confirmed: 1/2
 
-- [active] **🆕 NEW — user corrections as events (#650 PR B): add a missed delivery, adjust a pay.** On a dash
+- **🆕 NEW — user corrections as events (#650 PR B): add a missed delivery, adjust a pay.** On a dash
   that has an **"unaccounted on this dash"** callout (Analytics → Money → tap the dash), tap **Add
   missed delivery**, enter a pay (optionally store/tip/note), confirm. How to tell it's working: within
   a moment the callout **shrinks or disappears** and a new delivery row appears (store you typed, the

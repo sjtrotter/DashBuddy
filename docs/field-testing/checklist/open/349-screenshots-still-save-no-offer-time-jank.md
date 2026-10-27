@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #349
-confirmed: 0/2
 
-- [review] **Screenshots still save + no offer-time jank (#349).** Screenshot saving moved fully off the
+- **Screenshots still save + no offer-time jank (#349).** Screenshot saving moved fully off the
   main thread (the PNG compress + MediaStore write used to run on main, right when the offer
   card/notification renders). Confirm: (a) offer + dash-summary screenshots still land in
   `Pictures/DashBuddy`; (b) no visible stutter the moment an offer arrives (should be same or

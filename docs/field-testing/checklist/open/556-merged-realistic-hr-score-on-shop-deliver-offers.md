@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #556
-confirmed: 1/2
 
-- [active] **🔧 MERGED — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
+- **🔧 MERGED — realistic $/hr + score on Shop & Deliver offers (#556). CONFIRM ON DASH.**
   The time model now estimates a shop by its item count at the dasher's shopping pace (seed 0.8
   items/min, learned from your own completed shops) instead of a flat 7-min overhead — so a grocery
   run no longer reads a wildly inflated `$/hr` / "AWESOME" score. **This is a verdict-mover** (it

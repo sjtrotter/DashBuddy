@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / state machine
 issues: #762, #778
-confirmed: 0/2
 
-- [review] **🆕 NEW — "Shopping off" declines shop offers at the verdict edge (#762 D12 / PR #778).**
+- **🆕 NEW — "Shopping off" declines shop offers at the verdict edge (#762 D12 / PR #778).**
   With `allowShopping` off, a shop-type offer now gets a structural `SHOP_DECLINED` verdict (label
   "Shopping off") from the evaluator itself — full economics still computed and shown, score 0,
   decline recommendation — instead of relying on downstream handling.

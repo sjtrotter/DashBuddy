@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #606, #433
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — one DashSummary screenshot per session end, and offer screenshots are named
+- **🔧 FIX SHIPPED — one DashSummary screenshot per session end, and offer screenshots are named
   with real pay (#606). CONFIRM ON DASH.** Two independent owners were both saving a
   "DashSummary - \<earnings\>" screenshot at session end: the `dash_summary` rule effect
   (deduped + throttled, fires on recognition) and EffectMap's own SESSION_ENDED commit — the

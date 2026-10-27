@@ -1,9 +1,7 @@
 status: must-watch
-section: §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 issues: #1058, #1123, #1122, #1116, #985
-confirmed: 0/2
 
-- [must-watch] **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
+- **🆕 NEW — #1058 — the two dropoff sheets that were shipping addresses and door codes to
   UNKNOWN captures are now recognized and redacted.** Leak A is the ALCOHOL variant of the drop-off
   arrival card (the one that asks you to scan an ID and collect a signature): it renders no
   "Delivery for" line, so no rule matched it and the unit number + the customer's instruction body

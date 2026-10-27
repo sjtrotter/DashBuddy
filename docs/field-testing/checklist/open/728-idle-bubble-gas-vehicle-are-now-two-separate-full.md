@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #728, #767, #722
-confirmed: 0/2
 
-- [review] **🆕 NEW — idle bubble: gas + vehicle are now two separate full-width cards (#728 / PR #767).**
+- **🆕 NEW — idle bubble: gas + vehicle are now two separate full-width cards (#728 / PR #767).**
   The cramped one-row `JustInTimeActions` (the layout the dev called "a nightmare to try to operate")
   is now a stacked pair of full-width cards on the idle dashboard card: one for the #722 mode-adaptive
   gas control, one for Vehicle — every touch target ≥48dp (stepper −/+, refresh, "Resume auto" chip,

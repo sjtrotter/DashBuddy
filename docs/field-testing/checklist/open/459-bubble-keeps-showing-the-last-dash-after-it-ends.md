@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #459, #473
-confirmed: 1/2
 
-- [active] **Bubble keeps showing the last dash after it ends / after a crash (#459).**
+- **Bubble keeps showing the last dash after it ends / after a crash (#459).**
   The bubble's chat + card stack used to go EMPTY after a dash ended (8b: collapse it >5s then
   reopen) or after a crash with no active dash (8a) — the fallback dash id was a volatile
   in-memory latch. It's now sourced durably from the event log (most-recent dash). On a dash:

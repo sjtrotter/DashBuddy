@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #432
-confirmed: 0/2
 
-- [review] **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
+- **Uber sensitive screens now blocked + UNKNOWN-capture scrub (#432).**
   Uber finally has matcher-layer sensitive rules (wallet / Instant Pay / cash-out / bank /
   identity). On a dash, briefly open Uber's earnings/wallet area: working = the app treats it
   as sensitive (no capture, no state change, log shows the sensitive gate) and normal offer

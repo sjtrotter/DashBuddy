@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1254
-confirmed: 0/2
 
-- [active] **#1254 heads-up offer card: Decline is now on the RIGHT, Accept on the LEFT (24dp gap).**
+- **#1254 heads-up offer card: Decline is now on the RIGHT, Accept on the LEFT (24dp gap).**
   **On-dash:** when a DoorDash offer arrives with our heads-up floating over DoorDash's top-right Decline,
   reach for Decline by habit. Working = your finger lands on OUR muted Decline (the offer declines / the
   confirm sheet appears), never Accept; expanding the banner keeps the same order. Broken = any near-miss

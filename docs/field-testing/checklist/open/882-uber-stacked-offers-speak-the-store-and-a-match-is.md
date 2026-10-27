@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #882, #881
-confirmed: 0/2
 
-- [review] **🆕 NEW — #882 / #881 — Uber stacked offers speak the STORE, and a "Match" is recorded as a match.**
+- **🆕 NEW — #882 / #881 — Uber stacked offers speak the STORE, and a "Match" is recorded as a match.**
   Two fixes on the same card. **#882:** a multi-order Uber card ("Delivery (2)") rendered its type
   chip above the one store line it shows, and the chip won the store read — so the bubble/TTS said
   *"Offer. Delivery 2."* and `offer_records.merchantName` recorded "Delivery (2)". The **display**

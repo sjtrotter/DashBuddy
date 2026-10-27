@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #499, #503
-confirmed: unspecified
 
-- [active] **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
+- **✅ FIX SHIPPED — same-store add-on no longer re-mints the task (#499 / #503 slice 2). CONFIRM ON DASH.**
   The task lifecycle now **resumes a prior subtask** instead of re-minting on a phase switch / after an
   offer interlude (re-match by store for pickups, customer address for dropoffs). **Confirm on dash:
   0/2 —** on a same-store shopping add-on (e.g. an offer accepted mid-shop at the same store), the shop

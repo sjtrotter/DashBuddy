@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #431, #456, #466
-confirmed: 2/2
 
-- [active] **Receipt grace — delivery completion is now deferred ~2.5s (#431 pt 2).**
+- **Receipt grace — delivery completion is now deferred ~2.5s (#431 pt 2).**
   The delivery-summary (receipt) screen no longer retires the task instantly; it arms a short
   authoritative grace exactly like the dash summary. Watch: (a) the "Saved: $X" receipt bubble
   fires exactly ONCE per delivery (the expanded re-observation used to be able to double-fire

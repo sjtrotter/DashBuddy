@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #433
-confirmed: 0/2
 
-- [review] **Timeline storeHint now parses + pickup_picked_up rule newly matchable (#433).**
+- **Timeline storeHint now parses + pickup_picked_up rule newly matchable (#433).**
   Two rule fixes from mojibake literals: (a) timeline task rows should now carry store names
   (watch the dash-controls overlay's task chain — logs/cards referencing timeline tasks should
   name the store, not blank); (b) the `pickup_picked_up` screen rule could NEVER match before

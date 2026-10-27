@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #825, #833
-confirmed: 0/2
 
-- [review] **🆕 NEW — #825 / PR #833 — Uber recognized-surface customer redact wave.** `active_trip`,
+- **🆕 NEW — #825 / PR #833 — Uber recognized-surface customer redact wave.** `active_trip`,
   `customer_chat`, `splash`, and `pickup_verification_items` now carry full redact blocks (content
   shapes + uber id anchors incl. the chat `headline_text` "<Name> says:" header and the
   `map_marker_pin_head` address that rides `contentDescription` only).

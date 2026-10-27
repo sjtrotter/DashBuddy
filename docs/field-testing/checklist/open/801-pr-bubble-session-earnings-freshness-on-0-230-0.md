@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #801, #817
-confirmed: 0/2
 
-- [review] **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt
+- **🆕 NEW — #801 / PR #817 — bubble session-earnings freshness on 0.230.0.** The collapsed receipt
   no longer refreshes session `runningEarnings` (the 0.230.0 digit-wheel is unparseable); the figure now
   rides the dash-control "This dash" label parse alone. After a delivery on 0.230.0, verify the bubble's
   session-earnings figure still updates post-receipt; watch for a stale figure. Desk-side:

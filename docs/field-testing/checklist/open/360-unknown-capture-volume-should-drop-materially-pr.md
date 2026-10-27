@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #360, #388
-confirmed: 0/2
 
-- [review] **UNKNOWN capture volume should drop materially (#360, PR #388).**
+- **UNKNOWN capture volume should drop materially (#360, PR #388).**
   UNKNOWN frames now dedup by content hash in a rolling seen-set (animations/list churn
   capture once instead of per frame), with a 200-per-process cap (logged loudly when hit).
   Post-dash check: count files in the capture INBOX vs a May session of similar length —

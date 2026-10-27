@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #462
-confirmed: 0/2
 
-- [review] **Batch-1 recognition gaps from 2026-06-12 now recognized (#462).** Twelve more screens that
+- **Batch-1 recognition gaps from 2026-06-12 now recognized (#462).** Twelve more screens that
   fell to UNKNOWN are now recognized (mostly recognize-only — no flow change): pickup steps
   (`Pickup steps` / `Take receipt photo`), pickup "what's causing your wait" survey, pickup
   "Select an issue" + "Resolution options" menus, shopping intro-message / item-status /

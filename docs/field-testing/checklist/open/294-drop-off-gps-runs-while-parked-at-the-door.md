@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #294, #438, #918
-confirmed: 1/2
 
-- [active] **Drop-off GPS runs while parked at the door (#294 — CONFIRMED at desk 08-09, dev-eyes half
+- **Drop-off GPS runs while parked at the door (#294 — CONFIRMED at desk 08-09, dev-eyes half
   only).** The mechanism is now known and the old item text was inverted: post-#438 B5 the
   odometer keys on `lastActedFlow ∈ STATIONARY_FLOWS` (transient — the dropoff-completion
   screens photo/PIN/confirm are NOT in the set, so they read *moving* and resume GPS) while the

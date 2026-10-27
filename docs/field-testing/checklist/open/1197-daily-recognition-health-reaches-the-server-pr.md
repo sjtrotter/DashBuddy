@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1197, #1198
-confirmed: 1/2
 
-- [active] **Daily recognition health reaches the server (#1197, PR #1198).** Nothing to do on the dash itself;
+- **Daily recognition health reaches the server (#1197, PR #1198).** Nothing to do on the dash itself;
   the day's RECOGNIZED/UNKNOWN counts per (platform, app version) are ledgered on-device and posted as
   ONE closed-day report by the first census run after UTC midnight. Next morning: the developer census
   status line should read `health_posted 1` (or `spool_empty` on a later run), and the ops dashboard's

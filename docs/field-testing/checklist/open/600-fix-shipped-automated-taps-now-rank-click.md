@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #600
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — automated taps now rank click candidates by evidence instead of a dead exact-bounds check (#600).**
+- **🔧 FIX SHIPPED — automated taps now rank click candidates by evidence instead of a dead exact-bounds check (#600).**
   Every automated Accept/Decline/Confirm tap re-resolves its target against the live accessibility
   tree, then disambiguates among label-verified candidates. The old disambiguator compared
   `getBoundsInScreen()` for exact equality against the bounds captured at recognition time — that

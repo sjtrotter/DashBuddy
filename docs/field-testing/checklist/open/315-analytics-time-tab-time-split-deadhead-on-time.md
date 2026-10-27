@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #315, #689
-confirmed: 1/2
 
-- [active] **🆕 NEW — Analytics Time tab: time split, deadhead, on-time gauge, mileage & tax (#315 H4).**
+- **🆕 NEW — Analytics Time tab: time split, deadhead, on-time gauge, mileage & tax (#315 H4).**
   In the Analytics hub tap the **Time** tab and pick a period (Today / Week / Month / Lifetime). Four
   cards should appear: a **time split** (hero online duration + "online across N dashes", an
   On-delivery / Unattributed stack bar with durations, and Dashes / Avg-dash tiles), a **deadhead**

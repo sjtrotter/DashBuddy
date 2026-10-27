@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Re-aged by whole-item blame (a sub-line note after 2026-08-25 counts as touched) — newest first
 issues: #859, #830
-confirmed: 0/2
 
-- [active] **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
+- **🆕 NEW — #859 (H4 + placeholder filenames) — one offer screenshot per presentation, and no
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
   `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
   parsed null saves as `Offer` instead of the literal token.

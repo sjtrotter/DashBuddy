@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #865, #877
-confirmed: 0/2
 
-- [review] **🆕 NEW — #865 / PR #877 — performance-hub residual gaps recognized.**
+- **🆕 NEW — #865 / PR #877 — performance-hub residual gaps recognized.**
   Acceptance-rate detail, scrolled last-100 list, customer-rating detail. **Desk only:** those three
   UNKNOWN families → zero in the next pull. Watch item folded in per the review: if "View all
   offers" opens a "Last 100 offers" modal, it will land UNKNOWN (never fielded, deliberately not

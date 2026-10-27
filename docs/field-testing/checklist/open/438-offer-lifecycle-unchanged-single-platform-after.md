@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / state machine
 issues: #438, #594, #991, #1000
-confirmed: 1/2
 
-- [active] **🆕 NEW — offer lifecycle unchanged single-platform after the platform-owned-offers move (#438 B3 / PR).**
+- **🆕 NEW — offer lifecycle unchanged single-platform after the platform-owned-offers move (#438 B3 / PR).**
   Offers moved off the shared global screen slot onto each platform's own region (the concurrency
   fix), and the whole accept-stash mechanism was replaced by an owned accepted-pending-consumption
   survivor. Single-platform behavior must be **indistinguishable**. On a normal DoorDash dash watch the

@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #149
-confirmed: 0/2
 
-- [review] **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
+- **Alcohol delivery ID-verification flow recognized + arrival timing (#149).**
   On an alcohol dropoff, the ID-check flow is now recognized (previously
   UNKNOWN). Two things to confirm:
     - The flow screens are recognized (no longer UNKNOWN): the intro/legal screen

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / HUD
 issues: #279
-confirmed: 1/2
 
-- [active] **End-of-dash summary attribution (#279).** End a dash and watch the bubble:
+- **End-of-dash summary attribution (#279).** End a dash and watch the bubble:
   the **dash summary** (total earnings / duration) should land and attribute to
   the just-ended dash — whether the summary shows BEFORE or AFTER the
   idle/offline screen (the after-idle ordering was the bug). It must NOT finalize

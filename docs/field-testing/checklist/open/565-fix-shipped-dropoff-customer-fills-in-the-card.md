@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #565, #571
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — dropoff customer fills in the card instead of re-minting it (#565, PR #571). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — dropoff customer fills in the card instead of re-minting it (#565, PR #571). CONFIRM ON DASH.**
   06-21 Walgreens: at the dropoff the bubble showed **"the customer"** for a bit, then when you
   started navigating the card **re-minted** (a fresh card appeared) instead of just filling in the
   name — leaving a dead blank task behind. Fixed so the customer **resolves onto the same dropoff

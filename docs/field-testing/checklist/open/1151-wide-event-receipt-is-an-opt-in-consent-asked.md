@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1151, #1148, #1152
-confirmed: 1/2
 
-- [active] **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
+- **🆕 NEW — wide event receipt is an opt-in consent, asked BEFORE the accessibility grant (#1151).**
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
   overlay path needs) ONLY after you allow it, and the question now comes first in the setup
   sheets. **How to tell it works:**

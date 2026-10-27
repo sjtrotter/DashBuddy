@@ -1449,11 +1449,11 @@ tell if each item is working. This is the primary job of a field-testing agent l
 the phone before a dash. Keep it short and glanceable — they're about to be driving.
 
 **Each checklist item needs two independent field confirmations before it's validated** — a
-single dash can pass by luck or miss the edge case. Track with a `- Confirmed: N/2` sub-line
-in the item's file under `docs/field-testing/checklist/open/` (plus its `confirmed:` header line and
-its index line in `CHECKLIST.md`), noting each sighting's date/conditions. At 2/2, `git mv` the file
-to `checklist/closed/` with `status: field-validated`, move its index line to §5, and record the
-evidence in the dated session log; report broken findings there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
+single dash can pass by luck or miss the edge case. Track with the `- Confirmed: N/2` line
+in the item's file under `docs/field-testing/checklist/open/` (that line is the only place the count lives),
+noting each sighting's date/conditions on a dated sub-line. At 2/2, close it: `git mv` the file to
+`checklist/closed/`, change its `status:` line to `field-validated`, and in `CHECKLIST.md` move its index line
+to §5 with the link pointing at `checklist/closed/`; record the evidence in the dated session log; report broken findings there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
 desk-verified + 3 clean incidental dashes — pending the dev's confirmation); never record an unwitnessed confirmation.
 An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are the dev's.
 
@@ -1461,8 +1461,9 @@ An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are
 close an issue for a change that **needs or would benefit from field validation** — on-dash
 behavior, bubble/HUD changes, recognition rules or parsers, or anything verified only against
 captured data — **also add a matching item: a new file in `docs/field-testing/checklist/open/`
-(the four header lines `status:`/`section:`/`issues:`/`confirmed:`, a blank line, then the item) plus
-its line in the `docs/field-testing/CHECKLIST.md` index** (what to watch + how to tell it's working + the PR/issue number, starting at
+(a `status:` line (the only place the status lives) and an `issues:` line, a blank line, then the item as a
+`- **title** …` bullet) plus a `- [title](checklist/open/<file>.md)` line under its section in the
+`docs/field-testing/CHECKLIST.md` index** (what to watch + how to tell it's working + the PR/issue number, starting at
 `Confirmed: 0/2`). Treat this as part of finishing the PR/closing the issue, not an
 afterthought — it's how field-validation work reaches the developer on the next dash.
 

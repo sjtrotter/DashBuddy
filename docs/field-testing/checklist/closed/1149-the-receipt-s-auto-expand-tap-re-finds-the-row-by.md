@@ -1,9 +1,7 @@
 status: field-validated
-section: §5 Field-validated / retired
 issues: #1149, #1102
-confirmed: 2/2
 
-- [field-validated] **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
+- **🆕 NEW — the receipt's auto-expand tap re-finds the row by its labels, and every tap lands on the
   control that OWNS the click (#1149).** Taps now resolve the clickable owner first (verified, then
   `refresh()`ed right before the click), and an id-less bind is re-found by its exact label
   fingerprint BEFORE its captured bounds — so a receipt sheet still sliding when it was bound no longer

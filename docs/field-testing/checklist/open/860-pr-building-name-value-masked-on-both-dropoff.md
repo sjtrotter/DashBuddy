@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #860, #871, #1126, #1213
-confirmed: 0/2
 
-- [review] **🆕 NEW — #860 / PR #871 — Building Name value masked on both dropoff workflow sheets.**
+- **🆕 NEW — #860 / PR #871 — Building Name value masked on both dropoff workflow sheets.**
   **Desk only:** any `dropoff_pre_arrival` / `dropoff_pre_arrival_completion` envelope carrying a
   `Building Name` row shows the value as `[redacted:<4hex>]` (label survives). New engine predicate
   `hasPrecedingSiblingText` is the anchor — a completion-sheet fixture is still wanted (none

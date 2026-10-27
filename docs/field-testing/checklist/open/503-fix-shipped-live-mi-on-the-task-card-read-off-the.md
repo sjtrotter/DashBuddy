@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #503, #525
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — live $/mi on the task card, read off the Job (#503 deliverable 2, PR #525). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — live $/mi on the task card, read off the Job (#503 deliverable 2, PR #525). CONFIRM ON DASH.**
   The live pickup/delivery card's "Running at $X/hr" co-hero now shows a **$Y/mi** sub line (fixed
   efficiency off `Job.blendedDistanceMiles`; "—" when no offer distance is known, never `$X/0mi`).
   **Confirm on dash: 0/2 —** while driving a delivery the card should show a sensible **$/mi** under the

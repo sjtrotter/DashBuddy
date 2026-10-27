@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #110
-confirmed: 0/2
 
-- [review] **Offer heads-up notification with Accept/Decline (#110 surface pivot, PR pending).** Since the
+- **Offer heads-up notification with Accept/Decline (#110 surface pivot, PR pending).** Since the
   bubble can't auto-expand from the background, an offer now fires a **heads-up notification** showing
   the condensed card (`ACCEPT · $22/hr net` / `Net $22 · 12.9 mi · $1.74/mi · Score 74 · H-E-B`) with
   **Decline** + **Accept** action buttons. Confirm: (1) the notification **pops as a heads-up** while

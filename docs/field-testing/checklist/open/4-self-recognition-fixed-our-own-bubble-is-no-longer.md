@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #4
-confirmed: 0/2
 
-- [review] **Self-recognition fixed: our own bubble is no longer parsed as a DoorDash offer (#4, PR pending).**
+- **Self-recognition fixed: our own bubble is no longer parsed as a DoorDash offer (#4, PR pending).**
   Root cause of the 2026-06-09 offer flip-flop: when the bubble was the active window over DoorDash,
   our own overlay got snapshotted, mislabeled `doordash`, and matched `offer_popup` → a phantom
   re-eval (the spurious DECLINE-6 / "22.5 mi"). Now active-window snapshots are attributed to the

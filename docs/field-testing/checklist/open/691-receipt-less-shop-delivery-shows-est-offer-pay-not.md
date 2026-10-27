@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #691, #702, #996, #997
-confirmed: 0/2
 
-- [review] **🆕 NEW — receipt-less shop delivery shows est. offer pay, not $0-unattributed (#691 / PR).**
+- **🆕 NEW — receipt-less shop delivery shows est. offer pay, not $0-unattributed (#691 / PR).**
   Do a **DoorDash shop order** (grocery/convenience — the kind that shows NO per-delivery receipt at
   the end; pay lives only on the offer + the running dash total). After it completes, open **Analytics
   → the dash → the delivery drill-down**.

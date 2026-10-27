@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / HUD
 issues: #936, #952
-confirmed: 0/2
 
-- [review] **🆕 NEW — #936 / PR #952 — an offer with an unreadable distance says so instead of guessing.**
+- **🆕 NEW — #936 / PR #952 — an offer with an unreadable distance says so instead of guessing.**
   If a card's mileage ever fails to parse, the HUD/notification should show `no verdict` +
   `distance didn't parse` (no `$0/hr`, no score gauge) and the voice should say *"No verdict — the
   distance didn't parse"*. Rare in the field; the desk check is `offer_records` rows with

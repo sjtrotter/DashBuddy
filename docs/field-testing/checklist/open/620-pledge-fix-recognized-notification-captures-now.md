@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / recognition
 issues: #620
-confirmed: 0/2
 
-- [review] **🔒 PLEDGE FIX — recognized-notification captures now mask customer PII (#620).**
+- **🔒 PLEDGE FIX — recognized-notification captures now mask customer PII (#620).**
   Send yourself a customer chat ("Message from ‹name›" + a message body) and trigger an order-ready
   push ("‹name›'s order is ready for pickup at ‹store›"), then pull the capture envelopes off-device.
   **Working looks like:** the chat capture shows the sender masked (`Message from [redacted:‹4hex›]`)

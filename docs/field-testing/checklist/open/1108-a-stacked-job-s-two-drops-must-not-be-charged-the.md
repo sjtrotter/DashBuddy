@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1108, #1120
-confirmed: 0/2
 
-- [active] **🆕 NEW — a stacked job's two drops must not be charged the same miles twice (#1108).** **Desk:** per
+- **🆕 NEW — a stacked job's two drops must not be charged the same miles twice (#1108).** **Desk:** per
   session, `Σ realizedMiles` must be ≤ `lastOdometer − startOdometer`; and no
   `delivery_records.realizedMinutes` may be negative. Watch specifically for a stacked job where the
   second drop-off card appears without an arrival frame (09-13 session 499: 24.32 mi of legs on an

@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / analytics
 issues: #996, #997, #1012, #691, #1119
-confirmed: 1/2
 
-- [active] **🆕 NEW — #996/#997 (PR #1012) — per-offer pay attribution on a receipt-less dash.** On any
+- **🆕 NEW — #996/#997 (PR #1012) — per-offer pay attribution on a receipt-less dash.** On any
   dash with no post-drop receipt (an out-of-zone "Dash Along the Way" start, or a shop order),
   watch three shapes. (a) **Multi-accept job at DIFFERENT stores:** each drop's drill-down shows
   its own store's offer pay as the "est. offer pay", not all drops showing one averaged number.

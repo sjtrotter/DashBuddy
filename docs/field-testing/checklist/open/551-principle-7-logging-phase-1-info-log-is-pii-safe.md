@@ -1,9 +1,7 @@
 status: active
-section: §4 1/2 items older than 6 weeks / other
 issues: #551, #692
-confirmed: 1/2
 
-- [active] **🆕 NEW — Principle-7 logging phase 1: INFO+ log is PII-safe, `SCREEN:` spam gone, real WARNs
+- **🆕 NEW — Principle-7 logging phase 1: INFO+ log is PII-safe, `SCREEN:` spam gone, real WARNs
   visible (#551 PR #551-P1).** After a dash (ideally one with a **grocery shop**, so the TTS/ShopRate
   paths fire), export/inspect the log (Settings → the log/bug-report export, or pull the on-device
   file). How to tell it's working: **(a)** grep the log for your shop's merchant name (e.g. `H-E-B`,

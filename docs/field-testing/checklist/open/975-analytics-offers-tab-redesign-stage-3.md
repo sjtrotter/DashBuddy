@@ -1,9 +1,7 @@
 status: review
-section: §3 Review (aged ≥ 6 weeks at 0/2) / analytics
 issues: #975, #976, #1024
-confirmed: 0/2
 
-- [review] **🆕 NEW — #975 — Analytics → Offers tab (redesign stage 3).** Open Analytics. The second tab is
+- **🆕 NEW — #975 — Analytics → Offers tab (redesign stage 3).** Open Analytics. The second tab is
   now **Offers** (order: Money · Offers · Time · Patterns). On it, check four things.
   (a) **Top pair:** acceptance rate on the left, `~$X` "said no to" on the right, with the
   accept/decline/timeout bar under both. The said-no caption must name its population —

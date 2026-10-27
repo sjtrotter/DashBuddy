@@ -1,9 +1,7 @@
 status: superseded
-section: §5 Field-validated / retired / Superseded (dev-confirmed 2026-10-07 — the replacing redesign is named on each; the #657 earnings-freshness check is retained in §2)
 issues: #657, #658, #1024, #1027, #1246
-confirmed: 0/2
 
-- [superseded] **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
+- **🆕 NEW — the main dashboard is now a REVIEW surface, not a live bubble mirror (#657 / PR #658).**
   Open the app **after a dash** (not while on a task): the **Today** tiles (True Net / Net $/hr /
   Miles) should already reflect the just-completed dash with no manual refresh (the read-model folds
   each delivery as it completes). Tap the **Today / This week / Lifetime** selector and confirm the

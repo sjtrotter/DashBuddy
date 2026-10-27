@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #566, #573
-confirmed: unspecified
 
-- [active] **🔧 FIX SHIPPED — no more double fly-away bubble on a new/stacked pickup (#566, PR #573). CONFIRM ON DASH.**
+- **🔧 FIX SHIPPED — no more double fly-away bubble on a new/stacked pickup (#566, PR #573). CONFIRM ON DASH.**
   When a pickup started (or a stacked pickup handed off), the "Pickup: <store>" heads-up bubble flew
   out **twice** in quick succession (the second often icon-less). Fixed with a per-task dedupe key.
   **Confirm on dash: 0/2 —** on each new pickup (especially the second store of a stack), the

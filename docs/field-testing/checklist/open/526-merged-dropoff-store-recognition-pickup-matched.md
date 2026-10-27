@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / Counter unspecified — retained active, newest first
 issues: #526, #553, #557
-confirmed: 1/2
 
-- [active] **🔧 MERGED — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
+- **🔧 MERGED — dropoff store recognition + pickup-matched resolution (#526/#553). CONFIRM ON DASH.**
   A dropoff shows the store **resolved from the job's pickups** (single → the pickup's store;
   multi-store stack → matched per drop), not inherited from the last active pickup.
   - Confirmed: **1/2** (2026-06-20 — singles + **same-store** double stacks resolved correctly

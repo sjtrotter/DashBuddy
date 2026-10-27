@@ -1,9 +1,7 @@
 status: active
-section: §2 Active / 0/2 or 1/2 younger than 6 weeks — newest first
 issues: #1054, #732, #1140
-confirmed: 0/2
 
-- [active] **🆕 NEW — #1054 — a grace that lapses while nothing is on screen still commits, and survives a
+- **🆕 NEW — #1054 — a grace that lapses while nothing is on screen still commits, and survives a
   restart.** Both older grace timers (`GRACE_COMMIT` for a dash end / task retire,
   `MODE_RESUME_COMMIT` for a resume out of Paused) are armed for exactly `deadline − now` but their
   fire is stamped with the wall clock, so the ordinary case lands ON the deadline — which a strict
