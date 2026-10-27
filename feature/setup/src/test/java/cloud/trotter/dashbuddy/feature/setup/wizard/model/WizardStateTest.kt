@@ -11,6 +11,7 @@ import cloud.trotter.dashbuddy.domain.model.vehicle.WearProfile
 import cloud.trotter.dashbuddy.feature.setup.wizard.vehicle.VehicleDraftState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WizardStateTest {
@@ -29,6 +30,15 @@ class WizardStateTest {
         assertEquals(ElectricCar(kwhPer100Mi = 27.0,
             wear = WearProfile(tireSetCost = 900.0, tireLifetimeMi = 45_000.0), fixed = fixed),
             host.toVehicleProfile(vehicle))
+
+        // The legacy mirror writes the profile's stored overrides with their stored values, not the host's defaults.
+        val mirrored = host.toEconomyDraft(vehicle)
+        assertEquals(900.0, mirrored.wear.tireSetCost)
+        assertEquals(45_000.0, mirrored.wear.tireLifetimeMi)
+        assertEquals(25.0, mirrored.fixed.insuranceDeltaPerMonth)
+        assertEquals(27.0, mirrored.kwhPer100Mi, 0.0)
+        assertTrue(mirrored.userSetFields.containsAll(setOf(EconomyField.TIRE_COST, EconomyField.TIRE_LIFETIME,
+            EconomyField.INSURANCE_DELTA, EconomyField.KWH_PER_100_MI)))
     }
 
     @Test

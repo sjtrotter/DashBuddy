@@ -114,14 +114,20 @@ fun WizardState.toUserEconomy(vehicle: VehicleDraftState): UserEconomy {
 }
 
 /**
- * The draft the legacy preference mirror saves. Its user-set fields are the resolved vehicle's, as
- * [UserEconomy.from] computes them: the saved profile's applicable overrides plus the shared fields, so a cost
- * edited before a type change that no longer applies is not mirrored.
+ * The draft the legacy preference mirror saves: the resolved vehicle's values and user-set fields together, as
+ * [toUserEconomy] resolves them. A cost edited before a type change that no longer applies is not mirrored, and an
+ * override the saved profile already holds is mirrored with its stored value.
  */
 fun WizardState.toEconomyDraft(vehicle: VehicleDraftState): EconomyDraft {
+    val resolved = toUserEconomy(vehicle)
+    val detail = resolved.vehicleInputs?.disclosure
     val draft = draft(vehicle)
-    return draft.copy(userSetFields = EconomyFieldGroups.userSetFields(toVehicleProfile(vehicle)) +
-        draft.userSetFields.filter { it !in EconomyFieldGroups.vehicleFields })
+    return draft.copy(
+        vehicleClass = resolved.vehicleClass, mpg = resolved.vehicleMpg,
+        kwhPer100Mi = resolved.kwhPer100Mi, whPerMile = resolved.whPerMile,
+        wear = detail?.wear ?: draft.wear, fixed = detail?.fixed ?: draft.fixed,
+        userSetFields = resolved.userSetFields,
+    )
 }
 
 fun WizardState.withTypeDefaults(vehicle: VehicleDraftState): WizardState {
