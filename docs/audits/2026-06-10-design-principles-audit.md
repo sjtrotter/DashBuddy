@@ -4,7 +4,7 @@
 > are fixed and merged — PRs #368–#395. Three pre-existing issues (#300, #119, plus the
 > #346 family) closed with them; #96 and #192 are unblocked. Remaining adjacent work is
 > tracked on #293, #237, #57, and #244. Field validation for the on-dash-visible changes
-> is on the checklist in `docs/field-testing/README.md`.
+> is on the checklist (`docs/field-testing/CHECKLIST.md`).
 
 Full-codebase audit against the CLAUDE.md **Development Principles** (UDF, MAD, clean
 code / single responsibility, Kotlin/Android best practices), at master `3872684`

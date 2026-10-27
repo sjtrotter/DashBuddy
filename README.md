@@ -139,7 +139,7 @@ means contributing to that open, driver-owned layer — not to a single app's co
 ### Help #3: Field-test a change
 
 When a change needs eyes on a real dash, it lands on the
-[field-testing checklist](docs/field-testing/README.md) with a plain-language "watch for this, and
+[field-testing checklist](docs/field-testing/CHECKLIST.md) with a plain-language "watch for this, and
 here's how to tell if it's working." Picking an item, dashing with it, and reporting back is
 genuinely useful work.
 

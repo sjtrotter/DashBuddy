@@ -1,0 +1,4 @@
+status: active
+issues: #1333
+
+- 🆕 NEW — cash tip sheet and undo strip (#1333 S3a): the dock's Cash tip block opens a sheet with the drop at the door preselected, one +/− toggle button with the active glyph highlighted and a bottom-anchored row of filled $1 $5 $10 $20 Other buttons (Other opens an empty keypad and replaces the entered amount on Done); the running total sits in the title and the button says the amount ("Add $7.00 cash tip"); "Another delivery" lists the dash's deliveries; after the commit the band above the dock reads what was logged and where with Undo at the right and a 10 s drain line, the delivery card's foot shows the tip as pending until its row updates, and the Cash tip block stays lit meanwhile; Undo removes the tip. Broken = a tip that lands on the wrong delivery, a total below zero, an Undo that leaves the tip, a strip that outlives 10 s. — Confirmed: 0/2
