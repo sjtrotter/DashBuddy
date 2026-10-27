@@ -1150,6 +1150,35 @@ Release DI, Android event delivery and screenshots are out of scope.
 - **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1, Compose UI test (`ui-test-junit4`, Robolectric)
 - **Logging:** Timber 5.0.1
 
+## Agent skills
+
+### Issue tracker
+
+GitHub issues in `sjtrotter/DashBuddy`; every issue is labelled and added to the Roadmap project. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: a root `GLOSSARY.md` (created when the first term is settled) and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Delivery chain
+
+The user skills under `~/.claude/skills` run the PR loop in this repo, in this order:
+
+1. **Plan:** `grilling`, then `to-spec` and `to-tickets` (the developer starts those two). The codex builder spec for
+   each ticket follows `codex-harness` §3 and `CLAUDE.local.md` § Codex harness.
+2. **Build and prove:** Astra builds; Claude runs the local gate with `~/dashbuddy/tools/pr-loop/gt.sh` (the
+   skills' `free -m` check means that script's memory guard here). Bugs go through `diagnosing-bugs` and `tdd`.
+3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
+   into the branch now, and the author writes the design-goal review (the PR template's block). `deslop` the diff.
+4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
+   the full diff, after the local gate is green. `blast-radius` when the change touches a shared path.
+5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks.
+6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); PR CI confirms the local gate. Once it passes,
+   merge with `~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>`: it runs `gh pr merge --merge`, removes
+   the worktree, deletes the branch locally and on the remote, pulls master, sets the board to Done and drops
+   `in-progress`. Merging needs no "full send" in this repo: the developer is the only author (dev, 2026-10-27).
+   Then update the memory notes. `full-stop` and `full-send` do not know steps 3 and 6; they apply here all the same.
+
 ## Git Workflow
 
 **Before creating a branch**, mark the issue(s) as **In Progress** in the GitHub project board
@@ -1182,6 +1211,11 @@ pile up on the remote.
 gh pr merge <NUMBER> --merge --delete-branch
 ```
 
+On this workstation, where each issue's branch lives in a linked worktree (`~/dashbuddy-wt/<n>`), use
+`~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>` instead: `gh`'s local branch delete fails while the
+branch is checked out in a worktree, so the script merges with `--merge`, removes the worktree first, then deletes
+the branch locally and on the remote.
+
 (The `gh` binary path and all project/field IDs are workstation-specific — they live in
 `CLAUDE.local.md`, which is gitignored. Never hardcode workstation paths in this file.)
 
@@ -1211,8 +1245,8 @@ branch" button, or the workstation agent's `gh pr merge … --delete-branch`).
 A PR that skips these is incomplete — future agents inherit their entire context from these
 two places.
 
-**Every PR gets a design-goal review — no exceptions.** After CI is green and before
-`gh pr merge`, review the **full diff** against the Development Principles and record the result
+**Every PR gets a design-goal review — no exceptions.** After the local gate is green and before the
+adversarial review (PR CI confirms the gate after the push), review the **full diff** against the Development Principles and record the result
 in the PR description under a `### Design-goal review` heading (append it if the PR was opened
 without one):
 
@@ -1234,18 +1268,17 @@ review could have caught (#356, #585).
 **Then an adversarial review — an independent reviewer, not self-attestation (#589).** The
 design-goal review above is the *author* walking their own diff, and self-review shares the
 author's blind spots. So after it, and before
-`gh pr merge`, spawn a **separate** reviewer to attack the diff — reuse the existing skills, don't
-build parallel machinery: run `/code-review` (already multi-agent/adversarial) and, for anything
-touching untrusted input or the Pledges, `/security-review`; and beside them an independent
-**codex Astra** read-only pass on the exported, PII-swept diff (`-m gpt-6-astra`, xhigh — dev
-standing rule since 2026-09-04, reaffirmed 2026-09-30), adjudicated at fable. The adversary works three axes it must
-**not** take the author's framing on:
+the PR is filed, run the **`sol-loop`** skill: a read-only Sol (`gpt-6.1-sol`, xhigh) review of the PII-free
+diff, with the round ledger, the 3-round cap and the stopping rule below, adjudicated by the session (dev
+standing rule since 2026-10-27, replacing the `/code-review` + `/security-review` + Astra trio). The seats and
+the brief additions live in `.claude/council.md`; the full `council` runs only when the developer says
+"council". The adversary works three axes it must **not** take the author's framing on:
 
-1. **Correctness** — bugs, edge cases, reuse/simplification (`/code-review`'s default).
+1. **Correctness** — bugs, edge cases, broken callers, reuse/simplification.
 2. **Design principles** — walk principles 1–8 + the Reactive UI rules hunting for violations the
    author *missed or rationalized away*. **Platform-agnosticism (#8) is mandatory** for any diff
    touching `:core:state` / `:core:pipeline` / `:domain` / rule JSON.
-3. **Security** — `/security-review` the branch; for diffs touching the untrusted-input boundaries
+3. **Security** — for diffs touching the untrusted-input boundaries
    (rule compile/ingest, accessibility-tree mapping, regex, PII/sensitive handling, capture/effects)
    confirm the fail-closed + bounded-ingestion + no-plaintext-leak properties still hold, backed by
    the security property/fuzz suite (#590). **That suite is seeded (#878)** — every kotest property
@@ -1254,16 +1287,19 @@ standing rule since 2026-09-04, reaffirmed 2026-09-30), adjudicated at fable. Th
    **deliberately** to explore new samples, NEVER to turn a red run green; the
    unseeded breadth lives behind `-Ddashbuddy.propExplore=true` (10× samples, off the PR path).
 
-**Same-tier rule:** the adversarial reviewer runs at the **session model tier** (Mythos/Fable
-class) — never downgraded to a lower tier. An adversary weaker than the author is theater; this is
-the Subagent Model Policy applied to review. Record the outcome in a `### Adversarial review` block
-in the PR description; fix findings in-PR or file + link them. A PR merges only once the adversarial
-pass is clean or its findings are triaged.
+**Reviewer strength:** the reviewer runs at its highest effort (Sol at xhigh) and the session
+adjudicates every finding against the source; an adversary weaker than the author is theater. Record the
+outcome in the `### Adversarial review` block of the PR description (`file-pr`'s review record); fix
+findings in-PR or file + link them. A PR merges only once the adversarial pass is clean or its findings
+are triaged. `sol-loop`'s ledger, round cap and escalation rules implement (b)–(f) below, with one override for
+this repo: every round, round 2 and 3 included, gets the full base diff (rule (f)), not only the open findings and
+the changed code.
 
 **Review-loop convergence (2026-09-30 audit of PRs #1149 (15 rounds) and #1160 (17 rounds); revised 2026-10-07).**
 Those loops were productive for their first ~5 rounds (real Pledge defects) and then oscillated: on #1160 four
 rule decisions were each re-decided 4–10 times. The signal is not the round number but the PATTERN of findings.
-Rules for every review round: (a) after round 1, scope each reviewer to the DELTA since the last adjudicated head;
+Rules for every review round: (a) superseded by (f): every round reviews the full diff, and later rounds also get the
+delta since the last adjudicated head and the finding ledger;
 (b) fix follow-ups IN the PR that found them (dev rule 2026-10-07) — file an issue only when the follow-up is
 wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding
 that REVERSES an earlier accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
@@ -1361,9 +1397,9 @@ spend wasted — is the receipt for budget awareness).
 
 Rules, in precedence order:
 
-1. **PR checks are ALWAYS fable-tier.** The adversarial pre-merge review (the #589/#591
-   loop), `/code-review`, `/security-review`, and any verdict that gates a merge run on the
-   top tier, no exceptions. The reviewer is the safety net for everything built below it,
+1. **PR checks run at full strength.** The adversarial pre-merge review is `sol-loop` (Sol at
+   xhigh, see Git Workflow), and every verdict that gates a merge is adjudicated by the session at
+   its top tier, no exceptions. The reviewer is the safety net for everything built below it,
    and it has repeatedly caught author-missed defects (PRs #609/#610/#611). Save budget on
    the builder, never on the reviewer.
 2. **Planning, design, and vetting run at fable by design.** Usually that is the main loop
