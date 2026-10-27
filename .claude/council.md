@@ -31,4 +31,6 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
   (fail-closed gates, bounded ingestion, no plaintext PII) for any diff touching recognition, capture, redaction,
   network or effects.
 - The question "would you block this merge, and why".
-- The diff is PII-free. Reviewers never open `~/dashbuddy/logs` or raw captures.
+- Sol may read the field pulls (`~/dashbuddy/logs`: logs, captures, the database) when a review needs the evidence
+  behind a claim (dev, 2026-10-27). Briefs still keep personal data out of their own text, and nothing a reviewer
+  reads goes into an issue, a PR or a commit.

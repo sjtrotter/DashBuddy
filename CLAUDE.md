@@ -1268,8 +1268,8 @@ review could have caught (#356, #585).
 **Then an adversarial review — an independent reviewer, not self-attestation (#589).** The
 design-goal review above is the *author* walking their own diff, and self-review shares the
 author's blind spots. So after it, and before
-the PR is filed, run the **`sol-loop`** skill: a read-only Sol (`gpt-6.1-sol`, xhigh) review of the PII-free
-diff, with the round ledger, the 3-round cap and the stopping rule below, adjudicated by the session (dev
+the PR is filed, run the **`sol-loop`** skill: a read-only Sol (`gpt-6.1-sol`, xhigh) review of the
+diff (Sol may also read the field pulls under `~/dashbuddy/logs` when a claim rests on them, dev 2026-10-27), with the round ledger, the 3-round cap and the stopping rule below, adjudicated by the session (dev
 standing rule since 2026-10-27, replacing the `/code-review` + `/security-review` + Astra trio). The seats and
 the brief additions live in `.claude/council.md`; the full `council` runs only when the developer says
 "council". The adversary works three axes it must **not** take the author's framing on:
@@ -1416,8 +1416,8 @@ Rules, in precedence order:
    working tree, and the session commits, runs the suites and reviews. Codex spend is off
    the Claude budget entirely. A Claude subagent (opus — set `model` explicitly, never
    omit-to-inherit) is the FALLBACK builder only when codex cannot do the job: it needs
-   network/`gh`, needs gradle inside its loop, or the files carry real PII (codex never
-   sees PII). Codex has no network and no repo memory, so the spec must be self-contained;
+   network/`gh`, needs gradle inside its loop, or the files carry real PII (codex builders never
+   see PII; Sol reviews may read the field pulls, see Git Workflow). Codex has no network and no repo memory, so the spec must be self-contained;
    discovery-heavy prompts hang it.
 4. **Delegating to any lower tier — codex or sonnet — is allowed only for building
    well-bounded implementations from an already-vetted plan**, and only when confident the
