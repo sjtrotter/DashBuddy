@@ -34,11 +34,11 @@ class WizardScreenTest {
         whenever(vm.steps).thenReturn(MutableStateFlow(listOf(WizardStep.ECONOMY_COSTS)))
         whenever(vm.vehicleSaveFailed).thenReturn(MutableSharedFlow())
         whenever(vm.updateOilCost(any())).thenAnswer {
-            state.value = state.value.copy(oilCost = it.getArgument(0),
+            state.value = state.value.copy(wear = state.value.wear.copy(oilCost = it.getArgument(0)),
                 userSetEconomyFields = state.value.userSetEconomyFields + EconomyField.OIL_COST)
         }
         whenever(vm.saveAndFinish(any())).thenAnswer {
-            savedCost = state.value.oilCost
+            savedCost = state.value.wear.oilCost
             it.getArgument<() -> Unit>(0)()
         }
         compose.setContent { DashBuddyTheme { WizardScreen(vm, {}) } }
