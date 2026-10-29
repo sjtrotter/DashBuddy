@@ -83,20 +83,20 @@ class OfferCardTest {
         assertEquals(56f, wholeLayout.single().layoutInput.style.fontSize.value, 0.0f)
         assertTrue(fractionLayout.single().layoutInput.style.fontSize.value < wholeLayout.single().layoutInput.style.fontSize.value)
     }
-    @Test fun `pay bar pills read profit and car`() {
+    @Test fun `pay bar pills read profit and cost`() {
         show()
         value("offer.bar", "$8.29").assertExists()
         value("offer.bar", "profit").assertExists()
         value("offer.bar", "$3.46").assertExists()
-        value("offer.bar", "car").assertExists()
-        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Profit $8.29, car $3.46")
+        value("offer.bar", "cost").assertExists()
+        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Profit $8.29, cost $3.46")
     }
     @Test fun `loss bar shows the loss pill`() {
         val p = f.pending(f.offer().copy(payAmount = 6.0), f.evaluation().copy(netPayAmount = -1.67))
         show(OfferCardMapper.map(p, null, emptyList(), f.config))
         value("offer.bar", "$1.67").assertExists()
         value("offer.bar", "loss").assertExists()
-        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Loss $1.67, car $7.67")
+        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Loss $1.67, cost $7.67")
     }
     @Test fun `distance unknown shows the flat bar and em dash rates`() {
         show(OfferCardMapper.map(f.pending(f.offer().copy(distanceMiles = null)), null, emptyList(), f.config))
@@ -112,7 +112,7 @@ class OfferCardTest {
         listOf("31", "min", "$16", "/hr").forEach { value("offer.gauge.HOUR", it).assertExists() }
         listOf("6.4", "mi", "$1.30", "/mi").forEach { value("offer.gauge.MILE", it).assertExists() }
         listOf("12", "items", "69¢", "/ea").forEach { value("offer.gauge.ITEM", it).assertExists() }
-        compose.onNodeWithTag("offer.gauge.ITEM").assertContentDescriptionEquals("target from your hourly target")
+        compose.onNodeWithTag("offer.gauge.ITEM").assertContentDescriptionEquals("Item target comes from your hourly target")
     }
     @Test fun `gauge state says above or below target`() {
         show()
@@ -124,7 +124,7 @@ class OfferCardTest {
         show(OfferCardMapper.map(f.pending(o), null, emptyList(), f.config))
         compose.onAllNodesWithTag("offer.trip.node").assertCountEquals(4)
         compose.onAllNodesWithContentDescription("Pickup").assertCountEquals(1)
-        compose.onAllNodesWithContentDescription("Dropoff").assertCountEquals(2)
+        compose.onAllNodesWithContentDescription("Drop-off").assertCountEquals(2)
     }
     @Test fun `accept and decline call their lambdas`() {
         var accepted = 0
@@ -144,10 +144,10 @@ class OfferCardTest {
         value("offer.gauge.ITEM", "+3").assertExists()
         compose.onNodeWithTag("offer.addon.tiles").assertDoesNotExist()
     }
-    @Test fun `fallback add on shows four delta tiles and the no score line`() {
+    @Test fun `fallback add on shows four delta tiles and the unscored line`() {
         show(OfferCardMapper.map(f.pending(f.addon()), null, emptyList(), f.config))
         listOf("12", "2.1", "2", "15").forEach { value("offer.addon.tiles", it).assertExists() }
-        compose.onNodeWithText("Added to your current job. No score: the card gives only what this stop adds.").assertExists()
+        compose.onNodeWithText("Added to your current job. Unscored, since the card shows only what this stop adds.").assertExists()
         compose.onNodeWithTag("offer.ring").assertDoesNotExist()
         compose.onNodeWithTag("offer.bar").assertDoesNotExist()
         GaugeKind.entries.forEach { compose.onNodeWithTag("offer.gauge.$it").assertDoesNotExist() }

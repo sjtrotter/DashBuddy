@@ -20,7 +20,7 @@ import cloud.trotter.dashbuddy.feature.settings.R as SettingsR
 @RunWith(RobolectricTestRunner::class)
 class RequirementNoteVariantTest {
 
-    private val settingsPath = "Settings → Data &amp; Privacy → Automation &amp; Consent"
+    private val settingsPath = "Settings > Data &amp; privacy > Automation &amp; consent"
 
     private fun sourceValue(relPath: String): String {
         val xml = File(RepoRoot.locate(), relPath).readText()
@@ -32,7 +32,7 @@ class RequirementNoteVariantTest {
     fun `the debug variant resolves the Required note`() {
         val note = RuntimeEnvironment.getApplication().getString(SettingsR.string.event_receipt_requirement_note)
         assertTrue(note, note.startsWith("Required"))
-        assertTrue(note, note.contains("Settings → Data & Privacy → Automation & Consent"))
+        assertTrue(note, note.contains("Settings > Data & privacy > Automation & consent"))
     }
 
     @Test

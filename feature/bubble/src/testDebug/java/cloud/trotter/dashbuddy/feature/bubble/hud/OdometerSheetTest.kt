@@ -115,23 +115,23 @@ class OdometerSheetTest {
         model = model.copy(gpsLoaded = false)
         show()
         compose.onNodeWithTag("odometer.save").assertIsNotEnabled().performClick()
-        compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
+        compose.onNodeWithText("Waiting for tracked miles").assertIsDisplayed()
         assertEquals(0, saved)
         compose.runOnIdle { model = model.copy(gpsLoaded = true) }; settle()
-        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.onNodeWithText("Waiting for tracked miles").assertDoesNotExist()
         compose.onNodeWithTag("odometer.save").assertIsEnabled().performClick()
         assertEquals(1, saved)
     }
     @Test fun `gps waiting label appears only when gps is the remaining save blocker`() {
         model = model.copy(gpsLoaded = false, readingMiles = null, check = OdometerCheck.Empty)
         show()
-        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.onNodeWithText("Waiting for tracked miles").assertDoesNotExist()
         compose.runOnIdle { model = model.copy(readingMiles = 52_388, saving = true) }; settle()
-        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.onNodeWithText("Waiting for tracked miles").assertDoesNotExist()
         compose.runOnIdle { model = model.copy(saving = false, vehicle = null, check = OdometerCheck.NoVehicle) }; settle()
-        compose.onNodeWithText("Waiting for the GPS total").assertDoesNotExist()
+        compose.onNodeWithText("Waiting for tracked miles").assertDoesNotExist()
         compose.runOnIdle { model = model.copy(vehicle = car, check = OdometerCheck.First(car.identityName)) }; settle()
-        compose.onNodeWithText("Waiting for the GPS total").assertIsDisplayed()
+        compose.onNodeWithText("Waiting for tracked miles").assertIsDisplayed()
     }
 
     @Test fun `point key disabled`() {
@@ -144,14 +144,14 @@ class OdometerSheetTest {
         model = model.copy(vehicle = null, vehicles = emptyList(), check = OdometerCheck.NoVehicle,
             writeFailed = OdometerWriteFailure.UNREADABLE)
         show()
-        compose.onNodeWithText("Saved vehicles could not be read.").assertIsDisplayed()
+        compose.onNodeWithText("Couldn't load your vehicles.").assertIsDisplayed()
         compose.onNodeWithText("Could not save. Try again.").assertDoesNotExist()
     }
 
     @Test fun `fewer than tracked shows add vehicle link`() {
         model = model.copy(check = OdometerCheck.FewerThanTracked(12, 57.0, clock.millis))
         show()
-        compose.onNodeWithText("12 mi on this car, 57.0 mi tracked since ${formatShortDate(clock.millis)}").assertIsDisplayed()
+        compose.onNodeWithText("12 mi on the odometer, 57.0 mi tracked since ${formatShortDate(clock.millis)}").assertIsDisplayed()
         compose.onNodeWithText("Add vehicle").assertIsDisplayed().performClick()
         assertTrue(addOpened)
     }

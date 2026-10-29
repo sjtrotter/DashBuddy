@@ -111,7 +111,7 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
         setSpan(RelativeSizeSpan(1.2f), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         append(" · ")
-        append(if (scored) "${Formats.money0(dollarsPerHour)}/hr net" else "no verdict")
+        append(if (scored) "${Formats.money0(dollarsPerHour)}/hr net" else "no score")
         // Whole headline (verdict + rate) bold.
         setSpan(StyleSpan(Typeface.BOLD), start, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
@@ -130,7 +130,7 @@ fun OfferEvaluation.toNotificationSummary(): CharSequence {
                     merchantName
             } else {
                 // Gross pay is real (parsed); every other figure would be invented.
-                "Pay ${Formats.money(payAmount)} · distance not read · $merchantName"
+                "Pay ${Formats.money(payAmount)} · distance unknown · $merchantName"
             },
         )
     }

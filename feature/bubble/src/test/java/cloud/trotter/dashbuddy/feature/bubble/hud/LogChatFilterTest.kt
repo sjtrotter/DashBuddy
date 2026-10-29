@@ -7,13 +7,13 @@ import org.junit.Test
 
 class LogChatFilterTest {
     @Test fun `offer outcome lines are dropped as redundant`() {
-        listOf("Offer Accepted", "Offer Declined", "Offer Timed Out!").forEach { text ->
+        listOf("Offer accepted", "Offer declined", "Offer expired").forEach { text ->
             assertFalse(LogChatFilter.keep(logChat(text)))
-            assertFalse(LogChatFilter.keep(logChat("$text (offer replaced)")))
+            assertFalse(LogChatFilter.keep(logChat("$text, replaced by a new offer")))
         }
     }
     @Test fun `accept and decline acknowledgements are dropped`() {
-        listOf("Accepting…", "Declining…", "Decline already submitted…", "Decline already submitted \u2014 Accept won't take").forEach { assertFalse(LogChatFilter.keep(logChat(it))) }
+        listOf("Accepting…", "Declining…", "Already declined", "Already declined. Accept won't go through.").forEach { assertFalse(LogChatFilter.keep(logChat(it))) }
     }
     @Test fun `pickup dropoff and earnings personas are dropped`() {
         listOf(ChatPersona.Navigator, ChatPersona.Dropoff, ChatPersona.Shopper, ChatPersona.Earnings,
@@ -30,11 +30,12 @@ class LogChatFilterTest {
         assertTrue(LogChatFilter.keep(logChat("$5.00 tip from Panera Bread")))
     }
     @Test fun `pause and resume lines are kept`() {
-        listOf("Dash Paused!", "Session resumed (grace)").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
+        listOf("Shift paused", "Shift resumed").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
     }
     @Test fun `session start and done lines are kept`() {
-        listOf("Started dashing", "Done dashing").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
-        assertFalse(LogChatFilter.keep(logChat("Session Ended: $20.00")))
+        listOf("DoorDash shift started", "DoorDash shift ended").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
+        assertFalse(LogChatFilter.keep(logChat("Shift ended. Earned $20.00")))
+        assertFalse(LogChatFilter.keep(logChat("Shift ended.")))
     }
     @Test fun `unknown dispatcher text is kept`() {
         assertTrue(LogChatFilter.keep(logChat("New dispatch status")))
@@ -51,7 +52,7 @@ class LogChatFilterTest {
         val candidates = listOf(logChat(shaped), logChat("<b>$shaped</b>"),
             logChat("Store<br>" + ('P' + 1)),
             logChat("Store &#${('P' + 1).code};"), logChat("$shaped is waiting", ChatPersona.System),
-            logChat("Dash Paused!"), logChat("Panera Bread: 12 items"))
+            logChat("Shift paused"), logChat("Panera Bread: 12 items"))
         val kept = candidates.filter(LogChatFilter::keep)
         assertEquals(2, kept.size)
         kept.forEach { assertFalse(PiiShapes.hasNameShape(LogChatFilter.plainText(it.text))) }

@@ -88,13 +88,13 @@ class ComposeSmokeTest {
         compose.setContent {
             DashBuddyTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
-                    LogView(listOf(DispatcherRow("chat:start", T0, "Started dashing")), {}, {})
+                    LogView(listOf(DispatcherRow("chat:start", T0, "DoorDash shift started")), {}, {})
                 }
             }
         }
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(100)
-        compose.onNodeWithText("Started dashing").assertIsDisplayed()
+        compose.onNodeWithText("DoorDash shift started").assertIsDisplayed()
     }
 
     @Test

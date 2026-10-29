@@ -12,15 +12,15 @@
     <string name="tts_verdict_review">Revisar</string>
     <string name="tts_verdict_offer">Oferta</string>
     <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score. -->
-    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dólares por hora netos. Neto %4$s, %5$s millas, puntuación %6$s.</string>
+    <string name="tts_offer_evaluation_template">%1$s. %2$s. Neto %4$s, %3$s dólares por hora, %5$s millas, puntuación %6$s.</string>
     <!-- %1$s verdict word, %2$s merchant name, %3$s gross pay (#936). -->
     <!-- copy-audit: retranslated es -->
-    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pago %3$s. Sin veredicto: no se leyó la distancia.</string>
+    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pago %3$s. Sin puntuación, distancia desconocida.</string>
 
     <!-- #907 — folded from values-es-rUS; defaults live in app/src/main/res/values/strings.xml. -->
     <string name="app_name">DashBuddy</string>
     <!-- copy-audit: retranslated es -->
-    <string name="accessibility_service_description">DashBuddy ayuda a repartidores leyendo las pantallas de las aplicaciones de reparto habilitadas y las ofertas en voz alta mientras conduces. El reconocimiento y los cálculos se hacen en el teléfono. Aceptar y Rechazar requieren que pulses en DashBuddy; las acciones automáticas necesitan permisos separados. Eventos de pantalla permite identificar otras aplicaciones en primer plano. Las pantallas reconocidas con tus datos bancarios, de pago o de identidad y las pantallas de captura de documentos se bloquean antes de extraer o guardar datos. Los filtros pueden omitir pantallas no reconocidas en las capturas de depuración. Las capturas de imagen opcionales guardan toda la pantalla. Android puede incluir el historial y los ajustes en copias de seguridad; la galería puede sincronizar las imágenes. Subir capturas de depuración requiere activar opciones de desarrollador.</string>
+    <string name="accessibility_service_description">Para ayudar a los repartidores, DashBuddy lee las pantallas de las aplicaciones de reparto que actives y lee las ofertas en voz alta mientras conduces. La lectura de pantalla y los cálculos se hacen en tu teléfono. Aceptar y Rechazar requieren que los toques en DashBuddy; cada toque automático necesita su propio permiso. Si permites Eventos de pantalla, DashBuddy también ve qué otra aplicación está abierta. Descarta las pantallas reconocidas con tus datos bancarios, de pago o de identidad, o que fotografían un documento o recogen una firma, antes de leer o guardar sus detalles. Las capturas de pantalla opcionales guardan toda la pantalla; tu galería puede sincronizarlas. La copia de seguridad de Android puede copiar tu historial y tus ajustes.</string>
 
 
 
@@ -30,34 +30,34 @@
 
 
     <!-- copy-audit: retranslated es -->
-    <string name="perm_privacy_guarantee">DashBuddy no vende tus datos. Las copias de seguridad de Android y las funciones de red pueden enviar datos fuera del teléfono.</string>
+    <string name="perm_privacy_guarantee">DashBuddy no vende tus datos. La copia de seguridad de Android y las funciones en línea pueden enviar datos fuera de tu teléfono.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_under_the_hood_title">Uso de datos</string>
 
     <!-- copy-audit: retranslated es -->
     <string name="perm_title_accessibility">Lectura de pantalla (Accesibilidad)</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_pitch_accessibility">DashBuddy lee ofertas en voz alta mientras conduces. Aceptar y Rechazar requieren que pulses; las acciones automáticas necesitan tu permiso.</string>
+    <string name="perm_pitch_accessibility">DashBuddy lee las ofertas en voz alta mientras conduces. Tú tocas Aceptar o Rechazar; los toques automáticos necesitan tu permiso.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_hood_accessibility">Accesibilidad de Android lee las aplicaciones de reparto habilitadas. Eventos de pantalla permite identificar otras aplicaciones en primer plano. Las pantallas reconocidas con tus datos bancarios, de pago o de identidad y las pantallas de captura de documentos se bloquean antes de extraer o guardar datos. El reconocimiento y los cálculos se hacen en el dispositivo; los nombres y direcciones de clientes reconocidos se guardan como hashes. Las capturas de depuración pueden conservar datos que los filtros omitan.\n\nLa actualización de gasolina está desactivada por defecto en instalaciones nuevas; se conserva el ajuste existente. El geocodificador de Android puede enviar coordenadas a su proveedor; EIA recibe una solicitud de precios regionales. Pulsa el precio de gasolina de la burbuja para usar el modo manual y detener las actualizaciones automáticas. La configuración envía la selección de vehículo a EPA para obtener MPG solo después de pulsar \"Consultar mi vehículo\"; esta elección se guarda. Ninguna consulta envía una cuenta ni un identificador de instalación. La búsqueda manual de MPG abre Google con la consulta del vehículo. Subir el censo de depuración requiere activarlo en las opciones de desarrollador; compartir capturas desde instalaciones de confianza puede enviar texto de clientes al operador del servidor configurado. Las versiones de producción no hacen ninguna de estas operaciones. Las imágenes opcionales guardan toda la pantalla en Pictures/DashBuddy; la galería puede sincronizarlas. Android puede copiar el historial y los ajustes a tu cuenta de Google o transferirlos a otro teléfono; los registros de consentimiento quedan excluidos. El historial, los ajustes y las capturas de depuración permanecen hasta borrarlos o desinstalar; Android puede restaurar el historial y los ajustes de una copia de seguridad. Los registros rotan; las imágenes y las exportaciones permanecen hasta borrarlas. Consulta PRIVACY.md.</string>
+    <string name="perm_hood_accessibility">DashBuddy lee las pantallas de las aplicaciones de reparto que actives. Con Eventos de pantalla activado, también ve qué otra aplicación está abierta. Descarta las pantallas reconocidas con tus datos bancarios, de pago o de identidad, o que fotografían un documento o recogen una firma, antes de leer o guardar sus detalles. La lectura de pantalla y los cálculos se hacen en tu teléfono. Los nombres y direcciones de clientes se guardan como códigos, no como texto.\n\nLos precios automáticos de gasolina empiezan desactivados en una instalación nueva; una actualización conserva tu ajuste. Cuando están activados, la búsqueda de direcciones de Android puede enviar tu ubicación a su proveedor, y la Administración de Información Energética de EE. UU. recibe una solicitud del precio del combustible de tu región. Para detenerlo, pon en manual el precio de la gasolina en la burbuja.\n\nLa configuración envía tu vehículo a la EPA para obtener su MPG solo después de tocar \"Consultar mi vehículo\", y recuerda esa elección. Ninguna consulta envía una cuenta ni un identificador de instalación. La búsqueda manual de MPG abre Google con tu vehículo.\n\nLas capturas de pantalla opcionales de toda la pantalla van a Pictures/DashBuddy, donde la sincronización de la galería puede copiarlas. Android puede copiar tu historial y tus ajustes a tu cuenta de Google o a un teléfono nuevo, y restaurarlos más tarde; los registros de consentimiento quedan fuera. El historial y los ajustes permanecen hasta que los borres o desinstales la aplicación, los registros solo guardan las entradas recientes, y las capturas y exportaciones permanecen hasta que las borres. Más: Privacy details en Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_action_accessibility">Activar lectura de pantalla</string>
 
     <!-- copy-audit: retranslated es -->
     <string name="perm_title_listener">Acceso a notificaciones</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_pitch_listener">Leer ofertas y actualizaciones de propinas de las notificaciones de aplicaciones de reparto habilitadas.</string>
+    <string name="perm_pitch_listener">Lee las alertas de ofertas y propinas de las aplicaciones de reparto que actives.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_hood_listener">El lector de notificaciones de Android solo lee aplicaciones de reparto habilitadas. Descarta las notificaciones de otras aplicaciones antes de leerlas. Los eventos reconocidos se guardan en tu historial; Android puede copiarlos en una copia de seguridad. Las capturas de depuración pueden conservar texto de notificaciones. Compartir el censo de depuración está desactivado por defecto; las versiones de producción no pueden subirlo.</string>
+    <string name="perm_hood_listener">DashBuddy lee notificaciones solo de las aplicaciones de reparto que actives, y descarta las de otras aplicaciones sin leerlas. Lo que reconoce se guarda en tu historial, que la copia de seguridad de Android puede copiar.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_action_listener">Activar acceso a notificaciones</string>
 
     <!-- copy-audit: retranslated es -->
-    <string name="perm_title_location">Ubicación en segundo plano</string>
+    <string name="perm_title_location">Ubicación</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_pitch_location">Registrar las millas del dash para estimar las ganancias después de gasolina y desgaste.</string>
+    <string name="perm_pitch_location">Cuenta las millas de tu turno para estimar la ganancia después de los costos del vehículo.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_hood_location">El odómetro usa GPS durante un dash y se detiene al terminar, reduciendo el consumo de batería y la recogida de ubicación. La actualización de gasolina puede leer tu última ubicación fuera de un dash y enviar coordenadas al proveedor de geocodificación de Android. Está desactivada por defecto en instalaciones nuevas; se conserva el ajuste existente. Pulsa el precio de gasolina de la burbuja para usar el modo manual y detener las actualizaciones automáticas. Las millas registradas permanecen en el historial y pueden incluirse en copias de seguridad de Android.</string>
+    <string name="perm_hood_location">DashBuddy usa el GPS para contar millas solo durante un turno, lo que ahorra batería y recoge menos datos de ubicación. Si los precios automáticos de gasolina están activados, puede enviar tu última ubicación, incluso fuera de un turno, a la búsqueda de direcciones de Android. Los precios automáticos de gasolina empiezan desactivados en una instalación nueva; una actualización conserva tu ajuste. Para detenerlos, pon en manual el precio de la gasolina en la burbuja. Tus millas quedan en tu historial, que la copia de seguridad de Android puede copiar.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_action_location">Permitir ubicación</string>
 
@@ -66,7 +66,7 @@
     <!-- copy-audit: retranslated es -->
     <string name="perm_pitch_post_notif">Las notificaciones mantienen la burbuja activa y muestran ofertas con Aceptar y Rechazar.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_hood_post_notif">El permiso de notificaciones de Android permite mostrar notificaciones de la burbuja y de ofertas. Activa las burbujas para abrir la pantalla flotante.</string>
+    <string name="perm_hood_post_notif">Permite que DashBuddy muestre la burbuja y las alertas de ofertas. Para abrir la burbuja también hace falta el ajuste Burbujas de Android.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_action_post_notif">Permitir notificaciones</string>
 
@@ -80,29 +80,29 @@
          audience. -->
     <string name="app_notice_channel_name">Avisos de la aplicación</string>
     <!-- copy-audit: retranslated es -->
-    <string name="app_notice_channel_description">Avisos de estado de DashBuddy</string>
+    <string name="app_notice_channel_description">Avisos cuando DashBuddy no puede leer ni decir las ofertas</string>
     <string name="locale_notice_title">DashBuddy solo lee pantallas en inglés</string>
     <!-- copy-audit: retranslated es -->
-    <string name="locale_notice_text">Tu teléfono no está en inglés. DashBuddy reconoce el texto de pantalla en inglés, por lo que puede omitir la mayoría de las ofertas y entregas. Sus filtros de privacidad en inglés también pueden omitir datos de clientes. Cambia el teléfono a inglés para restablecer el reconocimiento y esos filtros; esto no garantiza que se filtre cada dato.</string>
+    <string name="locale_notice_text">Tu teléfono no está en inglés. DashBuddy solo lee las aplicaciones de reparto en inglés, así que puede omitir la mayoría de las ofertas y entregas, y sus filtros de privacidad pueden omitir datos de clientes. Cambiar el teléfono a inglés corrige ambas cosas, aunque ningún filtro lo detecta todo.</string>
 
     <string name="recognition_health_notice_title">DashBuddy no puede leer %1$s ahora mismo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="recognition_health_notice_text">El %2$d%% de las pantallas recientes de %1$s no se reconocieron. Es probable que la aplicación de %1$s haya cambiado. Las ofertas, recogidas y entregas pueden quedar sin registrar hasta que DashBuddy se actualice.</string>
-    <string name="recognition_health_notice_platform_fallback">esta plataforma</string>
+    <string name="recognition_health_notice_text">DashBuddy no reconoció el %2$d%% de las pantallas recientes de %1$s. Es probable que esa aplicación haya cambiado. Las ofertas, recogidas y entregas pueden no registrarse hasta que DashBuddy se actualice.</string>
+    <string name="recognition_health_notice_platform_fallback">esta aplicación de entrega</string>
 
     <!-- #991 — aviso del motor de voz. Traducido aquí porque la lectura de ofertas en voz alta ya
          respeta el idioma elegido (#428 mitad B): un aviso de que esa voz se apagó debe hablar el
          mismo idioma que hablaba. -->
     <string name="tts_health_notice_title">DashBuddy dejó de leer las ofertas en voz alta</string>
     <!-- copy-audit: retranslated es -->
-    <string name="tts_health_notice_text">El motor de texto a voz del teléfono dejó de responder. DashBuddy reintenta con cada oferta nueva. Si sigue sin voz, fuerza la detención de DashBuddy en Ajustes de Android → Aplicaciones y vuelve a abrirla. Las ofertas siguen en pantalla.</string>
+    <string name="tts_health_notice_text">El motor de texto a voz del teléfono dejó de responder. DashBuddy lo vuelve a intentar con cada oferta nueva. Si las ofertas siguen sin voz, abre Ajustes de Android &gt; Aplicaciones &gt; DashBuddy, toca Forzar detención y vuelve a abrir DashBuddy. Las ofertas siguen apareciendo en pantalla.</string>
 
     <!-- #254: local per-platform time learning and independent global overrides. -->
     <string name="economy_time_title">Estimaciones de tiempo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="economy_time_help">Los valores personalizados se aplican a todas las plataformas; las estimaciones automáticas siguen aprendiendo. El ritmo de conducción usa la salida de la recogida hasta la llegada a la entrega y supone el mismo ritmo hacia la tienda. El tiempo de parada incluye las esperas de recogida y entrega.</string>
-    <string name="economy_time_pace">Ritmo de conducción · min/milla</string>
-    <string name="economy_time_overhead">Recogida + entrega · min/pedido</string>
+    <string name="economy_time_help">Tus números valen para todas las apps de entrega; los automáticos siguen aprendiendo. El ritmo de conducción se mide de la tienda al cliente y se usa también para el trayecto a la tienda. El tiempo de parada incluye las esperas en la tienda y en la puerta.</string>
+    <string name="economy_time_pace">Ritmo de conducción (min/milla)</string>
+    <string name="economy_time_overhead">Tiempo de parada (min/entrega)</string>
     <string name="economy_time_automatic">Automático</string>
     <string name="economy_time_set_override">Usar valor personalizado</string>
     <string name="economy_time_use_automatic">Usar automático</string>
@@ -110,16 +110,16 @@
     <string name="economy_time_invalid_pace">Introduce un número finito mayor que 0.</string>
     <!-- copy-audit: retranslated es -->
     <string name="economy_time_invalid_overhead">Introduce un número finito de 0 o más.</string>
-    <string name="economy_time_automatic_values">Automático: %1$s min/milla · %2$s min/pedido</string>
-    <string name="economy_time_effective_values">En uso: %1$s min/milla · %2$s min/pedido</string>
+    <string name="economy_time_automatic_values">Automático: %1$s min/milla, %2$s min/entrega</string>
+    <string name="economy_time_effective_values">En uso: %1$s min/milla, %2$s min/entrega</string>
     <!-- copy-audit: retranslated es -->
-    <string name="economy_time_default_progress">%1$d/%2$d entregas válidas; usando el valor predeterminado</string>
-    <string name="economy_time_window">Las medianas usan las últimas %1$d entregas válidas.</string>
+    <string name="economy_time_default_progress">Usando el valor predeterminado hasta tener %2$d entregas válidas (%1$d por ahora)</string>
+    <string name="economy_time_window">Usa el valor típico de tus últimas %1$d entregas válidas.</string>
     <plurals name="economy_time_deliveries">
         <item quantity="one">Aprendido de %d entrega</item>
         <item quantity="other">Aprendido de %d entregas</item>
     </plurals>
-    <string name="tts_offer_addon_template">Pedido adicional en %1$s. %2$s dólares más, %3$s millas más. Sin veredicto.</string>
+    <string name="tts_offer_addon_template">Pedido adicional en %1$s. %2$s dólares más, %3$s millas más. Sin puntuación.</string>
     <plurals name="tts_offer_addon_minutes">
         <item quantity="one">%1$d minuto más.</item>
         <item quantity="other">%1$d minutos más.</item>

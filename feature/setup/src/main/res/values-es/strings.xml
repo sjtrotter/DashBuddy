@@ -8,11 +8,11 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_phase_economy">Parte 1: Costos</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_phase_strategy">Parte 2: Estrategia</string>
+    <string name="wizard_phase_strategy">Parte 2: Reglas de ofertas</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_vehicle">Vehículo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_vehicle">La consulta a EPA se realiza solo después de pulsar \"Consultar mi vehículo\". Esta elección se guarda. Envía el año, la marca, el modelo y el identificador del vehículo seleccionados a fueleconomy.gov para obtener MPG; no envía una cuenta ni un identificador de instalación. La búsqueda de MPG en Google envía el año, la marca y el modelo introducidos a Google en tu navegador.</string>
+    <string name="wizard_desc_vehicle">DashBuddy consulta tus MPG solo después de que pulses \"Consultar mi vehículo\", y recuerda esa elección. Envía a fueleconomy.gov el año, la marca, el modelo y el ID de vehículo de la EPA que elijas, sin cuenta ni ID de instalación. \"Search Google for MPG\" envía a Google, en tu navegador, el año, la marca y el modelo que escribiste.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_gas">Precio de gasolina</string>
     <!-- copy-audit: retranslated es -->
@@ -25,18 +25,18 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_shopping">Máximo de artículos para una oferta de compras.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_title_min_payout">Pago neto mínimo</string>
+    <string name="wizard_title_min_payout">Ganancia mínima</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_min_payout">Pago neto mínimo de una oferta que considerarías.</string>
+    <string name="wizard_desc_min_payout">La ganancia más baja que aceptarías en una oferta, después de los costos del vehículo.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_title_hourly">Meta $/h</string>
+    <string name="wizard_title_hourly">Meta de ganancia/h</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_hourly">Tu meta de pago neto por hora de entrega.</string>
+    <string name="wizard_desc_hourly">La ganancia por hora que buscas mientras haces una entrega.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_distance">Distancia máxima</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_distance">Máximo de millas que conducirías por una oferta.</string>
-    <string name="wizard_vehicle_lookup_prompt">Consulta los MPG de tu auto en EPA (fueleconomy.gov). Envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
+    <string name="wizard_vehicle_lookup_prompt">Consulta tus MPG en fueleconomy.gov, el sitio de la EPA. DashBuddy envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
     <string name="wizard_vehicle_lookup_allow">Consultar mi vehículo</string>
     <string name="wizard_vehicle_manual_entry">Introducir MPG manualmente</string>
 </resources>

@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name" translatable="false">DashBuddy</string>
-    <string name="accessibility_service_description">DashBuddy assists delivery drivers by reading enabled delivery apps\' screens and speaking offers while you drive. Recognition and calculations run on your phone. Accept and Decline require your tap in DashBuddy; automated actions need separate grants. Optional Screen events identifies other apps in front. Recognized screens showing your banking, payment or ID details, and document-capture screens, are blocked before parsing or storage. Filters can miss unrecognized screens in debug captures. Optional screenshots save the whole display. History and settings may enter Android backup; gallery apps may sync screenshots. Debug capture uploads require developer toggles.</string>
+    <string name="accessibility_service_description">To help delivery drivers, DashBuddy reads the screens of the delivery apps you turn on and reads offers aloud while you drive. Screen reading and calculations happen on your phone. Accept and Decline need your tap in DashBuddy; each automatic tap needs its own permission. If you allow Screen events, DashBuddy also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Optional screenshots save the whole screen; your gallery may sync them. Android backup may copy your history and settings.</string>
 
 
 
@@ -8,27 +8,27 @@
 
 
 
-    <string name="perm_privacy_guarantee">DashBuddy does not sell your data. Android backup and network features can send data off this phone.</string>
+    <string name="perm_privacy_guarantee">DashBuddy doesn\'t sell your data. Android backup and online features can send data off your phone.</string>
     <string name="perm_under_the_hood_title">Data use</string>
 
     <string name="perm_title_accessibility">Screen reading (Accessibility)</string>
-    <string name="perm_pitch_accessibility">DashBuddy reads offers aloud while you drive. Accept and Decline require your tap; automated actions need your permission.</string>
-    <string name="perm_hood_accessibility">Android Accessibility reads enabled delivery apps. Optional Screen events identifies other apps in front. Recognized screens showing your banking, payment or ID details, and document-capture screens, are blocked before parsing or storage. Recognition and calculations run on-device; recognized customer names and addresses are stored as hashes. Debug captures may retain details the filters miss.\n\nGas-price refresh is off by default on new installs; an existing setting is kept. Android\'s geocoder may send coordinates to its provider; EIA receives a regional fuel-price request. Tap the bubble\'s gas price for manual mode to stop automatic refreshes. Setup sends vehicle selections to EPA for MPG only after you tap \"Look up my vehicle\"; this choice is saved. Neither lookup sends an account or install ID. The manual MPG search opens Google with your vehicle query. Debug census uploads need developer opt-in; trusted capture sharing can send customer text to the configured server\'s operator. Release builds do neither. Optional screenshots save the whole display to Pictures/DashBuddy; gallery sync may copy them. Android may back up history and settings to your Google account or transfer them to another phone; consent records are excluded. History, settings and debug captures last until cleared or uninstalled; Android may restore history and settings from backup. Logs rotate; screenshots and exports remain until deleted. See PRIVACY.md.</string>
+    <string name="perm_pitch_accessibility">DashBuddy reads offers aloud as you drive. You tap Accept or Decline yourself; automatic taps need your permission.</string>
+    <string name="perm_hood_accessibility">DashBuddy reads the screens of the delivery apps you turn on. With Screen events on, it also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Screen reading and calculations happen on your phone. Customer names and addresses are saved as codes, not as text.\n\nAutomatic gas prices start off on a new install; an update keeps your setting. When on, Android\'s address lookup may send your location to its provider, and the U.S. Energy Information Administration gets a fuel-price request for your region. To stop it, set the bubble\'s gas price to manual.\n\nSetup sends your vehicle to the EPA for MPG only after you tap \"Look up my vehicle\", and remembers that choice. Neither lookup sends an account or install ID. The manual MPG search opens Google with your vehicle.\n\nOptional screenshots of the whole screen go to Pictures/DashBuddy, where gallery sync may copy them. Android may back up your history and settings to your Google account or a new phone, and restore them later; consent records are left out. History and settings stay until you clear them or uninstall, logs keep only recent entries, and screenshots and exports stay until you delete them. More: Privacy details in Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <string name="perm_action_accessibility">Turn on screen reading</string>
 
     <string name="perm_title_listener">Notification access</string>
-    <string name="perm_pitch_listener">Read offers and tip updates from enabled delivery apps\' notifications.</string>
-    <string name="perm_hood_listener">Android\'s notification listener reads enabled delivery apps only. Other apps\' notifications are dropped before reading. Recognized events are stored in your history; Android backup may copy it. Debug captures can retain notification text. Debug census sharing is off by default; release builds cannot upload it.</string>
+    <string name="perm_pitch_listener">Reads offer and tip alerts from delivery apps you turn on.</string>
+    <string name="perm_hood_listener">DashBuddy reads notifications only from the delivery apps you turn on, and skips other apps\' notifications unread. What it recognizes goes into your history, which Android backup may copy.</string>
     <string name="perm_action_listener">Turn on notification access</string>
 
-    <string name="perm_title_location">Background location</string>
-    <string name="perm_pitch_location">Track dash miles to estimate earnings after gas and wear.</string>
-    <string name="perm_hood_location">The odometer samples GPS during a dash and stops when it ends, reducing battery use and location collection. Gas-price refresh can read your last location outside a dash and send coordinates to Android\'s geocoding provider. Refresh is off by default on new installs; an existing setting is kept. Tap the bubble\'s gas price for manual mode to stop automatic refreshes. Recorded miles remain in history and may enter Android backup.</string>
+    <string name="perm_title_location">Location</string>
+    <string name="perm_pitch_location">Counts your shift miles to estimate profit after vehicle costs.</string>
+    <string name="perm_hood_location">DashBuddy uses GPS to count miles only during a shift, which saves battery and collects less location data. If automatic gas prices are on, it may send your last location, even outside a shift, to Android\'s address lookup. Automatic gas prices start off on a new install; an update keeps your setting. To stop them, set the bubble\'s gas price to manual. Your miles stay in your history, which Android backup may copy.</string>
     <string name="perm_action_location">Allow location</string>
 
     <string name="perm_title_post_notif">Notifications</string>
     <string name="perm_pitch_post_notif">Notifications keep the bubble running and show offer alerts with Accept and Decline.</string>
-    <string name="perm_hood_post_notif">Android notification permission lets DashBuddy post bubble and offer notifications. Enable bubbles to open the floating display.</string>
+    <string name="perm_hood_post_notif">Lets DashBuddy post the bubble and offer alerts. Opening the bubble also needs Android\'s Bubbles setting.</string>
     <string name="perm_action_post_notif">Allow notifications</string>
 
     <string name="perm_title_bubbles">Bubble</string>
@@ -87,10 +87,10 @@
     <!-- components/economy/EconomyAccordionRow.kt -->
     <string name="economy_accordion_content_desc_collapse">Collapse</string>
     <string name="economy_accordion_content_desc_expand">Expand</string>
-    <string name="economy_accordion_default_hint">(default)</string>
+    <string name="economy_accordion_default_hint">(estimate)</string>
 
     <!-- settings/EconomySettingsScreen.kt -->
-    <string name="economy_settings_title">Car costs</string>
+    <string name="economy_settings_title">Costs</string>
     <string name="economy_settings_reset_defaults">Reset to defaults</string>
     <string name="economy_settings_intro">Defaults are estimates for your vehicle class. Tap a section to enter your own.</string>
 
@@ -110,7 +110,7 @@
 
     <!-- main/analytics/AnalyticsScreen.kt -->
     <string name="analytics_screen_title">Analytics</string>
-    <string name="analytics_screen_content_desc_export_csv">Export data (CSV)</string>
+    <string name="analytics_screen_content_desc_export_csv">Export data as a spreadsheet</string>
 
     <!-- setup/permissions/PermissionCard.kt -->
     <string name="permission_card_content_desc_privacy">Privacy</string>
@@ -121,14 +121,14 @@
     <!-- setup/consent/ConsentPromptPage.kt (#843) — prompted per-capability consent, a page of the
          FrontDoorHost sheet (#1151) -->
     <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
-    <string name="consent_prompt_body">Delivery-app rules define these actions. Automated actions stay off until you allow each one. Choose Allow or Don\'t allow for each, or Not now to decide later. Direct Accept and Decline presses are your own actions. Decision receipts with their time, app version and privacy revision stay on this phone; backup and device transfer exclude them. The app log also records each grant or revocation; it leaves the phone only in a bug report you export. Change them under Settings → Data &amp; Privacy → Automation &amp; Consent.</string>
-    <string name="consent_prompt_source_bundled_format">Built-in %1$s rules</string>
-    <string name="consent_prompt_source_downloaded_format">Downloaded %1$s rules</string>
+    <string name="consent_prompt_body">DashBuddy can tap these buttons in the delivery app for you, depending on the app. Each stays off until you allow it; tap Not now to decide later. Pressing Accept or Decline yourself is your own choice.\n\nEach choice is recorded on this phone with its time, app version and privacy notice version, and left out of Android backup and phone transfer. The app log notes each choice too; it leaves your phone only in a bug report you export. Change them in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+    <string name="consent_prompt_source_bundled_format">%1$s, built in</string>
+    <string name="consent_prompt_source_downloaded_format">%1$s, downloaded</string>
     <string name="consent_prompt_allow">Allow</string>
     <string name="consent_prompt_deny">Don\'t allow</string>
     <!-- settings/components/FakeOfferCard.kt -->
     <!-- main/analytics/OffersTab.kt (#975 — was DecisionsTab) -->
-    <string name="offers_tab_offer_funnel_title">Offer funnel</string>
+    <string name="offers_tab_offer_funnel_title">Offer outcomes</string>
     <string name="offers_tab_no_offers_yet">No offers recorded.</string>
     <string name="offers_tab_offers_count_caption">%1$s %2$s</string>
     <string name="offers_tab_offer_singular">offer</string>
@@ -141,23 +141,23 @@
     <string name="offers_tab_said_no_title">DECLINED · EST. NET</string>
     <string name="offers_tab_no_declines_yet">No declined offers recorded.</string>
     <string name="offers_tab_est_net_skipped_format" translatable="false">~%1$s</string>
-    <string name="offers_tab_said_no_population_format">est. net · %1$s of %2$s %3$s priced</string>
-    <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s; no recorded estimates</string>
+    <string name="offers_tab_said_no_population_format">est. net from %1$s of %2$s %3$s</string>
+    <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s, none with an estimate</string>
     <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
     <string name="offers_tab_avg_score_header">Avg score /100</string>
     <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
-    <string name="offers_tab_frozen_disclosure">Offer figures are decision-time estimates; counts and realized figures are measured.</string>
+    <string name="offers_tab_frozen_disclosure">Offer figures are estimated at offer time. Counts and results are measured.</string>
 
     <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
-    <string name="offers_tab_est_vs_reality_title">AVG $/HR PER OFFER: EST. VS REAL</string>
+    <string name="offers_tab_est_vs_reality_title">AVG $/HR PER OFFER: ESTIMATE VS ACTUAL</string>
     <string name="offers_tab_est_vs_reality_bar_est">Est.</string>
-    <string name="offers_tab_est_vs_reality_bar_realized">Realized</string>
+    <string name="offers_tab_est_vs_reality_bar_realized">Actual</string>
     <string name="offers_tab_est_vs_reality_per_hour_format" translatable="false">%1$s/hr</string>
     <string name="offers_tab_est_vs_reality_ratio_format">About %1$s of estimate</string>
-    <string name="offers_tab_est_vs_reality_no_ratio">No positive estimate to compare</string>
-    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s matched</string>
-    <string name="offers_tab_est_vs_reality_thin_format">%1$s matched %2$s; thin data</string>
-    <string name="offers_tab_est_vs_reality_none">No comparable offers yet</string>
+    <string name="offers_tab_est_vs_reality_no_ratio">No estimate above $0 to compare</string>
+    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s matched to a delivery</string>
+    <string name="offers_tab_est_vs_reality_thin_format">%1$s %2$s matched, a small sample</string>
+    <string name="offers_tab_est_vs_reality_none">No offers to compare yet</string>
 
     <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
     <string name="offers_tab_list_title">Offers</string>
@@ -181,10 +181,10 @@
     <string name="ratings_screen_tile_acceptance">Acceptance</string>
     <string name="ratings_screen_tile_quality">Quality rate</string>
     <!-- #962: the points-based rating facts, shown verbatim. %1$s = points score, %2$s = the platform's own tier label. -->
-    <string name="ratings_screen_points_and_tier_format">Overall rating: %1$s · %2$s</string>
+    <string name="ratings_screen_points_and_tier_format">Overall rating: %1$s (%2$s)</string>
     <string name="ratings_screen_points_format">Overall rating: %1$s</string>
     <string name="ratings_screen_tier_format">Reward tier: %1$s</string>
-    <string name="ratings_screen_tile_deliveries_30d">Deliveries (30d)</string>
+    <string name="ratings_screen_tile_deliveries_30d">Deliveries, last 30 days</string>
     <string name="ratings_screen_tile_lifetime_deliveries">Lifetime deliveries</string>
     <string name="ratings_screen_shopping_quality_header">Shopping quality</string>
     <string name="ratings_screen_tile_original_items_found">Original items found</string>
@@ -194,11 +194,11 @@
     <string name="ratings_screen_tile_wrong_or_missing">Wrong or missing</string>
     <string name="ratings_screen_tile_lifetime_shops">Lifetime shops</string>
     <string name="ratings_screen_empty_title">No ratings yet</string>
-    <string name="ratings_screen_empty_fallback_platform">platform</string>
-    <string name="ratings_screen_empty_desc_format">Open %1$s Ratings while DashBuddy runs.</string>
+    <string name="ratings_screen_empty_fallback_platform">your delivery app</string>
+    <string name="ratings_screen_empty_desc_format">Open the Ratings page in %1$s while DashBuddy is running.</string>
 
     <!-- main/MainActivity.kt -->
-    <string name="main_activity_developer_options_title">Developer Options</string>
+    <string name="main_activity_developer_options_title">Developer options</string>
 
     <!-- setup/wizard/cards/VehicleCard.kt -->
 
@@ -207,19 +207,19 @@
     <string name="settings_home_group_monitoring">Monitoring</string>
     <string name="settings_home_item_gig_apps_title">Delivery apps</string>
     <string name="settings_home_item_gig_apps_subtitle">Which apps DashBuddy reads</string>
-    <string name="settings_home_group_automation">Scoring</string>
+    <string name="settings_home_group_automation">Offers and costs</string>
     <string name="settings_home_item_strategy_title">Offer rules</string>
     <string name="settings_home_item_strategy_subtitle">Rules, priorities, test offer</string>
-    <string name="settings_home_economy_true_cost_format" translatable="false">Estimated costs: %1$s/mi</string>
-    <string name="settings_home_economy_defaults_suffix_format">" · %1$d defaults"</string>
+    <string name="settings_home_economy_true_cost_format" translatable="false">Estimated cost: %1$s/mi</string>
+    <string name="settings_home_economy_defaults_suffix_format">, %1$d left at default</string>
     <string name="settings_home_economy_fallback_subtitle">Gas, electricity, phone, time</string>
-    <string name="settings_home_item_economy_title">Car costs</string>
-    <string name="settings_home_group_data_privacy">Data &amp; Privacy</string>
+    <string name="settings_home_item_economy_title">Costs</string>
+    <string name="settings_home_group_data_privacy">Data &amp; privacy</string>
     <string name="settings_home_item_evidence_title">Screenshots</string>
-    <string name="settings_home_item_evidence_subtitle">Offer, delivery and dash screenshots</string>
+    <string name="settings_home_item_evidence_subtitle">Offer, delivery and shift screenshots</string>
     <string name="settings_home_item_export_title">Export data</string>
-    <string name="settings_home_item_export_subtitle">Mileage &amp; earnings for a spreadsheet or tax prep</string>
-    <string name="settings_home_item_consent_title">Automation &amp; Consent</string>
+    <string name="settings_home_item_export_subtitle">Miles and earnings for a spreadsheet or taxes</string>
+    <string name="settings_home_item_consent_title">Automation &amp; consent</string>
     <string name="settings_home_item_consent_subtitle">Taps DashBuddy may make for you</string>
     <string name="settings_home_group_app_system">App</string>
     <string name="settings_home_item_general_title">General</string>
@@ -228,21 +228,21 @@
     <string name="settings_home_item_rerun_wizard_subtitle">Vehicle and offer targets</string>
     <string name="settings_home_item_about_title">About</string>
     <string name="settings_home_item_about_subtitle">Version, support and developer</string>
-    <string name="settings_home_item_debug_menu_title">Debug Menu</string>
-    <string name="settings_home_item_debug_menu_subtitle">Log levels &amp; Snapshot whitelist</string>
+    <string name="settings_home_item_debug_menu_title">Debug menu</string>
+    <string name="settings_home_item_debug_menu_subtitle">Bubble app display and census upload</string>
 
     <!-- settings/StrategySettingsScreen.kt -->
     <!-- main/analytics/TimeTab.kt -->
     <string name="time_tab_time_split_title">TIME SPLIT</string>
-    <string name="time_tab_no_sessions_yet">No dashes recorded.</string>
-    <string name="time_tab_sessions_stat_label">Dashes</string>
-    <string name="time_tab_avg_session_stat_label">Avg dash</string>
+    <string name="time_tab_no_sessions_yet">No shifts recorded.</string>
+    <string name="time_tab_sessions_stat_label">Shifts</string>
+    <string name="time_tab_avg_session_stat_label">Avg shift</string>
     <string name="time_tab_segment_on_delivery">On delivery</string>
-    <string name="time_tab_segment_unattributed">No delivery attached</string>
-    <string name="time_tab_deadhead_title">DEADHEAD</string>
-    <string name="time_tab_no_miles_measured_yet">No miles measured</string>
-    <string name="time_tab_deadhead_caption">miles with no delivery</string>
-    <string name="time_tab_segment_deadhead">Deadhead</string>
+    <string name="time_tab_segment_unattributed">No delivery</string>
+    <string name="time_tab_deadhead_title">EMPTY MILES</string>
+    <string name="time_tab_no_miles_measured_yet">No miles tracked</string>
+    <string name="time_tab_deadhead_caption">of miles with no delivery</string>
+    <string name="time_tab_segment_deadhead">No delivery</string>
     <string name="time_tab_on_time_title">ON TIME</string>
     <string name="time_tab_no_deadline_deliveries_yet">No deliveries with a deadline</string>
     <string name="time_tab_gauge_on_time_label">on time</string>
@@ -254,11 +254,11 @@
     <!-- Time tab — #983 (brief §6 + §7.8): the running-hourly-rate pair, the typical online hour,
          and the between-job gap distribution. Every line states its population; a residual is never
          described as pure driving, and a long gap is counted, not judged (§9). -->
-    <string name="time_tab_rate_pair_title">NET/HR</string>
+    <string name="time_tab_rate_pair_title">PROFIT/HR</string>
     <string name="time_tab_rate_whole_shift">Online</string>
-    <string name="time_tab_rate_distinction">Working: delivery time excluding measured gaps. Online: all online time.</string>
-    <string name="time_tab_rate_no_gaps_note">No gaps measured; the working rate may read low.</string>
-    <string name="time_tab_rate_working_unmeasured">No delivery time measured; working rate unavailable.</string>
+    <string name="time_tab_rate_distinction">Working: delivery time, minus waits between deliveries. Online: all online time.</string>
+    <string name="time_tab_rate_no_gaps_note">No waits between deliveries measured yet, so the working rate may be low.</string>
+    <string name="time_tab_rate_working_unmeasured">No delivery time tracked, so there is no working rate.</string>
     <string name="time_tab_rate_none">No online time</string>
     <string name="time_tab_gap_singular">gap</string>
     <string name="time_tab_gap_plural">gaps</string>
@@ -266,59 +266,59 @@
     <string name="time_tab_segment_at_stops">At stops</string>
     <string name="time_tab_segment_waiting">Waiting</string>
     <string name="time_tab_segment_driving">Driving &amp; other</string>
-    <string name="time_tab_typical_hour_derivation">At stops: parked at stores or doors. Waiting: drop-off to next accept. Driving &amp; other includes untimed activity and time before the first offer or after the last drop-off.</string>
+    <string name="time_tab_typical_hour_derivation">At stops: at stores and doors. Waiting: from a drop-off to the next accepted offer. Driving &amp; other: the rest, including before the first offer and after the last drop-off.</string>
     <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops</string>
     <string name="time_tab_typical_hour_all_timed_format">All %1$s stops timed</string>
-    <string name="time_tab_typical_hour_no_stops_timed">No arrivals recorded; at-stops time is unmeasured and included in Driving &amp; other.</string>
+    <string name="time_tab_typical_hour_no_stops_timed">No arrivals recorded, so time at stops counts as Driving &amp; other.</string>
     <string name="time_tab_typical_hour_no_stops">No stops recorded.</string>
-    <string name="time_tab_typical_hour_leak_format">%2$s waiting · ≈ %1$s at your net working rate</string>
-    <string name="time_tab_typical_hour_leak_unpriced">Waiting not priced: no working rate</string>
+    <string name="time_tab_typical_hour_leak_format">%2$s waiting, worth about %1$s at your working rate</string>
+    <string name="time_tab_typical_hour_leak_unpriced">No working rate to price the waiting</string>
     <string name="time_tab_gaps_title">Gaps between deliveries</string>
-    <string name="time_tab_gaps_none">No gaps: needs a completed drop-off and a later accept in the same dash.</string>
-    <string name="time_tab_gaps_p90_label">90% under</string>
+    <string name="time_tab_gaps_none">No gaps yet: needs a drop-off, then an accepted offer, in the same shift.</string>
+    <string name="time_tab_gaps_p90_label">9 in 10 under</string>
     <string name="time_tab_gaps_longest_label">Longest</string>
     <string name="time_tab_gaps_coverage_format">%1$s %2$s from %3$s deliveries</string>
-    <string name="time_tab_gaps_long_format">%1$s %2$s 2h+ (break or dry spell)</string>
+    <string name="time_tab_gaps_long_format">%1$s %2$s over 2 hours (a break or slow spell)</string>
     <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
-    <string name="time_tab_mileage_tax_disclosure">Estimated standard-mileage deduction; check with a tax pro.</string>
+    <string name="time_tab_mileage_tax_disclosure">The tax deduction is an estimate at the IRS standard mileage rate. Check with a tax professional.</string>
 
     <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
          moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
          id IS the copy's identity, so renaming would churn every translation for nothing. -->
     <!-- #979: declares the tab as always-lifetime, fixing the looks-like-a-bug relationship with the #970 pager. -->
     <string name="patterns_tab_all_time_badge">All time</string>
-    <string name="patterns_tab_heatmap_title">NET $/HR ONLINE BY HOUR</string>
+    <string name="patterns_tab_heatmap_title">PROFIT/HR ONLINE BY HOUR</string>
     <!-- #979: heatmap Rate/Hours toggle — the Hours copy for the same grid, coloring by coverage instead of rate. -->
     <string name="patterns_tab_heatmap_mode_rate">Rate</string>
     <string name="patterns_tab_heatmap_mode_hours">Hours</string>
-    <string name="patterns_tab_heatmap_title_hours">Online hours by hour</string>
-    <string name="patterns_tab_heatmap_no_data">Too little recorded time. Record dashes to populate the chart.</string>
-    <string name="patterns_tab_heatmap_best_format">Best hour %1$s · %2$s/hr</string>
+    <string name="patterns_tab_heatmap_title_hours">TIME ONLINE BY HOUR</string>
+    <string name="patterns_tab_heatmap_no_data">Not enough shifts yet to fill the chart.</string>
+    <string name="patterns_tab_heatmap_best_format">Best hour %1$s, %2$s/hr</string>
     <string name="patterns_tab_heatmap_legend_low">lower</string>
     <string name="patterns_tab_heatmap_legend_high">higher</string>
     <string name="patterns_tab_heatmap_legend_insufficient">too little time</string>
-    <string name="patterns_tab_heatmap_legend_zero">online, nothing kept</string>
+    <string name="patterns_tab_heatmap_legend_zero">online, no profit</string>
     <string name="patterns_tab_heatmap_legend_hours_none">No recorded time</string>
     <string name="patterns_tab_stores_title">YOUR STORES</string>
-    <string name="patterns_tab_stores_manual_note">Manual and unmatched deliveries count in Money but not in this list.</string>
+    <string name="patterns_tab_stores_manual_note">Deliveries you added, or with no matched store, count in Money but not here.</string>
     <string name="patterns_tab_no_stores">No stores visited yet.</string>
     <string name="patterns_tab_location_unknown">location unknown</string>
-    <string name="patterns_tab_stats_partial">partial: mixes all your %1$s locations on deliveries with no pay recorded</string>
+    <string name="patterns_tab_stats_partial">Combines all %1$s locations from deliveries with no recorded pay</string>
     <string name="patterns_tab_store_pickups_label">Pickups</string>
     <string name="patterns_tab_store_deliveries_label">Deliveries</string>
-    <string name="patterns_tab_store_gross_label">Earned (gross)</string>
-    <string name="patterns_tab_store_net_label">Kept</string>
+    <string name="patterns_tab_store_gross_label">Earned</string>
+    <string name="patterns_tab_store_net_label">Profit</string>
     <string name="patterns_tab_store_details_cd">Details for %1$s</string>
     <string name="patterns_tab_store_dwell_none">No pickup waits recorded.</string>
-    <string name="patterns_tab_store_seen_format">first %1$s · last %2$s</string>
+    <string name="patterns_tab_store_seen_format">first %1$s, last %2$s</string>
     <!-- #765: detail bottom sheet — dasher-friendly wait labels, stat term kept secondary. -->
     <string name="patterns_tab_store_detail_wait_title">Wait times</string>
-    <string name="patterns_tab_store_detail_median">Usual wait (median)</string>
-    <string name="patterns_tab_store_detail_p95">Longest waits (p95)</string>
+    <string name="patterns_tab_store_detail_median">Usual wait</string>
+    <string name="patterns_tab_store_detail_p95">Long wait (1 in 20)</string>
     <string name="patterns_tab_store_detail_avg">Average wait</string>
     <!-- #979: store cards → leaderboard (brief §6) -->
     <string name="patterns_tab_leaderboard_rank_format">#%1$d</string>
-    <string name="patterns_tab_leaderboard_sort_net">By net</string>
+    <string name="patterns_tab_leaderboard_sort_net">By profit</string>
     <string name="patterns_tab_leaderboard_sort_wait">By wait</string>
     <string name="patterns_tab_leaderboard_sort_recent">Recent</string>
     <string name="patterns_tab_leaderboard_wait_suffix">usual wait</string>
@@ -327,13 +327,13 @@
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry picker</string>
     <string name="wizard_screen_goal_option1_desc">Offers below your targets are flagged red.</string>
-    <string name="wizard_screen_goal_option2_title">Protect status</string>
-    <string name="wizard_screen_goal_option2_desc">Recommend Accept except for shopping offers you disabled.</string>
+    <string name="wizard_screen_goal_option2_title">Protect acceptance rate</string>
+    <string name="wizard_screen_goal_option2_desc">Every offer gets Accept, except shopping offers you turned off.</string>
     <string name="wizard_screen_goal_option3_title">Manual</string>
-    <string name="wizard_screen_goal_option3_desc">Figures only; you decide.</string>
+    <string name="wizard_screen_goal_option3_desc">Numbers only. You decide.</string>
     <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
     <string name="wizard_screen_shopping_footer">Used to score shopping offers.</string>
-    <string name="wizard_screen_hourly_value_format" translatable="false">%1$s / hr</string>
+    <string name="wizard_screen_hourly_value_format" translatable="false">%1$s/hr</string>
     <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
     <string name="wizard_screen_min_payout_footer_auto">Offers below this are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_min_payout_footer_flag">Offers below this are flagged red.</string>
@@ -361,7 +361,7 @@
     <!-- #977: Home's review section navigates into the Analytics hub (which owns the assign/attest
          flows), so it carries a navigation label rather than the hub's in-place action wording.
          #1024 D4: one label for the whole row, since every flag's action was already this one. -->
-    <string name="dashboard_review_action">Review →</string>
+    <string name="dashboard_review_action">Review</string>
     <!-- #1024 D5: one row of four destinations. dashboard_screen_entry_strategy/_economy went with
          the two tiles they labelled — both pages live one tap inside Settings, and Home is a glance
          surface rather than a menu of every route. -->
@@ -381,33 +381,33 @@
     <string name="economy_editor_every_label">Every</string>
     <string name="economy_editor_brakes_title">Brakes</string>
     <string name="economy_editor_fluids_title">Fluids</string>
-    <string name="economy_editor_misc_title">Misc repairs</string>
+    <string name="economy_editor_misc_title">Other repairs</string>
     <string name="economy_editor_misc_cost_label">Yearly budget</string>
     <string name="economy_editor_misc_interval_label">Driving</string>
     <string name="economy_editor_misc_interval_suffix" translatable="false">mi/yr</string>
-    <string name="economy_editor_misc_helper">Yearly repairs excluding oil, brakes and fluids.</string>
+    <string name="economy_editor_misc_helper">Yearly repairs other than oil, brakes and fluids.</string>
     <string name="economy_editor_depreciation_title">Depreciation</string>
     <string name="economy_editor_depreciation_off">off</string>
     <string name="economy_editor_depreciation_include_label">Include depreciation</string>
     <string name="economy_editor_purchase_price_label">Purchase price</string>
-    <string name="economy_editor_depreciation_helper">Total expected miles from new to retirement, e.g. 200,000 for a typical sedan.</string>
+    <string name="economy_editor_depreciation_helper">Miles you expect the vehicle to last from new, like 200,000 for a sedan.</string>
     <string name="economy_editor_insurance_title">Insurance</string>
-    <string name="economy_editor_insurance_label">Extra for gig work</string>
+    <string name="economy_editor_insurance_label">Extra for delivery work</string>
     <string name="economy_editor_per_month_suffix" translatable="false">/mo</string>
     <string name="economy_editor_insurance_helper">Monthly delivery or rideshare coverage above your personal policy.</string>
     <string name="economy_editor_registration_title">Registration</string>
     <string name="economy_editor_registration_label">Extra registration cost</string>
     <string name="economy_editor_per_year_suffix" translatable="false">/yr</string>
-    <string name="economy_editor_registration_helper">Yearly fees above personal registration: commercial plates, inspection, endorsement.</string>
+    <string name="economy_editor_registration_helper">Yearly fees beyond normal registration, like commercial plates, inspections or endorsements.</string>
     <string name="economy_editor_phone_title">Phone &amp; data</string>
     <string name="economy_editor_phone_plan_total_label">Plan total</string>
     <string name="economy_editor_phone_lines_label">Lines</string>
-    <string name="economy_editor_phone_business_percent_format">%% for gig work: %1$d%%</string>
-    <string name="economy_editor_phone_per_line_format">Your line: %1$s/mo × %2$d%% = %3$s/mo for gig work</string>
-    <string name="economy_editor_annual_miles_title">Expected gig miles / yr</string>
+    <string name="economy_editor_phone_business_percent_format">Delivery work share: %1$d%%</string>
+    <string name="economy_editor_phone_per_line_format">Your line: %1$s/mo x %2$d%% = %3$s/mo for delivery work</string>
+    <string name="economy_editor_annual_miles_title">Delivery miles per year</string>
     <string name="economy_editor_annual_miles_summary_format" translatable="false">%1$s mi</string>
     <string name="economy_editor_annual_miles_value_format">%1$s miles per year</string>
-    <string name="economy_editor_annual_miles_helper">Spreads insurance, registration and phone costs over gig miles. More miles → lower cost per mile.</string>
+    <string name="economy_editor_annual_miles_helper">Spreads insurance, registration and phone costs over these miles: more miles, lower cost per mile.</string>
     <string name="economy_editor_vehicle_class_title">Vehicle class</string>
     <string name="economy_editor_mpg_label">Combined MPG</string>
     <string name="economy_editor_fuel_type_title">Fuel type</string>
@@ -418,19 +418,19 @@
     <string name="money_tab_no_earnings_yet">No earnings recorded.</string>
     <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
     <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
-    <string name="money_tab_stat_net_per_hour">Net/hr online</string>
-    <string name="money_tab_stat_net_per_mile">Net/mi</string>
-    <string name="money_tab_stat_net_per_drop">Net/delivery</string>
+    <string name="money_tab_stat_net_per_hour">Profit/hr online</string>
+    <string name="money_tab_stat_net_per_mile">Profit/mi</string>
+    <string name="money_tab_stat_net_per_drop">Profit/delivery</string>
 
     <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
-    <string name="money_tab_where_went_title">KEPT VS COSTS</string>
+    <string name="money_tab_where_went_title">PROFIT VS COSTS</string>
     <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
-    <string name="money_tab_where_went_kept">Kept %1$s</string>
-    <string name="money_tab_where_went_segment_kept">Kept</string>
+    <string name="money_tab_where_went_kept">Profit %1$s</string>
+    <string name="money_tab_where_went_segment_kept">Profit</string>
     <string name="money_tab_where_went_segment_gas">Gas</string>
     <string name="money_tab_where_went_segment_wear">Wear</string>
-    <string name="money_tab_where_went_segment_car">Car costs</string>
-    <string name="money_tab_where_went_no_split">Some deliveries lack separate gas and wear costs; their costs are combined.</string>
+    <string name="money_tab_where_went_segment_car">Vehicle costs</string>
+    <string name="money_tab_where_went_no_split">Some deliveries show gas and wear as one combined cost.</string>
     <string name="money_tab_disclosure_expand">Show details</string>
     <string name="money_tab_disclosure_collapse">Hide details</string>
 
@@ -438,55 +438,55 @@
     <string name="money_tab_pay_mix_title">EARNED</string>
     <string name="money_tab_pay_mix_segment_base">Base pay</string>
     <string name="money_tab_pay_mix_segment_tips">Tips</string>
-    <string name="money_tab_pay_mix_segment_not_itemized">Not itemized</string>
+    <string name="money_tab_pay_mix_segment_not_itemized">No breakdown</string>
     <string name="money_tab_pay_mix_segment_not_matched">Not matched</string>
-    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (incl. %2$s cash you entered)</string>
+    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (including %2$s cash you entered)</string>
     <string name="money_tab_pay_mix_no_insight">No pay recorded</string>
-    <string name="money_tab_pay_mix_partial_coverage_format">itemized on %1$s of %2$s deliveries</string>
-    <string name="money_tab_pay_mix_partial_detail">A stacked order settles on one receipt that can\'t be split, so its pay is recorded but not itemized.</string>
-    <string name="money_tab_pay_mix_negative_itemization_format">itemized parts exceed the recorded pay by %1$s</string>
+    <string name="money_tab_pay_mix_partial_coverage_format">breakdown for %1$s of %2$s deliveries</string>
+    <string name="money_tab_pay_mix_partial_detail">Stacked orders share one receipt that can\'t be split, so their pay has no breakdown.</string>
+    <string name="money_tab_pay_mix_negative_itemization_format">breakdown is %1$s more than the recorded pay</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
     <string name="money_tab_needs_a_look_title_format">NEEDS A LOOK (%1$s)</string>
 
     <!-- main/analytics/MoneyBreakdownCards.kt -->
-    <string name="money_tab_platform_split_title">BY PLATFORM</string>
-    <string name="money_tab_platform_split_kept_format">%1$s kept</string>
+    <string name="money_tab_platform_split_title">BY DELIVERY APP</string>
+    <string name="money_tab_platform_split_kept_format">%1$s profit</string>
     <string name="money_tab_unattributed_callout_format">%1$s reported, no matching delivery</string>
-    <string name="money_tab_over_attributed_callout_format">%1$s more than reported</string>
-    <string name="money_tab_no_session_callout_format">%1$s from %2$s %3$s not in a dash</string>
-    <string name="money_tab_no_session_callout_click_label">Assign to a dash</string>
-    <string name="money_tab_orphan_offers_callout_format">%1$s accepted offers without matching deliveries</string>
-    <string name="money_tab_orphan_offers_callout_click_label">Resolve orphan offers</string>
-    <string name="money_tab_recent_sessions_title">LATEST DASHES · REPORTED</string>
-    <string name="money_tab_no_sessions_recorded_yet">No dashes recorded</string>
+    <string name="money_tab_over_attributed_callout_format">Recorded %1$s more than reported</string>
+    <string name="money_tab_no_session_callout_format">%1$s from %2$s %3$s not in a shift</string>
+    <string name="money_tab_no_session_callout_click_label">Assign to a shift</string>
+    <string name="money_tab_orphan_offers_callout_format">%1$s accepted offers with no delivery</string>
+    <string name="money_tab_orphan_offers_callout_click_label">Review these offers</string>
+    <string name="money_tab_recent_sessions_title">LATEST SHIFTS, REPORTED TOTALS</string>
+    <string name="money_tab_no_sessions_recorded_yet">No shifts recorded</string>
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
 
     <!-- main/analytics/SessionDetailScreen.kt -->
-    <string name="session_detail_title">Dash detail</string>
-    <string name="session_detail_not_found">Dash not found</string>
+    <string name="session_detail_title">Shift details</string>
+    <string name="session_detail_not_found">Shift not found</string>
     <string name="session_detail_add_missed_delivery">Add missed delivery</string>
     <string name="session_detail_deliveries_title">DELIVERIES</string>
     <string name="session_detail_no_deliveries_yet">No deliveries recorded. Add a missed delivery.</string>
-    <string name="session_detail_gross_source_summary">Reported: dash summary</string>
-    <string name="session_detail_gross_source_counter">Reported: in-dash counter</string>
-    <string name="session_detail_gross_source_driver">Reported: your entry</string>
-    <string name="session_detail_gross_source_none">Recorded by DashBuddy (no report)</string>
+    <string name="session_detail_gross_source_summary">From the shift summary</string>
+    <string name="session_detail_gross_source_counter">From the app\'s running total</string>
+    <string name="session_detail_gross_source_driver">Entered by you</string>
+    <string name="session_detail_gross_source_none">Added up by DashBuddy, no total from the app</string>
     <string name="session_detail_stat_miles">Miles</string>
     <string name="session_detail_stat_deliveries">Deliveries</string>
     <string name="session_detail_duration_format">Duration %1$s</string>
     <string name="session_detail_cash_tips_format">+%1$s cash tips</string>
     <string name="session_detail_unknown_store">Unknown store</string>
-    <string name="session_detail_tip_included_format">incl. %1$s tip</string>
+    <string name="session_detail_tip_included_format">including %1$s tip</string>
     <string name="session_detail_cash_format">+%1$s cash</string>
-    <string name="session_detail_est_offer_pay">est. offer pay</string>
+    <string name="session_detail_est_offer_pay">estimated from the offer</string>
     <!-- #1033 layer 2: the receipt was expanded after this delivery was already recorded, so the
          row was re-priced from the receipt's own itemization instead of the offer-pay estimate. -->
-    <string name="session_detail_receipt_repriced">receipt pay</string>
-    <string name="session_detail_drop_allocation">allocated within the dash · → store %1$s mi · → door %2$s mi</string>
-    <string name="session_detail_miles_legacy_span">miles from the odometer span - arrival not seen</string>
-    <string name="session_detail_unpaid_drop">no pay recorded · car costs only</string>
-    <string name="session_detail_net_format">kept %1$s</string>
+    <string name="session_detail_receipt_repriced">pay from the receipt</string>
+    <string name="session_detail_drop_allocation">split within the shift: %1$s mi to store, %2$s mi to door</string>
+    <string name="session_detail_miles_legacy_span">miles from the whole trip, arrival not seen</string>
+    <string name="session_detail_unpaid_drop">no pay recorded, vehicle costs only</string>
+    <string name="session_detail_net_format">profit %1$s</string>
     <string name="session_detail_content_desc_adjust">Adjust delivery</string>
     <string name="session_detail_field_store_optional">Store (optional)</string>
     <string name="session_detail_field_pay">Pay</string>
@@ -497,20 +497,20 @@
     <string name="session_detail_cancel_button">Cancel</string>
     <string name="session_detail_adjust_dialog_title">Adjust delivery</string>
     <string name="session_detail_field_store_name">Store name</string>
-    <string name="session_detail_field_pay_locked_supporting">duplicate receipt; edit the original delivery</string>
+    <string name="session_detail_field_pay_locked_supporting">Same receipt as another delivery. Edit that one.</string>
     <string name="session_detail_field_cash_tip">Cash tip</string>
     <string name="session_detail_save_button">Save</string>
     <string name="session_detail_assigned_by_you">assigned by you</string>
-    <string name="session_detail_remove_from_dash">Remove from this dash</string>
+    <string name="session_detail_remove_from_dash">Remove from this shift</string>
     <string name="session_detail_remove_cash_locked_supporting">Clear the cash tip first, then remove</string>
 
     <!-- main/analytics/NoSessionAssignDialogs.kt (#660 piece 2) -->
-    <string name="no_session_assign_title">Deliveries without a dash</string>
-    <string name="no_session_assign_subtitle">Tap a delivery to assign it to a dash.</string>
-    <string name="no_session_assign_empty">No deliveries without a dash</string>
-    <string name="no_session_assign_pick_dash_title">Assign to a dash</string>
-    <string name="no_session_assign_loading">Finding nearby dashes…</string>
-    <string name="no_session_assign_no_candidates">No ended dash nearby to assign it to.</string>
+    <string name="no_session_assign_title">Deliveries without a shift</string>
+    <string name="no_session_assign_subtitle">Tap a delivery to assign it to a shift.</string>
+    <string name="no_session_assign_empty">No deliveries without a shift</string>
+    <string name="no_session_assign_pick_dash_title">Assign to a shift</string>
+    <string name="no_session_assign_loading">Finding nearby shifts…</string>
+    <string name="no_session_assign_no_candidates">No ended shift nearby to assign it to.</string>
     <string name="no_session_assign_unknown_store">Unknown store</string>
     <string name="no_session_assign_session_deliveries_format">%1$s · %2$s %3$s</string>
     <string name="no_session_assign_close">Close</string>
@@ -518,10 +518,10 @@
 
     <!-- main/analytics/OrphanOfferAttestDialog.kt (#810 B2 Tier 2) -->
     <string name="orphan_offers_title">Unassigned offers</string>
-    <string name="orphan_offers_subtitle">These accepted offers have no matching delivery. Select an offer you unassigned; select a resolved row to undo.</string>
-    <string name="orphan_offers_empty">No unresolved accepted offers.</string>
+    <string name="orphan_offers_subtitle">These accepted offers have no delivery. Tap one you unassigned to mark it. Tap it again to undo.</string>
+    <string name="orphan_offers_empty">No accepted offers to review.</string>
     <string name="orphan_offers_group_header">%1$s accepted, %2$s unassigned</string>
-    <string name="orphan_offers_resolved_caption">Unassigned · tap to undo</string>
+    <string name="orphan_offers_resolved_caption">Unassigned, tap to undo</string>
     <string name="orphan_offers_unknown_store">Unknown store</string>
     <string name="orphan_offers_close">Close</string>
 
@@ -543,11 +543,11 @@
     <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score.
          Translations MUST keep the same six positional args (a translated %-mismatch is the #719
          HIGH-1 crash class). The merchant name and the numbers are runtime args — never translated. -->
-    <string name="tts_offer_evaluation_template">%1$s. %2$s. %3$s dollars an hour net. Net %4$s, %5$s miles, score %6$s.</string>
+    <string name="tts_offer_evaluation_template">%1$s. %2$s. Net %4$s, %3$s dollars an hour, %5$s miles, score %6$s.</string>
     <!-- #936 — spoken when the offer's distance never parsed, so every rate would be fabricated.
          %1$s verdict word, %2$s merchant name, %3$s gross pay. Translations MUST keep the same
          three positional args (the #719 HIGH-1 crash class). -->
-    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pay %3$s. No verdict: distance not read.</string>
+    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pay %3$s. No score, distance unknown.</string>
 
     <!-- state/effects/TipEffectHandler.kt -->
     <!-- %1$s tip amount, %2$s store name -->
@@ -558,14 +558,14 @@
          only device-derived value the feature ever handles is an ISO-639 code (kept out of the
          copy so nothing device-specific rides a user-visible surface). -->
     <string name="app_notice_channel_name">App notices</string>
-    <string name="app_notice_channel_description">DashBuddy status notices</string>
+    <string name="app_notice_channel_description">Warnings when DashBuddy can\'t read or speak offers</string>
     <string name="locale_notice_title">DashBuddy reads English screens only</string>
-    <string name="locale_notice_text">Your phone is not set to English. DashBuddy matches English screen text, so it can miss most offers and deliveries. Its English privacy filters can also miss customer details. Set the phone to English to restore matching and those filters; this does not guarantee every detail is filtered.</string>
+    <string name="locale_notice_text">Your phone isn\'t in English. DashBuddy reads delivery apps only in English, so it may miss most offers and deliveries, and its privacy filters may miss customer details. Switching your phone to English fixes both, though no filter catches everything.</string>
 
     <!-- #937 recognition-health alarm (App notices channel) -->
     <string name="recognition_health_notice_title">DashBuddy can\'t read %1$s right now</string>
-    <string name="recognition_health_notice_text">%2$d%% of recent %1$s screens were not recognized. The %1$s app has likely changed. Offers, pickups and deliveries may go untracked until DashBuddy is updated.</string>
-    <string name="recognition_health_notice_platform_fallback">this platform</string>
+    <string name="recognition_health_notice_text">DashBuddy didn\'t recognize %2$d%% of recent screens from %1$s. That app probably changed. Offers, pickups and deliveries may go untracked until DashBuddy updates.</string>
+    <string name="recognition_health_notice_platform_fallback">this delivery app</string>
 
     <!-- #991 speech-engine liveness notice (App notices channel). Device-independent copy: no
          offer, store or customer value ever reaches it.
@@ -573,28 +573,27 @@
          process-scoped singleton, so bringing the activity back to the foreground rebuilds
          nothing. And retries are stated as happening per offer, because that is when they fire —
          there is no background retry loop. -->
-    <string name="tts_health_notice_title">DashBuddy has stopped reading offers aloud</string>
-    <string name="tts_health_notice_text">Your phone\'s text-to-speech engine stopped responding. DashBuddy retries on each new offer. If offers stay silent, force stop DashBuddy in Android Settings → Apps, then reopen it. Offers still show on screen.</string>
+    <string name="tts_health_notice_title">DashBuddy stopped reading offers aloud</string>
+    <string name="tts_health_notice_text">Your phone\'s text-to-speech voice stopped working. DashBuddy retries on each offer. If offers stay silent, go to Android Settings > Apps > DashBuddy, tap Force stop, and reopen it. Offers still show on screen.</string>
 
     <!-- ui/bubble/BubbleManager.kt -->
     <string name="bubble_channel_stream_name">Bubble</string>
-    <string name="bubble_channel_stream_description">Updates from your dash</string>
+    <string name="bubble_channel_stream_description">Updates from your shift</string>
     <string name="bubble_channel_offer_name">Offer alerts</string>
-    <string name="bubble_channel_offer_description">Heads-up offer alerts with Accept / Decline</string>
-    <string name="bubble_notification_conversation_title">Current dash</string>
-    <!-- %1$s is Platform.sessionVerb (or its displayName fallback) — never a hardcoded platform word (Principle 8). -->
-    <string name="bubble_chat_session_started">Started %1$s</string>
+    <string name="bubble_channel_offer_description">Offer pop-ups with Accept and Decline buttons</string>
+    <string name="bubble_notification_conversation_title">Current shift</string>
+    <!-- %1$s is bubble_shift_named or bubble_shift_unnamed, never a hardcoded platform word (Principle 8). -->
+    <string name="bubble_chat_session_started">%1$s started</string>
     <string name="bubble_chat_odometer_cue">Log your odometer</string>
-    <string name="bubble_chat_session_done">Done %1$s</string>
-    <!-- BubbleManager.sessionVerb() fallbacks when a Platform has no sessionVerb of its own —
-         %1$s is the platform's displayName (or the raw, unresolved platform id). -->
-    <string name="bubble_session_verb_fallback_named">driving for %1$s</string>
-    <string name="bubble_session_verb_fallback_unnamed">driving</string>
-    <string name="bubble_welcome_message">Ready. Start a dash in your delivery app.</string>
+    <string name="bubble_chat_session_done">%1$s ended</string>
+    <!-- BubbleManager.shiftName(): %1$s is the platform's displayName (or the raw, unresolved platform id). -->
+    <string name="bubble_shift_named">%1$s shift</string>
+    <string name="bubble_shift_unnamed">Shift</string>
+    <string name="bubble_welcome_message">Ready. Go online in your delivery app.</string>
     <!-- ui/main/dashboard/DashboardViewModel.kt -->
     <string name="dashboard_status_offline">Offline</string>
-    <string name="dashboard_status_session_complete">Dash ended</string>
-    <string name="dashboard_status_ready">Ready for a dash</string>
+    <string name="dashboard_status_session_complete">Shift ended</string>
+    <string name="dashboard_status_ready">Ready for a shift</string>
     <string name="dashboard_status_paused">Paused</string>
     <string name="dashboard_status_looking_for_offers">Waiting for offers</string>
     <string name="dashboard_status_reviewing_offer">Reviewing offer</string>
@@ -622,8 +621,8 @@
     <string name="analytics_granularity_month">Month</string>
     <string name="analytics_granularity_lifetime">Lifetime</string>
     <string name="analytics_granularity_custom">Custom…</string>
-    <string name="analytics_window_previous">Previous window</string>
-    <string name="analytics_window_next">Next window</string>
+    <string name="analytics_window_previous">Previous period</string>
+    <string name="analytics_window_next">Next period</string>
     <string name="analytics_window_open_picker">Choose a date range</string>
     <string name="analytics_picker_title">Pick a range</string>
     <string name="analytics_picker_presets">Quick picks</string>
@@ -635,9 +634,9 @@
     <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
-    <string name="analytics_hero_kept_label">Kept</string>
-    <string name="analytics_hero_delta_up_format">▲ %1$s vs %2$s</string>
-    <string name="analytics_hero_delta_down_format">▼ %1$s vs %2$s</string>
+    <string name="analytics_hero_kept_label">Profit</string>
+    <string name="analytics_hero_delta_up_format">Up %1$s from %2$s</string>
+    <string name="analytics_hero_delta_down_format">Down %1$s from %2$s</string>
     <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
     <string name="analytics_hero_delta_none">No prior period</string>
     <string name="analytics_hero_delta_from_nothing_format">Up from nothing in %1$s</string>
@@ -659,78 +658,78 @@
     <!-- Target selector -->
     <string name="weekly_plan_target_title">Weekly target</string>
     <string name="weekly_plan_target_hours_format">%1$dh</string>
-    <string name="weekly_plan_target_dollars">$ goal</string>
-    <string name="weekly_plan_target_dollars_selected">Goal %1$s kept</string>
+    <string name="weekly_plan_target_dollars">Profit goal</string>
+    <string name="weekly_plan_target_dollars_selected">%1$s profit goal</string>
     <string name="weekly_plan_goal_dialog_title">Set a goal</string>
-    <string name="weekly_plan_goal_dialog_label">Kept this week</string>
+    <string name="weekly_plan_goal_dialog_label">Profit this week</string>
     <string name="weekly_plan_goal_dialog_confirm">Plan it</string>
     <string name="weekly_plan_goal_dialog_cancel">Cancel</string>
 
     <!-- Headline value + the plan-vs-random comparison -->
     <string name="weekly_plan_hours_format">%1$d hours</string>
-    <string name="weekly_plan_value_headline_format">%1$s on your best windows ≈ %2$s kept</string>
-    <string name="weekly_plan_value_comparison_format">Same %1$s at random ≈ %2$s · plan adds ~%3$s</string>
-    <string name="weekly_plan_value_comparison_no_gain_format">Same %1$s at random ≈ %2$s · plan adds nothing</string>
-    <string name="weekly_plan_value_no_baseline">Too little history for a random-hours comparison.</string>
-    <string name="weekly_plan_value_shortfall_format">Placed %1$d of %2$d target hours; your record supports no more</string>
-    <string name="weekly_plan_value_unpriced_format">%1$d hours with no record</string>
-    <string name="weekly_plan_provenance">Projection · your lifetime record.</string>
+    <string name="weekly_plan_value_headline_format">%1$s in your best windows: %2$s profit projected</string>
+    <string name="weekly_plan_value_comparison_format">The same %1$s at random times: about %2$s. The plan adds about %3$s.</string>
+    <string name="weekly_plan_value_comparison_no_gain_format">The same %1$s at random times: about %2$s. The plan adds nothing.</string>
+    <string name="weekly_plan_value_no_baseline">Not enough history yet to compare with random hours.</string>
+    <string name="weekly_plan_value_shortfall_format">Planned %1$d of %2$d target hours; your history supports no more.</string>
+    <string name="weekly_plan_value_unpriced_format">%1$d hours with no history</string>
+    <string name="weekly_plan_provenance">Projected from all your shift history.</string>
 
     <!-- Suggested windows -->
     <string name="weekly_plan_windows_title">Suggested windows</string>
-    <string name="weekly_plan_windows_none">No window has enough record yet</string>
+    <string name="weekly_plan_windows_none">No window has enough history yet</string>
     <string name="weekly_plan_window_best">Best</string>
     <string name="weekly_plan_window_moved">Moved</string>
-    <string name="weekly_plan_window_evidence_format">your %1$s: %2$s/hr over %3$d %4$s</string>
-    <string name="weekly_plan_window_no_evidence">No history for these hours; no projected earnings.</string>
+    <string name="weekly_plan_window_evidence_format">Your %1$s: %2$s profit/hr over %3$d %4$s</string>
+    <string name="weekly_plan_window_no_evidence">No history for these hours. Nothing projected.</string>
     <string name="weekly_plan_window_unpriced_value">—</string>
     <string name="weekly_plan_window_earlier">Move an hour earlier</string>
     <string name="weekly_plan_window_later">Move an hour later</string>
-    <string name="weekly_plan_window_drop">Drop this window</string>
+    <string name="weekly_plan_window_drop">Remove this window</string>
     <string name="weekly_plan_undo">Undo</string>
     <string name="weekly_plan_not_picked">Not picked</string>
-    <string name="weekly_plan_reason_no_history">no %1$s on record yet</string>
-    <string name="weekly_plan_reason_thin_format">only %1$d %2$s on record</string>
-    <string name="weekly_plan_reason_no_run_format">no %1$d-hour run supported by your %2$s</string>
-    <string name="weekly_plan_reason_no_positive">your %1$s kept $0 or less</string>
+    <string name="weekly_plan_reason_no_history">No %1$s in your history yet</string>
+    <string name="weekly_plan_reason_thin_format">Only %1$d %2$s in your history</string>
+    <string name="weekly_plan_reason_no_run_format">No %1$d-hour stretch with enough history on your %2$s</string>
+    <string name="weekly_plan_reason_no_positive">No profit on your %1$s</string>
     <string name="weekly_plan_reason_target_met">Target filled by better-paying windows</string>
-    <string name="weekly_plan_reason_removed">removed by you</string>
+    <string name="weekly_plan_reason_removed">Removed by you</string>
 
     <!-- Where the plan came from -->
     <string name="weekly_plan_provenance_title">Plan source</string>
-    <string name="weekly_plan_provenance_caption">Lifetime record · outlined = picked hours</string>
+    <string name="weekly_plan_provenance_caption">All your shift history. Outlined hours are in the plan.</string>
 
     <!-- Growth rows — locked, and carrying no data -->
     <string name="weekly_plan_growth_plus_badge">Plus</string>
     <string name="weekly_plan_growth_area_title">Demand around you</string>
-    <string name="weekly_plan_growth_area_body">Nearby drivers\' earning times. Not built. Off unless you turn it on.</string>
+    <string name="weekly_plan_growth_area_body">When nearby drivers earn the most. Not built yet. Off until you turn it on.</string>
     <string name="weekly_plan_growth_year_badge">Needs a year</string>
     <string name="weekly_plan_growth_year_title">This week last year</string>
-    <string name="weekly_plan_growth_year_body">Needs a year of your dash history.</string>
+    <string name="weekly_plan_growth_year_body">Needs a year of your shift history.</string>
 
     <!-- Save -->
     <string name="weekly_plan_save_button">Save this plan</string>
     <string name="weekly_plan_save_update">Update saved plan</string>
-    <string name="weekly_plan_save_note">Shows on Home each morning; graded next Sunday.</string>
+    <string name="weekly_plan_save_note">Shows on Home each morning. Results come Sunday evening.</string>
 
     <!-- Grade -->
     <string name="weekly_plan_grade_title">Plan, week of %1$s</string>
     <string name="weekly_plan_grade_hours_format">%1$s of %2$d planned hours worked</string>
-    <string name="weekly_plan_grade_money_format">%1$s kept of %2$s projected</string>
-    <string name="weekly_plan_grade_outside_format">%1$s kept outside the plan</string>
+    <string name="weekly_plan_grade_money_format">%1$s profit of %2$s projected</string>
+    <string name="weekly_plan_grade_outside_format">%1$s profit outside the plan</string>
     <string name="weekly_plan_grade_unworked_format">0 of %1$d planned hours worked</string>
 
     <!-- Empty state -->
-    <string name="weekly_plan_no_record_title">No record to plan from yet</string>
-    <string name="weekly_plan_no_record_body">Record dashes to build a plan from hours worked.</string>
+    <string name="weekly_plan_no_record_title">No shift history to plan from yet</string>
+    <string name="weekly_plan_no_record_body">Go online with DashBuddy running. The plan is built from those shifts.</string>
 
     <!-- Notification (its own channel, so it can be muted on its own) -->
     <string name="weekly_plan_channel_name">Weekly plan</string>
     <string name="weekly_plan_channel_description">Sunday evening plan results and next week\'s plan.</string>
     <string name="weekly_plan_notice_title">Your weekly plan</string>
-    <string name="weekly_plan_notice_text_plain">Plan the week ahead from your own best hours.</string>
-    <string name="weekly_plan_notice_grade_format">Last week: %1$s of %2$d planned hours worked, %3$s kept of %4$s projected. Tap to plan the week ahead.</string>
-    <string name="weekly_plan_notice_grade_unworked_format">Last week: 0 of %1$d planned hours worked. Tap to plan the week ahead.</string>
+    <string name="weekly_plan_notice_text_plain">Plan next week from your best hours.</string>
+    <string name="weekly_plan_notice_grade_format">Last week: %1$s of %2$d planned hours worked, %3$s profit of %4$s projected. Tap to plan next week.</string>
+    <string name="weekly_plan_notice_grade_unworked_format">Last week: 0 of %1$d planned hours worked. Tap to plan next week.</string>
 
     <!-- ui/components/HowNumbersWorkFooter.kt — shared cash-tip inclusion; screen-specific notes join it. -->
     <string name="disclosure_how_numbers_work">How these numbers work</string>
@@ -743,50 +742,50 @@
          never puts them in a shape that invites it. -->
     <string name="playbook_screen_title">Playbook</string>
     <string name="playbook_plan_title">THIS WEEK\'S PLAN</string>
-    <string name="playbook_plan_headline_format">%1$sh in your windows · %2$s kept of %3$s planned</string>
+    <string name="playbook_plan_headline_format">%1$sh worked in your windows, %2$s profit of %3$s projected</string>
     <string name="playbook_plan_hours_left_format">%1$d of %2$d scheduled hours left</string>
     <string name="playbook_plan_all_windows_done">All %1$d scheduled hours passed</string>
-    <string name="playbook_plan_not_started_format">Not started · %1$d hours scheduled, %2$s projected</string>
+    <string name="playbook_plan_not_started_format">Not started. %1$d hours scheduled, %2$s projected.</string>
     <string name="playbook_plan_window_done">Done</string>
     <string name="playbook_plan_window_now">Now</string>
-    <string name="playbook_plan_window_kept_format">%1$s kept over %2$sh worked</string>
-    <string name="playbook_plan_window_projected_format">projected %1$s</string>
-    <string name="playbook_plan_window_missed">no time logged</string>
-    <string name="playbook_plan_open">Open plan →</string>
+    <string name="playbook_plan_window_kept_format">%1$s profit over %2$sh worked</string>
+    <string name="playbook_plan_window_projected_format">%1$s projected</string>
+    <string name="playbook_plan_window_missed">No time logged</string>
+    <string name="playbook_plan_open">Open plan</string>
     <string name="playbook_plan_open_click_label">Open the weekly plan</string>
     <string name="playbook_plan_none_title">No plan saved for this week</string>
-    <string name="playbook_plan_none_body">Picks your best hours from your record; graded next Sunday.</string>
-    <string name="playbook_plan_none_action">Build a plan →</string>
-    <string name="playbook_heatmap_plan_outline_caption">Outlined = this week\'s plan</string>
+    <string name="playbook_plan_none_body">Picks your best hours from past shifts. Graded Sunday evening.</string>
+    <string name="playbook_plan_none_action">Build a plan</string>
+    <string name="playbook_heatmap_plan_outline_caption">Outlined hours are this week\'s plan</string>
     <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
-    <string name="debug_event_receipt_block_title">Wide event receipt is off</string>
-    <string name="debug_event_receipt_block_body">This debug build needs wide event receipt. While it is off, DashBuddy\'s accessibility service is not enabled. Allow it again under %1$s, then turn the service on when asked.</string>
-    <string name="debug_event_receipt_block_open_settings">Open Automation &amp; Consent</string>
+    <string name="debug_event_receipt_block_title">Screen events are off</string>
+    <string name="debug_event_receipt_block_body">This test build needs Screen events. While they are off, DashBuddy\'s Accessibility service stays off. Allow Screen events in %1$s, then turn the service on when asked.</string>
+    <string name="debug_event_receipt_block_open_settings">Open Automation &amp; consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
-    <string name="session_detail_report_corrected">report corrected</string>
+    <string name="session_detail_report_corrected">total corrected</string>
     <string name="session_detail_correct_total">Correct total</string>
     <string name="session_report_dialog_title">Correct %1$s total</string>
-    <string name="session_report_dialog_amount">Amount reported</string>
+    <string name="session_report_dialog_amount">Total reported</string>
     <string name="session_report_dialog_set">Set</string>
-    <string name="session_report_dialog_clear">No summary for this dash</string>
-    <string name="session_report_dialog_restore">Restore detected value</string>
+    <string name="session_report_dialog_clear">No summary for this shift</string>
+    <string name="session_report_dialog_restore">Use the total DashBuddy read</string>
     <string name="session_report_dialog_note">Note (optional)</string>
 
     <!-- #254: local per-platform time learning and independent global overrides. -->
     <string name="economy_time_title">Time estimates</string>
-    <string name="economy_time_help">Overrides apply to all platforms; automatic estimates keep learning. Driving pace uses pickup departure to drop-off arrival and assumes the same pace to the store. Stop overhead includes pickup and drop-off waits.</string>
-    <string name="economy_time_pace">Driving pace · min/mile</string>
-    <string name="economy_time_overhead">Pickup + dropoff · min/order</string>
+    <string name="economy_time_help">Your numbers apply to every delivery app; automatic ones keep learning. Driving pace is measured from store to customer and also used for the drive to the store. Stop time includes waits at the store and door.</string>
+    <string name="economy_time_pace">Driving pace (min/mile)</string>
+    <string name="economy_time_overhead">Stop time (min/delivery)</string>
     <string name="economy_time_automatic">Automatic</string>
     <string name="economy_time_set_override">Set override</string>
     <string name="economy_time_use_automatic">Use automatic</string>
     <string name="economy_time_invalid_pace">Enter a finite number above 0.</string>
     <string name="economy_time_invalid_overhead">Enter a finite number of 0 or more.</string>
-    <string name="economy_time_automatic_values">Automatic: %1$s min/mile · %2$s min/order</string>
-    <string name="economy_time_effective_values">Effective: %1$s min/mile · %2$s min/order</string>
-    <string name="economy_time_default_progress">%1$d/%2$d eligible deliveries; using default</string>
-    <string name="economy_time_window">Medians use the latest %1$d eligible deliveries.</string>
+    <string name="economy_time_automatic_values">Automatic: %1$s min/mile, %2$s min/delivery</string>
+    <string name="economy_time_effective_values">In use: %1$s min/mile, %2$s min/delivery</string>
+    <string name="economy_time_default_progress">Using the default until %2$d usable deliveries (%1$d so far)</string>
+    <string name="economy_time_window">Uses the typical value from your latest %1$d usable deliveries.</string>
     <plurals name="economy_time_deliveries">
         <item quantity="one">Learned from %d delivery</item>
         <item quantity="other">Learned from %d deliveries</item>
@@ -794,18 +793,18 @@
     <!-- #1255: simple analytics and shared detail preference. -->
     <string name="analytics_tier1_earned">Earned</string>
     <string name="analytics_tier1_accept_rate">Accept rate</string>
-    <string name="analytics_tier1_net_per_hour_working">Net/hr working</string>
+    <string name="analytics_tier1_net_per_hour_working">Profit/hr working</string>
     <string name="analytics_tier1_typical_gap">Typical gap</string>
-    <string name="analytics_tier1_at_least_format">≥%1$s</string>
-    <string name="patterns_tab_stores_title_by_net">YOUR STORES · BY NET</string>
+    <string name="analytics_tier1_at_least_format">at least %1$s</string>
+    <string name="patterns_tab_stores_title_by_net">YOUR STORES, BY PROFIT</string>
     <string name="money_tab_where_went_segment_note_format">%1$s · %2$s/mi</string>
-    <string name="offers_tab_est_vs_reality_mean_note">Table and bars: average $/hr per offer.</string>
+    <string name="offers_tab_est_vs_reality_mean_note">Table and bar figures are the average $/hr across offers.</string>
     <string name="common_more_numbers">More numbers</string>
     <string name="common_fewer_numbers">Fewer numbers</string>
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
-    <string name="money_tab_recent_scope_note">Latest dashes are your %1$d newest, whatever period is picked; amounts are reported totals (your corrections included), cash shown separately.</string>
-    <string name="time_tab_unattributed_note">No delivery attached: online time and miles after your last delivery, and dashes with no delivery.</string>
-    <string name="tts_offer_addon_template">Add-on at %1$s. %2$s dollars more, %3$s more miles. No verdict.</string>
+    <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
+    <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>
+    <string name="tts_offer_addon_template">Add-on at %1$s. %2$s dollars more, %3$s more miles. No score.</string>
     <plurals name="tts_offer_addon_minutes">
         <item quantity="one">%1$d more minute.</item>
         <item quantity="other">%1$d more minutes.</item>
@@ -825,52 +824,52 @@
          feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
     <string name="vehicle_type_car">Car</string>
     <string name="vehicle_type_hybrid">Hybrid</string>
-    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_ev">Electric car</string>
     <string name="vehicle_type_motorcycle">Motorcycle</string>
     <string name="vehicle_type_scooter">Scooter or moped</string>
     <string name="vehicle_type_e_bike">E-bike</string>
     <string name="vehicle_type_bicycle">Bicycle</string>
     <string name="garage_title">Garage</string>
-    <string name="garage_empty">No vehicles yet.</string>
-    <string name="garage_active_hint">Select a vehicle to use it. Adding keeps the current selection.</string>
+    <string name="garage_empty">No vehicles yet. Tap Add vehicle.</string>
+    <string name="garage_active_hint">Tap a vehicle to use it. Adding one doesn\'t switch to it.</string>
     <string name="garage_vehicle_gone">This vehicle was retired.</string>
     <string name="garage_add">Add vehicle</string>
     <string name="garage_vehicle_details">%1$s · %2$s</string>
     <string name="garage_vehicle_settings">%1$s settings</string>
     <string name="garage_retire_vehicle_button">Retire vehicle</string>
-    <string name="garage_retire_confirmation">Retire %1$s? Its readings stay.</string>
+    <string name="garage_retire_confirmation">Retire %1$s? Its odometer readings are kept, and you can restore it later.</string>
     <string name="garage_cancel">Cancel</string>
     <string name="garage_retire">Retire</string>
     <string name="garage_save_failed">Couldn\'t save. Try again.</string>
     <!-- Same wording as :feature:bubble hud_odometer_vehicles_unreadable. -->
     <string name="garage_vehicles_unreadable">Saved vehicles could not be read.</string>
     <string name="vehicle_odometer_title">Odometer</string>
-    <string name="vehicle_odometer_summary">Show odometer readings in the bubble</string>
+    <string name="vehicle_odometer_summary">Log odometer readings from the bubble</string>
     <string name="vehicle_edit_title">Edit vehicle</string>
     <string name="vehicle_edit_add_title">Add vehicle</string>
     <string name="vehicle_edit_name">Name</string>
-    <string name="vehicle_edit_name_hint">Optional. Shown on the HUD.</string>
+    <string name="vehicle_edit_name_hint">Optional. Shown in the bubble.</string>
     <string name="vehicle_edit_name_counter">%1$d / %2$d</string>
     <string name="vehicle_edit_type_resets_costs">Changing the type resets the cost figures to the type\'s presets. Edit them in Economy.</string>
     <string name="vehicle_edit_save">Save</string>
     <string name="settings_home_item_garage_title">Garage</string>
-    <string name="settings_home_item_garage_subtitle">%1$s · %2$s</string>
+    <string name="settings_home_item_garage_subtitle">%1$s, %2$s</string>
     <string name="settings_home_item_garage_empty">No vehicle</string>
-    <string name="settings_home_item_garage_unreadable">Vehicles can\'t be read</string>
+    <string name="settings_home_item_garage_unreadable">Couldn\'t read your vehicles</string>
     <string name="economy_settings_vehicle_label">Vehicle</string>
     <string name="economy_settings_vehicle_description">%1$s · %2$s</string>
     <string name="economy_settings_vehicle_empty">No vehicle</string>
     <string name="economy_settings_vehicle_garage">Garage</string>
-    <string name="bubble_chat_session_started_vehicle">Started %1$s in %2$s</string>
-    <string name="bubble_chat_vehicle_this_dash">This dash: %1$s</string>
-    <string name="bubble_chat_vehicle_next_dash">%1$s from your next dash</string>
-    <string name="hud_vehicle_locked">Vehicle can\'t change during a dash</string>
+    <string name="bubble_chat_session_started_vehicle">%1$s started in %2$s</string>
+    <string name="bubble_chat_vehicle_this_dash">This shift: %1$s</string>
+    <string name="bubble_chat_vehicle_next_dash">%1$s from your next shift</string>
+    <string name="hud_vehicle_locked">Can\'t switch vehicles after the first 10 minutes of a shift</string>
     <!-- Live vehicle details (#1385). -->
     <string name="vehicle_details_title">Vehicle details</string>
     <string name="vehicle_details_identity">%1$s · %2$s</string>
     <string name="vehicle_details_identity_hint">To drive a different vehicle, add it as a new one.</string>
-    <string name="vehicle_details_costs">This car\'s costs</string>
-    <string name="vehicle_details_electricity_hint">Shared. Change it on the Economy screen.</string>
+    <string name="vehicle_details_costs">Costs</string>
+    <string name="vehicle_details_electricity_hint">Same for every vehicle. Change it on the Costs screen.</string>
     <string name="vehicle_details_saving">Saving…</string>
     <string name="vehicle_details_not_saved">Not saved.</string>
     <string name="vehicle_details_retry">Try again</string>
@@ -880,25 +879,25 @@
     <string name="vehicle_restore">Restore vehicle</string>
     <string name="garage_retired_header">Retired (%1$s)</string>
     <string name="garage_retired_date">Retired %1$s</string>
-    <string name="vehicle_facts_title">This car</string>
+    <string name="vehicle_facts_title">This vehicle</string>
     <string name="vehicle_facts_cost_per_mile">Cost per mile</string>
-    <string name="vehicle_facts_energy">Energy</string>
+    <string name="vehicle_facts_energy">Fuel or charging</string>
     <string name="vehicle_facts_wear">Wear</string>
     <string name="vehicle_facts_depreciation">Depreciation</string>
-    <string name="vehicle_facts_fixed">Fixed</string>
+    <string name="vehicle_facts_fixed">Insurance and fees</string>
     <string name="vehicle_facts_running_costs">Running costs</string>
-    <string name="vehicle_facts_use">Use</string>
-    <string name="vehicle_facts_dashes">Dashes</string>
+    <string name="vehicle_facts_use">Usage</string>
+    <string name="vehicle_facts_dashes">Shifts</string>
     <string name="vehicle_facts_miles_tracked">Miles tracked</string>
-    <string name="vehicle_facts_usage_note">Counted from dashes since vehicles were recorded per dash</string>
-    <string name="vehicle_facts_last_odometer">Last odometer</string>
+    <string name="vehicle_facts_usage_note">Counts shifts since DashBuddy started recording which vehicle you drove.</string>
+    <string name="vehicle_facts_last_odometer">Last odometer reading</string>
     <string name="vehicle_facts_none_yet">None yet</string>
     <string name="vehicle_facts_retired">Retired</string>
     <string name="vehicle_facts_edit_costs">Edit costs</string>
     <string name="vehicle_facts_estimate">%1$s est.</string>
     <string name="vehicle_facts_reading">%1$s mi · %2$s</string>
     <string name="vehicle_facts_fuel_economy">Fuel economy</string>
-    <string name="vehicle_facts_consumption">Consumption</string>
+    <string name="vehicle_facts_consumption">Energy use</string>
     <string name="vehicle_facts_gas_price">Gas price</string>
     <string name="vehicle_facts_electricity_price">Electricity price</string>
     <string name="vehicle_facts_tires">Tires</string>
@@ -908,10 +907,10 @@
     <string name="vehicle_facts_chain">Chain</string>
     <string name="vehicle_facts_battery">Battery replacement</string>
     <string name="vehicle_facts_belt">Belt</string>
-    <string name="vehicle_facts_misc">Misc. upkeep</string>
+    <string name="vehicle_facts_misc">Other repairs</string>
     <string name="vehicle_facts_depreciation_per_mile">Depreciation per mile</string>
-    <string name="vehicle_facts_insurance">Insurance delta</string>
-    <string name="vehicle_facts_registration">Registration delta</string>
+    <string name="vehicle_facts_insurance">Extra insurance</string>
+    <string name="vehicle_facts_registration">Extra registration</string>
     <string name="vehicle_details_reset">Reset to estimates</string>
     <string name="vehicle_details_reset_confirmation">Reset this vehicle\'s costs to the estimates? Its name, type and fuel economy stay.</string>
     <string name="economy_shared_gas_price">Gas price</string>
@@ -933,5 +932,5 @@
     <string name="economy_undo_battery_lifetime">Battery lifetime</string>
     <string name="economy_undo_belt_cost">Belt cost</string>
     <string name="economy_undo_belt_lifetime">Belt lifetime</string>
-    <string name="economy_undo_phone_share">Business share</string>
+    <string name="economy_undo_phone_share">Delivery work share</string>
 </resources>

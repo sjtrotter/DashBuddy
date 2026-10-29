@@ -6,11 +6,11 @@ import cloud.trotter.dashbuddy.domain.privacy.PiiShapes
 
 object LogChatFilter {
     // EffectMap.outcomeCardText
-    private val outcomes = setOf("Offer Accepted", "Offer Declined", "Offer Timed Out!")
+    private val outcomes = setOf("Offer accepted", "Offer declined", "Offer expired")
     // OfferEffects: exact-match acknowledgements, already represented by the offer outcome.
     private val acknowledgements = setOf("Accepting…", "Declining…")
-    // Prefix-match copy from OfferEffects and ModeEffects, represented by outcomes and dash figures.
-    private val acknowledgementPrefixes = listOf("Decline already submitted", "Session Ended")
+    // Prefix-match copy from OfferEffects and ModeEffects, represented by outcomes and shift figures.
+    private val acknowledgementPrefixes = listOf("Already declined", "Shift ended")
     private val tags = Regex("<[^>]*>")
     private val breaks = Regex("<br\\b[^>]*>|</(?:p|div|li|h[1-6]|blockquote|ul|ol)\\s*>", RegexOption.IGNORE_CASE)
     private val unresolvedEntity = Regex("&(?:#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);")
@@ -39,7 +39,7 @@ object LogChatFilter {
         val text = plainText(msg.text)
         if (!safeText(text)) return null
         if (msg.persona == ChatPersona.Dispatcher) {
-            if (text.removeSuffix(" (offer replaced)") in outcomes || text in acknowledgements ||
+            if (text.removeSuffix(", replaced by a new offer") in outcomes || text in acknowledgements ||
                 acknowledgementPrefixes.any { text.startsWith(it) }) return null
         }
         return text // Unknown dispatcher/system copy fails open after the privacy guard.

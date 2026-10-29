@@ -72,7 +72,7 @@ class MileageTaxModelTest {
         assertEquals("$72.50 est. IRS 2027 mileage deduction", labels.deductionLine)
         assertNull(labels.spansYearsNote)
         assertEquals(
-            "2027 rate unavailable in DashBuddy; estimate uses 2026 rate.",
+            "DashBuddy doesn't have the 2027 IRS rate; this uses the 2026 rate.",
             labels.disclaimer,
         )
     }
@@ -80,7 +80,7 @@ class MileageTaxModelTest {
     @Test fun lifetime_addsMaySpanYearsNote() {
         val labels = MileageTaxModel.from(100.0, noonUtc(2026, 7, 15), utc, AnalyticsWindows.LIFETIME)
         assertEquals(
-            "may span tax years; see the CSV export",
+            "may cover more than one tax year; see the export",
             labels.spansYearsNote,
         )
     }
@@ -93,7 +93,7 @@ class MileageTaxModelTest {
             window(WindowGranularity.WEEK, LocalDate.of(2026, 1, 1)),
         )
         assertEquals(
-            "spans tax years; see the CSV export",
+            "covers more than one tax year; see the export",
             labels.spansYearsNote,
         )
         // A year-straddling window falls back to the CURRENT year's rate and says so.
@@ -136,7 +136,7 @@ class MileageTaxModelTest {
             AnalyticsWindows.custom(LocalDate.of(2025, 12, 20), LocalDate.of(2026, 1, 10)),
         )
         assertEquals(
-            "spans tax years; see the CSV export",
+            "covers more than one tax year; see the export",
             labels.spansYearsNote,
         )
     }

@@ -147,7 +147,7 @@ class BubbleManagerSessionAttributionTest {
         val fixture = buildFixture(Garage(listOf(vehicle), vehicle.id, true))
         fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
         verifyBlocking(fixture.chatRepository, timeout(5_000)) {
-            saveMessage(doorDashSession, "Started Dashing in Malibu", ChatPersona.Dispatcher)
+            saveMessage(doorDashSession, "DoorDash shift started in Malibu", ChatPersona.Dispatcher)
         }
     }
 
@@ -155,7 +155,7 @@ class BubbleManagerSessionAttributionTest {
         val fixture = buildFixture()
         fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
         verifyBlocking(fixture.chatRepository, timeout(5_000)) {
-            saveMessage(doorDashSession, "Started Dashing", ChatPersona.Dispatcher)
+            saveMessage(doorDashSession, "DoorDash shift started", ChatPersona.Dispatcher)
         }
     }
 
@@ -164,15 +164,15 @@ class BubbleManagerSessionAttributionTest {
         val fixture = buildFixture(Garage(listOf(vehicle), vehicle.id, false))
         fixture.manager.startSession(doorDashSession, Platform.DoorDash.name)
         verifyBlocking(fixture.chatRepository, timeout(5_000)) {
-            saveMessage(doorDashSession, "Started Dashing", ChatPersona.Dispatcher)
+            saveMessage(doorDashSession, "DoorDash shift started", ChatPersona.Dispatcher)
         }
     }
 
     @Test fun `vehicle line uses dispatcher and its originating session`() {
         val fixture = buildFixture()
-        fixture.manager.postVehicleLine(uberSession, "This dash: Civic")
+        fixture.manager.postVehicleLine(uberSession, "This shift: Civic")
         verifyBlocking(fixture.chatRepository, timeout(5_000)) {
-            saveMessage(uberSession, "This dash: Civic", ChatPersona.Dispatcher)
+            saveMessage(uberSession, "This shift: Civic", ChatPersona.Dispatcher)
         }
     }
 

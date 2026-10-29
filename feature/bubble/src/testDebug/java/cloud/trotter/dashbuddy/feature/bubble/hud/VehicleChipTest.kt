@@ -42,10 +42,10 @@ internal class VehicleChipTest : HudScreenFixture() {
         compose.onNodeWithTag("hud.vehicle.chip").assertContentDescriptionContains("2020 Honda Civic, change vehicle")
             .assertHasClickAction().assertHeightIsAtLeast(48.dp)
     }
-    @Test fun `none has a menu and change description`() {
+    @Test fun `no vehicle has a menu and change description`() {
         chip(model.copy(shown = null, vehicles = emptyList(), activeId = null))
-        compose.onNodeWithText("None").assertIsDisplayed()
-        compose.onNodeWithTag("hud.vehicle.chip").assertContentDescriptionContains("None, change vehicle").performClick()
+        compose.onNodeWithText("No vehicle").assertIsDisplayed()
+        compose.onNodeWithTag("hud.vehicle.chip").assertContentDescriptionContains("No vehicle, change vehicle").performClick()
         settle()
         compose.onNodeWithTag("hud.vehicle.menu").assertIsDisplayed()
         compose.onNodeWithTag("hud.vehicle.divider").assertDoesNotExist()

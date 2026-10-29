@@ -74,7 +74,7 @@ class VehicleDetailsScreenTest {
         runBlocking { whenever(repository.restore(vehicle.id)).thenReturn(true) }
         showEditor()
         finishLoading(retired = true)
-        compose.onNodeWithText("This car").assertIsDisplayed()
+        compose.onNodeWithText("This vehicle").assertIsDisplayed()
         compose.onNodeWithText("Edit costs").assertDoesNotExist()
         compose.onNodeWithText("Name").assertDoesNotExist()
         compose.onNodeWithText("Bicycle").assertDoesNotExist()
@@ -91,10 +91,10 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsNotEnabled()
         finishLoading()
         compose.onNodeWithText("Retire vehicle").performScrollTo().assertIsEnabled().performClick()
-        compose.onNodeWithText("Retire Original? Its readings stay.").assertIsDisplayed()
+        compose.onNodeWithText("Retire Original? Its odometer readings are kept, and you can restore it later.").assertIsDisplayed()
         runBlocking { verify(repository, never()).retire(any(), any()) }
         compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Retire Original? Its readings stay.").assertDoesNotExist()
+        compose.onNodeWithText("Retire Original? Its odometer readings are kept, and you can restore it later.").assertDoesNotExist()
         compose.onNodeWithText("Retire vehicle").performClick()
         compose.onNodeWithText("Retire").performClick()
         compose.waitForIdle(); compose.waitUntil(5_000) { done }
@@ -108,7 +108,7 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Retire vehicle").performScrollTo().performClick()
         compose.onNodeWithText("Retire").performClick()
         compose.waitForIdle()
-        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
         runBlocking { verify(repository, never()).retire(any(), any()) }
         assertFalse(done)
         compose.onNodeWithText("Retire vehicle").assertIsEnabled()
@@ -136,8 +136,8 @@ class VehicleDetailsScreenTest {
         compose.onNodeWithText("Model").assertDoesNotExist()
         compose.onNodeWithText("Save").assertDoesNotExist()
         compose.onNodeWithText("Edit costs").assertDoesNotExist()
-        compose.onNodeWithText("This car").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("This car's costs").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("This vehicle").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Costs").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Combined MPG").assertExists()
         compose.onNodeWithText("Oil changes").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Phone & data").assertDoesNotExist()
@@ -193,7 +193,7 @@ class VehicleDetailsScreenTest {
         finishLoading()
         val toggle = compose.onNodeWithText("Odometer")
         toggle.performScrollTo().assertIsEnabled().assertIsOn()
-        compose.onNodeWithText("Show odometer readings in the bubble").assertIsDisplayed()
+        compose.onNodeWithText("Log odometer readings from the bubble").assertIsDisplayed()
         val fact = compose.onNodeWithText("Cost per mile").fetchSemanticsNode()
         assertTrue(fact.positionInRoot.y < toggle.fetchSemanticsNode().positionInRoot.y)
         toggle.performClick()
@@ -251,10 +251,10 @@ class VehicleDetailsScreenTest {
         assertFalse(done)
     }
 
-    @Test fun `electricity price is read only and directs shared edits to Economy`() {
+    @Test fun `electricity price is read only and directs shared edits to Costs`() {
         showEditor()
         finishLoading(profile = ElectricCar())
-        compose.onNodeWithText("Shared. Change it on the Economy screen.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Same for every vehicle. Change it on the Costs screen.").performScrollTo().assertIsDisplayed()
         compose.onAllNodes(hasSetTextAction() and hasText("Electricity price")).assertCountEquals(0)
     }
 

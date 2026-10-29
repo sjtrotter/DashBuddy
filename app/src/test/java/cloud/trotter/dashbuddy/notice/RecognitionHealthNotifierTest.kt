@@ -74,7 +74,7 @@ class RecognitionHealthNotifierTest {
         notifier().onRecognitionDegraded("some_future_platform", 88)
 
         val text = postedText()
-        assertTrue("expected the generic fallback in $text", text.contains("this platform"))
+        assertTrue("expected the generic fallback in $text", text.contains("this delivery app"))
         assertFalse("never fabricate a brand name: $text", text.contains("some_future_platform"))
     }
 

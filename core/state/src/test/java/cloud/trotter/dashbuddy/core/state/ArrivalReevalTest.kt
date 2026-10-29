@@ -169,8 +169,8 @@ class ArrivalReevalTest {
         val advisory = emitted.filterIsInstance<AppEffect.UpdateBubble>().single()
         assertEquals(ChatPersona.Dispatcher, advisory.persona)
         assertEquals("session", advisory.sessionId)
-        assertTrue(advisory.text.startsWith("Store lists 30 items (offer said 64): this job now runs ≈ "))
-        assertTrue(advisory.text.endsWith("/hr. Unassigning may affect your completion rate."))
+        assertTrue(advisory.text.startsWith("Store lists 30 items (offer said 64). This job is now about "))
+        assertTrue(advisory.text.endsWith("/hr. Unassigning may lower your completion rate."))
         assertEquals(accepted.quotedItemCount, landed.activeJob!!.arrivalEstimate!!.quotedItems)
         assertTrue(emitted.filterIsInstance<AppEffect.LogEvent>().isEmpty())
         assertTrue(diff(landed, step(landed, loopback()), loopback()).filterIsInstance<AppEffect.UpdateBubble>().isEmpty())
@@ -195,7 +195,7 @@ class ArrivalReevalTest {
         val landed = step(requested, result)
         assertNull(arrival.quotedItems)
         val advisory = diff(requested, landed, result).filterIsInstance<AppEffect.UpdateBubble>().single()
-        assertTrue("no quote to compare, so no '(offer said …)'", advisory.text.startsWith("Store lists 30 items: this job now runs ≈ "))
+        assertTrue("no quote to compare, so no '(offer said …)'", advisory.text.startsWith("Store lists 30 items. This job is now about "))
     }
 
     @Test fun `no advisory is emitted when the landed estimate has no hourly`() {

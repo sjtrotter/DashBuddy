@@ -471,10 +471,10 @@ private fun travelLine(delivery: DeliveryRecord): String? {
     val parts = buildList {
         delivery.realizedMiles?.let { miles ->
             val legs = buildList {
-                delivery.milesToStore?.let { add("→ store ${Formats.decimal(it)}") }
-                delivery.milesToDropoff?.let { add("→ door ${Formats.decimal(it)}") }
+                delivery.milesToStore?.let { add("to store ${Formats.decimal(it)}") }
+                delivery.milesToDropoff?.let { add("to door ${Formats.decimal(it)}") }
             }
-            val legSuffix = legs.takeIf { it.isNotEmpty() }?.joinToString(" · ", " (", ")") ?: ""
+            val legSuffix = legs.takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: ""
             add("${Formats.decimal(miles)} mi$legSuffix")
         }
         delivery.realizedMinutes?.let { add("${it.roundToInt()} min") }

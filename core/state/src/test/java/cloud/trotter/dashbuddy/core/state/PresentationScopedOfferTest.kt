@@ -266,8 +266,8 @@ class PresentationScopedOfferTest {
             fx.any { it is AppEffect.LogEvent && it.event.type == AppEventType.OFFER_TIMEOUT },
         )
         assertFalse(
-            "no 'offer replaced' bubble",
-            fx.any { it is AppEffect.UpdateBubble && it.text.contains("offer replaced") },
+            "no 'replaced by a new offer' bubble",
+            fx.any { it is AppEffect.UpdateBubble && it.text.contains("replaced by a new offer") },
         )
         // The OLD hash's heads-up is dismissed (per-hash notification id → stale banner otherwise
         // strands + a tap on it aborts to manual). The new variant re-posts on its eval-land.
@@ -296,8 +296,8 @@ class PresentationScopedOfferTest {
         )
         assertTrue("its heads-up is cancelled", fx.any { it is AppEffect.CancelOfferNotification })
         assertTrue(
-            "the 'offer replaced' bubble fires",
-            fx.any { it is AppEffect.UpdateBubble && it.text.contains("offer replaced") },
+            "the 'replaced by a new offer' bubble fires",
+            fx.any { it is AppEffect.UpdateBubble && it.text.contains("replaced by a new offer") },
         )
         assertTrue("the new offer is evaluated", fx.any { it is AppEffect.EvaluateOffer })
     }

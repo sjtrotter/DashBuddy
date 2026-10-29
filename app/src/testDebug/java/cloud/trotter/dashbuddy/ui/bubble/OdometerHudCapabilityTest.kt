@@ -58,14 +58,14 @@ class OdometerHudCapabilityTest {
         compose.onNodeWithText("Resting cue").assertDoesNotExist()
         compose.onNodeWithText("Start cue").assertDoesNotExist()
         compose.onNodeWithText("Bike 110 mi,", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("car 10 mi, tracked", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("odometer 10 mi, tracked", substring = true).assertDoesNotExist()
     }
 
     private fun assertShown() {
         compose.onNodeWithText("Resting cue").assertIsDisplayed()
         compose.onNodeWithText("Start cue").assertIsDisplayed()
         compose.onNodeWithText("Bike 110 mi,", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("car 10 mi, tracked", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("odometer 10 mi, tracked", substring = true).assertIsDisplayed()
     }
 
     @Test fun `active bicycle hides the footer comparison and both cues`() {

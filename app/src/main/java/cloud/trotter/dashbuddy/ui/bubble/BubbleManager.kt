@@ -186,7 +186,7 @@ class BubbleManager @Inject constructor(
         Timber.tag("Bubble").i(
             "session start platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
         )
-        val verb = sessionVerb(platformName)
+        val shift = shiftName(platformName)
         // One Clock rule: cue comparisons share the injected clock used to stamp readings.
         val now = clock.millis()
         scope.launch {
@@ -200,8 +200,8 @@ class BubbleManager @Inject constructor(
             }
             val active = garage?.takeIf { it.readable }?.active
             val startedLine = if (active != null) {
-                context.getString(R.string.bubble_chat_session_started_vehicle, verb, active.displayName(context))
-            } else context.getString(R.string.bubble_chat_session_started, verb)
+                context.getString(R.string.bubble_chat_session_started_vehicle, shift, active.displayName(context))
+            } else context.getString(R.string.bubble_chat_session_started, shift)
             val started = enqueueMessage(startedLine, ChatPersona.Dispatcher, expand = false,
                 sessionId = sessionId, logText = false)
             try {
@@ -239,9 +239,8 @@ class BubbleManager @Inject constructor(
         Timber.tag("Bubble").i(
             "session end platform=%s sessionId=%s", Platform.fromName(platformName)?.wire ?: platformName, sessionId,
         )
-        val verb = sessionVerb(platformName)
         postMessage(
-            context.getString(R.string.bubble_chat_session_done, verb),
+            context.getString(R.string.bubble_chat_session_done, shiftName(platformName)),
             ChatPersona.Dispatcher,
             sessionId = sessionId,
         )
@@ -261,21 +260,15 @@ class BubbleManager @Inject constructor(
     }
 
     /**
-     * The dispatcher chat verb for a session. Resolves the serialized
-     * platform id (the enum constant name [EffectMap] carries, e.g.
-     * `"DoorDash"`) to a [Platform] and reads its [Platform.sessionVerb]
-     * SSOT (audit #9) — no more wire-name string matching leaking into the
-     * UI layer. Platforms without a specific verb fall back to
-     * "driving for <displayName>"; an unresolved or null id to "driving".
+     * The dispatcher chat name for a session ("DoorDash shift"). Resolves the serialized
+     * platform id (the enum constant name [EffectMap] carries, e.g. `"DoorDash"`) to a
+     * [Platform] and reads its [Platform.displayName] SSOT (audit #9); an unresolved id is
+     * shown as given, and a null id is a plain "Shift" (#1407).
      */
-    private fun sessionVerb(platformName: String?): String {
-        val platform = Platform.fromName(platformName)
-        return when {
-            platform?.sessionVerb != null -> platform.sessionVerb!!
-            platform != null -> context.getString(R.string.bubble_session_verb_fallback_named, platform.displayName)
-            platformName != null -> context.getString(R.string.bubble_session_verb_fallback_named, platformName)
-            else -> context.getString(R.string.bubble_session_verb_fallback_unnamed)
-        }
+    private fun shiftName(platformName: String?): String {
+        val name = Platform.fromName(platformName)?.displayName ?: platformName
+        return if (name != null) context.getString(R.string.bubble_shift_named, name)
+        else context.getString(R.string.bubble_shift_unnamed)
     }
 
     /**
