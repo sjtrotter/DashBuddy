@@ -7,16 +7,18 @@ The full prose discipline is the dev's `prose-whip` skill; this file is the subs
 ## The rules
 
 1. **A label, never a sentence, beside a number.** The number is the message. The label says what the number is and
-   over what denominator or window, in four words or fewer. `Net/hr online`, `Kept this week`, `Typical gap`.
+   over what denominator or window, in four words or fewer. `Profit/hr online`, `Profit this week`, `Typical gap`.
 2. **Caveats live in the one disclosure per screen** (`HowNumbersWorkFooter`), never beside the figure. A figure
    whose meaning depends on a condition carries that condition as a short context line (`AppStatTile.sub`), not
    a paragraph. Thin-data reasons and plan states are exempt from the label rule because they are the content.
-3. **Plain nouns, repeated.** A dash is a dash on every screen (not a session, a shift, a window). Kept is kept.
-   Earned is gross and says so. Pick the word once and reuse it.
+3. **Plain nouns, repeated.** A dash is a dash on every screen (not a session, a shift, a window). Profit is money
+   after vehicle costs on every screen; it replaced "kept" and "net" as the name of an amount (dev, 2026-10-29,
+   #1407), and an offer's estimate before accept keeps "net". Earned is gross and says so. Pick the word once and
+   reuse it.
 4. **No adverbs, no intensifiers, no marketing.** Nothing is quietly, deeply, remarkably or fundamentally anything.
    The app describes; it does not sell, congratulate, reassure or coach.
 5. **No counting before listing, no "you" sentences that perform.** Not "3 things to review"; a list. Not
-   "You kept more this week!"; the number and its comparison.
+   "You made more this week!"; the number and its comparison.
 6. **No negative parallelism, no reveals, no analogies.** Not "It isn't pay, it's time." Not "Here's the thing."
    Not "Think of it as a scorecard."
 7. **State the scope once, where the eye is.** Lifetime, this week, in your windows: said at the figure or in
@@ -29,6 +31,13 @@ The full prose discipline is the dev's `prose-whip` skill; this file is the subs
 11. **History is a ledger.** Recorded numbers do not change, so never say they won't ('frozen at accept time').
     Do not explain how a number is calculated beside it; the setup wizard covers costs. A label says what the
     number is, not how it was made.
+
+## Write for a reader who is not technical
+
+The dasher is not a developer (dev, 2026-10-29, #1407). Name what the app does, never how it is built: "on your phone",
+not "on-device"; "saved as a code, not the name itself", not "hashed"; "screens DashBuddy doesn't recognize", not
+"UNKNOWN screens"; "test build", not "debug build". Android's own setting names stay exact. A privacy text keeps every
+fact it states, in short sentences; it never promises more than the code does.
 
 ## How to apply it
 

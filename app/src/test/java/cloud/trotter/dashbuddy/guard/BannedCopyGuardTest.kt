@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 
-/** Checks English XML resource copy; does not cover Kotlin literals. */
+/** Checks English XML resource copy in the main and debug source sets; does not cover Kotlin literals. */
 class BannedCopyGuardTest {
     private val banned = Regex(
         """\b(delve|leverage|robust|streamline|harness|seamless|effortless|unlock|supercharge|quietly|deeply|fundamentally|remarkably|utilize)\b""",
@@ -25,7 +25,7 @@ class BannedCopyGuardTest {
                     val folder = file.parentFile?.name.orEmpty()
                     file.isFile &&
                         file.extension == "xml" &&
-                        "/src/main/res/" in file.invariantSeparatorsPath &&
+                        ("/src/main/res/" in file.invariantSeparatorsPath || "/src/debug/res/" in file.invariantSeparatorsPath) &&
                         (
                             folder == "values" ||
                             folder == "values-en" ||
@@ -52,14 +52,8 @@ class BannedCopyGuardTest {
         )
 
         val app = "app/src/main/res/values/strings.xml"
-        val settings = "feature/settings/src/main/res/values/strings.xml"
         val placeholders = setOf(
             "$app:weekly_plan_window_unpriced_value",
-        )
-        // Developer-only text (out of copy scope), frozen at its current em-dash count per key.
-        val debugEmDashes = mapOf(
-            "$settings:developer_settings_bubble_session_pinned_explainer" to 1,
-            "$settings:developer_settings_census_share_captures_explainer" to 2,
         )
         val seenExceptions = mutableSetOf<String>()
         val factory = DocumentBuilderFactory.newInstance()
@@ -92,14 +86,10 @@ class BannedCopyGuardTest {
                         assertEquals("$id must remain the empty-value glyph", "—", value)
                         seenExceptions += id
                     }
-                    in debugEmDashes -> {
-                        assertEquals("$id changed its developer-only exception", debugEmDashes.getValue(id), value.count { it == '—' })
-                        seenExceptions += id
-                    }
                     else -> assertFalse("$id contains a prose em-dash", '—' in value)
                 }
             }
         }
-        assertEquals(placeholders + debugEmDashes.keys, seenExceptions)
+        assertEquals(placeholders, seenExceptions)
     }
 }

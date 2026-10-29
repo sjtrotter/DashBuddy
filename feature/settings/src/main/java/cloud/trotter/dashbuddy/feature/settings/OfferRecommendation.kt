@@ -4,8 +4,8 @@ import cloud.trotter.dashbuddy.domain.evaluation.OfferAction
 
 /** UI recommendation line derived from the typed [OfferAction] (#366). */
 fun OfferAction.recommendationLabel(): String = when (this) {
-    OfferAction.ACCEPT -> "Recommended: ACCEPT"
-    OfferAction.DECLINE -> "Recommended: DECLINE"
-    OfferAction.MANUAL_REVIEW -> "Recommended: REVIEW"
-    else -> "Recommended: DECIDE"
+    OfferAction.ACCEPT -> "Recommended: Accept"
+    OfferAction.DECLINE -> "Recommended: Decline"
+    OfferAction.MANUAL_REVIEW -> "Recommended: Review"
+    else -> "Recommended: Decide"
 }

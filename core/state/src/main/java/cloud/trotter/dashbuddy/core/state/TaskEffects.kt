@@ -83,9 +83,9 @@ internal fun EffectMap.diffTask(
                 append("Store lists ${estimate.observedItems} items")
                 estimate.quotedItems?.let { append(" (offer said $it)") }
                 estimate.correctedDollarsPerHour?.let {
-                    append(": this job now runs ≈ ${Formats.money(it)}/hr")
+                    append(". This job is now about ${Formats.money(it)}/hr")
                 }
-                append(". Unassigning may affect your completion rate.")
+                append(". Unassigning may lower your completion rate.")
             }
             add(AppEffect.UpdateBubble(text, ChatPersona.Dispatcher, sessionId = sessionId))
         }
@@ -129,7 +129,7 @@ internal fun EffectMap.diffTask(
             add(
                 AppEffect.UpdateBubble(
                     if (singleTask != null) "Unassigned: ${singleTask.storeName ?: UNKNOWN_STORE}"
-                    else "Unassigned: ${orderCount} orders",
+                    else "Unassigned: ${orderCount} deliveries",
                     ChatPersona.Navigator,
                     dedupeScope = abandonedTasks.joinToString(",") { it.taskId },
                     sessionId = predecessorSessionId,
@@ -567,7 +567,7 @@ internal fun EffectMap.diffPostTask(
     val payData = parsed.parsedPay
     val text = if (payData != null) {
         buildString {
-            append("Saved: ${Formats.money(payData.total)}")
+            append("Paid ${Formats.money(payData.total)}")
             payData.customerTips.forEach { item ->
                 // #1052: a SYNTHESIZED receipt (`ParsedFieldsFactory.buildPostTask`'s bridge for an
                 // id-less 8.93.7 itemization) carries a BLANK tip type on purpose — there is no
@@ -577,12 +577,12 @@ internal fun EffectMap.diffPostTask(
                 if (label.isBlank()) {
                     append("\nTip: ${Formats.money(item.amount)}")
                 } else {
-                    append("\nTip: $label • ${Formats.money(item.amount)}")
+                    append("\nTip: $label, ${Formats.money(item.amount)}")
                 }
             }
         }
     } else {
-        "Saved: ${Formats.money(parsed.totalPay)}"
+        "Paid ${Formats.money(parsed.totalPay)}"
     }
     // #867: same per-platform session resolution [diffTask] uses — the receipt belongs to THIS
     // region's dash, not to whichever platform produced the last recognized frame.

@@ -16,46 +16,46 @@
     <string name="tts_language_option_english">English</string>
     <string name="tts_language_option_spanish">Español</string>
     <string name="platform_settings_title">Delivery apps</string>
-    <string name="platform_settings_description">Choose delivery apps to monitor. Full rule support enables dash tracking. Debug builds can save screen and notification text for rule development; filters may miss customer details. Census sharing is off by default; developer toggles can send filtered skeletons and, for trusted installs, UNKNOWN screen text to the configured server. Release builds save no development captures and upload no census data. Local debug captures last until removed or uninstalled and are excluded from backup and transfer.</string>
+    <string name="platform_settings_description">Choose which delivery apps DashBuddy reads. Dash tracking works only in apps DashBuddy fully supports.</string>
     <string name="platform_settings_installed">Installed</string>
     <string name="platform_settings_not_installed">Not installed</string>
-    <string name="reorderable_rule_content_desc_reorder">Reorder</string>
+    <string name="reorderable_rule_content_desc_reorder">Drag to reorder</string>
     <string name="reorderable_rule_merchant_coming_soon">Store rule (unavailable)</string>
     <string name="reorderable_rule_dollar_per_mile_format" translatable="false">%1$s/mi</string>
     <string name="reorderable_rule_distance_format" translatable="false">%1$s mi</string>
     <string name="reorderable_rule_item_count_format">%1$d items</string>
-    <string name="data_export_title">Export Data</string>
-    <string name="data_export_csv_heading">Miles and earnings to CSV</string>
-    <string name="data_export_csv_desc">Export all history to a folder you choose.\ndeliveries.csv: one row per delivery\nsessions.csv: one row per dash\nsummary.csv: totals and estimated IRS mileage deduction\nexpenses.csv: logged expenses, including voided entries\nfuel.csv: logged fill-ups, including voided entries\n\nStore names, your expense labels and the app\'s tracked miles at the fill-up are included; customer and address hashes are excluded. DashBuddy writes the files through Android\'s folder provider; a cloud folder may upload them. Files survive uninstall; delete them from that folder. Existing files with these names are replaced.</string>
+    <string name="data_export_title">Export data</string>
+    <string name="data_export_csv_heading">Miles and earnings spreadsheet</string>
+    <string name="data_export_csv_desc">Saves your full history as spreadsheet files in a folder you choose:\ndeliveries.csv: one row per delivery\nsessions.csv: one row per dash\nsummary.csv: totals and estimated IRS mileage deduction\nexpenses.csv: logged expenses, including undone ones\nfuel.csv: logged fill-ups, including undone ones\n\nThe files include store names, your expense labels and DashBuddy\'s tracked miles at each fill-up, but nothing about customers. DashBuddy doesn\'t upload them, but a cloud folder may. The files stay after you uninstall; delete them from the folder. Exporting again replaces them.</string>
     <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
     <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
     <string name="data_export_csv_error_format">Export failed (%1$s). Check the folder and try again.</string>
     <string name="data_export_log_heading">Export a bug report</string>
-    <string name="data_export_log_desc">Save dashbuddy-log.txt in a folder you choose for diagnosis. It contains INFO+ milestones. Every line is checked for known sensitive text before writing; matches are replaced. Filters may miss details, so review before sharing. DashBuddy does not send the report to the developer. A cloud folder may upload it. The file survives uninstall; delete it from that folder. An existing dashbuddy-log.txt is replaced.</string>
+    <string name="data_export_log_desc">Saves a bug report, dashbuddy-log.txt, to a folder you choose. It lists the app\'s main events, like offers and deliveries. DashBuddy replaces known private details first but can miss some, so read it before sharing. DashBuddy doesn\'t send it to the developer; a cloud folder may upload it. It stays after uninstall; delete it from the folder. Exporting again replaces it.</string>
     <string name="data_export_log_button">"  Choose folder &amp; export log"</string>
-    <string name="data_export_log_success_format">Exported dashbuddy-log.txt · %1$d lines scrubbed</string>
-    <string name="data_export_log_error_format">Log export failed (%1$s). Check the folder and try again.</string>
-    <string name="consent_title">Automation &amp; Consent</string>
+    <string name="data_export_log_success_format">Exported dashbuddy-log.txt. Private details removed from %1$d lines.</string>
+    <string name="data_export_log_error_format">Bug report export failed (%1$s). Check the folder and try again.</string>
+    <string name="consent_title">Automation &amp; consent</string>
     <string name="consent_disclosure_heading">Taps DashBuddy may make</string>
-    <string name="consent_disclosure_body">Android Accessibility reads enabled delivery apps to recognize offers, pickups and deliveries on your phone. Automated actions stay off until allowed; DashBuddy asks when one becomes available and asks again if its rule layout changes. Taps stay inside the delivery app and must match the action\'s button label. The pay-details arrow has no label; only the app boundary is checked. Turning an action off stops automation; direct Accept and Decline presses still request taps. Built-in and downloaded rules grant nothing by themselves. Each decision is saved on this phone with its time, app version and privacy revision until app data is cleared or uninstalled. Backup and device transfer exclude these records, so a new phone asks again.</string>
-    <string name="consent_empty">No actions available. Actions appear when loaded delivery-app rules provide them.</string>
-    <string name="consent_layout_count_format">%1$d card layouts</string>
+    <string name="consent_disclosure_body">DashBuddy uses Android Accessibility to recognize offers, pickups and deliveries in the delivery apps you turn on, on your phone.\n\nEach automatic tap below stays off until you allow it. It asks when a new one appears, and again if that button\'s layout changes. Nothing built in or downloaded turns one on by itself. Taps stay in the delivery app and must match the button\'s label, except the pay-details arrow, which has none.\n\nTurning one off stops the automatic tap. Pressing Accept or Decline in DashBuddy still taps for you.\n\nChoices are saved on this phone with their time, app version and privacy notice version, until you clear app data or uninstall. Backup and phone transfer skip them, so a new phone asks again.</string>
+    <string name="consent_empty">No automatic taps yet. They show up when a delivery app supports them.</string>
+    <string name="consent_layout_count_format">%1$d screen layouts</string>
     <string name="consent_platform_unknown">Delivery app</string>
-    <string name="consent_source_bundled_format">%1$s · built-in rules</string>
-    <string name="consent_source_downloaded_format">%1$s · downloaded rules</string>
+    <string name="consent_source_bundled_format">%1$s, built in</string>
+    <string name="consent_source_downloaded_format">%1$s, downloaded</string>
     <string name="consent_cap_accept_title">Accept offers</string>
-    <string name="consent_cap_accept_desc">Press Accept in DashBuddy to request an Accept or Add to route tap inside %1$s. The button label is checked in %1$s. Your press works without an automation grant.</string>
+    <string name="consent_cap_accept_desc">Press Accept in DashBuddy and it taps Accept or Add to route in %1$s, after checking the button\'s label there. Your press works even with this switched off.</string>
     <string name="consent_cap_decline_title">Decline offers</string>
-    <string name="consent_cap_decline_desc">Press Decline in DashBuddy to request a Decline tap inside %1$s. The button label is checked in %1$s. Your press works without an automation grant.</string>
+    <string name="consent_cap_decline_desc">Press Decline in DashBuddy and it taps Decline in %1$s, after checking the button\'s label there. Your press works even with this switched off.</string>
     <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
-    <string name="consent_cap_confirm_decline_desc">With quick declines and this action allowed, DashBuddy taps the second Decline button in %1$s after you start a decline. It checks the label and stays inside %1$s.</string>
+    <string name="consent_cap_confirm_decline_desc">If quick declines and this are both on, DashBuddy taps the second Decline in %1$s after you start a decline. It checks the label and stays inside %1$s.</string>
     <string name="consent_cap_expand_title">Open the pay breakdown</string>
-    <string name="consent_cap_expand_desc">DashBuddy taps the arrow on a completed %1$s delivery to read its pay breakdown for your records. The arrow has no label; only the app boundary is checked. Delivery, pay and settings are unchanged.</string>
-    <string name="fake_offer_score_format" translatable="false">"%1$s  ·  %2$dpts"</string>
-    <string name="fake_offer_pay_line_format" translatable="false">"%1$s gross  →  %2$s net"</string>
-    <string name="fake_offer_pay_line_estimate_format" translatable="false">"%1$s gross  →  %2$s net (est.)"</string>
-    <string name="fake_offer_fuel_cost_format" translatable="false">−%1$s fuel</string>
-    <string name="fake_offer_nonfuel_cost_format">−%1$s wear &amp; fixed costs</string>
+    <string name="consent_cap_expand_desc">DashBuddy taps the arrow on a finished %1$s delivery to read its pay breakdown for your records. The arrow has no label, so only the app is checked. Delivery, pay and settings don\'t change.</string>
+    <string name="fake_offer_score_format" translatable="false">%1$s, score %2$d</string>
+    <string name="fake_offer_pay_line_format" translatable="false">Pay %1$s, profit %2$s</string>
+    <string name="fake_offer_pay_line_estimate_format" translatable="false">Pay %1$s, profit %2$s (default costs)</string>
+    <string name="fake_offer_fuel_cost_format" translatable="false">-%1$s fuel</string>
+    <string name="fake_offer_nonfuel_cost_format">-%1$s wear and other costs</string>
     <string name="fake_offer_metric_dollar_per_mile_label" translatable="false">$/mi</string>
     <string name="fake_offer_metric_dollar_per_hour_label" translatable="false">$/hr</string>
     <string name="fake_offer_metric_items_label">items</string>
@@ -64,20 +64,20 @@
     <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
     <string name="fake_offer_warning_format">Warning: %1$s</string>
     <string name="strategy_settings_the_lab_title">Test offer</string>
-    <string name="strategy_settings_sim_pay_format">Pay: %1$s</string>
-    <string name="strategy_settings_sim_dist_format">Dist: %1$s mi</string>
+    <string name="strategy_settings_sim_pay_format">Pay %1$s</string>
+    <string name="strategy_settings_sim_dist_format">Distance %1$s mi</string>
     <string name="strategy_settings_global_overrides_title">Overrides</string>
-    <string name="strategy_settings_protect_stats_label">Protect stats</string>
-    <string name="strategy_settings_protect_stats_subtitle">Recommend Accept; disabled shopping still gets Decline</string>
+    <string name="strategy_settings_protect_stats_label">Protect acceptance rate</string>
+    <string name="strategy_settings_protect_stats_subtitle">Every offer gets Accept, except shopping offers when Shopping offers is off</string>
     <string name="strategy_settings_allow_shopping_label">Shopping offers</string>
-    <string name="strategy_settings_allow_shopping_subtitle">Off: shopping offers score Decline. Nothing is tapped for you.</string>
+    <string name="strategy_settings_allow_shopping_subtitle">When off, shopping offers score Decline. Nothing is tapped for you.</string>
     <string name="strategy_settings_quick_declines_label">Quick declines</string>
-    <string name="strategy_settings_quick_declines_subtitle">Confirm a decline you start; requires confirmation-tap consent</string>
+    <string name="strategy_settings_quick_declines_subtitle">After you tap Decline, DashBuddy taps the confirm button. Needs your OK under Automation &amp; Consent.</string>
     <string name="strategy_settings_priorities_title">Priorities</string>
-    <string name="strategy_settings_priorities_hint">Drag to reorder. Rules at the top have more weight.</string>
+    <string name="strategy_settings_priorities_hint">Drag to reorder. Rules higher up count more.</string>
     <string name="evidence_settings_title">Screenshots</string>
     <string name="evidence_settings_master_label">Save screenshots</string>
-    <string name="evidence_settings_master_subtitle">Screenshots are off by default. Saving requires this switch and a category below; categories start on. Images capture the whole display, including customer details and other apps, and are saved to Pictures/DashBuddy. DashBuddy does not upload them; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. A capture is skipped if this switch is off or another app is in front when it fires. Anything else on screen, such as a video or keyboard, can appear in the image. A capture already being saved finishes. Dash history and debug text captures are separate.</string>
+    <string name="evidence_settings_master_subtitle">Off unless you turn it on. A screenshot is saved only when this switch and its type below are on; the types start on.\n\nA screenshot shows the whole screen, including customer details, other apps and anything else showing, like a video or the keyboard. It goes to Pictures/DashBuddy. DashBuddy never uploads it, but gallery sync or sharing can. Screenshots stay after you uninstall; delete them in your gallery.\n\nNone is taken if this switch is off or another app is in front at that moment; one already saving still finishes. This switch doesn\'t affect your dash history.</string>
     <string name="evidence_settings_section_granular">By type</string>
     <string name="evidence_settings_offers_label">Offers</string>
     <string name="evidence_settings_offers_subtitle">Offer screenshots</string>
@@ -87,16 +87,16 @@
     <string name="evidence_settings_session_subtitle">Dash summary screenshots</string>
 
     <!-- #867 Developer Options: bubble session-presentation experiment -->
-    <string name="developer_settings_title">Developer Options</string>
-    <string name="developer_settings_section_bubble">Bubble HUD</string>
-    <string name="developer_settings_bubble_session_label">Session presentation</string>
-    <string name="developer_settings_bubble_session_subtitle">Which dash the bubble shows while two platforms are online. Platform chips appear on cards and the chat header in every mode.</string>
+    <string name="developer_settings_title">Developer options</string>
+    <string name="developer_settings_section_bubble">Bubble</string>
+    <string name="developer_settings_bubble_session_label">Dash shown</string>
+    <string name="developer_settings_bubble_session_subtitle">Which dash the bubble shows when two delivery apps are online. In every mode, cards and the chat header name their app.</string>
     <string name="developer_settings_bubble_session_follow_label">Follow</string>
     <string name="developer_settings_bubble_session_pinned_label">Pin</string>
     <string name="developer_settings_bubble_session_merged_label">Merge</string>
-    <string name="developer_settings_bubble_session_follow_explainer">Follows whichever platform you last touched. Picking a platform in the bubble\'s switcher holds until that dash ends, then it goes back to following.</string>
-    <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick sticks until you change it — including across that platform\'s next dash. While the pinned platform is offline the bubble falls back to following.</string>
-    <string name="developer_settings_bubble_session_merged_explainer">Test mode: one card stack folding every live dash, each card chipped with its platform. The switcher is hidden and chat stays on the followed dash.</string>
+    <string name="developer_settings_bubble_session_follow_explainer">Shows the delivery app you used last. A pick in the bubble\'s switcher holds until that dash ends, then the bubble follows again.</string>
+    <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick stays until you change it, even across that app\'s next dash. While that app is offline, the bubble shows the app you used last.</string>
+    <string name="developer_settings_bubble_session_merged_explainer">Test mode: one stack of cards from every live dash, each labeled with its app. No switcher; the chat follows the app you used last.</string>
     <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the permission chain's
          first step (:app ScreenEventsCard), the Settings switch row below and the debug block; also
          the prominent-disclosure shape #1138 M3 will reuse. -->
@@ -104,36 +104,36 @@
     <!-- #1151 RR1 — the requirement note: PRODUCTION wording here; src/debug/res/values/strings.xml
          overrides the SAME key with the debug wording (debug requires, release offers). Rendered
          on the permission-chain step and on the Automation & Consent switch row. -->
-    <string name="event_receipt_requirement_note">Optional. If declined, DashBuddy stays usable and receives events only from supported delivery apps. Change this under Settings → Data &amp; Privacy → Automation &amp; Consent.</string>
-    <string name="event_receipt_settings_path">Settings → Data &amp; Privacy → Automation &amp; Consent</string>
-    <string name="event_receipt_body">Allow Android Accessibility events from every app to notice delivery offers over other apps. Only enabled delivery apps\' window content is inspected or captured; other windows are identified by app name, with no content stored. Offer screenshots are off by default. If enabled under Settings → Data &amp; Privacy, they save the whole display, including apps behind the offer, to Pictures/DashBuddy. DashBuddy does not upload these images; gallery sync or sharing can. Images survive uninstall; delete them in the gallery. Turn Screen events off in %1$s. This decision receipt with its time, app version and privacy revision stays on this phone and is excluded from backup and device transfer. The app log also records each grant or revocation; it leaves the phone only in a bug report you export. Release stays usable when declined; debug disables the service.</string>
+    <string name="event_receipt_requirement_note">Optional. If you don\'t allow it, DashBuddy still works, with events only from supported delivery apps. Change this in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+    <string name="event_receipt_settings_path">Settings > Data &amp; privacy > Automation &amp; consent</string>
+    <string name="event_receipt_body">Lets DashBuddy notice a delivery offer that pops up over another app, by getting screen events from every app.\n\nScreen content is read and saved only from delivery apps you turn on; for other apps, DashBuddy sees only which app is open.\n\nOffer screenshots are off unless you turn them on in Settings > Data &amp; privacy. A screenshot saves the whole screen, including any app behind the offer, to Pictures/DashBuddy. DashBuddy never uploads it, but gallery sync or sharing can. Screenshots stay after you uninstall; delete them in your gallery.\n\nDashBuddy records this choice on this phone with its time, app version and privacy notice version, and leaves it out of Android backup and phone transfer. The app log also notes each change; it leaves your phone only in a bug report you export. Turn Screen events off in %1$s.</string>
     <string name="event_receipt_allow">Allow</string>
     <string name="event_receipt_deny">Don\'t allow</string>
     <!-- The front door's ONE "Not now" (the :app FrontDoorSheet button; review NN6). -->
     <string name="consent_front_door_not_now">Not now</string>
     <string name="event_receipt_settings_section">Screen events</string>
-    <string name="event_receipt_android11_caveat">(may not take effect on Android 11)</string>
-    <string name="event_receipt_settings_switch">Notice windows from other apps</string>
+    <string name="event_receipt_android11_caveat">On Android 11, this may not take effect.</string>
+    <string name="event_receipt_settings_switch">See which other app is open</string>
     <string name="developer_settings_census_upload">Census upload (debug)</string>
-    <string name="developer_settings_census_identity">%1$s · Install: %2$s</string>
+    <string name="developer_settings_census_identity">%1$s, install %2$s</string>
     <string name="developer_settings_census_not_enrolled">Not enrolled</string>
     <string name="developer_settings_census_upload_now">Upload now</string>
-    <string name="developer_settings_census_status">Last run %1$s ago · %2$s · Queued: %3$d</string>
-    <string name="developer_settings_census_status_never">No upload run yet · Queued: %1$d</string>
-    <string name="developer_settings_census_copy_id">Copy install id</string>
+    <string name="developer_settings_census_status">Last run %1$s ago, %2$s, %3$d waiting</string>
+    <string name="developer_settings_census_status_never">No upload yet, %1$d waiting</string>
+    <string name="developer_settings_census_copy_id">Copy install ID</string>
     <string name="developer_settings_census_reset">Reset census identity</string>
     <string name="developer_settings_census_reset_title">Reset census identity?</string>
-    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install id and secret and deletes the queued skeletons and captures and switches capture sharing off. The next upload enrols a new install id, which the census server must trust again. Your upload consent setting is left unchanged.</string>
+    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install ID and secret, deletes the waiting outlines and captures, and turns capture sharing off. The next upload signs up a new install ID, which the census server must trust again. The Census upload switch stays as it is.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
-    <string name="developer_settings_census_share_captures">Share UNKNOWN captures (trusted installs)</string>
-    <string name="developer_settings_census_share_captures_explainer">Sends the text of UNKNOWN screens to the census server while this install is trusted there. UNKNOWN screens get no rule redaction — only the marker backstops — so a capture can still contain customer details, and the server operator can read them.</string>
-    <string name="developer_settings_census_captures_status">Captures shared: %1$d queued · %2$s</string>
+    <string name="developer_settings_census_share_captures">Share unrecognized screens (trusted installs)</string>
+    <string name="developer_settings_census_share_captures_explainer">Sends the text of screens DashBuddy doesn\'t recognize to the census server while the server trusts this install. These screens get only the general privacy filters, so a capture can still hold customer details that the server\'s operator can read.</string>
+    <string name="developer_settings_census_captures_status">Screen captures: %1$d waiting, %2$s</string>
     <string name="developer_settings_census_captures_sent">%1$d sent last run</string>
-    <string name="consent_receipt_format">%1$s · %2$s · v%3$s · disclosure r%4$d</string>
+    <string name="consent_receipt_format">%1$s %2$s, app %3$s, privacy notice %4$d</string>
     <string name="consent_receipt_allowed">Allowed</string>
     <string name="consent_receipt_denied">Not allowed</string>
     <string name="consent_privacy_link">Privacy details</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
-    <string name="settings_odometer_prompts_description">Lights the Odometer block at the start of a dash and after one until you log a reading</string>
+    <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a dash, and after one until you log a reading</string>
 </resources>

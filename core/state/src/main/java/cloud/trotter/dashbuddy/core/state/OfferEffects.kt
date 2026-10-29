@@ -120,7 +120,7 @@ internal fun EffectMap.diffOfferLifecycle(
             if (!directOverMatch) {
                 add(
                     AppEffect.UpdateBubble(
-                        "${outcomeCardText(outcome)} (offer replaced)",
+                        "${outcomeCardText(outcome)}, replaced by a new offer",
                         persona = ChatPersona.Dispatcher,
                         sessionId = sessionId,
                     )
@@ -223,7 +223,7 @@ internal fun EffectMap.diffOfferLifecycle(
                     )
                     add(
                         AppEffect.UpdateBubble(
-                            "Decline already submitted — Accept won't take",
+                            "Already declined. Accept won't go through.",
                             persona = ChatPersona.Dispatcher,
                             sessionId = sessionId,
                         )

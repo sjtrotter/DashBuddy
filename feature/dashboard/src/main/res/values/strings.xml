@@ -25,13 +25,13 @@
 
     <!-- Today (brief §2 + #1024 D1) — ONE card: the day's record, a hairline, then the day's plan. -->
     <string name="dashboard_today_title">TODAY</string>
-    <string name="dashboard_today_stat_kept">Kept</string>
+    <string name="dashboard_today_stat_kept">Profit</string>
     <!--
       The denominator rides the LABEL (#1024 review item 3): "Net/hr" alone reads as an all-day rate,
       and the "while online" caption it used to carry was deleted with the stat tiles (D3). A rate
       whose denominator is only findable inside a collapsed footer is not stated.
     -->
-    <string name="dashboard_today_stat_net_per_hour">Net/hr online</string>
+    <string name="dashboard_today_stat_net_per_hour">Profit/hr online</string>
     <string name="dashboard_today_stat_drops">Deliveries</string>
     <string name="dashboard_today_stat_miles">Miles</string>
     <string name="dashboard_today_stat_online">Online</string>
@@ -40,13 +40,13 @@
       then the current dash's live elapsed time, not the day's settled total, so it must not claim to
       be the latter.
     -->
-    <string name="dashboard_today_stat_on_dash">On dash</string>
+    <string name="dashboard_today_stat_on_dash">This dash</string>
 
     <!-- The plan half of the Today card. Each state names the weekday it is quoting — do not drop it. -->
-    <string name="dashboard_plan_best_tonight_format">Tonight %1$s · %2$s avg %3$s/hr</string>
-    <string name="dashboard_plan_best_today_format">Today %1$s · %2$s avg %3$s/hr</string>
-    <string name="dashboard_plan_no_window_format">No stretch left today; your %1$s peak earlier.</string>
-    <string name="dashboard_plan_thin_data_format">Only %2$s readable hours on your %1$s so far.</string>
+    <string name="dashboard_plan_best_tonight_format">Tonight %1$s: %3$s profit/hr on your %2$s</string>
+    <string name="dashboard_plan_best_today_format">Today %1$s: %3$s profit/hr on your %2$s</string>
+    <string name="dashboard_plan_no_window_format">No good stretch left today. Your %1$s peak earlier.</string>
+    <string name="dashboard_plan_thin_data_format">Only %2$s hours of history on your %1$s so far.</string>
     <!--
       Recurring-weekday plural ("Monday" → "Mondays"). Its own string so a translation can replace
       the English +s rule with its own form instead of having it welded into the code.
@@ -55,15 +55,15 @@
 
     <!-- This week (brief §2 + #1024 D4) — net + delta + per-day sparkline + Recap, then the plan row. -->
     <string name="dashboard_week_title">THIS WEEK</string>
-    <string name="dashboard_week_recap_action">Recap →</string>
+    <string name="dashboard_week_recap_action">Recap</string>
     <string name="dashboard_week_delta_from_nothing">Nothing recorded last week</string>
     <string name="dashboard_week_delta_none">No prior week</string>
 
     <!-- components/WeekCard.kt row 2 — the pointer at the Weekly Plan (#981, brief §2 row 3) -->
-    <string name="dashboard_weekly_plan_pointer_title">Week plan</string>
-    <string name="dashboard_weekly_plan_pointer_detail_format">%1$dh · %2$s projected</string>
-    <string name="dashboard_weekly_plan_pointer_action">Plan →</string>
+    <string name="dashboard_weekly_plan_pointer_title">Weekly plan</string>
+    <string name="dashboard_weekly_plan_pointer_detail_format">%1$dh, %2$s projected</string>
+    <string name="dashboard_weekly_plan_pointer_action">Plan</string>
     <!-- #1255: simple analytics and shared detail preference. -->
     <string name="dashboard_week_last_week_format">Last week %1$s</string>
-    <string name="dashboard_dashing_row">Dashing · open bubble</string>
+    <string name="dashboard_dashing_row">Dashing. Tap to show the bubble.</string>
 </resources>

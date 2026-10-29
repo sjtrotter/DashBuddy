@@ -2,21 +2,21 @@
 <resources>
     <!-- Setup wizard strings (#98) — moved verbatim from :app. Owned by :feature:setup. -->
     <string name="wizard_phase_economy">Part 1: Costs</string>
-    <string name="wizard_phase_strategy">Part 2: Strategy</string>
+    <string name="wizard_phase_strategy">Part 2: Offer rules</string>
     <string name="wizard_title_vehicle">Vehicle</string>
-    <string name="wizard_desc_vehicle">The EPA lookup runs only after you tap \"Look up my vehicle\". This choice is saved. It sends your selected year, make, model and vehicle ID to fueleconomy.gov for MPG; no account or install ID is sent. The Google MPG search sends your entered year, make and model to Google in your browser.</string>
+    <string name="wizard_desc_vehicle">DashBuddy looks up your MPG only after you tap \"Look up my vehicle\", and remembers that choice. It sends the year, make, model and EPA vehicle ID you pick to fueleconomy.gov, with no account or install ID. \"Search Google for MPG\" sends the year, make and model you typed to Google in your browser.</string>
     <string name="wizard_title_gas">Gas price</string>
     <string name="wizard_desc_gas">Your price per gallon.</string>
-    <string name="wizard_title_economy_costs">Car costs</string>
-    <string name="wizard_desc_economy_costs">Defaults are estimates for your vehicle class. Tap a section to enter your own.</string>
+    <string name="wizard_title_economy_costs">Vehicle costs</string>
+    <string name="wizard_desc_economy_costs">Starting numbers are estimates for your vehicle. Tap a section to enter your own.</string>
     <string name="wizard_title_goal">Goal</string>
     <string name="wizard_desc_goal">Pick how offers are scored.</string>
     <string name="wizard_title_shopping">Shop &amp; Deliver</string>
     <string name="wizard_desc_shopping">Maximum items for a shopping offer.</string>
-    <string name="wizard_title_min_payout">Minimum net pay</string>
-    <string name="wizard_desc_min_payout">Lowest net offer pay you would consider.</string>
-    <string name="wizard_title_hourly">Target $/hr</string>
-    <string name="wizard_desc_hourly">Your target net pay per delivery hour.</string>
+    <string name="wizard_title_min_payout">Minimum profit</string>
+    <string name="wizard_desc_min_payout">Lowest profit you\'d take on an offer, after vehicle costs.</string>
+    <string name="wizard_title_hourly">Target profit/hr</string>
+    <string name="wizard_desc_hourly">The profit per hour you aim for while on a delivery.</string>
     <string name="wizard_title_distance">Max distance</string>
     <string name="wizard_desc_distance">Most miles you will drive for one offer.</string>
     <string name="wizard_bottom_bar_back">Back</string>
@@ -29,20 +29,20 @@
     <string name="wizard_gas_price_ev_title">EV charging cost</string>
     <string name="wizard_gas_price_ev_desc">Charging prices vary, so enter your cost per gallon-equivalent.</string>
     <string name="wizard_gas_price_auto_update_title">Update gas price daily</string>
-    <string name="wizard_gas_price_auto_update_desc">Off by default on new installs; an existing setting is kept. Fetches your fuel type\'s regional average daily. Android\'s geocoder may send your last coordinates to its provider; EIA receives a regional fuel-price request, without an account or install ID. This can run outside a dash. Turn this off and save setup to stop automatic refreshes.</string>
+    <string name="wizard_gas_price_auto_update_desc">Off on a new install; an update keeps your setting. Daily, even off a dash, DashBuddy gets your region\'s average price for your fuel type. To find your region, Android may send your last location to its address lookup. The U.S. Energy Information Administration gets the price request, with no account or install ID. To stop, turn this off and save setup.</string>
     <string name="wizard_gas_price_current_regional_average">Regional average</string>
     <string name="wizard_vehicle_card_type_car">Car</string>
     <string name="wizard_vehicle_card_type_ebike">E-bike</string>
     <string name="wizard_vehicle_card_year_label">Year</string>
     <string name="wizard_vehicle_card_make_label">Make</string>
     <string name="wizard_vehicle_card_model_label">Model</string>
-    <string name="wizard_vehicle_card_trim_label">Trim / Options</string>
+    <string name="wizard_vehicle_card_trim_label">Trim or options</string>
     <string name="wizard_vehicle_card_content_desc_search">Search</string>
     <string name="wizard_vehicle_card_lookup_mpg">Search Google for MPG</string>
     <string name="wizard_vehicle_card_mpg_format" translatable="false">%1$s MPG</string>
-    <string name="wizard_vehicle_card_mpg_slider_hint">Set your car\'s combined MPG.</string>
-    <string name="wizard_vehicle_card_ebike_note">Gas expenses are excluded; wear and fixed costs still apply.</string>
-    <string name="wizard_vehicle_lookup_prompt">Look up your car\'s MPG from the EPA (fueleconomy.gov). Sends the year, make, model and EPA vehicle ID you pick.</string>
+    <string name="wizard_vehicle_card_mpg_slider_hint">Set your combined city and highway MPG.</string>
+    <string name="wizard_vehicle_card_ebike_note">No gas cost. Charging, wear and fixed costs still count.</string>
+    <string name="wizard_vehicle_lookup_prompt">Look up your MPG on the EPA\'s fueleconomy.gov. DashBuddy sends the year, make, model and EPA vehicle ID you pick.</string>
     <string name="wizard_vehicle_lookup_allow">Look up my vehicle</string>
     <string name="wizard_vehicle_manual_entry">Enter MPG myself</string>
     <string name="vehicle_power_gas">Gas</string>
@@ -59,7 +59,7 @@
          feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
     <string name="vehicle_type_car">Car</string>
     <string name="vehicle_type_hybrid">Hybrid</string>
-    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_ev">Electric car</string>
     <string name="vehicle_type_motorcycle">Motorcycle</string>
     <string name="vehicle_type_scooter">Scooter or moped</string>
     <string name="vehicle_type_e_bike">E-bike</string>

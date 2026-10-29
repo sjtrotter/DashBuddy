@@ -72,8 +72,8 @@ object IrsMileage {
         val latestYear = latestKnown().first
         return when {
             isKnown(year) -> null
-            year > latestYear -> "$year rate unavailable in DashBuddy; estimate uses $latestYear rate."
-            else -> "$year rate unavailable in DashBuddy; estimate uses $latestYear rate."
+            year > latestYear -> "DashBuddy doesn't have the $year IRS rate; this uses the $latestYear rate."
+            else -> "DashBuddy doesn't have the $year IRS rate; this uses the $latestYear rate."
         }
     }
 

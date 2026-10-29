@@ -10,11 +10,11 @@
     <string name="bubble_mode_idle_gas_content_desc">Gas price</string>
     <string name="bubble_mode_idle_gas_decrease">Lower gas price</string>
     <string name="bubble_mode_idle_gas_increase">Raise gas price</string>
-    <string name="bubble_mode_idle_gas_auto">AUTO</string>
-    <string name="bubble_mode_idle_gas_manual">MANUAL</string>
+    <string name="bubble_mode_idle_gas_auto">Auto</string>
+    <string name="bubble_mode_idle_gas_manual">Manual</string>
     <string name="bubble_mode_idle_gas_refresh">Refresh gas price</string>
     <string name="bubble_mode_idle_gas_take_control">Set gas price manually</string>
-    <string name="bubble_mode_idle_gas_resume_auto">Resume auto</string>
+    <string name="bubble_mode_idle_gas_resume_auto">Use auto price</string>
     <string name="bubble_mode_idle_gas_refresh_error">Couldn\'t refresh</string>
 
     <!-- Shared card labels -->
@@ -52,7 +52,7 @@
     <string name="hud_rest_accepted_label">accepted</string>
     <string name="hud_rest_span_to">to</string>
     <string name="hud_first_run_title">No dash yet</string>
-    <string name="hud_first_run_body">A dash starts when the delivery app goes online.</string>
+    <string name="hud_first_run_body">A dash starts when you go online in your delivery app.</string>
     <string name="hud_gas_label">Gas</string>
     <string name="hud_gas_per_gal">/gal</string>
     <string name="hud_gas_auto">Auto</string>
@@ -101,7 +101,7 @@
     <string name="hud_offer_cd_left">%1$s left</string>
     <string name="hud_offer_profit">profit</string>
     <string name="hud_offer_loss">loss</string>
-    <string name="hud_offer_car">car</string>
+    <string name="hud_offer_car">cost</string>
     <string name="hud_offer_distance_unknown">distance unknown</string>
     <string name="hud_offer_unit_mi">mi</string>
     <plurals name="hud_offer_items"><item quantity="one">item</item><item quantity="other">items</item></plurals>
@@ -109,17 +109,17 @@
     <string name="hud_offer_added">+%1$s added</string>
     <string name="hud_offer_was">was %1$d</string>
     <string name="hud_offer_addon">Add-on</string>
-    <string name="hud_offer_addon_note">Added to your current job. No score: the card gives only what this stop adds.</string>
+    <string name="hud_offer_addon_note">Added to your current job. Unscored, since the card shows only what this stop adds.</string>
     <string name="hud_offer_cd_score">Score %1$d</string>
     <string name="hud_offer_cd_no_score">No score</string>
-    <string name="hud_offer_cd_bar">Profit %1$s, car %2$s</string>
-    <string name="hud_offer_cd_bar_loss">Loss %1$s, car %2$s</string>
+    <string name="hud_offer_cd_bar">Profit %1$s, cost %2$s</string>
+    <string name="hud_offer_cd_bar_loss">Loss %1$s, cost %2$s</string>
     <string name="hud_offer_cd_above">Above target</string>
     <string name="hud_offer_cd_below">Below target</string>
-    <string name="hud_offer_cd_item_target">target from your hourly target</string>
+    <string name="hud_offer_cd_item_target">Item target comes from your hourly target</string>
     <string name="hud_offer_cd_pin">Start</string>
     <string name="hud_offer_cd_store">Pickup</string>
-    <string name="hud_offer_cd_house">Dropoff</string>
+    <string name="hud_offer_cd_house">Drop-off</string>
     <string name="hud_offer_more">+%1$d</string>
     <plurals name="hud_offer_cd_more">
         <item quantity="one">%1$d more stop</item>
@@ -130,7 +130,7 @@
     <string name="hud_dock_now">Now</string>
     <string name="hud_log_now">Now</string>
     <string name="hud_log_declined">Declined %1$s</string>
-    <string name="hud_log_timed_out">Timed out %1$s</string>
+    <string name="hud_log_timed_out">Expired %1$s</string>
     <string name="hud_log_accepted_row">Accepted %1$s</string>
     <string name="hud_log_offer_unknown_store">Offer</string>
     <string name="hud_log_expense">Expense %1$s</string>
@@ -165,9 +165,9 @@
     <string name="hud_log_now_nodue_to_door">%1$s to the customer</string>
     <string name="hud_log_now_nodue_at_store">%1$s at the store</string>
     <string name="hud_log_now_nodue_at_door">%1$s at the door</string>
-    <string name="hud_log_net">net %1$s</string>
+    <string name="hud_log_net">profit %1$s</string>
     <string name="hud_log_score_cd">Score %1$d</string>
-    <string name="hud_log_empty">Nothing logged yet this dash. Offers, deliveries and expenses land here.</string>
+    <string name="hud_log_empty">Nothing logged yet this dash. Offers, deliveries and expenses appear here.</string>
     <string name="hud_hero_compact_cd">Profit %1$s</string>
     <string name="hud_log_minutes">%1$d min</string>
     <string name="hud_log_miles">%1$s mi</string>
@@ -177,7 +177,7 @@
     <string name="hud_dock_odometer">Odometer</string>
     <string name="hud_keypad_backspace">Backspace</string>
     <string name="hud_odometer_title">Odometer</string>
-    <string name="hud_vehicle_none">None</string>
+    <string name="hud_vehicle_none">No vehicle</string>
     <string name="hud_vehicle_unavailable">Unavailable</string>
     <string name="hud_vehicle_add_menu">Add vehicle…</string>
     <string name="hud_vehicle_cd_change">%1$s, change vehicle</string>
@@ -187,19 +187,19 @@
     <string name="hud_odometer_last">Last %1$s mi, %2$s</string>
     <string name="hud_odometer_first">First reading for %1$s</string>
     <string name="hud_odometer_lower">Below the last reading, %1$s mi</string>
-    <string name="hud_odometer_fewer">%3$s mi on this car, %1$s mi tracked since %2$s</string>
+    <string name="hud_odometer_fewer">%3$s mi on the odometer, %1$s mi tracked since %2$s</string>
     <string name="hud_odometer_delta">+%1$s mi since %2$s</string>
     <string name="hud_odometer_large_jump">+%1$s mi since %2$s, more than expected</string>
     <string name="hud_odometer_save_empty">Save reading</string>
     <string name="hud_odometer_save">Save %1$s mi</string>
-    <string name="hud_odometer_gps_loading">Waiting for the GPS total</string>
+    <string name="hud_odometer_gps_loading">Waiting for tracked miles</string>
     <string name="hud_odometer_saved">Odometer saved, %1$s mi</string>
-    <string name="hud_odometer_vehicles_unreadable">Saved vehicles could not be read.</string>
+    <string name="hud_odometer_vehicles_unreadable">Couldn\'t load your vehicles.</string>
     <string name="hud_odometer_write_failed">Could not save. Try again.</string>
     <string name="hud_odometer_footer">%1$s %2$s mi, %3$s</string>
-    <string name="hud_odometer_comparison">car %1$s mi, tracked %2$s mi since %3$s</string>
+    <string name="hud_odometer_comparison">odometer %1$s mi, tracked %2$s mi since %3$s</string>
     <string name="hud_odometer_other">other %1$s mi</string>
-    <string name="hud_odometer_short">short of tracked by %1$s mi</string>
+    <string name="hud_odometer_short">%1$s mi fewer than tracked</string>
     <string name="hud_cash_tip_title">Cash tip</string>
     <string name="hud_cash_tip_fewer">Fewer</string>
     <string name="hud_cash_tip_another">Another delivery</string>
@@ -211,11 +211,11 @@
     <string name="hud_cash_tip_remove">Remove %1$s cash tip</string>
     <string name="hud_cash_tip_empty">No completed deliveries in this dash</string>
     <string name="hud_cash_tip_delivery">Delivery</string>
-    <string name="hud_cash_tip_below_zero">Less cash than that is logged. Nothing changed.</string>
+    <string name="hud_cash_tip_below_zero">That\'s more than the cash tip logged. Nothing changed.</string>
     <string name="hud_cash_tip_failed">Cash tip not saved. Try again.</string>
     <string name="hud_undo_line">%1$s %2$s, %3$s</string>
     <string name="hud_undo_action">Undo</string>
-    <string name="hud_undo_failed">Undo failed, tap to retry</string>
+    <string name="hud_undo_failed">Undo failed. Tap to try again.</string>
     <string name="hud_cash_tip_pending">Cash tip %1$s pending</string>
     <string name="hud_log_cat_car_care">Car care</string>
     <string name="hud_expense_gas">Gas</string>
@@ -231,7 +231,7 @@
          feature-to-app module boundary require local copies. A shared resource module is the follow-up. -->
     <string name="vehicle_type_car">Car</string>
     <string name="vehicle_type_hybrid">Hybrid</string>
-    <string name="vehicle_type_ev">EV</string>
+    <string name="vehicle_type_ev">Electric car</string>
     <string name="vehicle_type_motorcycle">Motorcycle</string>
     <string name="vehicle_type_scooter">Scooter or moped</string>
     <string name="vehicle_type_e_bike">E-bike</string>

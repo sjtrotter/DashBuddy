@@ -277,8 +277,8 @@ object MileageTaxModel {
         val deductionLine = "${Formats.money(IrsMileage.deduction(miles, year))} " +
             "est. IRS $year mileage deduction"
         val spansYearsNote = when {
-            window.isLifetime -> "may span tax years; see the CSV export"
-            spansYears -> "spans tax years; see the CSV export"
+            window.isLifetime -> "may cover more than one tax year; see the export"
+            spansYears -> "covers more than one tax year; see the export"
             else -> null
         }
         return Labels(deductionLine, IrsMileage.fallbackNote(year), spansYearsNote)

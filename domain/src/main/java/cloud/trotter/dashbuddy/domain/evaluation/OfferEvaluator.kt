@@ -372,18 +372,18 @@ class OfferEvaluator() {
         rules.mapNotNull { rule ->
             val target = rule.targetValue.toDouble()
             val consequence =
-                "A Decline recommendation does not tap the delivery app."
+                "A Decline recommendation doesn't tap anything in the delivery app."
             when (rule.metricType) {
                 MetricType.DOLLAR_PER_MILE -> if (target > REALISTIC_MAX_DPM)
-                    "Net/mi target ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
+                    "Profit/mi target ${Formats.money(target)} is above the ${Formats.money(REALISTIC_MAX_DPM)} warning level. $consequence"
                 else null
 
                 MetricType.ACTIVE_HOURLY -> if (target > REALISTIC_MAX_HOURLY)
-                    "Net/hr target ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
+                    "Profit/hr target ${Formats.money(target)} is above the ${Formats.money(REALISTIC_MAX_HOURLY)} warning level. $consequence"
                 else null
 
                 MetricType.PAYOUT -> if (target > REALISTIC_MAX_PAYOUT)
-                    "Minimum net pay ${Formats.money(target)} exceeds the preset warning threshold. $consequence"
+                    "Minimum profit ${Formats.money(target)} is above the ${Formats.money(REALISTIC_MAX_PAYOUT)} warning level. $consequence"
                 else null
 
                 else -> null

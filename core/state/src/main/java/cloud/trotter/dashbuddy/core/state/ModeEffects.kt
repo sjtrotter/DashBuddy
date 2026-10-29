@@ -114,7 +114,7 @@ internal fun EffectMap.diffMode(
                     // another still-live dash.
                     add(
                         AppEffect.UpdateBubble(
-                            earnings?.let { "Session Ended. Total: $it" } ?: "Session Ended.",
+                            earnings?.let { "Dash ended. Earned $it" } ?: "Dash ended.",
                             ChatPersona.Dispatcher,
                             sessionId = endedSessionId,
                         )
@@ -186,7 +186,7 @@ internal fun EffectMap.diffMode(
                 } else if (nextSession != null && prevSession?.sessionId == nextSession.sessionId) {
                     // Grace resume — same session, no start effects needed
                     Timber.d("Session grace resume: ${nextSession.sessionId}")
-                    add(AppEffect.UpdateBubble("Session resumed (grace)", sessionId = nextSession.sessionId))
+                    add(AppEffect.UpdateBubble("Dash resumed", sessionId = nextSession.sessionId))
                 }
 
                 // #1054 round 4: the SESSION_PAUSED_SAFETY cancel is no longer hand-built here —
@@ -231,7 +231,7 @@ internal fun EffectMap.diffMode(
                     // transition. It used to be hand-built here, which is exactly why it could
                     // not survive a restore: the deadline existed only inside the engine's timer
                     // map, so a process death left a paused dash with nothing to end it.
-                    add(AppEffect.UpdateBubble("Dash Paused!", sessionId = sessionId))
+                    add(AppEffect.UpdateBubble("Dash paused", sessionId = sessionId))
                 }
             }
         }

@@ -494,9 +494,9 @@ class EffectMap @Inject constructor(
      * to the ledger — so the chat can never claim an outcome the ledger doesn't record.
      */
     internal fun outcomeCardText(outcome: AppEventType): String = when (outcome) {
-        AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
-        AppEventType.OFFER_DECLINED -> "Offer Declined"
-        AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
+        AppEventType.OFFER_ACCEPTED -> "Offer accepted"
+        AppEventType.OFFER_DECLINED -> "Offer declined"
+        AppEventType.OFFER_TIMEOUT -> "Offer expired"
         // Fail OPEN on display text, never on the reducer loop (#625 review): EffectMap
         // is diffed inside StateManagerV2's event loop, which has no try/catch — a throw
         // here would freeze the state machine and let the unbounded observation buffer
