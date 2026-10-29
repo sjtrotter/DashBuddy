@@ -51,7 +51,7 @@ class TtsEffectHandlerRecoveryTest {
 
     @Test
     @org.robolectric.annotation.Config(qualifiers = "en")
-    fun `add-on speech and notification summary state what the add-on adds without a verdict`() {
+    fun `add-on speech and notification summary state what the add-on adds without a score`() {
         val tts = handler()
         reportReady()
         val evaluation = OfferEvaluator().evaluate(ParsedOffer(
@@ -66,16 +66,16 @@ class TtsEffectHandlerRecoveryTest {
         assertTrue(speech.contains("Add-on at H-E-B"))
         assertTrue(speech.contains("10.50 dollars more"))
         assertTrue(speech.contains("1.5 more miles"))
-        assertTrue(speech.contains("No verdict"))
+        assertTrue(speech.contains("No score"))
         assertTrue(speech.contains("1 more minute."))
-        assertFalse(speech.contains("distance not read"))
+        assertFalse(speech.contains("distance unknown"))
         assertFalse(speech.contains(" net"))
         val summary = evaluation.toNotificationSummary().toString()
         assertTrue(summary.contains("Add-on"))
         assertTrue(summary.contains("+$10.50"))
         assertTrue(summary.contains("+1.5 mi"))
         assertTrue(summary.contains("+1 min"))
-        assertTrue(summary.contains("no verdict"))
+        assertTrue(summary.contains("no score"))
         assertFalse(summary.contains("Net"))
         assertFalse(summary.contains("Score"))
     }
@@ -95,9 +95,9 @@ class TtsEffectHandlerRecoveryTest {
         val speech = spoken.lastValue.toString()
         assertTrue(speech.contains("Pedido adicional en H-E-B"))
         assertTrue(speech.contains("millas más"))
-        assertTrue(speech.contains("Sin veredicto"))
+        assertTrue(speech.contains("Sin puntuación"))
         assertTrue(speech.contains("1 minuto más."))
-        assertFalse(speech.contains("no se leyó la distancia"))
+        assertFalse(speech.contains("distancia desconocida"))
     }
 
     private lateinit var engines: MutableList<TextToSpeech>

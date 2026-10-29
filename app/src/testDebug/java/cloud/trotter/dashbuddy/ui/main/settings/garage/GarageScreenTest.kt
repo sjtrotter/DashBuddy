@@ -57,7 +57,7 @@ class GarageScreenTest {
         whenever(vm.swapLocked()).thenReturn(true)
         show()
         compose.onNodeWithText("Other").performClick()
-        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
         verify(vm, never()).select(any())
     }
 

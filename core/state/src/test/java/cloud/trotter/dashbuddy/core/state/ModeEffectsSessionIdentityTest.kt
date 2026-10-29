@@ -75,7 +75,7 @@ class ModeEffectsSessionIdentityTest {
         assertTrue(effects.indexOf(endEffect) < effects.indexOf(logs[1]))
         assertTrue(effects.indexOf(logs[0]) < effects.indexOf(startEffect))
         val endBubble = effects.filterIsInstance<AppEffect.UpdateBubble>()
-            .single { it.text.startsWith("Session Ended") }
+            .single { it.text.startsWith("Shift ended") }
         assertEquals(sessionA.sessionId, endBubble.sessionId)
         assertTrue(effects.indexOf(endBubble) < effects.indexOf(logs[1]))
     }

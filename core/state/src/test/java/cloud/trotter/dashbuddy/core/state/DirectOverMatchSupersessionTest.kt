@@ -109,7 +109,7 @@ class DirectOverMatchSupersessionTest {
         .let { (it.event.payload as OfferPayload).description }
 
     private fun hasReplacedBubble(fx: List<AppEffect>): Boolean =
-        fx.any { it is AppEffect.UpdateBubble && it.text.contains("offer replaced") }
+        fx.any { it is AppEffect.UpdateBubble && it.text.contains("replaced by a new offer") }
 
     @Test
     fun `direct over match resolves quietly - same event, softer description, no replaced bubble`() {

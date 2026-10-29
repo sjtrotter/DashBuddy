@@ -79,8 +79,8 @@ class CsvTest {
         listOf(
             Case(2025, 0.70, 0.70, null),
             Case(2026, 0.725, 0.725, null),
-            Case(2027, null, 0.725, "2027 rate unavailable in DashBuddy; estimate uses 2026 rate."),
-            Case(2024, null, 0.725, "2024 rate unavailable in DashBuddy; estimate uses 2026 rate."),
+            Case(2027, null, 0.725, "DashBuddy doesn't have the 2027 IRS rate; this uses the 2026 rate."),
+            Case(2024, null, 0.725, "DashBuddy doesn't have the 2024 IRS rate; this uses the 2026 rate."),
         ).forEach { (year, rate, effective, note) ->
             val name = "year=$year"
             assertEquals(name, rate, IrsMileage.rateFor(year))

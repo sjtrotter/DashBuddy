@@ -340,7 +340,7 @@ class EffectMapTest {
     }
 
     @Test
-    fun `an ACCEPT click after a committed decline shows the race bubble, not Offer Accepted (#594)`() {
+    fun `an ACCEPT click after a committed decline shows the race bubble, not Offer accepted (#594)`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(declineCommittedAt = 900L))
         // A click doesn't change flow by itself; the latch survives on the pending offer.
         val next = prev
@@ -348,11 +348,11 @@ class EffectMapTest {
         val effects = effectMap.diff(prev, next, clickObs(intent = "accept_offer"))
         assertTrue(
             "the accept race is surfaced honestly",
-            effects.any { it is AppEffect.UpdateBubble && it.text == "Decline already submitted — Accept won't take" },
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Already declined. Accept won't go through." },
         )
         assertFalse(
-            "the contradictory Offer Accepted bubble must not fire",
-            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer Accepted" },
+            "the contradictory Offer accepted bubble must not fire",
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer accepted" },
         )
     }
 
@@ -391,7 +391,7 @@ class EffectMapTest {
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
         assertTrue("Should show timeout bubble", effects.any {
-            it is AppEffect.UpdateBubble && it.text.contains("Timed Out")
+            it is AppEffect.UpdateBubble && it.text.contains("expired")
         })
     }
 
@@ -517,7 +517,7 @@ class EffectMapTest {
             it is AppEffect.UpdateBubble && it.text == "Accepting…"
         })
         assertFalse("a click must never claim the outcome (#601)", effects.any {
-            it is AppEffect.UpdateBubble && it.text == "Offer Accepted"
+            it is AppEffect.UpdateBubble && it.text == "Offer accepted"
         })
     }
 
@@ -531,7 +531,7 @@ class EffectMapTest {
             it is AppEffect.UpdateBubble && it.text == "Declining…"
         })
         assertFalse("a click must never claim the outcome (#601)", effects.any {
-            it is AppEffect.UpdateBubble && it.text == "Offer Declined"
+            it is AppEffect.UpdateBubble && it.text == "Offer declined"
         })
     }
 
@@ -545,12 +545,12 @@ class EffectMapTest {
     // still fails a test instead of being tautologically hidden.
     private fun expectedOutcomeCard(outcome: AppEventType, replaced: Boolean = false): String {
         val base = when (outcome) {
-            AppEventType.OFFER_ACCEPTED -> "Offer Accepted"
-            AppEventType.OFFER_DECLINED -> "Offer Declined"
-            AppEventType.OFFER_TIMEOUT -> "Offer Timed Out!"
+            AppEventType.OFFER_ACCEPTED -> "Offer accepted"
+            AppEventType.OFFER_DECLINED -> "Offer declined"
+            AppEventType.OFFER_TIMEOUT -> "Offer expired"
             else -> error("not an offer outcome: $outcome")
         }
-        return if (replaced) "$base (offer replaced)" else base
+        return if (replaced) "$base, replaced by a new offer" else base
     }
 
     @Test
@@ -583,7 +583,7 @@ class EffectMapTest {
         val prevAtClick = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(declineCommittedAt = 900L))
         val clickEffects = effectMap.diff(prevAtClick, prevAtClick, clickObs(intent = "accept_offer"))
         assertTrue("the race warning fires instead of an ack", clickEffects.any {
-            it is AppEffect.UpdateBubble && it.text == "Decline already submitted — Accept won't take"
+            it is AppEffect.UpdateBubble && it.text == "Already declined. Accept won't go through."
         })
         assertFalse("no Accepting… ack when the decline already committed", clickEffects.any {
             it is AppEffect.UpdateBubble && it.text == "Accepting…"
@@ -650,7 +650,7 @@ class EffectMapTest {
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
         assertTrue(
             "faithful to the ledger's OFFER_TIMEOUT — no invented 4th outcome string",
-            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer Timed Out! (offer replaced)" },
+            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer expired, replaced by a new offer" },
         )
     }
 
@@ -743,7 +743,7 @@ class EffectMapTest {
             it is AppEffect.ScheduleTimeout && it.type == TimeoutType.SESSION_PAUSED_SAFETY
         })
         assertTrue("Should emit UpdateBubble", effects.any {
-            it is AppEffect.UpdateBubble && it.text.contains("Paused")
+            it is AppEffect.UpdateBubble && it.text.contains("paused")
         })
     }
 
@@ -781,12 +781,12 @@ class EffectMapTest {
      * The 06-28 receipt: DoorDash's pause sheet is a modal on top of the just-completed
      * delivery summary, so accessibility frames alternate `dash_paused` ↔
      * `delivery_summary_collapsed` (modeHint online) for a few seconds. Before #605 each
-     * online→paused edge re-minted `DASH_PAUSED` + "Dash Paused!" and each paused→online edge
-     * fired a spurious "Session resumed (grace)" card while the dasher was still paused.
+     * online→paused edge re-minted `DASH_PAUSED` + "Shift paused" and each paused→online edge
+     * fired a spurious "Shift resumed" card while the dasher was still paused.
      *
      * Driven through the REAL state machine (the fix is edge-flap elimination in the stepper, so
      * hand-built diff pairs can't exercise it): the whole flap must collapse to exactly ONE
-     * DASH_PAUSED, ONE "Dash Paused!", and ZERO resume cards.
+     * DASH_PAUSED, ONE "Shift paused", and ZERO resume cards.
      */
     @Test
     fun `#605 the 06-28 pause-flap collapses to one DASH_PAUSED and no spurious resume card`() {
@@ -833,11 +833,11 @@ class EffectMapTest {
             1, all.logEventTypes().count { it == AppEventType.DASH_PAUSED },
         )
         assertEquals(
-            "exactly one 'Dash Paused!' card",
-            1, all.count { it is AppEffect.UpdateBubble && it.text.contains("Dash Paused!") },
+            "exactly one 'Shift paused' card",
+            1, all.count { it is AppEffect.UpdateBubble && it.text.contains("Shift paused") },
         )
         assertFalse(
-            "no spurious 'Session resumed (grace)' card while the pause sheet is up",
+            "no spurious 'Shift resumed' card while the pause sheet is up",
             all.any { it is AppEffect.UpdateBubble && it.text.contains("resumed") },
         )
     }
@@ -1612,7 +1612,7 @@ class EffectMapTest {
         ))
         assertEquals(
             "first sighting announces",
-            1, first.filterIsInstance<AppEffect.UpdateBubble>().count { it.text.contains("Saved") },
+            1, first.filterIsInstance<AppEffect.UpdateBubble>().count { it.text.contains("Paid") },
         )
 
         val second = effectMap.diff(afterFirst, afterFirst, screenObs(
@@ -1621,12 +1621,12 @@ class EffectMapTest {
         ))
         assertTrue(
             "the expanded re-observation must NOT re-announce",
-            second.filterIsInstance<AppEffect.UpdateBubble>().none { it.text.contains("Saved") },
+            second.filterIsInstance<AppEffect.UpdateBubble>().none { it.text.contains("Paid") },
         )
     }
 
     @Test
-    fun `collapsed-only PostTask emits single minimal Saved bubble`() {
+    fun `collapsed-only PostTask emits single minimal Paid bubble`() {
         val (platform, _) = stateWithPlatform()
         val session = Session("sess-1", startedAt = 100L)
         val task = Task(taskId = "task-1", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", startedAt = 900L, completedAt = 1000L)
@@ -1644,7 +1644,7 @@ class EffectMapTest {
         ))
         val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
         assertEquals(1, bubbles.size)
-        assertTrue("Bubble should contain Saved", bubbles[0].text.contains("Saved"))
+        assertTrue("Bubble should contain Paid", bubbles[0].text.contains("Paid"))
         assertTrue("Bubble should contain totalPay value", bubbles[0].text.contains("7.50"))
     }
 
@@ -1718,11 +1718,11 @@ class EffectMapTest {
         assertEquals(1, bubbles.size)
         assertTrue(
             "Bare-number tip label should render as 'Store #618', not the raw digits",
-            bubbles[0].text.contains("Tip: Store #618 • \$10.00"),
+            bubbles[0].text.contains("Tip: Store #618, \$10.00"),
         )
         assertFalse(
             "The raw bare-digit label alone must not appear unqualified",
-            bubbles[0].text.contains("Tip: 618 •"),
+            bubbles[0].text.contains("Tip: 618,"),
         )
     }
 
@@ -1749,7 +1749,7 @@ class EffectMapTest {
         ))
         val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
         assertEquals(1, bubbles.size)
-        assertEquals("Saved: \$16.70\nTip: \$7.00", bubbles[0].text)
+        assertEquals("Paid \$16.70\nTip: \$7.00", bubbles[0].text)
     }
 
     // =========================================================================
@@ -2497,7 +2497,7 @@ class EffectMapTest {
     @Test
     fun `a one-shot non-task bubble stays unkeyed so it can legitimately recur (#566)`() {
         // Offer/session/resume/paused/earnings bubbles pass no dedupeScope → null key → never deduped.
-        assertNull("Offer Accepted must stay unkeyed", AppEffect.UpdateBubble("Offer Accepted", ChatPersona.Dispatcher).effectKey)
-        assertNull("a default bubble is unkeyed", AppEffect.UpdateBubble("Dash Paused!").effectKey)
+        assertNull("Offer accepted must stay unkeyed", AppEffect.UpdateBubble("Offer accepted", ChatPersona.Dispatcher).effectKey)
+        assertNull("a default bubble is unkeyed", AppEffect.UpdateBubble("Shift paused").effectKey)
     }
 }

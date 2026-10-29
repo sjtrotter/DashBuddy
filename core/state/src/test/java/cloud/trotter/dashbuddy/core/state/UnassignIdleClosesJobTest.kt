@@ -146,7 +146,7 @@ class UnassignIdleClosesJobTest {
             val closed = machine.step(armed.newState, wake(armed.newState))
             assertNull(region(closed.newState).pendingDestructive)
             assertAbandoned(closed.newState, 5_300L)
-            assertEquals("one bubble counts two drops, not three tasks", listOf("Unassigned: 2 orders"),
+            assertEquals("one bubble counts two drops, not three tasks", listOf("Unassigned: 2 deliveries"),
                 closed.effects.filterIsInstance<AppEffect.UpdateBubble>().map { it.text })
             // The normal close tripwire runs: explicit unassignments are accounted, and this
             // in-session single accept is also below its existing two-accept floor (#810/#1095).

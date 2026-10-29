@@ -167,7 +167,7 @@ class PerRegionLifecycleEdgesTest {
     }
 
     @Test
-    fun `a DoorDash PostTask receipt fires exactly one Saved bubble - none from the non-observing Uber region`() {
+    fun `a DoorDash PostTask receipt fires exactly one Paid bubble - none from the non-observing Uber region`() {
         val ddDrop = Task(
             taskId = "dd-drop", jobId = "dd-job", phase = TaskPhase.DROPOFF,
             storeName = "HEB", customerNameHash = "cx-1", startedAt = 300L, arrivedAt = 400L,
@@ -206,7 +206,7 @@ class PerRegionLifecycleEdgesTest {
 
         val savedBubbles = transition.effects
             .filterIsInstance<AppEffect.UpdateBubble>()
-            .filter { it.text.startsWith("Saved:") }
+            .filter { it.text.startsWith("Paid ") }
         assertEquals(
             "exactly one receipt bubble — the non-observing Uber region must not fire one off DoorDash's receipt",
             1, savedBubbles.size,

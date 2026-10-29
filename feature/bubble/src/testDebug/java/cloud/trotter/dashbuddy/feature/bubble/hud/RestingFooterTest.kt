@@ -54,7 +54,7 @@ class RestingFooterTest {
     @Test fun `shows last reading with vehicle name`() {
         show()
         compose.onNodeWithText("Civic 52,388 mi, ${formatShortDate(reading.occurredAt)}").assertIsDisplayed().performClick()
-        compose.onNodeWithText("car 59 mi, tracked 57.0 mi since ${formatShortDate(reading.occurredAt - 86_400_000)}").assertIsDisplayed()
+        compose.onNodeWithText("odometer 59 mi, tracked 57.0 mi since ${formatShortDate(reading.occurredAt - 86_400_000)}").assertIsDisplayed()
         compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
         assertTrue(opened)
     }
@@ -67,20 +67,20 @@ class RestingFooterTest {
     @Test fun `hidden without a reading`() {
         last = null; show()
         compose.onNodeWithText("Civic", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("car", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("odometer", substring = true).assertDoesNotExist()
     }
 
     @Test fun `a negative other figure reads as a shortfall`() {
         reconciliation = ReconciledMileage(59, 79.0, reading.occurredAt - 86_400_000)
         show()
-        compose.onNodeWithText("car 59 mi, tracked 79.0 mi since ${formatShortDate(reconciliation.since)}").assertIsDisplayed()
-        compose.onNodeWithText("short of tracked by 20.0 mi").assertIsDisplayed()
+        compose.onNodeWithText("odometer 59 mi, tracked 79.0 mi since ${formatShortDate(reconciliation.since)}").assertIsDisplayed()
+        compose.onNodeWithText("20.0 mi fewer than tracked").assertIsDisplayed()
         compose.onNodeWithText("other -20.0 mi").assertDoesNotExist()
     }
 
     @Test fun `a positive other figure stays a figure`() {
         show()
         compose.onNodeWithText("other 2.0 mi").assertIsDisplayed()
-        compose.onNodeWithText("short of tracked by", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("fewer than tracked", substring = true).assertDoesNotExist()
     }
 }

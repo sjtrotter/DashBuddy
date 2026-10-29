@@ -356,13 +356,13 @@ class CsvExporterTest {
         assertTrue(summary.contains("estimated_mileage_deduction,72.50"))
         // Explicit, clearly-labelled disclaimer line (routed through Csv.textField — formula-safe).
         assertTrue(
-            summary.contains("rate_note,2027 rate unavailable in DashBuddy; estimate uses 2026 rate."),
+            summary.contains("rate_note,DashBuddy doesn't have the 2027 IRS rate; this uses the 2026 rate."),
         )
         assertTrue(summary.contains(
-            "rate_note,2027 rate unavailable in DashBuddy; estimate uses 2026 rate.\n" +
+            "rate_note,DashBuddy doesn't have the 2027 IRS rate; this uses the 2026 rate.\n" +
                 "vehicle_id,\nvehicle_label,Unknown vehicle\nvehicle_deductible_miles,100.00\n",
         ))
-        // Disclaimer starts with a digit, so no cell in the summary begins with a formula leader.
+        // Disclaimer starts with DashBuddy, so no cell in the summary begins with a formula leader.
         summary.trim().lines().forEach { row ->
             assertFalse("formula-leading cell leaked: $row", row.startsWith("=") || row.startsWith("@"))
         }

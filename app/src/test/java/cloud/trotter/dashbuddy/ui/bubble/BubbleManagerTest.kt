@@ -103,7 +103,7 @@ class BubbleManagerTest {
         verifyBlocking(fixture.chat) {
             saveMessage(eq(sessionId), texts.capture(), eq(ChatPersona.Dispatcher))
         }
-        assertTrue(texts.firstValue.startsWith("Started "))
+        assertTrue(texts.firstValue.startsWith("DoorDash shift started"))
         val notification = argumentCaptor<Notification>()
         verify(fixture.notifications, after(100).times(1)).notify(eq(BubbleManager.BUBBLE_NOTIFICATION_ID), notification.capture())
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification.firstValue)!!
@@ -133,7 +133,7 @@ class BubbleManagerTest {
         }
     }
 
-    @Test fun `an active e-bike posts only the Started line`() {
+    @Test fun `an active e-bike posts only the shift started line`() {
         assertNoCue(fixture(active = vehicle.copy(profile = EBike())))
     }
 
@@ -141,15 +141,15 @@ class BubbleManagerTest {
         assertCue(fixture(active = vehicle.copy(profile = EBike(), odometerShown = true)))
     }
 
-    @Test fun `a car with its switch off posts only the Started line`() {
+    @Test fun `a car with its switch off posts only the shift started line`() {
         assertNoCue(fixture(active = vehicle.copy(odometerShown = false)))
     }
 
-    @Test fun `an unreadable garage posts the Started line only`() {
+    @Test fun `an unreadable garage posts the shift started line only`() {
         assertNoCue(fixture(active = null, readable = false))
     }
 
-    @Test fun `a failing readings read skips the cue and keeps the Started line`() {
+    @Test fun `a failing readings read skips the cue and keeps the shift started line`() {
         assertNoCue(fixture(readingsFlow = flow { throw IOException("read failed") }))
     }
 

@@ -66,7 +66,7 @@ class UndoStripTest {
             clock.millis += 10_001
         }
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("Undo failed, tap to retry").assertIsDisplayed()
+        compose.onNodeWithText("Undo failed. Tap to try again.").assertIsDisplayed()
         compose.onNodeWithText("Undo").assertIsEnabled().performClick()
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
         assertEquals(2, taps)
@@ -74,7 +74,7 @@ class UndoStripTest {
         // Another failed append also leaves an enabled retry.
         compose.runOnIdle { model = model.copy(busy = false, failed = true) }
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
-        compose.onNodeWithText("Undo failed, tap to retry").assertIsDisplayed()
+        compose.onNodeWithText("Undo failed. Tap to try again.").assertIsDisplayed()
         compose.onNodeWithText("Undo").assertIsEnabled()
     }
     @Test fun `drain follows Compose frames and host hides exactly at deadline`() {

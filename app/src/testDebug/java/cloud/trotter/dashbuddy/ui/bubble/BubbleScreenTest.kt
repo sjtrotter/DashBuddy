@@ -131,7 +131,7 @@ class BubbleScreenTest {
         whenever(vm.vehicleSwapLocked()).thenReturn(true)
         show(vm)
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
-        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
         repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
         verify(vm, never()).selectVehicle(any())
     }
@@ -161,7 +161,7 @@ class BubbleScreenTest {
         show(vm)
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
         compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
-        assertEquals("Vehicle can't change during a dash", ShadowToast.getTextOfLatestToast())
+        assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
         verify(vm, never()).selectVehicle(any())
     }
 
