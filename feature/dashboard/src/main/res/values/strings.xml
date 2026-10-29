@@ -40,7 +40,7 @@
       then the current dash's live elapsed time, not the day's settled total, so it must not claim to
       be the latter.
     -->
-    <string name="dashboard_today_stat_on_dash">This dash</string>
+    <string name="dashboard_today_stat_on_dash">This shift</string>
 
     <!-- The plan half of the Today card. Each state names the weekday it is quoting — do not drop it. -->
     <string name="dashboard_plan_best_tonight_format">Tonight %1$s: %3$s profit/hr on your %2$s</string>
@@ -65,5 +65,5 @@
     <string name="dashboard_weekly_plan_pointer_action">Plan</string>
     <!-- #1255: simple analytics and shared detail preference. -->
     <string name="dashboard_week_last_week_format">Last week %1$s</string>
-    <string name="dashboard_dashing_row">Dashing. Tap to show the bubble.</string>
+    <string name="dashboard_dashing_row">On shift. Tap to show the bubble.</string>
 </resources>

@@ -29,7 +29,7 @@
     <string name="wizard_gas_price_ev_title">EV charging cost</string>
     <string name="wizard_gas_price_ev_desc">Charging prices vary, so enter your cost per gallon-equivalent.</string>
     <string name="wizard_gas_price_auto_update_title">Update gas price daily</string>
-    <string name="wizard_gas_price_auto_update_desc">Off on a new install; an update keeps your setting. Daily, even off a dash, DashBuddy gets your region\'s average price for your fuel type. To find your region, Android may send your last location to its address lookup. The U.S. Energy Information Administration gets the price request, with no account or install ID. To stop, turn this off and save setup.</string>
+    <string name="wizard_gas_price_auto_update_desc">Off on a new install; an update keeps your setting. Daily, even off shift, DashBuddy gets your region\'s average price for your fuel type. To find your region, Android may send your last location to its address lookup. The U.S. Energy Information Administration gets the price request, with no account or install ID. To stop, turn this off and save setup.</string>
     <string name="wizard_gas_price_current_regional_average">Regional average</string>
     <string name="wizard_vehicle_card_type_car">Car</string>
     <string name="wizard_vehicle_card_type_ebike">E-bike</string>

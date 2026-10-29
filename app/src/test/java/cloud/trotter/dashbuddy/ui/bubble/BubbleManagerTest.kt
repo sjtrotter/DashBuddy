@@ -74,7 +74,7 @@ class BubbleManagerTest {
     private fun reading(at: Long, vehicleId: String = vehicle.id, sequence: Long = 1L) =
         VehicleOdometerReading(vehicleId, LastOdometerReading(52_388, 100.0, at), sequence)
 
-    private fun assertCue(fixture: Fixture, expectedLine: String = "Started Dashing in Car") {
+    private fun assertCue(fixture: Fixture, expectedLine: String = "DoorDash shift started in Car") {
         fixture.manager.startSession(sessionId, Platform.DoorDash.name)
         val notifications = argumentCaptor<Notification>()
         verify(fixture.notifications, timeout(5_000).times(2))
@@ -121,11 +121,11 @@ class BubbleManagerTest {
             val fixture = fixture(enabled = false, active = vehicle.copy(name = name))
             fixture.manager.startSession(sessionId, Platform.DoorDash.name)
             verifyBlocking(fixture.chat, timeout(5_000)) {
-                saveMessage(sessionId, "Started Dashing in $name", ChatPersona.Dispatcher)
+                saveMessage(sessionId, "DoorDash shift started in $name", ChatPersona.Dispatcher)
             }
-            fixture.manager.postVehicleLine(sessionId, "This dash: $name")
+            fixture.manager.postVehicleLine(sessionId, "This shift: $name")
             verifyBlocking(fixture.chat, timeout(5_000)) {
-                saveMessage(sessionId, "This dash: $name", ChatPersona.Dispatcher)
+                saveMessage(sessionId, "This shift: $name", ChatPersona.Dispatcher)
             }
             assertTrue(messages.none { name in it })
         } finally {
@@ -176,7 +176,7 @@ class BubbleManagerTest {
     }
 
     @Test fun `no vehicle yet posts the odometer line`() {
-        assertCue(fixture(active = null), expectedLine = "Started Dashing")
+        assertCue(fixture(active = null), expectedLine = "DoorDash shift started")
     }
 
     @Test fun `a recent reading for another vehicle does not suppress the line`() {

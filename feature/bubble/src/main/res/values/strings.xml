@@ -25,7 +25,7 @@
 
     <!-- #867 manual dash switcher (multi-app) -->
     <string name="bubble_switcher_label">Showing</string>
-    <string name="bubble_switcher_content_desc">Switch which dash the bubble shows</string>
+    <string name="bubble_switcher_content_desc">Switch which app the bubble shows</string>
 
 
     <!-- HUD foundations -->
@@ -44,21 +44,21 @@
     <string name="hud_dock_expense">Expense</string>
     <string name="hud_dock_log">Log</string>
     <string name="hud_dock_settings">Settings</string>
-    <string name="hud_rest_last_dash">Last dash</string>
+    <string name="hud_rest_last_dash">Last shift</string>
     <string name="hud_rest_ended">ended</string>
     <string name="hud_rest_ago">%1$s ago</string>
     <string name="hud_rest_profit_hr">profit/hr</string>
     <string name="hud_rest_accepted">%1$d of %2$d</string>
     <string name="hud_rest_accepted_label">accepted</string>
     <string name="hud_rest_span_to">to</string>
-    <string name="hud_first_run_title">No dash yet</string>
-    <string name="hud_first_run_body">A dash starts when you go online in your delivery app.</string>
+    <string name="hud_first_run_title">No shift yet</string>
+    <string name="hud_first_run_body">A shift starts when you go online in your delivery app.</string>
     <string name="hud_gas_label">Gas</string>
     <string name="hud_gas_per_gal">/gal</string>
     <string name="hud_gas_auto">Auto</string>
     <string name="hud_gas_manual">Manual</string>
     <string name="hud_gas_click_label">Edit gas price</string>
-    <string name="hud_ribbon_cd">Dash %1$s, %2$s</string>
+    <string name="hud_ribbon_cd">Shift %1$s, %2$s</string>
     <plurals name="hud_deliveries">
         <item quantity="one">delivery</item>
         <item quantity="other">deliveries</item>
@@ -167,7 +167,7 @@
     <string name="hud_log_now_nodue_at_door">%1$s at the door</string>
     <string name="hud_log_net">profit %1$s</string>
     <string name="hud_log_score_cd">Score %1$d</string>
-    <string name="hud_log_empty">Nothing logged yet this dash. Offers, deliveries and expenses appear here.</string>
+    <string name="hud_log_empty">Nothing logged yet this shift. Offers, deliveries and expenses appear here.</string>
     <string name="hud_hero_compact_cd">Profit %1$s</string>
     <string name="hud_log_minutes">%1$d min</string>
     <string name="hud_log_miles">%1$s mi</string>
@@ -209,7 +209,7 @@
     <string name="hud_cash_tip_done">Done</string>
     <string name="hud_cash_tip_add">Add %1$s cash tip</string>
     <string name="hud_cash_tip_remove">Remove %1$s cash tip</string>
-    <string name="hud_cash_tip_empty">No completed deliveries in this dash</string>
+    <string name="hud_cash_tip_empty">No completed deliveries in this shift</string>
     <string name="hud_cash_tip_delivery">Delivery</string>
     <string name="hud_cash_tip_below_zero">That\'s more than the cash tip logged. Nothing changed.</string>
     <string name="hud_cash_tip_failed">Cash tip not saved. Try again.</string>

@@ -133,12 +133,12 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("hud.dock.SETTINGS").assertIsDisplayed()
         compose.onNodeWithTag("hud.dock.NOW").performClick()
         settle()
-        compose.onNodeWithText("Last dash").assertIsDisplayed()
+        compose.onNodeWithText("Last shift").assertIsDisplayed()
     }
 
     @Test fun `resting shows the last dash and five dock blocks`() {
         show({ state(resting = true) })
-        compose.onNodeWithText("Last dash").assertIsDisplayed()
+        compose.onNodeWithText("Last shift").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
         value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2 hr 0 min").assertExists()
@@ -159,7 +159,7 @@ internal class HudScreenTest : HudScreenFixture() {
     @Test fun `first run shows em dashes and the resting dock`() {
         show({ state(first = true, profit = null) })
         listOf("hud.top.earned", "hud.top.online", "hud.top.miles").forEach { value(it, EMPTY_VALUE).assertExists() }
-        compose.onNodeWithText("No dash yet").assertIsDisplayed()
+        compose.onNodeWithText("No shift yet").assertIsDisplayed()
         compose.onNodeWithTag("hud.dock.CASH_TIP").assertDoesNotExist()
         compose.onNodeWithTag("hud.dock.EXPENSE").assertIsEnabled()
         compose.onNodeWithTag("hud.dock.ODOMETER").assertIsEnabled()

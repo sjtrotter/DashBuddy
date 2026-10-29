@@ -67,7 +67,7 @@ class DashVehicleStamperTest {
         garage.value = garage.value.copy(activeId = civic.id)
         runCurrent()
         verify(repository).record("dash", "civic", DashVehicleKind.SWAP)
-        verify(bubble).postVehicleLine("dash", "This dash: Civic")
+        verify(bubble).postVehicleLine("dash", "This shift: Civic")
         assertEquals("civic", DashVehicles.perDash(stamps.value).single().vehicleId)
     }
     @Test fun `after window next dash is posted once per session and vehicle with no swap`() = runTest {
@@ -81,7 +81,7 @@ class DashVehicleStamperTest {
         runCurrent()
         garage.value = garage.value.copy(readable = true)
         runCurrent()
-        verify(bubble, times(1)).postVehicleLine("dash", "Civic from your next dash")
+        verify(bubble, times(1)).postVehicleLine("dash", "Civic from your next shift")
         verify(repository, never()).record(any(), anyOrNull(), eq(DashVehicleKind.SWAP))
         assertEquals(1, stamps.value.size)
     }
@@ -113,7 +113,7 @@ class DashVehicleStamperTest {
         runCurrent()
         verify(repository).record("dash", null, DashVehicleKind.START)
         verify(repository).record("dash", "civic", DashVehicleKind.SWAP)
-        verify(bubble).postVehicleLine("dash", "This dash: Civic")
+        verify(bubble).postVehicleLine("dash", "This shift: Civic")
         assertEquals("civic", DashVehicles.perDash(stamps.value).single().vehicleId)
     }
     @Test fun `unknown start then vehicle added after eleven minutes only posts next dash`() = runTest {
@@ -127,7 +127,7 @@ class DashVehicleStamperTest {
         verify(repository, never()).record(any(), anyOrNull(), eq(DashVehicleKind.SWAP))
         assertEquals(1, stamps.value.size)
         assertNull(stamps.value.single().vehicleId)
-        verify(bubble).postVehicleLine("dash", "Civic from your next dash")
+        verify(bubble).postVehicleLine("dash", "Civic from your next shift")
     }
     @Test fun `a failed emission does not stop later emissions`() = runTest {
         doThrow(IllegalStateException("private detail")).whenever(repository).record("dash", "malibu", DashVehicleKind.START)

@@ -9,14 +9,14 @@
     <string name="general_settings_title">General</string>
     <string name="general_settings_section_driving">Driving</string>
     <string name="general_settings_glance_mode_label">Driving glance mode</string>
-    <string name="general_settings_glance_mode_subtitle">Larger bubble text during a dash</string>
+    <string name="general_settings_glance_mode_subtitle">Larger bubble text during a shift</string>
     <string name="general_settings_section_voice">Voice</string>
     <string name="general_settings_tts_language_label">Spoken offer language</string>
     <string name="tts_language_option_system">System default</string>
     <string name="tts_language_option_english">English</string>
     <string name="tts_language_option_spanish">Español</string>
     <string name="platform_settings_title">Delivery apps</string>
-    <string name="platform_settings_description">Choose which delivery apps DashBuddy reads. Dash tracking works only in apps DashBuddy fully supports.</string>
+    <string name="platform_settings_description">Choose which delivery apps DashBuddy reads. Shift tracking works only in apps DashBuddy fully supports.</string>
     <string name="platform_settings_installed">Installed</string>
     <string name="platform_settings_not_installed">Not installed</string>
     <string name="reorderable_rule_content_desc_reorder">Drag to reorder</string>
@@ -26,7 +26,7 @@
     <string name="reorderable_rule_item_count_format">%1$d items</string>
     <string name="data_export_title">Export data</string>
     <string name="data_export_csv_heading">Miles and earnings spreadsheet</string>
-    <string name="data_export_csv_desc">Saves your full history as spreadsheet files in a folder you choose:\ndeliveries.csv: one row per delivery\nsessions.csv: one row per dash\nsummary.csv: totals and estimated IRS mileage deduction\nexpenses.csv: logged expenses, including undone ones\nfuel.csv: logged fill-ups, including undone ones\n\nThe files include store names, your expense labels and DashBuddy\'s tracked miles at each fill-up, but nothing about customers. DashBuddy doesn\'t upload them, but a cloud folder may. The files stay after you uninstall; delete them from the folder. Exporting again replaces them.</string>
+    <string name="data_export_csv_desc">Saves your full history as spreadsheet files in a folder you choose:\ndeliveries.csv: one row per delivery\nsessions.csv: one row per shift\nsummary.csv: totals and estimated IRS mileage deduction\nexpenses.csv: logged expenses, including undone ones\nfuel.csv: logged fill-ups, including undone ones\n\nThe files include store names, your expense labels and DashBuddy\'s tracked miles at each fill-up, but nothing about customers. DashBuddy doesn\'t upload them, but a cloud folder may. The files stay after you uninstall; delete them from the folder. Exporting again replaces them.</string>
     <string name="data_export_csv_button">"  Choose folder &amp; export"</string>
     <string name="data_export_csv_success_format">Exported %1$d files to the chosen folder.</string>
     <string name="data_export_csv_error_format">Export failed (%1$s). Check the folder and try again.</string>
@@ -77,26 +77,26 @@
     <string name="strategy_settings_priorities_hint">Drag to reorder. Rules higher up count more.</string>
     <string name="evidence_settings_title">Screenshots</string>
     <string name="evidence_settings_master_label">Save screenshots</string>
-    <string name="evidence_settings_master_subtitle">Off unless you turn it on. A screenshot is saved only when this switch and its type below are on; the types start on.\n\nA screenshot shows the whole screen, including customer details, other apps and anything else showing, like a video or the keyboard. It goes to Pictures/DashBuddy. DashBuddy never uploads it, but gallery sync or sharing can. Screenshots stay after you uninstall; delete them in your gallery.\n\nNone is taken if this switch is off or another app is in front at that moment; one already saving still finishes. This switch doesn\'t affect your dash history.</string>
+    <string name="evidence_settings_master_subtitle">Off unless you turn it on. A screenshot is saved only when this switch and its type below are on; the types start on.\n\nA screenshot shows the whole screen, including customer details, other apps and anything else showing, like a video or the keyboard. It goes to Pictures/DashBuddy. DashBuddy never uploads it, but gallery sync or sharing can. Screenshots stay after you uninstall; delete them in your gallery.\n\nNone is taken if this switch is off or another app is in front at that moment; one already saving still finishes. This switch doesn\'t affect your shift history.</string>
     <string name="evidence_settings_section_granular">By type</string>
     <string name="evidence_settings_offers_label">Offers</string>
     <string name="evidence_settings_offers_subtitle">Offer screenshots</string>
     <string name="evidence_settings_deliveries_label">Delivery summaries</string>
     <string name="evidence_settings_deliveries_subtitle">Delivery receipt screenshots</string>
-    <string name="evidence_settings_session_label">Dash summaries</string>
-    <string name="evidence_settings_session_subtitle">Dash summary screenshots</string>
+    <string name="evidence_settings_session_label">Shift summaries</string>
+    <string name="evidence_settings_session_subtitle">Shift summary screenshots</string>
 
     <!-- #867 Developer Options: bubble session-presentation experiment -->
     <string name="developer_settings_title">Developer options</string>
     <string name="developer_settings_section_bubble">Bubble</string>
-    <string name="developer_settings_bubble_session_label">Dash shown</string>
-    <string name="developer_settings_bubble_session_subtitle">Which dash the bubble shows when two delivery apps are online. In every mode, cards and the chat header name their app.</string>
+    <string name="developer_settings_bubble_session_label">App shown</string>
+    <string name="developer_settings_bubble_session_subtitle">Which app the bubble shows when two delivery apps are online. In every mode, cards and the chat header name their app.</string>
     <string name="developer_settings_bubble_session_follow_label">Follow</string>
     <string name="developer_settings_bubble_session_pinned_label">Pin</string>
     <string name="developer_settings_bubble_session_merged_label">Merge</string>
-    <string name="developer_settings_bubble_session_follow_explainer">Shows the delivery app you used last. A pick in the bubble\'s switcher holds until that dash ends, then the bubble follows again.</string>
-    <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick stays until you change it, even across that app\'s next dash. While that app is offline, the bubble shows the app you used last.</string>
-    <string name="developer_settings_bubble_session_merged_explainer">Test mode: one stack of cards from every live dash, each labeled with its app. No switcher; the chat follows the app you used last.</string>
+    <string name="developer_settings_bubble_session_follow_explainer">Shows the delivery app you used last. A pick in the bubble\'s switcher holds until that app\'s shift ends, then the bubble follows again.</string>
+    <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick stays until you change it, even across that app\'s next shift. While that app is offline, the bubble shows the app you used last.</string>
+    <string name="developer_settings_bubble_session_merged_explainer">Test mode: one stack of cards from every app with a live shift, each labeled with its app. No switcher; the chat follows the app you used last.</string>
     <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the permission chain's
          first step (:app ScreenEventsCard), the Settings switch row below and the debug block; also
          the prominent-disclosure shape #1138 M3 will reuse. -->
@@ -135,5 +135,5 @@
     <string name="consent_receipt_denied">Not allowed</string>
     <string name="consent_privacy_link">Privacy details</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
-    <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a dash, and after one until you log a reading</string>
+    <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a shift, and after one until you log a reading</string>
 </resources>

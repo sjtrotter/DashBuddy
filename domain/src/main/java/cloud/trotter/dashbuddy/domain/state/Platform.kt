@@ -11,10 +11,8 @@ import java.util.Locale
  * on first observation.
  *
  * Display metadata lives here as the SSOT (audit #9): [displayName] (settings
- * label), [shortName] (bubble HUD badge), and [sessionVerb] (the dispatcher
- * chat gerund — "Dashing"/"Ubering"; `null` falls back to a generic verb at
- * the UI edge). No UI/Android types — this is pure copy + a phrase, derived
- * everywhere it's shown.
+ * label, and the dispatcher chat's "<displayName> shift") and [shortName] (bubble
+ * HUD badge). No UI/Android types — this is pure copy, derived everywhere it's shown.
  *
  * [offerOverlay] (#1152) declares that the platform draws its offer as a floating overlay above
  * other apps (a `SYSTEM_ALERT_WINDOW`, reported to accessibility services as `TYPE_SYSTEM`) — the
@@ -31,14 +29,13 @@ enum class Platform(
     val packageName: String?,
     val displayName: String,
     val shortName: String,
-    val sessionVerb: String?,
     val offerOverlay: Boolean = false,
 ) {
-    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "Dashing"),
-    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Ubering", offerOverlay = true),
-    Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC", null),
-    WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark", null),
-    Unknown("_unknown", null, "Unknown", "", null),
+    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD"),
+    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", offerOverlay = true),
+    Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC"),
+    WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark"),
+    Unknown("_unknown", null, "Unknown", ""),
     ;
 
     companion object {

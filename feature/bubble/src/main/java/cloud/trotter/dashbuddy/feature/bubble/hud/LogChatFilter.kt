@@ -9,8 +9,9 @@ object LogChatFilter {
     private val outcomes = setOf("Offer accepted", "Offer declined", "Offer expired")
     // OfferEffects: exact-match acknowledgements, already represented by the offer outcome.
     private val acknowledgements = setOf("Accepting…", "Declining…")
-    // Prefix-match copy from OfferEffects and ModeEffects, represented by outcomes and dash figures.
-    private val acknowledgementPrefixes = listOf("Already declined", "Dash ended")
+    // Prefix-match copy from OfferEffects and ModeEffects, represented by outcomes and shift figures.
+    // "Dash ended" is the pre-#1407 wording, still in saved chat history.
+    private val acknowledgementPrefixes = listOf("Already declined", "Shift ended", "Dash ended")
     private val tags = Regex("<[^>]*>")
     private val breaks = Regex("<br\\b[^>]*>|</(?:p|div|li|h[1-6]|blockquote|ul|ol)\\s*>", RegexOption.IGNORE_CASE)
     private val unresolvedEntity = Regex("&(?:#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);")

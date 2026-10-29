@@ -55,9 +55,9 @@
     <!-- copy-audit: retranslated es -->
     <string name="perm_title_location">Ubicación</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_pitch_location">Cuenta las millas de tu dash para estimar la ganancia después de los costos del vehículo.</string>
+    <string name="perm_pitch_location">Cuenta las millas de tu turno para estimar la ganancia después de los costos del vehículo.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="perm_hood_location">DashBuddy usa el GPS para contar millas solo durante un dash, lo que ahorra batería y recoge menos datos de ubicación. Si los precios automáticos de gasolina están activados, puede enviar tu última ubicación, incluso fuera de un dash, a la búsqueda de direcciones de Android. Los precios automáticos de gasolina empiezan desactivados en una instalación nueva; una actualización conserva tu ajuste. Para detenerlos, pon en manual el precio de la gasolina en la burbuja. Tus millas quedan en tu historial, que la copia de seguridad de Android puede copiar.</string>
+    <string name="perm_hood_location">DashBuddy usa el GPS para contar millas solo durante un turno, lo que ahorra batería y recoge menos datos de ubicación. Si los precios automáticos de gasolina están activados, puede enviar tu última ubicación, incluso fuera de un turno, a la búsqueda de direcciones de Android. Los precios automáticos de gasolina empiezan desactivados en una instalación nueva; una actualización conserva tu ajuste. Para detenerlos, pon en manual el precio de la gasolina en la burbuja. Tus millas quedan en tu historial, que la copia de seguridad de Android puede copiar.</string>
     <!-- copy-audit: retranslated es -->
     <string name="perm_action_location">Permitir ubicación</string>
 

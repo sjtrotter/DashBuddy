@@ -11,7 +11,9 @@ The full prose discipline is the dev's `prose-whip` skill; this file is the subs
 2. **Caveats live in the one disclosure per screen** (`HowNumbersWorkFooter`), never beside the figure. A figure
    whose meaning depends on a condition carries that condition as a short context line (`AppStatTile.sub`), not
    a paragraph. Thin-data reasons and plan states are exempt from the label rule because they are the content.
-3. **Plain nouns, repeated.** A dash is a dash on every screen (not a session, a shift, a window). Profit is money
+3. **Plain nouns, repeated.** A shift is a shift on every screen (not a dash, a session, a window): "dash" is
+   DoorDash's word, and the app reads more than one delivery app (dev, 2026-10-29, #1407). A delivery app's own
+   button or screen name stays exact when the copy quotes it. Profit is money
    after vehicle costs on every screen; it replaced "kept" and "net" as the name of an amount (dev, 2026-10-29,
    #1407), and an offer's estimate before accept keeps "net". Earned is gross and says so. Pick the word once and
    reuse it.

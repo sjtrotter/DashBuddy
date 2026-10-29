@@ -33,7 +33,8 @@ class LogChatFilterTest {
         listOf("Dash Paused!", "Session resumed (grace)").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
     }
     @Test fun `session start and done lines are kept`() {
-        listOf("Started dashing", "Done dashing").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
+        listOf("DoorDash shift started", "DoorDash shift ended").forEach { assertTrue(LogChatFilter.keep(logChat(it))) }
+        listOf("Shift ended. Earned $20.00", "Dash ended.").forEach { assertFalse(LogChatFilter.keep(logChat(it))) }
         assertFalse(LogChatFilter.keep(logChat("Session Ended: $20.00")))
     }
     @Test fun `unknown dispatcher text is kept`() {
