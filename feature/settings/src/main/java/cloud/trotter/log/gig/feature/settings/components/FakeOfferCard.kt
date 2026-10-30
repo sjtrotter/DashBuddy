@@ -28,7 +28,6 @@ import cloud.trotter.log.gig.feature.settings.R
 import cloud.trotter.log.gig.domain.evaluation.OfferAction
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
 import cloud.trotter.log.gig.domain.format.Formats
-import cloud.trotter.log.gig.feature.settings.recommendationLabel
 
 @Composable
 fun FakeOfferCard(
@@ -37,19 +36,9 @@ fun FakeOfferCard(
 ) {
     val c = AppTheme.colors
 
-    val targetContainerColor = when (evaluation.action) {
-        OfferAction.ACCEPT -> c.goodBg
-        OfferAction.DECLINE -> c.badBg
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-
+    val targetContainerColor = MaterialTheme.colorScheme.surfaceVariant
     val targetContentColor = c.text
-
-    val borderColor = when (evaluation.action) {
-        OfferAction.ACCEPT -> c.good
-        OfferAction.DECLINE -> c.bad
-        else -> c.neutral
-    }
+    val borderColor = c.neutral
 
     val animatedContainerColor by animateColorAsState(targetContainerColor, label = "container")
     val animatedContentColor by animateColorAsState(targetContentColor, label = "content")
@@ -72,20 +61,6 @@ fun FakeOfferCard(
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // --- Recommendation + Score ---
-                Text(
-                    text = stringResource(
-                        R.string.fake_offer_score_format,
-                        evaluation.action.recommendationLabel(),
-                        evaluation.score.toInt(),
-                    ),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = borderColor
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 // --- Pay line ---
                 if (hasAnyCost) {
                     val payLineFormat = if (evaluation.isUsingDefaults)

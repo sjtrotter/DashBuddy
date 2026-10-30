@@ -18,6 +18,26 @@ Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `Tts
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
 
+**One offer story (#1442).** `domain.offer.story.OfferStories` owns the landed figures, combined-job
+calculation, quoted add-on deltas, display-precision target comparisons, missing inputs and all preference
+hits. `OfferRules.hits` is shared with the evaluator, whose first-hit precedence and stored score/action/quality
+are unchanged. A TOTAL quote uses its landed evaluation without another evaluation. A combined add-on
+keeps the existing count-unit guard and two evaluations under one resolved configuration.
+
+`SpeakOffer(pending, platform, job)` carries the inputs to the engine; it builds a story with the strategy
+configuration and selects `AddOnSpeech` from developer settings. The card and notification use the same
+builder and setting. The source story keeps both job totals and quoted deltas; `forPresentation` selects
+which facts every renderer reads. `JOB_TOTALS` is the default, `DELTAS_ONLY` is the experiment.
+
+`OfferStoryText` supplies the pop-up title and body and the chat line. `ChatPersona.Offer` uses a neutral
+receipt icon and logs only `[Offer]`; legacy GOOD_OFFER/BAD_OFFER/INSPECTOR rows decode to it and stay
+out of the HUD log. `Platform.appName` supplies titles without platform branches. Both RemoteViews
+layouts replace the score gauge with a one-line first-rule/first-missing note; all gauge setters are gone
+so applying the views preserves the action buttons. `OfferSpeech` uses localized English/Spanish resources,
+`Formats.wholeDollars` for amounts, and hourly last. Losses are named explicitly, including under one dollar.
+Re-quotes update the pop-up but add no chat row and do not re-speak. The HUD log, analytics offer rows and
+Settings preview contain no scores or recommendations; persisted columns and their readers remain.
+
 **Barriers on the serialized queue (#1271 scenario 4).** Besides effects, the one drain worker runs
 `EffectExecutor.afterProcessed` actions in queue order — after every effect enqueued before them, before
 anything enqueued after. `StateManagerV2` writes every state snapshot through one, and recovery
@@ -81,9 +101,9 @@ returned economics are the honest subset: real gross pay and the economy's own
 would make the session's deliveries look cost-free), with every distance-derived figure an explicit
 `0.0` placeholder and `netPayAmount` == gross (no cost deducted ≠ a one-mile cost).
 **`OfferEvaluation.hasDistanceMetrics` is the one predicate consumers branch on** so those
-placeholders are never rendered as measurements — `FlowCardSnapshot.Offer.from` (bubble card +
-heads-up custom views get null → their existing `—` / hidden gauge), `toNotificationSummary`,
-`TtsEffectHandler` (a no-verdict utterance, not "zero dollars an hour"),
+placeholders are never rendered as measurements. `OfferStories.build` also requires parsed pay;
+its nullable facts feed the card, pop-up, chat line and voice. Unknown inputs remain words or `—`.
+Other consumers remain guarded:
 `JobAcceptFlow.acceptInputsFromPending` + `FlowCardMapper`'s #460 co-hero, and
 `RecordFolds.foldOffer` (null frozen estimates, so `AVG(score)`/`AVG(estDollarsPerHour)` aren't
 dragged toward a fabricated 0). The #659 fuel/non-fuel split was already guarded at the fold

@@ -12,7 +12,7 @@ import java.util.Locale
  *
  * Display metadata lives here as the SSOT (audit #9): [displayName] (settings
  * label, and the dispatcher chat's "<displayName> shift") and [shortName] (bubble
- * HUD badge). No UI/Android types — this is pure copy, derived everywhere it's shown.
+ * HUD badge), and [appName] (plain app name in offer titles). No UI/Android types — this is pure copy, derived everywhere it's shown.
  *
  * [offerOverlay] (#1152) declares that the platform draws its offer as a floating overlay above
  * other apps (a `SYSTEM_ALERT_WINDOW`, reported to accessibility services as `TYPE_SYSTEM`) — the
@@ -29,13 +29,14 @@ enum class Platform(
     val packageName: String?,
     val displayName: String,
     val shortName: String,
+    val appName: String,
     val offerOverlay: Boolean = false,
 ) {
-    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD"),
-    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", offerOverlay = true),
-    Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC"),
-    WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark"),
-    Unknown("_unknown", null, "Unknown", ""),
+    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "DoorDash"),
+    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Uber", offerOverlay = true),
+    Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC", "Instacart"),
+    WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark", "Walmart Spark"),
+    Unknown("_unknown", null, "Unknown", "", "Unknown"),
     ;
 
     companion object {

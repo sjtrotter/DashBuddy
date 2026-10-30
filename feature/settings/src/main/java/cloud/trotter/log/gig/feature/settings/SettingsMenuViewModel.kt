@@ -75,6 +75,11 @@ class SettingsMenuViewModel @Inject constructor(
     val isDevModeUnlocked = devSettingsRepository.isDevModeUnlocked
 
     /** #867 — the bubble's session-presentation experiment switch (Developer Options). */
+    val addOnSpeech = devSettingsRepository.addOnSpeech
+    fun setAddOnSpeech(value: cloud.trotter.log.gig.domain.offer.story.AddOnSpeech) = viewModelScope.launch {
+        devSettingsRepository.setAddOnSpeech(value)
+    }
+
     val bubbleSessionMode = devSettingsRepository.bubbleSessionMode
 
     private val _versionClickCount = MutableStateFlow(0)

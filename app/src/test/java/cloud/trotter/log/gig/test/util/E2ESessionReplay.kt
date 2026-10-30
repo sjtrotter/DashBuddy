@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.test.util
 
+import cloud.trotter.log.gig.domain.offer.story.*
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import android.app.NotificationManager
 import android.content.Context
 import android.content.ContextWrapper
@@ -231,6 +233,9 @@ class E2ESessionReplay(
             screenShotHandler = screenshots,
             uiInteractionHandler = UiInteractionHandler(accessibility.source),
             effectsFiredDao = db.effectsFiredDao(),
+            devSettingsRepository = mock<DevSettingsRepository> {
+                on { addOnSpeech } doReturn MutableStateFlow(AddOnSpeech.JOB_TOTALS)
+            },
             ttsEffectHandler = TtsEffectHandler(
                 app, appPreferences, appScope, tts.factory, TtsHealthNotifier(app, notifications), clock,
             ),

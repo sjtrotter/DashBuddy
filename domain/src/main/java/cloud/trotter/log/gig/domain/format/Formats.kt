@@ -30,6 +30,9 @@ data class MoneyParts(val sign: String, val symbol: String, val whole: String, v
  * appear in ui/ or rendered-copy code — everything routes here.
  */
 object Formats {
+    /** Truncate the displayed cents, rather than the unrounded input. */
+    fun wholeDollars(value: Double): Long = cents(value) / 100
+
 
     private val locale: Locale get() = Locale.getDefault()
 

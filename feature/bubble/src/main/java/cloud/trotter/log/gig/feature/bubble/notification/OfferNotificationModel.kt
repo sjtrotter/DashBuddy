@@ -8,7 +8,6 @@ data class OfferNotificationModel(
     val store: String?,
     val pay: Double?,
     val expiresAt: Long?,
-    val ring: RingModel?,
     val bar: PayBarModel?,
     val rates: List<RateText>,
     val addOnFigures: String?,
@@ -17,7 +16,7 @@ data class OfferNotificationModel(
         fun from(card: OfferCardModel): OfferNotificationModel {
             val scored = card as? OfferCardModel.Scored
             return OfferNotificationModel(card.head.store, card.head.pay, card.head.expiresAt,
-                scored?.ring, scored?.bar, scored?.gauges?.map { it.rateParts() }.orEmpty(),
+                scored?.bar, scored?.gauges?.map { it.rateParts() }.orEmpty(),
                 (card as? OfferCardModel.AddOnRaw)?.tiles?.let(::addOnFigures))
         }
     }

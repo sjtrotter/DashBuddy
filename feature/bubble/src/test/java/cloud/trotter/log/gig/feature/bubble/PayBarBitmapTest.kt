@@ -15,10 +15,10 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PayBarBitmapTest {
-    private val labels = PayBarLabels("profit", "loss", "car", "distance unknown")
+    private val labels = PayBarLabels("net", "loss", "car", "distance unknown")
     private val colors = darkAppColors()
 
-    @Test fun `split draws the profit and car tint at the requested size`() {
+    @Test fun `split draws the net and car tint at the requested size`() {
         val bitmap = payBarBitmap(PayBarModel.Split(829, 346, 0.7f), 360, 34, 1f, labels)!!
         assertEquals(360, bitmap.width)
         assertEquals(34, bitmap.height)

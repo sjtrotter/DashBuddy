@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.domain.evaluation
 
 import cloud.trotter.log.gig.domain.format.Formats
+import cloud.trotter.log.gig.domain.offer.story.RuleHit
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
 
@@ -14,13 +15,11 @@ class OfferEvaluator() {
         val offerStoreNames = offer.orders.map { it.storeName.lowercase().trim() }.toSet()
         val activeMerchantRules = activeRules.filterIsInstance<ScoringRule.MerchantRule>()
         // #1121: these distance-independent policies retain the #936 precedence for every basis.
+        val hits = OfferRules.hits(offer, config)
         val preferenceVerdict = when {
-            !config.allowShopping && offer.isShop -> OfferQuality.SHOP_DECLINED
-            config.protectStatsMode -> OfferQuality.PROTECTED
-            activeMerchantRules.any { rule ->
-                rule.action == MerchantAction.BLOCK &&
-                    rule.storeName.lowercase().trim() in offerStoreNames
-            } -> OfferQuality.BLOCKED
+            RuleHit.SHOPPING_OFF in hits -> OfferQuality.SHOP_DECLINED
+            RuleHit.PROTECT_RATE in hits -> OfferQuality.PROTECTED
+            RuleHit.BLOCKED_STORE in hits -> OfferQuality.BLOCKED
             else -> null
         }
         // Marginal-route context is absent: preserve a preference verdict, but derive no metrics.
@@ -262,10 +261,7 @@ class OfferEvaluator() {
         }
 
         // MANUAL_REVIEW: flag for later action override
-        val requiresManualReview = activeMerchantRules.any { rule ->
-            rule.action == MerchantAction.MANUAL_REVIEW &&
-                    rule.storeName.lowercase().trim() in offerStoreNames
-        }
+        val requiresManualReview = RuleHit.REVIEW_STORE in hits
 
         // SCORE_MODIFIER: collect all matching multipliers, fold into one
         val scoreModifier = activeMerchantRules

@@ -55,6 +55,15 @@ class BubbleManagerChatLogTest {
 
     @Test
     fun `a refresh-only offer post writes no chat summary and no INFO milestone (#1104)`() {
+        assertNoChat(refreshOnly = true, requote = false)
+    }
+
+    @Test
+    fun `a re-quote writes no chat summary and no INFO milestone`() {
+        assertNoChat(refreshOnly = false, requote = true)
+    }
+
+    private fun assertNoChat(refreshOnly: Boolean, requote: Boolean) {
         val context = RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
@@ -81,12 +90,12 @@ class BubbleManagerChatLogTest {
         val tree = RecordingTree()
         Timber.plant(tree)
         try {
-            manager.postOfferNotification(offer, evaluation, cloud.trotter.log.gig.domain.state.Platform.DoorDash, "sess-1", refreshOnly = true,
+            manager.postOfferNotification(offer, evaluation, cloud.trotter.log.gig.domain.state.Platform.DoorDash, "sess-1", refreshOnly = refreshOnly, requote = requote,
                 pending = cloud.trotter.log.gig.domain.state.PendingOffer("h1",
                     cloud.trotter.log.gig.domain.state.ParsedFields.OfferFields(parsedOffer =
                         cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5)),
                     1_000L, evaluation, returnFlow = cloud.trotter.log.gig.domain.state.Flow.TaskPickupNavigation),
-                config = null)
+                config = null, addOnSpeech = cloud.trotter.log.gig.domain.offer.story.AddOnSpeech.JOB_TOTALS)
         } finally {
             Timber.uproot(tree)
         }
@@ -103,6 +112,7 @@ class BubbleManagerChatLogTest {
         val tree = RecordingTree()
         Timber.plant(tree)
         try {
+            manager.postMessage("H-E-B · $12.00 net", ChatPersona.Offer("DoorDash offer"))
             manager.postMessage("Pickup: H-E-B ready", ChatPersona.Merchant("H-E-B"))
             manager.postMessage("Heading to H-E-B's customer", ChatPersona.Customer("H-E-B's customer"))
         } finally {
@@ -120,6 +130,8 @@ class BubbleManagerChatLogTest {
         check(infoChat.any { it.message.contains("message posted [Customer]") }) {
             "No INFO 'Chat' line carried '[Customer]'. Records: $infoChat"
         }
+
+        check(infoChat.any { it.message.contains("message posted [Offer]") })
 
         // (c) The DEBUG firehose keeps full fidelity — the raw store/customer text is still there.
         tree.assertLevelContains(Log.DEBUG, "H-E-B")

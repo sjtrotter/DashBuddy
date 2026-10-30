@@ -5,13 +5,15 @@
     android:orientation="vertical" android:paddingTop="2dp" android:paddingBottom="2dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="40dp"
         android:orientation="horizontal" android:gravity="center_vertical">
-        <ImageView android:id="@+id/notif_offer_gauge" android:layout_width="40dp" android:layout_height="40dp" />
         <TextView android:id="@+id/notif_offer_hero" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:layout_marginStart="10dp"
             android:maxLines="1" android:includeFontPadding="false" android:textStyle="bold" />
         <TextView android:id="@+id/notif_offer_profit" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:layout_marginStart="10dp"
             android:maxLines="1" android:includeFontPadding="false" />
+        <TextView android:id="@+id/notif_offer_note" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+            android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
         <FrameLayout android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
         <Chronometer android:id="@+id/notif_offer_countdown" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:textSize="18sp" android:textStyle="bold" />

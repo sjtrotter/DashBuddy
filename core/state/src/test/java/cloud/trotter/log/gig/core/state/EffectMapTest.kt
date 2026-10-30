@@ -289,7 +289,10 @@ class EffectMapTest {
         // Spoken read also fires on eval-landing, carrying the same evaluation.
         val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
         assertEquals("Exactly one SpeakOffer", 1, spoken.size)
-        assertEquals("Speaks the landed evaluation", testEvaluation, spoken[0].evaluation)
+        assertEquals("Speaks the landed evaluation", testEvaluation, spoken[0].pending.evaluation)
+        assertEquals(posts[0].pending, spoken[0].pending)
+        assertEquals(posts[0].platform, spoken[0].platform)
+        assertEquals(posts[0].job, spoken[0].job)
         // Offer didn't just appear — only its evaluation landed — so don't re-evaluate.
         assertTrue("Should not re-evaluate", effects.none { it is AppEffect.EvaluateOffer })
     }

@@ -19,7 +19,10 @@ import cloud.trotter.log.gig.domain.evaluation.OfferEvaluator
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
-import cloud.trotter.log.gig.feature.bubble.formatters.toNotificationSummary
+import cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText
+import cloud.trotter.log.gig.domain.offer.story.*
+import cloud.trotter.log.gig.domain.state.*
+import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,23 +62,23 @@ class TtsEffectHandlerRecoveryTest {
             payAmount = 10.5, distanceMiles = 1.5, timeToCompleteMinutes = 1L,
             displayStoreName = "H-E-B",
         ), EvaluationConfig())
-        tts.speakOffer(evaluation)
+        tts.speakOffer(story(evaluation))
         val spoken = argumentCaptor<CharSequence>()
         verify(engines.first()).speak(spoken.capture(), any(), anyOrNull(), any())
         val speech = spoken.lastValue.toString()
-        assertTrue(speech.contains("Add-on at H-E-B"))
-        assertTrue(speech.contains("10.50 dollars more"))
+        assertTrue(speech.contains("Add-on. H-E-B."))
+        assertTrue(speech.contains("Adds 10 dollars."))
         assertTrue(speech.contains("1.5 more miles"))
-        assertTrue(speech.contains("No score"))
+        assertFalse(speech.contains("score"))
         assertTrue(speech.contains("1 more minute."))
         assertFalse(speech.contains("distance unknown"))
         assertFalse(speech.contains(" net"))
-        val summary = evaluation.toNotificationSummary().toString()
-        assertTrue(summary.contains("Add-on"))
+        val summary = OfferStoryText.line(story(evaluation), RuntimeEnvironment.getApplication().resources)
+        assertEquals("DoorDash add-on", OfferStoryText.title(story(evaluation), RuntimeEnvironment.getApplication().resources))
         assertTrue(summary.contains("+$10.50"))
         assertTrue(summary.contains("+1.5 mi"))
         assertTrue(summary.contains("+1 min"))
-        assertTrue(summary.contains("no score"))
+        assertFalse(summary.contains("score"))
         assertFalse(summary.contains("Net"))
         assertFalse(summary.contains("Score"))
     }
@@ -89,15 +92,23 @@ class TtsEffectHandlerRecoveryTest {
             payAmount = 10.5, distanceMiles = 1.5, timeToCompleteMinutes = 1L,
             displayStoreName = "H-E-B",
         ), EvaluationConfig())
-        tts.speakOffer(evaluation)
+        tts.speakOffer(story(evaluation))
         val spoken = argumentCaptor<CharSequence>()
         verify(engines.first()).speak(spoken.capture(), any(), anyOrNull(), any())
         val speech = spoken.lastValue.toString()
-        assertTrue(speech.contains("Pedido adicional en H-E-B"))
+        assertTrue(speech.contains("Pedido adicional. H-E-B."))
         assertTrue(speech.contains("millas más"))
-        assertTrue(speech.contains("Sin puntuación"))
+        assertFalse(speech.contains("puntuación"))
         assertTrue(speech.contains("1 minuto más."))
         assertFalse(speech.contains("distancia desconocida"))
+    }
+
+    private fun story(e: OfferEvaluation): OfferStory {
+        val parsed = ParsedOffer("speech", payAmount = e.payAmount, distanceMiles = e.distanceMiles,
+            displayStoreName = e.merchantName, quoteBasis = e.quoteBasis,
+            offerScope = if (e.quoteBasis == OfferQuoteBasis.INCREMENTAL) OfferScope.ADD_ON else OfferScope.STANDALONE,
+            timeToCompleteMinutes = e.incrementalMinutes)
+        return OfferStories.build(OfferFixtures.pending(parsed, e), null, null, Platform.DoorDash)
     }
 
     private lateinit var engines: MutableList<TextToSpeech>
@@ -174,7 +185,7 @@ class TtsEffectHandlerRecoveryTest {
         reportReady()
         failSpeech(engines.first())
 
-        tts.speakOffer(evaluation())
+        tts.speakOffer(story(evaluation()))
 
         verify(engines.first()).shutdown()
         assertEquals("the dead engine must be replaced, not reused", 2, engines.size)
@@ -186,7 +197,7 @@ class TtsEffectHandlerRecoveryTest {
         reportReady()
         // speak() returns SUCCESS (the mock default) — QUEUED, not spoken — and the failure
         // arrives asynchronously. Before #991 review finding 2 this reached nothing at all.
-        tts.speakOffer(evaluation())
+        tts.speakOffer(story(evaluation()))
 
         progressListener(engines.first()).onError("offer_1", TextToSpeech.ERROR)
 
@@ -213,7 +224,7 @@ class TtsEffectHandlerRecoveryTest {
         val tts = handler()
         reportReady()
 
-        tts.speakOffer(evaluation())
+        tts.speakOffer(story(evaluation()))
         progressListener(engines.first()).onDone("offer_1")
 
         verify(engines.first(), never()).shutdown()
@@ -224,7 +235,7 @@ class TtsEffectHandlerRecoveryTest {
     fun `a skipped utterance while the first init is still pending is not counted`() {
         val tts = handler() // no readiness report: the engine is simply still binding
 
-        repeat(5) { tts.speakOffer(evaluation()) }
+        repeat(5) { tts.speakOffer(story(evaluation())) }
 
         verify(notificationManager, never()).notify(any<Int>(), any<Notification>())
         assertEquals("startup is not a failure — nothing to rebuild", 1, engines.size)
@@ -239,7 +250,7 @@ class TtsEffectHandlerRecoveryTest {
         val tts = handler()
         reportReady()
         failSpeech(engines.first())
-        tts.speakOffer(evaluation())
+        tts.speakOffer(story(evaluation()))
 
         reportReady() // the rebuilt engine reports in
 
@@ -280,7 +291,7 @@ class TtsEffectHandlerRecoveryTest {
         // The replacement engine never reports ready (the TTS package is mid-update), so every
         // later offer is skipped — which, during a recovery, is itself a lost utterance. All of
         // them land milliseconds apart, well inside the policy's 60 s floor.
-        repeat(40) { tts.speakOffer(evaluation()) }
+        repeat(40) { tts.speakOffer(story(evaluation())) }
 
         // Finding 4: the notice cannot be un-fired, so a burst must not spend it. A real outage
         // crossing the floor still gets it — that gate is exercised in TtsRecoveryPolicyTest.

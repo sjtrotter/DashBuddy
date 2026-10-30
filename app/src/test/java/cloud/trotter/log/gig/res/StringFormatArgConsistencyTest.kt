@@ -25,7 +25,7 @@ class StringFormatArgConsistencyTest {
         assertTrue("missing res file: ${file.absolutePath}", file.exists())
         val text = file.readText()
         // Grab <string name="x" ...>value</string>, tolerating extra attributes (translatable, etc).
-        val stringTag = Regex("""<string\s+name="([^"]+)"[^>]*>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
+        val stringTag = Regex("""<(?:string|plurals)\s+name="([^"]+)"[^>]*>(.*?)</(?:string|plurals)>""", RegexOption.DOT_MATCHES_ALL)
         return stringTag.findAll(text)
             .map { Res(it.groupValues[1], it.groupValues[2]) }
             .associate { it.name to it.value }
@@ -44,11 +44,10 @@ class StringFormatArgConsistencyTest {
         // MISSING from es would silently regress to the English word inside the Spanish voice, which
         // the both-files positional-arg check below can't catch (it only compares shared names).
         val requiredTtsNames = listOf(
-            "tts_verdict_accept",
-            "tts_verdict_decline",
-            "tts_verdict_review",
-            "tts_verdict_offer",
-            "tts_offer_evaluation_template",
+            "tts_lead_offer", "tts_lead_addon", "tts_net", "tts_job_net", "tts_loss", "tts_loss_under_one",
+            "tts_pay", "tts_adds", "tts_miles", "tts_more_miles", "tts_minutes", "tts_more_minutes",
+            "tts_per_hour", "tts_distance_unknown", "tts_pay_unknown", "tts_rule_blocked",
+            "tts_rule_shopping_off", "tts_rule_review",
         )
         val missing = requiredTtsNames.filter { it !in es }
         assertEquals(
@@ -73,9 +72,13 @@ class StringFormatArgConsistencyTest {
     }
 
     @Test
-    fun `tts template still declares six args in the default locale`() {
+    fun `spoken figure resources declare one argument per quantity form`() {
         val default = parse(File("src/main/res/values/strings.xml"))
-        val args = argIndices(default.getValue("tts_offer_evaluation_template"))
-        assertEquals(listOf(1, 2, 3, 4, 5, 6), args)
+        for (name in listOf("tts_net", "tts_job_net", "tts_loss", "tts_pay", "tts_adds",
+            "tts_minutes", "tts_more_minutes", "tts_per_hour")) {
+            assertEquals(name, listOf(1, 1), argIndices(default.getValue(name)))
+        }
+        assertEquals(listOf(1), argIndices(default.getValue("tts_miles")))
+        assertEquals(listOf(1), argIndices(default.getValue("tts_more_miles")))
     }
 }

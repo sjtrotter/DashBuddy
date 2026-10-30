@@ -119,6 +119,10 @@ class ChurnReplayTest {
             c[AppEventType.OFFER_TIMEOUT] ?: 0,
         )
 
+        effects(steps).filterIsInstance<AppEffect.SpeakOffer>().forEach { spoken ->
+            assertEquals(spoken.pending.platform, spoken.platform)
+            assertTrue(spoken.pending.evaluation != null)
+        }
         val speaks = effects(steps).count { it is AppEffect.SpeakOffer }
         assertEquals("SpeakOffer fires once per physical presentation, not once per re-quote", 1, speaks)
 

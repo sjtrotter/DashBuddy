@@ -210,6 +210,9 @@ class TransitionOutcomeTest {
         assertEquals(next.pendingOffers.last(), post.pending)
         assertTrue("a moved deadline is a refresh-only post", post.refreshOnly)
         assertTrue("speak-once holds", effects.none { it is AppEffect.SpeakOffer })
+        effects.filterIsInstance<AppEffect.PostOfferNotification>().forEach { post ->
+            assertEquals(post.pending.platform, post.platform)
+        }
         assertTrue("no chat card for a deadline refresh", effects.none { it is AppEffect.UpdateBubble })
     }
 

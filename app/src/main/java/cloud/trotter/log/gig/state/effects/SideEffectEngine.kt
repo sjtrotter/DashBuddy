@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.state.effects
 
+import cloud.trotter.log.gig.domain.offer.story.OfferStories
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.core.database.effects.EffectsFiredDao
@@ -58,6 +60,7 @@ class SideEffectEngine @Inject constructor(
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
+    private val devSettingsRepository: DevSettingsRepository,
     private val ttsEffectHandler: TtsEffectHandler,
     private val permissionTierChecker: PermissionTierChecker,
     private val capabilityGrants: RuleCapabilityGrants,
@@ -391,7 +394,8 @@ class SideEffectEngine @Inject constructor(
                 if (!dispatchRuleEffect(effect.effect)) return
             }
 
-            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.evaluation)
+            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(OfferStories.build(effect.pending, effect.job,
+                strategyRepository.evaluationConfig.value, effect.platform).forPresentation(devSettingsRepository.addOnSpeech.value))
 
             is AppEffect.StartSession -> {
                 bubbleManager.startSession(effect.sessionId, effect.platformName)
@@ -525,6 +529,7 @@ class SideEffectEngine @Inject constructor(
                         effect.offer, effect.evaluation, effect.platform, effect.sessionId,
                         refreshOnly = !fresh, pending = effect.pending, job = effect.job,
                         config = strategyRepository.evaluationConfig.value,
+                        requote = effect.requote, addOnSpeech = devSettingsRepository.addOnSpeech.value,
                     )
                 }
                 val pending = PendingOfferPost(job, fresh)

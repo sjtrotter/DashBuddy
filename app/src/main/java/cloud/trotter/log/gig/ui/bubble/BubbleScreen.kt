@@ -42,6 +42,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val gasAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val gasRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
+    val addOnSpeech by viewModel.addOnSpeech.collectAsStateWithLifecycle()
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val switchable by viewModel.switchablePlatforms.collectAsStateWithLifecycle()
     val garage by viewModel.garage.collectAsStateWithLifecycle()
@@ -197,8 +198,9 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             },
             offer = {
                 pendingOffer?.let { pending ->
-                    val offerModel = remember(pending, region?.activeJob, cards.stack.completed, config) {
-                        OfferCardMapper.map(pending, region?.activeJob, cards.stack.completed, config)
+                    val offerModel = remember(pending, region?.activeJob, config, addOnSpeech) {
+                        OfferCardMapper.map(cloud.trotter.log.gig.domain.offer.story.OfferStories.build(
+                            pending, region?.activeJob, config, pending.platform).forPresentation(addOnSpeech), pending, region?.activeJob)
                     }
                     OfferCard(offerModel, viewModel::acceptOffer, viewModel::declineOffer)
                 }

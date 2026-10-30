@@ -1,9 +1,14 @@
 package cloud.trotter.log.gig.feature.settings
 
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
+import cloud.trotter.log.gig.domain.offer.story.AddOnSpeech
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -72,6 +77,7 @@ fun DeveloperSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsMenuViewModel = hiltViewModel(),
 ) {
+    val addOnSpeech by viewModel.addOnSpeech.collectAsStateWithLifecycle()
     val sessionMode by viewModel.bubbleSessionMode
         .collectAsStateWithLifecycle(initialValue = BubbleSessionMode.Default)
 
@@ -100,6 +106,17 @@ fun DeveloperSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
+            Text(stringResource(R.string.developer_settings_add_on_title),
+                style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+            AddOnSpeech.entries.forEach { option ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected = option == addOnSpeech,
+                    role = Role.RadioButton, onClick = { viewModel.setAddOnSpeech(option) }).padding(vertical = 8.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    RadioButton(selected = option == addOnSpeech, onClick = null)
+                    Text(stringResource(if (option == AddOnSpeech.JOB_TOTALS)
+                        R.string.developer_settings_add_on_totals else R.string.developer_settings_add_on_deltas))
+                }
+            }
             Text(
                 stringResource(R.string.developer_settings_section_bubble),
                 style = MaterialTheme.typography.labelLarge,

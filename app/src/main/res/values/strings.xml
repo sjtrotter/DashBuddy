@@ -143,8 +143,7 @@
     <string name="offers_tab_est_net_skipped_format" translatable="false">~%1$s</string>
     <string name="offers_tab_said_no_population_format">est. net from %1$s of %2$s %3$s</string>
     <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s, none with an estimate</string>
-    <string name="offers_tab_score_vs_outcome_title">SCORE VS OUTCOME</string>
-    <string name="offers_tab_avg_score_header">Avg score /100</string>
+    <string name="offers_tab_rates_title">Offer rates</string>
     <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
     <string name="offers_tab_frozen_disclosure">Offer figures are estimated at offer time. Counts and results are measured.</string>
 
@@ -166,7 +165,6 @@
     <string name="offers_tab_row_meta_separator" translatable="false">" · "</string>
     <string name="offers_tab_row_distance_format" translatable="false">%1$s mi</string>
     <string name="offers_tab_row_est_rate_format">est. %1$s/hr</string>
-    <string name="offers_tab_row_score_format">score %1$s</string>
     <string name="offers_tab_row_unknown_store">Unknown store</string>
     <string name="offers_tab_pill_unknown">Unknown</string>
     <string name="offers_tab_see_all_format">See all %1$s offers</string>
@@ -332,7 +330,7 @@
     <string name="wizard_screen_goal_option3_title">Manual</string>
     <string name="wizard_screen_goal_option3_desc">Numbers only. You decide.</string>
     <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
-    <string name="wizard_screen_shopping_footer">Used to score shopping offers.</string>
+    <string name="wizard_screen_shopping_footer">Used to estimate shopping time.</string>
     <string name="wizard_screen_hourly_value_format" translatable="false">%1$s/hr</string>
     <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
     <string name="wizard_screen_min_payout_footer_auto">Offers below this are flagged to decline. Nothing is declined for you.</string>
@@ -533,21 +531,6 @@
          words via a localized Context (see TtsEffectHandler). See values-es for the Spanish set. -->
 
     <!-- state/effects/TtsEffectHandler.kt -->
-    <!-- Verdict words spoken before the economics. Translatable (#428 Half B). NOTE: these are the
-         SPOKEN verdict, unrelated to the RuleAction tap-label allowlists (button text) which stay
-         locale-anchored English by design. -->
-    <string name="tts_verdict_accept">Accept</string>
-    <string name="tts_verdict_decline">Decline</string>
-    <string name="tts_verdict_review">Review</string>
-    <string name="tts_verdict_offer">Offer</string>
-    <!-- %1$s verdict word, %2$s merchant name, %3$s $/hr, %4$s net pay, %5$s miles, %6$s score.
-         Translations MUST keep the same six positional args (a translated %-mismatch is the #719
-         HIGH-1 crash class). The merchant name and the numbers are runtime args — never translated. -->
-    <string name="tts_offer_evaluation_template">%1$s. %2$s. Net %4$s, %3$s dollars an hour, %5$s miles, score %6$s.</string>
-    <!-- #936 — spoken when the offer's distance never parsed, so every rate would be fabricated.
-         %1$s verdict word, %2$s merchant name, %3$s gross pay. Translations MUST keep the same
-         three positional args (the #719 HIGH-1 crash class). -->
-    <string name="tts_offer_no_verdict_template">%1$s. %2$s. Pay %3$s. No score, distance unknown.</string>
 
     <!-- state/effects/TipEffectHandler.kt -->
     <!-- %1$s tip amount, %2$s store name -->
@@ -804,11 +787,6 @@
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
     <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>
-    <string name="tts_offer_addon_template">Add-on at %1$s. %2$s dollars more, %3$s more miles. No score.</string>
-    <plurals name="tts_offer_addon_minutes">
-        <item quantity="one">%1$d more minute.</item>
-        <item quantity="other">%1$d more minutes.</item>
-    </plurals>
     <!-- Documented duplicate: vehicle_wh_per_mile, vehicle_kwh_per_100_mi and vehicle_electricity_price
          are shared by :app and :feature:setup. The :app copy is AUTHORITATIVE. Keep both byte-identical;
          non-transitive R and the feature-to-app module boundary require local copies.
@@ -933,4 +911,46 @@
     <string name="economy_undo_belt_cost">Belt cost</string>
     <string name="economy_undo_belt_lifetime">Belt lifetime</string>
     <string name="economy_undo_phone_share">Delivery work share</string>
+    <string name="tts_lead_offer">Offer</string>
+    <string name="tts_lead_addon">Add-on</string>
+    <string name="tts_loss_under_one">Estimated loss: under 1 dollar.</string>
+    <string name="tts_miles">%1$s miles.</string>
+    <string name="tts_more_miles">%1$s more miles.</string>
+    <string name="tts_distance_unknown">Distance unknown.</string>
+    <string name="tts_pay_unknown">Pay unknown.</string>
+    <string name="tts_rule_blocked">Blocked store.</string>
+    <string name="tts_rule_shopping_off">Shopping off.</string>
+    <string name="tts_rule_review">Review store.</string>
+    <plurals name="tts_net">
+        <item quantity="one">Estimated net: %1$d dollar.</item>
+        <item quantity="other">Estimated net: %1$d dollars.</item>
+    </plurals>
+    <plurals name="tts_job_net">
+        <item quantity="one">Job estimated net: %1$d dollar.</item>
+        <item quantity="other">Job estimated net: %1$d dollars.</item>
+    </plurals>
+    <plurals name="tts_loss">
+        <item quantity="one">Estimated loss: %1$d dollar.</item>
+        <item quantity="other">Estimated loss: %1$d dollars.</item>
+    </plurals>
+    <plurals name="tts_pay">
+        <item quantity="one">Pay: %1$d dollar.</item>
+        <item quantity="other">Pay: %1$d dollars.</item>
+    </plurals>
+    <plurals name="tts_adds">
+        <item quantity="one">Adds %1$d dollar.</item>
+        <item quantity="other">Adds %1$d dollars.</item>
+    </plurals>
+    <plurals name="tts_minutes">
+        <item quantity="one">%1$d minute.</item>
+        <item quantity="other">%1$d minutes.</item>
+    </plurals>
+    <plurals name="tts_more_minutes">
+        <item quantity="one">%1$d more minute.</item>
+        <item quantity="other">%1$d more minutes.</item>
+    </plurals>
+    <plurals name="tts_per_hour">
+        <item quantity="one">%1$d dollar an hour.</item>
+        <item quantity="other">%1$d dollars an hour.</item>
+    </plurals>
 </resources>

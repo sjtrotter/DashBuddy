@@ -20,9 +20,7 @@ class ChatPersonaLogLabelTest {
         ChatPersona.Dasher,
         ChatPersona.Merchant("seed"),
         ChatPersona.Customer("seed"),
-        ChatPersona.GoodOffer,
-        ChatPersona.BadOffer,
-        ChatPersona.Inspector,
+        ChatPersona.Offer("seed"),
         ChatPersona.Navigator,
         ChatPersona.Dropoff,
         ChatPersona.Shopper,
@@ -41,9 +39,7 @@ class ChatPersonaLogLabelTest {
         is ChatPersona.Dasher -> ChatPersona.Dasher
         is ChatPersona.Merchant -> ChatPersona.Merchant("H-E-B")
         is ChatPersona.Customer -> ChatPersona.Customer("Willie's Grill & Icehouse's customer")
-        is ChatPersona.GoodOffer -> ChatPersona.GoodOffer
-        is ChatPersona.BadOffer -> ChatPersona.BadOffer
-        is ChatPersona.Inspector -> ChatPersona.Inspector
+        is ChatPersona.Offer -> ChatPersona.Offer("H-E-B")
         is ChatPersona.Navigator -> ChatPersona.Navigator
         is ChatPersona.Dropoff -> ChatPersona.Dropoff
         is ChatPersona.Shopper -> ChatPersona.Shopper
@@ -79,5 +75,13 @@ class ChatPersonaLogLabelTest {
     @Test
     fun `Customer logLabel is the constant kind label, never the customer name`() {
         assertEquals("Customer", ChatPersona.Customer("H-E-B's customer").logLabel)
+    }
+    @Test fun `legacy offer tokens decode to the neutral persona`() {
+        listOf("GOOD_OFFER", "BAD_OFFER", "INSPECTOR", "OFFER", "offer").forEach {
+            val offer = ChatPersona.fromWire(it, "DoorDash offer")
+            assertEquals(ChatPersona.Offer("DoorDash offer"), offer)
+            assertEquals("offer", offer.id)
+            assertEquals("Offer", offer.logLabel)
+        }
     }
 }

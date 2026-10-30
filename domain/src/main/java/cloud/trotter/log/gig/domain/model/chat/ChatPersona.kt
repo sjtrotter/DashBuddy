@@ -44,22 +44,9 @@ sealed class ChatPersona {
         override val logLabel = "Customer"
     }
 
-    data object GoodOffer : ChatPersona() {
-        override val id = "good_offer"
-        override val displayName = "Good Offer"
-        override val logLabel get() = displayName
-    }
-
-    data object BadOffer : ChatPersona() {
-        override val id = "bad_offer"
-        override val displayName = "Bad Offer"
-        override val logLabel get() = displayName
-    }
-
-    data object Inspector : ChatPersona() {
-        override val id = "inspector"
-        override val displayName = "Inspector"
-        override val logLabel get() = displayName
+    data class Offer(override val displayName: String) : ChatPersona() {
+        override val id = "offer"
+        override val logLabel = "Offer"
     }
 
     data object Navigator : ChatPersona() {
@@ -112,9 +99,7 @@ sealed class ChatPersona {
                 "DASHER" -> Dasher
                 "MERCHANT" -> Merchant(name)
                 "CUSTOMER" -> Customer(name)
-                "GOOD_OFFER" -> GoodOffer
-                "BAD_OFFER" -> BadOffer
-                "INSPECTOR" -> Inspector
+                "OFFER", "GOOD_OFFER", "BAD_OFFER", "INSPECTOR" -> Offer(name)
                 "NAVIGATOR" -> Navigator
                 "DROPOFF" -> Dropoff
                 "SHOPPER" -> Shopper

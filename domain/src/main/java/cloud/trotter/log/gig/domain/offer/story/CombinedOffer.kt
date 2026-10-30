@@ -1,4 +1,4 @@
-package cloud.trotter.log.gig.feature.bubble.hud
+package cloud.trotter.log.gig.domain.offer.story
 
 import cloud.trotter.log.gig.domain.model.offer.AddOnStops
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis

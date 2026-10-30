@@ -176,10 +176,10 @@ internal fun EffectMap.diffOfferLifecycle(
         add(
             AppEffect.PostOfferNotification(
                 landedEval, offerCard, nextOffer, nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
-                job = next.activeJob,
+                job = next.activeJob, requote = prevOffer.firstEvalLandedAt != null,
             )
         )
-        if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(landedEval))
+        if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(nextOffer, nextOffer.platform, next.activeJob))
     }
 
     // Offer resolved (accepted/declined/timeout) — the presented offer left presentation this step

@@ -61,7 +61,7 @@ fun OffersTab(
         if (showMore) {
             OfferTopPairCard(decisions)
             EstimateVsRealityCard(estimateVsReality)
-            ScoreVsOutcomeCard(decisions)
+            OfferRatesCard(decisions)
             OffersListCard(
                 feed = offersFeed,
                 onSelectFilter = onSelectFilter,
@@ -172,17 +172,13 @@ private fun SaidNoHalf(decisions: DecisionEconomics, modifier: Modifier = Modifi
     }
 }
 
-/**
- * Score vs outcome — a 2-row comparison of the avg frozen score + avg est. $/hr for accepted vs
- * declined offers: the "is my judgment matching the verdicts" read. Both economic columns are
- * decision-time estimates (labelled "est.").
- */
+/** Decision-time hourly estimates for accepted and declined offers. */
 @Composable
-private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
+private fun OfferRatesCard(decisions: DecisionEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = stringResource(R.string.offers_tab_score_vs_outcome_title),
+            text = stringResource(R.string.offers_tab_rates_title),
             style = MaterialTheme.typography.labelMedium,
             color = c.text3,
         )
@@ -194,7 +190,6 @@ private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
         // Header
         ComparisonRow(
             label = "",
-            score = stringResource(R.string.offers_tab_avg_score_header),
             perHour = stringResource(R.string.offers_tab_est_per_hour_header),
             labelColor = c.text3,
             valueStyleHeader = true,
@@ -202,14 +197,12 @@ private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
         Spacer(Modifier.height(8.dp))
         ComparisonRow(
             label = stringResource(R.string.offers_tab_segment_accepted),
-            score = decisions.avgScoreAccepted?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
             perHour = decisions.avgEstPerHourAccepted?.let { Formats.money(it) } ?: EMPTY_VALUE,
             labelColor = c.good,
         )
         Spacer(Modifier.height(8.dp))
         ComparisonRow(
             label = stringResource(R.string.offers_tab_segment_declined),
-            score = decisions.avgScoreDeclined?.let { Formats.decimal(it, 1) } ?: EMPTY_VALUE,
             perHour = decisions.avgEstPerHourDeclined?.let { Formats.money(it) } ?: EMPTY_VALUE,
             labelColor = c.bad,
         )
@@ -219,7 +212,6 @@ private fun ScoreVsOutcomeCard(decisions: DecisionEconomics) {
 @Composable
 private fun ComparisonRow(
     label: String,
-    score: String,
     perHour: String,
     labelColor: Color,
     valueStyleHeader: Boolean = false,
@@ -234,14 +226,6 @@ private fun ComparisonRow(
             color = labelColor,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            text = score,
-            style = valueStyle,
-            color = valueColor,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(96.dp),
-        )
-        Spacer(Modifier.width(12.dp))
         Text(
             text = perHour,
             style = valueStyle,

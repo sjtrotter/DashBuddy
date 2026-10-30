@@ -308,6 +308,12 @@ class PresentationScopedOfferTest {
         val next = region(pending("H1", "P", presentedAt = 1_000L, evaluation = evalOf(), firstEvalLandedAt = 1_200L))
         val fx = diff(prev, next, 1_200L)
         assertTrue("first landing is spoken", fx.any { it is AppEffect.SpeakOffer })
+        val spoken = fx.filterIsInstance<AppEffect.SpeakOffer>().single()
+        val post = fx.filterIsInstance<AppEffect.PostOfferNotification>().single()
+        assertEquals(post.pending, spoken.pending)
+        assertEquals(post.platform, spoken.platform)
+        assertEquals(post.job, spoken.job)
+        assertFalse(post.requote)
         assertTrue("and posts the heads-up", fx.any { it is AppEffect.PostOfferNotification })
     }
 
@@ -318,6 +324,7 @@ class PresentationScopedOfferTest {
         val next = region(pending("H2", "P", presentedAt = 1_000L, evaluation = evalOf(6.42), firstEvalLandedAt = 1_200L))
         val fx = diff(prev, next, 2_100L)
         assertFalse("no re-speak on a variant re-eval", fx.any { it is AppEffect.SpeakOffer })
+        assertTrue(fx.filterIsInstance<AppEffect.PostOfferNotification>().single().requote)
         assertTrue("but the heads-up still live-updates", fx.any { it is AppEffect.PostOfferNotification })
     }
 

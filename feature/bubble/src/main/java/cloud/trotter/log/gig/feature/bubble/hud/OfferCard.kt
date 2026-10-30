@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cloud.trotter.log.gig.core.designsystem.component.AppGaugeRing
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
@@ -27,7 +26,6 @@ import cloud.trotter.log.gig.domain.format.formatCountdown
 import cloud.trotter.log.gig.feature.bubble.R
 import cloud.trotter.log.gig.feature.bubble.formatters.badgeMeta
 import cloud.trotter.log.gig.feature.bubble.formatters.offerExpiryColor
-import cloud.trotter.log.gig.feature.bubble.formatters.offerScoreColor
 
 @Composable
 fun OfferCard(model: OfferCardModel, onAccept: () -> Unit, onDecline: () -> Unit) {
@@ -51,7 +49,6 @@ fun OfferCard(model: OfferCardModel, onAccept: () -> Unit, onDecline: () -> Unit
                         }
                     }
                 }
-                if (model is OfferCardModel.Scored) OfferRing(model.ring)
             }
             // Approved order (design §10, 09c): pay bar, trip line, gauges, badges; the raw add-on: tiles, trip, note.
             when (model) {
@@ -115,19 +112,6 @@ private fun OfferHero(pay: Double?) {
     }
 }
 
-@Composable
-private fun OfferRing(ring: RingModel) {
-    val description = ring.score?.let { stringResource(R.string.hud_offer_cd_score, it) }
-        ?: stringResource(R.string.hud_offer_cd_no_score)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        AppGaugeRing((ring.score ?: 0) / 100f, ring.score?.toString() ?: EMPTY_VALUE,
-            modifier = Modifier.testTag("offer.ring").semantics { contentDescription = description },
-            color = ring.score?.let { offerScoreColor(it.toDouble(), AppTheme.colors) } ?: AppTheme.colors.neutral,
-            diameter = 64.dp, valueStyle = AppTheme.num.xlNum)
-        ring.was?.let { Text(stringResource(R.string.hud_offer_was, it), color = AppTheme.colors.text3, fontSize = 12.sp) }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun OfferBadges(badges: List<OfferBadgeModel>) {
@@ -135,6 +119,7 @@ internal fun OfferBadges(badges: List<OfferBadgeModel>) {
     FlowRow(Modifier.testTag("offer.badges"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         badges.forEach { badge ->
             val (label, ink) = when (badge) {
+                is OfferBadgeModel.Rule -> stringResource(cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText.ruleResource(badge.hit)) to c.neutral
                 OfferBadgeModel.AddOn -> stringResource(R.string.hud_offer_addon) to c.stOffer
                 OfferBadgeModel.Shop -> stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
                 is OfferBadgeModel.Platform -> badgeMeta(badge.badge, c)

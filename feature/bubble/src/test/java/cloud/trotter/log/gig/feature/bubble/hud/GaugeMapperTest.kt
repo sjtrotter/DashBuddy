@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.feature.bubble.hud
 
 import org.junit.Assert.*
 import org.junit.Test
+import cloud.trotter.log.gig.domain.offer.story.*
 
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 
@@ -11,7 +12,7 @@ class GaugeMapperTest {
     @org.junit.After fun cleanup() { java.util.Locale.setDefault(locale) }
     private fun map(rate: Double? = 16.0, target: Double? = 18.0, kind: GaugeKind = GaugeKind.HOUR,
         previous: Double? = null, denominator: Double? = 31.0, delta: Double? = null) =
-        GaugeMapper.map(kind, denominator, rate, target, previous, delta)
+        mapGauge(kind, denominator, rate, target, previous, delta)
     @Test fun `rate above target fills good`() {
         val m = map(20.0, 18.0, GaugeKind.HOUR)
         assertEquals(GaugeTone.GOOD, m.tone)

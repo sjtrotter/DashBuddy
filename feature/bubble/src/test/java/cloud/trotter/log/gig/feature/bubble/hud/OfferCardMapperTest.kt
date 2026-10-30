@@ -2,11 +2,10 @@ package cloud.trotter.log.gig.feature.bubble.hud
 
 import org.junit.Assert.*
 import org.junit.Test
+import cloud.trotter.log.gig.domain.offer.story.*
 
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.domain.evaluation.*
-import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.offer.*
 import cloud.trotter.log.gig.domain.model.order.CountUnit
 import cloud.trotter.log.gig.domain.state.*
@@ -22,10 +21,7 @@ class OfferCardMapperTest {
     private val p = f.pending()
     private val job = f.job()
     private val addon = f.addon()
-    private val completed = listOf(FlowCardSnapshot.Offer(0, 1, "before", evaluationScore = 60.0,
-        outcome = AppEventType.OFFER_ACCEPTED))
-    private fun map(pending: PendingOffer = p, active: Job? = job, config: EvaluationConfig? = f.config,
-        history: List<FlowCardSnapshot> = completed) = OfferCardMapper.map(pending, active, history, config)
+    private fun map(pending: PendingOffer = p, active: Job? = job, config: EvaluationConfig? = f.config) = mapOffer(pending, active, config)
     private fun combined() = map(f.pending(addon)) as OfferCardModel.Combined
     @Test fun `total quote gives the standard card`() {
         assertTrue(map() is OfferCardModel.Standard)
@@ -37,17 +33,19 @@ class OfferCardMapperTest {
         val o = f.offer().copy(distanceMiles = null)
         val m = map(f.pending(o)) as OfferCardModel.Standard
         assertEquals(PayBarModel.DistanceUnknown, m.bar)
-        assertNull(m.ring.score)
+        assertTrue(m.gauges.all { it.tone == GaugeTone.NEUTRAL })
         assertTrue(m.gauges.all { it.rateText == EMPTY_VALUE })
     }
-    @Test fun `evaluation pending gives an unscored bar and an empty ring`() {
+    @Test fun `evaluation pending gives an unscored bar and unknown facts`() {
         val m = map(f.pending(e = null)) as OfferCardModel.Standard
         assertEquals(PayBarModel.Unscored, m.bar)
-        assertNull(m.ring.score)
+        assertTrue(m.gauges.all { it.tone == GaugeTone.NEUTRAL })
         assertTrue(m.gauges.all { it.rateText == EMPTY_VALUE })
     }
-    @Test fun `scored offer carries the ring score`() {
-        assertEquals(74, (map() as OfferCardModel.Standard).ring.score)
+    @Test fun `offer carries net facts and rule hits before platform badges`() {
+        assertEquals(PayBarMapper.map(11.75, 8.29, true, true), (map() as OfferCardModel.Standard).bar)
+        val model = map(config = f.config.copy(allowShopping = false))
+        assertEquals(OfferBadgeModel.Rule(RuleHit.SHOPPING_OFF), model.badges.first())
     }
     @Test fun `countdown anchor is the pending countdown expiry`() {
         assertEquals(p.countdownExpiresAt, map().head.expiresAt)
@@ -71,27 +69,25 @@ class OfferCardMapperTest {
         assertEquals(18.75, combined().head.pay!!, 0.0)
         assertEquals(7.0, combined().head.addedPay!!, 0.0)
     }
-    @Test fun `combined ring is the re evaluated score with the was score`() {
+    @Test fun `combined bar carries the re evaluated net`() {
         val e = OfferEvaluator().evaluate(CombinedOffer.build(job, addon)!!, f.config.forPlatform(p.platform))
-        assertEquals(e.score.toInt(), combined().ring.score)
-        assertEquals(60, combined().ring.was)
+        assertEquals(PayBarMapper.map(e.payAmount, e.netPayAmount, true, true), combined().bar)
     }
-    @Test fun `combined has no was score when the accepted card has none`() {
-        assertNull((map(f.pending(addon), history = emptyList()) as OfferCardModel.Combined).ring.was)
-        assertNull((map(f.pending(addon), history = listOf(
-            FlowCardSnapshot.Offer(0, 1, "before", outcome = AppEventType.OFFER_ACCEPTED))) as OfferCardModel.Combined).ring.was)
-        assertNull((map(f.pending(addon), history = listOf(
-            FlowCardSnapshot.Offer(0, 1, "before", evaluationScore = 60.0,
-                outcome = AppEventType.OFFER_DECLINED))) as OfferCardModel.Combined).ring.was)
-        val two = job.copy(acceptedOffers = job.acceptedOffers + job.acceptedOffers)
-        assertNull((map(f.pending(addon), active = two) as OfferCardModel.Combined).ring.was)
+    @Test fun `combined facts retain previous net with one or multiple accepted offers`() {
+        for (owned in listOf(job, job.copy(acceptedOffers = job.acceptedOffers + job.acceptedOffers))) {
+            val story = OfferStories.build(f.pending(addon), owned, f.config, p.platform)
+            val before = OfferEvaluator().evaluate(CombinedOffer.quote(owned)!!.beforeOffer(addon.offerHash), f.config.forPlatform(p.platform))
+            assertEquals(StoryBasis.ADD_ON_JOB, story.basis)
+            assertEquals(before.netPayAmount, story.fact(FactKind.NET)!!.previous!!, 0.0)
+            assertEquals(story.fact(FactKind.PAY)?.value, map(f.pending(addon), active = owned).head.pay)
+        }
     }
     @Test fun `combined gauges carry deltas and previous rates`() {
         val m = combined()
         val e = OfferEvaluator().evaluate(CombinedOffer.build(job, addon)!!, f.config.forPlatform(p.platform))
         val before = OfferEvaluator().evaluate(CombinedOffer.quote(job)!!.beforeOffer(addon.offerHash), f.config.forPlatform(p.platform))
         val hour = m.gauges.first()
-        assertEquals(GaugeMapper.map(GaugeKind.HOUR, e.estimatedTimeMinutes, e.dollarsPerHour, 18.0,
+        assertEquals(mapGauge(GaugeKind.HOUR, e.estimatedTimeMinutes, e.dollarsPerHour, 18.0,
             before.dollarsPerHour, e.estimatedTimeMinutes - before.estimatedTimeMinutes), hour)
         assertEquals("+2.1", m.gauges[1].deltaText)
         assertEquals("+3", m.gauges[2].deltaText)
@@ -140,7 +136,7 @@ class OfferCardMapperTest {
         assertTrue(map(f.pending(addon.copy(payAmount = null))) is OfferCardModel.AddOnRaw)
     }
     @Test fun `combined evaluation without distance metrics falls back`() {
-        val m = OfferCardMapper.map(f.pending(addon), job, completed, f.config) { o, c ->
+        val m = mapOffer(f.pending(addon), job, f.config) { o, c ->
             OfferEvaluator().evaluate(o.copy(distanceMiles = null), c)
         }
         assertTrue(m is OfferCardModel.AddOnRaw)
@@ -148,14 +144,14 @@ class OfferCardMapperTest {
     @Test fun `unparsed gross stays unknown`() {
         val m = map(f.pending(f.offer().copy(payAmount = null))) as OfferCardModel.Standard
         assertNull(m.head.pay)
-        assertNull(m.ring.score)
+        assertTrue(m.gauges.all { it.tone == GaugeTone.NEUTRAL })
         assertEquals(PayBarModel.Unscored, m.bar)
     }
     @Test fun `combined deltas come from two evaluations under one config`() {
         val config = f.config.copy(userEconomy = UserEconomy(gasPricePerGallon = 1.0),
             shopRates = mapOf(p.platform to LearnedShopRate(2.0, UserEconomy.MIN_SHOP_SAMPLES)))
         val calls = mutableListOf<Pair<ParsedOffer, EvaluationConfig>>()
-        val m = OfferCardMapper.map(f.pending(addon), job, completed, config) { o, c ->
+        val m = mapOffer(f.pending(addon), job, config) { o, c ->
             calls += o to c
             OfferEvaluator().evaluate(o, c)
         } as OfferCardModel.Combined
@@ -168,14 +164,14 @@ class OfferCardMapperTest {
         assertTrue(before.estimatedTimeMinutes != f.accept().estMinutes)
         val targets = OfferTargets.from(config, p.platform, true)
         assertEquals(listOf(
-            GaugeMapper.map(GaugeKind.HOUR, after.estimatedTimeMinutes, after.dollarsPerHour, targets.perHour,
+            mapGauge(GaugeKind.HOUR, after.estimatedTimeMinutes, after.dollarsPerHour, targets.perHour,
                 before.dollarsPerHour, after.estimatedTimeMinutes - before.estimatedTimeMinutes),
-            GaugeMapper.map(GaugeKind.MILE, after.distanceMiles, after.dollarsPerMile, targets.perMile,
+            mapGauge(GaugeKind.MILE, after.distanceMiles, after.dollarsPerMile, targets.perMile,
                 before.dollarsPerMile, after.distanceMiles - before.distanceMiles),
-            GaugeMapper.map(GaugeKind.ITEM, 15.0, after.netPayAmount / 15, targets.perItem,
+            mapGauge(GaugeKind.ITEM, 15.0, after.netPayAmount / 15, targets.perItem,
                 before.netPayAmount / 12, 3.0)), m.gauges)
         assertEquals(before.payAmount + addon.payAmount!!, m.head.pay!!, 0.0)
-        assertEquals(60, m.ring.was)
+        assertEquals(addon.payAmount, m.head.addedPay)
     }
     @Test fun `shop add on onto a plain pickup job has no previous item rate`() {
         val plain = job.copy(acceptedOffers = listOf(f.accept().copy(isShop = false, quotedItemCount = 1)))
@@ -188,7 +184,7 @@ class OfferCardMapperTest {
     @Test fun `mixed units and items fall back`() {
         listOf(false to true, true to false).forEach { (beforeUnits, afterUnits) ->
             val owned = job.copy(acceptedOffers = listOf(f.accept().copy(offerUnitCount = if (beforeUnits) 12 else null)))
-            val m = OfferCardMapper.map(f.pending(addon.copy(itemCountIsUnits = afterUnits)), owned, completed, f.config) { _, _ ->
+            val m = mapOffer(f.pending(addon.copy(itemCountIsUnits = afterUnits)), owned, f.config) { _, _ ->
                 error("Mixed denominations must not be evaluated as a combined offer")
             }
             assertTrue(m is OfferCardModel.AddOnRaw)
@@ -198,7 +194,7 @@ class OfferCardMapperTest {
     @Test fun `a new order in units on an items quote falls back`() {
         val offer = addon.copy(itemCount = 16, itemCountIsUnits = false, orders = listOf(
             f.order(), f.order("New", 4).copy(countUnit = CountUnit.UNITS)))
-        val m = OfferCardMapper.map(f.pending(offer), job, completed, f.config) { _, _ ->
+        val m = mapOffer(f.pending(offer), job, f.config) { _, _ ->
             error("Mixed denominations must not be evaluated as a combined offer")
         }
         assertTrue(m is OfferCardModel.AddOnRaw)
@@ -210,7 +206,7 @@ class OfferCardMapperTest {
         val offer = addon.copy(itemCount = 12, itemCountIsUnits = true, orders = listOf(
             f.order().copy(countUnit = CountUnit.UNITS), f.order("New", 1, shop = false)))
         val evaluated = mutableListOf<ParsedOffer>()
-        val model = OfferCardMapper.map(f.pending(offer), owned, completed, f.config) { o, c ->
+        val model = mapOffer(f.pending(offer), owned, f.config) { o, c ->
             evaluated += o
             OfferEvaluator().evaluate(o, c)
         }

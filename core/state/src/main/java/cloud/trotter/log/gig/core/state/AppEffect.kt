@@ -220,14 +220,14 @@ sealed class AppEffect {
         val requestedAt: Long,
     ) : AppEffect()
 
-    /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
-    data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
+    /** Speak the offer story aloud. Fires on eval-landing. */
+    data class SpeakOffer(val pending: PendingOffer, val platform: Platform, val job: Job?) : AppEffect()
 
     /**
      * Post the offer evaluation as a heads-up notification with Accept/Decline actions. Emitted by
      * [EffectMap] when the async evaluation lands on the pending offer (eval null → non-null) — not
      * fired inline from the [EvaluateOffer] loopback handler — so the offer's UI side-effects stay
-     * first-class and testable. The app layer formats the summary + persona from the evaluation.
+     * first-class and testable. The app layer builds the shared story for text, persona and figures.
      */
     data class PostOfferNotification(
         val evaluation: OfferEvaluation,
@@ -256,6 +256,7 @@ sealed class AppEffect {
          * logs the summary as before. LAST so positional constructions stay valid.
          */
         val refreshOnly: Boolean = false,
+        val requote: Boolean = false,
         /**
          * S2g: the platform's active job at the same step as [pending], so the heads-up maps an add-on
          * to the same COMBINED card the bubble shows (the bubble passes `region.activeJob`). Null when
