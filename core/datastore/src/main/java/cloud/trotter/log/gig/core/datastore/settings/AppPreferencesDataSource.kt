@@ -42,6 +42,18 @@ data class StoredGasPrice(val price: StoredPreference<Float>, val auto: StoredPr
 class AppPreferencesDataSource @Inject constructor(
     @param:AppPreferences private val ds: DataStore<Preferences>
 ) {
+    fun <T, S : Any> read(p: Pref<T, S>): Flow<T> = ds.data.map { prefs ->
+        val raw = prefs[p.key]
+        if (raw == null) p.default else p.codec.decode(raw)
+    }
+
+    suspend fun <T, S : Any> write(p: Pref<T, S>, value: T) {
+        ds.edit { prefs ->
+            val raw = p.codec.encode(value)
+            if (raw == null) prefs.remove(p.key) else prefs[p.key] = raw
+        }
+    }
+
     private object Keys {
         val VEHICLE_YEAR = stringPreferencesKey("vehicle_year")
         val VEHICLE_MAKE = stringPreferencesKey("vehicle_make")
@@ -50,18 +62,7 @@ class AppPreferencesDataSource @Inject constructor(
         val ESTIMATED_MPG = floatPreferencesKey("estimated_mpg")
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
-        val ODOMETER_PROMPTS = booleanPreferencesKey("odometer_prompts")
-        val DAILY_KEPT_GOAL_DOLLARS = doublePreferencesKey("daily_kept_goal_dollars")
-        val HUD_PILL_SHOWS_EARNINGS = booleanPreferencesKey("hud_pill_shows_earnings")
-        val ANALYTICS_SHOW_MORE = booleanPreferencesKey("analytics_show_more")
         val VEHICLE_LOOKUP_ALLOWED = booleanPreferencesKey("vehicle_lookup_allowed")
-        val APP_THEME = stringPreferencesKey("app_theme")
-        // Driving / glance mode (#318) — bumps the HUD's LocalGlance multiplier.
-        val GLANCE_MODE = booleanPreferencesKey("glance_mode")
-        // Spoken-offer (TTS) language override (#428 Half B) — a BCP-47 tag (e.g. "es").
-        // Absent/null ⇒ follow the system locale; present ⇒ force that language for both the
-        // engine voice and the spoken word resolution.
-        val TTS_LANGUAGE_TAG = stringPreferencesKey("tts_language_tag")
         val FUEL_TYPE = stringPreferencesKey("fuel_type")
         // Legacy key (pre-v2 schema, "CAR"/"E_BIKE"). VEHICLE_CLASS supersedes it.
         val VEHICLE_TYPE = stringPreferencesKey("vehicle_type")
@@ -181,16 +182,8 @@ class AppPreferencesDataSource @Inject constructor(
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
     val electricityPricePerKwh: Flow<Double?> = ds.data.map { it[Keys.ELECTRICITY_PRICE_PER_KWH] }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
-    val odometerPrompts: Flow<Boolean> = ds.data.map { it[Keys.ODOMETER_PROMPTS] ?: true }
-    val dailyKeptGoalDollars: Flow<Double?> = ds.data.map { it[Keys.DAILY_KEPT_GOAL_DOLLARS] }
-    val hudPillShowsEarnings: Flow<Boolean> = ds.data.map { it[Keys.HUD_PILL_SHOWS_EARNINGS] ?: true }
 
-    val analyticsShowMore: Flow<Boolean> = ds.data.map { it[Keys.ANALYTICS_SHOW_MORE] ?: false }
     val vehicleLookupAllowed: Flow<Boolean> = ds.data.map { it[Keys.VEHICLE_LOOKUP_ALLOWED] ?: false }
-    val appTheme: Flow<String?> = ds.data.map { it[Keys.APP_THEME] }
-    val glanceMode: Flow<Boolean> = ds.data.map { it[Keys.GLANCE_MODE] ?: false }
-    /** #428 Half B — spoken-offer language override (BCP-47 tag); null ⇒ follow system locale. */
-    val ttsLanguageTag: Flow<String?> = ds.data.map { it[Keys.TTS_LANGUAGE_TAG] }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
     /**
      * Reads `vehicle_class` first; falls back to legacy `vehicle_type` (mapping
@@ -340,52 +333,8 @@ class AppPreferencesDataSource @Inject constructor(
         ds.edit { it[Keys.VEHICLE_CLASS] = type }
     }
 
-    suspend fun updateEstimatedMpg(mpg: Float) {
-        ds.edit {
-            it[Keys.ESTIMATED_MPG] = mpg
-            it.markUserSet(EconomyField.VEHICLE_MPG)
-        }
-    }
-
-    suspend fun setOdometerPrompts(enabled: Boolean) {
-        ds.edit { it[Keys.ODOMETER_PROMPTS] = enabled }
-    }
-
-    suspend fun setDailyKeptGoalDollars(value: Double?) {
-        ds.edit {
-            if (value == null) it.remove(Keys.DAILY_KEPT_GOAL_DOLLARS)
-            else it[Keys.DAILY_KEPT_GOAL_DOLLARS] = value
-        }
-    }
-
-    suspend fun setHudPillShowsEarnings(enabled: Boolean) {
-        ds.edit { it[Keys.HUD_PILL_SHOWS_EARNINGS] = enabled }
-    }
-
-    suspend fun setAnalyticsShowMore(enabled: Boolean) {
-        ds.edit { it[Keys.ANALYTICS_SHOW_MORE] = enabled }
-    }
-
     suspend fun setVehicleLookupAllowed(allowed: Boolean) {
         ds.edit { it[Keys.VEHICLE_LOOKUP_ALLOWED] = allowed }
-    }
-
-    suspend fun setTheme(theme: String) {
-        ds.edit { it[Keys.APP_THEME] = theme }
-    }
-
-    suspend fun setGlanceMode(enabled: Boolean) {
-        ds.edit { it[Keys.GLANCE_MODE] = enabled }
-    }
-
-    /**
-     * #428 Half B — set (or clear) the spoken-offer language override. A non-null [tag] is a
-     * BCP-47 language tag (e.g. "es"); null clears the key so TTS falls back to the system locale.
-     */
-    suspend fun setTtsLanguageTag(tag: String?) {
-        ds.edit {
-            if (tag == null) it.remove(Keys.TTS_LANGUAGE_TAG) else it[Keys.TTS_LANGUAGE_TAG] = tag
-        }
     }
 
     /**
@@ -597,16 +546,6 @@ class AppPreferencesDataSource @Inject constructor(
         return restoreIfUnchanged(key, field, previous, expected, current)
     }
 
-    suspend fun updateTimeConstants(avgMinPerMile: Double, basePickupMin: Double) {
-        require(avgMinPerMile.isFinite() && avgMinPerMile > 0)
-        require(basePickupMin.isFinite() && basePickupMin >= 0)
-        ds.edit {
-            it[Keys.AVG_MIN_PER_MILE] = avgMinPerMile
-            it[Keys.BASE_PICKUP_MIN] = basePickupMin
-            it.markUserSet(EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN)
-        }
-    }
-
     /** Shared settings only; legacy vehicle keys and their markers stay intact. */
     suspend fun resetSharedEconomyDefaults() {
         val shared = setOf(EconomyField.ELECTRICITY_PRICE, EconomyField.PHONE_PLAN_TOTAL,
@@ -623,29 +562,6 @@ class AppPreferencesDataSource @Inject constructor(
             prefs.remove(Keys.BASE_PICKUP_MIN)
             prefs[Keys.USER_SET_ECONOMY_FIELDS] = (prefs[Keys.USER_SET_ECONOMY_FIELDS] ?: emptySet())
                 .filterNot { EconomyField.fromPersistedName(it) in shared }.toSet()
-        }
-    }
-
-    /** Removes all user-set markers, falling all economy fields back to class defaults. */
-    suspend fun resetEconomyDefaults() {
-        ds.edit {
-            it.remove(Keys.USER_SET_ECONOMY_FIELDS)
-            it.remove(Keys.ELECTRICITY_PRICE_PER_KWH)
-            it.remove(Keys.TIRE_SET_COST); it.remove(Keys.TIRE_LIFETIME_MI)
-            it.remove(Keys.OIL_COST); it.remove(Keys.OIL_INTERVAL_MI)
-            it.remove(Keys.BRAKES_COST); it.remove(Keys.BRAKES_INTERVAL_MI)
-            it.remove(Keys.FLUIDS_COST); it.remove(Keys.FLUIDS_INTERVAL_MI)
-            it.remove(Keys.MISC_YEARLY); it.remove(Keys.MISC_YEARLY_MI)
-            it.remove(Keys.INCLUDE_DEPRECIATION)
-            it.remove(Keys.PURCHASE_PRICE); it.remove(Keys.TOTAL_LIFETIME_MI)
-            it.remove(Keys.INSURANCE_DELTA_PER_MONTH)
-            it.remove(Keys.REGISTRATION_DELTA_PER_YEAR)
-            it.remove(Keys.EXPECTED_ANNUAL_MI)
-            it.remove(Keys.PHONE_PLAN_TOTAL)
-            it.remove(Keys.PHONE_PLAN_LINES)
-            it.remove(Keys.PHONE_BUSINESS_PERCENT)
-            it.remove(Keys.AVG_MIN_PER_MILE)
-            it.remove(Keys.BASE_PICKUP_MIN)
         }
     }
 
