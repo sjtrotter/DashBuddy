@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.StepDecisions
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
@@ -167,11 +169,21 @@ class DashEndHonorsTaskRetireTest {
         payload = ObservationPayload.GraceWake(pend.wakeId),
     )
 
-    private fun step(region: PlatformRegion, prevFlow: Flow, obs: Observation): PlatformRegion =
-        stepper.step(region, flowRegion(prevFlow), flowRegion(prevFlow), obs, policy)
+    // Keep each returned region paired with its actual decisions, including when a test diffs an
+    // earlier step after taking another one. Identity keys avoid conflating equal region snapshots.
+    private val stepDecisions = java.util.IdentityHashMap<PlatformRegion, RegionDecisions>()
+
+    private fun decisionsFor(region: PlatformRegion): StepDecisions =
+        StepDecisions(mapOf(platform to requireNotNull(stepDecisions[region])))
+
+    private fun step(region: PlatformRegion, prevFlow: Flow, obs: Observation): PlatformRegion {
+        val stepped = stepper.stepWithDecisions(region, flowRegion(prevFlow), flowRegion(prevFlow), obs, policy)
+        stepDecisions[stepped.region] = stepped.decisions
+        return stepped.region
+    }
 
     private fun completions(prev: PlatformRegion, next: PlatformRegion, obs: Observation) =
-        effectMap.diff(state(prev, Flow.SessionEnded), state(next, Flow.Idle), obs)
+        effectMap.diff(state(prev, Flow.SessionEnded), state(next, Flow.Idle), obs, decisionsFor(next))
             .filterIsInstance<AppEffect.LogEvent>()
 
     private fun deliveries(effects: List<AppEffect.LogEvent>): List<DeliveryPayload> =
@@ -351,6 +363,7 @@ class DashEndHonorsTaskRetireTest {
         )
         val exitEffects = effectMap.diff(
             state(afterReceipt, Flow.PostTask), state(afterSummary, Flow.SessionEnded), summary,
+            decisionsFor(afterSummary),
         ).filterIsInstance<AppEffect.LogEvent>()
 
         val wake = graceWake(end)
@@ -562,6 +575,7 @@ class DashEndHonorsTaskRetireTest {
 
         val effects = effectMap.diff(
             state(afterOffline, Flow.Idle), state(afterNextDash, Flow.Idle), nextDashFrame,
+            decisionsFor(afterNextDash),
         ).filterIsInstance<AppEffect.LogEvent>()
 
         assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
@@ -594,6 +608,7 @@ class DashEndHonorsTaskRetireTest {
         assertNotEquals("dash-A", sessionB.sessionId)
         val commitEffects = effectMap.diff(
             state(afterNextDash, Flow.Idle), state(afterCommit, Flow.Idle), commitWake,
+            decisionsFor(afterCommit),
         ).filterIsInstance<AppEffect.LogEvent>()
         val start = commitEffects.single { it.event.type == AppEventType.DASH_START }
         assertEquals(sessionB.sessionId, start.event.sessionId)
@@ -623,6 +638,7 @@ class DashEndHonorsTaskRetireTest {
         assertEquals("the task is still ACTIVE — its completedAt is not stamped yet", "d1", afterBack.activeTask?.taskId)
         val exitEffects = effectMap.diff(
             state(afterReceipt, Flow.PostTask), state(afterBack, Flow.TaskDropoffArrived), backOnDrop,
+            decisionsFor(afterBack),
         ).filterIsInstance<AppEffect.LogEvent>()
         assertEquals("the PostTask exit mints the completion", 1, deliveries(exitEffects).size)
         assertTrue(
@@ -669,6 +685,7 @@ class DashEndHonorsTaskRetireTest {
         val effects = effectMap.diffDeliveryCompletion(
             before, after, Flow.PostTask, Flow.TaskPickupNavigation,
             screen(Flow.TaskPickupNavigation, 110_000L),
+            RegionDecisions(retiredTaskId = completedTask.taskId),
         ).filterIsInstance<AppEffect.LogEvent>()
         val completed = effects.single { it.event.type == AppEventType.DELIVERY_COMPLETED }
         assertEquals("dash-A", completed.event.sessionId)
@@ -689,6 +706,7 @@ class DashEndHonorsTaskRetireTest {
         val afterSummary = step(afterReceipt, Flow.PostTask, summary)
         val exitEffects = effectMap.diff(
             state(afterReceipt, Flow.PostTask), state(afterSummary, Flow.SessionEnded), summary,
+            decisionsFor(afterSummary),
         ).filterIsInstance<AppEffect.LogEvent>()
         assertEquals("the SessionEnded frame is the PostTask exit — it mints", 1, deliveries(exitEffects).size)
         assertTrue(
@@ -938,6 +956,7 @@ class DashEndHonorsTaskRetireTest {
         val afterExit = step(onReceipt, Flow.PostTask, exitFrame)
         val exitEffects = effectMap.diff(
             state(onReceipt, Flow.PostTask), state(afterExit, Flow.Idle), exitFrame,
+            decisionsFor(afterExit),
         ).filterIsInstance<AppEffect.LogEvent>()
         assertEquals("the exit mints", 1, deliveries(exitEffects).size)
         assertTrue("…and it is recorded", afterExit.mintedAtPostTaskExit("d1"))
@@ -992,6 +1011,7 @@ class DashEndHonorsTaskRetireTest {
         val effects = effectMap.diff(
             state(afterSummary, Flow.SessionEnded), state(afterPickup, Flow.TaskPickupNavigation),
             pickupFrame,
+            decisionsFor(afterPickup),
         ).filterIsInstance<AppEffect.LogEvent>()
 
         assertEquals("dash-A", effects.single { it.event.type == AppEventType.DASH_STOP }.event.sessionId)
@@ -1139,6 +1159,7 @@ class DashEndHonorsTaskRetireTest {
         val effects = effectMap.diff(
             state(onPickup, Flow.TaskPickupArrived), state(afterDrop, Flow.TaskDropoffNavigation),
             dropFrame,
+            decisionsFor(afterDrop),
         ).filterIsInstance<AppEffect.LogEvent>()
 
         // The in-session shape first: both ids are A, and the sweep fired at all.
@@ -1155,6 +1176,7 @@ class DashEndHonorsTaskRetireTest {
         val split = effectMap.diff(
             state(onPickup, Flow.TaskPickupArrived), state(nextWithB, Flow.TaskDropoffNavigation),
             dropFrame,
+            decisionsFor(afterDrop),
         ).filterIsInstance<AppEffect.LogEvent>()
         assertEquals(
             "A's own pickup is confirmed under A, never under the dash that just started",

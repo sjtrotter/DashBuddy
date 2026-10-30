@@ -1,5 +1,8 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
+import cloud.trotter.log.gig.core.state.model.StepDecisions
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.event.AppEvent
 import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
@@ -27,7 +30,6 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.ReceiptCoverage
 import cloud.trotter.log.gig.domain.state.Platform
-import cloud.trotter.log.gig.domain.state.PendingReceiptReprice
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
@@ -395,11 +397,13 @@ class ReceiptRepriceTest {
             metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
             parsed = ParsedFields.None,
         )
-        val afterExit = stepper.step(
+        val stepped = stepper.stepWithDecisions(
             afterReceipt, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.Idle), idleObs, policy,
         )
+        val afterExit = stepped.region
         val completions = effectMap
-            .diff(appState(afterReceipt, Flow.PostTask), appState(afterExit, Flow.Idle), idleObs)
+            .diff(appState(afterReceipt, Flow.PostTask), appState(afterExit, Flow.Idle), idleObs,
+                StepDecisions(mapOf(Platform.DoorDash to stepped.decisions)))
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
         assertEquals("the exit minted the completion", 1, completions.size)
@@ -429,9 +433,10 @@ class ReceiptRepriceTest {
         assertEquals(18_000L, afterReceipt.pendingDestructive?.deadline)
 
         val obs = postTaskObs(expanded(), 18_001L) // one ms past the deadline
-        val next = stepper.step(
+        val stepped = stepper.stepWithDecisions(
             afterReceipt, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.PostTask), obs, policy,
         )
+        val next = stepped.region
         assertNull("the expiry closed the job on this frame", next.activeJob)
         assertNotNull("…stamping the marker in the RESULTING region only", next.lastClosedJobReceipt)
         assertNull("while `prev` still has none", afterReceipt.lastClosedJobReceipt)
@@ -443,7 +448,8 @@ class ReceiptRepriceTest {
         assertEquals(receipt, next.lastClosedJobReceipt!!.lastDecidedPay)
 
         val logged = effectMap
-            .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs)
+            .diff(appState(afterReceipt, Flow.PostTask), appState(next, Flow.PostTask), obs,
+                StepDecisions(mapOf(Platform.DoorDash to stepped.decisions)))
             .filterIsInstance<AppEffect.LogEvent>()
             .map { it.event }
         val types = logged.map { it.type }
@@ -485,6 +491,7 @@ class ReceiptRepriceTest {
      */
     private inner class Fold(start: PlatformRegion) {
         var region: PlatformRegion = start
+        var decisions: RegionDecisions = RegionDecisions.NONE
         private var flow: Flow = start.lastActedFlow ?: Flow.Idle
         val events = mutableListOf<AppEvent>()
         /** Re-price effect keys as the engine's `effects_fired` table would see them. */
@@ -496,9 +503,12 @@ class ReceiptRepriceTest {
             val prevRegion = region
             val prevFlow = flow
             val nextFlow = (obs as? Observation.FlowObservation)?.flow ?: prevFlow
-            region = stepper.step(prevRegion, FlowRegion(flow = prevFlow), FlowRegion(flow = nextFlow), obs, policy)
+            val stepped = stepper.stepWithDecisions(prevRegion, FlowRegion(flow = prevFlow), FlowRegion(flow = nextFlow), obs, policy)
+            region = stepped.region
+            decisions = stepped.decisions
             val logged = effectMap
-                .diff(appState(prevRegion, prevFlow), appState(region, nextFlow), obs)
+                .diff(appState(prevRegion, prevFlow), appState(region, nextFlow), obs,
+                    StepDecisions(mapOf(Platform.DoorDash to decisions)))
                 .filterIsInstance<AppEffect.LogEvent>()
             events += logged.map { it.event }
             effectKeys += logged
@@ -1074,14 +1084,16 @@ class ReceiptRepriceTest {
         // `completeActiveJob` + `EffectMap` so the 3-drop fixture need not satisfy every
         // physical-completeness precondition of a grace chain to reach it.
         val prev = threeDropJob()
-        val next = stepper.completeActiveJob(prev, at = 16_000L)
+        val sink = DecisionSink()
+        val next = stepper.completeActiveJob(sink, prev, at = 16_000L)
         val flow = Flow.TaskDropoffArrived
-        val minted = effectMap.diff(appState(prev, flow), appState(next, flow), graceCommit(16_000L))
+        val minted = effectMap.diff(appState(prev, flow), appState(next, flow), graceCommit(16_000L),
+            StepDecisions(mapOf(Platform.DoorDash to sink.build())))
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_COMPLETED }
             .associate { (it.event.payload as DeliveryPayload).let { p -> p.taskId to p } }
 
-        val decided = next.pendingReceiptReprice
+        val decided = sink.build().receiptReprice
         assertEquals(setOf("t1"), decided!!.shares.keys)
         assertEquals(20.00, decided.shares.getValue("t1"), 0.0001)
         assertEquals(20.00, minted.getValue("t1").dropRealizedPay!!, 0.0001)
@@ -1142,7 +1154,9 @@ class ReceiptRepriceTest {
                 kind = DestructiveKind.TASK_RETIRE, since = 15_500L, deadline = 18_000L,
             ),
         )
-        val decided = stepper.completeActiveJob(region, at = 16_000L).pendingReceiptReprice
+        val sink = DecisionSink()
+        stepper.completeActiveJob(sink, region, at = 16_000L)
+        val decided = sink.build().receiptReprice
         assertEquals(setOf("t1"), decided!!.shares.keys)
     }
 
@@ -1233,9 +1247,11 @@ class ReceiptRepriceTest {
         assertTrue("a receipt of unknown scope is not evidence", fold.reprices().isEmpty())
         fold.completions().values.forEach { assertUnpriced(it) }
 
+        val sink = DecisionSink()
+        stepper.completeActiveJob(sink, region, at = 16_000L)
         assertNull(
             "…and the close refuses it too",
-            stepper.completeActiveJob(region, at = 16_000L).pendingReceiptReprice,
+            sink.build().receiptReprice,
         )
     }
 
@@ -1552,29 +1568,34 @@ class ReceiptRepriceTest {
     @Test
     fun `the decision handoff lives exactly one transition`() {
         val fold = Fold(closedJobRegion()).step(postTaskObs(expanded(), 21_000L))
-        assertNotNull("set on the deciding step", fold.region.pendingReceiptReprice)
+        assertNotNull("set on the deciding step", fold.decisions.receiptReprice)
         assertEquals(1, fold.reprices().size)
 
         fold.step(idleObs(21_500L))
-        assertNull("cleared at the top of the very next step", fold.region.pendingReceiptReprice)
+        assertNull("the next step has no re-price decision", fold.decisions.receiptReprice)
         assertEquals("and emitted exactly once", 1, fold.reprices().size)
     }
 
     @Test
     fun `a stale handoff restored from a snapshot emits nothing`() {
-        val restored = closedJobRegion().copy(
-            pendingReceiptReprice = PendingReceiptReprice(
-                jobId = "J1", parsedPay = receipt, shares = mapOf("t1" to 16.70),
-                decidedAt = 1_000L, revision = 1, sourceCaptureId = "cap-old",
-            ),
-        )
+        // Old snapshots may still carry the removed key. Decode it with the production codec.
+        val snapshot = StateJson.encodeToString(PlatformRegion.serializer(), closedJobRegion())
+        val legacy = snapshot.dropLast(1) + """,
+            "pendingReceiptReprice": {
+                "jobId": "J1", "parsedPay": ${StateJson.encodeToString(ParsedPay.serializer(), receipt)}, "shares": {"t1": 16.70},
+                "decidedAt": 1000, "revision": 1, "sourceCaptureId": "cap-old"
+            }}"""
+        val restored = StateJson.decodeFromString<PlatformRegion>(legacy)
+        assertEquals(closedJobRegion(), restored)
         val obs = idleObs(30_000L)
-        val next = stepper.step(
+        val stepped = stepper.stepWithDecisions(
             restored, FlowRegion(flow = Flow.PostTask), FlowRegion(flow = Flow.Idle), obs, policy,
         )
-        assertNull("dropped by the top-of-step clear", next.pendingReceiptReprice)
+        val next = stepped.region
+        assertEquals("the legacy handoff creates no decision", RegionDecisions.NONE, stepped.decisions)
         val events = effectMap
-            .diff(appState(restored, Flow.PostTask), appState(next, Flow.Idle), obs)
+            .diff(appState(restored, Flow.PostTask), appState(next, Flow.Idle), obs,
+                StepDecisions(mapOf(Platform.DoorDash to stepped.decisions)))
             .filterIsInstance<AppEffect.LogEvent>()
             .filter { it.event.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
         assertTrue(events.isEmpty())
@@ -1619,7 +1640,7 @@ class ReceiptRepriceTest {
 
         assertNull(
             "the DoorDash region was never stepped, so it decided nothing",
-            transition.newState.regions.platforms[Platform.DoorDash]?.pendingReceiptReprice,
+            transition.decisions.of(Platform.DoorDash).receiptReprice,
         )
         assertTrue(
             transition.effects.filterIsInstance<AppEffect.LogEvent>()

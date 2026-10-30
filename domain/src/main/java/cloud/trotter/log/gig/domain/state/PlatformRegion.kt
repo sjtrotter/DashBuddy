@@ -275,14 +275,6 @@ data class PlatformRegion(
      */
     val lastClosedJobReceipt: ClosedJobReceipt? = null,
     /**
-     * A receipt re-price decided by the stepper on THIS transition (#1033 review round 4) — see
-     * [PendingReceiptReprice]. Set by the PostTask arm of `updateSessionFields` at the same moment it
-     * updates [lastClosedJobReceipt], and cleared at the top of the next step, so it is a one-step
-     * handoff to `EffectMap` rather than durable state. Default-null so existing snapshots
-     * deserialize unchanged.
-     */
-    val pendingReceiptReprice: PendingReceiptReprice? = null,
-    /**
      * The current job's FIRST-occurrence receipt anchors (#1033 review rounds 6–7) — see
      * [JobReceiptAnchors]. Read at the close into [ClosedJobReceipt]; kept across that close (the
      * receipt is still on screen after it), reset when another job becomes active, cleared at
@@ -459,43 +451,6 @@ data class JobReceiptAnchors(
      * the pre-#1078 answer everywhere it is read.
      */
     val exitMintedTaskIds: Set<String> = emptySet(),
-)
-
-/**
- * A receipt re-price the stepper DECIDED on this transition, handed to `EffectMap` to emit (#1033
- * review round 4).
- *
- * UDF: the decision is pure state (the stepper owns "is this receipt this job's, and is it owed a
- * re-price"), the effect diff only reports what was decided. The alternative — deciding inside
- * `EffectMap.diffReceiptReprice` — is what made the round-3 defects unfixable in place: an effect
- * diff cannot update [ClosedJobReceipt] as it emits, so the marker could never learn that the job
- * had just been re-priced.
- *
- * A **one-step handoff**: the stepper clears it at the top of the very next transition, before
- * anything else, so it describes exactly one step. `@Serializable` because it can be caught in a
- * snapshot mid-flight; on restore the next step's top-of-step clear drops it, so a restored value
- * can never re-emit (the effect diff also requires it to have CHANGED).
- */
-@Serializable
-data class PendingReceiptReprice(
-    /** The closed job whose delivered drops are being re-priced. */
-    val jobId: String,
-    /** The late-expanded receipt itself — rides the payload verbatim. */
-    val parsedPay: ParsedPay,
-    /** `taskId -> this drop's apportioned share`; Σ == `parsedPay.total` to the cent. */
-    val shares: Map<String, Double>,
-    /**
-     * The deciding observation's `obs.timestamp` — the emitted events' `occurredAt`. Carried
-     * explicitly rather than read back off the region, so the emission is `obs`-driven and
-     * replay-stable exactly as it was when the diff still saw the observation.
-     */
-    val decidedAt: Long,
-    /**
-     * [ClosedJobReceipt.repriceRevision] AFTER this decision — the effect key's uniqueness carrier.
-     */
-    val revision: Int,
-    /** The capture the expanded receipt was read from, when the observation carried one (debug). */
-    val sourceCaptureId: String? = null,
 )
 
 /**

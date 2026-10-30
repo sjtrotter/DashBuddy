@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.pipeline.Observation
@@ -34,6 +35,7 @@ internal fun EffectMap.diffDeliveryCompletion(
     actedPrevFlow: Flow,
     actedNextFlow: Flow,
     obs: Observation,
+    decisions: RegionDecisions,
 ): List<AppEffect> = buildList {
     // Delivery completed: THIS region's own acted flow leaving PostTask for a non-PostTask
     // flow (#438 item 5 — was the global `prevFlow.flow`/`nextFlow.flow`, which fired this
@@ -233,9 +235,8 @@ internal fun EffectMap.diffDeliveryCompletion(
                 ),
             )
         }
-        // #1078: through the ONE owner — a `SESSION_END` that absorbed a retire carries the same
-        // evidence a live `TASK_RETIRE` does, and the #996 amendment-B mask below plus
-        // `mintingDropoffTasks` inherit it through this single variable.
+        // Preserve the pre-step retire evidence used by the close-out apportionment denominator.
+        // The completeness mask and emission gate below use this step's committed decision (#1423).
         val retirePending = p.retirePendingForMint()
         // #691/#996/#997: the whole offer-pay attribution for this close, computed ONCE (the drops
         // all share one job shape — running the ladder per completion would also let the two mint
@@ -246,14 +247,14 @@ internal fun EffectMap.diffDeliveryCompletion(
         // force-stamps `completedAt` on whatever task was active at a bail (T3), which — for a drop
         // that had already ARRIVED — otherwise satisfies the #749 coverage arm and FORGES a
         // completeness proof for an abandoned job. The amdt-#5 discriminator the mint loop already
-        // uses (completed before this step, or retired under a TASK_RETIRE grace) is the SSOT for
+        // uses (completed before this step, or named by this step's retire decision) is the SSOT for
         // "this completion is real", so the proof reads the same masked evidence: an unqualified
         // completion is reverted to unfinished, which fails the arm toward absorption. Invariant:
         // an unqualified endSession/abandon bail cannot yield provenComplete.
         val closedJobProvenComplete = !estimateSuppressed && isJobPhysicallyComplete(
             closedJob,
             recentTasks = next.recentTasks.map { t ->
-                if (mintQualified(p, retirePending, t)) t else t.copy(completedAt = null)
+                if (mintQualified(p, decisions.retiredTaskId, t)) t else t.copy(completedAt = null)
             },
             justRetired = null,
         )
@@ -315,13 +316,12 @@ internal fun EffectMap.diffDeliveryCompletion(
             // amdt #2 exclusivity: the PostTask-exit block already minted this one.
             if (task.taskId in emittedThisStep) continue
             // amdt #5: qualify ONLY (a) a task already completed BEFORE this step, or (b) the
-            // active task just retired under retire evidence ([retirePendingForMint] — a live
-            // TASK_RETIRE, or since #1078 a SESSION_END that ABSORBED one). This excludes exactly
+            // active task named by this step's committed retire decision. This excludes exactly
             // endSession's force-stamp of an active, UNDELIVERED task (T3 false-completion guard):
-            // an end with nothing absorbed carries no retire evidence, so neither arm matches. The
+            // a refused retire records no decision, so neither arm matches. The
             // SAME discriminator masks the completeness proof's evidence above (#996 amendment B)
             // and the #1095 tripwire's.
-            if (!mintQualified(p, retirePending, task)) continue
+            if (!mintQualified(p, decisions.retiredTaskId, task)) continue
             // #1078 round 5: there is deliberately NO "already minted at a PostTask exit" skip here.
             // Round 3 added one and round 5 withdrew it: `StateManagerV2` snapshots BEFORE the exit's
             // effect is durably written, so a restore can carry an `exitMintedTaskIds` entry for a
@@ -445,59 +445,17 @@ private fun warnIfUnsplit(job: Job, taskId: String, result: OfferPayFallback.Res
     )
 }
 
-/**
- * The amdt-#5 mint qualification, hoisted so the close-out loop AND the #996 completeness proof read
- * ONE definition of "this completion is real" (#997 amendment B): a task already completed BEFORE
- * this step, or the active task just retired under retire evidence ([retirePendingForMint] — a live
- * `TASK_RETIRE`, or since #1078 a `SESSION_END` that absorbed one). It excludes exactly
- * `endSession`'s force-stamp of an active, UNDELIVERED task at a bail — which, for a drop that had
- * already ARRIVED, would otherwise satisfy the #749 coverage arm and FORGE a completeness proof for
- * an abandoned job.
- *
- * `internal` since #1033: the receipt re-price ([diffReceiptReprice]) has to rebuild the SAME
- * denominator the mint used, a step or more later. Re-spelling it there was the #1033 review's R2
- * defect in embryo — a completion minted from the STILL-ACTIVE task (its `completedAt` is stamped
- * only when the retire grace commits) is invisible to a naive `recentTasks + completedAt != null`
- * scan, so the re-price found an empty denominator and silently emitted nothing.
- *
- * **Rounds 6–7 — for a `SESSION_END` pending, arm (b) reads the STEPPER'S ACTUAL DECISION off the
- * task.** A teardown has two outcomes and only one of them is a delivery, but "did it honor?" was
- * being re-derived here from the pending alone (`retirePendingForMint`), which is a second predicate
- * that has to be kept in sync with every refusal the stepper makes — the maturity gate, the
- * `task:unassigned` disown, a lazy-expiry refusal. It fell out of sync at the mode arm's
- * `startingSession` shortcut, which calls `endSession` ahead of the absorbed deadline: the stepper
- * force-stamped, and the sweep minted anyway.
- *
- * So the discriminator is the stepper's own MARK, [Task.honoredRetireAt], written by `endSession`'s
- * honored branch, or [Task.staleCloseCompletedAt], written by the #1119 stale close. These are the
- * two writers of stepper completion marks. Round 6 first tried the stamp's VALUE (`completedAt ==
- * absorbedRetireSince`) and that was wrong: a summary sharing the idle frame's timestamp makes
- * `pend.since == absorbedRetireSince`, so the immature teardown's force-stamp (`completedAt =
- * pend.since`) is numerically identical to an honored one and was minted — a timestamp is not
- * provenance. Requiring the mark makes the emitter agree with the stepper BY CONSTRUCTION — a refusal
- * anywhere in the stepper leaves the task unmarked and the mint off, with nothing else to update. It
- * reads [task], which every caller passes from the NEXT region (the post-step copy that carries the
- * mark).
- *
- * A `TASK_RETIRE` pending is unaffected: its arm (b) is the ordinary inline retire, judged as before.
- */
-internal fun mintQualified(p: PlatformRegion, retirePending: Boolean, task: Task): Boolean {
-    // #1119: the stale close explicitly completed an arrived drop; the mark is its provenance.
+/** Completion evidence from prior history, a stale close, or this step's committed retire. */
+internal fun mintQualified(p: PlatformRegion, retiredTaskId: String?, task: Task): Boolean {
     if (task.staleCloseCompletedAt != null) return true
     if (p.recentTasks.any { it.taskId == task.taskId && it.completedAt != null }) return true
-    if (!retirePending || p.activeTask?.taskId != task.taskId) return false
-    val pend = p.pendingDestructive ?: return false
-    // Round 7: a teardown's completion counts ONLY when the stepper MARKED it honored. Round 6 read
-    // the mark off `completedAt`'s VALUE (== `absorbedRetireSince`), which an equal-timestamped
-    // summary — or a clock rollback — let the immature teardown's force-stamp satisfy, fabricating a
-    // row the stepper had refused. A timestamp is not provenance; [Task.honoredRetireAt] is.
-    if (pend.kind == DestructiveKind.SESSION_END) return task.honoredRetireAt != null
-    return true
+    return retiredTaskId == task.taskId
 }
 
 /**
  * The ONE owner of "does this region carry destructive RETIRE evidence for its active task?" — the
- * `retirePending` argument every [mintQualified] caller passes (#1078).
+ * `retirePending` argument used by [mintingDropoffTasks] for the apportionment denominator (#1078).
+ * Emission qualification instead reads the step's retired-task decision (#1423).
  *
  * Two shapes answer yes, and they are the same fact:
  * - a live `TASK_RETIRE` grace (the pre-#1078 spelling), and
@@ -679,14 +637,10 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
  * from THIS function plus one explicit widening arm, so "the same denominator the mint uses" is
  * literally the same expression rather than a second copy that has to be kept in step.
  *
- * **Deliberately NOT routed through [mintQualified]'s honor-mark rule (rounds 6–7).** That rule reads
- * [Task.honoredRetireAt] off a POST-step task copy, and one of this function's two callers —
- * `decideReceiptReprice`, invoked from inside `endSession` — passes the PRE-teardown region for both
- * `p` and `next`, where the drop is still active and not yet marked. Applying the mark rule there
- * would empty the denominator of the very drop the teardown is about to mint and silently withhold
- * the correction (the #1033 R2 defect, exactly). The distinction is what each answers: this is a
- * DENOMINATOR for apportionment, where including a drop that is about to mint is the safe direction,
- * while [mintQualified] gates an EMISSION, where being wrong writes or loses a row.
+ * Deliberately separate from [mintQualified]'s committed-retire decision (#1423).
+ * `decideReceiptReprice`, invoked inside `endSession`, passes the PRE-teardown region for both
+ * `p` and `next`, before the retire decision is recorded. Keep the structural retire evidence here
+ * and at the close-out caller: changing this denominator changes the apportioned payloads.
  */
 internal fun mintingDropoffTasks(
     p: PlatformRegion,

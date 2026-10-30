@@ -5,5 +5,6 @@ import cloud.trotter.log.gig.core.state.AppEffect
 
 data class Transition(
     val newState: AppState,
-    val effects: List<AppEffect> = emptyList()
+    val effects: List<AppEffect> = emptyList(),
+    val decisions: StepDecisions = StepDecisions.NONE,
 )

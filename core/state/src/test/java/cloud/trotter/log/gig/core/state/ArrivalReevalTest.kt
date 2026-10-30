@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.evaluation.ArrivalCorrection
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
@@ -236,7 +237,7 @@ class ArrivalReevalTest {
         val landed = step(requested, loopback())
         val addon = AcceptInputs("addon", accepted.copy(offerHash = "addon"), listOf("Store"), 1)
         for (before in listOf(requested, landed)) {
-            val after = stepper.consumeAcceptIntoJob(before, obs(timestamp = 1_200L), addon)
+            val after = stepper.consumeAcceptIntoJob(DecisionSink(), before, obs(timestamp = 1_200L), addon)
             assertEquals(2, after.activeJob!!.acceptedOffers.size)
             assertNull(after.activeJob!!.arrivalEstimate)
             assertNull(after.activeJob!!.arrivalEstimateRequestedAt)

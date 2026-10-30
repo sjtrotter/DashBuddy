@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.state.PlatformRegion
@@ -27,7 +28,7 @@ import timber.log.Timber
  * **Evidence is MINT-QUALIFIED, not raw.** `endSession` force-stamps `completedAt` on whatever task
  * was active at a bail, which would read as a delivered drop and silence the very close the tripwire
  * now covers. So `next.recentTasks` is masked through the same amdt-#5 discriminator the mint and the
- * #996 completeness proof use ([mintQualified] + the one owner [retirePendingForMint]): an
+ * #996 completeness proof use ([mintQualified] + the step's retired-task decision): an
  * unqualified force-stamp is reverted to unfinished, because a completion with no row is not a
  * delivery. An HONORED teardown (#1078 — the end absorbed a real retire) qualifies and is therefore
  * correctly accounted, so it stays silent.
@@ -58,6 +59,7 @@ internal fun EffectMap.diffJobClose(
     prev: PlatformRegion,
     next: PlatformRegion,
     obs: Observation,
+    decisions: RegionDecisions,
 ): List<AppEffect> {
     val closingJob = prev.activeJob ?: return emptyList()
     // No close this step (same job survives, or an add-on `existing.copy` kept the jobId).
@@ -77,9 +79,8 @@ internal fun EffectMap.diffJobClose(
     // it ([mintedAtPostTaskExit]). Without that term a perfectly normal receipted delivery — arrived
     // drop, receipt, then the dash ended before the receipt's retire expired — read as "nothing
     // minted", and the lifted floor fired a false 1-of-0 alarm on it.
-    val retirePending = prev.retirePendingForMint()
     val evidence = next.recentTasks.map { t ->
-        val real = mintQualified(prev, retirePending, t) || prev.mintedAtPostTaskExit(t.taskId)
+        val real = mintQualified(prev, decisions.retiredTaskId, t) || prev.mintedAtPostTaskExit(t.taskId)
         if (real) t else t.copy(completedAt = null)
     }
 

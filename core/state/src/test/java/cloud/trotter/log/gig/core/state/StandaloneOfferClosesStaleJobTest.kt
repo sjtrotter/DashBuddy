@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
@@ -271,7 +272,7 @@ class StandaloneOfferClosesStaleJobTest {
         val before = region(initial()).copy(pendingOffers = emptyList())
         val inputs = stepper.acceptInputsFromPending(null, acceptedAt = 900L)
         assertNull(inputs.offerScope)
-        val after = stepper.consumeAcceptIntoJob(before, frame, inputs)
+        val after = stepper.consumeAcceptIntoJob(DecisionSink(), before, frame, inputs)
         assertEquals("old-job", after.activeJob?.jobId)
         assertEquals(2, after.activeJob?.acceptedOffers?.size)
         assertNull(after.lastClosedJobReceipt)
@@ -295,7 +296,7 @@ class StandaloneOfferClosesStaleJobTest {
         for (scope in OfferScope.entries) {
             val parsed = offer.copy(offerHash = "old-offer", offerScope = scope)
             val before = region(initial(parsed)).copy(pendingOffers = emptyList())
-            val after = stepper.consumeAcceptIntoJob(before, frame,
+            val after = stepper.consumeAcceptIntoJob(DecisionSink(), before, frame,
                 stepper.acceptInputsFromPending(pending(parsed), acceptedAt = 900L))
             assertEquals(before, after)
         }
@@ -325,7 +326,7 @@ class StandaloneOfferClosesStaleJobTest {
         )
         val before = initial(destructive = destructive)
         // #1119 slice 1: pin the consumer's clearing before task-flow processing can cancel the grace.
-        val consumed = stepper.consumeAcceptIntoJob(region(before).copy(pendingOffers = emptyList()),
+        val consumed = stepper.consumeAcceptIntoJob(DecisionSink(), region(before).copy(pendingOffers = emptyList()),
             frame, stepper.acceptInputsFromPending(pending(), acceptedAt = 900L))
         assertNull(consumed.pendingDestructive)
         assertAbandoned(consumed, viaStep = false)
@@ -359,7 +360,7 @@ class StandaloneOfferClosesStaleJobTest {
         for (kind in listOf(DestructiveKind.SESSION_END, DestructiveKind.JOB_ABANDON)) {
             val destructive = PendingDestructive(kind, since = 800L, deadline = 10_800L)
             val before = region(initial(destructive = destructive)).copy(pendingOffers = emptyList())
-            val after = stepper.consumeAcceptIntoJob(before, frame,
+            val after = stepper.consumeAcceptIntoJob(DecisionSink(), before, frame,
                 stepper.acceptInputsFromPending(pending(), acceptedAt = 900L))
             assertEquals(destructive, after.pendingDestructive)
             assertAbandoned(after, viaStep = false)

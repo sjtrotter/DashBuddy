@@ -1,5 +1,8 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.ReceiptRepriceDecision
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryReceiptRepricePayload
 import cloud.trotter.log.gig.domain.pipeline.Observation
@@ -7,7 +10,6 @@ import cloud.trotter.log.gig.domain.state.DropPayApportioner
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.FlowRegion
 import cloud.trotter.log.gig.domain.state.ParsedFields
-import cloud.trotter.log.gig.domain.state.PendingReceiptReprice
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.ReceiptCoverage
 import cloud.trotter.log.gig.domain.state.Task
@@ -222,8 +224,8 @@ internal fun List<Task>.describedBy(coverage: ReceiptCoverage?): List<Task> =
  * and what its receipt now totals. An effect diff cannot do that, and the round-3 shape — deciding
  * in `EffectMap` off a marker nobody could update — is exactly why a re-priced job could be re-priced
  * back DOWN by a later same-total receipt from a different job. So [decideReceiptReprice] runs inside
- * `updateSessionFields`, parks its result on [PlatformRegion.pendingReceiptReprice] (a one-step
- * handoff), and [diffReceiptReprice] just reports it.
+ * `updateSessionFields`, records its result in the step-local [DecisionSink], and
+ * [diffReceiptReprice] just reports it.
  *
  * **Ownership** is the other thing the rounds taught. `lastAnnouncedPostTaskTaskId` falls back to
  * `recentTasks.lastOrNull()`, so a receipt with no job of its own attaches to whatever drop happened
@@ -236,6 +238,7 @@ internal fun List<Task>.describedBy(coverage: ReceiptCoverage?): List<Task> =
  * no wire string. Pure: `obs`-driven, no wall clock, no side effect beyond the emitted log effects.
  */
 internal fun PlatformRegionStepper.decideReceiptReprice(
+    sink: DecisionSink,
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
     postTaskTaskId: String?,
@@ -309,14 +312,12 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val anchor = postTaskTaskId ?: region.lastAnnouncedPostTaskTaskId ?: return region
 
     // The denominator, rebuilt as the mint built it — `Task.isAccountableDropoff` (the #498 phantom +
-    // #736 unassign firewalls) plus the SAME amdt-#5 [mintQualified] predicate
-    // `DeliveryCompletionEffects.mintingDropoffTasks` applies, so Σ shares lands on exactly the rows
-    // the mint wrote.
+    // #736 unassign firewalls) plus [mintingDropoffTasks]'s structural retire evidence.
+    // This denominator remains separate from [mintQualified]'s step-local emission decision.
     //
     // The active task is a CANDIDATE: the PostTask-exit mint can complete a task that is STILL ACTIVE
     // under its retire grace (`completedAt` is stamped only when that grace commits), and
-    // [mintQualified] admits it only while a `TASK_RETIRE` really is pending — the same evidence the
-    // mint required of it.
+    // [mintingDropoffTasks] admits it while retire evidence is pending.
     //
     // [mintRanForJob] widens that ONLY at a terminal teardown, and ONLY to the receipt's own anchor
     // task (round 11). Widening to "the active task" alone moved money: at a mid-stack session end —
@@ -374,8 +375,8 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     if (shares.isEmpty()) return region
 
     val revision = mark.repriceRevision + 1
-    return region.copy(
-        pendingReceiptReprice = PendingReceiptReprice(
+    sink.reprice(
+        ReceiptRepriceDecision(
             jobId = mark.jobId,
             parsedPay = parsedPay,
             shares = shares,
@@ -383,6 +384,8 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             revision = revision,
             sourceCaptureId = captureId,
         ),
+    )
+    return region.copy(
         // ATOMIC with the decision: the revision the events are keyed at (which keeps an X → Y → X
         // itemization sequence's three emissions distinct), and the itemization this decision was
         // made from, so an unchanged re-render does not spend another revision.
@@ -405,6 +408,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
  * fail-null with no extra guard.
  */
 internal fun PlatformRegionStepper.decideFromCachedReceipt(
+    sink: DecisionSink,
     source: PlatformRegion,
     closed: PlatformRegion,
     decidedAt: Long,
@@ -412,6 +416,7 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
 ): PlatformRegion {
     val cached = source.lastPostTaskFields ?: return closed
     return decideReceiptReprice(
+        sink,
         region = closed,
         parsed = cached,
         postTaskTaskId = null,
@@ -428,16 +433,15 @@ internal fun PlatformRegionStepper.decideFromCachedReceipt(
  * the receipt's content: an X→Y→X itemization hashed back onto its own first key and the third
  * emission was dropped).
  *
- * Reads state only: no observation, no re-derivation. The handoff is cleared at the top of the next
- * step, and the `!= p.pendingReceiptReprice` guard makes a value that somehow survived (a snapshot
- * restored mid-flight) emit nothing.
+ * Reads the returned decision without re-deriving it. Each step starts with a fresh sink; replay
+ * reconstructs the decision along with the state transition.
  */
 internal fun EffectMap.diffReceiptReprice(
     p: PlatformRegion,
     next: PlatformRegion,
+    decisions: RegionDecisions,
 ): List<AppEffect> {
-    val decided = next.pendingReceiptReprice ?: return emptyList()
-    if (decided == p.pendingReceiptReprice) return emptyList()
+    val decided = decisions.receiptReprice ?: return emptyList()
 
     // #1078 round 3: the ONE close-step attribution rule ([closingSession]). A teardown handoff
     // (`endSession`'s decision, carried out of the step that cleared the session) corrects rows

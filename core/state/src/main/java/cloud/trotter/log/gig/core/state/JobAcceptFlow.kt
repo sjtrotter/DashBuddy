@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.model.offer.AddOnStops
 import cloud.trotter.log.gig.domain.model.offer.newStores
 import cloud.trotter.log.gig.domain.model.offer.ownedStoreKeys
@@ -143,6 +144,7 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
  * The single entry point shared by the accept-adjacent, add-on, and fallback branches.
  */
 internal fun PlatformRegionStepper.consumeAcceptIntoJob(
+    sink: DecisionSink,
     region: PlatformRegion,
     obs: Observation.FlowObservation,
     inputs: AcceptInputs,
@@ -167,13 +169,14 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
             if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
         if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
             val committed = if (justRetired != null) {
+                sink.retired(justRetired.taskId)
                 region.copy(
                     activeTask = null,
                     recentTasks = recentForCheck.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
                     pendingDestructive = null,
                 )
             } else region
-            return mintFreshJobFromAccept(completeActiveJob(committed, obs.timestamp), obs, inputs)
+            return mintFreshJobFromAccept(completeActiveJob(sink, committed, obs.timestamp), obs, inputs)
         }
     }
 
@@ -190,7 +193,7 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
             region.copy(pendingDestructive = null)
         } else region
         return mintFreshJobFromAccept(
-            abandonActiveJob(stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)",
+            abandonActiveJob(sink, stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)",
                 arrivedDropsComplete = true),
             obs, inputs,
         )

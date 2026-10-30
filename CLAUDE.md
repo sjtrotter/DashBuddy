@@ -480,7 +480,7 @@ Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 �
 interpretation, NOT offers), one **`PlatformRegion`** per platform (session/task lifecycle + that
 platform's offers), **`CrossPlatformRegion`** (derived aggregates). The steppers are pure and driven by
 `obs.timestamp` — never a wall clock — so crash recovery replays observations over the last snapshot.
-`StateManagerV2` hosts the reduction and crash recovery; `EffectMap` diffs prev/next into `AppEffect`s.
+`StateManagerV2` hosts the reduction and crash recovery; `EffectMap` turns prev/next plus the step's `StepDecisions` (that step's re-price and retired task; never persisted, rebuilt by replay) into `AppEffect`s (#1423).
 No `Platform` branch anywhere (principle 8); per-platform values ride `GraceConfig` through
 `TransitionPolicy`.
 
@@ -714,9 +714,9 @@ else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
 (`decideReceiptReprice`, at every itemized receipt frame, at the job close, and at `endSession`), keyed
 `…:<taskId>:<jobId>:r<repriceRevision>`. Ownership is ONE temporal question — has any acceptance
 resolved since this receipt appeared (`lastAcceptResolvedAt` vs `receiptSeenAt`) — so the STACKED
-late-expand shape is refused (fail-null, #745). Stepper state: `lastDecidedPay` is compared STRUCTURALLY (a hash collided), the one-step
-`pendingReceiptReprice` handoff is cleared at the top of the next step (a restored value can never
-re-emit), and `lastAcceptResolvedAt` survives both the survivor's expiry and the mint. The projector
+late-expand shape is refused (fail-null, #745). Stepper state: `lastDecidedPay` is compared STRUCTURALLY
+(a hash collided), and `lastAcceptResolvedAt` survives both the survivor's expiry and the mint.
+The re-price travels in the returned `StepDecisions`, never in region state; replay reconstructs it (#1423). The projector
 applies by (jobId, taskId) — itemization only on the receipt's sole drop (`soleDropOfReceipt`),
 `payBasis` → `DROP_SHARE`, net against the row's own frozen cpm, a missing row is a counted skip —
 no-ops when the row already matches, never overwrites a DRIVER-owned row

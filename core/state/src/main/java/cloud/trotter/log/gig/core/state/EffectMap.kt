@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.StepDecisions
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.action.ActionTrigger
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
@@ -103,7 +105,7 @@ class EffectMap @Inject constructor(
     }
 
 
-    fun diff(prev: AppState, next: AppState, obs: Observation): List<AppEffect> = buildList {
+    fun diff(prev: AppState, next: AppState, obs: Observation, decisions: StepDecisions): List<AppEffect> = buildList {
         addAll(diffRuleEffects(obs))
         addAll(diffExpandAction(obs))
         addAll(diffConfirmDeclineAction(obs, next))
@@ -124,6 +126,7 @@ class EffectMap @Inject constructor(
                     prev.regions.flow,
                     next.regions.flow,
                     obs,
+                    decisions.of(p),
                 )
             )
         }
@@ -179,6 +182,7 @@ class EffectMap @Inject constructor(
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
         obs: Observation,
+        decisions: RegionDecisions,
     ): List<AppEffect> {
         if (next == null) return emptyList()
         val p = prev ?: PlatformRegion(platform)
@@ -215,7 +219,7 @@ class EffectMap @Inject constructor(
             // #438 B5/#240: the DELIVERY_COMPLETED mint (PostTask-exit + the #596 close-out
             // sweep) extracted to DeliveryCompletionEffects.kt as one unit — both blocks share the
             // emittedThisStep dual-mint-exclusivity set (amdt #2), so they moved together.
-            addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs))
+            addAll(diffDeliveryCompletion(p, next, actedPrevFlow, actedNextFlow, obs, decisions))
             // #810 B1: the job-close accept-reconciliation tripwire — diffs the activeJob close.
             // #1095: EVERY close edge is in scope now, `endSession`'s teardown included, attributed
             // to the job's own session (see [diffJobClose]).
@@ -225,7 +229,7 @@ class EffectMap @Inject constructor(
             // reconcile paging-independent — the projector's evidence read sees every delivered row of
             // the job by construction. Behaviorally inert to B1 (diffJobClose only diffs prev/next +
             // emits a log effect; the sweep's emittedThisStep set is local to diffDeliveryCompletion).
-            addAll(diffJobClose(p, next, obs))
+            addAll(diffJobClose(p, next, obs, decisions))
             // #1033 layer 2: a receipt EXPANDED after its job's completions were already minted off
             // the collapsed shape re-prices those drops from the itemization. Ordering is
             // LOAD-BEARING (review R3): this must stay AFTER `diffDeliveryCompletion`, because an
@@ -233,7 +237,7 @@ class EffectMap @Inject constructor(
             // writes one step's effects serially, so the re-price then lands in `app_events` after
             // the `DELIVERY_COMPLETED` it corrects, and the projector applies adjustments after the
             // batch's own delivery upserts in sequence order.
-            addAll(diffReceiptReprice(p, next))
+            addAll(diffReceiptReprice(p, next, decisions))
         }
     }
 

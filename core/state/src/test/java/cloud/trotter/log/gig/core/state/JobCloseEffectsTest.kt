@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.JobAcceptMismatchPayload
@@ -93,7 +94,7 @@ class JobCloseEffectsTest {
             Platform.DoorDash, session = session, activeJob = null,
             recentTasks = listOf(deliveredDrop("J1")),
         )
-        val effects = effectMap.diffJobClose(prev, next, obs())
+        val effects = effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)
         val m = mismatches(effects)
         assertEquals("the in-session close fires exactly one tripwire", 1, m.size)
         assertEquals(2, m.single().acceptedCount)
@@ -118,7 +119,7 @@ class JobCloseEffectsTest {
             Platform.DoorDash, session = sessionB, activeJob = null,
             recentTasks = listOf(deliveredDrop("J1")),
         )
-        val effects = effectMap.diffJobClose(prev, next, obs())
+        val effects = effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)
         val m = mismatches(effects)
         assertEquals("the end+mint close is in scope (#1095)", 1, m.size)
         assertEquals(2, m.single().acceptedCount)
@@ -140,7 +141,7 @@ class JobCloseEffectsTest {
             Platform.DoorDash, session = null, activeJob = null,
             recentTasks = listOf(deliveredDrop("J1")),
         )
-        val effects = effectMap.diffJobClose(prev, next, obs())
+        val effects = effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)
         assertEquals("a session-clearing endSession is in scope (#1095)", 1, mismatches(effects).size)
         assertEquals(listOf("dash-A"), sessionIds(effects))
     }
@@ -154,7 +155,7 @@ class JobCloseEffectsTest {
         val next = PlatformRegion(Platform.DoorDash, session = session, activeJob = null)
         assertEquals(
             "one accept closing drop-less in-session is the early-offline class, not this signal",
-            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+            0, mismatches(effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)).size,
         )
     }
 
@@ -180,7 +181,7 @@ class JobCloseEffectsTest {
             // The teardown's force-stamp, on a drop the dasher had ARRIVED at.
             recentTasks = listOf(active.copy(completedAt = 5000L)),
         )
-        val effects = effectMap.diffJobClose(prev, next, obs())
+        val effects = effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)
         val m = mismatches(effects)
         assertEquals("the stranded accept is visible at last (#1078/#1095)", 1, m.size)
         assertEquals(1, m.single().acceptedCount)
@@ -198,7 +199,7 @@ class JobCloseEffectsTest {
             activeJob = job, activeTask = active)
         val next = PlatformRegion(Platform.DoorDash,
             recentTasks = listOf(active.copy(completedAt = 5000L)))
-        val effects = effectMap.diffJobClose(prev, next, obs())
+        val effects = effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)
         val mismatch = mismatches(effects).single()
         assertEquals(1, mismatch.acceptedCount)
         assertEquals(0, mismatch.accountedCount)
@@ -231,7 +232,7 @@ class JobCloseEffectsTest {
         )
         assertEquals(
             "an honored teardown accounts its drop — no tripwire",
-            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+            0, mismatches(effectMap.diffJobClose(prev, next, obs(), RegionDecisions(retiredTaskId = active.taskId))).size,
         )
     }
 
@@ -256,7 +257,7 @@ class JobCloseEffectsTest {
         )
         assertEquals(
             "no dropoff ever existed — the floor stays at 2",
-            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+            0, mismatches(effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)).size,
         )
     }
 
@@ -277,7 +278,7 @@ class JobCloseEffectsTest {
         )
         assertEquals(
             "the dasher never reached a doorstep — the floor stays at 2",
-            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+            0, mismatches(effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)).size,
         )
     }
 
@@ -301,7 +302,7 @@ class JobCloseEffectsTest {
         )
         assertEquals(
             "a real completion was minted — nothing is lost, the floor stays at 2",
-            0, mismatches(effectMap.diffJobClose(prev, next, obs())).size,
+            0, mismatches(effectMap.diffJobClose(prev, next, obs(), RegionDecisions.NONE)).size,
         )
     }
 }

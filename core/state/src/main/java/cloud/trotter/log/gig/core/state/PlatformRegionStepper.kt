@@ -1,5 +1,8 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.PlatformStep
+import cloud.trotter.log.gig.core.state.model.ReceiptRepriceDecision
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.model.ratings.RatingsSnapshot
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
@@ -92,34 +95,43 @@ class PlatformRegionStepper @Inject constructor() {
         nextFlow: FlowRegion,
         obs: Observation,
         policy: TransitionPolicy,
-    ): PlatformRegion = stampLastActedFlow(
-        // #438 B3: the offer lifecycle runs FIRST, on THIS platform's owned pendingOffers, so an
-        // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
-        // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
-        reconcileDropoffStore(
-            reconcileJobTasks(
-                // #1033 review R1: the re-price window closes the moment the NEXT job is minted —
-                // run this where `activeJob` is final for the step (nothing after stepCore changes
-                // whether a job is active).
-                closeReceiptRepriceWindow(
-                    stepCore(
-                        // #1073 round 13: the PostTask-exit latch is a pure flow-edge fact about the
-                        // frame, so it is stamped before any of stepCore's early returns can skip it.
-                        stampPostTaskExit(
-                            // #1033 round 4: the re-price handoff lives exactly ONE transition.
-                            // Clearing it at the very top means the value `EffectMap` sees is always
-                            // the one THIS step decided — and a stale one restored from a snapshot is
-                            // dropped before it can be re-emitted.
-                            landArrivalEstimate(stepOffers(prev.copy(pendingReceiptReprice = null), obs, policy), obs),
-                            prevFlow, obs,
+    ): PlatformRegion = stepWithDecisions(prev, prevFlow, nextFlow, obs, policy).region
+
+    fun stepWithDecisions(
+        prev: PlatformRegion,
+        prevFlow: FlowRegion,
+        nextFlow: FlowRegion,
+        obs: Observation,
+        policy: TransitionPolicy,
+    ): PlatformStep {
+        val sink = DecisionSink()
+        val region = stampLastActedFlow(
+            // #438 B3: the offer lifecycle runs FIRST, on THIS platform's owned pendingOffers, so an
+            // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
+            // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
+            reconcileDropoffStore(
+                reconcileJobTasks(
+                    // #1033 review R1: the re-price window closes the moment the NEXT job is minted —
+                    // run this where `activeJob` is final for the step (nothing after stepCore changes
+                    // whether a job is active).
+                    closeReceiptRepriceWindow(
+                        stepCore(
+                            sink,
+                            // #1073 round 13: the PostTask-exit latch is a pure flow-edge fact about the
+                            // frame, so it is stamped before any of stepCore's early returns can skip it.
+                            stampPostTaskExit(
+                                landArrivalEstimate(stepOffers(prev, obs, policy), obs),
+                                prevFlow, obs,
+                            ),
+                            prevFlow, nextFlow, obs, policy,
                         ),
-                        prevFlow, nextFlow, obs, policy,
                     ),
-                ),
-            ).let { requestArrivalEstimate(it, obs) },
-        ),
-        obs,
-    )
+                ).let { requestArrivalEstimate(it, obs) },
+            ),
+            obs,
+        )
+        return PlatformStep(region, sink.build())
+    }
 
     /**
      * #438 item 5 (D3): record the last **non-null** own-platform flow this region stepped on
@@ -179,6 +191,7 @@ class PlatformRegionStepper @Inject constructor() {
     }
 
     private fun stepCore(
+        sink: DecisionSink,
         prev: PlatformRegion,
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
@@ -229,18 +242,10 @@ class PlatformRegionStepper @Inject constructor() {
                 //     honoring (the shape the amdt-#5 T3 guard exists to refuse), and
                 //  2. the task is marked `unassignedAt` at this frame.
                 //
-                // Half 2 is what makes the refusal BITE. `EffectMap` judges the mint against the
-                // PRE-step region, whose pending still carries the absorbed value — so clearing it
-                // inside the step is invisible to [retirePendingForMint] and the close-out sweep
-                // would mint the fabricated completion anyway. The `unassignedAt` marker is read off
-                // the task itself and is answered by firewalls that already exist: the close-out
-                // loop's own `unassignedAt` skip (#736/#752), `isJobPhysicallyComplete`'s exclusion,
-                // and `detectAcceptMismatch` counting the order as ACCOUNTED — which is the honest
-                // answer, because it was abandoned, not stranded. It is also the truthful mark: the
-                // frame IS the platform stating the dasher unassigned this order — and `TaskEffects`
-                // detects that marker and emits the proper `TASK_UNASSIGNED`, attributed through
-                // [closingSession] to the session that just ended (round 3; the round-2 note here
-                // claiming no event fires was wrong).
+                // `unassignedAt` remains the durable record of the abandonment: completeness and
+                // accounting readers exclude the drop, and `TaskEffects` emits `TASK_UNASSIGNED`
+                // attributed through [closingSession] to the session that just ended. The missing
+                // retired-task decision tells the same-step close-out sweep that no retire committed.
                 //
                 // The same disown runs on an IN-WINDOW unassign frame — see [disownAbsorbedRetire],
                 // the one owner of both halves.
@@ -254,6 +259,7 @@ class PlatformRegionStepper @Inject constructor() {
                     current.copy(pendingDestructive = null)
                 } else if (disownedByUnassign) {
                     commitDestructive(
+                        sink,
                         disownAbsorbedRetire(current, obs.timestamp),
                         pend.kind, pend.since, obs.timestamp,
                     )
@@ -275,7 +281,7 @@ class PlatformRegionStepper @Inject constructor() {
                     // AppEventEntity's class KDoc ("sequenceId vs occurredAt") for the full
                     // invariant; this is a documented, accepted tradeoff (Option B), not a
                     // bug to silently "fix" by re-stamping here.
-                    commitDestructive(current, pend.kind, pend.since, obs.timestamp)
+                    commitDestructive(sink, current, pend.kind, pend.since, obs.timestamp)
                 }
             }
         }
@@ -299,7 +305,7 @@ class PlatformRegionStepper @Inject constructor() {
                 current = when {
                     impliedMode == Mode.Offline || impliedMode == Mode.Paused ->
                         current.copy(pendingModeResume = null)
-                    obs is Observation.Timeout || flowObs != null -> commitModeResume(current, obs, policy)
+                    obs is Observation.Timeout || flowObs != null -> commitModeResume(sink, current, obs, policy)
                     else -> current
                 }
             }
@@ -319,7 +325,7 @@ class PlatformRegionStepper @Inject constructor() {
                 val startParsed = (obs as? Observation.FlowObservation)?.parsed
                 if ((startParsed as? ParsedFields.IdleFields)?.startingSession == true) {
                     // Honest end time = when the destructive signal appeared (#431).
-                    current = endSession(current, pend.since, obs.timestamp)
+                    current = endSession(sink, current, pend.since, obs.timestamp)
                 }
             }
         }
@@ -412,7 +418,7 @@ class PlatformRegionStepper @Inject constructor() {
         val afterRatings = updateRatings(afterMode, flowObs)
 
         // Update session/job/task lifecycle based on flow changes
-        return updateLifecycle(afterRatings, prevFlow, nextFlow, flowObs, policy)
+        return updateLifecycle(sink, afterRatings, prevFlow, nextFlow, flowObs, policy)
     }
 
     // =========================================================================
@@ -555,6 +561,7 @@ class PlatformRegionStepper @Inject constructor() {
 
     /** Commit either resume origin; a new session starts at the first hint, not the wake (#1311). */
     private fun commitModeResume(
+        sink: DecisionSink,
         region: PlatformRegion,
         obs: Observation,
         policy: TransitionPolicy,
@@ -565,7 +572,7 @@ class PlatformRegionStepper @Inject constructor() {
             startedAt = pending?.since ?: obs.timestamp,
         )
         return pending?.idleFields?.let {
-            updateSessionFields(resumed, obs, Flow.Idle, policy, it)
+            updateSessionFields(sink, resumed, obs, Flow.Idle, policy, it)
         } ?: resumed
     }
 
@@ -649,16 +656,10 @@ class PlatformRegionStepper @Inject constructor() {
      *     instead of honoring — the shape the amdt-#5 T3 guard exists to refuse; and
      *  2. the active task is marked `unassignedAt` at [at].
      *
-     * Half 2 is what makes the refusal BITE: `EffectMap` judges the mint against the PRE-step
-     * region, whose pending still carries the absorbed value, so clearing it alone is invisible to
-     * [retirePendingForMint] and the close-out sweep would mint anyway. The marker is answered by
-     * firewalls that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`,
-     * `detectAcceptMismatch` counting the order as accounted) and it is the truthful record — which
-     * is also why `TaskEffects` can emit the proper `TASK_UNASSIGNED` off it.
-     *
-     * ONE owner, because the abandon can arrive at either moment: ON the commit frame (the
-     * lazy-expiry branch) or INSIDE the grace window (before the `Mode.Offline` early return, where
-     * `abandonActiveTask` is unreachable).
+     * The task's `unassignedAt` records the abandonment for later completeness/accounting reads
+     * and `TaskEffects`' `TASK_UNASSIGNED` emission. This step records no retired-task decision.
+     * Called both at lazy expiry and before the Offline early return (where `abandonActiveTask`
+     * is unreachable).
      */
     private fun disownAbsorbedRetire(region: PlatformRegion, at: Long): PlatformRegion {
         val pend = region.pendingDestructive ?: return region
@@ -724,6 +725,7 @@ class PlatformRegionStepper @Inject constructor() {
      * Update session/job/task based on flow transitions.
      */
     private fun updateLifecycle(
+        sink: DecisionSink,
         region: PlatformRegion,
         prevFlow: FlowRegion,
         nextFlow: FlowRegion,
@@ -820,7 +822,7 @@ class PlatformRegionStepper @Inject constructor() {
 
         // Update session fields from observations. `next` is the flow the read is being made
         // ON — the settle gate parks it with that flow (#1029, see [PendingSessionPay.flow]).
-        r = updateSessionFields(r, obs, next, policy, obs.parsed)
+        r = updateSessionFields(sink, r, obs, next, policy, obs.parsed)
 
         // Accumulate delivery pay when entering PostTask
         if (prev != Flow.PostTask && next == Flow.PostTask) {
@@ -846,10 +848,10 @@ class PlatformRegionStepper @Inject constructor() {
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
 
         // Job lifecycle
-        r = updateJobLifecycle(r, prev, next, obs, policy)
+        r = updateJobLifecycle(sink, r, prev, next, obs, policy)
 
         // Task lifecycle
-        r = updateTaskLifecycle(r, prev, next, obs, policy)
+        r = updateTaskLifecycle(sink, r, prev, next, obs, policy)
 
         // Idle anchor: track when we started waiting for offers
         r = when {
@@ -864,6 +866,7 @@ class PlatformRegionStepper @Inject constructor() {
     }
 
     private fun updateSessionFields(
+        sink: DecisionSink,
         region: PlatformRegion,
         obs: Observation,
         flow: Flow,
@@ -917,11 +920,12 @@ class PlatformRegionStepper @Inject constructor() {
                 }
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
-                // updated in the same breath (see [PendingReceiptReprice]). `EffectMap` only emits
+                // updated in the same breath (see [ReceiptRepriceDecision]). `EffectMap` only emits
                 // what this decides. The flow gate lives at this call site (round 9), because the
                 // OTHER caller is the job close, which has no frame.
                 if (flow == Flow.PostTask) {
                     r = decideReceiptReprice(
+                        sink,
                         region = r,
                         parsed = parsed,
                         postTaskTaskId = postTaskTaskId,
@@ -978,6 +982,7 @@ class PlatformRegionStepper @Inject constructor() {
      * pending: replacing it would discard that decision's evidence, deadline and wake identity.
      */
     private fun updateJobLifecycle(
+        sink: DecisionSink,
         region: PlatformRegion,
         prevFlowVal: Flow,
         nextFlowVal: Flow,
@@ -1000,7 +1005,7 @@ class PlatformRegionStepper @Inject constructor() {
         if (nextFlowVal.isTaskFlow() && accepted != null) {
             if (!isOfferAcceptExpired(accepted, obs, policy.acceptGraceMs(current.platform))) {
                 val consumed = current.copy(pendingOffers = current.pendingOffers.filterNot { it === accepted })
-                return consumeAcceptIntoJob(consumed, obs, acceptInputsFromPending(accepted, accepted.acceptedAt))
+                return consumeAcceptIntoJob(sink, consumed, obs, acceptInputsFromPending(accepted, accepted.acceptedAt))
             }
             // A lapsed survivor is a corpse — clear it INLINE but do NOT early-return; the frame must
             // still process normally (a lost arrivedAt stamp would trip the #615 arrival gate and the
@@ -1053,7 +1058,7 @@ class PlatformRegionStepper @Inject constructor() {
         // wrong close on a stacked job is fabrication, and an open job fails toward absorption —
         // the preferred failure direction. See ADR-0002 amendment 2026-07-15 (residual).
         if (prevFlowVal == Flow.PostTask && !nextFlowVal.isTaskFlow() && nextFlowVal != Flow.PostTask && nextFlowVal != Flow.OfferPresented) {
-            return completeActiveJob(current, obs.timestamp)
+            return completeActiveJob(sink, current, obs.timestamp)
         }
 
         return current
@@ -1066,16 +1071,18 @@ class PlatformRegionStepper @Inject constructor() {
     /** Commit a pending destructive transition — its deadline lapsed, or an
      *  authoritative signal confirmed it. */
     private fun commitDestructive(
+        sink: DecisionSink,
         region: PlatformRegion,
         kind: DestructiveKind,
         timestamp: Long,
         observedAt: Long,
     ): PlatformRegion = when (kind) {
-        DestructiveKind.SESSION_END -> endSession(region, timestamp, observedAt)
+        DestructiveKind.SESSION_END -> endSession(sink, region, timestamp, observedAt)
         // [timestamp] is the honest completion instant (the grace's `since`, #732); [observedAt] is
         // the frame that commits it, which is what a re-price decided here must be stamped with.
-        DestructiveKind.TASK_RETIRE -> retireActiveTask(region, timestamp, observedAt)
+        DestructiveKind.TASK_RETIRE -> retireActiveTask(sink, region, timestamp, observedAt)
         DestructiveKind.JOB_ABANDON -> abandonActiveJob(
+            sink,
             region.copy(pendingDestructive = null), timestamp, reason = "unassign then no-orders idle (#1312)",
             arrivedDropsComplete = false,
         )
@@ -1095,6 +1102,7 @@ class PlatformRegionStepper @Inject constructor() {
      * delivered — the accept is an add-on).
      */
     private fun retireActiveTask(
+        sink: DecisionSink,
         region: PlatformRegion,
         timestamp: Long,
         observedAt: Long = timestamp,
@@ -1104,6 +1112,7 @@ class PlatformRegionStepper @Inject constructor() {
         // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
         val completed = region.activeTask?.completedInline(timestamp)
             ?: return region.copy(pendingDestructive = null)
+        sink.retired(completed.taskId)
         val recentTasks = (region.recentTasks + completed).takeLast(MAX_RECENT_TASKS)
         val retired = region.copy(
             activeTask = null,
@@ -1114,7 +1123,7 @@ class PlatformRegionStepper @Inject constructor() {
         return if (job != null && armedFromFlow != Flow.OfferPresented &&
             isJobPhysicallyComplete(job, recentTasks, justRetired = completed)
         ) {
-            completeActiveJob(retired, observedAt)
+            completeActiveJob(sink, retired, observedAt)
         } else {
             retired
         }
@@ -1125,6 +1134,7 @@ class PlatformRegionStepper @Inject constructor() {
      * back Offline because an authoritative end can survive an ungraced Online frame (#1311).
      */
     private fun endSession(
+        sink: DecisionSink,
         region: PlatformRegion,
         timestamp: Long,
         observedAt: Long = timestamp,
@@ -1137,7 +1147,7 @@ class PlatformRegionStepper @Inject constructor() {
         // teardown is about to drop, under exactly the same guards.
         //
         // The denominator is the load-bearing part. `pendingDestructive` is the SESSION_END that
-        // brought us here, so [mintQualified] already excludes the active task — which is right for a
+        // brought us here, so an unabsorbed end's denominator excludes the active task — right for a
         // drop this bail is force-completing (the amdt-#5 T3 guard: it has no row), and wrong for one
         // whose completion was already minted on an earlier PostTask exit. `exitedPostTask` is what
         // separates them; a mistake either way is caught by the projector finding no row.
@@ -1154,8 +1164,9 @@ class PlatformRegionStepper @Inject constructor() {
         // decides nothing — fail-null (#745). Shared with the job close through
         // [decideFromCachedReceipt]: one question, one implementation.
         val endingJob = region.activeJob
-        val repriceHandoff = endingJob?.let { job ->
+        endingJob?.let { job ->
             decideFromCachedReceipt(
+                sink,
                 source = region,
                 closed = region.copy(
                     activeJob = null,
@@ -1166,7 +1177,7 @@ class PlatformRegionStepper @Inject constructor() {
                 ),
                 decidedAt = observedAt,
                 mintRanForJob = region.jobReceiptAnchors?.exitedPostTask == true,
-            ).pendingReceiptReprice
+            )
         }
         // #1078: two shapes of teardown completion, and the destructive pending says which.
         //  - HONORED: this `SESSION_END` absorbed a PROVENANCED live `TASK_RETIRE` **and the retire
@@ -1184,9 +1195,8 @@ class PlatformRegionStepper @Inject constructor() {
         // ending early is confirmation that the DASH ended; it says nothing about whether the retire
         // matured. So honor only from the absorbed deadline onward, and force-stamp before it.
         //
-        // Nothing else needs clearing: the honored branch below MARKS the task
-        // ([Task.honoredRetireAt]) and that mark is the emitter's discriminator (`mintQualified`), so
-        // a force-stamp here is automatically refused a row.
+        // Only the honored branch records the retired-task decision consumed by `mintQualified`.
+        // The durable [Task.honoredRetireAt] history remains unchanged.
         val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.SESSION_END }
         val matured = observedAt >= (pend?.absorbedRetireDeadline ?: Long.MIN_VALUE)
         // The same delivery evidence gate as T1 and absorption, including restored absorbed state.
@@ -1197,11 +1207,9 @@ class PlatformRegionStepper @Inject constructor() {
         }
         val completedTask = region.activeTask?.let {
             if (honoredAt != null) {
-                // Round 7: STATE the honor on the task (`Task.honoredRetireAt`) instead of leaving the
-                // emitter to infer it from `completedAt`'s value. `pend.since` and
-                // `absorbedRetireSince` can be the SAME instant (a summary frame sharing the idle
-                // frame's timestamp, or a clock rollback), and then the force-stamp below is
-                // indistinguishable from an honored one.
+                sink.retired(it.taskId)
+                // Preserve the durable honor history too. Equal completedAt values alone cannot
+                // distinguish an honored retire from a force-stamp.
                 it.completedInline(honoredAt).copy(honoredRetireAt = honoredAt)
             } else {
                 it.copy(completedAt = timestamp)
@@ -1233,14 +1241,10 @@ class PlatformRegionStepper @Inject constructor() {
             lastClosedJobReceipt = null,
             jobReceiptAnchors = null,
             lastAcceptResolvedAt = null,
-            // The one thing that OUTLIVES the teardown: a correction decided from the receipt it just
-            // dropped. `EffectMap` emits it on this same step; the next step's top-of-step clear
-            // drops it (#1033 round 10).
-            pendingReceiptReprice = repriceHandoff,
         ))
     }
 
-    internal fun completeActiveJob(region: PlatformRegion, at: Long): PlatformRegion {
+    internal fun completeActiveJob(sink: DecisionSink, region: PlatformRegion, at: Long): PlatformRegion {
         val job = region.activeJob ?: return region
         val closed = region.clearCachedReceipt().copy(
             activeJob = null,
@@ -1274,7 +1278,7 @@ class PlatformRegionStepper @Inject constructor() {
         // (the frame is fresher evidence for the same job) and costs only a skipped revision number.
         //
         // #1073 round 13: shared with the teardown — same question, same [ReceiptCoverage] scoping.
-        return decideFromCachedReceipt(source = region, closed = closed, decidedAt = at)
+        return decideFromCachedReceipt(sink, source = region, closed = closed, decidedAt = at)
     }
 }
 
