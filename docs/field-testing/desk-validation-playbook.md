@@ -28,19 +28,21 @@ and 3), #159, #691-mechanism. **desk-partial** (data half here; UI half needs de
 `files/app.log` and `files/shareable.log` stay where they were. `LogRepository` also moves legacy
 root rotations into `logs/` on every initialization until none remain; failed moves attempt deletion.
 Android backup excludes these logs; pull them explicitly for desk validation. With `D` set to the dated pull directory and the device
-selected through `ANDROID_SERIAL` when needed:
+selected through `ANDROID_SERIAL` when needed. `PKG` is the build on the phone: the sideloaded debug build is
+`cloud.trotter.log.gig.debug` (only a debuggable build answers `run-as`); a Play build is `cloud.trotter.log.gig`.
 
 ```bash
+PKG=cloud.trotter.log.gig.debug
 mkdir -p "$D/logs"
-adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/app.log "$D/app.log"
-adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/shareable.log "$D/shareable.log"
-adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/logs/. "$D/logs/"
+adb pull /sdcard/Android/data/$PKG/files/app.log "$D/app.log"
+adb pull /sdcard/Android/data/$PKG/files/shareable.log "$D/shareable.log"
+adb pull /sdcard/Android/data/$PKG/files/logs/. "$D/logs/"
 # Optional: the single previous shareable log, if it has rotated.
-adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/shareable.log.1 "$D/shareable.log.1"
+adb pull /sdcard/Android/data/$PKG/files/shareable.log.1 "$D/shareable.log.1"
 ```
 
 `logs/` only exists on the device once rotations have been written or moved. If external storage was unavailable,
-the same relative paths are under internal `files/` (read them with `adb shell run-as cloud.trotter.log.gig`).
+the same relative paths are under internal `files/` (read them with `adb shell run-as $PKG`).
 
 ## Step 0 — identify the build
 
