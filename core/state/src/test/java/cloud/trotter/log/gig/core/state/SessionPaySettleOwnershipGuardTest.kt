@@ -20,9 +20,13 @@ class SessionPaySettleOwnershipGuardTest {
         )
         val problems = mutableListOf<String>()
         // Same walkTopDown source-scan approach as TimberTagGuardTest and IcuRegexGuardTest.
-        sourceRoot.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .forEach { file ->
+        val files = sourceRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        // A scan that visits nothing would pass vacuously; the gate file itself must be among the files read.
+        assertTrue(
+            "The guard scanned no SessionPaySettleGate.kt under ${sourceRoot.path}",
+            files.any { it.relativeTo(sourceRoot).path.replace(File.separatorChar, '/') == gate },
+        )
+        files.forEach { file ->
                 val sourcePath = file.relativeTo(sourceRoot).path.replace(File.separatorChar, '/')
                 val repoPath = file.relativeTo(repoRoot).path.replace(File.separatorChar, '/')
                 file.readLines().forEachIndexed { index, line ->
