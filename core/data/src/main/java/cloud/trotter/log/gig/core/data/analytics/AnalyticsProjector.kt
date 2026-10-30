@@ -59,7 +59,8 @@ import javax.inject.Singleton
  * folded increments — re-folding a committed batch would double them, which the watermark prevents;
  * idempotency does not rest on the PKs alone.)
  *
- * **Purity boundary:** all fold arithmetic lives in `:domain` [RecordFolds] (pure, `:domain:test`);
+ * **Purity boundary:** fold arithmetic lives in `:domain` [RecordFolds] (pure, `:domain:test`);
+ * row-local delivery corrections live in [DeliveryCorrections] (pure, `:core:data:test`).
  * this orchestrator owns only the impure edges — paging, restart-correct context hydration from the
  * record tables, the inferred-close DB query, the live-economy read for the `CURRENT_FALLBACK`
  * frozen basis, and the transaction.
@@ -355,183 +356,53 @@ class AnalyticsProjector @Inject constructor(
      *  in-transaction apply (M1). */
     private data class ResolutionTask(val sequenceId: Long, val resolution: StoreResolution)
 
-    /**
-     * Apply one legacy PAY_ADJUSTMENT re-price by-PK. Returns true iff the target row was missing (a
-     * counted skip, never a crash). A MANUAL row stays MANUAL (#650 review F1): a driver correcting
-     * their own statement leaves it a driver statement (the audit trail lives in the log), and its net
-     * keeps the MANUAL missing-terms-as-0 policy (net-additive) — the generic machine recompute would
-     * null the net and drop the dollars from period SUM. Machine rows flip to USER_CORRECTED with the
-     * machine recompute (null when not computable — the pre-existing #660-family seam, not widened).
-     * The re-price recomputes net against the row's OWN frozen cpm (never today's economy — an
-     * immutable historical fact); tip/basePay are left untouched.
-     */
+    /** Apply one legacy PAY_ADJUSTMENT by PK. Returns true iff the target row was missing. */
     private suspend fun applyPayAdjustment(adj: PayAdjustmentFold, occurredAt: Long): Boolean {
         val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
             // P7: counts only, no payload text.
             Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
             return true
         }
-        val manual = row.payBasis == PayBasis.MANUAL
-        val net = when {
-            manual -> NetProfit.net(adj.newPay, row.realizedMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
-            row.frozenCostPerMile != null && row.realizedMiles != null ->
-                NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
-            else -> null
-        }
-        analyticsDao.upsertDelivery(
-            row.copy(
-                realizedPay = adj.newPay,
-                payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
-                netProfit = net,
-                // #1033 round 6: a driver monetary edit — the machine re-price must never overwrite it.
-                driverAdjustedAt = occurredAt,
-            ),
-        )
+        analyticsDao.upsertDelivery(DeliveryCorrections.applyPay(row, adj, occurredAt).row)
         return false
     }
 
-    /**
-     * Apply one driver DELIVERY_ADJUSTMENT (#688) multi-field re-apply by-PK. Returns true iff the
-     * target row was missing (a counted skip). Copies each non-null field; null ⇒ that column is left
-     * unchanged. Two same-row edits compose because each apply reads the row fresh (a prior same-batch
-     * upsert is already visible).
-     */
+    /** Apply one driver DELIVERY_ADJUSTMENT by PK. Returns true iff the target row was missing. */
     private suspend fun applyDeliveryAdjustment(adj: DeliveryAdjustmentFold, occurredAt: Long): Boolean {
         val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
             // P7: counts only, no payload text.
             Timber.tag(TAG).w("DELIVERY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
             return true
         }
-        // FIX 5 (#653 double-count guard): a SUSPECT_FULL_RECEIPT row's money was nulled because its
-        // siblings' shares already sum to the receipt — editing pay/tip back onto it re-opens the
-        // double count with one innocent tap. Block the pay+tip terms; store/cash/note still apply.
-        // `originalPayBasis` is the first-fold, never-rewritten basis, so this holds even after a
-        // prior non-pay edit. The dialog also disables the Pay field for these rows (a second gate).
-        val suspectReceipt = row.originalPayBasis == PayBasis.SUSPECT_FULL_RECEIPT
-        if (suspectReceipt && (adj.newPay != null || adj.newTip != null)) {
-            Timber.tag(TAG).w(
-                "DELIVERY_ADJUSTMENT: pay/tip edit blocked on SUSPECT_FULL_RECEIPT row %d (#653 double-count guard)",
-                adj.targetEventSequenceId,
-            )
+        val outcome = DeliveryCorrections.applyDelivery(row, adj, occurredAt)
+        for (followUp in outcome.followUps) {
+            when (followUp) {
+                CorrectionFollowUp.PayTipBlockedOnSuspectReceipt -> {
+                    Timber.tag(TAG).w(
+                        "DELIVERY_ADJUSTMENT: pay/tip edit blocked on SUSPECT_FULL_RECEIPT row %d (#653 double-count guard)",
+                        adj.targetEventSequenceId,
+                    )
+                }
+                CorrectionFollowUp.CashIgnoredOnSessionlessRow -> {
+                    Timber.tag(TAG).w(
+                        "DELIVERY_ADJUSTMENT: cash tip ignored on null-session row %d (F3 sessionful-cash invariant)",
+                        adj.targetEventSequenceId,
+                    )
+                }
+                is CorrectionFollowUp.SweepStoreIfUnreferenced -> Unit
+            }
         }
-        val reqNewPay = if (suspectReceipt) null else adj.newPay
-        val reqNewTip = if (suspectReceipt) null else adj.newTip
-
-        // FIX 3 (#688 F3 invariant): cash is only meaningful on a SESSIONFUL row — gross counts it via a
-        // session join, net counts it session-inclusive. A null-session cash row would enter net but
-        // never gross, skewing the true-net waterfall cost negative. So drop a cash edit on a
-        // null-session row (one PII-safe WARN); every other field still applies. This makes the
-        // "cash-bearing rows are always sessionful" invariant real rather than merely documented.
-        val cashRejected = adj.newCashTip != null && row.sessionId == null
-        if (cashRejected) {
-            Timber.tag(TAG).w(
-                "DELIVERY_ADJUSTMENT: cash tip ignored on null-session row %d (F3 sessionful-cash invariant)",
-                adj.targetEventSequenceId,
-            )
-        }
-
-        val newStore = adj.newStoreName ?: row.storeName
-        val newPay = reqNewPay ?: row.realizedPay
-        val newTip = reqNewTip ?: row.tip
-        val newCashTip = if (cashRejected) row.cashTip else when (val cash = adj.newCashTip) {
-            null -> row.cashTip
-            0.0 -> null
-            else -> cash
-        }
-        val newMiles = adj.newMiles ?: row.realizedMiles
-        val manual = row.payBasis == PayBasis.MANUAL
-        val payChanged = reqNewPay != null
-        val milesChanged = adj.newMiles != null
-        // Basis (VET F1): payBasis rewrites exactly when realizedPay does. A machine row flips to
-        // USER_CORRECTED iff pay changed; a MANUAL row stays MANUAL; a cash/tip/store-only edit leaves
-        // the basis (and its "est. offer pay" disclosure) intact.
-        val newBasis = when {
-            manual -> PayBasis.MANUAL
-            payChanged -> PayBasis.USER_CORRECTED
-            else -> row.payBasis
-        }
-        // Net recompute only when a net-bearing term (pay or miles) changed; otherwise the stored
-        // netProfit is preserved byte-identically (cash/tip/store/note-only edits do not touch net).
-        // MANUAL keeps the missing-terms-as-0 net-additive policy over the FINAL values; a machine row
-        // recomputes against its OWN frozen cpm. #1133: a pay-less miles edit still carries −cost;
-        // missing miles or frozen cpm keeps net null.
-        val net = when {
-            !payChanged && !milesChanged -> row.netProfit
-            manual -> NetProfit.net(newPay ?: 0.0, newMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
-            else -> NetProfit.realized(newPay, newMiles, row.frozenCostPerMile)
-        }
-        // #159 H1: a driver-supplied newStoreName NULLS the resolved storeKey AND sets the pin, so the
-        // driver's fix wins the report-card grouping (its grouping becomes read-side
-        // normalizedChain(newStoreName), F9) and store resolution NEVER re-keys it back to the pickup
-        // anchor (every resolution UPDATE carries `WHERE storeKeyPinned = 0`). The pin is derived from
-        // this event, so a from-zero refold re-derives it (F8 wipe clears it, the replayed event resets
-        // it) — rebuild-deterministic. A store-name-less edit leaves storeKey/pin untouched.
-        val storeChanged = adj.newStoreName != null
-        val priorStoreKey = row.storeKey
-        analyticsDao.upsertDelivery(
-            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
-            row.copy(
-                storeName = newStore,
-                realizedPay = newPay,
-                tip = newTip,
-                cashTip = newCashTip,
-                realizedMiles = newMiles,
-                payBasis = newBasis,
-                netProfit = net,
-                storeKey = if (storeChanged) null else row.storeKey,
-                storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
-                // Pay, tip, and miles edits own the receipt economics. A cash-only edit owns
-                // the cash column, which the re-price never touches, so it is not pay ownership.
-                // A tip-only edit leaves payBasis intact (#688), so it still needs this stamp.
-                driverAdjustedAt = if (
-                    reqNewPay != null || reqNewTip != null || adj.newMiles != null
-                ) {
-                    occurredAt
-                } else {
-                    row.driverAdjustedAt
-                },
-            ),
-        )
+        analyticsDao.upsertDelivery(outcome.row)
         // #906: the rename detached this row; sweep only its prior key in the batch transaction.
-        if (storeChanged && priorStoreKey != null) {
-            storeResolutionRunner.deleteStoreIfUnreferenced(priorStoreKey) // still referenced → kept, silently
+        for (followUp in outcome.followUps) {
+            if (followUp is CorrectionFollowUp.SweepStoreIfUnreferenced) {
+                storeResolutionRunner.deleteStoreIfUnreferenced(followUp.storeKey) // still referenced → kept, silently
+            }
         }
         return false
     }
 
-    /**
-     * Apply one machine `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) by (jobId, taskId). Returns true
-     * iff the apply was SKIPPED (a counted skip + PII-safe WARN, ids only — never a crash).
-     *
-     * The row was priced off the #691 `OFFER_PAY` estimate because its `DELIVERY_COMPLETED` closed on
-     * a COLLAPSED receipt; the itemization that arrived seconds later is the real receipt, so the row
-     * takes the apportioned share as `realizedPay` with `payBasis` → [PayBasis.DROP_SHARE].
-     *
-     * The invariants it shares with every other apply:
-     *  - **Never re-costs.** Net recomputes against the row's OWN `frozenCostPerMile` and its stored
-     *    `realizedMiles` — the same helper [applyDeliveryAdjustment] uses — never today's economy.
-     *  - **`originalPayBasis` is preserved** (via `row.copy`), so the #691/#703 receipt-evidence
-     *    hydration still reads the FIRST-fold basis.
-     *  - **Cash, store keys, mileage and every other column are untouched.**
-     *
-     * Three guards, each a counted skip:
-     *  0. **Already priced** — the row already holds exactly these values on a `DROP_SHARE` basis, so
-     *     the re-price is redundant (the completion mint carried the same itemization). Skipped
-     *     WITHOUT a rewrite, so no `receiptRepricedAt` is stamped for a correction that corrected
-     *     nothing. This is where "already priced" lives since round 8: the state machine cannot know
-     *     which completions persisted, and its two attempts to model it both refused legitimate
-     *     corrections.
-     *  1. **Target row exists** (a re-price whose completion was never folded — the mid-stack shape
-     *     where the mint is still pending — leaves nothing to do; the pending mint will carry the
-     *     itemization itself).
-     *  2. **Never overrides a DRIVER row.** A `MANUAL` or `USER_CORRECTED` row states the driver's
-     *     own figure; a machine re-price must not silently overwrite it. Log order is what settles
-     *     the general case (a driver `DELIVERY_ADJUSTMENT` sequenced AFTER the re-price simply wins,
-     *     because each apply reads the row fresh), and this guard is the other direction: a driver
-     *     edit that came EARLIER is superseded for nothing at all. The documented asymmetry: an
-     *     earlier machine re-price IS superseded by a later driver adjustment's pay/tip, which is the
-     *     intended precedence — the driver is the higher authority on their own money.
-     */
+    /** Apply one machine DELIVERY_RECEIPT_REPRICE by (jobId, taskId). Returns true iff skipped. */
     private suspend fun applyReceiptReprice(adj: ReceiptRepriceFold): Boolean {
         val row = analyticsDao.deliveryRecordByJobTask(adj.jobId, adj.taskId) ?: run {
             // P7: ids only, no payload text.
@@ -540,60 +411,30 @@ class AnalyticsProjector @Inject constructor(
             )
             return true
         }
-        // #1033 round 6: `driverAdjustedAt` is the load-bearing half of this guard. A TIP-ONLY
-        // DELIVERY_ADJUSTMENT deliberately leaves `payBasis` alone (#688 VET F1 — the row keeps its
-        // "est. offer pay" disclosure), so the basis test alone let a later re-price overwrite the
-        // driver's own tip. Either signal refuses.
-        if (row.driverAdjustedAt != null ||
-            row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED
-        ) {
-            Timber.tag(TAG).w(
-                "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s, driverAdjusted=%b)",
-                row.eventSequenceId, row.payBasis, row.driverAdjustedAt != null,
-            )
-            return true
+        return when (val outcome = DeliveryCorrections.applyReceiptReprice(row, adj)) {
+            is CorrectionOutcome.Skip -> {
+                when (outcome.reason) {
+                    is RepriceSkip.DriverOwned -> {
+                        Timber.tag(TAG).w(
+                            "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s, driverAdjusted=%b)",
+                            row.eventSequenceId, row.payBasis, row.driverAdjustedAt != null,
+                        )
+                    }
+                    is RepriceSkip.AlreadyPriced -> {
+                        // P7: ids + cents only.
+                        Timber.tag(TAG).d(
+                            "DELIVERY_RECEIPT_REPRICE: row %d already holds %d¢ — no-op",
+                            row.eventSequenceId, Math.round(adj.realizedPay * 100.0),
+                        )
+                    }
+                }
+                true
+            }
+            is CorrectionOutcome.Write -> {
+                analyticsDao.upsertDelivery(outcome.row)
+                false
+            }
         }
-        // #1033 round 8: "already priced" is answered HERE, against the row itself — the state
-        // machine cannot know which completions actually persisted (it tried, through two review
-        // rounds, and both attempts refused legitimate corrections). A re-price whose values the row
-        // already holds is a no-op: no rewrite, so no `receiptRepricedAt` churn either. Refold-stable
-        // by construction — the comparison sees the same rows on a from-zero refold.
-        if (row.payBasis == PayBasis.DROP_SHARE &&
-            sameCents(row.realizedPay, adj.realizedPay) &&
-            sameCents(row.tip, adj.tip) &&
-            sameCents(row.basePay, adj.basePay)
-        ) {
-            // P7: ids + cents only.
-            Timber.tag(TAG).d(
-                "DELIVERY_RECEIPT_REPRICE: row %d already holds %d¢ — no-op",
-                row.eventSequenceId, Math.round(adj.realizedPay * 100.0),
-            )
-            return true
-        }
-        val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
-            NetProfit.net(adj.realizedPay, row.realizedMiles!!, row.frozenCostPerMile!!)
-        } else {
-            null
-        }
-        analyticsDao.upsertDelivery(
-            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
-            row.copy(
-                realizedPay = adj.realizedPay,
-                tip = adj.tip,
-                basePay = adj.basePay,
-                payBasis = PayBasis.DROP_SHARE,
-                netProfit = net,
-                receiptRepricedAt = adj.repricedAt,
-            ),
-        )
-        return false
-    }
-
-    /** Cent-exact equality for two nullable money figures; two nulls are equal. */
-    private fun sameCents(a: Double?, b: Double?): Boolean = when {
-        a == null && b == null -> true
-        a == null || b == null -> false
-        else -> Math.round(a * 100.0) == Math.round(b * 100.0)
     }
 
     /**

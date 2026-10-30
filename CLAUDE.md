@@ -734,7 +734,7 @@ correction pins (`storeKeyPinned`); superseded zero-reference identity rows are 
 a pickup-less job still stamps the exact offer link (`linkOfferToJobIfUnlinked`).
 Per-store reads group on the resolved key.
 
-**Corrections are append-only events**, folded non-destructively and rebuild-faithfully:
+**Corrections are append-only events**, folded non-destructively and rebuild-faithfully (the single-row pay, delivery and re-price decisions are the pure `DeliveryCorrections` in `:core:data`, tested as plain tables; the projector keeps the reads, writes, skips, logs and the post-write store sweep, #1420):
 `MANUAL_DELIVERY`, `DELIVERY_ADJUSTMENT` (a machine row's `payBasis` → `USER_CORRECTED` iff pay changes,
 a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against the row's OWN frozen cpm;
 `newCompletedAt` banned; new UI never writes legacy `PAY_ADJUSTMENT`), `DELIVERY_SESSION_ASSIGN`
