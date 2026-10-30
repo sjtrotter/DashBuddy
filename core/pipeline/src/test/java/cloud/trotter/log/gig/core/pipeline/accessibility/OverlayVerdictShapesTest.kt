@@ -218,4 +218,30 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
         assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
         verify(shadeWindow, times(2)).root // the first walk's verdict was decided on the old list → never memoized
     }
+
+    @Test
+    fun `KK1 #1422 - the no-active-flag fallback keeps the pre-enumeration generation - its walk verdicts are not written`() {
+        // No window carries the active flag, and the native root (our own bubble) sits in a window the
+        // enumeration does not list, so the event path takes the pre-#1152 read over the list it already
+        // has. That read must use the generation captured BEFORE the enumeration; re-reading it after
+        // (the #1422 bug) filed the shade's verdict, decided on the old list, under the new generation.
+        val bubble = node(ownPkg, "bubble", windowId = 99)
+        val shade = node(systemUiPkg, "shade")
+        val shadeWindow = window(30, 30, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
+        val list = listOf(shadeWindow, window(3, 2, node(ddPkg, "dd")))
+        val h = harness(activeRoot = bubble, windows = list)
+        var first = true
+        whenever(h.service.windows).thenAnswer {
+            if (first) {
+                first = false
+                @Suppress("DEPRECATION")
+                h.source.emit(AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+            }
+            list
+        }
+
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        assertEquals(listOf("dd"), collect(h, Kind.STATE).map { it.tree.text })
+        verify(shadeWindow, times(2)).root // decided on the old list → never memoized under the new generation
+    }
 }

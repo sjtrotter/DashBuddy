@@ -71,7 +71,7 @@ internal fun AccessibilitySource.snapshotForEvent(
         null
     }
     val step: Step = if (windows == null) {
-        preOverlayRead(getLiveNativeRoot(), null, isEnabled, windowId, eventPackage)
+        preOverlayRead(getLiveNativeRoot(), null, gen, isEnabled, windowId, eventPackage)
     } else {
         resolveOnList(windows, gen, isEnabled, windowId, eventPackage)
     }
@@ -116,7 +116,7 @@ private fun AccessibilitySource.resolveOnList(
         // PR #1155 review JJ2: zero or ≥ 2 flagged windows — the native root's own window, found BY ID.
         val native = getLiveNativeRoot()
         val w = native?.windowId?.takeIf { it >= 0 }?.let { id -> windows.firstOrNull { it.id == id } }
-            ?: return preOverlayRead(native, windows, isEnabled, windowId, eventPackage)
+            ?: return preOverlayRead(native, windows, gen, isEnabled, windowId, eventPackage)
         nativeForWindow = native
         w
     }
@@ -208,6 +208,9 @@ private fun AccessibilitySource.frontRead(
 private fun AccessibilitySource.preOverlayRead(
     activeRoot: android.view.accessibility.AccessibilityNodeInfo?,
     windows: List<android.view.accessibility.AccessibilityWindowInfo>?,
+    // KK1: the generation the caller read BEFORE producing [windows]; never re-read here (#1422 — a
+    // re-read after the enumeration let a mid-frame clear file old-list verdicts under the new generation).
+    gen: Long,
     isEnabled: (String?) -> Boolean,
     windowId: Int,
     eventPackage: String?,
@@ -219,6 +222,6 @@ private fun AccessibilitySource.preOverlayRead(
     return if (isEnabled(activeRoot.packageName?.toString())) {
         Step.Frame(getCurrentRootSnapshot(activeRoot))
     } else {
-        frontRead(windows, generation, isEnabled, windowId, eventPackage)
+        frontRead(windows, gen, isEnabled, windowId, eventPackage)
     }
 }

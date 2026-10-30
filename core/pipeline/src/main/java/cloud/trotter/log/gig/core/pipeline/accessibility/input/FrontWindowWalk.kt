@@ -90,7 +90,7 @@ internal class FrontWindowWalk(
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
         total: Int = windows.size,
-        gen: Long = cache.generation,
+        gen: Long,
     ): Foreground = when (val stop = walk(windows, isEnabled, display, total, gen)) {
         WalkStop.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
         WalkStop.NoDisplayArea -> Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
@@ -125,7 +125,7 @@ internal class FrontWindowWalk(
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
-        gen: Long = cache.generation,
+        gen: Long,
     ): Foreground = foreground(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)
 
     /**
@@ -144,7 +144,7 @@ internal class FrontWindowWalk(
         active: AccessibilityWindowInfo,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = lazyDisplayArea(),
-        gen: Long = cache.generation,
+        gen: Long,
     ): OverlayScan = try {
         when (val stop = walk(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)) {
             WalkStop.Exhausted -> OverlayScan.Refused(ForegroundSkipReason.SCAN_BUDGET)
@@ -296,7 +296,7 @@ internal class FrontWindowWalk(
         budget: ScanBudget? = null,
         // PR #1155 review DD9: the WALK's generation, read before its enumeration was used — a probe
         // on a window from an older list after a mid-walk clear must not write under the new one.
-        gen: Long = cache.generation,
+        gen: Long,
     ): OverlayProbe {
         if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached

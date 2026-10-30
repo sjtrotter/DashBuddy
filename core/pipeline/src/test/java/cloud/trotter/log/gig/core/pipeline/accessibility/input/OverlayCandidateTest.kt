@@ -127,7 +127,7 @@ class OverlayCandidateTest {
     @Test
     fun `a large unreadable system window cannot prove its package - Unreadable, not merely false`() {
         val w = window(14, null, OverlayGeometry.UBER_OFFER)
-        assertEquals(AccessibilitySource.OverlayProbe.Unreadable, source().walk.overlayProbe(w, display)) // CC11: the distinction a Boolean lost
+        assertEquals(AccessibilitySource.OverlayProbe.Unreadable, source().let { it.walk.overlayProbe(w, display, gen = it.generation) }) // CC11: the distinction a Boolean lost
         assertEquals(1L, stats.overlayRejectedCount(OverlayRejectReason.UNREADABLE))
     }
 
@@ -179,5 +179,5 @@ class OverlayCandidateTest {
 
     /** CC11: tests assert on the ONE seam's sealed result. */
     private fun candidate(src: AccessibilitySource, w: AccessibilityWindowInfo, area: Long): Boolean =
-        src.walk.overlayProbe(w, area) is AccessibilitySource.OverlayProbe.Candidate
+        src.walk.overlayProbe(w, area, gen = src.generation) is AccessibilitySource.OverlayProbe.Candidate
 }

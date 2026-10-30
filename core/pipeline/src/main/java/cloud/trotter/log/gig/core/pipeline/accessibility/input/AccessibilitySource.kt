@@ -336,7 +336,7 @@ class AccessibilitySource @Inject constructor(
         windows: List<AccessibilityWindowInfo>,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long> = walk.lazyDisplayArea(),
-        gen: Long = generation,
+        gen: Long,
     ): Foreground = walk.foreground(windows, isEnabled, display, gen = gen)
 
 
@@ -360,7 +360,7 @@ class AccessibilitySource @Inject constructor(
      * [gen] (read by the caller BEFORE its enumeration, KK1). Null when unreadable — [resolveActive]
      * then reports [ActiveWindow.Unknown] with the window (HH1), never "not enabled".
      */
-    internal fun rootOf(w: AccessibilityWindowInfo, gen: Long = generation): AccessibilityNodeInfo? {
+    internal fun rootOf(w: AccessibilityWindowInfo, gen: Long): AccessibilityNodeInfo? {
         val root = try {
             w.root
         } catch (_: Exception) {

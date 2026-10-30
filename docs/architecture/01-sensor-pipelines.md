@@ -584,7 +584,9 @@ then fired, and were answered with the window beneath). The shipped rules:
   records the package; review KK3) — never through a memoized package (reviews GG1/HH1). Every caller
   reads the generation BEFORE its enumeration and passes it to every walk, probe and fetch, so a clear
   landing between `getWindows()` and the walk discards the verdicts decided on the old list (review
-  KK1). Declined (review DD2): revalidating a memoized
+  KK1). Since #1422 no walk, probe or fetch defaults its `gen` (a defaulted generation was read after
+  the caller's enumeration, silently breaking KK1), and the no-active-flag fallback that reuses an
+  enumeration passes the caller's generation instead of re-reading it. Declined (review DD2): revalidating a memoized
   `NOT_OVERLAY_PLATFORM` against an owner change under a live id — window ids are allocated per
   accessibility connection and a connection belongs to ONE package, so `windowId → package` is
   stable by framework construction; only geometry moves under a live id, which the bounds check
