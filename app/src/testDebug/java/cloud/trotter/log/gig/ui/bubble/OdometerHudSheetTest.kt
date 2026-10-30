@@ -34,21 +34,23 @@ class OdometerHudSheetTest {
     private val civic = Vehicle("civic", "Civic", 0)
     private val bike = Vehicle("bike", "Bike", 1)
     private val changes = MutableSharedFlow<VehicleChange>(extraBufferCapacity = 1)
-    private val saves = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val saves = MutableSharedFlow<Long>(extraBufferCapacity = 1)
     private val entry = OdometerEntryState(mutableStateOf(true), mutableStateOf("52"))
     private var adds = 0
     private val selections = mutableListOf<String>()
+    private val odometerActions: OdometerActions = mock()
     private val vm: BubbleViewModel = mock()
 
     private val garage = MutableStateFlow(Garage(listOf(civic, bike), civic.id, true))
     private fun show() {
+        whenever(vm.odometerActions).thenReturn(odometerActions)
         whenever(vm.garage).thenReturn(garage)
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.gpsTotalMiles).thenReturn(MutableStateFlow(100.0))
-        whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
-        whenever(vm.odometerWriteFailed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))
-        whenever(vm.odometerSaveCompleted).thenReturn(saves)
-        whenever(vm.odometerVehicleChanged).thenReturn(changes)
+        whenever(odometerActions.saving).thenReturn(MutableStateFlow(false))
+        whenever(odometerActions.failed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))
+        whenever(odometerActions.saveCompleted).thenReturn(saves)
+        whenever(odometerActions.vehicleChanged).thenReturn(changes)
         val hud = OdometerHud(vm, entry, closeLog = {}, onAddVehicle = { adds++ })
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -56,6 +58,7 @@ class OdometerHudSheetTest {
                 CompositionLocalProvider(LocalNowProvider provides Clock.fixed(Instant.ofEpochMilli(1_700_000_000_000), ZoneOffset.UTC)) {
                     var menu by remember { mutableStateOf(false) }
                     hud.ObserveEntry()
+                    rememberBubbleSheetHost(listOf(SheetSlot(hud) {}))
                     Box(Modifier.size(400.dp, 500.dp)) {
                         hud.Sheet {
                             VehicleChip(VehicleChipModel(civic, listOf(civic, bike), civic.id, false), menu,
@@ -103,12 +106,12 @@ class OdometerHudSheetTest {
         compose.runOnIdle { assertTrue(changes.tryEmit(VehicleChange.SWITCHED)) }; settle()
         assertNull(entry.reading)
         assertTrue(entry.open)
-        verify(vm, times(1)).odometerVehicleChangeHandled()
+        verify(odometerActions, times(1)).vehicleChangeHandled()
     }
     @Test fun `save completion closes reading and is handled once`() {
         show()
-        compose.runOnIdle { assertTrue(saves.tryEmit(Unit)) }; settle()
+        compose.runOnIdle { assertTrue(saves.tryEmit(entry.entryId)) }; settle()
         assertFalse(entry.open)
-        verify(vm, times(1)).odometerSaveHandled()
+        verify(odometerActions, times(1)).saveHandled()
     }
 }

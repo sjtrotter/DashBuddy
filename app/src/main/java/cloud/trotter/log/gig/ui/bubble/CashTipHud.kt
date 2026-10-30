@@ -8,6 +8,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.feature.bubble.hud.cashtip.*
 import cloud.trotter.log.gig.feature.bubble.hud.undo.*
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 
 @Stable
@@ -15,18 +16,24 @@ internal class CashTipHud(
     private val viewModel: BubbleViewModel,
     private val entry: CashTipEntryState,
     private val closeLog: () -> Unit,
-) {
+) : SheetPort {
+    override val key = EntrySheet.CASH_TIP
+    override val entryId get() = entry.entryId
+    override val completed by lazy { viewModel.cashTipActions.committed.map { it.entryId } }
+    override fun completionHandled() = viewModel.cashTipActions.committedHandled()
+    override fun show() = openSheet()
+
     private var sessionId by mutableStateOf<String?>(null)
     private var rows by mutableStateOf<List<DeliveryRecord>>(emptyList())
-    val open: Boolean get() = entry.open
+    override val open: Boolean get() = entry.open
 
     fun openSheet() {
         closeLog()
         viewModel.cashTipActions.reopen()
         entry.show(rows.maxWithOrNull(compareBy<DeliveryRecord> { it.completedAt }.thenBy { it.eventSequenceId })?.eventSequenceId, sessionId)
     }
-    fun dismiss() { entry.open = false }
-    fun back() { entry.back() }
+    override fun dismiss() { entry.open = false }
+    override fun back() { entry.back() }
 
     @Composable
     fun Observe(dashId: String?) {
@@ -47,12 +54,6 @@ internal class CashTipHud(
         LaunchedEffect(viewModel) {
             viewModel.projectionWatermark.collect { watermark ->
                 watermark?.let(viewModel.cashTipActions::acknowledgeThrough)
-            }
-        }
-        LaunchedEffect(viewModel, entry) {
-            viewModel.cashTipActions.committed.collect { committed ->
-                if (committed.entryId == entry.entryId) dismiss()
-                viewModel.cashTipActions.committedHandled()
             }
         }
     }
@@ -90,9 +91,12 @@ internal class CashTipHud(
     }
 
     @Composable
-    fun Undo() {
-        val strip by viewModel.cashTipActions.undo.collectAsStateWithLifecycle()
-        strip?.let { model -> UndoStrip(model.strip) { viewModel.cashTipActions.undo(model) } }
+    override fun Band(): SheetBand? {
+        val commit by viewModel.cashTipActions.undo.collectAsStateWithLifecycle()
+        val visible = UndoVisible()
+        return commit?.takeIf { visible }?.let { model ->
+            SheetBand(model.strip.token) { UndoStrip(model.strip) { viewModel.cashTipActions.undo(model) } }
+        }
     }
 
     @Composable

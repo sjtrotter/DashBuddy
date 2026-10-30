@@ -33,8 +33,8 @@ internal class OdometerActions(
     val failed = failure.asStateFlow()
     private val saved = MutableStateFlow<OdometerNoticeModel?>(null)
     val notice = saved.asStateFlow()
-    private val completed = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
-    val saveCompleted: SharedFlow<Unit> = completed.asSharedFlow()
+    private val completed = MutableSharedFlow<Long>(replay = 1, extraBufferCapacity = 1)
+    val saveCompleted: SharedFlow<Long> = completed.asSharedFlow()
     private val changed = MutableSharedFlow<VehicleChange>(replay = 1, extraBufferCapacity = 1)
     val vehicleChanged: SharedFlow<VehicleChange> = changed.asSharedFlow()
 
@@ -53,10 +53,10 @@ internal class OdometerActions(
     @OptIn(ExperimentalCoroutinesApi::class)
     fun vehicleChangeHandled() { changed.resetReplayCache() }
 
-    fun save(vehicleId: String, miles: Int) {
+    fun save(vehicleId: String, miles: Int, entryId: Long) {
         write(WriteKind.READING) {
             readings.record(vehicleId, miles)
-            completed.emit(Unit)
+            completed.emit(entryId)
             val model = OdometerNoticeModel(miles, HudNoticeOrder.next())
             saved.value = model
             scope.launch {

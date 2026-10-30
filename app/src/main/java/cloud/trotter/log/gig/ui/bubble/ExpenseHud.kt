@@ -12,26 +12,23 @@ import cloud.trotter.log.gig.domain.analytics.ExpenseCategory
 import cloud.trotter.log.gig.feature.bubble.hud.vehicle.VehicleChip
 import cloud.trotter.log.gig.feature.bubble.hud.expense.*
 import cloud.trotter.log.gig.feature.bubble.hud.undo.*
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 
 @Stable
 internal class ExpenseHud(private val viewModel: BubbleViewModel, private val entry: ExpenseEntryState,
-    private val closeLog: () -> Unit, private val openVehicleAdd: () -> Unit) {
-    val open get() = entry.open
-    val compact get() = entry.page == ExpensePage.SUBCARD
-    fun openSubcard() { closeLog(); viewModel.expenseActions.reopen(); entry.show() }
-    fun back() { entry.back() }
-    fun dismiss() { entry.open = false; entry.keyboardOpen = false }
+    private val closeLog: () -> Unit, private val openVehicleAdd: () -> Unit) : SheetPort {
+    override val key = EntrySheet.EXPENSE
+    override val entryId get() = entry.entryId
+    override val completed by lazy { viewModel.expenseActions.committed.map { it.entryId } }
+    override fun completionHandled() = viewModel.expenseActions.committedHandled()
+    override fun show() = openSubcard()
 
-    @Composable
-    fun Observe() {
-        LaunchedEffect(viewModel, entry) {
-            viewModel.expenseActions.committed.collect { commit ->
-                if (commit.entryId == entry.entryId) dismiss()
-                viewModel.expenseActions.committedHandled()
-            }
-        }
-    }
+    override val open get() = entry.open
+    override val compact get() = entry.page == ExpensePage.SUBCARD
+    fun openSubcard() { closeLog(); viewModel.expenseActions.reopen(); entry.show() }
+    override fun back() { entry.back() }
+    override fun dismiss() { entry.open = false; entry.keyboardOpen = false }
 
     @Composable
     fun Sheet() {
@@ -94,9 +91,13 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
         return visible
     }
     @Composable fun Cue(): Boolean = UndoVisible()
-    @Composable fun Undo() {
+    @Composable
+    override fun Band(): SheetBand? {
         val commit by viewModel.expenseActions.undo.collectAsStateWithLifecycle()
-        commit?.let { UndoStrip(it.strip) { viewModel.expenseActions.undo(it) } }
+        val visible = UndoVisible()
+        return commit?.takeIf { visible }?.let { model ->
+            SheetBand(model.strip.token) { UndoStrip(model.strip) { viewModel.expenseActions.undo(model) } }
+        }
     }
 }
 
@@ -104,6 +105,5 @@ internal class ExpenseHud(private val viewModel: BubbleViewModel, private val en
 internal fun rememberExpenseHud(viewModel: BubbleViewModel, closeLog: () -> Unit, openVehicleAdd: () -> Unit): ExpenseHud {
     val entry = rememberExpenseEntryState()
     val hud = remember(viewModel, entry, closeLog, openVehicleAdd) { ExpenseHud(viewModel, entry, closeLog, openVehicleAdd) }
-    hud.Observe()
     return hud
 }

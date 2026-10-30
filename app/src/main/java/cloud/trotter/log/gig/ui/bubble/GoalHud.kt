@@ -8,21 +8,17 @@ import kotlin.math.roundToInt
 
 @Stable
 internal class GoalHud(private val viewModel: BubbleViewModel, private val entry: GoalEntryState,
-    private val closeLog: () -> Unit) {
-    val open get() = entry.open
-    fun openSheet() { closeLog(); if (entry.show()) viewModel.goalActions.reopen() }
-    fun back() = entry.back()
-    fun dismiss() = entry.dismiss()
+    private val closeLog: () -> Unit) : SheetPort {
+    override val key = EntrySheet.GOAL
+    override val entryId get() = entry.entryId
+    override val completed by lazy { viewModel.goalActions.committed }
+    override fun completionHandled() = viewModel.goalActions.committedHandled()
+    override fun show() = openSheet()
 
-    @Composable
-    fun Observe() {
-        LaunchedEffect(viewModel, entry) {
-            viewModel.goalActions.committed.collect { id ->
-                entry.saved(id)
-                viewModel.goalActions.committedHandled()
-            }
-        }
-    }
+    override val open get() = entry.open
+    fun openSheet() { closeLog(); if (entry.show()) viewModel.goalActions.reopen() }
+    override fun back() = entry.back()
+    override fun dismiss() = entry.dismiss()
 
     @Composable
     fun Sheet() {
@@ -42,6 +38,5 @@ internal class GoalHud(private val viewModel: BubbleViewModel, private val entry
 internal fun rememberGoalHud(viewModel: BubbleViewModel, closeLog: () -> Unit): GoalHud {
     val entry = rememberGoalEntryState()
     val hud = remember(viewModel, entry) { GoalHud(viewModel, entry, closeLog) }
-    hud.Observe()
     return hud
 }

@@ -70,7 +70,7 @@ class UndoStripTest {
         compose.onNodeWithText("Undo").assertIsEnabled().performClick()
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)
         assertEquals(2, taps)
-        assertEquals(UndoBandContent.CASH_TIP, undoBandContent(null, model.token.takeIf { model.visible(clock.millis) }, null))
+        assertEquals("tip", newestBand(mapOf("tip" to model.token.takeIf { model.visible(clock.millis) })))
         // Another failed append also leaves an enabled retry.
         compose.runOnIdle { model = model.copy(busy = false, failed = true) }
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(32)

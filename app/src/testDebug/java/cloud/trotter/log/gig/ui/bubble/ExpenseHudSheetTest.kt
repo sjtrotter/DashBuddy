@@ -42,6 +42,7 @@ class ExpenseHudSheetTest {
     private val bike = Vehicle("bike", "Bike", 1)
     // The dash chip may differ from the active vehicle; receipts default to active.
     private val model = MutableStateFlow<VehicleChipModel?>(VehicleChipModel(bike, listOf(civic, bike), civic.id, false))
+    private val odometerActions: OdometerActions = mock()
     private val vm: BubbleViewModel = mock()
     private val events: AppEventRepo = mock()
     private val entry = ExpenseEntryState()
@@ -49,6 +50,7 @@ class ExpenseHudSheetTest {
     @After fun cleanup() { scope.cancel() }
 
     private fun show(pick: ExpensePick = ExpensePick.Fuel) {
+        whenever(vm.odometerActions).thenReturn(odometerActions)
         runBlocking { whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71L) }
         whenever(vm.expenseActions).thenReturn(ExpenseActions(scope, LedgerRepository(events, mock(), mock()), clock))
         whenever(vm.vehicleChip).thenReturn(model)
@@ -82,7 +84,7 @@ class ExpenseHudSheetTest {
     }
     private fun log() { compose.onNodeWithTag("expense.log").assertIsDisplayed().performClick(); settle() }
     private fun neverSwitched() {
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
         // Receipt picks do not consult the active-vehicle swap lock either.
         verify(vm, never()).vehicleSwapLocked()
         assertEquals(civic.id, model.value?.activeId)
@@ -131,7 +133,7 @@ class ExpenseHudSheetTest {
         compose.onNodeWithTag("hud.vehicle.chip").assertTextContains("Bike")
         log()
         assertEquals(bike.id, (appended().payload as FuelFillupPayload).vehicleId)
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
     }
     @Test fun `unreadable garage shows unavailable chip and logs no vehicle`() {
         model.value = VehicleChipModel(null, emptyList(), null, true)
@@ -139,7 +141,7 @@ class ExpenseHudSheetTest {
         compose.onNodeWithTag("hud.vehicle.chip").assertIsDisplayed().assertHasNoClickAction()
         log()
         assertNull((appended().payload as FuelFillupPayload).vehicleId)
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
     }
     @Test fun `Add opens the existing vehicle form without a selection`() {
         show()
