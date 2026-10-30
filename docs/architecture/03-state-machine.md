@@ -53,9 +53,9 @@ its whole window commit on the departure frame. Another platform's screen still 
 park — fail-null, accepted. **A park is FROZEN, not killed, while the dash is not `Mode.Online`, and
 its window RESTARTS on the way back (#1052):** a read parks in ANY mode, the lazy expiry SKIPS
 wholesale while non-Online (no commit, no drop), and `applyModeTransition` — the single site that
-moves `mode` — RE-BASES `since`/`deadline` on the transition INTO Online and re-arms the timer, so
-the park stands a full window on a LIVE dash before it may commit. Dropping or refusing the park
-while non-Online both STRAND a legitimate figure, because the #605 resume grace holds `Paused` across
+moves `mode` — calls `SessionPaySettleGate.modeChanged` to RE-BASE `since`/`deadline` on the transition
+INTO Online and re-arm the timer, so the park stands a full window on a LIVE dash before it may commit.
+Dropping or refusing the park while non-Online both STRAND a legitimate figure, because the #605 resume grace holds `Paused` across
 the pause-sheet flap, the confirmed resume arrives as a wake TIMER with no frame behind it, and
 `FrameGate` never re-admits the identical idle capture. (Hence `diffDeadlineTimer`'s early-wake
 re-arm is guarded on `obs.timestamp < deadline`: a park kept across its own deadline would otherwise
@@ -81,9 +81,10 @@ on DoorDash — so the $40.14 parked, stood its 3 s unchallenged, committed into
 `runningEarnings`, and the `early_offline` `DASH_STOP` reported $40.14 of earnings for a 2-minute,
 0-delivery dash (`ModeEffects`' `prevSession.runningEarnings.takeIf { > 0 }`). The job/task lifecycle
 was inert throughout, which is why nothing else caught it. The test lives at the ONE owner,
-`PlatformRegionStepper.ownsReceiptJob()`, read through `Observation.sessionPayRead(region)` so the
-gate and the expiry's contradiction check can never disagree about what counts as this session's
-running total; a refused read is DROPPED (fail-null, #745) and logged once per frame at DEBUG under
+`SessionPaySettleGate`'s private `ownsReceiptJob()`, read through its private
+`Observation.sessionPayRead(region)` so the gate and the expiry's contradiction check can never
+disagree about what counts as this session's running total; a refused read is DROPPED (fail-null,
+#745) and logged once per frame at DEBUG under
 the `StateMachine` tag — ids and platform only, no money — because the fielded failure left no trace
 anywhere. The pill is deliberately exempt: it renders the live dash's own total and describes no job.
 **(c) every NON-gated writer supersedes older parks** — the PostTask-entry pay accumulation and the
@@ -91,9 +92,9 @@ dash-summary total drop any park whose `since` predates them; `since >= now` kee
 same-frame park. The dash summary reaches the park by (f), not by this rule: `updateLifecycle` returns
 early on `Flow.SessionEnded` with a live session (to arm the authoritative SESSION_END grace), so its
 `updateSessionFields` arm is unreachable on the fielded path — the summary's `totalEarnings` is
-instead one of the three reads `Observation.sessionPayRead()` recognizes, which is what stops a
-pre-"End Dash" park committing on the summary frame and riding into the #596 close-out sweep's
-`DELIVERY_COMPLETED.sessionEarnings`.
+instead one of the three reads `SessionPaySettleGate`'s private `Observation.sessionPayRead()`
+recognizes, which is what stops a pre-"End Dash" park committing on the summary frame and riding into
+the #596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
 **(d) comparisons are cent-tolerant** (`accumulatedDeliveryPay + totalPay` is not bit-equal to the
 2-dp figure the wheel renders).
 **(e) a pending's own wake lapses it by IDENTITY; a frame lapses the park at-or-past** — the timer is
