@@ -22,6 +22,7 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -755,7 +756,7 @@ class StateMachineTest {
             platform = Platform.DoorDash,
             mode = Mode.Paused,
             session = session,
-            pauseSafety = PendingWake(safetyDeadline, SAFETY_WAKE),
+            pauseSafety = PendingWake(safetyDeadline, PlatformRegion(Platform.DoorDash, wakeSeq = (SAFETY_WAKE) - 1L).mintWakeId().second),
         )
         val flow = FlowRegion(flow = Flow.Idle)
 
@@ -865,9 +866,9 @@ class StateMachineTest {
             session = cloud.trotter.log.gig.domain.state.Session("sess-1", startedAt = 100L),
             // Grace still un-expired at the timeout instant (deadline in the future) so the
             // safety-timeout path — not lazy expiry — resolves the pending.
-            pendingModeResume = cloud.trotter.log.gig.domain.state.PendingModeResume(since = 4_000L, deadline = 12_000L),
+            pendingModeResume = cloud.trotter.log.gig.domain.state.PendingModeResume(since = 4_000L, deadline = 12_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
             // #1054 rounds 4–5: the safety fire matches this net by GENERATION.
-            pauseSafety = PendingWake(9_000L, SAFETY_WAKE),
+            pauseSafety = PendingWake(9_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (SAFETY_WAKE) - 1L).mintWakeId().second),
         )
         val flow = FlowRegion(flow = Flow.Idle)
         val result = stepper.step(

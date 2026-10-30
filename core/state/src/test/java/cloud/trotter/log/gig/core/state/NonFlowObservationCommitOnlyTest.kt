@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -75,6 +76,7 @@ class NonFlowObservationCommitOnlyTest {
     fun `a UiInput past a TASK_RETIRE deadline commits ONLY the lazy expiry`() {
         val pend = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 4_000L, deadline = 5_000L, armedFromFlow = Flow.Idle,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         // The task never arrived → retire completes it into recentTasks; the job stays open.
         val region = activeRegion(pend)
@@ -98,6 +100,7 @@ class NonFlowObservationCommitOnlyTest {
     fun `a Loopback past a TASK_RETIRE deadline commits ONLY the lazy expiry`() {
         val pend = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 4_000L, deadline = 5_000L, armedFromFlow = Flow.Idle,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         val region = activeRegion(pend)
         val r = stepper.step(region, taskFlow, taskFlow, loopback(6_000L), policy)

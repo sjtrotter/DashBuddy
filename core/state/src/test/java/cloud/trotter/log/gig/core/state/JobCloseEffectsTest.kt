@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -174,6 +175,7 @@ class JobCloseEffectsTest {
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.SESSION_END, since = 4000L, deadline = 6500L,
                 authoritative = true,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val next = PlatformRegion(
@@ -221,6 +223,7 @@ class JobCloseEffectsTest {
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.SESSION_END, since = 4600L, deadline = 7100L,
                 authoritative = true, absorbedRetireSince = 4600L,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val next = PlatformRegion(

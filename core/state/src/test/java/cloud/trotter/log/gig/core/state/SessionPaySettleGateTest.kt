@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.domain.state.PendingSessionPay
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -248,7 +249,7 @@ class SessionPaySettleGateTest {
     fun `a read equal to the committed figure clears the park`() {
         val start = region(
             runningEarnings = 16.70,
-            pending = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+            pending = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val result = feed(start, t0 to 16.70)
         assertEarnings(16.70, result)
@@ -260,7 +261,7 @@ class SessionPaySettleGateTest {
 
     @Test
     fun `a null read leaves both the committed figure and the park alone`() {
-        val park = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle)
+        val park = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val result = feed(region(runningEarnings = 16.70, pending = park), (t0 + 1L) to null)
         assertEarnings(16.70, result)
         assertEquals(park, result.pendingSessionPay)
@@ -300,7 +301,7 @@ class SessionPaySettleGateTest {
 
     @Test
     fun `a zero read does not disturb a park already standing`() {
-        val park = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle)
+        val park = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val result = feed(region(runningEarnings = 16.70, pending = park), (t0 + 100L) to 0.0)
         assertEquals("the placeholder is ignored, not treated as a challenge", park, result.pendingSessionPay)
     }
@@ -357,10 +358,10 @@ class SessionPaySettleGateTest {
         // replacement and committed $30 after essentially zero time in its own window — precisely
         // the mid-spin figure this gate exists to reject.
         val parked20 = feed(region(runningEarnings = 16.70), t0 to 20.00)
-        val firstWake = parked20.pendingSessionPay!!.wakeId
+        val firstWake = parked20.pendingSessionPay!!.wakeId.value
 
         val parked30 = step(parked20, idleScreen(30.00, t0))
-        val secondWake = parked30.pendingSessionPay!!.wakeId
+        val secondWake = parked30.pendingSessionPay!!.wakeId.value
         assertEquals(
             "the replacement really does share the superseded park's deadline",
             parked20.pendingSessionPay!!.deadline,
@@ -430,7 +431,7 @@ class SessionPaySettleGateTest {
         val sessionless = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Online,
-            pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+            pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val result = step(sessionless, timeout(t0 + settle + 1L))
         assertNull("no session may be invented to hold it", result.session)
@@ -608,7 +609,7 @@ class SessionPaySettleGateTest {
         var flow = FlowRegion(flow = Flow.Idle)
         var region = region(
             runningEarnings = 16.70,
-            pending = PendingSessionPay(470.00, 4_000L, 4_000L + settle, Flow.Idle),
+            pending = PendingSessionPay(470.00, 4_000L, 4_000L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
 
         // The dash summary arms the (graced) session end...
@@ -770,7 +771,7 @@ class SessionPaySettleGateTest {
         val offline = PlatformRegion(
             platform = Platform.DoorDash,
             mode = Mode.Offline,
-            pendingSessionPay = PendingSessionPay(470.00, 8_000L, 8_000L + settle, Flow.Idle),
+            pendingSessionPay = PendingSessionPay(470.00, 8_000L, 8_000L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val obs = idleScreen(sessionPay = null, timestamp = 9_000L)
         val nextFlow = flowStepper.step(FlowRegion(), obs)

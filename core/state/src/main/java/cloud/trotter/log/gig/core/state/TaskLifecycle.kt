@@ -409,42 +409,33 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
         }
         val newDeadline = obs.timestamp + graceMs
         val existing = region.pendingDestructive
-        val pend = if (existing?.kind == DestructiveKind.TASK_RETIRE) {
-            // Already armed (idle-grace, or an earlier receipt frame) —
-            // tighten to the short window; the earliest destructive signal
-            // stays the honest completion time. The receipt is an authoritative
-            // completion, so re-anchor the provenance to PostTask (#596): a drop
-            // finished at a real receipt is closeable even if an earlier
-            // offer-deliberation had armed the original retire.
-            existing.copy(
-                deadline = minOf(existing.deadline, newDeadline),
-                authoritative = true,
-                armedFromFlow = Flow.PostTask,
-            )
-        } else {
-            PendingDestructive(
-                kind = DestructiveKind.TASK_RETIRE,
-                since = obs.timestamp,
-                deadline = newDeadline,
-                authoritative = true,
-                armedFromFlow = Flow.PostTask,
-            )
-        }
-        // #1054 round 6: both arms route through the shared installer, so a FRESH retire gets a
-        // generation and a TIGHTENED one gets a new arm. Round 5 left this site out of the rollout
-        // entirely: an id-0 retire's own fire could never match (a fire stamped exactly on the
-        // deadline, or early after a clock step-back, committed nothing and nothing re-armed — the
-        // original #1054 bug, intact for retires), and the #1033 collapsed→expanded tighten moved
-        // the deadline 18 000 → 13 500 while `diffGraceTimer` saw an unchanged id and emitted no
-        // replacement, so the completion waited for the OLD timer.
-        //
-        // Round 7: `existing` is passed as the predecessor ONLY when it is the retire this frame is
-        // tightening. When it is a SESSION_END the `else` branch above built a brand-new
-        // TASK_RETIRE that REPLACES it, and after a clock rollback the two can carry the same
-        // deadline — the installer's kind test catches that, and passing null here says the same
-        // thing at the call site.
+        // A receipt may tighten a retire, but replaces any other destructive kind.
         val tightened = existing?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
-        return region.withWakeIdIfDeadlineMoved(tightened, pend, obs)
+        return region.withWakeIdIfDeadlineMoved(tightened, WindowStart.Live(obs.timestamp)) { wakeId ->
+            if (existing?.kind == DestructiveKind.TASK_RETIRE) {
+                // Already armed (idle-grace, or an earlier receipt frame) —
+                // tighten to the short window; the earliest destructive signal
+                // stays the honest completion time. The receipt is an authoritative
+                // completion, so re-anchor the provenance to PostTask (#596): a drop
+                // finished at a real receipt is closeable even if an earlier
+                // offer-deliberation had armed the original retire.
+                existing.copy(
+                    wakeId = wakeId,
+                    deadline = minOf(existing.deadline, newDeadline),
+                    authoritative = true,
+                    armedFromFlow = Flow.PostTask,
+                )
+            } else {
+                PendingDestructive(
+                    kind = DestructiveKind.TASK_RETIRE,
+                    since = obs.timestamp,
+                    wakeId = wakeId,
+                    deadline = newDeadline,
+                    authoritative = true,
+                    armedFromFlow = Flow.PostTask,
+                )
+            }
+        }
     }
 
     // Leaving a task flow to idle/offer while online → do NOT retire the task
@@ -459,8 +450,9 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
             // reaches a region.
             return region.withWakeIdIfDeadlineMoved(
                 prev = null,
-                obs = obs,
-                next = PendingDestructive(
+                start = WindowStart.Live(obs.timestamp),
+            ) { wakeId ->
+                PendingDestructive(
                     kind = DestructiveKind.TASK_RETIRE,
                     since = obs.timestamp,
                     // Through the injected policy (#406/#438 item 6): per-platform grace.
@@ -470,8 +462,9 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
                     // T1/T2 close-out fire on the still-undelivered final drop; an idle/waiting
                     // arm (`Idle`) is a genuine receipt-skip and IS closeable.
                     armedFromFlow = nextFlowVal,
-                ),
-            )
+                    wakeId = wakeId,
+                )
+            }
         }
     }
 

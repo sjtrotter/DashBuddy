@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -45,7 +46,7 @@ class TimeoutRoutingTest {
         platform = Platform.DoorDash,
         mode = Mode.Paused,
         session = Session("sess-1", startedAt = 1_000L),
-        pauseSafety = PendingWake(safetyDeadline, SAFETY_WAKE),
+        pauseSafety = PendingWake(safetyDeadline, PlatformRegion(Platform.DoorDash, wakeSeq = (SAFETY_WAKE) - 1L).mintWakeId().second),
     )
 
     private fun state(region: PlatformRegion) = AppState(
@@ -97,6 +98,7 @@ class TimeoutRoutingTest {
             ),
             pendingDestructive = PendingDestructive(
                 DestructiveKind.TASK_RETIRE, since = 800L, deadline = 1_000L,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         // A non-flow observation past the deadline — only reaches the region when routed.

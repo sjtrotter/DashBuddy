@@ -18,23 +18,15 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.IdleSurface
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * **Every deadline-bearing pending the STEPPERS create carries a usable generation** (#1054 round 6).
- *
- * `wakeId` keeps a kotlinx default of `0` so pre-round-5 snapshots decode, which means a forgotten
- * mint is silent: the pending looks fine, its arm carries id 0, and `isWakeFor` refuses id 0 on both
- * sides — so its own fire can never commit it and, since round 4 deleted the early-wake re-arm,
- * nothing rescues it. That is the original #1054 bug, and round 5 shipped it for `TASK_RETIRE`
- * because the two `TaskLifecycle` constructors were missed in the rollout.
- *
- * A grep cannot notice the next omission; this can. Each case drives a REAL stepper path to the
- * point where the pending exists, and asserts only that its generation is non-zero — the behaviour
- * of each window is pinned by its own suite. Anything new that arms a deadline belongs here.
+ * Every deadline-bearing pending the steppers create carries a minted generation (#1427).
+ * Construction requires a WakeId; these cases pin the reachable installation paths too.
  */
 class WakeIdMintCoverageTest {
 
@@ -152,7 +144,7 @@ class WakeIdMintCoverageTest {
 
         assertEquals(DestructiveKind.TASK_RETIRE, replaced.kind)
         assertEquals("the deadlines really do coincide", end.deadline, replaced.deadline)
-        assertTrue("and the replacement never inherits", replaced.wakeId != end.wakeId)
+        assertTrue("and the replacement never inherits", replaced.wakeId.value != end.wakeId.value)
     }
 
     @Test
@@ -204,7 +196,7 @@ class WakeIdMintCoverageTest {
         assertMinted(tightened.pendingDestructive, "tightened TASK_RETIRE")
         assertTrue(
             "a moved deadline is a new pending to its timer",
-            tightened.pendingDestructive!!.wakeId != collapsed.pendingDestructive!!.wakeId,
+            tightened.pendingDestructive!!.wakeId.value != collapsed.pendingDestructive!!.wakeId.value,
         )
     }
 
@@ -216,7 +208,7 @@ class WakeIdMintCoverageTest {
         val armed = step(paused, Flow.Idle, screen(10_000L, Flow.Idle, Mode.Online, ParsedFields.IdleFields()))
 
         assertNotNull("the resume grace was armed", armed.pendingModeResume)
-        assertTrue("resume grace minted", armed.pendingModeResume!!.wakeId > 0L)
+        assertTrue("resume grace minted", armed.pendingModeResume!!.wakeId.value > 0L)
     }
 
     // ---- pauseSafety ----
@@ -231,7 +223,7 @@ class WakeIdMintCoverageTest {
             ),
         )
         assertNotNull("the net was armed", paused.pauseSafety)
-        assertTrue("pause safety minted", paused.pauseSafety!!.wakeId > 0L)
+        assertTrue("pause safety minted", paused.pauseSafety!!.wakeId.value > 0L)
     }
 
     // ---- pendingSessionPay ----
@@ -246,7 +238,7 @@ class WakeIdMintCoverageTest {
             ),
         )
         assertNotNull("the park was created", parked.pendingSessionPay)
-        assertTrue("park minted", parked.pendingSessionPay!!.wakeId > 0L)
+        assertTrue("park minted", parked.pendingSessionPay!!.wakeId.value > 0L)
     }
 
     @Test
@@ -275,18 +267,39 @@ class WakeIdMintCoverageTest {
         )
         val rebased = resumed.pendingSessionPay
         assertNotNull("the park survived the resume", rebased)
-        assertTrue("re-based park minted", rebased!!.wakeId > 0L)
+        assertTrue("re-based park minted", rebased!!.wakeId.value > 0L)
         assertTrue(
             "and it is a NEW generation — the pre-pause arm must not land on it",
-            rebased.wakeId != paused.pendingSessionPay!!.wakeId,
+            rebased.wakeId.value != paused.pendingSessionPay!!.wakeId.value,
         )
+    }
+
+    // The JOB_ABANDON installer's mint is pinned in UnassignIdleClosesJobTest (its first case asserts the
+    // armed grace carries the region's newest generation), where the full unassign-then-idle setup lives.
+
+    @Test
+    fun `recovery re-base mints even when the deadline stays equal`() {
+        val armed = step(
+            region(), Flow.Idle,
+            screen(10_000L, Flow.Idle, Mode.Offline, ParsedFields.IdleFields()),
+        )
+        val before = armed.pendingDestructive!!
+        val recovered = state(armed).copy(timestamp = 10_000L)
+            .recoveryHygiene(nowMs = 10_000L).regions.platforms.getValue(platform)
+        val after = recovered.pendingDestructive!!
+        assertMinted(after, "recovery re-base")
+        assertEquals(before.deadline, after.deadline)
+        assertEquals(armed.wakeSeq + 1L, recovered.wakeSeq)
+        assertEquals(recovered.wakeSeq, after.wakeId.value)
+        assertEquals(before.windowFrom, after.windowFrom)
+        assertEquals(10_000L, after.servedFrom)
     }
 
     private fun assertMinted(pend: PendingDestructive?, what: String) {
         assertNotNull("$what was armed", pend)
         assertTrue(
-            "$what carries id 0 — its own wake could never commit it, and nothing re-arms",
-            pend!!.wakeId > 0L,
+            "$what carries a positive minted generation",
+            pend!!.wakeId.value > 0L,
         )
         assertTrue("$what is a destructive kind", pend.kind in DestructiveKind.entries)
     }

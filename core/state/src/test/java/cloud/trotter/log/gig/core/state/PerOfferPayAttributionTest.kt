@@ -32,6 +32,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -393,7 +394,7 @@ class PerOfferPayAttributionTest {
             // `bailed` is NOT in prev's recentTasks — it was the ACTIVE task when the bail landed.
             activeTask = drops[1].resolved("cust-b", "S-Two", at = 9_000L, finished = false),
             recentTasks = pickups + listOf(delivered),
-            pendingDestructive = PendingDestructive(kind = DestructiveKind.SESSION_END, since = 9_000L, deadline = 9_500L),
+            pendingDestructive = PendingDestructive(kind = DestructiveKind.SESSION_END, since = 9_000L, deadline = 9_500L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
             lastPostTaskFields = null,
         )
         // endSession's shape: session + job cleared, the active task force-stamped into recentTasks.

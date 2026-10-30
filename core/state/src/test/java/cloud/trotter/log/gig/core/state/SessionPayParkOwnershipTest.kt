@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -576,7 +577,7 @@ class SessionPayParkOwnershipTest {
                         session = Session("s1", startedAt = 100L, runningEarnings = 16.70),
                         lastActedFlow = Flow.Idle,
                         lastObservedAt = t0,
-                        pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+                        pendingSessionPay = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
                     ),
                 ),
             ),

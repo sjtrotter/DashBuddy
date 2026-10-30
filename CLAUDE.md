@@ -510,7 +510,8 @@ Crash recovery DROPS any restored park. `Session.runningEarnings` /
 **Timer identity (#1054):** every arm from `ModeEffects.diffDeadlineTimer` carries
 `ObservationPayload.GraceWake(wakeId)`, a per-region generation from `PlatformRegion.wakeSeq` via
 `mintWakeId()` (a deadline is not unique); `GraceExpiry.isWakeFor`/`graceLapsed` is the one rule; a fire
-from a replaced pending is inert; id `0` is the legacy unidentified value. There is no re-arm logic.
+from a replaced pending is inert. An id is a `WakeId` minted at install through `WakeInstall.kt`;
+snapshots without a positive id are discarded on decode (#1427). There is no re-arm logic.
 Arms carry `deadlineMs` (`OFFER_EXPIRY`/`SETTLE_UI` do not yet — #1076).
 
 **Recovery (#1052/#1054) — evidence is dropped, a decision in flight is re-armed.** `AppState.recoveryHygiene`

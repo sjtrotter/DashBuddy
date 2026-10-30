@@ -21,6 +21,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -106,7 +107,7 @@ class StateManagerV2RecoveryHygieneTest {
 
     private fun parkedState(
         cv: Long,
-        pending: PendingSessionPay? = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+        pending: PendingSessionPay? = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         // #1103: a receipt's total accumulates only for a job this session owns; the receipt
         // fixtures pass a live job so the replay exercises the fold, not the ownership refusal.
         activeJob: Job? = null,
@@ -217,7 +218,7 @@ class StateManagerV2RecoveryHygieneTest {
             dispatcher = dispatcher,
             snapshot = parkedState(
                 cv = 7L,
-                pending = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle),
+                pending = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
             ),
         )
 
@@ -586,7 +587,7 @@ class StateManagerV2RecoveryHygieneTest {
             deadline = 102_500L,
             authoritative = true,
             absorbedRetireSince = 99_000L,
-            wakeId = 3L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (3L) - 1L).mintWakeId().second,
             windowFrom = 100_000L,
         )
         val restored = AppState(
@@ -630,7 +631,7 @@ class StateManagerV2RecoveryHygieneTest {
             authoritative = true,
             absorbedRetireSince = 200_000L,
             absorbedRetireDeadline = 210_000L,
-            wakeId = 3L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (3L) - 1L).mintWakeId().second,
             windowFrom = 201_000L,
         )
         val restored = AppState(

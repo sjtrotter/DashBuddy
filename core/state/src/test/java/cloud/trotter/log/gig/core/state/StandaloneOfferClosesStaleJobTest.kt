@@ -27,6 +27,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -323,6 +324,7 @@ class StandaloneOfferClosesStaleJobTest {
         val destructive = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 800L, deadline = 10_800L,
             armedFromFlow = Flow.OfferPresented,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         val before = initial(destructive = destructive)
         // #1119 slice 1: pin the consumer's clearing before task-flow processing can cancel the grace.
@@ -358,7 +360,7 @@ class StandaloneOfferClosesStaleJobTest {
     @Test
     fun `standalone close preserves other destructive pending kinds`() {
         for (kind in listOf(DestructiveKind.SESSION_END, DestructiveKind.JOB_ABANDON)) {
-            val destructive = PendingDestructive(kind, since = 800L, deadline = 10_800L)
+            val destructive = PendingDestructive(kind, since = 800L, deadline = 10_800L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
             val before = region(initial(destructive = destructive)).copy(pendingOffers = emptyList())
             val after = stepper.consumeAcceptIntoJob(DecisionSink(), before, frame,
                 stepper.acceptInputsFromPending(pending(), acceptedAt = 900L))

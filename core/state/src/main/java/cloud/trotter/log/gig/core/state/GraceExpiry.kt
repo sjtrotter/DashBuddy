@@ -3,10 +3,9 @@ package cloud.trotter.log.gig.core.state
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.ObservationPayload
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
-import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.PlatformRegion
-import cloud.trotter.log.gig.domain.state.mintWakeId
+import cloud.trotter.log.gig.domain.state.WakeId
 
 /**
  * When a deadline-bearing pending has lapsed (#1054) — the rules
@@ -62,17 +61,16 @@ import cloud.trotter.log.gig.domain.state.mintWakeId
  *
  * False for a frame, for another timer type, for a fire carrying a DIFFERENT id (a replaced
  * pending), and for a payload-less fire — the last being an old-shape timeout from a journal row
- * written before round 4, or a hand-built timeout in a test. **Id `0` never matches**, on either
- * side: it is the reserved "legacy, unidentified" value a pre-round-5 snapshot decodes to, and such
- * a pending is lapsed by its timestamp alone, exactly as it was under the code that wrote it.
+ * written before round 4, or a hand-built timeout in a test. **Id `0` never matches**: pending identities are positive [WakeId] values,
+ * while old journal payloads remain plain numbers.
  * Fail-closed throughout — an unrecognised fire lapses nothing, and the frame path still commits
  * strictly past the deadline.
  */
-internal fun Observation.isWakeFor(type: TimeoutType, wakeId: Long?): Boolean =
-    wakeId != null && wakeId != 0L &&
+internal fun Observation.isWakeFor(type: TimeoutType, wakeId: WakeId?): Boolean =
+    wakeId != null &&
         this is Observation.Timeout &&
         this.type == type &&
-        (payload as? ObservationPayload.GraceWake)?.wakeId == wakeId
+        (payload as? ObservationPayload.GraceWake)?.wakeId == wakeId.value
 
 /**
  * Has a GRACE deadline lapsed as of [obs]? — used by both `pendingDestructive` and
@@ -81,71 +79,9 @@ internal fun Observation.isWakeFor(type: TimeoutType, wakeId: Long?): Boolean =
  * Strictly past for an ordinary observation, or this pending's own wake whenever it arrives. See
  * the file KDoc for why those are the two halves.
  */
-internal fun graceLapsed(deadline: Long, wakeId: Long, obs: Observation, type: TimeoutType): Boolean =
+internal fun graceLapsed(deadline: Long, wakeId: WakeId, obs: Observation, type: TimeoutType): Boolean =
     obs.timestamp > deadline || obs.isWakeFor(type, wakeId)
 
-/**
- * THE way a destructive pending reaches a region (#1054 rounds 5–7) — every create and every
- * tighten in `PlatformRegionStepper` and `TaskLifecycle` goes through here.
- *
- * It answers one question: **is [next] the same logical pending as [prev], merely re-derived?**
- * Only then does it keep the existing identity and accounting. Everything else is a replacement, and
- * a replacement always mints.
- *
- * "Same logical pending" is `prev != null && prev.kind == next.kind && prev.deadline ==
- * next.deadline`. Each conjunct earns its place:
- *
- * - **Non-null and unchanged deadline** — the tighten sites (the dash summary's `minOf` against a
- *   standing offline grace, and #1033's collapsed-vs-expanded receipt `minOf`) re-derive the pending
- *   on every qualifying frame, and most of those frames change nothing. Re-minting there would
- *   cancel and re-arm the timer on every frame.
- * - **Same KIND** (round 7). The receipt caller passes the standing `pendingDestructive` even when
- *   its constructor has just replaced a `SESSION_END` with a brand-new `TASK_RETIRE`, and after a
- *   clock rollback the two can carry the SAME deadline. Round 6 read that as "unchanged" and copied
- *   the session end's generation onto the retire — so the end's old, nearly-elapsed timer matched
- *   the retire and committed it after about 10 ms of its own window, with no replacement arm emitted
- *   because the diff saw an unchanged id. A different kind is a different pending however the
- *   deadlines line up.
- *
- * On a genuine move (or a replacement) it mints a fresh [PendingDestructive.wakeId] — the standing
- * arm would otherwise fire at the old instant, by which time the window it protects has been over
- * for a while — and re-anchors the accounting:
- *
- * - **[PendingDestructive.windowFrom] = the moving observation's timestamp.** That is the moment the
- *   window now being served began. [PendingDestructive.since] cannot serve: it is the historical
- *   moment the destructive signal appeared (#732 stamps the commit at it), and after a wall-clock
- *   rollback a tighten can legitimately land BEHIND it — a grace with `since = 100 000` tightened at
- *   97 000 to deadline 99 500 has a real 2 500 ms window, but measured from `since` the next
- *   recovery computes zero remaining and commits a window that was never served (round 7).
- * - **[PendingDestructive.servedFrom] = null.** That field anchors crash recovery's serve-live
- *   accounting to the instant a restore last began serving the window; a live tighten replaces the
- *   window, so the restore anchor no longer describes it (round 6).
- *
- * [prev] is the pending as it stood; pass null when constructing a replacement, which always mints.
- */
-internal fun PlatformRegion.withWakeIdIfDeadlineMoved(
-    prev: PendingDestructive?,
-    next: PendingDestructive,
-    obs: Observation,
-): PlatformRegion {
-    if (prev != null && prev.kind == next.kind && prev.deadline == next.deadline) {
-        return copy(
-            pendingDestructive = next.copy(
-                wakeId = prev.wakeId,
-                servedFrom = prev.servedFrom,
-                windowFrom = prev.windowFrom,
-            ),
-        )
-    }
-    val (withId, wakeId) = mintWakeId()
-    return withId.copy(
-        pendingDestructive = next.copy(
-            wakeId = wakeId,
-            servedFrom = null,
-            windowFrom = obs.timestamp,
-        ),
-    )
-}
 
 /**
  * Does this `SESSION_PAUSED_SAFETY` fire authoritatively describe [region]'s current pause

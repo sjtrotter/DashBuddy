@@ -8,6 +8,8 @@ import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,11 +32,11 @@ import org.junit.Test
 class GraceExpiryTest {
 
     private val deadline = 20_000L
-    private val wakeId = 7L
+    private val wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 6L).mintWakeId().second
 
     private fun wake(
         type: TimeoutType = TimeoutType.GRACE_COMMIT,
-        armedFor: Long? = wakeId,
+        armedFor: Long? = wakeId.value,
         at: Long = deadline,
         platform: Platform = Platform.DoorDash,
     ) = Observation.Timeout(
@@ -74,8 +76,8 @@ class GraceExpiryTest {
         // The stale-fire case, and the reason this is not "did the stamps coincide": a pending that
         // was re-armed later leaves an old coroutine in flight, and committing on its fire would
         // commit the pending that SUPERSEDED it — a mid-spin figure for the settle gate.
-        assertFalse(wake(armedFor = wakeId - 1).isWakeFor(TimeoutType.GRACE_COMMIT, wakeId))
-        assertFalse(wake(armedFor = wakeId + 1).isWakeFor(TimeoutType.GRACE_COMMIT, wakeId))
+        assertFalse(wake(armedFor = wakeId.value - 1).isWakeFor(TimeoutType.GRACE_COMMIT, wakeId))
+        assertFalse(wake(armedFor = wakeId.value + 1).isWakeFor(TimeoutType.GRACE_COMMIT, wakeId))
     }
 
     @Test
@@ -86,7 +88,7 @@ class GraceExpiryTest {
         // not in the question at all now.
         assertFalse(
             "generation 1's wake is not generation 2's, however the deadlines line up",
-            wake(armedFor = 1L).isWakeFor(TimeoutType.GRACE_COMMIT, 2L),
+            wake(armedFor = 1L).isWakeFor(TimeoutType.GRACE_COMMIT, PlatformRegion(Platform.DoorDash, wakeSeq = 1L).mintWakeId().second),
         )
     }
 
@@ -125,16 +127,11 @@ class GraceExpiryTest {
     }
 
     @Test
-    fun `generation ZERO never matches - a legacy pending is lapsed by its timestamp alone`() {
-        // 0 is the reserved default a pre-round-5 snapshot decodes to. Matching it would let ANY
-        // legacy-shaped fire lapse ANY legacy pending; refusing it leaves exactly the pre-#1054
-        // behaviour those pendings were written under.
-        assertFalse(wake(armedFor = 0L).isWakeFor(TimeoutType.GRACE_COMMIT, 0L))
+    fun `generation ZERO in an old journal payload never matches a minted pending`() {
         assertFalse(wake(armedFor = 0L).isWakeFor(TimeoutType.GRACE_COMMIT, wakeId))
-        assertFalse(wake().isWakeFor(TimeoutType.GRACE_COMMIT, 0L))
         assertTrue(
-            "and it still lapses once the deadline has genuinely passed",
-            graceLapsed(deadline, 0L, frame(deadline + 1L), TimeoutType.GRACE_COMMIT),
+            "ordinary observations still lapse strictly past the deadline",
+            graceLapsed(deadline, wakeId, frame(deadline + 1L), TimeoutType.GRACE_COMMIT),
         )
     }
 
@@ -163,7 +160,7 @@ class GraceExpiryTest {
         assertFalse(
             graceLapsed(
                 deadline, wakeId,
-                wake(armedFor = wakeId - 1, at = deadline - 1L), TimeoutType.GRACE_COMMIT,
+                wake(armedFor = wakeId.value - 1, at = deadline - 1L), TimeoutType.GRACE_COMMIT,
             ),
         )
     }
@@ -175,7 +172,7 @@ class GraceExpiryTest {
         assertTrue(
             graceLapsed(
                 deadline, wakeId,
-                wake(armedFor = wakeId - 1, at = deadline + 1L), TimeoutType.GRACE_COMMIT,
+                wake(armedFor = wakeId.value - 1, at = deadline + 1L), TimeoutType.GRACE_COMMIT,
             ),
         )
     }

@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.domain.state.PendingSessionPay
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -101,7 +102,7 @@ class PostEndHintGraceTest {
                 timestamp = end.deadline,
                 type = TimeoutType.GRACE_COMMIT,
                 targetPlatform = platform,
-                payload = ObservationPayload.GraceWake(end.wakeId),
+                payload = ObservationPayload.GraceWake(end.wakeId.value),
             ) else screen(2_501L)
             val commit = machine.step(arm.newState, observation)
             assertNull(commit.newState.region().session)
@@ -113,7 +114,7 @@ class PostEndHintGraceTest {
             assertNull(cancel.newState.region().pendingModeResume)
             assertNull(cancel.newState.region().session)
             assertNoStart(cancel.effects)
-            val late = machine.step(cancel.newState, wake(pending.deadline, pending.wakeId))
+            val late = machine.step(cancel.newState, wake(pending.deadline, pending.wakeId.value))
             assertNull(late.newState.region().session)
             assertNoStart(late.effects)
         }
@@ -148,13 +149,13 @@ class PostEndHintGraceTest {
             timestamp = end.deadline,
             type = TimeoutType.GRACE_COMMIT,
             targetPlatform = platform,
-            payload = ObservationPayload.GraceWake(end.wakeId),
+            payload = ObservationPayload.GraceWake(end.wakeId.value),
         ))
         assertNull(commit.newState.region().session)
         assertEquals(Mode.Offline, commit.newState.region().mode)
         val arm = machine.step(commit.newState, screen(4_000L))
         val pending = requireNotNull(arm.newState.region().pendingModeResume)
-        val resumed = machine.step(arm.newState, wake(pending.deadline, pending.wakeId))
+        val resumed = machine.step(arm.newState, wake(pending.deadline, pending.wakeId.value))
         assertEquals(t0 + 4_000L, requireNotNull(resumed.newState.region().session).startedAt)
         assertEquals(1, starts(resumed.effects).size)
     }
@@ -176,11 +177,11 @@ class PostEndHintGraceTest {
             timestamp = end.deadline,
             type = TimeoutType.GRACE_COMMIT,
             targetPlatform = platform,
-            payload = ObservationPayload.GraceWake(end.wakeId),
+            payload = ObservationPayload.GraceWake(end.wakeId.value),
         ))
         assertNull(commit.newState.region().session)
         assertEquals(pending, commit.newState.region().pendingModeResume)
-        val start = machine.step(commit.newState, wake(pending.deadline, pending.wakeId))
+        val start = machine.step(commit.newState, wake(pending.deadline, pending.wakeId.value))
         assertEquals(pending.since, requireNotNull(start.newState.region().session).startedAt)
         assertEquals(1, starts(start.effects).size)
     }
@@ -204,9 +205,9 @@ class PostEndHintGraceTest {
         val third = machine.step(second.newState, screen(8_000L))
         val pending = requireNotNull(third.newState.region().pendingModeResume)
         assertEquals(fields, pending.idleFields)
-        assertEquals(first.newState.region().pendingModeResume!!.wakeId, pending.wakeId)
+        assertEquals(first.newState.region().pendingModeResume!!.wakeId.value, pending.wakeId.value)
         assertEquals(third.newState, StateJson.decodeFromString<AppState>(StateJson.encodeToString(third.newState)))
-        val commit = machine.step(third.newState, wake(pending.deadline, pending.wakeId))
+        val commit = machine.step(third.newState, wake(pending.deadline, pending.wakeId.value))
         val region = commit.newState.region()
         assertEquals("B", region.zoneName)
         assertEquals(SessionType.ByTime, region.sessionType)
@@ -224,7 +225,7 @@ class PostEndHintGraceTest {
     fun `wake at fourteen seconds stamps session identity and DASH_START at the six second hint`() {
         val arm = machine.step(ended(at = 0L), screen(6_000L).copy(timestamp = 6_000L))
         val pending = requireNotNull(arm.newState.region().pendingModeResume)
-        val commit = machine.step(arm.newState, wake(14_000L, pending.wakeId))
+        val commit = machine.step(arm.newState, wake(14_000L, pending.wakeId.value))
         val session = requireNotNull(commit.newState.region().session)
         assertEquals("session-${platform.wire}-6000-0", session.sessionId)
         assertEquals(6_000L, session.startedAt)
@@ -243,18 +244,18 @@ class PostEndHintGraceTest {
             val pending = region.pendingModeResume!!
             assertEquals(t0 + 6_000L, pending.since)
             assertEquals(pending.since + GraceConfig.PAUSE_RESUME_GRACE_MS, pending.deadline)
-            assertTrue(pending.wakeId > 0)
+            assertTrue(pending.wakeId.value > 0)
             assertNoStart(arm.effects)
             val timer = arm.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
                 .single { it.type == TimeoutType.MODE_RESUME_COMMIT }
-            assertEquals(ObservationPayload.GraceWake(pending.wakeId), timer.payload)
+            assertEquals(ObservationPayload.GraceWake(pending.wakeId.value), timer.payload)
 
             val cancel = machine.step(arm.newState, screen(11_000L, Flow.Idle, Mode.Offline))
             assertEquals(Mode.Offline, cancel.newState.region().mode)
             assertNull(cancel.newState.region().pendingModeResume)
             assertNull(cancel.newState.region().session)
             assertNoStart(cancel.effects)
-            val lateWake = machine.step(cancel.newState, wake(pending.deadline + 1, pending.wakeId))
+            val lateWake = machine.step(cancel.newState, wake(pending.deadline + 1, pending.wakeId.value))
             assertNull(lateWake.newState.region().session)
             assertNoStart(lateWake.effects)
         }
@@ -272,7 +273,7 @@ class PostEndHintGraceTest {
             assertNull(region.session)
             assertEquals(arm.newState.region().mintCounter, region.mintCounter)
             assertNoStart(cancel.effects)
-            val lateWake = machine.step(cancel.newState, wake(pending.deadline + 2, pending.wakeId))
+            val lateWake = machine.step(cancel.newState, wake(pending.deadline + 2, pending.wakeId.value))
             assertNull(lateWake.newState.region().session)
             assertNoStart(lateWake.effects)
         }
@@ -299,7 +300,7 @@ class PostEndHintGraceTest {
         val paused = machine.step(online, screen(1_000L, Flow.Idle, Mode.Paused)).newState
         // A frozen earnings read exposes an otherwise invisible Paused -> Online -> Offline flap:
         // that intermediate Online transition would rebase it and mint another wake generation.
-        val frozen = PendingSessionPay(value = 12.0, since = t0, deadline = t0 + 2_000L, flow = Flow.Idle)
+        val frozen = PendingSessionPay(value = 12.0, since = t0, deadline = t0 + 2_000L, flow = Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val withRead = paused.copy(regions = paused.regions.copy(platforms = mapOf(
             platform to paused.region().copy(pendingSessionPay = frozen),
         )))
@@ -429,12 +430,12 @@ class PostEndHintGraceTest {
     fun `at the deadline a stale wake is inert and the own wake commits at the first hint instant`() {
         val arm = machine.step(ended(), screen(6_000L))
         val pending = arm.newState.region().pendingModeResume!!
-        val stale = machine.step(arm.newState, wake(pending.deadline, pending.wakeId + 1))
+        val stale = machine.step(arm.newState, wake(pending.deadline, pending.wakeId.value + 1))
         assertEquals(Mode.Offline, stale.newState.region().mode)
         assertEquals(pending, stale.newState.region().pendingModeResume)
         assertNull(stale.newState.region().session)
         assertNoStart(stale.effects)
-        val commit = machine.step(stale.newState, wake(pending.deadline, pending.wakeId))
+        val commit = machine.step(stale.newState, wake(pending.deadline, pending.wakeId.value))
         assertEquals(Mode.Online, commit.newState.region().mode)
         assertEquals(pending.since, commit.newState.region().session!!.startedAt)
         assertNull(commit.newState.region().pendingModeResume)
@@ -447,7 +448,7 @@ class PostEndHintGraceTest {
         val pending = arm.newState.region().pendingModeResume!!
         // CLAUDE.md §3 rule (e): graceLapsed = timestamp > deadline || isWakeFor(type, wakeId).
         // Any observation strictly past the deadline lapses by TIME, including a stale wake.
-        val commit = machine.step(arm.newState, wake(pending.deadline + 1, pending.wakeId + 1))
+        val commit = machine.step(arm.newState, wake(pending.deadline + 1, pending.wakeId.value + 1))
         assertEquals(Mode.Online, commit.newState.region().mode)
         assertEquals(pending.since, commit.newState.region().session!!.startedAt)
         assertNull(commit.newState.region().pendingModeResume)
@@ -462,7 +463,7 @@ class PostEndHintGraceTest {
         assertNull(clean.region().pendingModeResume)
         assertEquals(t0, clean.region().lastSessionEndedAt)
         assertTrue(clean.pendingDeadlineTimers().isEmpty())
-        val lateWake = machine.step(clean, wake(pending.deadline + 1, pending.wakeId))
+        val lateWake = machine.step(clean, wake(pending.deadline + 1, pending.wakeId.value))
         assertNull(lateWake.newState.region().session)
         assertNoStart(lateWake.effects)
         assertNotNull(machine.step(clean, screen(10_000L)).newState.region().pendingModeResume)

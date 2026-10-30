@@ -305,7 +305,7 @@ object SessionReplay {
                     targetPlatform = input.platform,
                     payload = if (input.type == TimeoutType.GRACE_COMMIT) {
                         state.regions.platforms[input.platform]?.pendingDestructive?.let {
-                            ObservationPayload.GraceWake(it.wakeId)
+                            ObservationPayload.GraceWake(it.wakeId.value)
                         }
                     } else null,
                 )

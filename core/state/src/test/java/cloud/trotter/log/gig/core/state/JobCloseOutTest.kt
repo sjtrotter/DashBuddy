@@ -24,6 +24,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -372,6 +373,7 @@ class JobCloseOutTest {
             recentTasks = emptyList(),
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 2_000L, deadline = 3_000L, armedFromFlow = Flow.Idle,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         // GRACE_COMMIT past the deadline → lazy-expiry retire → T1 close.
@@ -390,6 +392,7 @@ class JobCloseOutTest {
             activeTask = active,
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 2_000L, deadline = 3_000L, armedFromFlow = Flow.Idle,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepper.step(region, FlowRegion(flow = Flow.Idle), FlowRegion(flow = Flow.Idle), graceTimeout(3_001L), policy)
@@ -412,6 +415,7 @@ class JobCloseOutTest {
             ),
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 2_000L, deadline = 3_000L, armedFromFlow = Flow.Idle,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepper.step(region, FlowRegion(flow = Flow.Idle), FlowRegion(flow = Flow.Idle), graceTimeout(3_001L), policy)
@@ -431,6 +435,7 @@ class JobCloseOutTest {
             activeTask = drop,
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 2_000L, deadline = 3_000L, armedFromFlow = Flow.OfferPresented,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepper.step(region, FlowRegion(flow = Flow.Idle), FlowRegion(flow = Flow.Idle), graceTimeout(3_001L), policy)
@@ -495,6 +500,7 @@ class JobCloseOutTest {
             ),
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.OfferPresented,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepAccept(region, acceptedOffer("offer-2", OfferScope.ADD_ON), acceptObs(2_000L, "Chipotle"))
@@ -511,6 +517,7 @@ class JobCloseOutTest {
             activeTask = drop,
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.Idle,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepAccept(region, acceptedOffer("offer-1"), acceptObs(2_000L, "Chipotle"))
@@ -543,6 +550,7 @@ class JobCloseOutTest {
             activeTask = finalDrop,
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 1_500L, deadline = 11_500L, armedFromFlow = Flow.OfferPresented,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val r = stepAccept(region, acceptedOffer("offer-2", OfferScope.ADD_ON), acceptObs(2_000L, "Chipotle"))

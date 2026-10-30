@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -213,7 +214,7 @@ class TaskLifecycleGuardTest {
     fun `PostTask arms a short authoritative retire grace - not an immediate completion (#431)`() {
         val r0 = region(
             pickupTask("task-A", "H-E-B", arrivedAt = 800L),
-            pending = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 800L, deadline = 11_000L),
+            pending = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 800L, deadline = 11_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val (r1, _) = step(r0, FlowRegion(flow = Flow.Idle), postTaskObs(timestamp = 1_005L))
 

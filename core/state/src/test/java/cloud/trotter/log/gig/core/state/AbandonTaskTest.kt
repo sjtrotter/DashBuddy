@@ -20,6 +20,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -112,14 +113,14 @@ class AbandonTaskTest {
 
     @Test
     fun `a pending TASK_RETIRE is superseded by the abandon`() {
-        val pend = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 900L, deadline = 3_000L)
+        val pend = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 900L, deadline = 3_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val next = step(region(pickup("pk"), job(listOf(dropoffPlaceholder("dO"))), pending = pend), unassignObs())
         assertNull("TASK_RETIRE cleared", next.pendingDestructive)
     }
 
     @Test
     fun `a pending SESSION_END survives the abandon`() {
-        val pend = PendingDestructive(DestructiveKind.SESSION_END, since = 900L, deadline = 3_000L)
+        val pend = PendingDestructive(DestructiveKind.SESSION_END, since = 900L, deadline = 3_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val next = step(region(pickup("pk"), job(listOf(dropoffPlaceholder("dO"))), pending = pend), unassignObs())
         assertEquals("SESSION_END preserved (the graced-offline state)", DestructiveKind.SESSION_END, next.pendingDestructive?.kind)
     }
@@ -232,7 +233,7 @@ class AbandonTaskTest {
     fun `same-frame supersession - an overdue TASK_RETIRE lapsing on the unassign frame yields to the abandon`() {
         // Fix 3(a): a help-flow retire grace whose deadline lapses exactly as the confirmation frame
         // arrives must NOT commit a completedAt first (the seq-71 fabrication hole) — the abandon wins.
-        val pend = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 900L, deadline = 950L)
+        val pend = PendingDestructive(DestructiveKind.TASK_RETIRE, since = 900L, deadline = 950L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val prevRegion = region(pickup("pk"), job(listOf(dropoffPlaceholder("dO"))), pending = pend)
         val nextRegion = step(prevRegion, unassignObs(ts = 1_000L))
 

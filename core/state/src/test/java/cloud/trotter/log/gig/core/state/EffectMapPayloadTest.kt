@@ -33,6 +33,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -713,7 +714,7 @@ class EffectMapPayloadTest {
             platform = Platform.DoorDash,
             mode = Mode.Offline,
             session = Session("s1", startedAt = 1000L, runningEarnings = 30.0),
-            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L),
+            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))
         val next = appState(platforms = mapOf(Platform.DoorDash to regionNext))
@@ -737,7 +738,7 @@ class EffectMapPayloadTest {
             platform = Platform.DoorDash,
             mode = Mode.Offline,
             session = Session("s1", startedAt = 1000L, runningEarnings = 50.0),
-            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L),
+            pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = 1_000L, deadline = 15_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         )
         val regionNext = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline)
         val prev = appState(platforms = mapOf(Platform.DoorDash to regionPrev))

@@ -82,9 +82,9 @@ data class PlatformRegion(
      * gate exists to reject.
      *
      * Bumped ONLY through [mintWakeId], and persisted with snapshots so identity survives a crash
-     * (a restored pending keeps its id; a re-based one gets a fresh one). Starts at 0, and 0 is
-     * reserved to mean "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot,
-     * which is matched by timestamp alone.
+     * (a restored pending keeps its id; a re-based one gets a fresh one). The counter starts at 0;
+     * minted [WakeId] values are positive. Snapshots with a missing or zero pending id fail decode
+     * and use the existing undecodable-snapshot fallback (#1427).
      */
     val wakeSeq: Long = 0,
     /** Timestamp when Flow entered Idle while mode is Online. Null otherwise. */
@@ -486,7 +486,7 @@ data class PendingSessionPay(
     /** The obs.timestamp of the read that parked it. */
     val since: Long,
     /** Once an observation's timestamp reaches this, the value is committed. */
-    val deadline: Long,
+    override val deadline: Long,
     /**
      * The R0 [Flow] the read was parked under — the surface it was read from.
      *
@@ -559,12 +559,11 @@ data class PendingSessionPay(
      * collide: it is minted fresh wherever a pending is created, replaced, re-based, or has its
      * deadline moved.
      *
-     * `0` means "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot. Such a
-     * pending is never matched by identity and is lapsed only by `obs.timestamp` passing its
-     * deadline, which is exactly the pre-#1054 behaviour it was written under.
+     * The id is minted at installation (#1427). Missing or zero ids fail snapshot decode
+     * and use the existing undecodable-snapshot fallback.
      */
-    val wakeId: Long = 0,
-)
+    override val wakeId: WakeId,
+) : WakeBearing
 
 /**
  * A provisional screen-implied resume out of [Mode.Paused], pending confirmation
@@ -592,12 +591,12 @@ data class PendingModeResume(
     /** The obs.timestamp of the first online frame that armed it. */
     val since: Long,
     /** Once an observation's timestamp passes this, the resume is committed. */
-    val deadline: Long,
+    override val deadline: Long,
     /** Which arm of the `MODE_RESUME_COMMIT` timer belongs to it — see [PlatformRegion.wakeSeq]. */
-    val wakeId: Long = 0,
+    override val wakeId: WakeId,
     /** Latest idle parse deferred by an Offline-origin start; Paused resumes leave this null. */
     val idleFields: ParsedFields.IdleFields? = null,
-)
+) : WakeBearing
 
 /**
  * Draw the next wake generation for this region (#1054 round 5) — the ONE place [PlatformRegion.wakeSeq]
@@ -611,9 +610,9 @@ data class PendingModeResume(
  * Mint a NEW id wherever a pending is CREATED, REPLACED, RE-BASED, or has its deadline MOVED. An
  * otherwise-unchanged pending keeps its id, so its live timer stays valid.
  */
-fun PlatformRegion.mintWakeId(): Pair<PlatformRegion, Long> {
+fun PlatformRegion.mintWakeId(): Pair<PlatformRegion, WakeId> {
     val id = wakeSeq + 1
-    return copy(wakeSeq = id) to id
+    return copy(wakeSeq = id) to WakeId(id)
 }
 
 /**
@@ -626,10 +625,10 @@ fun PlatformRegion.mintWakeId(): Pair<PlatformRegion, Long> {
  */
 @Serializable
 data class PendingWake(
-    val deadline: Long,
+    override val deadline: Long,
     /** Which arm of this pending's wake timer belongs to it — see [PlatformRegion.wakeSeq]. */
-    val wakeId: Long = 0,
-)
+    override val wakeId: WakeId,
+) : WakeBearing
 
 /**
  * A provisional transition toward a less-active state, pending confirmation.
@@ -643,7 +642,7 @@ data class PendingDestructive(
     /** The obs.timestamp that armed it. */
     val since: Long,
     /** Once an observation's timestamp passes this, the transition is committed. */
-    val deadline: Long,
+    override val deadline: Long,
     val reason: String? = null,
     /**
      * Armed by an authoritative-looking signal (the dash-summary screen)
@@ -736,11 +735,10 @@ data class PendingDestructive(
      * collide: it is minted fresh wherever a pending is created, replaced, re-based, or has its
      * deadline moved.
      *
-     * `0` means "legacy, unidentified" — a pending decoded from a pre-round-5 snapshot. Such a
-     * pending is never matched by identity and is lapsed only by `obs.timestamp` passing its
-     * deadline, which is exactly the pre-#1054 behaviour it was written under.
+     * The id is minted at installation (#1427). Missing or zero ids fail snapshot decode
+     * and use the existing undecodable-snapshot fallback.
      */
-    val wakeId: Long = 0,
+    override val wakeId: WakeId,
     /**
      * The wall instant at which this grace last began serving its REMAINING window live after a
      * crash recovery (#1054 round 5); null = never restored.
@@ -777,7 +775,7 @@ data class PendingDestructive(
      * live move, else the arm.
      */
     val windowFrom: Long? = null,
-)
+) : WakeBearing
 
 enum class DestructiveKind {
     /** End the dash/session — online→offline without an authoritative end signal. */

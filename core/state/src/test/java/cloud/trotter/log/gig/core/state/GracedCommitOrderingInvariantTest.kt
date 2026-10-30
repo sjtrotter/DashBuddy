@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -85,7 +86,7 @@ class GracedCommitOrderingInvariantTest {
     private fun armedRegion() = PlatformRegion(
         platform = platform, mode = Mode.Online, session = session,
         activeJob = job(), activeTask = pickupTask(),
-        pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = armedAt, deadline = deadline),
+        pendingDestructive = PendingDestructive(DestructiveKind.SESSION_END, since = armedAt, deadline = deadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
         lastActedFlow = Flow.TaskPickupArrived,
     )
 
