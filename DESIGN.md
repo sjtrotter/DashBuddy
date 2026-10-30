@@ -30,7 +30,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 | Reading time | About 2 seconds per glance | As long as the dasher wants |
 | Code | `feature/bubble` (`hud/*`), hosted by `app/.../ui/bubble` (`BubbleActivity`, `BubbleScreen`) | `app/.../ui/main`, `feature/dashboard`, `feature/settings`, `feature/setup` |
 | Window | An Android bubble over the delivery app, dismissed by a tap. The app asks for 600 dp of height; about 510 dp shows in practice (10-21 screenshots) | Full screen, edge to edge |
-| Structure | A fixed frame (phase strip, head, top row, Profit hero, goal pill, a body, dock) whose body changes by state | Screens on a navigation stack: Home (today), the analytics hub (the past), the Playbook (the next move), Settings |
+| Structure | A fixed frame (phase strip, head, top row, earnings hero, goal pill, a body, dock) whose body changes by state | Screens on a navigation stack: Home (today), the analytics hub (the past), the Playbook (the next move), Settings |
 | Input | Taps on large targets; amounts from a keypad or preset buttons; no typing beyond a short note | Any Material input, including text fields |
 | Mistakes | Save on the commit tap; an undo window where the entry can be taken back | Save as you go with a snackbar Undo; a confirm dialog for a step with lasting effect |
 | Colour | Brand tokens (`AppTheme.colors`) | Material roles (`MaterialTheme.colorScheme`), brand tokens for meaning colours |
@@ -40,7 +40,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 
 ### Bubble rules
 - **The glance budget.** A glance reads one state and one or two numbers. Each state shows one big figure (the
-  Profit hero) and at most one other element that stands out. A label is four words or fewer. The driving digest
+  earnings hero) and at most one other element that stands out. A label is four words or fewer. The driving digest
   puts the useful limit at about 30 characters per glance.
 - **The frame stays put, with three modes.** In the live and off-shift modes the phase strip, head, top row, hero,
   goal pill and dock keep their places and only the body changes; entry sheets rise into the body
@@ -57,11 +57,18 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   notice. A goal change saves at once and is changed back the same way.
 - **Nothing moves by itself** except values that change with time (countdowns, elapsed time), a progress
   indicator while something loads, and the one-time goal-met sequence. No auto-scrolling text.
+- **The headline is what the delivery app says you earned.** The hero shows the shift's earnings as the delivery
+  app reports them, with no label, not changed by tips or costs (dev, 2026-10-30). Cash tips are shown apart from
+  it, either as a small "$X cash" mark beside the hero or as the running cash total on the cash-tip button. The
+  offer is the only bubble figure judged against vehicle costs.
 - **One offer, one story.** The offer card, the offer pop-up, the shift notification's line and the spoken offer
-  name the same figures in the same words.
+  name the same figures in the same words, produced by one owner. Each delivery app shapes what that owner can
+  say (Uber's offers re-quote live and carry different fields), never a second copy of the wording.
 - **Leave for the main app** when the task needs reading, comparing or typing: history beyond the shift log,
   settings, the garage. The bubble opens the app with `openInApp`, which collapses the bubble.
-- **Dark first.** The bubble is designed in the dark theme and checked in the light one.
+- **Both themes, the same sizes.** The bubble and its notifications follow the dasher's theme, light or dark, with
+  the same layout and type sizes in each; a colour that does not hold up in light is changed, and a design that only
+  works in dark is redesigned (dev, 2026-10-30).
 
 ### Main app rules
 - **Material first.** Use the stock Material 3 component for the job (`Scaffold`, `TopAppBar`, `ListItem`,
@@ -120,7 +127,8 @@ rules with their sources; the rules below are the ones that come up most.
 
 Two layers. `AppColors` (`core/designsystem/.../theme/AppColors.kt`) holds the brand tokens, one fixed set for
 dark and one for light. `AppTheme.kt` maps them onto Material's colour roles so stock components render in the
-brand. Dark is the default; the app follows the system setting.
+brand. The app follows the phone's theme; a theme setting (system, light or dark, plus colour options) is planned
+(dev, 2026-10-30).
 
 | Material role | Brand token | Use |
 |---|---|---|
@@ -144,8 +152,8 @@ Rules:
   `surface3`.
 - **Text that carries information uses `text` or `text2`.** `text3` is 4.2:1 on `bg` and 3.4:1 on `surface2` in
   the dark theme, under the 4.5:1 small-text minimum, so it is for disabled states and decorative marks (icon
-  strokes, the drag handle). Small labels use `neutral` (5.2 to 6.4:1) or `text2`. The #1333 bubble design adopted
-  this for labels; the code does not follow it yet.
+  strokes, the drag handle). Small labels use `neutral` (5.2 to 6.4:1) or `text2` (dev, 2026-10-30; first adopted
+  for the bubble in #1333). The code does not follow it yet.
 - The phase strip's colours: waiting `good`, offer `stOffer`, pickup `stPickup`, dropoff `stDropoff`, off shift
   and paused `rest`. The head's "Paused" label is `warn`. Each phase also has a word on screen.
 - The `*Bg` tokens tint chips and badges: the status colours (`good`, `warn`, `bad`, `neutral`) at 14 % alpha in
@@ -156,7 +164,7 @@ Rules:
 - **Words:** Hanken Grotesk through `AppTypography`, on DashBuddy's own scale rather than Material's sizes:
   body 15, 13 and 11 sp; labels 13, 11 and 10 sp; titles 13 to 18 sp.
 - **Numbers:** Space Grotesk with tabular figures through `AppTheme.num.*`, so digits line up and do not jump as
-  they tick. The Profit hero shows dollars at 60 sp and cents at 28 sp, or 30 and 18 sp when compact. State
+  they tick. The hero shows dollars at 60 sp and cents at 28 sp, or 30 and 18 sp when compact. State
   figures are 48 and 56 sp; the other number styles step through 22, 18, 15, 13 and 11 sp.
 - **Driving mode** multiplies the bubble's type by 1.12 (`DRIVING_GLANCE_MULTIPLIER`, #318). The main app never
   scales.
@@ -241,17 +249,22 @@ adds the gap below, and never leaves it worse.
 - #1379, #1383, #1385: the vehicle chip in the bubble head; save as you go with a snackbar Undo; the Garage's
   two-part rows.
 - #1407 (2026-10-29): "shift" replaces "dash" and "Profit" replaces "Kept" in copy; an offer's estimate keeps "net".
+- 2026-10-30 (dev): the bubble's hero is the delivery app's reported earnings, unlabelled, not changed by tips or
+  costs; this replaces #1333's Profit hero and settles #1372. The analytics side includes cash tips and applies
+  vehicle costs as the dasher selects. Labels move off `text3`; confirmations only for lasting effects; one offer
+  story from one owner; a title bar and back button on every screen below Home; every state designed; light and
+  dark both supported at the same sizes, with a theme setting to come.
 
 ## Open questions
 
 - **The bubble declutter.** A 2026-10-21 study proposes thinning the waiting and shift-start states. It waits on
   the developer and lives outside the repo.
-- **The bubble's headline figure.** Profit after vehicle costs (#1407) or earnings after logged spending (#1372,
-  open), and the same figure live and after a shift.
-- **Offer verdict and score.** Whether any surface says Accept or Decline or shows a score.
-- **Force dark** in the bubble and the offer pop-up, or keep following the phone's theme and fix the light colours.
-- **Light theme contrast.** On the light `bg`, small text in `accent` (3.0:1), `warn` (2.7:1), `good` (3.1:1) and
-  `neutral` (4.0:1) falls under 4.5:1.
+- **Where cash tips show in the bubble:** a "$X cash" mark beside the hero, or the running cash total on the
+  cash-tip button.
+- **Offer verdict and score.** Whether any surface says Accept or Decline or shows a score (with the council,
+  2026-10-30).
+- **Light theme colours.** On the light `bg`, small text in `accent` (3.0:1), `warn` (2.7:1), `good` (3.1:1) and
+  `neutral` (4.0:1) falls under 4.5:1; those tokens change, or the surface is redesigned for light.
 - **Dropoff colour.** `stDropoff` is 3.8:1 on `surface2` in the dark theme; fine for the phase strip, too faint for
   small text on a sheet.
 - **`AppSegmented`** follows the segmented button, which current Material no longer recommends: replace it with the
