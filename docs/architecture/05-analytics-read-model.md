@@ -621,9 +621,8 @@ comparing the row (no rewrite, so no `receiptRepricedAt` churn). "Already priced
 question: the stepper cannot know which completions persisted, the projector can just look.
 **The decision is a pure STEPPER transition, not an effect diff** (`decideReceiptReprice`, in
 `updateSessionFields`' PostTask arm): it must update the marker atomically as it decides, which an
-effect diff cannot do — `EffectMap.diffReceiptReprice` only reports the one-step
-`pendingReceiptReprice` handoff (cleared at the top of the next step, so a snapshot-restored value
-can never re-emit). **Ownership is ONE temporal question — "has any acceptance resolved since this
+effect diff cannot do — `EffectMap.diffReceiptReprice` only reports the re-price returned in that
+step's `StepDecisions`. Decisions are never persisted; journal replay rebuilds them (#1423). **Ownership is ONE temporal question — "has any acceptance resolved since this
 receipt appeared?"** (`lastAcceptResolvedAt` vs `receiptSeenAt`, two region facts; the accept anchor
 is stamped at the `OfferLifecycle` accept-latch resolution and survives BOTH the survivor's expiry
 and the mint, since forgetting either is what re-opened the window in review). A receipt carries no

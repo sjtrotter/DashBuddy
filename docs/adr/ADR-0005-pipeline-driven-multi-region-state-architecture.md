@@ -1,5 +1,7 @@
 # ADR-0005: Pipeline-Driven, Multi-Region State Architecture
 
+> **Amendment (2026-10-30, #1423).** §13 rule 3 rewritten; PlatformRegion.pendingReceiptReprice removed.
+
 **Status:** Accepted
 **Date:** 2026-05-01
 **Builds on:** ADR-0001, ADR-0002, ADR-0003, ADR-0004
@@ -1350,9 +1352,12 @@ For **each** Kotlin parser:
 2. **Region steppers don't reference each other.** `FlowRegionStepper` doesn't
    depend on `PlatformRegionStepper` or vice versa. `StateMachine` wires them;
    steppers are independently testable.
-3. **Effects are diffed per-region.** `EffectMap.diff` calls per-region diff
-   functions independently. Adding a new effect for one region doesn't risk
-   regressing others.
+3. **Effects are derived per region from the diff and the step's decisions.** `EffectMap.diff(prev, next, obs, decisions)`
+   calls per-region diff functions independently. Decisions a step makes that its before/after states cannot show (a
+   receipt re-price, the task retired as a delivery) travel in the `StepDecisions` the step returns; they are never
+   written into region state for the diff to find, and never re-derived on the effect side from pre-step fields.
+   `StepDecisions` is not persisted: journal replay re-runs the step and gets the same decisions. Facts a later step reads
+   stay in the region.
 
 ---
 

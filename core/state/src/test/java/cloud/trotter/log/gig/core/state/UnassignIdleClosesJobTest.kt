@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.core.state.model.Transition
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.event.AppEventType
@@ -155,7 +156,7 @@ class UnassignIdleClosesJobTest {
             val again = machine.step(closed.newState, frame(10_400L, Flow.Idle))
             assertOneUnassignPerTask(first.effects + repeated.effects + closed.effects + again.effects)
 
-            val accepted = stepper.consumeAcceptIntoJob(region(again.newState),
+            val accepted = stepper.consumeAcceptIntoJob(DecisionSink(), region(again.newState),
                 frame(11_000L, Flow.TaskPickupNavigation),
                 AcceptInputs("second", AcceptedOfferEconomics(offerHash = "second", acceptedAt = 11_000L),
                     listOf("Store C"), 1))
@@ -347,7 +348,7 @@ class UnassignIdleClosesJobTest {
         val stale = machine.step(resumed.newState, oldWake)
         assertEquals("job", region(stale.newState).activeJob?.jobId)
         assertTrue(unassignedEffects(stale.effects).isEmpty())
-        val accepted = stepper.consumeAcceptIntoJob(region(stale.newState),
+        val accepted = stepper.consumeAcceptIntoJob(DecisionSink(), region(stale.newState),
             frame(11_000L, Flow.TaskPickupNavigation),
             AcceptInputs("addon", AcceptedOfferEconomics(offerHash = "addon", acceptedAt = 11_000L),
                 listOf("Store C"), 1))

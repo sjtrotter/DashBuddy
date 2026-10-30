@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.StepDecisions
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.Platform
@@ -18,7 +20,7 @@ import javax.inject.Singleton
  * 3. **R1 (CrossPlatform)** — derived aggregation
  *
  * Produces a [Transition] containing the new [AppState] and a list of
- * [AppEffect]s derived by diffing the region snapshots.
+ * [AppEffect]s derived from the region snapshots and this step's decisions.
  */
 @Singleton
 class StateMachine @Inject constructor(
@@ -34,7 +36,7 @@ class StateMachine @Inject constructor(
         val nextFlow = flowStepper.step(prev.regions.flow, obs)
 
         // R2+ — per-platform; only the matching platform steps
-        val nextPlatforms = stepPlatforms(
+        val (nextPlatforms, decisions) = stepPlatforms(
             prev.regions.platforms, prev.regions.flow, nextFlow, obs,
         )
 
@@ -49,7 +51,7 @@ class StateMachine @Inject constructor(
             correlationVersion = prev.correlationVersion + 1,
         )
 
-        return Transition(next, effectMap.diff(prev, next, obs))
+        return Transition(next, effectMap.diff(prev, next, obs, decisions), decisions)
     }
 
     private fun stepPlatforms(
@@ -57,7 +59,7 @@ class StateMachine @Inject constructor(
         prevFlow: cloud.trotter.log.gig.domain.state.FlowRegion,
         nextFlow: cloud.trotter.log.gig.domain.state.FlowRegion,
         obs: Observation,
-    ): Map<Platform, PlatformRegion> {
+    ): Pair<Map<Platform, PlatformRegion>, StepDecisions> {
         val platform = obs.platform
         // #438 item 4: an observation whose platform can't be resolved
         // (Platform.Unknown — e.g. an offer Accept/Decline UiInput/Loopback that
@@ -72,9 +74,11 @@ class StateMachine @Inject constructor(
         // fix still decodes fine (Platform is a by-name enum); it is simply DROPPED on
         // the next step here (the `- Platform.Unknown` below runs on every observation,
         // whatever its platform), never fed to a stepper — no recovery crash.
-        if (platform == Platform.Unknown) return prev - Platform.Unknown
+        if (platform == Platform.Unknown) return (prev - Platform.Unknown) to StepDecisions.NONE
         val prevRegion = prev[platform] ?: PlatformRegion(platform)
-        val nextRegion = platformStepper.step(prevRegion, prevFlow, nextFlow, obs, transitionPolicy)
-        return (prev + (platform to nextRegion)) - Platform.Unknown
+        val stepped = platformStepper.stepWithDecisions(prevRegion, prevFlow, nextFlow, obs, transitionPolicy)
+        val decisions = if (stepped.decisions == RegionDecisions.NONE) StepDecisions.NONE
+            else StepDecisions(mapOf(platform to stepped.decisions))
+        return ((prev + (platform to stepped.region)) - Platform.Unknown) to decisions
     }
 }

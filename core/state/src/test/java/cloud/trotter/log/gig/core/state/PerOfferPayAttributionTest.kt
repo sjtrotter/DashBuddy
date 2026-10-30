@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.evaluation.OfferAction
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
@@ -108,6 +109,7 @@ class PerOfferPayAttributionTest {
         stores: List<String>,
         at: Long,
     ): PlatformRegion = stepper.consumeAcceptIntoJob(
+        DecisionSink(),
         region,
         taskObs(at, stores.first()),
         stepper.acceptInputsFromPending(acceptedOffer(hash, pay, stores, at), acceptedAt = at),

@@ -14,7 +14,7 @@ platform (session/task lifecycle + that platform's own offers), and **`CrossPlat
 (derived aggregates). The steppers (`FlowRegionStepper`, `PlatformRegionStepper`,
 `CrossPlatformRegionStepper`) are pure and driven by `obs.timestamp` — never a wall clock — so crash
 recovery can replay observations over the last snapshot. `StateManagerV2` hosts the reduction,
-exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` diffs prev/next state into
+exposes `StateFlow<AppState>`, and owns crash recovery; `EffectMap` turns prev/next state plus the step's non-persisted `StepDecisions` into
 `AppEffect`s.
 
 **The dash running total is settle-gated (#1029).** A parsed running total moves
@@ -359,23 +359,14 @@ retire with seconds still to run — seconds in which a `task:unassigned` frame 
 was honored anyway. A dash ending early is confirmation that the DASH ended, not that the retire
 matured, so `endSession` honors only from `absorbedRetireDeadline` onward and force-stamps before it.
 
-Nothing else needs clearing, because the **stepper MARKS the honored completion** and the emitter
-reads that mark. Round 6 tried to use the stamp's VALUE as provenance — `completedAt ==
-absorbedRetireSince`, on the reasoning that no other writer lands there. It was wrong: when the
-summary frame carries the SAME timestamp as the idle frame that armed the retire, `pend.since ==
-absorbedRetireSince`, and the immature teardown's force-stamp (`completedAt = pend.since`) is
-numerically identical to an honored one — the guard accepted it and minted a $21 row the stepper had
-just refused. A clock rollback collides the same way. **A timestamp is not provenance** (the #1093
-lesson again, where geometry was not identity). So `endSession`'s honored branch sets
-`Task.honoredRetireAt` (`:domain`, additive nullable, legacy → null = refuse) and `mintQualified`'s
-arm (b) for a `SESSION_END` pending requires `task.honoredRetireAt != null` — the stepper's ACTUAL
-decision, stated once and read, never re-derived. Every refusal in the stepper (immature deadline, disown,
-lazy-expiry refusal) turns the mint off with no second predicate to keep in sync; that second
-predicate is exactly what had fallen out of step at the shortcut. `mintingDropoffTasks` is
-deliberately NOT routed through the stamp rule: one of its callers (`decideReceiptReprice`, from
-inside `endSession`) passes the PRE-teardown region, where the drop is still unstamped, and it is a
-DENOMINATOR for apportionment — over-including a drop that is about to mint is the safe direction,
-where `mintQualified` gates an EMISSION.
+The honored branch returns the task id in `StepDecisions`; `mintQualified` consumes that decision
+(#1423). `Task.honoredRetireAt` remains durable history. A timestamp alone cannot distinguish a
+force-stamp from an honored retire: the summary and idle frames may share an instant, or the clock
+may roll back. Every refusal (immaturity, disown, lazy-expiry refusal) leaves the retire decision
+absent, so the effect side needs no second predicate. `mintingDropoffTasks` deliberately keeps its
+pre-step structural evidence: it supplies the apportionment denominator, including when called by
+`decideReceiptReprice` before teardown has recorded its retire decision. That denominator and its
+payloads are unchanged.
 
 The tighten branch keeps an already-absorbed value, and its two halves move TOGETHER — a `since` from
 one retire beside a `deadline` from another would be a floor belonging to neither.
@@ -394,13 +385,10 @@ BOTH the commit frame and — because a `task:unassigned` frame arriving INSIDE 
 through `updateLifecycle`'s `Mode.Offline` early return, where `abandonActiveTask` is unreachable —
 from a site just ahead of that return. It has two inseparable halves: `absorbedRetireSince` is
 cleared (so `endSession` force-stamps and the T3 guard refuses the mint) **and** the active task is
-marked `unassignedAt`. The second half is load-bearing: `EffectMap` judges the mint against the
-PRE-step region, whose pending still carries the absorbed value, so clearing alone is invisible to
-`retirePendingForMint` and the close-out sweep would mint anyway. The marker is answered by firewalls
-that already exist (the close-out `unassignedAt` skip, `isJobPhysicallyComplete`,
-`detectAcceptMismatch` counting the order as accounted) and is the truthful record, which is also
-what lets `TaskEffects` emit the proper `TASK_UNASSIGNED` off it. The dash really did end; the order
-really was abandoned; no money is fabricated.
+marked `unassignedAt`. That marker remains the durable abandonment history read by the close-out
+`unassignedAt` skip, `isJobPhysicallyComplete`, and `detectAcceptMismatch`, and lets `TaskEffects`
+emit `TASK_UNASSIGNED`. The step returns no retired-task decision for this refusal; the effect side
+no longer re-derives it from the pre-step pending (#1423).
 
 **A completion the PostTask exit already minted is recorded PER TASK** (round 4). The exit block
 mints the drop the receipt was about and leaves it ACTIVE — its `completedAt` is stamped only when
@@ -453,13 +441,13 @@ before #1078 — and each is now LOUD through the #1095 tripwire instead of sile
 
 `endSession` then honors it: `completedTask = activeTask.completedInline(honoredAt)` (the one
 spelling of the retire copy, `JobCompleteness.kt`) instead of the unqualified
-`copy(completedAt = timestamp)`. **One owner** answers "does this region carry retire evidence for
-its active task" — `PlatformRegion.retirePendingForMint()` (`DeliveryCompletionEffects.kt`): a live
-`TASK_RETIRE`, or a `SESSION_END` with a non-null `absorbedRetireSince`. Every `mintQualified`
-caller routes through it (the close-out mint + the #996 amendment-B completeness mask,
-`ReceiptRepriceEffects`'s cached-receipt denominator, and the #1095 tripwire's evidence), so the
-predicate cannot drift between sites. **The T3 guard is untouched:** an end with nothing absorbed
-still force-stamps and still mints nothing. The cancel path needs no code — a task-flow frame inside
+`copy(completedAt = timestamp)`. The three retire commit sites return the retired task's id in
+`StepDecisions`; `mintQualified` reads that decision for the close-out mint, completeness mask, and
+tripwire. `PlatformRegion.retirePendingForMint()` still supplies structural retire evidence to
+`mintingDropoffTasks` and `ReceiptRepriceEffects`, preserving the apportionment denominator (#1423).
+Receipt re-prices likewise travel in `StepDecisions`, never in region state; replay rebuilds them.
+**The T3 guard is untouched:** an end with nothing absorbed still force-stamps and mints nothing.
+The cancel path needs no code — a task-flow frame inside
 the window clears `pendingDestructive` outright, and the absorbed value goes with it.
 
 **#1095 — the #810 job-close tripwire sees EVERY close edge.** `JobCloseEffects.diffJobClose` v1

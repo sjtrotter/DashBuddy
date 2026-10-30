@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.state.DestructiveKind
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.PlatformRegion
@@ -231,6 +232,7 @@ internal fun PlatformRegionStepper.reconcileJobTasks(region: PlatformRegion): Pl
  * same-step task processing; the close emitter can recover evicted, already-evidenced pre-step tasks.
  */
 internal fun PlatformRegionStepper.abandonActiveJob(
+    sink: DecisionSink,
     region: PlatformRegion,
     at: Long,
     reason: String,
@@ -271,7 +273,7 @@ internal fun PlatformRegionStepper.abandonActiveJob(
         job.jobId, reason, touched.count { it.unassignedAt != null },
         touched.count { it.staleCloseCompletedAt != null },
     )
-    return completeActiveJob(abandoned, at)
+    return completeActiveJob(sink, abandoned, at)
 }
 
 /**
@@ -306,6 +308,7 @@ internal fun PlatformRegionStepper.abandonActiveJob(
  *    a retro target, is otherwise a no-op.
  */
 internal fun PlatformRegionStepper.abandonActiveTask(
+    sink: DecisionSink,
     region: PlatformRegion,
     timestamp: Long,
     prevFlowVal: Flow,
@@ -426,7 +429,7 @@ internal fun PlatformRegionStepper.abandonActiveTask(
             it.phase == TaskPhase.DROPOFF && it.completedAt == null && it.unassignedAt == null
         }
         if (!hasOutstandingDropoff) {
-            r = completeActiveJob(r, timestamp)
+            r = completeActiveJob(sink, r, timestamp)
         }
     }
     return r

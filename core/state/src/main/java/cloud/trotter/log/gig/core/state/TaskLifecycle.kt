@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.DecisionSink
 import cloud.trotter.log.gig.domain.evaluation.ArrivalCorrection
 import cloud.trotter.log.gig.domain.state.PickupActivity
 import cloud.trotter.log.gig.domain.pipeline.Observation
@@ -28,6 +29,7 @@ import cloud.trotter.log.gig.domain.state.UNKNOWN_STORE
  * family lives in the sibling `TaskLineage.kt`.
  */
 internal fun PlatformRegionStepper.updateTaskLifecycle(
+    sink: DecisionSink,
     region: PlatformRegion,
     prevFlowVal: Flow,
     nextFlowVal: Flow,
@@ -46,7 +48,7 @@ internal fun PlatformRegionStepper.updateTaskLifecycle(
     // the job closes and a later same-order frame mints a NEW jobId the resume lookup can't reach.
     // Documented residual (#736 review), not widened here.
     if (nextFlowVal == Flow.TaskUnassigned) {
-        return abandonActiveTask(region, obs.timestamp, prevFlowVal)
+        return abandonActiveTask(sink, region, obs.timestamp, prevFlowVal)
     }
 
     // Task flow → create or update active task
