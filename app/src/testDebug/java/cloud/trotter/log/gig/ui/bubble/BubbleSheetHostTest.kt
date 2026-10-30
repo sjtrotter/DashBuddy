@@ -280,6 +280,37 @@ class BubbleSheetHostTest {
         }
     }
 
+    @Test fun `a stale completion already cached when the host subscribes is acknowledged once and closes nothing`() {
+        // Sol r1 (#1425): the replay case a restored activity meets, a completion waiting in the cache BEFORE the host's
+        // collector exists, for an entry that is no longer the open one.
+        val completions = MutableSharedFlow<Long>(replay = 1)
+        check(completions.tryEmit(1L))
+        var open = true
+        var handled = 0
+        var dismissed = 0
+        val port = object : SheetPort {
+            override val key = EntrySheet.ODOMETER
+            override val open get() = open
+            override val entryId = 2L
+            override val completed = completions
+            override fun completionHandled() { handled++; completions.resetReplayCache() }
+            override fun show() { open = true }
+            override fun dismiss() { dismissed++; open = false }
+            override fun back() { open = false }
+        }
+        compose.setContent { host = rememberBubbleSheetHost(listOf(SheetSlot(port) {})) }
+        settle()
+        compose.runOnIdle { host.show(EntrySheet.ODOMETER) }
+        settle()
+        compose.runOnIdle {
+            assertEquals(1, handled)
+            assertTrue(completions.replayCache.isEmpty())
+            assertTrue(open)
+            // show() dismisses only OTHER ports, so the odometer itself was never dismissed by the stale id.
+            assertEquals(0, dismissed)
+        }
+    }
+
     @Test fun `restoration retains the selected goal and repeated goal launches keep its entry`() {
         val restoration = StateRestorationTester(compose)
         val vm: BubbleViewModel = mock()
