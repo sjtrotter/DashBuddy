@@ -111,7 +111,7 @@ rules with their sources; the rules below are the ones that come up most.
 - **Brand fonts** instead of Roboto: Hanken Grotesk for words, Space Grotesk with tabular figures for numbers.
 - **A separate number scale** for the bubble (`AppTheme.num.*`), larger than Material's type scale, because the
   hero must read at a glance.
-- **The bubble's sheets have no scrim,** unlike a Material bottom sheet, so the live figures stay visible behind
+- **The bubble's sheets have no scrim,** unlike a modal Material bottom sheet, so the live figures stay visible behind
   them. A full sheet keeps the bottom sheet's 28 dp top corners and drag handle.
 - **The shift notification behind the bubble uses MessagingStyle** (`BubbleManager`), because Android shows a
   bubble only for a conversation notification.
