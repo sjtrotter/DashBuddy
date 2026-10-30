@@ -161,18 +161,8 @@ data class NodeRef(
             // foreign, or whose owner walk would reach/cross a foreign node, yields NO hints and is
             // never complete (no 2b) — the executor would never read or tap there anyway.
             val none = BindHints(emptyList(), complete = false, ownerClassHint = null, refused = true)
-            if (bound.foreignPackage) return none
-            var owner: cloud.trotter.log.gig.domain.model.accessibility.UiNode = bound
-            var steps = 0
-            // N4: self + (MAX_OWNER_WALK - 1) parents — exactly what the live resolveActionOwner inspects.
-            while (!owner.takesClick && steps < MAX_OWNER_WALK - 1) {
-                val parent = owner.parent ?: break
-                if (parent.foreignPackage) return none
-                owner = parent
-                steps++
-            }
             // S5: no owner → refused; skip the scan and hashing the caller would discard.
-            val found = owner.takeIf { it.takesClick } ?: return none
+            val found = actionOwner(bound, UiOwnerShape) ?: return none
             val scan = hintLabelsOf(found)
             val distinct = scan.labels.asSequence().mapNotNull(::hintHash).distinct().toList()
             // P7: truncation is RECORDED here, where it is known — a set cut at MAX_LABEL_HINTS is not

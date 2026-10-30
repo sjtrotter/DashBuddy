@@ -111,10 +111,12 @@ class UiInteractionHandler @Inject constructor(
     ): Boolean {
         Timber.tag("Effects").i("UiInteractionHandler: attempting verified click (%s)", description)
 
-        if (expectedPackage.isNullOrEmpty()) {
+        if (decide(TapGateInput.Package(present = !expectedPackage.isNullOrEmpty())) is TapGateDecision.Abort) {
             Timber.tag("Effects").w("No package scope for %s — refusing to click (fail closed)", description)
             return false
         }
+        // The package gate established non-nullness; the pure decision cannot carry a Kotlin smart cast.
+        val scopedPackage = expectedPackage!!
         // #602: a notification-action tap can land here ~tens of ms after the
         // tap, while a SystemUI takeover (shade/lock) still owns the
         // foreground — the platform window reappears roughly 0.5-1s later
@@ -133,18 +135,18 @@ class UiInteractionHandler @Inject constructor(
             val live = accessibilitySource.getLiveWindowRoots()
             activeRoot = live.active
             unreadableWindows = live.unreadableWindows
-            live.roots.filter { it.packageName?.toString() == expectedPackage }
+            live.roots.filter { it.packageName?.toString() == scopedPackage }
         }
-        val roots = if (allowRetry) awaitLiveRoots(expectedPackage, source = rootsSource) else rootsSource()
-        if (roots.isEmpty()) {
+        val roots = if (allowRetry) awaitLiveRoots(scopedPackage, source = rootsSource) else rootsSource()
+        if (decide(TapGateInput.Roots(count = roots.size)) is TapGateDecision.Abort) {
             // R10: AUTOMATION makes ONE read — only a user tap retried (#602).
             if (allowRetry) {
                 Timber.tag("Effects").w(
                     "No live windows for package %s after %d retries over %dms — cannot click (%s)",
-                    expectedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
+                    scopedPackage, RETRY_DELAYS_MS.size, RETRY_DELAYS_MS.sum(), description,
                 )
             } else {
-                Timber.tag("Effects").w("No live windows for package %s (single read) — cannot click (%s)", expectedPackage, description)
+                Timber.tag("Effects").w("No live windows for package %s (single read) — cannot click (%s)", scopedPackage, description)
             }
             return false
         }
@@ -154,21 +156,27 @@ class UiInteractionHandler @Inject constructor(
         // = windowId+sourceNodeId) IS the active window. When the active window belongs to another
         // package (e.g. the dasher's bubble holds focus), it was package-filtered out of `roots`, so it
         // matches nothing and scoping no-ops (we fall through to all windows, as before).
-        val search = findCandidates(roots, activeRoot, ref, expectedPackage, unreadableWindows)
-        if (search.oversizedQuery > 0) {
+        val search = findCandidates(roots, activeRoot, ref, scopedPackage, unreadableWindows)
+        val searchGate = decide(TapGateInput.Search(
+            oversizedQuery = search.oversizedQuery,
+            activeBoundsCut = search.activeBoundsCut,
+            inconclusiveHits = search.inconclusiveHits,
+            candidates = search.candidates.size,
+        ))
+        if (searchGate == TapGateDecision.Abort(TapAbortReason.OVERSIZED)) {
             Timber.tag("Effects").w(
                 "An id/text query for %s returned %d matches (cap %d) — refusing to click (fail closed, #1149)",
                 description, search.oversizedQuery, NodeRef.MAX_QUERY_CANDIDATES,
             )
             return false
         }
-        if (search.activeBoundsCut) {
+        if (searchGate == TapGateDecision.Abort(TapAbortReason.ACTIVE_CUT)) {
             Timber.tag("Effects").w(
                 "Bounds walk of the active window for %s was cut by the tree budget — aborting to manual (#1149)", description,
             )
             return false
         }
-        if (search.inconclusiveHits > 0) {
+        if (searchGate == TapGateDecision.Abort(TapAbortReason.INCONCLUSIVE)) {
             // #1149 review L1 (decideSemanticOutcome): 2b found hit(s) but a window of the deciding set
             // could not be read completely — a hidden twin is possible, and the bounds walk must not
             // guess past it (#1102 review constraint 2).
@@ -176,7 +184,7 @@ class UiInteractionHandler @Inject constructor(
             return false
         }
         val candidates = search.candidates
-        if (candidates.isEmpty()) {
+        if (searchGate == TapGateDecision.Abort(TapAbortReason.NO_CANDIDATES)) {
             // Principle 7: `ref.text` is third-party UI text — DEBUG only, never the exportable WARN slice.
             Timber.tag("Effects").w(
                 "Could not find any live node for: %s (id=%s, bounds=%s, hints=%d)",
@@ -190,18 +198,23 @@ class UiInteractionHandler @Inject constructor(
         // and dedupe candidates that lead to the same owner (a button's title TextView and the
         // button are ONE control, not a #734 tie). Everything below verifies, scopes, ranks and
         // clicks OWNERS; verification never runs on one node and the click on another.
-        val owned = resolveOwners(candidates, ref, expectedPackage)
+        val owned = resolveOwners(candidates, ref, scopedPackage)
         if (owned.orphaned > 0) {
             Timber.tag("Effects").w(
                 "%d of %d candidate(s) for %s have no clickable, fresh owner in the package within %d steps (%d stale) — dropped (#1149)",
                 owned.orphaned, candidates.size, description, AccNodeUtils.MAX_OWNER_WALK, owned.stale,
             )
         }
-        if (owned.staleSemantic > 0) {
+        val ownersGate = decide(TapGateInput.Owners(
+            staleSemantic = owned.staleSemantic,
+            stale = owned.stale,
+            targets = owned.targets.size,
+        ))
+        if (ownersGate == TapGateDecision.Abort(TapAbortReason.STALE_SEMANTIC)) {
             warnInconclusive(description, candidates.count { it.semantic })
             return false
         }
-        if (owned.stale > 0 && owned.targets.size + owned.stale >= 2) {
+        if (ownersGate == TapGateDecision.Abort(TapAbortReason.STALE_OWNERS)) {
             // #1149 review R6: a stale owner among several targets is not "absent" — dropping it would
             // also un-scope #788 and hand the tap to another window's twin. Abort.
             Timber.tag("Effects").w(
@@ -210,7 +223,7 @@ class UiInteractionHandler @Inject constructor(
             )
             return false
         }
-        if (owned.targets.isEmpty()) return false
+        if (ownersGate == TapGateDecision.Abort(TapAbortReason.NO_OWNERS)) return false
 
         // Label-verify once, on the OWNER's bounded subtree, and keep each surviving owner's labels
         // alongside it — the ranker below wants them too (for WARN diagnostics). For a 2b hit this
@@ -228,8 +241,8 @@ class UiInteractionHandler @Inject constructor(
             val separateEvidence = target.evidence != target.owner
             if (separateEvidence && (
                     !target.evidenceFresh || // T5 refreshed it while choosing it — once, not twice
-                        target.evidence.packageName?.toString() != expectedPackage ||
-                        AccNodeUtils.resolveActionOwner(target.evidence, expectedPackage) != target.owner
+                        target.evidence.packageName?.toString() != scopedPackage ||
+                        AccNodeUtils.resolveActionOwner(target.evidence, scopedPackage) != target.owner
                     )
             ) { staleEvidence++; return@mapNotNull null }
             // #1149 review U3: a bounds-derived target's geometric credit was earned BEFORE the owner's
@@ -237,7 +250,7 @@ class UiInteractionHandler @Inject constructor(
             // (hint-less / exact hit) or the same IoU tier (relaxed hit); a refresh that rebound the node
             // to another control drops it as stale (the R6/S1 multi-target abort then applies).
             if (target.boundsDerived && !stillAtCapturedGeometry(target, ref)) { staleEvidence++; return@mapNotNull null }
-            val scan = scanLabels(target.owner, expectedPackage)
+            val scan = scanLabels(target.owner, scopedPackage)
             // #1149 review I8: the MATCHED node's own (refreshed, in-package — J1) text/contentDescription
             // always count — the owner may sit more than NodeRef.LABEL_SCAN_DEPTH levels (or NodeRef.LABEL_SCAN_NODES
             // fetches) above it, and a viewId/text match that verified pre-#1149 must not fail for that.
@@ -250,7 +263,7 @@ class UiInteractionHandler @Inject constructor(
             // verifies. Expectation verification only — the semantic fingerprint stays OWNER-scoped.
             // Z1: the union over EVERY fresh member (each bounded by the shared horizon; a group is a handful
             // of nodes), so evidence selection affects only the ranker's text/bounds facts, never verification.
-            val evidenceLabels = target.freshMembers.flatMap { scanLabels(it, expectedPackage).labels }.distinct()
+            val evidenceLabels = target.freshMembers.flatMap { scanLabels(it, scopedPackage).labels }.distinct()
             val labels = scan.labels + evidenceLabels.filterNot { it in scan.labels }
             // #1093: a bounds-derived candidate — exact rect or overlap — needs the bind's own
             // subtree labels among its live ones; that, not geometry, separates the slid receipt
@@ -274,12 +287,18 @@ class UiInteractionHandler @Inject constructor(
             if (!expectation.matchesLabels(labels)) return@mapNotNull null
             target to labels
         }
-        if (semanticUnprovable > 0) {
+        val verificationGate = decide(TapGateInput.Verification(
+            semanticUnprovable = semanticUnprovable,
+            staleEvidence = staleEvidence,
+            targets = owned.targets.size,
+            verified = labeledCandidates.size,
+        ))
+        if (verificationGate == TapGateDecision.Abort(TapAbortReason.UNPROVABLE)) {
             // J6 under L1: an unprovable 2b hit in the deciding set is |H| >= 1 ∧ I.
             warnInconclusive(description, owned.targets.count { it.semantic })
             return false
         }
-        if (staleEvidence > 0 && owned.targets.size >= 2) {
+        if (verificationGate == TapGateDecision.Abort(TapAbortReason.STALE_EVIDENCE)) {
             // #1149 review R6: the id/text arms too — the active sheet's stale title must not hand the
             // tap to the lower window's twin (#788). A lone stale target simply isn't clicked (below).
             Timber.tag("Effects").w(
@@ -294,7 +313,7 @@ class UiInteractionHandler @Inject constructor(
                 staleEvidence, description,
             )
         }
-        if (labeledCandidates.isEmpty()) {
+        if (verificationGate == TapGateDecision.Abort(TapAbortReason.UNVERIFIED)) {
             Timber.tag("Effects").w(
                 "%d candidate(s) for %s but NONE passed verification (label %s; %d bounds-derived candidate(s) did not carry the bind's labels) — refusing to click",
                 owned.targets.size, description, expectation.labelPattern, geometryRejected,
@@ -310,7 +329,11 @@ class UiInteractionHandler @Inject constructor(
         // window) keep them all. Genuine SAME-window ambiguity still fails closed
         // below.
         val activeWindowCandidates = labeledCandidates.filter { it.first.inActiveWindow }
-        if (activeWindowCandidates.isEmpty() && search.cutBoundsWindows > 0) {
+        val windowGate = decide(TapGateInput.Window(
+            activeVerified = activeWindowCandidates.size,
+            cutBoundsWindows = search.cutBoundsWindows,
+        ))
+        if (windowGate is TapGateDecision.Abort) {
             // #1149 review T1 — S2 extended: with no verified active-window candidate the deciding set is
             // every scoped window (#788 keep-all, e.g. our bubble is active), so ANY cut window could hold
             // the intended control past its cut while another window's twin sits at the captured rect.
@@ -344,7 +367,12 @@ class UiInteractionHandler @Inject constructor(
         // the semantic (2b) walk, whose hits record their nesting the same way.
         val retainedIndices = scopedCandidates.map { it.first.index }.toHashSet()
         val nested = scopedCandidates.firstOrNull { (t, _) -> t.ancestors.any { it in retainedIndices } }
-        if (nested != null) {
+        val retainedGate = decide(TapGateInput.Retained(
+            nested = nested != null,
+            count = scopedCandidates.size,
+            anySemantic = scopedCandidates.any { it.first.semantic },
+        ))
+        if (retainedGate == TapGateDecision.Abort(TapAbortReason.NESTED)) {
             Timber.tag("Effects").w(
                 "Nested verified candidates for %s (a control inside another that also carries the bind's labels) — aborting to manual (#1093)",
                 description,
@@ -357,7 +385,7 @@ class UiInteractionHandler @Inject constructor(
         // pick between them by the captured rect — the very evidence 2b exists to distrust — and no
         // stored-text tie-break exists (the round-5 one was removed: the bound text is part of what makes
         // them twins). Survivors from different background windows abort the same way.
-        if (scopedCandidates.size > 1 && scopedCandidates.any { it.first.semantic }) {
+        if (retainedGate == TapGateDecision.Abort(TapAbortReason.TWINS)) {
             Timber.tag("Effects").w(
                 "%d semantic twins for %s share the bind's fingerprint — aborting to manual (#1149)",
                 scopedCandidates.size, description,
@@ -382,8 +410,12 @@ class UiInteractionHandler @Inject constructor(
         }
         val ranked = ClickCandidateRanker.rank(ref, facts)
         val target = verified[ranked.index]
+        val rankGate = decide(TapGateInput.Rank(
+            unresolved = ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED,
+            count = verified.size,
+        ))
         when {
-            ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1 -> {
+            rankGate is TapGateDecision.Abort -> {
                 // #734: an ambiguous target must NOT be clicked. Picking the
                 // first-in-tree candidate is luck, not verification, and breaks
                 // #425's fail-closed promise (a wrong click on a decline/accept
@@ -406,7 +438,7 @@ class UiInteractionHandler @Inject constructor(
                 description, ranked.tier, verified.size,
             )
         }
-        return AccNodeUtils.clickNodeStrict(target.owner, expectedPackage)
+        return AccNodeUtils.clickNodeStrict(target.owner, scopedPackage)
     }
 
     /**

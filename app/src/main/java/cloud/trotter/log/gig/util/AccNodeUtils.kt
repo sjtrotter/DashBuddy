@@ -2,7 +2,17 @@ package cloud.trotter.log.gig.util
 
 import android.view.accessibility.AccessibilityNodeInfo
 import cloud.trotter.log.gig.core.pipeline.accessibility.mapper.takesClick
+import cloud.trotter.log.gig.domain.pipeline.OwnerShape
+import cloud.trotter.log.gig.domain.pipeline.actionOwner
 import timber.log.Timber
+
+internal class LiveOwnerShape(private val expectedPackage: String) : OwnerShape<AccessibilityNodeInfo> {
+    override fun parent(n: AccessibilityNodeInfo): AccessibilityNodeInfo? = n.parent
+    override fun foreign(n: AccessibilityNodeInfo): Boolean = n.packageName?.toString() != expectedPackage
+    override fun takesClick(n: AccessibilityNodeInfo): Boolean = n.takesClick()
+    // Live parent reads can return fresh objects for the same window/source node.
+    override fun same(a: AccessibilityNodeInfo, b: AccessibilityNodeInfo): Boolean = a == b
+}
 
 /**
  * A utility object for performing actions on AccessibilityNodeInfo objects.
@@ -32,18 +42,7 @@ object AccNodeUtils {
      * never lend itself to a same-package owner above it.
      */
     fun resolveActionOwner(node: AccessibilityNodeInfo?, expectedPackage: String): AccessibilityNodeInfo? {
-        var current = node
-        val visited = ArrayList<AccessibilityNodeInfo>(4)
-        var steps = 0
-        while (current != null && steps < MAX_OWNER_WALK) {
-            if (current.packageName?.toString() != expectedPackage) return null
-            if (visited.any { it == current }) return null
-            if (current.takesClick()) return current
-            visited.add(current)
-            current = current.parent
-            steps++
-        }
-        return null
+        return actionOwner(node, LiveOwnerShape(expectedPackage))
     }
 
     /**
