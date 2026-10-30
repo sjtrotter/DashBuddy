@@ -73,6 +73,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
 - [#1407 the rewritten copy reads right on a shift](checklist/open/1407-plain-copy-reads-right-on-a-shift.md)
+- [#1411 the renamed app, gig.log debug, carries on where DashBuddy left off](checklist/open/1411-renamed-app-gig-log-debug.md)
 - [#1002 short "Tip Update" push recognized](checklist/open/1002-short-tip-update-push-recognized.md)
 - [#1222 offer_accepting stays off a live offer card](checklist/open/1222-offer-accepting-stays-off-a-live-offer-card.md)
 - [#1291 shop-order arrival bubble only when the count changed](checklist/open/1291-shop-order-arrival-bubble-only-when-the-count.md)
