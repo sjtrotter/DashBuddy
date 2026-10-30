@@ -828,6 +828,7 @@ Every new feature or refactor holds to these — they are forefront design input
    and point both at it; when a value can be computed from an owned anchor, compute it —
    don't store it twice.
 User-facing copy follows `docs/design/copy-style.md` (label not sentence beside a number, one disclosure per screen, plain repeated nouns, no adverbs/marketing).
+Screen design follows `DESIGN.md` (repo root): the bubble's glance rules versus the main app's, how the app uses Material 3 and where it departs, the colour-role map, and the settled and open design decisions.
 
 6. **Security & privacy first.** The non-negotiable Pledges above (on-device computation,
    sensitive screens blocked at the matcher layer, opt-in network, edge PII scrub) are design
