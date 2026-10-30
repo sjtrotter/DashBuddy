@@ -154,7 +154,7 @@ S2d: the log (`LogMapper` over the pure `JobGrouper` (one card per job, an accep
 `formatters/*`,
 `cards/*`, and `session/*` (the pure `BubbleSessionResolver` — follow-active + manual switcher / pinned / merged —
 plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`,
-`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`; a sheet host such as S2f's `OdometerHud`, a remembered `@Stable` object with composable slot members, collects its own sheet-local state, the shape S3's sheets copy), `BubbleManager` and
+`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`; a sheet host such as S2f's `OdometerHud`, a remembered `@Stable` object with composable slot members, collects its own sheet-local state, the shape S3's sheets copy; since #1425 all four sheets register with one `BubbleSheetHost`, which owns exclusive open, Back delegation, the newest-undo band and completion routing: a save closes a sheet only while it is still open with the same `entryId`), `BubbleManager` and
 `BubbleViewModel` (`sessionNet`, `dailyGoal`, `todayProfit`) stay in `:app`, which consumes the moved renderers
 as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytics/*`) is a separate
 sibling surface, left for a future extraction.
@@ -618,10 +618,10 @@ capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). H
 `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (the only path that ever clicks a third-party app, #425; #1149: resolves the clickable
 OWNER first — `isClickable` OR advertised `ACTION_CLICK`, one predicate with bind time's `UiNode.takesClick`,
-bounded walk — refreshes owner AND matched evidence BEFORE verifying, never lets a container borrow a clickable
+bounded walk, one generic `actionOwner` walk shared by bind and fire since #1424 — refreshes owner AND matched evidence BEFORE verifying, never lets a container borrow a clickable
 descendant's labels (one bind/fire label-horizon rule, `LabelHorizon`, in `:domain`), and re-finds a bind whose ref carries a
 PROVABLE exact fingerprint (`NodeRef.hasExactFingerprint`; bind side = the bound node's action OWNER's region,
-package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. One
+package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. Its go/abort ladder is the pure `TapAbortPolicy` (#1424). One
 outcome rule (`decideSemanticOutcome`) over the deciding set — the active platform window when it has a hit,
 else every window (#788), roots and active root from ONE enumeration: no hit → strategy 3; hit(s) with an
 incomplete deciding window or an unprovable hit → abort; twins → abort; a refused bind (foreign / no owner)
