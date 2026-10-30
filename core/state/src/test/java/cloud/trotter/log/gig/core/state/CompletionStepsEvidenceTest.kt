@@ -131,7 +131,7 @@ class CompletionStepsEvidenceTest {
             }
             val result = reducer.step(before, Observation.Timeout(
                 timestamp = pending.deadline + 1L, type = TimeoutType.GRACE_COMMIT,
-                targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId),
+                targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId.value),
             ))
             val after = result.newState.regions.platforms.getValue(Platform.DoorDash)
             val retired = after.recentTasks.single { it.taskId == drop.taskId }
@@ -239,7 +239,7 @@ class CompletionStepsEvidenceTest {
         val pending = requireNotNull(state.regions.platforms.getValue(Platform.DoorDash).pendingDestructive)
         return machine.step(state, Observation.Timeout(
             timestamp = pending.deadline + 1L, type = TimeoutType.GRACE_COMMIT,
-            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId),
+            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId.value),
         ))
     }
 

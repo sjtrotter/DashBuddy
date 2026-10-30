@@ -32,6 +32,7 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -55,7 +56,7 @@ class StepDecisionsTest {
     )
     private val retire = PendingDestructive(
         DestructiveKind.TASK_RETIRE, since = 1_000L, deadline = 11_000L,
-        armedFromFlow = Flow.Idle, wakeId = 1L,
+        armedFromFlow = Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second,
     )
     private val receipt = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 12.0)), customerTips = emptyList())
 
@@ -80,7 +81,7 @@ class StepDecisionsTest {
 
     private fun wake(pending: PendingDestructive) = Observation.Timeout(
         timestamp = pending.deadline, type = TimeoutType.GRACE_COMMIT, targetPlatform = platform,
-        payload = ObservationPayload.GraceWake(pending.wakeId),
+        payload = ObservationPayload.GraceWake(pending.wakeId.value),
     )
 
     private fun Transition.region() = newState.regions.platforms.getValue(platform)
@@ -100,7 +101,7 @@ class StepDecisionsTest {
         pendingDestructive = PendingDestructive(
             DestructiveKind.SESSION_END, since = 2_000L, deadline = 11_000L,
             authoritative = true, absorbedRetireSince = retire.since,
-            absorbedRetireDeadline = retire.deadline, wakeId = 2L,
+            absorbedRetireDeadline = retire.deadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second,
         ),
     )
 

@@ -35,6 +35,7 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import cloud.trotter.log.gig.test.util.SessionReplay
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -204,17 +205,17 @@ class NotificationNeutralityTest {
             session = Session(sessionId = "session", startedAt = NOW - 60_000),
             lastActedFlow = Flow.Idle,
         )
-        val paused = online.copy(mode = Mode.Paused, pauseSafety = PendingWake(NOW + 60_000, wakeId = 1))
+        val paused = online.copy(mode = Mode.Paused, pauseSafety = PendingWake(NOW + 60_000, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1) - 1L).mintWakeId().second))
         val task = Task(taskId = "task", jobId = "job", phase = TaskPhase.DROPOFF, startedAt = NOW - 30_000)
         // All deadlines are live: lazy expiry of an already-due grace is legitimate on ANY input.
         val pending = paused.copy(
-            pendingModeResume = PendingModeResume(NOW - 1_000, NOW + 7_000, wakeId = 2),
+            pendingModeResume = PendingModeResume(NOW - 1_000, NOW + 7_000, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (2) - 1L).mintWakeId().second),
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE,
                 since = NOW - 1_000,
                 deadline = NOW + 9_000,
                 armedFromFlow = Flow.Idle,
-                wakeId = 3,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (3) - 1L).mintWakeId().second,
             ),
             activeTask = task,
             activeJob = Job(

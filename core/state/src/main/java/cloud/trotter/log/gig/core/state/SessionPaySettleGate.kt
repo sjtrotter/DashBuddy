@@ -10,7 +10,6 @@ import cloud.trotter.log.gig.domain.state.PendingSessionPay
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Session
-import cloud.trotter.log.gig.domain.state.mintWakeId
 import timber.log.Timber
 
 /** Owns session-pay reads, direct writes, and parked-read lifecycle (CLAUDE.md §3). */
@@ -152,9 +151,9 @@ internal object SessionPaySettleGate {
         if (previousMode != Mode.Online && r.mode == Mode.Online && r.pendingSessionPay != null) {
             // #1054 round 5: a re-based park is a NEW window, so it takes a new identity — the
             // pre-pause arm must not be able to land on it.
-            val (withId, wakeId) = r.mintWakeId()
-            r = withId.copy(
-                pendingSessionPay = r.pendingSessionPay?.copy(
+            val frozen = requireNotNull(r.pendingSessionPay)
+            val (withId, rebased) = r.sessionPayWindow { wakeId ->
+                frozen.copy(
                     since = now,
                     deadline = now + policy.sessionPaySettleMs(r.platform),
                     wakeId = wakeId,
@@ -168,8 +167,9 @@ internal object SessionPaySettleGate {
                     // clears the flag (settleSessionPay); the expiry DROPS it otherwise. See
                     // [PendingSessionPay.unconfirmed].
                     unconfirmed = true,
-                ),
-            )
+                )
+            }
+            r = withId.copy(pendingSessionPay = rebased)
         }
 
         return r
@@ -378,16 +378,16 @@ internal object SessionPaySettleGate {
                 // deadline alone would not separate them — after a clock step-back the replacement
                 // computes the identical `now + settleWindow`, and the superseded arm then
                 // committed it after essentially no time in its own window.
-                val (withId, wakeId) = region.mintWakeId()
-                withId.copy(
-                    pendingSessionPay = PendingSessionPay(
+                val (withId, parked) = region.sessionPayWindow { wakeId ->
+                    PendingSessionPay(
                         value = pay,
                         since = now,
                         deadline = now + policy.sessionPaySettleMs(region.platform),
                         flow = flow,
                         wakeId = wakeId,
-                    ),
-                )
+                    )
+                }
+                withId.copy(pendingSessionPay = parked)
             }
         }
     }

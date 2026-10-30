@@ -22,6 +22,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -135,7 +136,7 @@ class StateManagerV2RecoveryRearmTest {
                     pendingDestructive = destructive,
                     pendingModeResume = modeResume,
                     pendingSessionPay = park,
-                    pauseSafety = safety?.let { PendingWake(it, SAFETY_WAKE) },
+                    pauseSafety = safety?.let { PendingWake(it, PlatformRegion(Platform.DoorDash, wakeSeq = (SAFETY_WAKE) - 1L).mintWakeId().second) },
                 ),
             ),
         ),
@@ -148,6 +149,7 @@ class StateManagerV2RecoveryRearmTest {
         since = armedAt,
         deadline = deadline,
         armedFromFlow = Flow.Idle,
+        wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
     )
 
     /** A journalled non-flow timeout of an UNRELATED type: replays without moving any deadline. */
@@ -309,7 +311,7 @@ class StateManagerV2RecoveryRearmTest {
             deadline in (before + graceWindow)..(after + graceWindow),
         )
         val installedId = manager.state.value.regions.platforms[Platform.DoorDash]
-            ?.pendingDestructive?.wakeId
+            ?.pendingDestructive?.wakeId?.value
         assertEquals(
             "the arm carries the generation the re-base minted, so its fire is recognised",
             ObservationPayload.GraceWake(installedId!!),
@@ -579,7 +581,7 @@ class StateManagerV2RecoveryRearmTest {
                 val engine = RecordingEngine()
                 val manager = newManager(
                     snapshot = snapshotState(
-                        modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline),
+                        modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
                         mode = Mode.Paused,
                         session = session,
                     ),
@@ -616,7 +618,7 @@ class StateManagerV2RecoveryRearmTest {
         val engine = RecordingEngine()
         val manager = newManager(
             snapshot = snapshotState(
-                modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline),
+                modeResume = PendingModeResume(since = 11_000L, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
                 mode = Mode.Paused,
             ),
             engine = engine,
@@ -655,7 +657,7 @@ class StateManagerV2RecoveryRearmTest {
         val manager = newManager(
             snapshot = snapshotState(
                 destructive = sessionEnd(),
-                park = PendingSessionPay(470.00, 12_000L, 15_000L, Flow.Idle),
+                park = PendingSessionPay(470.00, 12_000L, 15_000L, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
             ),
             engine = engine,
             dispatcher = dispatcher,
@@ -808,7 +810,7 @@ class StateManagerV2RecoveryRearmTest {
             platform = Platform.DoorDash,
             mode = Mode.Paused,
             session = Session("s1", startedAt = 100L),
-            pauseSafety = PendingWake(30_000L, SAFETY_WAKE),
+            pauseSafety = PendingWake(30_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (SAFETY_WAKE) - 1L).mintWakeId().second),
         )
         val flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash)
 
@@ -823,7 +825,7 @@ class StateManagerV2RecoveryRearmTest {
         )
 
         assertEquals("the armed pause is untouched", Mode.Paused, after.mode)
-        assertEquals(SAFETY_WAKE, after.pauseSafety?.wakeId)
+        assertEquals(SAFETY_WAKE, after.pauseSafety?.wakeId?.value)
     }
 
     // =====================================================================

@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -68,7 +69,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a park appearing arms the settle timer for exactly its remaining window`() {
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val armed = diff(region(), region(pending = park))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -79,8 +80,8 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a replaced park re-arms on the new generation`() {
-        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle, Flow.Idle, wakeId = 1L)
-        val new = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 2L)
+        val old = PendingSessionPay(470.00, t0 - 200L, t0 - 200L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second)
+        val new = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second)
         val armed = diff(region(pending = old), region(pending = new))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -95,8 +96,8 @@ class SessionPaySettleTimerEffectTest {
         // superseded coroutine stayed live to commit the replacement. Two successive parks really
         // can share a deadline: after a clock step-back the replacement computes the identical
         // `now + settleWindow`.
-        val old = PendingSessionPay(20.00, t0, t0 + settle, Flow.Idle, wakeId = 1L)
-        val new = PendingSessionPay(30.00, t0, t0 + settle, Flow.Idle, wakeId = 2L)
+        val old = PendingSessionPay(20.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second)
+        val new = PendingSessionPay(30.00, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second)
         val armed = diff(region(pending = old), region(pending = new))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -106,7 +107,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `the same park re-observed does not re-arm - the window is never extended`() {
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle, wakeId = 1L)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second)
         val effects = diff(region(pending = park), region(pending = park))
 
         assertTrue(
@@ -118,7 +119,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `a cleared park cancels the settle timer`() {
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val cancelled = diff(region(pending = park), region())
             .filterIsInstance<AppEffect.CancelTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -137,7 +138,7 @@ class SessionPaySettleTimerEffectTest {
         // this test pins the COMMIT (Astra: the old shape fed identical states to `EffectMap` and
         // proved only that no re-arm was emitted — it never showed the park landing). So drive the
         // real machine and read the money.
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 9L)
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (9L) - 1L).mintWakeId().second)
         val machine = StateMachine(
             FlowRegionStepper(), PlatformRegionStepper(),
             CrossPlatformRegionStepper(), TransitionPolicy(), EffectMap(),
@@ -179,7 +180,7 @@ class SessionPaySettleTimerEffectTest {
         // The two halves of #1054, both on one effect: the `GraceWake` payload is what the expiry
         // matches on (so a superseded fire is inert), and `deadlineMs` is what the engine waits on
         // (so a tail-REPLAYED arm lands on time rather than a full window late).
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = 4L)
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (4L) - 1L).mintWakeId().second)
         val armed = diff(region(), region(pending = park))
             .filterIsInstance<AppEffect.ScheduleTimeout>()
             .single { it.type == TimeoutType.SESSION_PAY_SETTLE }
@@ -190,7 +191,7 @@ class SessionPaySettleTimerEffectTest {
 
     @Test
     fun `an unrelated timer's fire does not re-arm the settle timer`() {
-        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle)
+        val park = PendingSessionPay(16.70, t0, t0 + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
         val wake = Observation.Timeout(
             timestamp = t0 + 100L,
             type = TimeoutType.GRACE_COMMIT,
@@ -213,9 +214,10 @@ class SessionPaySettleTimerEffectTest {
             kind = DestructiveKind.TASK_RETIRE,
             since = t0 - 1_000L,
             deadline = t0 + 60_000L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
-        val modeResume = PendingModeResume(since = t0 - 1_000L, deadline = t0 + 60_000L)
-        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle)
+        val modeResume = PendingModeResume(since = t0 - 1_000L, deadline = t0 + 60_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
+        val park = PendingSessionPay(16.70, t0 - 500L, t0 - 500L + settle, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
 
         val effects = diff(
             region(pending = park, destructive = destructive, modeResume = modeResume),

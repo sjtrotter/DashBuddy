@@ -27,6 +27,9 @@ import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
 import cloud.trotter.log.gig.domain.state.TimelineTaskEntry
+import cloud.trotter.log.gig.domain.state.PendingSessionPay
+import cloud.trotter.log.gig.domain.state.PendingWake
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -177,8 +180,9 @@ class SerializationRoundTripTest {
                         ),
                         pendingDestructive = PendingDestructive(
                             DestructiveKind.TASK_RETIRE, since = 800L, deadline = 1_000L,
+                            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
                         ),
-                        pendingModeResume = PendingModeResume(since = 700L, deadline = 8_700L),
+                        pendingModeResume = PendingModeResume(since = 700L, deadline = 8_700L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second),
                         ratings = RatingsSnapshot(customerRating = 4.97, capturedAt = 900L),
                         lastPostTaskFields = ParsedFields.PostTaskFields(totalPay = 9.75),
                         mintCounter = 3L,
@@ -208,10 +212,10 @@ class SerializationRoundTripTest {
     }
 
     @Test
-    fun `a SESSION_END carrying an absorbed retire round-trips, and a pre-1078 pending decodes to null`() {
+    fun `a SESSION_END carrying an absorbed retire round-trips, and missing absorption defaults to null`() {
         // #1078: `absorbedRetireSince` is additive, nullable and defaulted, so it must survive a
-        // snapshot round-trip AND a snapshot written before it existed must decode to null (the
-        // pre-#1078 teardown), never fail the restore.
+        // snapshot round-trip. A pending with a valid wake id but missing absorption fields
+        // still defaults those fields to null; missing wake ids now fail decode (#1427).
         val honored = PendingDestructive(
             kind = DestructiveKind.SESSION_END,
             since = 1_000L,
@@ -219,7 +223,7 @@ class SerializationRoundTripTest {
             authoritative = true,
             absorbedRetireSince = 900L,
             absorbedRetireDeadline = 10_900L,
-            wakeId = 7L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (7L) - 1L).mintWakeId().second,
             windowFrom = 1_000L,
         )
         val decoded = StateJson.decodeFromString<PendingDestructive>(StateJson.encodeToString(honored))
@@ -231,11 +235,37 @@ class SerializationRoundTripTest {
         )
 
         val legacy = StateJson.decodeFromString<PendingDestructive>(
-            """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true}""",
+            """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true,"wakeId":7}""",
         )
         assertEquals(null, legacy.absorbedRetireSince)
         assertEquals("a pre-round-5 snapshot carries no floor", null, legacy.absorbedRetireDeadline)
         assertEquals(DestructiveKind.SESSION_END, legacy.kind)
+    }
+
+    @Test
+    fun `current pending JSON stays byte-identical and requires a positive wake id`() {
+        assertWakeJson<PendingSessionPay>(
+            """{"value":16.7,"since":1000,"deadline":4000,"flow":"Idle","unconfirmed":false,"wakeId":7}""",
+        )
+        assertWakeJson<PendingModeResume>(
+            """{"since":1000,"deadline":9000,"wakeId":7,"idleFields":null}""",
+        )
+        assertWakeJson<PendingWake>("""{"deadline":9000,"wakeId":7}""")
+        assertWakeJson<PendingDestructive>(
+            """{"kind":"SESSION_END","since":1000,"deadline":3500,"reason":null,"authoritative":true,"armedFromFlow":null,"endFields":null,"absorbedRetireSince":900,"absorbedRetireDeadline":3400,"wakeId":7,"servedFrom":null,"windowFrom":1000}""",
+        )
+    }
+
+    private inline fun <reified T> assertWakeJson(current: String) {
+        assertEquals(current, StateJson.encodeToString(StateJson.decodeFromString<T>(current)))
+        for (invalid in listOf(
+            current.replace(",\"wakeId\":7", ""),
+            current.replace("\"wakeId\":7", "\"wakeId\":0"),
+        )) {
+            assertTrue("Invalid wake id must fail decode: $invalid", runCatching {
+                StateJson.decodeFromString<T>(invalid)
+            }.isFailure)
+        }
     }
 
     @Test

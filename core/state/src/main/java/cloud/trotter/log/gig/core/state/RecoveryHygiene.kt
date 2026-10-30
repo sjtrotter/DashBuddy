@@ -3,8 +3,8 @@ package cloud.trotter.log.gig.core.state
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.PendingWake
-import cloud.trotter.log.gig.domain.state.mintWakeId
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.wake
 
 /**
  * Crash-recovery hygiene on a restored [AppState] (#1029, widened by #1054) — pure, total, and
@@ -157,15 +157,13 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
                 // `absorbedRetireSince` is deliberately NOT shifted: it is a historical domain
                 // instant (#732 stamps the honored completion at it), not a window boundary.
                 val shift = rebasedDeadline - pend.deadline
-                val (withId, wakeId) = scrubbed.mintWakeId()
-                withId.copy(
-                    pendingDestructive = pend.copy(
+                scrubbed.withWakeIdIfDeadlineMoved(pend, WindowStart.Restored(nowMs)) { wakeId ->
+                    pend.copy(
                         deadline = rebasedDeadline,
                         absorbedRetireDeadline = pend.absorbedRetireDeadline?.plus(shift),
-                        servedFrom = nowMs,
                         wakeId = wakeId,
-                    ),
-                )
+                    )
+                }
             },
         ),
     )
@@ -222,7 +220,7 @@ internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
                     PendingDeadline(
                         TimeoutType.GRACE_COMMIT,
                         region.platform,
-                        PendingWake(it.deadline, it.wakeId),
+                        it.wake,
                     ),
                 )
             }

@@ -111,8 +111,8 @@ REPLACED pending is inert. A new id is minted wherever a pending is created, rep
 has its deadline MOVED — `withWakeIdIfDeadlineMoved` is the one installer for a destructive pending
 and preserves an identity only for the SAME logical pending (same kind AND unchanged deadline; a
 kind change is a replacement, and after a clock rollback a fresh `TASK_RETIRE` really can land on a
-standing `SESSION_END`'s deadline, whose nearly-elapsed timer then committed it after ~10 ms); id `0` is the reserved "legacy, unidentified" value a pre-round-5 snapshot
-decodes to and never matches, so such a pending is lapsed by its timestamp alone. **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
+standing `SESSION_END`'s deadline, whose nearly-elapsed timer then committed it after ~10 ms); an id is a `WakeId` minted at install through `WakeInstall.kt`. Snapshots without a positive id
+are discarded on decode through the existing ERROR-logged fallback (#1427). **A FRAME lapses a grace strictly PAST the deadline and the park at-or-past**, so a
 contradicting frame stamped exactly on a grace's deadline still reaches its own cancel arm (a paused
 frame cancels a resume #605, a task frame cancels a misrecognized `SESSION_END` #431; on the resume
 the alternative also MINTED a session whose Online→Paused follow-up left `diffMode` with no edge, a

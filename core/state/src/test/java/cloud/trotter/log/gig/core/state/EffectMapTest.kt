@@ -39,6 +39,7 @@ import cloud.trotter.log.gig.domain.state.PickupActivity
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -728,7 +729,7 @@ class EffectMapTest {
             platforms = mapOf(
                 platform to onlineRegion.copy(
                     mode = Mode.Paused,
-                    pauseSafety = PendingWake(301_000L, 1L),
+                    pauseSafety = PendingWake(301_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second),
                 ),
             ),
         ))
@@ -754,7 +755,7 @@ class EffectMapTest {
         // that on every exit from Paused), so the hand-built pair carries the field.
         val pausedRegion = PlatformRegion(
             platform, mode = Mode.Paused, session = Session("sess-1", startedAt = 100L),
-            pauseSafety = PendingWake(301_000L, 1L),
+            pauseSafety = PendingWake(301_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second),
         )
         val prev = AppState(regions = Regions(
             platforms = mapOf(platform to pausedRegion),
@@ -1553,6 +1554,7 @@ class EffectMapTest {
         val active = Task(taskId = "task-9", jobId = "job-1", phase = TaskPhase.DROPOFF, storeName = "Chipotle", customerNameHash = "cust-9", startedAt = 900L)
         val pend = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         val prev = AppState(regions = Regions(
             flow = FlowRegion(flow = Flow.PostTask),
@@ -1594,6 +1596,7 @@ class EffectMapTest {
             activeTask = active,
             pendingDestructive = PendingDestructive(
                 kind = DestructiveKind.TASK_RETIRE, since = 950L, deadline = 3_450L, authoritative = true,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
             lastAnnouncedPostTaskTaskId = announced,
         )

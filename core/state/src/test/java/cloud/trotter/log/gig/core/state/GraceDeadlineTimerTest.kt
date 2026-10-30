@@ -24,6 +24,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -132,7 +133,7 @@ class GraceDeadlineTimerTest {
         since = offlineAt,
         deadline = deadline,
         armedFromFlow = Flow.Idle,
-        wakeId = endWake,
+        wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (endWake) - 1L).mintWakeId().second,
     )
 
     // =====================================================================
@@ -167,11 +168,11 @@ class GraceDeadlineTimerTest {
             .newState.dd()
         val pend = armed.pendingDestructive!!
         assertEquals("the retire really was armed by the receipt", DestructiveKind.TASK_RETIRE, pend.kind)
-        assertTrue("and the production path minted it a usable generation", pend.wakeId > 0L)
+        assertTrue("and the production path minted it a usable generation", pend.wakeId.value > 0L)
 
         val transition = machine.step(
             state(armed, Flow.PostTask),
-            wake(TimeoutType.GRACE_COMMIT, pend.deadline, pend.wakeId),
+            wake(TimeoutType.GRACE_COMMIT, pend.deadline, pend.wakeId.value),
         )
         val dd = transition.newState.dd()
 
@@ -200,10 +201,10 @@ class GraceDeadlineTimerTest {
         val tightened = transition.newState.dd().pendingDestructive!!
 
         assertEquals("tightened to the expanded receipt's 2.5 s", 13_500L, tightened.deadline)
-        assertNotEquals("a moved deadline is a new pending to its timer", collapsed.wakeId, tightened.wakeId)
+        assertNotEquals("a moved deadline is a new pending to its timer", collapsed.wakeId.value, tightened.wakeId.value)
 
         val rearm = transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single()
-        assertEquals(ObservationPayload.GraceWake(tightened.wakeId), rearm.payload)
+        assertEquals(ObservationPayload.GraceWake(tightened.wakeId.value), rearm.payload)
         assertEquals(13_500L, rearm.deadlineMs)
     }
 
@@ -211,10 +212,10 @@ class GraceDeadlineTimerTest {
     fun `the tightened retire commits on its OWN wake, and the superseded one is inert`() {
         val armed = machine.step(state(retiringRegion(), Flow.TaskDropoffArrived), collapsedReceipt(10_000L))
             .newState.dd()
-        val staleId = armed.pendingDestructive!!.wakeId
+        val staleId = armed.pendingDestructive!!.wakeId.value
         val tightenedRegion = machine.step(state(armed, Flow.PostTask), expandedReceipt(11_000L))
             .newState.dd()
-        val liveId = tightenedRegion.pendingDestructive!!.wakeId
+        val liveId = tightenedRegion.pendingDestructive!!.wakeId.value
 
         val stale = machine.step(
             state(tightenedRegion, Flow.PostTask),
@@ -237,7 +238,7 @@ class GraceDeadlineTimerTest {
         val pend = armed.pendingDestructive!!
 
         assertEquals(DestructiveKind.TASK_RETIRE, pend.kind)
-        assertTrue("never the legacy 0", pend.wakeId > 0L)
+        assertTrue("never the legacy 0", pend.wakeId.value > 0L)
     }
 
     @Test
@@ -271,17 +272,17 @@ class GraceDeadlineTimerTest {
 
         assertEquals("the receipt replaced the end with a retire", DestructiveKind.TASK_RETIRE, retire.kind)
         assertEquals("at the very same deadline", end.deadline, retire.deadline)
-        assertNotEquals("but never with the end's generation", end.wakeId, retire.wakeId)
+        assertNotEquals("but never with the end's generation", end.wakeId.value, retire.wakeId.value)
         assertEquals(
             "and a replacement arm is emitted for it",
-            ObservationPayload.GraceWake(retire.wakeId),
+            ObservationPayload.GraceWake(retire.wakeId.value),
             transition.effects.scheduled(TimeoutType.GRACE_COMMIT).single().payload,
         )
 
         // The end's own old fire is now inert against the retire that replaced it.
         val stale = machine.step(
             state(transition.newState.dd(), Flow.PostTask),
-            wake(TimeoutType.GRACE_COMMIT, at = end.deadline - 2_490L, armedFor = end.wakeId),
+            wake(TimeoutType.GRACE_COMMIT, at = end.deadline - 2_490L, armedFor = end.wakeId.value),
         ).newState.dd()
         assertNotNull("the retire survives its predecessor's timer", stale.activeTask)
     }
@@ -369,7 +370,7 @@ class GraceDeadlineTimerTest {
         // nothing — which is what round 1 needed a "re-arm, never commit" rule to approximate and
         // round 3 needed an equality carve-out to approximate. Now it simply is not this pending's
         // wake.
-        val replaced = sessionEnd(deadline = 30_000L).copy(wakeId = endWake + 1)
+        val replaced = sessionEnd(deadline = 30_000L).copy(wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (endWake + 1) - 1L).mintWakeId().second)
 
         val transition = machine.step(
             state(region(destructive = replaced)),
@@ -409,7 +410,7 @@ class GraceDeadlineTimerTest {
     fun `a graced resume commits on a MODE_RESUME_COMMIT fire landing exactly on the deadline`() {
         val region = region(
             mode = Mode.Paused,
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = resumeWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
         )
 
         val transition = machine.step(state(region), wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline, resumeWake))
@@ -428,7 +429,7 @@ class GraceDeadlineTimerTest {
     fun `a MODE_RESUME_COMMIT fire one millisecond early still commits the resume`() {
         val region = region(
             mode = Mode.Paused,
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = resumeWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
         )
 
         val dd = machine.step(
@@ -444,7 +445,7 @@ class GraceDeadlineTimerTest {
     fun `a MODE_RESUME_COMMIT fire for a REPLACED resume is inert`() {
         val region = region(
             mode = Mode.Paused,
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline + 5_000L, wakeId = resumeWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline + 5_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
         )
 
         val dd = machine.step(
@@ -559,7 +560,7 @@ class GraceDeadlineTimerTest {
 
         // ...while the timer's own fire at that same instant commits, which is the whole point of
         // the asymmetry. The generation comes from the state the machine actually minted.
-        val armedWake = s.dd().pendingDestructive!!.wakeId
+        val armedWake = s.dd().pendingDestructive!!.wakeId.value
         val committed = machine.step(s, wake(TimeoutType.GRACE_COMMIT, deadline, armedWake))
             .newState.dd()
         assertNull("a GRACE_COMMIT at the deadline still ends the dash", committed.session)
@@ -612,8 +613,8 @@ class GraceDeadlineTimerTest {
         // the fire carries the SAFETY deadline, so it is not the resume's wake.
         val region = region(
             mode = Mode.Paused,
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = resumeWake),
-            pauseSafety = PendingWake(resumeDeadline, safetyWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
+            pauseSafety = PendingWake(resumeDeadline, PlatformRegion(Platform.DoorDash, wakeSeq = (safetyWake) - 1L).mintWakeId().second),
         )
 
         val after = machine.step(state(region), wake(TimeoutType.SESSION_PAUSED_SAFETY, resumeDeadline, safetyWake))
@@ -637,8 +638,8 @@ class GraceDeadlineTimerTest {
     fun `the resume's OWN fire at that same instant still commits`() {
         val region = region(
             mode = Mode.Paused,
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = resumeWake),
-            pauseSafety = PendingWake(resumeDeadline, safetyWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
+            pauseSafety = PendingWake(resumeDeadline, PlatformRegion(Platform.DoorDash, wakeSeq = (safetyWake) - 1L).mintWakeId().second),
         )
 
         val after = machine.step(state(region), wake(TimeoutType.MODE_RESUME_COMMIT, resumeDeadline, resumeWake))
@@ -652,7 +653,7 @@ class GraceDeadlineTimerTest {
     fun `a STALE safety fire from a previous pause does not end the current one`() {
         // #1054 round 4, the other half of identity-gating `handleTimeout`. The deadline is state
         // now, so a re-pause arms a new one while an old coroutine may still be in flight.
-        val region = region(mode = Mode.Paused, pauseSafety = PendingWake(50_000L, safetyWake))
+        val region = region(mode = Mode.Paused, pauseSafety = PendingWake(50_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (safetyWake) - 1L).mintWakeId().second))
 
         val after = machine.step(
             state(region),
@@ -676,7 +677,7 @@ class GraceDeadlineTimerTest {
         val region = region(
             mode = Mode.Paused,
             destructive = sessionEnd(),
-            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = resumeWake),
+            modeResume = PendingModeResume(since = resumeArmedAt, deadline = resumeDeadline, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (resumeWake) - 1L).mintWakeId().second),
         )
 
         val transition = machine.step(state(region), wake(TimeoutType.GRACE_COMMIT, endDeadline, endWake))

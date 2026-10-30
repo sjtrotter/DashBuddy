@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PendingWake
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.wake
 import timber.log.Timber
 
 /**
@@ -258,8 +259,8 @@ internal fun EffectMap.diffGraceTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prev = prev.pendingDestructive?.let { PendingWake(it.deadline, it.wakeId) },
-    next = next.pendingDestructive?.let { PendingWake(it.deadline, it.wakeId) },
+    prev = prev.pendingDestructive?.wake,
+    next = next.pendingDestructive?.wake,
     type = TimeoutType.GRACE_COMMIT,
     platform = next.platform,
     obs = obs,
@@ -308,7 +309,7 @@ internal fun EffectMap.diffDeadlineTimer(
             durationMs = (wake.deadline - obs.timestamp).coerceAtLeast(1L),
             type = type,
             platform = platform,
-            payload = ObservationPayload.GraceWake(wake.wakeId),
+            payload = ObservationPayload.GraceWake(wake.wakeId.value),
             deadlineMs = wake.deadline,
         ),
     )
@@ -350,8 +351,8 @@ internal fun EffectMap.diffModeResumeTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prev = prev.pendingModeResume?.let { PendingWake(it.deadline, it.wakeId) },
-    next = next.pendingModeResume?.let { PendingWake(it.deadline, it.wakeId) },
+    prev = prev.pendingModeResume?.wake,
+    next = next.pendingModeResume?.wake,
     type = TimeoutType.MODE_RESUME_COMMIT,
     platform = next.platform,
     obs = obs,
@@ -378,8 +379,8 @@ internal fun EffectMap.diffSessionPaySettleTimer(
     next: PlatformRegion,
     obs: Observation,
 ): List<AppEffect> = diffDeadlineTimer(
-    prev = prev.pendingSessionPay?.let { PendingWake(it.deadline, it.wakeId) },
-    next = next.pendingSessionPay?.let { PendingWake(it.deadline, it.wakeId) },
+    prev = prev.pendingSessionPay?.wake,
+    next = next.pendingSessionPay?.wake,
     type = TimeoutType.SESSION_PAY_SETTLE,
     platform = next.platform,
     obs = obs,

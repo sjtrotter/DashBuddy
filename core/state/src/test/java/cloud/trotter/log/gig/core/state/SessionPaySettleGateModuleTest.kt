@@ -12,6 +12,7 @@ import cloud.trotter.log.gig.domain.state.PendingSessionPay
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -47,7 +48,7 @@ class SessionPaySettleGateModuleTest {
         since = since,
         deadline = since + policy.sessionPaySettleMs(Platform.DoorDash),
         flow = Flow.Idle,
-        wakeId = 7L,
+        wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (7L) - 1L).mintWakeId().second,
     )
 
     private fun idleScreen(timestamp: Long) = Observation.Screen(

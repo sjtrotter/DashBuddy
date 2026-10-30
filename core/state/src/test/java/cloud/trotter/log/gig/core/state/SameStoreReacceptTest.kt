@@ -156,7 +156,7 @@ class SameStoreReacceptTest {
         val pending = requireNotNull(region(idle).pendingDestructive)
         val retired = machine.step(idle, Observation.Timeout(
             timestamp = pending.deadline + 1L, type = TimeoutType.GRACE_COMMIT,
-            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId),
+            targetPlatform = Platform.DoorDash, payload = ObservationPayload.GraceWake(pending.wakeId.value),
         )).newState
         assertNull(region(retired).activeTask)
         assertNull(region(retired).recentTasks.single { it.taskId == pickup.taskId }.confirmedAt)

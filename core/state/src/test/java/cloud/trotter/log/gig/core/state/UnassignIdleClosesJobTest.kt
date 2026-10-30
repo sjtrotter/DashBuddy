@@ -27,6 +27,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -83,7 +84,7 @@ class UnassignIdleClosesJobTest {
 
     private fun wake(state: AppState, at: Long = region(state).pendingDestructive!!.deadline) =
         Observation.Timeout(timestamp = at, type = TimeoutType.GRACE_COMMIT, targetPlatform = platform,
-            payload = ObservationPayload.GraceWake(region(state).pendingDestructive!!.wakeId))
+            payload = ObservationPayload.GraceWake(region(state).pendingDestructive!!.wakeId.value))
 
     private fun armAndCommit(state: AppState): Transition {
         val armed = machine.step(state, frame(5_300L, Flow.Idle))
@@ -136,14 +137,16 @@ class UnassignIdleClosesJobTest {
             assertEquals(5_300L, pending.since)
             assertEquals(5_300L, pending.windowFrom)
             assertEquals(5_300L + GraceConfig.JOB_ABANDON_GRACE_MS, pending.deadline)
-            assertTrue(pending.wakeId > 0L)
+            assertTrue(pending.wakeId.value > 0L)
+            // #1427: the job-abandon installer mints at this step (the region's newest generation).
+            assertEquals(region(armed.newState).wakeSeq, pending.wakeId.value)
             assertEquals("job", region(armed.newState).activeJob?.jobId)
             assertTrue(unassignedEffects(armed.effects).isEmpty())
             val timer = armed.effects.filterIsInstance<AppEffect.ScheduleTimeout>()
                 .single { it.type == TimeoutType.GRACE_COMMIT }
             assertEquals(pending.deadline, timer.deadlineMs)
             assertEquals(GraceConfig.JOB_ABANDON_GRACE_MS, timer.durationMs)
-            assertEquals(ObservationPayload.GraceWake(pending.wakeId), timer.payload)
+            assertEquals(ObservationPayload.GraceWake(pending.wakeId.value), timer.payload)
             val closed = machine.step(armed.newState, wake(armed.newState))
             assertNull(region(closed.newState).pendingDestructive)
             assertAbandoned(closed.newState, 5_300L)
@@ -425,7 +428,7 @@ class UnassignIdleClosesJobTest {
         val first = unassign().newState
         for (kind in DestructiveKind.entries) {
             val pending = PendingDestructive(kind, since = 200L, deadline = 20_000L,
-                authoritative = true, wakeId = 1L, windowFrom = 200L)
+                authoritative = true, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second, windowFrom = 200L)
             val starting = first.copy(regions = first.regions.copy(platforms = mapOf(
                 platform to region(first).copy(pendingDestructive = pending, wakeSeq = 1L),
             )))
@@ -442,7 +445,7 @@ class UnassignIdleClosesJobTest {
         val correct = wake(armed.newState, 5_000L)
         val deadline = region(armed.newState).pendingDestructive!!.deadline
         val stale = machine.step(armed.newState, correct.copy(timestamp = deadline + 1L,
-            payload = ObservationPayload.GraceWake(region(armed.newState).pendingDestructive!!.wakeId + 1L)))
+            payload = ObservationPayload.GraceWake(region(armed.newState).pendingDestructive!!.wakeId.value + 1L)))
         assertEquals(region(armed.newState).pendingDestructive, region(stale.newState).pendingDestructive)
         assertTrue(unassignedEffects(stale.effects).isEmpty())
         val closed = machine.step(stale.newState, correct)
@@ -463,16 +466,16 @@ class UnassignIdleClosesJobTest {
         assertEquals(original.windowFrom, pending.windowFrom)
         assertEquals(100_000L, pending.servedFrom)
         assertEquals(103_000L, pending.deadline)
-        assertTrue(pending.wakeId != original.wakeId)
+        assertTrue(pending.wakeId.value != original.wakeId.value)
         val timer = restored.pendingDeadlineTimers().single()
         assertEquals(TimeoutType.GRACE_COMMIT, timer.type)
         assertEquals(platform, timer.platform)
         assertEquals(pending.deadline, timer.wake.deadline)
-        assertEquals(pending.wakeId, timer.wake.wakeId)
+        assertEquals(pending.wakeId.value, timer.wake.wakeId.value)
         val stale = machine.step(restored, wake(observed.newState, 100_001L))
         assertEquals(pending, region(stale.newState).pendingDestructive)
         val fire = Observation.Timeout(timestamp = timer.wake.deadline, type = timer.type,
-            targetPlatform = timer.platform, payload = ObservationPayload.GraceWake(timer.wake.wakeId))
+            targetPlatform = timer.platform, payload = ObservationPayload.GraceWake(timer.wake.wakeId.value))
         val closed = machine.step(stale.newState, fire)
         assertAbandoned(closed.newState, original.since)
         assertNull(region(closed.newState).pendingDestructive)

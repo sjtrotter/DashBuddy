@@ -390,7 +390,7 @@ class StateManagerV2 @Inject constructor(
                     durationMs = 1L,
                     type = pending.type,
                     platform = pending.platform,
-                    payload = ObservationPayload.GraceWake(pending.wake.wakeId),
+                    payload = ObservationPayload.GraceWake(pending.wake.wakeId.value),
                     deadlineMs = pending.wake.deadline,
                 ),
                 recovering = false,

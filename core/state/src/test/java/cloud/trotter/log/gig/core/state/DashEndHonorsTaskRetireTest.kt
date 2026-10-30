@@ -29,6 +29,7 @@ import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -166,7 +167,7 @@ class DashEndHonorsTaskRetireTest {
         timestamp = at,
         type = TimeoutType.GRACE_COMMIT,
         targetPlatform = platform,
-        payload = ObservationPayload.GraceWake(pend.wakeId),
+        payload = ObservationPayload.GraceWake(pend.wakeId.value),
     )
 
     // Keep each returned region paired with its actual decisions, including when a test diffs an
@@ -231,7 +232,7 @@ class DashEndHonorsTaskRetireTest {
         )
         assertEquals(summaryAt, end.since)
         assertEquals(summaryDeadline, end.deadline)
-        assertNotEquals("a replacement pending mints a fresh wake generation", retire.wakeId, end.wakeId)
+        assertNotEquals("a replacement pending mints a fresh wake generation", retire.wakeId.value, end.wakeId.value)
         assertEquals("the task is still active while the end is graced", "d1", afterSummary.activeTask?.taskId)
 
         // The GRACE_COMMIT wake armed for THIS pending.
@@ -597,7 +598,7 @@ class DashEndHonorsTaskRetireTest {
             timestamp = pending.deadline,
             type = TimeoutType.MODE_RESUME_COMMIT,
             targetPlatform = platform,
-            payload = ObservationPayload.GraceWake(pending.wakeId),
+            payload = ObservationPayload.GraceWake(pending.wakeId.value),
         )
         val afterCommit = step(afterNextDash, Flow.Idle, commitWake)
         val sessionB = afterCommit.session
@@ -818,11 +819,11 @@ class DashEndHonorsTaskRetireTest {
                 since = idleAt,
                 deadline = idleAt + 10_000L,
                 armedFromFlow = Flow.Idle,
-                wakeId = 11L,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (11L) - 1L).mintWakeId().second,
             ),
             pendingSessionPay = PendingSessionPay(
                 value = 21.0, flow = Flow.Idle, deadline = idleAt + 3_000L,
-                since = idleAt, wakeId = 12L,
+                since = idleAt, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (12L) - 1L).mintWakeId().second,
             ),
         )
         assertEquals("the fixture starts with a stale total", 0.0, armed.session?.runningEarnings ?: Double.NaN, 0.0001)

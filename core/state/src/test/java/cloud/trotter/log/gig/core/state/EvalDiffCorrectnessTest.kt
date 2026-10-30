@@ -25,6 +25,7 @@ import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -137,6 +138,7 @@ class EvalDiffCorrectnessTest {
             activeTask = dropoff,
             pendingDestructive = PendingDestructive(
                 DestructiveKind.TASK_RETIRE, since = 800L, deadline = 1_000L,
+                wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
             ),
         )
         val prev = AppState(

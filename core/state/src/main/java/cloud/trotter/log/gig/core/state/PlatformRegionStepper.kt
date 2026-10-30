@@ -19,10 +19,8 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.PendingModeResume
 import cloud.trotter.log.gig.domain.state.PendingOffer
-import cloud.trotter.log.gig.domain.state.PendingWake
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
-import cloud.trotter.log.gig.domain.state.mintWakeId
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.SessionType
 import cloud.trotter.log.gig.domain.state.Task
@@ -483,18 +481,16 @@ class PlatformRegionStepper @Inject constructor() {
                     // delayed to the retire's own deadline, so a contradicting `task:unassigned`
                     // frame the retire would still have seen can still disown it.
                     val candidate = obs.timestamp + policy.gracePeriodMs(region.platform)
-                    val (withId, wakeId) = region.mintWakeId()
-                    region = withId.copy(
-                        pendingDestructive = PendingDestructive(
+                    region = region.withWakeIdIfDeadlineMoved(null, WindowStart.Live(obs.timestamp)) { wakeId ->
+                        PendingDestructive(
                             kind = DestructiveKind.SESSION_END,
                             since = obs.timestamp,
                             deadline = maxOf(candidate, absorbed?.deadline ?: candidate),
                             absorbedRetireSince = absorbed?.since,
                             absorbedRetireDeadline = absorbed?.deadline,
                             wakeId = wakeId,
-                            windowFrom = obs.timestamp,
-                        ),
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -507,14 +503,10 @@ class PlatformRegionStepper @Inject constructor() {
         if (prev.mode != Mode.Paused && newMode == Mode.Paused) {
             val remaining = ((obs as? Observation.FlowObservation)?.parsed
                 as? ParsedFields.PausedFields)?.remainingMillis ?: 0L
-            val (withId, wakeId) = region.mintWakeId()
-            region = withId.copy(
-                pauseSafety = PendingWake(
-                    deadline = obs.timestamp + remaining +
-                        policy.pauseTimeoutBufferMs(region.platform),
-                    wakeId = wakeId,
-                ),
+            val (withId, safety) = region.pauseSafetyWindow(
+                deadline = obs.timestamp + remaining + policy.pauseTimeoutBufferMs(region.platform),
             )
+            region = withId.copy(pauseSafety = safety)
         }
         // Both resume origins resolve on a committed mode change, including authoritative flows
         // that bypass the grace (#1311). A pending must never outlive that transition.
@@ -544,19 +536,12 @@ class PlatformRegionStepper @Inject constructor() {
         val since = existing?.since ?: obs.timestamp
         val deadline = since + policy.pauseResumeGraceMs(region.platform)
         // #1054: keep both the original since and wake identity while the deadline stands.
-        if (existing != null && existing.deadline == deadline) {
-            return region.copy(
-                lastObservedAt = obs.timestamp,
-                pendingModeResume = existing.copy(idleFields = idleFields),
+        val (withId, resume) = region.modeResumeWindow(existing) { wakeId ->
+            PendingModeResume(
+                since = since, deadline = deadline, wakeId = wakeId, idleFields = idleFields,
             )
         }
-        val (withId, wakeId) = region.mintWakeId()
-        return withId.copy(
-            lastObservedAt = obs.timestamp,
-            pendingModeResume = PendingModeResume(
-                since = since, deadline = deadline, wakeId = wakeId, idleFields = idleFields,
-            ),
-        )
+        return withId.copy(lastObservedAt = obs.timestamp, pendingModeResume = resume)
     }
 
     /** Commit either resume origin; a new session starts at the first hint, not the wake (#1311). */
@@ -756,49 +741,46 @@ class PlatformRegionStepper @Inject constructor() {
             // completion the amdt-#5 T3 guard then refused to mint. Absorb instead of discarding —
             // through the ONE predicate both arm sites read ([absorbableRetire]).
             val absorbed = r.absorbableRetire()
-            val pend = if (existing?.kind == DestructiveKind.SESSION_END) {
-                // Offline-grace already armed (idle/offline before summary) —
-                // tighten to the short window, keep the original `since` (the
-                // earliest destructive signal is the honest end time).
-                //
-                // An already-absorbed retire wins, and its two halves move TOGETHER (round 5) — a
-                // `since` from one retire beside a `deadline` from another would be a floor that
-                // belongs to neither.
-                val keptAbsorbedSince = existing.absorbedRetireSince ?: absorbed?.since
-                val keptAbsorbedDeadline = if (existing.absorbedRetireSince != null) {
-                    existing.absorbedRetireDeadline
-                } else {
-                    absorbed?.deadline
-                }
-                // The tighten may shorten the window — but never below the absorbed retire's own.
-                val tightened = minOf(existing.deadline, newDeadline)
-                existing.copy(
-                    deadline = maxOf(tightened, keptAbsorbedDeadline ?: tightened),
-                    authoritative = true,
-                    endFields = endFields ?: existing.endFields,
-                    absorbedRetireSince = keptAbsorbedSince,
-                    absorbedRetireDeadline = keptAbsorbedDeadline,
-                )
-            } else {
-                PendingDestructive(
-                    kind = DestructiveKind.SESSION_END,
-                    since = obs.timestamp,
-                    deadline = maxOf(newDeadline, absorbed?.deadline ?: newDeadline),
-                    authoritative = true,
-                    endFields = endFields,
-                    absorbedRetireSince = absorbed?.since,
-                    absorbedRetireDeadline = absorbed?.deadline,
-                )
-            }
-            // #1054 round 5: a MOVED deadline is a new pending as far as its timer is concerned —
-            // the standing arm would fire at the old, later instant. An unchanged one (the tighten
-            // that did not actually tighten) keeps its id and its live arm.
-            // Round 7: the predecessor is passed ONLY when this frame is tightening the SAME kind.
-            // The `else` branch built a fresh SESSION_END that REPLACES whatever stood there, and a
-            // replacement must never inherit an identity (the installer's kind test is the belt to
-            // this call site's braces).
+            // Only a tighten of this kind may reuse the standing timer identity.
             val tightened = existing?.takeIf { it.kind == DestructiveKind.SESSION_END }
-            return r.withWakeIdIfDeadlineMoved(tightened, pend, obs)
+            return r.withWakeIdIfDeadlineMoved(tightened, WindowStart.Live(obs.timestamp)) { wakeId ->
+                if (existing?.kind == DestructiveKind.SESSION_END) {
+                    // Offline-grace already armed (idle/offline before summary) —
+                    // tighten to the short window, keep the original `since` (the
+                    // earliest destructive signal is the honest end time).
+                    //
+                    // An already-absorbed retire wins, and its two halves move TOGETHER (round 5) — a
+                    // `since` from one retire beside a `deadline` from another would be a floor that
+                    // belongs to neither.
+                    val keptAbsorbedSince = existing.absorbedRetireSince ?: absorbed?.since
+                    val keptAbsorbedDeadline = if (existing.absorbedRetireSince != null) {
+                        existing.absorbedRetireDeadline
+                    } else {
+                        absorbed?.deadline
+                    }
+                    // The tighten may shorten the window — but never below the absorbed retire's own.
+                    val tightened = minOf(existing.deadline, newDeadline)
+                    existing.copy(
+                        wakeId = wakeId,
+                        deadline = maxOf(tightened, keptAbsorbedDeadline ?: tightened),
+                        authoritative = true,
+                        endFields = endFields ?: existing.endFields,
+                        absorbedRetireSince = keptAbsorbedSince,
+                        absorbedRetireDeadline = keptAbsorbedDeadline,
+                    )
+                } else {
+                    PendingDestructive(
+                        kind = DestructiveKind.SESSION_END,
+                        since = obs.timestamp,
+                        wakeId = wakeId,
+                        deadline = maxOf(newDeadline, absorbed?.deadline ?: newDeadline),
+                        authoritative = true,
+                        endFields = endFields,
+                        absorbedRetireSince = absorbed?.since,
+                        absorbedRetireDeadline = absorbed?.deadline,
+                    )
+                }
+            }
         }
         // #1078 round 3: an unassign INSIDE the window disowns too. The lazy-expiry branch only sees
         // an unassign frame that lands at or past the deadline; one arriving EARLIER falls straight
@@ -1034,16 +1016,15 @@ class PlatformRegionStepper @Inject constructor() {
             (obs as? Observation.Screen)?.idleSurface == IdleSurface.NO_ORDERS && obs.modeHint == Mode.Online &&
             current.activeTask == null && current.activeJob != null && current.pendingDestructive == null
         ) {
-            return current.withWakeIdIfDeadlineMoved(
-                prev = null,
-                obs = obs,
-                next = PendingDestructive(
+            return current.withWakeIdIfDeadlineMoved(null, WindowStart.Live(obs.timestamp)) { wakeId ->
+                PendingDestructive(
                     kind = DestructiveKind.JOB_ABANDON,
                     since = obs.timestamp,
                     deadline = obs.timestamp + policy.jobAbandonGraceMs(current.platform),
                     armedFromFlow = Flow.TaskUnassigned,
-                ),
-            )
+                    wakeId = wakeId,
+                )
+            }
         }
 
         // Post-task: keep job alive through PostTask for payout capture

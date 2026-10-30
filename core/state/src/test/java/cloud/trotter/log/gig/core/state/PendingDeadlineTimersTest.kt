@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -65,9 +66,10 @@ class PendingDeadlineTimersTest {
 
     private val destructive = PendingDestructive(
         kind = DestructiveKind.SESSION_END, since = 10_500L, deadline = 20_500L,
+        wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
     )
-    private val modeResume = PendingModeResume(since = 11_000L, deadline = 19_000L)
-    private val park = PendingSessionPay(16.70, 12_000L, 15_000L, Flow.Idle)
+    private val modeResume = PendingModeResume(since = 11_000L, deadline = 19_000L, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
+    private val park = PendingSessionPay(16.70, 12_000L, 15_000L, Flow.Idle, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second)
 
     /** "Now" at the moment of the restore — far past every deadline above. */
     private val NOW = 1_000_000L
@@ -97,7 +99,7 @@ class PendingDeadlineTimersTest {
         val platform = Platform.entries.first { it != Platform.Unknown }
         val pending = PendingDestructive(DestructiveKind.JOB_ABANDON,
             since = 10_500L, deadline = 15_500L, armedFromFlow = Flow.TaskUnassigned,
-            wakeId = 1L, windowFrom = 10_500L)
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (1L) - 1L).mintWakeId().second, windowFrom = 10_500L)
         for ((lastSeen, remaining) in listOf(10_500L to 5_000L, 12_500L to 3_000L, 16_500L to 0L)) {
             val original = state(region(platform, destructive = pending).copy(wakeSeq = 1L))
                 .copy(timestamp = lastSeen)
@@ -109,12 +111,12 @@ class PendingDeadlineTimersTest {
             assertEquals(pending.windowFrom, kept.windowFrom)
             assertEquals(NOW, kept.servedFrom)
             assertEquals(NOW + remaining, kept.deadline)
-            assertTrue(kept.wakeId != pending.wakeId)
+            assertTrue(kept.wakeId.value != pending.wakeId.value)
             val timer = cleaned.pendingDeadlineTimers().single()
             assertEquals(TimeoutType.GRACE_COMMIT, timer.type)
             assertEquals(platform, timer.platform)
             assertEquals(kept.deadline, timer.wake.deadline)
-            assertEquals(kept.wakeId, timer.wake.wakeId)
+            assertEquals(kept.wakeId.value, timer.wake.wakeId.value)
         }
     }
 
@@ -168,7 +170,7 @@ class PendingDeadlineTimersTest {
                 destructive = destructive,
                 modeResume = modeResume,
                 park = park,
-                pauseSafety = PendingWake(40_000L, 3L),
+                pauseSafety = PendingWake(40_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (3L) - 1L).mintWakeId().second),
             ),
         ).pendingDeadlineTimers().described()
 
@@ -191,7 +193,7 @@ class PendingDeadlineTimersTest {
         // morning's dash would RESUME.
         assertEquals(
             listOf(Triple(TimeoutType.SESSION_PAUSED_SAFETY, Platform.DoorDash, 1_000L)),
-            state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, 2L)))
+            state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second)))
                 .pendingDeadlineTimers().described(),
         )
     }
@@ -301,19 +303,17 @@ class PendingDeadlineTimersTest {
             since = 10_000L,
             deadline = 110_000L,
             servedFrom = 100_000L,
-            wakeId = 4L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (4L) - 1L).mintWakeId().second,
         )
         val region = region(Platform.DoorDash, destructive = restored)
 
         val tightened = region
-            .withWakeIdIfDeadlineMoved(
-                restored,
-                restored.copy(deadline = 92_500L, authoritative = true),
-                frame(90_000L),
-            )
+            .withWakeIdIfDeadlineMoved(restored, WindowStart.Live(90_000L)) { wakeId ->
+                restored.copy(deadline = 92_500L, authoritative = true, wakeId = wakeId)
+            }
             .pendingDestructive!!
         assertNull("the stale anchor is cleared by the move", tightened.servedFrom)
-        assertNotEquals("and the moved deadline is a new pending to its timer", 4L, tightened.wakeId)
+        assertNotEquals("and the moved deadline is a new pending to its timer", 4L, tightened.wakeId.value)
 
         // Crash immediately; the next recovery must serve the 2.5 s the tighten granted.
         val next = state(region(Platform.DoorDash, destructive = tightened))
@@ -342,14 +342,12 @@ class PendingDeadlineTimersTest {
             deadline = 111_000L,
             servedFrom = 101_000L,
             windowFrom = 100_000L,
-            wakeId = 4L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (4L) - 1L).mintWakeId().second,
         )
         val tightened = region(Platform.DoorDash, destructive = restored)
-            .withWakeIdIfDeadlineMoved(
-                restored,
-                restored.copy(deadline = 99_500L, authoritative = true),
-                frame(97_000L),
-            )
+            .withWakeIdIfDeadlineMoved(restored, WindowStart.Live(97_000L)) { wakeId ->
+                restored.copy(deadline = 99_500L, authoritative = true, wakeId = wakeId)
+            }
             .pendingDestructive!!
 
         assertEquals("anchored at the frame that moved it", 97_000L, tightened.windowFrom)
@@ -376,20 +374,23 @@ class PendingDeadlineTimersTest {
         // timer matched and committed the retire after ~10 ms of its own window.
         val end = PendingDestructive(
             kind = DestructiveKind.SESSION_END,
-            since = 8_000L, deadline = 12_500L, authoritative = true, wakeId = 2L,
+            since = 8_000L, deadline = 12_500L, authoritative = true, wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second,
         )
         val retire = PendingDestructive(
             kind = DestructiveKind.TASK_RETIRE,
             since = 10_000L, deadline = 12_500L, authoritative = true,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
 
         val installed = region(Platform.DoorDash, destructive = end)
-            .withWakeIdIfDeadlineMoved(end, retire, frame(10_000L))
+            .withWakeIdIfDeadlineMoved(end, WindowStart.Live(10_000L)) { wakeId ->
+                retire.copy(wakeId = wakeId)
+            }
             .pendingDestructive!!
 
         assertEquals(DestructiveKind.TASK_RETIRE, installed.kind)
-        assertNotEquals("a different kind is a different pending", 2L, installed.wakeId)
-        assertTrue("and it is a real generation", installed.wakeId > 0L)
+        assertNotEquals("a different kind is a different pending", 2L, installed.wakeId.value)
+        assertTrue("and it is a real generation", installed.wakeId.value > 0L)
         assertEquals("anchored at the frame that created it", 10_000L, installed.windowFrom)
     }
 
@@ -403,13 +404,15 @@ class PendingDeadlineTimersTest {
             since = 10_000L,
             deadline = 110_000L,
             servedFrom = 100_000L,
-            wakeId = 4L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (4L) - 1L).mintWakeId().second,
         )
         val same = region(Platform.DoorDash, destructive = restored)
-            .withWakeIdIfDeadlineMoved(restored, restored.copy(authoritative = true), frame(90_000L))
+            .withWakeIdIfDeadlineMoved(restored, WindowStart.Live(90_000L)) { wakeId ->
+                restored.copy(authoritative = true, wakeId = wakeId)
+            }
             .pendingDestructive!!
 
-        assertEquals(4L, same.wakeId)
+        assertEquals(4L, same.wakeId.value)
         assertEquals(100_000L, same.servedFrom)
         assertEquals("and its window anchor", 10_000L, same.windowFrom ?: 10_000L)
     }
@@ -423,6 +426,7 @@ class PendingDeadlineTimersTest {
         // bound. `servedFrom` is the anchor that closes it.
         val short = PendingDestructive(
             kind = DestructiveKind.SESSION_END, since = 10_000L, deadline = 12_500L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         val crashed = state(region(Platform.DoorDash, destructive = short)).copy(timestamp = 10_000L)
 
@@ -447,6 +451,7 @@ class PendingDeadlineTimersTest {
         // was served, so 1.5 s remain.
         val short = PendingDestructive(
             kind = DestructiveKind.SESSION_END, since = 10_000L, deadline = 12_500L,
+            wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = 99L).mintWakeId().second,
         )
         val first = state(region(Platform.DoorDash, destructive = short))
             .copy(timestamp = 10_000L)
@@ -467,18 +472,18 @@ class PendingDeadlineTimersTest {
             .recoveryHygiene(nowMs = NOW)
         val pend = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
 
-        assertTrue("never the legacy 0 — a restored arm must be identifiable", pend.wakeId > 0L)
+        assertTrue("never the legacy 0 — a restored arm must be identifiable", pend.wakeId.value > 0L)
         assertEquals("`since` never moves — #732 stamps the commit at it", 10_500L, pend.since)
         assertEquals(
             "and the enumerator carries that generation to the arm",
-            pend.wakeId,
-            cleaned.pendingDeadlineTimers().single { it.type == TimeoutType.GRACE_COMMIT }.wake.wakeId,
+            pend.wakeId.value,
+            cleaned.pendingDeadlineTimers().single { it.type == TimeoutType.GRACE_COMMIT }.wake.wakeId.value,
         )
     }
 
     @Test
     fun `the pause-safety deadline is left exactly as it was`() {
-        val cleaned = state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, 2L)))
+        val cleaned = state(region(Platform.DoorDash, pauseSafety = PendingWake(1_000L, PlatformRegion(Platform.DoorDash, wakeSeq = (2L) - 1L).mintWakeId().second)))
             .recoveryHygiene(nowMs = NOW)
 
         assertEquals(
