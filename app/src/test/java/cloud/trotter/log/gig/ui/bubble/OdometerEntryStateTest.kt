@@ -7,6 +7,20 @@ import org.junit.Test
 class OdometerEntryStateTest {
     private fun entry() = OdometerEntryState(mutableStateOf(false), mutableStateOf(""))
 
+    @Test fun `only successful fresh shows increment entry identity`() {
+        val state = entry()
+        assertEquals(0L, state.entryId)
+        assertFalse(state.show(false))
+        assertEquals(0L, state.entryId)
+        assertTrue(state.show(true))
+        assertEquals(1L, state.entryId)
+        assertFalse(state.show(true))
+        assertEquals(1L, state.entryId)
+        state.back()
+        assertTrue(state.show(true))
+        assertEquals(2L, state.entryId)
+    }
+
     @Test fun `show opens a fresh reading and reports opening once`() {
         val state = entry()
         state.digit(5)

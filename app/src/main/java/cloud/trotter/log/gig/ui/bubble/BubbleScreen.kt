@@ -7,7 +7,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.displayCutout
@@ -20,14 +19,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.feature.bubble.hud.*
-import cloud.trotter.log.gig.feature.bubble.hud.undo.*
 import cloud.trotter.log.gig.feature.bubble.hud.vehicle.VehicleChip
 import cloud.trotter.log.gig.feature.bubble.hud.odometer.displayName
 import cloud.trotter.log.gig.ui.main.MainActivity
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import kotlinx.coroutines.delay
-
-private enum class EntrySheet { ODOMETER, CASH_TIP, EXPENSE, GOAL }
 
 @Composable
 fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
@@ -71,7 +67,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         // and picking the already-active vehicle is a no-op so an entered odometer reading survives.
         when {
             viewModel.vehicleSwapLocked() -> Toast.makeText(context, R.string.hud_vehicle_locked, Toast.LENGTH_SHORT).show()
-            id != vehicleChip?.activeId -> viewModel.selectVehicle(id)
+            id != vehicleChip?.activeId -> viewModel.odometerActions.select(id)
         }
     }
     val openVehicleAdd = remember(openInApp) { { openInApp(Screen.VehicleAdd.route) } }
@@ -86,76 +82,24 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
     val expense = rememberExpenseHud(viewModel, closeLog, openVehicleAdd)
     val goalHud = rememberGoalHud(viewModel, closeLog)
-    var lastSheet by rememberSaveable { mutableStateOf(EntrySheet.ODOMETER) }
-    val route: (EntrySheet) -> Unit = remember(odometer, cashTip, expense, goalHud) {
-        { next ->
-            if (next != EntrySheet.ODOMETER) odometer.dismiss()
-            if (next != EntrySheet.CASH_TIP) cashTip.dismiss()
-            if (next != EntrySheet.EXPENSE) expense.dismiss()
-            if (next != EntrySheet.GOAL) goalHud.dismiss()
-            lastSheet = next
-        }
-    }
-    // The four sheet opens (including the footer and both goal pills) share the same exclusive rule.
-    val openSheet: (EntrySheet?) -> Unit = remember(route, odometer, cashTip, expense, goalHud) {
-        { next ->
-            if (next != null) route(next)
-            when (next) {
-                EntrySheet.ODOMETER -> odometer.openSheet()
-                EntrySheet.CASH_TIP -> cashTip.openSheet()
-                EntrySheet.EXPENSE -> expense.openSubcard()
-                EntrySheet.GOAL -> goalHud.openSheet()
-                null -> {
-                    odometer.dismiss()
-                    cashTip.dismiss()
-                    expense.dismiss()
-                    goalHud.dismiss()
-                }
-            }
-        }
-    }
-    val openOdometer = remember(openSheet) { { openSheet(EntrySheet.ODOMETER) } }
-    val cashTipCue = cashTip.Cue()
-    val expenseCue = expense.Cue()
-    val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt, odometerShown)
-    LaunchedEffect(odometer.open) { dismissVehicleMenus() }
-    val entrySheet: @Composable ColumnScope.() -> Unit = {
-        when (lastSheet) {
-            EntrySheet.CASH_TIP -> cashTip.Sheet()
-            EntrySheet.ODOMETER -> odometer.Sheet {
+    val sheets = rememberBubbleSheetHost(listOf(
+        SheetSlot(odometer) {
+            odometer.Sheet {
                 vehicleChip?.let {
                     VehicleChip(it.forActive(), odometerVehicleMenuOpen, { clickVehicleChip(true) },
                         dismissVehicleMenus, selectVehicle, addVehicle)
                 }
             }
-            EntrySheet.EXPENSE -> expense.Sheet()
-            EntrySheet.GOAL -> goalHud.Sheet()
-        }
-    }
-    val entryUndo: @Composable () -> Unit = remember(odometer, cashTip, expense, viewModel) {
-        {
-            val tip by viewModel.cashTipActions.undo.collectAsStateWithLifecycle()
-            val cost by viewModel.expenseActions.undo.collectAsStateWithLifecycle()
-            val notice by viewModel.odometerNotice.collectAsStateWithLifecycle()
-            val tipVisible = cashTip.UndoVisible()
-            val expenseVisible = expense.UndoVisible()
-            when (undoBandContent(notice?.token, tip?.strip?.token.takeIf { tipVisible },
-                cost?.strip?.token.takeIf { expenseVisible })) {
-                UndoBandContent.CASH_TIP -> cashTip.Undo()
-                UndoBandContent.EXPENSE -> expense.Undo()
-                UndoBandContent.ODOMETER -> odometer.Undo()
-                null -> Unit
-            }
-        }
-    }
-    val entryUndoVisible: @Composable () -> Boolean = remember(odometer, cashTip, expense) {
-        {
-            val tipVisible = cashTip.UndoVisible()
-            val expenseVisible = expense.UndoVisible()
-            val odometerVisible = odometer.UndoVisible()
-            tipVisible || expenseVisible || odometerVisible
-        }
-    }
+        },
+        SheetSlot(cashTip) { cashTip.Sheet() },
+        SheetSlot(expense) { expense.Sheet() },
+        SheetSlot(goalHud) { goalHud.Sheet() },
+    ))
+    val openOdometer = remember(sheets) { { sheets.show(EntrySheet.ODOMETER) } }
+    val cashTipCue = cashTip.Cue()
+    val expenseCue = expense.Cue()
+    val odometerCue = odometer.Cue(region?.session?.startedAt, lastSession?.endedAt, odometerShown)
+    LaunchedEffect(odometer.open) { dismissVehicleMenus() }
     val odometerFooter: @Composable () -> Unit = remember(odometer, openOdometer, odometerShown) { { odometer.RestingFooter(openOdometer, odometerShown) } }
     BackHandler(enabled = logOpen) { logOpen = false }
     LaunchedEffect(viewModel, context) {
@@ -212,19 +156,14 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             state = state,
             ribbon = ribbon,
             onGoalCelebrated = viewModel::goalCelebrated,
-            onGoalClick = { openSheet(EntrySheet.GOAL) },
-            sheetOpen = odometer.open || cashTip.open || expense.open || goalHud.open,
-            sheetCompact = lastSheet == EntrySheet.EXPENSE && expense.compact,
-            onSheetOutsideDismiss = expense::dismiss,
-            onSheetDismiss = { when (lastSheet) {
-                EntrySheet.ODOMETER -> odometer.back()
-                EntrySheet.CASH_TIP -> cashTip.back()
-                EntrySheet.EXPENSE -> expense.back()
-                EntrySheet.GOAL -> goalHud.back()
-            } },
-            sheet = entrySheet,
-            undo = entryUndo,
-            undoVisible = entryUndoVisible,
+            onGoalClick = { sheets.show(EntrySheet.GOAL) },
+            sheetOpen = sheets.open,
+            sheetCompact = sheets.compact,
+            onSheetOutsideDismiss = sheets::outside,
+            onSheetDismiss = sheets::back,
+            sheet = { sheets.Sheet(this) },
+            undo = { sheets.Band() },
+            undoVisible = { sheets.BandVisible() },
             restingFooter = odometerFooter,
             vehicleMenuOpen = vehicleMenuOpen,
             onVehicleChipClick = { clickVehicleChip(false) },
@@ -238,14 +177,14 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
             onRefreshGasPrice = { viewModel.refreshGasPrice() },
             onResumeAutoGasPrice = { viewModel.resumeAutoGasPrice() },
             onDockClick = { kind ->
-                if (kind == DockKind.LOG || kind == DockKind.NOW || kind == DockKind.SETTINGS) openSheet(null)
+                if (kind == DockKind.LOG || kind == DockKind.NOW || kind == DockKind.SETTINGS) sheets.show(null)
                 when (kind) {
                     DockKind.ODOMETER -> openOdometer()
                     DockKind.LOG -> logOpen = true
                     DockKind.NOW -> logOpen = false
                     DockKind.SETTINGS -> openInApp(Screen.SettingsHome.route)
-                    DockKind.CASH_TIP -> openSheet(EntrySheet.CASH_TIP)
-                    DockKind.EXPENSE -> openSheet(EntrySheet.EXPENSE)
+                    DockKind.CASH_TIP -> sheets.show(EntrySheet.CASH_TIP)
+                    DockKind.EXPENSE -> sheets.show(EntrySheet.EXPENSE)
                 }
             },
             stateCard = {

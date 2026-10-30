@@ -20,9 +20,6 @@ data class UndoStripModel(
     companion object { const val WINDOW_MS = 10_000L }
 }
 
-/** One newest-wins decision across all three sources. Invisible strips cannot win. */
-enum class UndoBandContent { ODOMETER, CASH_TIP, EXPENSE }
-fun undoBandContent(odometerToken: Long?, cashTipToken: Long?, expenseToken: Long?): UndoBandContent? =
-    listOfNotNull(odometerToken?.let { UndoBandContent.ODOMETER to it },
-        cashTipToken?.let { UndoBandContent.CASH_TIP to it },
-        expenseToken?.let { UndoBandContent.EXPENSE to it }).maxByOrNull { it.second }?.first
+/** One newest-wins decision over all candidates. Invisible bands have no token. */
+fun <K : Any> newestBand(tokens: Map<K, Long?>): K? =
+    tokens.entries.filter { it.value != null }.maxByOrNull { it.value!! }?.key

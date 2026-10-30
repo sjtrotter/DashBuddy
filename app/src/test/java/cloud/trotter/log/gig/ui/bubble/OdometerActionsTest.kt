@@ -40,7 +40,7 @@ class OdometerActionsTest {
 
     @Test fun `successful append publishes the saved notice`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         assertTrue(actions.saving.value)
         runCurrent()
         verify(readings).record("civic", 52_388)
@@ -52,7 +52,7 @@ class OdometerActionsTest {
     @Test fun `failed append keeps the sheet available for retry`() = runTest {
         whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         assertNull(actions.notice.value)
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
@@ -61,23 +61,23 @@ class OdometerActionsTest {
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
     }
 
-    @Test fun `a completed save emits once`() = runTest {
+    @Test fun `a completed save emits its captured entry id once`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        val completions = mutableListOf<Unit>()
+        val completions = mutableListOf<Long>()
         backgroundScope.launch { actions.saveCompleted.collect { completions += it; actions.saveHandled() } }
         runCurrent()
         repeat(2) { index ->
-            actions.save("civic", 52_388)
+            actions.save("civic", 52_388, index.toLong())
             runCurrent()
-            assertEquals(index + 1, completions.size)
+            assertEquals((0..index).map { it.toLong() }, completions)
         }
         whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
-        actions.save("civic", 52_400)
+        actions.save("civic", 52_400, 42L)
         runCurrent()
         assertEquals(2, completions.size)
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
 
-        val lateCompletions = mutableListOf<Unit>()
+        val lateCompletions = mutableListOf<Long>()
         backgroundScope.launch { actions.saveCompleted.collect { lateCompletions += it } }
         runCurrent()
         assertTrue(lateCompletions.isEmpty())
@@ -85,26 +85,26 @@ class OdometerActionsTest {
 
     @Test fun `a late collector sees one pending completion`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
-        val completions = mutableListOf<Unit>()
+        val completions = mutableListOf<Long>()
         backgroundScope.launch { actions.saveCompleted.collect { completions += it } }
         runCurrent()
-        assertEquals(listOf(Unit), completions)
+        assertEquals(listOf(42L), completions)
     }
 
     @Test fun `a handled completion is not replayed`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
-        val completions = mutableListOf<Unit>()
+        val completions = mutableListOf<Long>()
         val collector = backgroundScope.launch {
             actions.saveCompleted.collect { completions += it; actions.saveHandled() }
         }
         runCurrent()
-        assertEquals(listOf(Unit), completions)
+        assertEquals(listOf(42L), completions)
         collector.cancel()
-        val lateCompletions = mutableListOf<Unit>()
+        val lateCompletions = mutableListOf<Long>()
         backgroundScope.launch { actions.saveCompleted.collect { lateCompletions += it } }
         runCurrent()
         assertTrue(lateCompletions.isEmpty())
@@ -160,14 +160,14 @@ class OdometerActionsTest {
     @Test fun `a vehicle select keeps a save failure visible`() = runTest {
         whenever(readings.record(any(), any())).thenThrow(IllegalStateException("storage unavailable"))
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         doSuspendableAnswer { 1L }.whenever(readings).record(any(), any())
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         assertEquals(OdometerWriteFailure.NONE, actions.failed.value)
     }
@@ -206,7 +206,7 @@ class OdometerActionsTest {
         actions.select("civic")
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         assertEquals(OdometerWriteFailure.RETRY, actions.failed.value)
         assertNotNull(actions.notice.value)
@@ -216,8 +216,8 @@ class OdometerActionsTest {
 
     @Test fun `double tap appends only once`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         verify(readings, times(1)).record("civic", 52_388)
     }
@@ -231,7 +231,7 @@ class OdometerActionsTest {
         }.whenever(readings).record(any(), any())
         val scope = CoroutineScope(coroutineContext + Job())
         val actions = OdometerActions(scope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         assertTrue(actions.saving.value)
         assertTrue(recorded.isEmpty())
@@ -251,7 +251,7 @@ class OdometerActionsTest {
     }
     @Test fun `the notice clears itself after ten seconds`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         val notice = actions.notice.value!!
         advanceTimeBy(9_999)
@@ -264,11 +264,11 @@ class OdometerActionsTest {
 
     @Test fun `a newer notice outlives the older timer`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         val first = actions.notice.value!!
         advanceTimeBy(5_000)
-        actions.save("civic", 52_400)
+        actions.save("civic", 52_400, 42L)
         runCurrent()
         val second = actions.notice.value!!
         assertEquals(52_400, second.readingMiles)
@@ -286,11 +286,11 @@ class OdometerActionsTest {
 
     @Test fun `an identical second save gets its own ten seconds`() = runTest {
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         val first = actions.notice.value!!
         advanceTimeBy(5_000)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         val second = actions.notice.value!!
         assertEquals(first.readingMiles, second.readingMiles)
@@ -314,7 +314,7 @@ class OdometerActionsTest {
         val repositoryClock = Clock.fixed(Instant.ofEpochMilli(900), ZoneOffset.UTC)
         val repository = OdometerReadingRepository(events, gps, repositoryClock)
         val actions = OdometerActions(backgroundScope, garage, repository)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         verify(events).appendUserEvent(AppEvent(AppEventType.ODOMETER_READING, 900, null,
             OdometerReadingPayload("civic", 52_388, 123.5)), null)
@@ -325,7 +325,7 @@ class OdometerActionsTest {
         doSuspendableAnswer { delay(11_000); 1L }
             .whenever(readings).record(any(), any())
         val actions = OdometerActions(backgroundScope, garage, readings)
-        actions.save("civic", 52_388)
+        actions.save("civic", 52_388, 42L)
         runCurrent()
         advanceTimeBy(11_000)
         assertTrue(actions.saving.value)

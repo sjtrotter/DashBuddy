@@ -13,7 +13,9 @@ class OdometerHudTest {
 
     @Test fun `openSheet is inert while the garage or readings are loading`() {
         for (garage in listOf(null, Garage(emptyList(), null, readable = true))) {
+            val actions: OdometerActions = mock()
             val vm: BubbleViewModel = mock()
+            whenever(vm.odometerActions).thenReturn(actions)
             whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(false))
             whenever(vm.garage).thenReturn(MutableStateFlow(garage))
             val entry = OdometerEntryState(mutableStateOf(false), mutableStateOf("52"))
@@ -27,13 +29,15 @@ class OdometerHudTest {
             assertEquals(52, entry.reading)
             assertEquals(0, closes)
             assertEquals(0, adds)
-            verify(vm, never()).reopenOdometer()
+            verify(actions, never()).reopen()
         }
     }
 
     @Test fun `an empty or entirely retired garage opens Add vehicle and leaves the sheet closed`() {
         for (vehicles in listOf(emptyList(), listOf(civic.copy(retiredAt = 1)))) {
+            val actions: OdometerActions = mock()
             val vm: BubbleViewModel = mock()
+            whenever(vm.odometerActions).thenReturn(actions)
             whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
             whenever(vm.garage).thenReturn(MutableStateFlow(Garage(vehicles, null, readable = true)))
             val entry = OdometerEntryState(mutableStateOf(false), mutableStateOf("52"))
@@ -47,13 +51,15 @@ class OdometerHudTest {
             assertEquals(1, closes)
             assertFalse(hud.open)
             assertEquals(52, entry.reading)
-            verify(vm, never()).reopenOdometer()
+            verify(actions, never()).reopen()
         }
     }
 
     @Test fun `a garage with vehicles opens reading once even without an active vehicle`() {
         for (activeId in listOf(null, civic.id)) {
+            val actions: OdometerActions = mock()
             val vm: BubbleViewModel = mock()
+            whenever(vm.odometerActions).thenReturn(actions)
             whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
             whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), activeId, readable = true)))
             val entry = OdometerEntryState(mutableStateOf(false), mutableStateOf(""))
@@ -67,7 +73,7 @@ class OdometerHudTest {
             assertTrue(hud.open)
             assertEquals(5, entry.reading)
             assertEquals(0, adds)
-            verify(vm, times(1)).reopenOdometer()
+            verify(actions, times(1)).reopen()
         }
     }
 }

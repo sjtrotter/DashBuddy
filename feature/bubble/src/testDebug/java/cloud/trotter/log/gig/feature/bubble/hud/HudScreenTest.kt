@@ -327,7 +327,7 @@ internal class HudScreenTest : HudScreenFixture() {
             GigLogTheme {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     HudScreen(state(), null, {}, undo = {
-                        if (undoBandContent(notice.token, strip.token.takeIf { strip.visible(clock.millis) }, null) == UndoBandContent.CASH_TIP)
+                        if (newestBand(mapOf("notice" to notice.token, "tip" to strip.token.takeIf { strip.visible(clock.millis) })) == "tip")
                             cloud.trotter.log.gig.feature.bubble.hud.undo.UndoStrip(strip) {}
                         else cloud.trotter.log.gig.feature.bubble.hud.odometer.OdometerNotice(notice)
                     })
@@ -489,11 +489,11 @@ internal class HudScreenTest : HudScreenFixture() {
                     HudScreen(state(), null, {}, undo = {
                         val tipVisible = undoStripVisible(tip)
                         val expenseVisible = undoStripVisible(expense)
-                        when (undoBandContent(notice.token, tip.token.takeIf { tipVisible }, expense.token.takeIf { expenseVisible })) {
-                            UndoBandContent.CASH_TIP -> UndoStrip(tip) {}
-                            UndoBandContent.EXPENSE -> UndoStrip(expense) {}
-                            UndoBandContent.ODOMETER -> cloud.trotter.log.gig.feature.bubble.hud.odometer.OdometerNotice(notice)
-                            null -> Unit
+                        when (newestBand(mapOf("notice" to notice.token, "tip" to tip.token.takeIf { tipVisible }, "expense" to expense.token.takeIf { expenseVisible }))) {
+                            "tip" -> UndoStrip(tip) {}
+                            "expense" -> UndoStrip(expense) {}
+                            "notice" -> cloud.trotter.log.gig.feature.bubble.hud.odometer.OdometerNotice(notice)
+                            else -> Unit
                         }
                     })
                 }

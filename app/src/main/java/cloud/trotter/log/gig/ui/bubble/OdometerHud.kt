@@ -22,8 +22,13 @@ internal class OdometerHud(
     private val entry: OdometerEntryState,
     private val closeLog: () -> Unit,
     private val onAddVehicle: () -> Unit,
-) {
-    val open: Boolean get() = entry.open
+) : SheetPort {
+    override val key = EntrySheet.ODOMETER
+    override val entryId get() = entry.entryId
+    override val completed get() = viewModel.odometerActions.saveCompleted
+    override fun completionHandled() = viewModel.odometerActions.saveHandled()
+    override fun show() = openSheet()
+    override val open: Boolean get() = entry.open
 
     /** A tap while the garage or readings are loading is inert. */
     fun openSheet() {
@@ -35,27 +40,21 @@ internal class OdometerHud(
             return
         }
         if (entry.show(anyVehicles = garage?.unretired?.isNotEmpty() == true)) {
-            viewModel.reopenOdometer()
+            viewModel.odometerActions.reopen()
         }
     }
 
-    fun dismiss() { entry.open = false }
+    override fun dismiss() { entry.open = false }
 
     /** Back closes the reading sheet. */
-    fun back() { entry.back() }
+    override fun back() { entry.back() }
 
     @Composable
     fun ObserveEntry() {
         LaunchedEffect(viewModel, entry) {
-            viewModel.odometerSaveCompleted.collect {
-                entry.open = false
-                viewModel.odometerSaveHandled()
-            }
-        }
-        LaunchedEffect(viewModel, entry) {
-            viewModel.odometerVehicleChanged.collect {
+            viewModel.odometerActions.vehicleChanged.collect {
                 entry.vehicleSwitched()
-                viewModel.odometerVehicleChangeHandled()
+                viewModel.odometerActions.vehicleChangeHandled()
             }
         }
         // A typed reading belongs to the vehicle it was typed for. The collapsed bubble keeps its sheet, and
@@ -81,8 +80,8 @@ internal class OdometerHud(
         val vehicle = garage?.active
         val readings by viewModel.odometerReadings.collectAsStateWithLifecycle()
         val gpsTotal by viewModel.gpsTotalMiles.collectAsStateWithLifecycle()
-        val saving by viewModel.odometerSaving.collectAsStateWithLifecycle()
-        val writeFailed by viewModel.odometerWriteFailed.collectAsStateWithLifecycle()
+        val saving by viewModel.odometerActions.saving.collectAsStateWithLifecycle()
+        val writeFailed by viewModel.odometerActions.failed.collectAsStateWithLifecycle()
         val last = vehicle?.let { VehicleOdometerReading.latestFor(readings.orEmpty(), it.id) }
         val now by rememberNow(60_000)
         val check = OdometerReadingCheck.check(OdometerCheckInput(entry.reading, vehicle, last, gpsTotal, now, readings.orEmpty()))
@@ -91,23 +90,16 @@ internal class OdometerHud(
                 writeFailed = if (garage?.readable == false) OdometerWriteFailure.UNREADABLE else writeFailed,
                 gpsLoaded = gpsTotal != null),
                 onDigit = entry::digit, onBackspace = entry::backspace,
-                onSave = { entry.reading?.let(viewModel::saveOdometerReading) },
+                onSave = { entry.reading?.let { viewModel.saveOdometerReading(it, entry.entryId) } },
                 vehicleChip = vehicleChip,
                 onShowAddVehicle = onAddVehicle, onBack = ::back)
         }
     }
 
-    // The slot must disappear at rest when no notice is present, even though its lambda is stable.
     @Composable
-    fun UndoVisible(): Boolean {
-        val notice by viewModel.odometerNotice.collectAsStateWithLifecycle()
-        return notice != null
-    }
-
-    @Composable
-    fun Undo() {
-        val notice by viewModel.odometerNotice.collectAsStateWithLifecycle()
-        notice?.let { OdometerNotice(it) }
+    override fun Band(): SheetBand? {
+        val notice by viewModel.odometerActions.notice.collectAsStateWithLifecycle()
+        return notice?.let { model -> SheetBand(model.token) { OdometerNotice(model) } }
     }
 
     @Composable

@@ -9,7 +9,10 @@ import cloud.trotter.log.gig.feature.bubble.hud.keypad.WholeNumberEntry
 internal class OdometerEntryState(
     private val openState: MutableState<Boolean>,
     private val digitsState: MutableState<String>,
+    private val entryIdState: MutableState<Long> = mutableStateOf(0L),
 ) {
+    var entryId by entryIdState
+        private set
     var open by openState
     private var digits by digitsState
     val reading: Int? get() = WholeNumberEntry(digits, OdometerReadingLimit.DIGITS).value
@@ -18,6 +21,7 @@ internal class OdometerEntryState(
     fun show(anyVehicles: Boolean): Boolean {
         if (open || !anyVehicles) return false
         digits = ""
+        entryId++
         open = true
         return true
     }
@@ -29,5 +33,6 @@ internal class OdometerEntryState(
 internal fun rememberOdometerEntryState(): OdometerEntryState {
     val open = rememberSaveable { mutableStateOf(false) }
     val digits = rememberSaveable { mutableStateOf("") }
-    return remember { OdometerEntryState(open, digits) }
+    val entryId = rememberSaveable { mutableStateOf(0L) }
+    return remember { OdometerEntryState(open, digits, entryId) }
 }

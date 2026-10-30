@@ -107,7 +107,7 @@ class BubbleViewModel @Inject constructor(
     internal val projectionWatermark get() = analyticsRepository.projectionWatermark
     internal fun cashTipDeliveries(sessionId: String) = analyticsRepository.deliveriesForSession(sessionId)
 
-    private val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository)
+    internal val odometerActions = OdometerActions(viewModelScope, garageRepository, odometerReadingRepository)
     val garage: StateFlow<Garage?> = garageRepository.garage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val odometerReadings: StateFlow<List<VehicleOdometerReading>?> = odometerReadingRepository.readings
@@ -119,16 +119,9 @@ class BubbleViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val odometerPrompts = appPreferencesRepository.odometerPrompts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val gpsTotalMiles = odometerRepository.totalMilesFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val odometerSaving = odometerActions.saving
-    val odometerWriteFailed = odometerActions.failed
-    val odometerNotice = odometerActions.notice
-    val odometerSaveCompleted = odometerActions.saveCompleted
-    val odometerVehicleChanged = odometerActions.vehicleChanged
-    fun odometerSaveHandled() = odometerActions.saveHandled()
-    fun odometerVehicleChangeHandled() = odometerActions.vehicleChangeHandled()
-    fun reopenOdometer() = odometerActions.reopen()
-    fun saveOdometerReading(miles: Int) { garage.value?.active?.let { odometerActions.save(it.id, miles) } }
-    fun selectVehicle(id: String) = odometerActions.select(id)
+    fun saveOdometerReading(miles: Int, entryId: Long) {
+        garage.value?.active?.let { odometerActions.save(it.id, miles, entryId) }
+    }
     fun vehicleSwapLocked() = vehicleSwapLock.locked()
 
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig

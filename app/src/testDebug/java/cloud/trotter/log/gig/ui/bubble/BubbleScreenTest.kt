@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import cloud.trotter.log.gig.core.data.vehicle.Garage
+import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.model.vehicle.Bicycle
@@ -44,8 +45,11 @@ class BubbleScreenTest {
     private val clock = Clock.fixed(Instant.ofEpochMilli(1_700_000_000_000), ZoneOffset.UTC)
     @After fun cleanup() { scope.cancel() }
 
+    private val odometerActions: OdometerActions = mock()
+
     private fun model(): BubbleViewModel {
         val vm: BubbleViewModel = mock()
+        whenever(vm.odometerActions).thenReturn(odometerActions)
         val tip = CashTipActions(scope, mock(), mock(), clock)
         val expense = ExpenseActions(scope, mock(), clock)
         whenever(vm.cashTipActions).thenReturn(tip)
@@ -75,12 +79,12 @@ class BubbleScreenTest {
         whenever(vm.odometerReadings).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.stamps).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(null, emptyList(), null, false)))
-        whenever(vm.odometerNotice).thenReturn(MutableStateFlow(null))
-        whenever(vm.odometerSaving).thenReturn(MutableStateFlow(false))
-        whenever(vm.odometerWriteFailed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))
+        whenever(odometerActions.notice).thenReturn(MutableStateFlow(null))
+        whenever(odometerActions.saving).thenReturn(MutableStateFlow(false))
+        whenever(odometerActions.failed).thenReturn(MutableStateFlow(OdometerWriteFailure.NONE))
         whenever(vm.gpsTotalMiles).thenReturn(MutableStateFlow(null))
-        whenever(vm.odometerSaveCompleted).thenReturn(MutableSharedFlow())
-        whenever(vm.odometerVehicleChanged).thenReturn(MutableSharedFlow())
+        whenever(odometerActions.saveCompleted).thenReturn(MutableSharedFlow())
+        whenever(odometerActions.vehicleChanged).thenReturn(MutableSharedFlow())
         whenever(vm.projectionWatermark).thenReturn(flowOf(null))
         whenever(vm.cashTipDeliveries("dash")).thenReturn(flowOf(emptyList()))
         whenever(vm.recentLabels(any())).thenReturn(flowOf(emptyList()))
@@ -133,7 +137,7 @@ class BubbleScreenTest {
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
         assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
         repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
     }
 
     @Test fun `unlocked chip opens menu and selecting calls existing path once`() {
@@ -147,8 +151,8 @@ class BubbleScreenTest {
         compose.onNodeWithTag("hud.vehicle.menu").assertIsDisplayed()
         compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
         repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
-        verify(vm, times(1)).selectVehicle("bike")
-        verify(vm, times(1)).selectVehicle(any())
+        verify(odometerActions, times(1)).select("bike")
+        verify(odometerActions, times(1)).select(any())
     }
 
     /** Review r1: the lock is re-checked at the pick, so a menu opened inside the window cannot swap after it. */
@@ -162,7 +166,7 @@ class BubbleScreenTest {
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
         compose.onNodeWithTag("hud.vehicle.option.bike").performClick(); settle()
         assertEquals("Can't switch vehicles after the first 10 minutes of a shift", ShadowToast.getTextOfLatestToast())
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
     }
 
     /** Review r1: picking the vehicle that is already active changes nothing (an entered reading survives). */
@@ -176,7 +180,7 @@ class BubbleScreenTest {
         compose.onNodeWithTag("hud.vehicle.chip").performClick(); settle()
         compose.onNodeWithTag("hud.vehicle.option.civic").performClick(); settle()
         repeat(20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }; compose.onNodeWithTag("hud.vehicle.menu").assertDoesNotExist()
-        verify(vm, never()).selectVehicle(any())
+        verify(odometerActions, never()).select(any())
     }
 
     @Test fun `typed expense chip reopens the actual entry field prefilled`() {
@@ -220,7 +224,7 @@ class BubbleScreenTest {
         compose.onNodeWithTag("hud.dock.ODOMETER").performClick(); settle()
         assertVehicleAddStarted()
         compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
-        verify(vm, never()).reopenOdometer()
+        verify(odometerActions, never()).reopen()
     }
 
     /** #1379 follow-up: Accept and Decline collapse the bubble through the same helper, never finish it. */
@@ -271,6 +275,77 @@ class BubbleScreenTest {
         assertTrue("the bubble collapses", shadowOf(compose.activity).isTaskMovedToBack)
         assertFalse("the bubble is not removed", compose.activity.isFinishing)
         assertNull(shadowOf(compose.activity).nextStartedActivity)
+    }
+
+    @Test fun `reopen during a save keeps the reopened odometer sheet`() {
+        finishGatedOdometerSave(reopenReading = true)
+    }
+
+    @Test fun `a late odometer save leaves the cash tip sheet open`() {
+        finishGatedOdometerSave(reopenReading = false)
+    }
+
+    private fun finishGatedOdometerSave(reopenReading: Boolean) {
+        val civic = Vehicle("civic", "Civic", 0)
+        val releaseWrite = CompletableDeferred<Unit>()
+        val readings: OdometerReadingRepository = mock()
+        runBlocking {
+            doSuspendableAnswer { releaseWrite.await(); 71L }
+                .whenever(readings).record(any(), any())
+        }
+        val actions = OdometerActions(scope, mock(), readings)
+        val vm = model()
+        whenever(vm.odometerActions).thenReturn(actions)
+        whenever(vm.garage).thenReturn(MutableStateFlow(Garage(listOf(civic), civic.id, true)))
+        whenever(vm.vehicleChip).thenReturn(MutableStateFlow(VehicleChipModel(civic, listOf(civic), civic.id, false)))
+        whenever(vm.gpsTotalMiles).thenReturn(MutableStateFlow(100.0))
+        doAnswer { invocation ->
+            actions.save(civic.id, invocation.getArgument(0), invocation.getArgument(1))
+            Unit
+        }.whenever(vm).saveOdometerReading(any(), any())
+        try {
+            show(vm)
+            compose.onNodeWithTag("hud.dock.ODOMETER").performClick(); settle()
+            compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("keypad.5").performClick(); settle()
+            compose.onNodeWithTag("odometer.save").assertIsEnabled().performClick(); settle()
+            compose.runOnIdle {
+                assertTrue(actions.saving.value)
+                assertNull(actions.notice.value)
+                verify(vm).saveOdometerReading(5, 1L)
+                compose.activity.onBackPressedDispatcher.onBackPressed()
+            }
+            settle(); compose.mainClock.advanceTimeBy(400)
+            compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+            val next = if (reopenReading) "ODOMETER" else "CASH_TIP"
+            compose.onNodeWithTag("hud.dock.$next").performClick(); settle()
+            compose.mainClock.advanceTimeBy(400)
+            if (reopenReading) {
+                compose.onNodeWithTag("keypad.7").performClick(); settle()
+                compose.onNodeWithTag("odometer.reading").assertTextEquals("7")
+            }
+            compose.runOnIdle { releaseWrite.complete(Unit) }
+            settle(); compose.mainClock.advanceTimeBy(400)
+            compose.runOnIdle {
+                assertFalse(actions.saving.value)
+                assertEquals(5, actions.notice.value!!.readingMiles)
+                assertTrue(actions.saveCompleted.replayCache.isEmpty())
+            }
+            compose.onNodeWithTag("hud.sheet").assertIsDisplayed()
+            if (reopenReading) {
+                compose.onNodeWithTag("odometer.reading").assertTextEquals("7")
+                compose.onNodeWithTag("odometer.save").assertIsEnabled().performClick(); settle()
+                compose.mainClock.advanceTimeBy(400)
+                verify(vm).saveOdometerReading(7, 2L)
+                compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
+            } else {
+                compose.onNodeWithTag("cashTip.title").assertIsDisplayed()
+                compose.onNodeWithTag("odometer.sheet").assertDoesNotExist()
+            }
+            runBlocking { verify(readings).record(civic.id, 5); Unit } // verify returns the mock's null Long
+        } finally {
+            releaseWrite.complete(Unit)
+        }
     }
 
     private fun assertVehicleAddStarted() {
