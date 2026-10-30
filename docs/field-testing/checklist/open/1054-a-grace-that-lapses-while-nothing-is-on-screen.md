@@ -10,7 +10,7 @@ issues: #1054, #732, #1140
   come up) and then leave the app backgrounded, untouched, with the phone idle — the dash should
   end on its own about a grace window later (~10 s from an idle/offline screen, ~2.5 s from the
   summary), NOT the next time you happen to open DoorDash. Then the harder half: while a dash-end
-  grace is open, force-stop DashBuddy and relaunch it — the pending end must still commit within
+  grace is open, force-stop gig.log and relaunch it — the pending end must still commit within
   its window rather than hanging around. **Desk, after the pull:**
   1. `grep "Recovery re-armed" *.log` — one INFO line under the `StateMachine` tag per recovery
      that restored a live grace, carrying a count only. Absent on a recovery with no pending

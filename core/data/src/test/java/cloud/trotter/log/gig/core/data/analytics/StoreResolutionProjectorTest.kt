@@ -1,0 +1,1085 @@
+package cloud.trotter.log.gig.core.data.analytics
+
+import androidx.room.Room
+import cloud.trotter.log.gig.core.data.event.AppEventRepo
+import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.database.GigLogDatabase
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.StoreEntity
+import cloud.trotter.log.gig.core.database.event.AppEventDao
+import cloud.trotter.log.gig.core.database.event.AppEventEntity
+import cloud.trotter.log.gig.domain.analytics.StoreResolution
+import cloud.trotter.log.gig.domain.evaluation.OfferAction
+import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
+import cloud.trotter.log.gig.domain.evaluation.OfferQuality
+import cloud.trotter.log.gig.domain.evaluation.UserEconomy
+import cloud.trotter.log.gig.domain.model.event.AppEventCodec
+import cloud.trotter.log.gig.domain.model.event.AppEventType
+import cloud.trotter.log.gig.domain.model.event.payload.AppEventPayload
+import cloud.trotter.log.gig.domain.model.event.payload.DeliveryAdjustmentPayload
+import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
+import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
+import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
+import cloud.trotter.log.gig.domain.model.event.payload.SessionStartPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionStartSource
+import cloud.trotter.log.gig.domain.model.event.payload.SessionStopPayload
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
+import cloud.trotter.log.gig.domain.model.pay.ParsedPay
+import cloud.trotter.log.gig.domain.model.pay.ParsedPayItem
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.UNKNOWN_STORE
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+
+/**
+ * #159 — the store-resolution edges of [AnalyticsProjector] against an in-memory Room DB: fresh
+ * resolution, the B1 no-downgrade + re-run-no-op guards, the B2 multi-store stack, the F1 batch-
+ * boundary incremental ≡ refold guard, the H1 correction pin, and the F8 version-wipe. The pure
+ * resolver/normalizer are covered in `:domain`.
+ */
+@RunWith(RobolectricTestRunner::class)
+class StoreResolutionProjectorTest {
+
+    private lateinit var db: GigLogDatabase
+    private lateinit var dao: AnalyticsDao
+    private lateinit var eventDao: AppEventDao
+    private lateinit var repo: AppEventRepo
+    private lateinit var prefs: AppPreferencesRepository
+
+    @Before
+    fun setUp() {
+        val context = RuntimeEnvironment.getApplication()
+        db = Room.inMemoryDatabaseBuilder(context, GigLogDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        dao = db.analyticsDao()
+        eventDao = db.appEventDao()
+        repo = AppEventRepo(db, eventDao, db.effectsFiredDao())
+        prefs = mock { on { userEconomy } doReturn flowOf(UserEconomy()) }
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    private fun projector() = AnalyticsProjector(db, repo, eventDao, dao, prefs)
+
+    private suspend fun insert(type: AppEventType, sessionId: String?, at: Long, payload: AppEventPayload?): Long =
+        eventDao.insert(
+            AppEventEntity(
+                aggregateId = sessionId,
+                eventType = type,
+                eventPayload = payload?.let(AppEventCodec::encodePayload) ?: "{}",
+                occurredAt = at,
+            ),
+        )
+
+    private fun start(sid: String, at: Long) =
+        SessionStartPayload(sid, "DoorDash", at, SessionStartSource.INTERACTION, "start")
+
+    private fun stop(sid: String, at: Long) =
+        SessionStopPayload(sid, at, SessionEndSource.EARLY_OFFLINE, platform = "DoorDash")
+
+    private fun pickup(jobId: String, taskId: String, store: String, at: Long, address: String? = null) =
+        PickupPayload(
+            jobId = jobId, taskId = taskId, storeName = store, phaseStartedAt = at - 100,
+            arrivedAt = at - 60, confirmedAt = at, activity = "PICKUP", storeAddress = address,
+        )
+
+    private fun delivery(
+        jobId: String,
+        taskId: String,
+        store: String,
+        at: Long,
+        parsedPay: ParsedPay? = null,
+        totalPay: Double? = null,
+        dropRealizedPay: Double? = null,
+        customerHash: String? = "cust-$taskId",
+        jobOfferHashes: List<String> = emptyList(),
+    ) = DeliveryPayload(
+        jobId = jobId, taskId = taskId, storeName = store, customerHash = customerHash,
+        addressHash = "addr-$taskId", phaseStartedAt = at - 200, arrivedAt = at - 30,
+        completedAt = at, totalPay = totalPay, parsedPay = parsedPay, dropRealizedPay = dropRealizedPay,
+        jobOfferHashes = jobOfferHashes,
+    )
+
+    private fun receipt(vararg tips: Pair<String, Double>) =
+        ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 5.0)),
+            customerTips = tips.map { ParsedPayItem(it.first, it.second) },
+        )
+
+    private val targetKey = "doordash|target|02426"
+    private val mapleKey = "doordash|maple street biscuit company|alamo ranch"
+
+    // ── Basics: fresh fold stamps stores + pickup_records + delivery storeKey ──
+
+    @Test
+    fun `fresh fold resolves a single-store job — stores row, pickup + delivery keyed`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val pu = insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100, "123 Main St"))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val store = dao.store(targetKey)
+        assertNotNull("Target keyed store exists", store)
+        assertEquals("target", store!!.normalizedChain)
+        assertEquals("02426", store.runningKey)
+        assertEquals("123 Main St", store.address)
+        assertEquals("Target", store.pickupNameForm)
+        assertEquals(targetKey, dao.pickupRecordsForJob("J1").single { it.eventSequenceId == pu }.storeKey)
+        assertEquals(targetKey, dao.deliveryRecord(d)!!.storeKey)
+        // pay/net untouched by resolution.
+        assertEquals(8.0, dao.deliveryRecord(d)!!.realizedPay!!, 0.001)
+    }
+
+    // ── B1: keyed drop then payout-less DASH_STOP → no downgrade; re-run is a no-op ──
+
+    @Test
+    fun `B1 — payout-less DASH_STOP does not downgrade a keyed store, and a re-run is a no-op`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        // Still keyed after the payout-less DASH_STOP resolution ran (session-level, no receipt).
+        assertEquals(targetKey, dao.deliveryRecord(d)!!.storeKey)
+        val storeBefore = dao.store(targetKey)!!
+
+        // A from-zero refold re-runs every resolution over the row set: byte-identical (L1) — the key
+        // is row-sourced, so the payout-less close recomputes the SAME key, no downgrade.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        assertEquals("store row byte-identical on refold", storeBefore, dao.store(targetKey))
+        assertEquals(targetKey, dao.deliveryRecord(d)!!.storeKey)
+    }
+
+    private suspend fun wipeAndResetWatermark() {
+        dao.deleteAllDeliveries(); dao.deleteAllSessions(); dao.deleteAllOffers()
+        dao.deleteAllStores(); dao.deleteAllPickupRecords()
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = 5))
+    }
+
+    // ── B2: Target+Maple stack, one receipt on drop1, drop2 receipt-less, closed by DASH_STOP ──
+
+    @Test
+    fun `B2 — a multi-store stack keys BOTH stores from the single receipt`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1150, pickup("J1", "pM", "Maple Street Biscuit Company", 1150))
+        // drop1 carries the FULL receipt (both store lines); drop2 is receipt-less.
+        val d1 = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery(
+                "J1", "dT", "Target", 1200,
+                parsedPay = receipt("Target (02426)" to 2.25, "Maple Street Biscuit - Alamo Ranch" to 6.50),
+                dropRealizedPay = 4.5,
+            ),
+        )
+        val d2 = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dM", "Maple Street Biscuit Company", 1250, dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        assertNotNull("Target keyed", dao.store(targetKey))
+        assertNotNull("Maple keyed (NOT chain-only) — both stores of the stack keyed from one receipt", dao.store(mapleKey))
+        assertEquals(targetKey, dao.deliveryRecord(d1)!!.storeKey)
+        assertEquals(mapleKey, dao.deliveryRecord(d2)!!.storeKey)
+    }
+
+    // ── F1: incremental fold with a batch boundary splitting the job ≡ from-zero refold ──
+
+    @Test
+    fun `F1 — incremental fold with the batch boundary BETWEEN the two drops equals a from-zero refold`() = runBlocking {
+        // FIX 12b: the receipt rides the SECOND drop, with the batch boundary between the drops — the
+        // divergence-prone shape (drop1's early resolution keys chain-only; drop2's receipt upgrades it).
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1150, pickup("J1", "pM", "Maple Street Biscuit Company", 1150))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dT", "Target", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery(
+                "J1", "dM", "Maple Street Biscuit Company", 1250,
+                parsedPay = receipt("Target (02426)" to 2.25, "Maple Street Biscuit - Alamo Ranch" to 6.50),
+                dropRealizedPay = 4.25,
+            ),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        // Incremental: limit 2 lands DASH_START+pT in b1, pM+dT in b2, dM+DASH_STOP in b3 — so dT and dM
+        // (and their resolutions) fall in DIFFERENT batches.
+        val p = projector()
+        while (p.processBatch(limit = 2) != null) { /* drain */ }
+        val incrementalVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val incrementalStores = dao.allStores()
+        val incrementalDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val incrementalPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
+
+        // From-zero refold in ONE drain.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refoldVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val refoldStores = dao.allStores()
+        val refoldDeliveryKeys = listOf("dT", "dM").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+        val refoldPickupKeys = dao.pickupRecordsForJob("J1").associate { it.taskId to it.storeKey }
+
+        // The READ-VISIBLE store set (M4 EXISTS-filtered) + ALL delivery + ALL pickup stamps converge.
+        // #887: the RAW `stores` table now converges too. It used to differ — the incremental path left an
+        // unreferenced chain-only orphan (dT's early resolution, before dM's receipt landed), documented
+        // here as an accepted read-invisible residual. It is no longer accepted: dM's upgrade sweeps the
+        // key it superseded, so incremental lands on the refold's terminal set exactly.
+        assertEquals(
+            "RAW stores table identical incremental vs refold (#887 supersession sweep)",
+            refoldStores, incrementalStores,
+        )
+        assertEquals("read-visible store set identical incremental vs refold", refoldVisible, incrementalVisible)
+        assertEquals("delivery storeKeys identical", refoldDeliveryKeys, incrementalDeliveryKeys)
+        assertEquals("pickup storeKeys identical", refoldPickupKeys, incrementalPickupKeys)
+        assertEquals(targetKey, incrementalDeliveryKeys["dT"])
+        assertEquals(mapleKey, incrementalDeliveryKeys["dM"])
+        assertEquals(setOf(targetKey, mapleKey), incrementalVisible)
+    }
+
+    // ── H1: a disagreeing driver correction pins the row; resolution never re-keys it ──
+
+    @Test
+    fun `H1 — a store-name correction pins the row and resolution does not re-key it (pin is load-bearing)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        // FIX 12a: correct to a name that STILL brand-matches the pickup anchor ("Target Cafe" shares the
+        // leading "target" token). Without the pin, resolution WOULD re-key it back to the Target entity —
+        // so the pin is genuinely load-bearing here (a disagreeing name would have stayed null regardless).
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-resolution
+        projector().catchUp()
+
+        val row = dao.deliveryRecord(d)!!
+        assertEquals("driver name honored", "Target Cafe", row.storeName)
+        assertEquals("pinned", 1, row.storeKeyPinned)
+        assertNull("storeKey stays null — the pin blocks the brand-matching re-key", row.storeKey)
+
+        // FIX 12a refold half: a from-zero refold re-derives the pin (the DELIVERY_ADJUSTMENT replays
+        // after its target) → the pinned row's final state is identical to the incremental path.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refold = dao.deliveryRecord(d)!!
+        assertEquals("Target Cafe", refold.storeName)
+        assertEquals(1, refold.storeKeyPinned)
+        assertNull(refold.storeKey)
+    }
+
+    // ── #906: a driver rename sweeps only the prior key, after detaching the delivery ──
+
+    /** Seed the last-reference shape directly: normal anchored resolution also keys a pickup row. */
+    private suspend fun seedDeliveryWithOnlyStoreReference(): Long {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, totalPay = 8.0),
+        )
+        projector().catchUp()
+        dao.upsertStore(
+            StoreEntity(
+                storeKey = targetKey, platform = "doordash", normalizedChain = "target",
+                chainDisplay = "Target", runningKey = "02426", offerNameForm = null,
+                pickupNameForm = "Target", payoutNameForm = null, address = null,
+            ),
+        )
+        dao.upsertDelivery(dao.deliveryRecord(d)!!.copy(storeKey = targetKey))
+        assertEquals(1, dao.storeKeyReferenceCount(targetKey))
+        return d
+    }
+
+    @Test
+    fun `#906 — renaming the last referencing delivery deletes only its prior store`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        val unrelated = dao.store(targetKey)!!.copy(storeKey = "doordash|target|999", runningKey = "999")
+        dao.upsertStore(unrelated) // An unrelated zero-reference entity must NOT be swept (#904).
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+
+        projector().catchUp()
+
+        assertNull("last reference detached, prior entity gone", dao.store(targetKey))
+        assertEquals("no global unreferenced-row sweep", listOf(unrelated), dao.allStores())
+        val row = dao.deliveryRecord(d)!!
+        assertEquals("Target Cafe", row.storeName)
+        assertNull(row.storeKey)
+        assertEquals(1, row.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — a second delivery referencing the prior key keeps the store even when pinned`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        val other = dao.deliveryRecord(d)!!.copy(
+            eventSequenceId = 88_888, jobId = "JOTHER", taskId = "dOTHER", storeKeyPinned = 1,
+        )
+        dao.upsertDelivery(other)
+        val storeBefore = dao.store(targetKey)!!
+        assertEquals(2, dao.storeKeyReferenceCount(targetKey))
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+
+        projector().catchUp()
+
+        assertEquals(storeBefore, dao.store(targetKey))
+        assertEquals(1, dao.storeKeyReferenceCount(targetKey))
+        assertEquals(other, dao.deliveryRecord(other.eventSequenceId))
+        assertNull(dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(1, dao.deliveryRecord(d)!!.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — a pay-only delivery adjustment leaves all stores and the key untouched`() = runBlocking {
+        val d = seedDeliveryWithOnlyStoreReference()
+        dao.upsertStore(dao.store(targetKey)!!.copy(storeKey = "doordash|target|999", runningKey = "999"))
+        val storesBefore = dao.allStores()
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newPay = 12.0),
+        )
+
+        projector().catchUp()
+
+        assertEquals(storesBefore, dao.allStores())
+        val row = dao.deliveryRecord(d)!!
+        assertEquals(12.0, row.realizedPay!!, 0.001)
+        assertEquals(targetKey, row.storeKey)
+        assertEquals(0, row.storeKeyPinned)
+    }
+
+    @Test
+    fun `#906 — incremental rename and version-reset refold yield identical raw stores`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        projector().catchUp() // Prior key exists when the incremental rename applies.
+        assertEquals(targetKey, dao.deliveryRecord(d)!!.storeKey)
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1250,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "Target Cafe"),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+        val incrementalStores = dao.allStores()
+        val incrementalDelivery = dao.deliveryRecord(d)!!
+        assertEquals(listOf(targetKey), incrementalStores.map { it.storeKey }) // Pickup keeps it alive.
+        assertNull(incrementalDelivery.storeKey)
+        assertEquals(1, incrementalDelivery.storeKeyPinned)
+
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
+        projector().catchUp() // From zero: the rename pins the row BEFORE the first resolution.
+
+        assertEquals("raw stores byte-identical", incrementalStores, dao.allStores())
+        assertEquals(incrementalDelivery, dao.deliveryRecord(d))
+    }
+
+    @Test
+    fun `#906 — event-derived last reference is deleted identically on refold and a later visit recreates it`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val pu = insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dC1", "CVS - Pharmacy", 1200, dropRealizedPay = 4.5),
+        )
+        projector().catchUp()
+        assertNotNull(dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(cvsAddressKey, dao.pickupRecordsForJob("J1").single().storeKey)
+
+        // The new anchor wins the dropoff match; the no-downgrade guard keeps its address key.
+        // The original pickup upgrades to the receipt key, leaving only the delivery on the old key.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1225, pickup("J1", "pC2", "CVS - Pharmacy", 1225))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        projector().catchUp()
+        assertEquals(cvsReceiptKey, dao.pickupRecordsForJob("J1").single { it.eventSequenceId == pu }.storeKey)
+        assertEquals("doordash|cvs|", dao.pickupRecordsForJob("J1").single { it.taskId == "pC2" }.storeKey)
+        assertNotNull(dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals("only the delivery references the old key", 1, dao.storeKeyReferenceCount(cvsAddressKey))
+
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1300,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d, sessionId = "S1", newStoreName = "CVS Cafe"),
+        )
+        projector().catchUp()
+        assertNull("renaming the last reference deletes the old store", dao.store(cvsAddressKey))
+        assertEquals(0, dao.storeKeyReferenceCount(cvsAddressKey))
+        val incrementalStores = dao.allStores()
+        val incrementalDelivery = dao.deliveryRecord(d)!!
+        assertEquals(listOf("doordash|cvs|", cvsReceiptKey), incrementalStores.map { it.storeKey })
+        assertEquals("CVS Cafe", incrementalDelivery.storeName)
+        assertNull(incrementalDelivery.storeKey)
+        assertEquals(1, incrementalDelivery.storeKeyPinned)
+
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
+        projector().catchUp()
+        assertEquals("full stores table identical on refold", incrementalStores, dao.allStores())
+        assertEquals("full delivery row identical on refold", incrementalDelivery, dao.deliveryRecord(d))
+        assertNull(dao.store(cvsAddressKey))
+
+        // A new job at the same address can create the deleted identity again.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1400, pickup("J2", "pC3", "CVS", 1400, cvsAddress))
+        val laterDelivery = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1500,
+            delivery("J2", "dC3", "CVS", 1500, dropRealizedPay = 5.0),
+        )
+        projector().catchUp()
+        val recreated = dao.store(cvsAddressKey)
+        assertNotNull("later resolution creates a fresh identity row", recreated)
+        assertEquals(cvsAddress, recreated!!.address)
+        assertEquals(cvsAddressKey, dao.pickupRecordsForJob("J2").single().storeKey)
+        assertEquals(cvsAddressKey, dao.deliveryRecord(laterDelivery)!!.storeKey)
+        assertEquals(2, dao.storeKeyReferenceCount(cvsAddressKey))
+        assertEquals(incrementalStores.size + 1, dao.allStores().size)
+        assertEquals(incrementalDelivery, dao.deliveryRecord(d))
+    }
+
+    // ── F8: a PROJECTOR_VERSION bump wipes stores + pickup_records ──
+
+    @Test
+    fun `F8 — a version bump wipes stale stores and pickup_records`() = runBlocking {
+        // Seed a real store + one bogus stale store, and a bogus pickup row, at an OLD projector version.
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp() // version 5, real store created
+
+        val bogus = StoreEntity(
+            storeKey = "doordash|ghost|999", platform = "doordash", normalizedChain = "ghost",
+            chainDisplay = "Ghost", runningKey = "999", offerNameForm = null, pickupNameForm = "Ghost",
+            payoutNameForm = null, address = null,
+        )
+        dao.upsertStore(bogus)
+        // FIX 12c: also seed a POISONED pickup_records row (a fake PK no refold recreates) to prove the
+        // F8 wipe clears pickup_records, not only stores.
+        dao.upsertPickup(
+            PickupRecordEntity(
+                eventSequenceId = 99_999, sessionId = "S1", platform = "doordash", jobId = "JGHOST",
+                taskId = "PTGHOST", storeName = "Ghost", storeKey = "doordash|ghost|999",
+                phaseStartedAt = 1, arrivedAt = 1, confirmedAt = 2, deadlineMillis = null, activity = "PICKUP",
+            ),
+        )
+        // Force the version-mismatch rebuild by writing an OLD projectorVersion watermark.
+        dao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 999, projectorVersion = 4))
+
+        projector().catchUp() // triggers rebuildIfVersionChanged → F8 wipe + refold
+
+        assertNull("stale bogus store wiped", dao.store("doordash|ghost|999"))
+        assertNotNull("real store re-created by the refold", dao.store(targetKey))
+        assertEquals("poisoned pickup row gone after rebuild (F8)", 0, dao.pickupRecordsForJob("JGHOST").size)
+    }
+
+    // ── #773: address-derived running-key fallback for chain-bare receipts ──
+
+    private val hebAddress = "12125 Alamo Rnch Pkwy, San Antonio, TX 78240, USA"
+    private val hebAddressKey = "doordash|h-e-b|@12125"
+
+    @Test
+    fun `#773 — a chain-bare grocery receipt keys the store off its pickup address`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val pu = insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pH", "H-E-B", 1100, hebAddress))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            // chain-bare receipt: the payout store form carries no (code)/ - Area running key.
+            delivery("J1", "dH", "H-E-B", 1200, receipt("H-E-B" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val store = dao.store(hebAddressKey)
+        assertNotNull("H-E-B keyed by its street number (@12125)", store)
+        assertEquals("h-e-b", store!!.normalizedChain)
+        assertEquals("@12125", store.runningKey)
+        assertEquals("the display address is seeded from the SAME row that keyed the store", hebAddress, store.address)
+        assertEquals(hebAddressKey, dao.deliveryRecord(d)!!.storeKey)
+        assertEquals(hebAddressKey, dao.pickupRecordsForJob("J1").single { it.eventSequenceId == pu }.storeKey)
+        // pay/net untouched by resolution.
+        assertEquals(8.0, dao.deliveryRecord(d)!!.realizedPay!!, 0.001)
+    }
+
+    @Test
+    fun `#773 F1 — a chain-bare address job folds identically incremental vs from-zero refold across a batch boundary`() = runBlocking {
+        // Batch boundary BETWEEN the pickups and the close (the F1 divergence-prone shape): the pickup
+        // resolves in one batch, the DELIVERY_COMPLETED/DASH_STOP close in the next.
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pH", "H-E-B", 1100, hebAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dH", "H-E-B", 1200, receipt("H-E-B" to 3.0), totalPay = 8.0))
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        // Incremental: limit 2 lands DASH_START+pH in b1, dH+DASH_STOP in b2 — pickup and close split.
+        val p = projector()
+        while (p.processBatch(limit = 2) != null) { /* drain */ }
+        val incDelivery = dao.deliveryRecordByTask("dH")?.storeKey
+        val incPickup = dao.pickupRecordsForJob("J1").single().storeKey
+        val incVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refDelivery = dao.deliveryRecordByTask("dH")?.storeKey
+        val refPickup = dao.pickupRecordsForJob("J1").single().storeKey
+        val refVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+
+        assertEquals(hebAddressKey, incDelivery)
+        assertEquals("delivery storeKey identical incremental vs refold", refDelivery, incDelivery)
+        assertEquals("pickup storeKey identical incremental vs refold", refPickup, incPickup)
+        assertEquals("read-visible store set identical incremental vs refold", refVisible, incVisible)
+        assertEquals(setOf(hebAddressKey), incVisible)
+    }
+
+    @Test
+    fun `#773 acceptance — four same-chain jobs at distinct addresses key to four @-rows, an address-less job stays chain-only`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val addrs = listOf(
+            "100 Bandera Rd, San Antonio, TX 78228, USA",
+            "200 Culebra Rd, San Antonio, TX 78228",
+            "300 Marbach Rd, San Antonio, TX 78227-1000, United States",
+            "400 SW Loop 410, San Antonio, TX 78227",
+        )
+        var t = 1100L
+        addrs.forEachIndexed { i, addr ->
+            insert(AppEventType.PICKUP_CONFIRMED, "S1", t, pickup("J$i", "pH$i", "H-E-B", t, addr)); t += 50
+            insert(AppEventType.DELIVERY_COMPLETED, "S1", t, delivery("J$i", "dH$i", "H-E-B", t, receipt("H-E-B" to 3.0), totalPay = 8.0)); t += 50
+        }
+        // A fifth H-E-B job with NO pickup address → stays the chain-only "location unknown" bucket.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", t, pickup("J4", "pH4", "H-E-B", t)); t += 50
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", t, delivery("J4", "dH4", "H-E-B", t, receipt("H-E-B" to 3.0), totalPay = 8.0)); t += 50
+        insert(AppEventType.DASH_STOP, "S1", t, stop("S1", t))
+        projector().catchUp()
+
+        // Four distinct located rows, each seeded with its own address.
+        listOf("@100" to addrs[0], "@200" to addrs[1], "@300" to addrs[2], "@400" to addrs[3]).forEach { (frag, addr) ->
+            val s = dao.store("doordash|h-e-b|$frag")
+            assertNotNull("located H-E-B $frag exists", s)
+            assertEquals(addr, s!!.address)
+        }
+        // The address-less job keeps its own chain-only bucket (no phantom merge).
+        val chainOnly = dao.store("doordash|h-e-b|")
+        assertNotNull("address-less job keeps the chain-only 'location unknown' bucket", chainOnly)
+        assertNull(chainOnly!!.runningKey)
+
+        val hebRunningKeys = dao.allStores().filter { it.normalizedChain == "h-e-b" }.map { it.runningKey }.toSet()
+        assertEquals(setOf("@100", "@200", "@300", "@400", null), hebRunningKeys)
+        assertEquals("doordash|h-e-b|@100", dao.deliveryRecordByTask("dH0")?.storeKey)
+        assertEquals("doordash|h-e-b|", dao.deliveryRecordByTask("dH4")?.storeKey)
+    }
+
+    // ── #887: a monotonic key UPGRADE sweeps the identity row it superseded ──
+
+    private val cvsAddress = "23530 Bandera Rd, San Antonio, TX 78255, USA"
+    private val cvsAddressKey = "doordash|cvs|@23530"
+    private val cvsReceiptKey = "doordash|cvs|3551"
+
+    /**
+     * The fielded shape (07-27 pull, job-217): a receipt-less first drop keys the store off its pickup
+     * ADDRESS, a later drop's receipt upgrades it to the receipt tier — and the superseded address-tier
+     * `stores` row used to survive as a zero-visit phantom. The batch boundary BETWEEN the drops is what
+     * makes the intermediate row exist at all (in one batch the receipt evidence is already committed).
+     */
+    @Test
+    fun `#887 — a receipt upgrade over an address-tier key deletes the superseded stores row`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        // Batch 1 = DASH_START + pickup + drop1 → the receipt-less resolution mints the ADDRESS-tier row.
+        assertNotNull(p.processBatch(limit = 3))
+        assertNotNull("the address-tier row exists before the upgrade", dao.store(cvsAddressKey))
+        assertEquals(cvsAddressKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+
+        // Batch 2 = drop2 (the receipt) + DASH_STOP → upgrade to the receipt tier.
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNull("the superseded address-tier stores row is GONE (#887)", dao.store(cvsAddressKey))
+        assertNotNull("the receipt-tier winner exists", dao.store(cvsReceiptKey))
+        assertEquals("winner keyed off the receipt", "3551", dao.store(cvsReceiptKey)!!.runningKey)
+        // Every visit row followed the upgrade — nothing is left pointing at the deleted entity.
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC2")?.storeKey)
+        assertEquals(cvsReceiptKey, dao.pickupRecordsForJob("J1").single().storeKey)
+        assertEquals("exactly one CVS identity row survives", 1, dao.allStores().count { it.normalizedChain == "cvs" })
+        // The sweep is store-identity only: the money columns are untouched.
+        assertEquals(4.5, dao.deliveryRecordByTask("dC1")!!.realizedPay!!, 0.001)
+    }
+
+    /**
+     * The guard: a row the re-key did NOT reach still references the superseded key ⇒ the entity is
+     * KEPT (fail toward keeping — deleting it would orphan a referencing row and blank its report card).
+     * Simulated with a pickup row from a DIFFERENT session's job (so the session-level DASH_STOP
+     * re-resolution never enumerates it), the same way the F8 test seeds an unreachable row.
+     */
+    @Test
+    fun `#887 guard — a superseded key still referenced by a row the re-key missed is KEPT`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        assertNotNull(p.processBatch(limit = 3)) // mints the address-tier row
+        assertNotNull(dao.store(cvsAddressKey))
+        // A visit row from another session's job, already keyed to the address-tier entity, that THIS
+        // job's re-key can never reach.
+        dao.upsertPickup(
+            PickupRecordEntity(
+                eventSequenceId = 88_888, sessionId = "S9", platform = "doordash", jobId = "JOTHER",
+                taskId = "pOTHER", storeName = "CVS", storeKey = cvsAddressKey,
+                phaseStartedAt = 500, arrivedAt = 520, confirmedAt = 560, deadlineMillis = null,
+                activity = "PICKUP", storeAddress = cvsAddress,
+            ),
+        )
+
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNotNull("the superseded entity is KEPT — a row still references it", dao.store(cvsAddressKey))
+        assertNotNull("the winner still exists alongside it", dao.store(cvsReceiptKey))
+        assertEquals("the unreached row keeps its key", cvsAddressKey, dao.pickupRecordsForJob("JOTHER").single().storeKey)
+        // This job's own rows still completed the upgrade.
+        assertEquals(cvsReceiptKey, dao.deliveryRecordByTask("dC1")?.storeKey)
+    }
+
+    /** Incremental (page boundary between the drops) ≡ from-zero refold on the RAW `stores` table —
+     *  the property the sweep buys: the refold never mints the intermediate row, incremental deletes it. */
+    @Test
+    fun `#887 — incremental across a page boundary equals a from-zero refold on the raw stores table`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        val p = projector()
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+        val incStores = dao.allStores()
+        val incVisible = dao.storeReportRows().first().map { it.storeKey }.toSet()
+        val incKeys = listOf("dC1", "dC2").associateWith { dao.deliveryRecordByTask(it)?.storeKey }
+
+        wipeAndResetWatermark()
+        projector().catchUp() // ONE batch — the receipt evidence is committed before any resolution runs
+        val refStores = dao.allStores()
+
+        assertEquals("raw stores table identical incremental vs from-zero refold", refStores, incStores)
+        assertEquals("the refold never minted the address-tier row either", listOf(cvsReceiptKey), refStores.map { it.storeKey })
+        assertEquals(setOf(cvsReceiptKey), incVisible)
+        assertEquals(mapOf("dC1" to cvsReceiptKey, "dC2" to cvsReceiptKey), incKeys)
+    }
+
+    /** A later correction fold must not RESURRECT a swept identity row: no correction path writes the
+     *  `stores` table or stamps a storeKey — only resolution does, and it re-derives the winner. */
+    @Test
+    fun `#887 — a later correction fold does not resurrect the swept stores row`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pC", "CVS", 1100, cvsAddress))
+        val d1 = insert(AppEventType.DELIVERY_COMPLETED, "S1", 1200, delivery("J1", "dC1", "CVS", 1200, dropRealizedPay = 4.5))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J1", "dC2", "CVS", 1250, receipt("CVS (3551)" to 3.0), dropRealizedPay = 4.25),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        val p = projector()
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+        assertNull(dao.store(cvsAddressKey))
+
+        // A driver re-price + a cash-tip edit, folded in a LATER batch.
+        insert(
+            AppEventType.DELIVERY_ADJUSTMENT, "S1", 1400,
+            DeliveryAdjustmentPayload(targetEventSequenceId = d1, sessionId = "S1", newPay = 9.0, newCashTip = 2.0),
+        )
+        while (p.processBatch(limit = 3) != null) { /* drain */ }
+
+        assertNull("the swept address-tier row stays gone across a correction fold", dao.store(cvsAddressKey))
+        assertEquals(listOf(cvsReceiptKey), dao.allStores().map { it.storeKey })
+        assertEquals("the correction still applied", 9.0, dao.deliveryRecord(d1)!!.realizedPay!!, 0.001)
+        assertEquals(cvsReceiptKey, dao.deliveryRecord(d1)!!.storeKey)
+    }
+
+    // ── FIX 12d: F4 offer-link guards ──
+
+    private fun offerAccepted(offerHash: String, merchant: String, at: Long) =
+        OfferPayload(
+            offerHash = offerHash,
+            parsedOffer = ParsedOffer(offerHash = offerHash),
+            evaluation = OfferEvaluation(
+                action = OfferAction.ACCEPT, score = 80.0, qualityLevel = OfferQuality.GOOD,
+                payAmount = 10.0, fuelCostEstimate = 0.0, nonFuelCostEstimate = 0.75,
+                operatingCostPerMile = 0.25, netPayAmount = 9.25, distanceMiles = 3.0,
+                dollarsPerMile = 3.0, dollarsPerHour = 20.0, estimatedTimeMinutes = 15.0,
+                itemCount = 1.0, merchantName = merchant,
+            ),
+            outcome = AppEventType.OFFER_ACCEPTED, presentedAt = at - 10, decidedAt = at,
+            returnFlow = Flow.Idle,
+        )
+
+    @Test
+    fun `F4 — a queued next-job offer that brand-DISAGREES is not linked by the temporal fallback`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        // A queued NEXT-job offer accepted mid-job for a DIFFERENT brand (Whataburger), no offer hashes
+        // on the job → temporal fallback only. It must NOT be linked to the Target job.
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1050, offerAccepted("HASHW", "Whataburger", 1050))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pT", "Target", 1100))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertNull("a brand-disagreeing queued offer is not linked (F4)", offer.linkedJobId)
+    }
+
+    @Test
+    fun `FIX 1b — a job already exactly-linked does not claim a second offer on the DASH_STOP re-run`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        // The job's OWN accepted offer (hash carried onto the job's events → exact link).
+        val ownSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Target", 1040))
+        // A SECOND accepted Target offer (a next job's), same brand → would temporally agree.
+        val nextSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1060, offerAccepted("HASH2", "Target", 1060))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickupWithHashes("J1", "pT", "Target", 1100, listOf("HASH1")))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            deliveryWithHashes("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), 8.0, listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run, no hashes → temporal
+        projector().catchUp()
+
+        assertEquals("the exact-linked own offer is claimed", "J1", dao.offerRecord(ownSeq)!!.linkedJobId)
+        assertNull("the second Target offer is NOT claimed on the DASH_STOP re-run (FIX 1b)", dao.offerRecord(nextSeq)!!.linkedJobId)
+    }
+
+    private fun pickupWithHashes(jobId: String, taskId: String, store: String, at: Long, hashes: List<String>) =
+        PickupPayload(
+            jobId = jobId, taskId = taskId, storeName = store, phaseStartedAt = at - 100,
+            arrivedAt = at - 60, confirmedAt = at, activity = "PICKUP", jobOfferHashes = hashes,
+        )
+
+    private fun deliveryWithHashes(
+        jobId: String, taskId: String, store: String, at: Long, parsedPay: ParsedPay, totalPay: Double, hashes: List<String>,
+    ) = DeliveryPayload(
+        jobId = jobId, taskId = taskId, storeName = store, customerHash = "cust-$taskId",
+        addressHash = "addr-$taskId", phaseStartedAt = at - 200, arrivedAt = at - 30,
+        completedAt = at, totalPay = totalPay, parsedPay = parsedPay, jobOfferHashes = hashes,
+    )
+
+    // ── #1000: an ANCHORLESS job (no pickup rows at all, OR pickup rows whose only storeName(s) are
+    // blank/UNKNOWN_STORE — #733) still links its EXACT offer↔job hash, storeKey stays fail-null — the
+    // #615-class blown-through pickup, PICKUP_ARRIVED with no PICKUP_CONFIRMED ──
+
+    @Test
+    fun `#1000 — a pickup-less job with an exact offer hash links via the offer, storeKey stays null`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        // No PICKUP_CONFIRMED for J1 at all — the DELIVERY_COMPLETED trigger still carries the job's
+        // own offer hashes (the DELIVERY_COMPLETED fold's jobOfferHashes), which is all the runner needs.
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("the exact offer↔job link is stamped despite no pickup row", "J1", offer.linkedJobId)
+        assertNull("no anchor exists — storeKey stays fail-null, never derived from the offer form", offer.storeKey)
+        assertNull("the delivery row's own storeKey is likewise untouched (no anchor to key with)", dao.deliveryRecord(d)!!.storeKey)
+        assertEquals("no pickup_records row was fabricated", 0, dao.pickupRecordsForJob("J1").size)
+        // pay/net untouched by resolution.
+        assertEquals(8.0, dao.deliveryRecord(d)!!.realizedPay!!, 0.001)
+    }
+
+    @Test
+    fun `#1000 F1 — a job whose only pickup row is UNKNOWN_STORE is anchorless too, and still links`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        // The pickup row EXISTS but its only storeName is the UNKNOWN_STORE sentinel (#733) — anchors
+        // resolves empty even though `pickups.isEmpty()` is false, exercising the sibling exit F1 asks for.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J1", "pW", UNKNOWN_STORE, 1100))
+        val d = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("a blank/UNKNOWN_STORE-only pickup set is anchorless — the link still stamps", "J1", offer.linkedJobId)
+        assertNull(offer.storeKey)
+        assertNull(dao.deliveryRecord(d)!!.storeKey)
+    }
+
+    @Test
+    fun `#1000 — a pickup-less job with no offer hashes stays unlinked (never the temporal nominee)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        // An accepted offer exists in the session (a plausible temporal nominee) but the job carries NO
+        // hashes at all — the design's fail-null arm: pickup-less ⇒ no anchor ⇒ no brand-token agreement
+        // check to run ⇒ never the temporal fallback (exactly the queued-next-job mis-link F4 guards
+        // against — an unverified nominee here would be strictly worse, since there isn't even a brand
+        // check available).
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        assertNull(
+            "no offer hashes on the job ⇒ no link, not even via the temporal nominee",
+            dao.offerRecord(offSeq)!!.linkedJobId,
+        )
+    }
+
+    @Test
+    fun `#1000 F3 — a resolved orphan offer is never linked by the anchorless arm`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        // Fold the accept FIRST so the offer_records row exists, THEN mark it already Tier-2 resolved
+        // (#810 B2) — simulating an offer that was already attested elsewhere as an orphan — BEFORE the
+        // pickup-less DELIVERY_COMPLETED's own resolution ever runs.
+        projector().catchUp()
+        dao.stampOfferOutcomeResolved(offSeq, "UNASSIGNED_ATTESTED")
+
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        assertNull(
+            "an already outcome-resolved offer must not gain a live linkedJobId via the anchorless arm",
+            dao.offerRecord(offSeq)!!.linkedJobId,
+        )
+        assertEquals("UNASSIGNED_ATTESTED", dao.offerRecord(offSeq)!!.outcomeResolved)
+    }
+
+    @Test
+    fun `#1000 — the pickup-less link converges — incremental fold across a batch boundary equals a from-zero refold`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+
+        // Incremental: split OFFER_ACCEPTED into its own batch from DELIVERY_COMPLETED/DASH_STOP.
+        val p = projector()
+        while (p.processBatch(limit = 2) != null) { /* drain */ }
+        val incLinked = dao.offerRecord(offSeq)!!.linkedJobId
+
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refLinked = dao.offerRecord(offSeq)!!.linkedJobId
+
+        assertEquals("J1", incLinked)
+        assertEquals("incremental fold ≡ from-zero refold on the linked offer", refLinked, incLinked)
+    }
+
+    @Test
+    fun `#1000 — an already-linked offer is never overwritten by a second job's pickup-less trigger`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Target", 1040))
+        // J1 is properly anchored (has a pickup) and claims HASH1 via the normal exact path.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickupWithHashes("J1", "pT", "Target", 1100, listOf("HASH1")))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            deliveryWithHashes("J1", "dT", "Target", 1200, receipt("Target (02426)" to 3.0), 8.0, listOf("HASH1")),
+        )
+        // J2 is pickup-less and (contrived — a data anomaly) carries the SAME hash. The link-only fallback
+        // must never steal the claim off J1.
+        val d2 = insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1250,
+            delivery("J2", "dT2", "Target", 1250, totalPay = 8.0, jobOfferHashes = listOf("HASH1")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("first claim wins — J1 keeps the link", "J1", offer.linkedJobId)
+        assertEquals("J1's anchored storeKey is untouched by J2's pickup-less trigger", targetKey, offer.storeKey)
+        assertNull("J2 gets no storeKey — it has no anchor and the offer was already claimed", dao.deliveryRecord(d2)!!.storeKey)
+    }
+
+    @Test
+    fun `#1000 F5 — a session-level trigger never attempts the anchorless link even if it carried hashes`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Wendys", 1040))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW", "Wendys", 1200, totalPay = 8.0), // no jobOfferHashes on the job itself
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300))
+        projector().catchUp()
+        assertNull("sanity: unlinked via the normal fold (no hashes on the job)", dao.offerRecord(offSeq)!!.linkedJobId)
+
+        // Directly simulate a hash-bearing SESSION-level trigger (jobId == null) — a shape that cannot
+        // occur today (both session-level StoreResolution constructors pass emptyList) but the
+        // precondition guard must reject it structurally, not rely on that incidental fact.
+        StoreResolutionRunner(dao).resolve(
+            StoreResolution(sessionId = "S1", platform = "DoorDash", jobId = null, offerHashes = listOf("HASH1")),
+        )
+
+        assertNull(
+            "a session-level trigger must never mass-claim via the anchorless link path",
+            dao.offerRecord(offSeq)!!.linkedJobId,
+        )
+    }
+
+    @Test
+    fun `#1000 F4 — a late pickup after an anchorless link still backfills storeKey via nomination (DASH_STOP re-run)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 1000, start("S1", 1000))
+        val offSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("HASH1", "Target", 1040))
+        // Pickup-less at fold time — J1 has no pickup row yet, so the offer gets a LINK-ONLY stamp
+        // (storeKey stays null). The receipt rides this event so the LATER anchored backfill below can
+        // resolve the same real running-key (`02426`) the rest of the file uses for Target.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery(
+                "J1", "dT", "Target", 1200,
+                parsedPay = receipt("Target (02426)" to 3.0), totalPay = 8.0, jobOfferHashes = listOf("HASH1"),
+            ),
+        )
+        // The #526 D5 late-sweep shape: a PICKUP_CONFIRMED for the SAME job arrives after its delivery
+        // already completed and its offer already anchorless-linked.
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1250, pickup("J1", "pT", "Target", 1250))
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run sees the anchor
+        projector().catchUp()
+
+        val offer = dao.offerRecord(offSeq)!!
+        assertEquals("J1", offer.linkedJobId)
+        assertEquals(
+            "the late pickup gives the job a real anchor, and FIX-1b's storeKey-bearing narrowing lets " +
+                "the DASH_STOP re-run's nomination backfill storeKey onto the SAME already-linked offer " +
+                "(nominateOfferForJob's own WHERE accepts linkedJobId = :jobId as a valid candidate)",
+            targetKey, offer.storeKey,
+        )
+    }
+
+    @Test
+    fun `#1000 F7 — a duplicate-hash offer pair claims one row per job, identically with or without a batch boundary`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 900, start("S1", 900))
+        // A and B are TWO separate accepted-offer events sharing one CONTENT hash (the session accepted
+        // the same order twice with an identical parse) — the fielded multi-claim shape (#1000 F7).
+        val aSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 950, offerAccepted("HASH_DUP", "Wendys", 950))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J1", "dW1", "Wendys", 1200, jobOfferHashes = listOf("HASH_DUP")),
+        )
+        val bSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1220, offerAccepted("HASH_DUP", "Wendys", 1220))
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1300, pickup("J2", "pW2", "Wendys", 1300))
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1400,
+            delivery("J2", "dW2", "Wendys", 1400, jobOfferHashes = listOf("HASH_DUP")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1500, stop("S1", 1500))
+
+        // Incremental: a batch boundary that splits J1's DELIVERY_COMPLETED from B's OFFER_ACCEPTED — B
+        // is NOT YET COMMITTED when J1's anchorless link resolves.
+        val p = projector()
+        assertNotNull(p.processBatch(limit = 3)) // DASH_START, A, J1's DELIVERY_COMPLETED
+        while (p.processBatch(limit = 10) != null) { /* drain the rest */ }
+        val incA = dao.offerRecord(aSeq)!!.linkedJobId
+        val incB = dao.offerRecord(bSeq)!!.linkedJobId
+
+        // From-zero refold: the whole log fits in ONE batch, so BOTH rows are already committed when
+        // J1's anchorless resolution runs.
+        wipeAndResetWatermark()
+        projector().catchUp()
+        val refA = dao.offerRecord(aSeq)!!.linkedJobId
+        val refB = dao.offerRecord(bSeq)!!.linkedJobId
+
+        assertEquals("A (the earliest unlinked row) claims J1 regardless of the batch boundary", "J1", incA)
+        assertEquals(
+            "B (the sibling) claims J2 via the ANCHORED path's own per-row guard, regardless of the batch boundary",
+            "J2", incB,
+        )
+        assertEquals("incremental ≡ refold for A", refA, incA)
+        assertEquals("incremental ≡ refold for B", refB, incB)
+    }
+
+    @Test
+    fun `#1000 F8 — a re-mint's pickup-only leftover job never nominates a wrong offer (no delivery row ⇒ no temporal nomination)`() = runBlocking {
+        insert(AppEventType.DASH_START, "S1", 900, start("S1", 900))
+        // An UNRELATED earlier accepted offer, same brand — the wrong-nomination bait.
+        val oldSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 950, offerAccepted("OLD_HASH", "Wendys", 950))
+        // The offer that is ACTUALLY this physical job's — its hash rides the NEW job's DELIVERY_COMPLETED.
+        val newSeq = insert(AppEventType.OFFER_ACCEPTED, "S1", 1040, offerAccepted("NEW_HASH", "Wendys", 1040))
+        // J_old: the #499/#736 re-mint's LEFTOVER — holds only the pickup rows; no delivery ever completed
+        // under this jobId (the completion, and the offer's hash, moved to J_new after the re-mint).
+        insert(AppEventType.PICKUP_CONFIRMED, "S1", 1100, pickup("J_old", "pW", "Wendys", 1100))
+        // J_new: pickup-less at fold time — the completion (and the exact hash) landed here.
+        insert(
+            AppEventType.DELIVERY_COMPLETED, "S1", 1200,
+            delivery("J_new", "dW", "Wendys", 1200, jobOfferHashes = listOf("NEW_HASH")),
+        )
+        insert(AppEventType.DASH_STOP, "S1", 1300, stop("S1", 1300)) // session-level re-run visits BOTH jobs
+        projector().catchUp()
+
+        assertEquals("the exact hash correctly claims J_new", "J_new", dao.offerRecord(newSeq)!!.linkedJobId)
+        assertNull(
+            "J_old (pickup-only, no delivery row) must NOT reach past the already-claimed offer to " +
+                "wrongly nominate the older, brand-coincidental one (#1000 F8)",
+            dao.offerRecord(oldSeq)!!.linkedJobId,
+        )
+    }
+}

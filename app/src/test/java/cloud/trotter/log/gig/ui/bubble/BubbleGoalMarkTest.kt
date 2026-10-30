@@ -1,0 +1,180 @@
+package cloud.trotter.log.gig.ui.bubble
+
+import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.LedgerRepository
+import cloud.trotter.log.gig.core.data.chat.ChatRepository
+import cloud.trotter.log.gig.core.data.event.AppEventRepo
+import cloud.trotter.log.gig.core.data.fuel.FuelPriceRepository
+import cloud.trotter.log.gig.core.data.location.OdometerRepository
+import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
+import cloud.trotter.log.gig.core.data.state.AppStateRepository
+import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
+import cloud.trotter.log.gig.core.datastore.appstate.AppStateDataSource
+import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.analytics.AnalyticsPeriod
+import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
+import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
+import cloud.trotter.log.gig.domain.model.bubble.BubbleSessionMode
+import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.feature.bubble.hud.GoalCelebrationResolver
+import cloud.trotter.log.gig.feature.bubble.hud.GoalMetMark
+import cloud.trotter.log.gig.feature.bubble.hud.GoalPillMapper
+import cloud.trotter.log.gig.feature.bubble.hud.GoalPillState
+import cloud.trotter.log.gig.feature.bubble.hud.HudMode
+import cloud.trotter.log.gig.feature.bubble.hud.MarkRead
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.*
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.mockito.kotlin.*
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class BubbleGoalMarkTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val marks = MutableSharedFlow<String?>(replay = 1)
+    private val appState: AppStateRepository = mock()
+    private val analytics: AnalyticsRepository = mock()
+    private val preferences: AppPreferencesRepository = mock()
+    private val state: StateManagerV2 = mock()
+    private val strategy: StrategyRepository = mock()
+    private val events: AppEventRepo = mock()
+    private val odometer: OdometerRepository = mock()
+    private val dev: DevSettingsRepository = mock()
+
+    @Before fun setup() {
+        Dispatchers.setMain(dispatcher)
+        whenever(appState.goalMetMark).thenReturn(marks)
+        whenever(analytics.recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(analytics.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(flowOf(PeriodEconomics.EMPTY))
+        whenever(state.state).thenReturn(MutableStateFlow(AppState()))
+        whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow<EvaluationConfig?>(null))
+        whenever(events.getMostRecentSessionId()).thenReturn(flowOf(null))
+        whenever(odometer.sessionMilesFlow).thenReturn(flowOf(0.0))
+        whenever(odometer.totalMilesFlow).thenReturn(flowOf(null))
+        whenever(dev.bubbleSessionMode).thenReturn(flowOf(BubbleSessionMode.Default))
+        whenever(preferences.glanceMode).thenReturn(flowOf(false))
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(true))
+        whenever(preferences.dailyKeptGoalDollars).thenReturn(flowOf(null))
+        whenever(preferences.gasPrice).thenReturn(flowOf(null))
+        whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))
+    }
+    @After fun cleanup() { Dispatchers.resetMain() }
+    private fun garage(): cloud.trotter.log.gig.core.data.vehicle.GarageRepository {
+        val repo: cloud.trotter.log.gig.core.data.vehicle.GarageRepository = mock()
+        whenever(repo.garage).thenReturn(flowOf(cloud.trotter.log.gig.core.data.vehicle.Garage(emptyList(), null, readable = true)))
+        return repo
+    }
+    private fun dashVehicles(): cloud.trotter.log.gig.core.data.vehicle.DashVehicleRepository {
+        val repo: cloud.trotter.log.gig.core.data.vehicle.DashVehicleRepository = mock()
+        whenever(repo.stamps).thenReturn(flowOf(emptyList()))
+        return repo
+    }
+    private fun readings(): cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository {
+        val repo: cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository = mock()
+        whenever(repo.readings).thenReturn(flowOf(emptyList()))
+        return repo
+    }
+    private fun model(repository: AppStateRepository = appState) = BubbleViewModel(
+        chatRepository = mock<ChatRepository>(), odometerRepository = odometer, stateManager = state,
+        appEventRepo = events, appPreferencesRepository = preferences, fuelPriceRepository = mock<FuelPriceRepository>(),
+        analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
+        devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
+        garageRepository = garage(), odometerReadingRepository = readings(),
+        correctionRepository = mock(),
+        vehicleSwapLock = mock(),
+        dashVehicleRepository = dashVehicles(),
+        clock = Clock.fixed(Instant.parse("2026-10-18T00:00:00Z"), ZoneOffset.UTC),
+    )
+    @Test fun goalMark_staysLoadingUntilStoreAnswers() = runTest(dispatcher) {
+        val vm = model()
+        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalMark.collect {} }
+        runCurrent()
+        assertEquals(MarkRead.Loading, vm.goalMark.value)
+        marks.emit(null); runCurrent()
+        assertEquals(MarkRead.Loaded(null), vm.goalMark.value)
+        read.cancel()
+    }
+    @Test fun `goal actions feed the existing daily goal flow and pill without a new event`() = runTest(dispatcher) {
+        val stored = MutableStateFlow<Double?>(null)
+        whenever(preferences.dailyKeptGoalDollars).thenReturn(stored)
+        doSuspendableAnswer { invocation -> stored.value = invocation.getArgument<Double?>(0) }
+            .whenever(preferences).setDailyKeptGoalDollars(anyOrNull())
+        val vm = model()
+        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dailyGoal.collect {} }
+        runCurrent()
+        vm.goalActions.set(150); runCurrent()
+        assertEquals(150.0, vm.dailyGoal.value)
+        assertTrue(GoalPillMapper.map(vm.dailyGoal.value, 71.2)
+            is GoalPillState.InProgress)
+        vm.goalActions.set(50); runCurrent()
+        assertEquals(GoalPillState.Met,
+            GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+        vm.goalActions.clear(); runCurrent()
+        assertNull(vm.dailyGoal.value)
+        assertEquals(GoalPillState.NoGoal,
+            GoalPillMapper.map(vm.dailyGoal.value, 71.2))
+        verify(appState, never()).setGoalMetMark(any())
+        verify(events, never()).appendUserEvent(any(), anyOrNull())
+        read.cancel()
+    }
+    @Test fun `a new view model after collapse sees the pending mark`() = runTest(dispatcher) {
+        val releaseWrite = CompletableDeferred<Unit>()
+        val persisted = MutableStateFlow<String?>("2026-10-17|7900")
+        val source: AppStateDataSource = mock()
+        whenever(source.goalMetMark).thenReturn(persisted)
+        doSuspendableAnswer {
+            releaseWrite.await()
+            persisted.value = "2026-10-18|7900"
+        }.whenever(source).setGoalMetMark(any())
+        // One real singleton repository, with a scope that outlives both activity ViewModels.
+        val repository = AppStateRepository(source, backgroundScope)
+        val day = LocalDate.of(2026, 10, 18)
+        val key = GoalMetMark.key(day, 79.0)
+        val first = model(repository)
+        val firstRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { first.goalMark.collect {} }
+        runCurrent()
+        first.goalCelebrated(key)
+        runCurrent()
+        assertEquals(MarkRead.Loaded(key), first.goalMark.value)
+        firstRead.cancel()
+        val second = model(repository)
+        val resolved = mutableListOf<String?>()
+        val secondRead = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            second.goalMark.collect { mark ->
+                resolved += GoalCelebrationResolver.resolve(GoalPillState.Met, HudMode.LIVE, day, 79.0, mark)
+            }
+        }
+        runCurrent()
+        assertEquals("2026-10-17|7900", persisted.value)
+        assertEquals(MarkRead.Loaded(key), second.goalMark.value)
+        assertTrue(resolved.isNotEmpty())
+        assertTrue(resolved.all { it == null })
+        releaseWrite.complete(Unit)
+        runCurrent()
+        assertEquals(key, persisted.value) // The write outlives the first collector.
+        assertTrue(resolved.all { it == null })
+        secondRead.cancel()
+    }
+    @Test fun goalMark_recreatedViewModelUsesDurableMark() = runTest(dispatcher) {
+        marks.emit("2026-10-18|7900")
+        val vm = model()
+        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalMark.collect {} }
+        runCurrent()
+        assertEquals(MarkRead.Loaded("2026-10-18|7900"), vm.goalMark.value)
+        verify(appState, never()).setGoalMetMark(any())
+        read.cancel()
+    }
+}

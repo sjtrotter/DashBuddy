@@ -1,0 +1,113 @@
+package cloud.trotter.log.gig.state.effects
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import androidx.core.app.NotificationCompat
+import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.core.data.location.OdometerRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class OdometerEffectHandler @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val odometerRepository: OdometerRepository,
+    private val notificationManager: NotificationManager // <--- Injected!
+) {
+
+    private val notificationId = 101
+    private val channelId = "LocationServiceChannel" // Keeping ID for compatibility
+
+    init {
+        createNotificationChannel()
+    }
+
+    fun startUp() {
+        Timber.tag(TAG).i("Effect: Starting Odometer & Notification")
+        try {
+            // 1. Start the Logic (Coroutines Job). #438 B5: NO resetSession() here — the odometer
+            // is arbitrated at the cross-platform tier (StartOdometer fires only on the 0→1
+            // live-session crossing), and the per-session anchor rides StartSession
+            // ([onSessionStarted]) so a second concurrent session can't zero the first's miles.
+            odometerRepository.startTracking()
+
+            // 2. Post the Notification (User Trust UI)
+            val notification = createNotification()
+            notificationManager.notify(notificationId, notification)
+
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to start Odometer")
+        }
+    }
+
+    /**
+     * #438 B5: anchor a session's miles to the current odometer total at its start. Rides the
+     * per-platform StartSession effect (not the global StartOdometer), so each session gets its OWN
+     * anchor. Idempotent in the repository — a grace-resume re-arm never moves an existing anchor.
+     */
+    fun onSessionStarted(sessionId: String) {
+        odometerRepository.startSessionTracking(sessionId)
+    }
+
+    fun shutDown() {
+        Timber.tag(TAG).i("Effect: Stopping Odometer")
+        try {
+            // 1. Stop the Logic (Kills GPS)
+            odometerRepository.stopTracking()
+
+            // 2. Remove the Notification
+            notificationManager.cancel(notificationId)
+
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to stop Odometer")
+        }
+    }
+
+    // Idempotent: safe to call even if already paused. stopTracking() no-ops when not active.
+    fun pause() {
+        Timber.tag(TAG).i("Effect: Pausing Odometer (stationary)")
+        try {
+            odometerRepository.stopTracking()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to pause Odometer")
+        }
+    }
+
+    // Idempotent: safe to call even if already running. startTracking() no-ops when active.
+    fun resume() {
+        Timber.tag(TAG).i("Effect: Resuming Odometer")
+        try {
+            odometerRepository.startTracking()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to resume Odometer")
+        }
+    }
+
+    private fun createNotification(): Notification {
+        return NotificationCompat.Builder(context, channelId)
+            .setContentTitle("Tracking miles")
+            .setContentText("")
+            .setSmallIcon(R.drawable.ic_location) // Make sure this drawable exists!
+            .setOngoing(true) // Makes it "sticky" so user knows it's running
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            channelId,
+            "Mileage tracking",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private companion object {
+        /** Principle 7: this handler's stable Timber tag — never the catch-all `App` (#764). */
+        const val TAG = "Odometer"
+    }
+}

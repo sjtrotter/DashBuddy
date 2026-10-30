@@ -12,7 +12,7 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_vehicle">Vehículo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_vehicle">DashBuddy consulta tus MPG solo después de que pulses \"Consultar mi vehículo\", y recuerda esa elección. Envía a fueleconomy.gov el año, la marca, el modelo y el ID de vehículo de la EPA que elijas, sin cuenta ni ID de instalación. \"Search Google for MPG\" envía a Google, en tu navegador, el año, la marca y el modelo que escribiste.</string>
+    <string name="wizard_desc_vehicle">gig.log consulta tus MPG solo después de que pulses \"Consultar mi vehículo\", y recuerda esa elección. Envía a fueleconomy.gov el año, la marca, el modelo y el ID de vehículo de la EPA que elijas, sin cuenta ni ID de instalación. \"Search Google for MPG\" envía a Google, en tu navegador, el año, la marca y el modelo que escribiste.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_gas">Precio de gasolina</string>
     <!-- copy-audit: retranslated es -->
@@ -36,7 +36,7 @@
     <string name="wizard_title_distance">Distancia máxima</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_distance">Máximo de millas que conducirías por una oferta.</string>
-    <string name="wizard_vehicle_lookup_prompt">Consulta tus MPG en fueleconomy.gov, el sitio de la EPA. DashBuddy envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
+    <string name="wizard_vehicle_lookup_prompt">Consulta tus MPG en fueleconomy.gov, el sitio de la EPA. gig.log envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
     <string name="wizard_vehicle_lookup_allow">Consultar mi vehículo</string>
     <string name="wizard_vehicle_manual_entry">Introducir MPG manualmente</string>
 </resources>

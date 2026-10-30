@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/sjtrotter/dashbuddy-matchers/rules.schema.json",
-  "title": "DashBuddy Rule Format",
-  "description": "Schema for DashBuddy screen matcher, click classifier, and notification classifier rule files. See ADR-0001 for design rationale.",
+  "$id": "https://github.com/sjtrotter/giglog-matchers/rules.schema.json",
+  "title": "gig.log Rule Format",
+  "description": "Schema for gig.log screen matcher, click classifier, and notification classifier rule files. See ADR-0001 for design rationale.",
   "type": "object",
   "required": ["format_version", "platform_id"],
   "properties": {

@@ -93,7 +93,7 @@ in `LedgerApply.kt` by primary key in event order inside the batch transaction, 
 
 `pricePerGallon` is derived at read time as the total divided by gallons. It is null when gallons
 is null or zero, and is never stored. `odometerMiles` comes from
-`OdometerRepository.totalMiles(): Double?`, DashBuddy's own GPS odometer total at the fill, null
+`OdometerRepository.totalMiles(): Double?`, gig.log's own GPS odometer total at the fill, null
 until the persisted total has loaded. That odometer runs only while a dash is tracked, so it is not
 the car's odometer: a cost per mile between two fills built on it covers dash miles only, and a
 reader must say so. User events carry no event metadata (`appendUserEvent` passes none), so the
@@ -227,7 +227,7 @@ The weekly plan stays in DataStore because nothing in the event log can rebuild 
 ## Privacy
 
 Amounts, category, gallons, an odometer total, and an optional free-text note typed by the dasher
-stay on the device. DashBuddy sends none of it anywhere. The rows live in the Room database,
+stay on the device. gig.log sends none of it anywhere. The rows live in the Room database,
 which Android backup and device transfer include like the rest of the history (`PRIVACY.md` §6), so
 a typed note goes wherever the dasher's backup goes.
 The note is never written to a log at `INFO` or above. A decode failure logs the exception class

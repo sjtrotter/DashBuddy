@@ -1,0 +1,220 @@
+package cloud.trotter.log.gig.core.data.strategy
+
+import cloud.trotter.log.gig.core.data.analytics.TimeConstantRepository
+import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.datastore.strategy.StrategyDataSource
+import cloud.trotter.log.gig.core.datastore.strategy.dto.ScoringRuleDto
+import cloud.trotter.log.gig.domain.config.EvidenceConfig
+import cloud.trotter.log.gig.domain.config.OfferAutomationConfig
+import cloud.trotter.log.gig.domain.di.IoDispatcher
+import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
+import cloud.trotter.log.gig.domain.evaluation.MerchantAction
+import cloud.trotter.log.gig.domain.evaluation.MetricType
+import cloud.trotter.log.gig.domain.evaluation.ScoringRule
+import cloud.trotter.log.gig.domain.state.Platform
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.serialization.InternalSerializationApi
+import timber.log.Timber
+
+@Singleton
+class StrategyRepository @Inject constructor(
+    private val dataSource: StrategyDataSource,
+    private val appPreferencesRepository: AppPreferencesRepository,
+    @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    private val timeConstantRepository: TimeConstantRepository,
+) {
+    private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
+
+    /**
+     * Cancel this repository's eager collectors (#1271). The process-lifetime singleton never calls
+     * it; a test that builds one per case does, so the time-constant materializer and the eagerly
+     * shared configs stop with the case.
+     */
+    fun close() {
+        scope.cancel()
+    }
+
+    init {
+        scope.launch {
+            timeConstantRepository.learnedTimeConstants
+                .distinctUntilChanged()
+                .onEach { dataSource.replaceTimeConstants(it) }
+                .retryWhen { cause, attempt ->
+                    if (cause is CancellationException) throw cause
+                    Timber.tag("Strategy").w(cause, "Time-constant materialization failed; retrying")
+                    delay(1_000L * (attempt + 1).coerceAtMost(60))
+                    true
+                }
+                .collect()
+        }
+    }
+
+    private val defaultRules = listOf(
+        ScoringRule.MetricRule("pay", true, MetricType.PAYOUT, 7.0f),
+        ScoringRule.MetricRule("dpm", true, MetricType.DOLLAR_PER_MILE, 1.5f),
+        ScoringRule.MetricRule("dist", true, MetricType.MAX_DISTANCE, 10.0f),
+        ScoringRule.MetricRule("hr", true, MetricType.ACTIVE_HOURLY, 22.0f),
+        ScoringRule.MetricRule("items", false, MetricType.ITEM_COUNT, 50.0f)
+    )
+
+    // ============================================================================================
+    // STREAMS
+    // ============================================================================================
+    val evidenceConfig = combine(
+        dataSource.evidenceMaster, dataSource.evidenceOffers,
+        dataSource.evidenceDelivery, dataSource.evidenceSession
+    ) { master, offers, delivery, dash ->
+        EvidenceConfig(master, offers, delivery, dash)
+    }.stateIn(scope, SharingStarted.Eagerly, EvidenceConfig())
+
+    val automationConfig: Flow<OfferAutomationConfig> = dataSource.quickDeclines.map {
+        OfferAutomationConfig(quickDeclinesEnabled = it)
+    }
+
+    // Maps the incoming DTOs to pure Domain Models
+    @OptIn(InternalSerializationApi::class)
+    val scoringRules: Flow<List<ScoringRule>> = dataSource.scoringRules.map { dtoList ->
+        if (dtoList.isEmpty()) return@map defaultRules
+
+        dtoList.map { dto ->
+            when (dto) {
+                is ScoringRuleDto.MetricRuleDto -> ScoringRule.MetricRule(
+                    id = dto.id,
+                    isEnabled = dto.isEnabled,
+                    metricType = MetricType.valueOf(dto.metricType),
+                    targetValue = dto.targetValue,
+                    autoDeclineOnFail = dto.autoDeclineOnFail
+                )
+
+                is ScoringRuleDto.MerchantRuleDto -> ScoringRule.MerchantRule(
+                    id = dto.id,
+                    isEnabled = dto.isEnabled,
+                    storeName = dto.storeName,
+                    action = runCatching { MerchantAction.valueOf(dto.action) }.getOrElse {
+                        // Migrate legacy enum names (BAN→BLOCK, BOOST/PENALIZE→SCORE_MODIFIER)
+                        when (dto.action) {
+                            "BAN" -> MerchantAction.BLOCK
+                            "BOOST", "PENALIZE" -> MerchantAction.SCORE_MODIFIER
+                            else -> MerchantAction.MANUAL_REVIEW
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    val protectStatsMode = dataSource.protectStatsMode
+    val allowShopping = dataSource.allowShopping
+
+    // ============================================================================================
+    // WRITE ACTIONS
+    // ============================================================================================
+    suspend fun setEvidenceMaster(enabled: Boolean) = dataSource.setEvidenceMaster(enabled)
+    suspend fun updateEvidenceConfig(offers: Boolean, delivery: Boolean, dash: Boolean) =
+        dataSource.updateEvidenceConfig(offers, delivery, dash)
+
+    suspend fun setProtectStatsMode(enabled: Boolean) = dataSource.setProtectStatsMode(enabled)
+    suspend fun setAllowShopping(allowed: Boolean) = dataSource.setAllowShopping(allowed)
+    suspend fun setQuickDeclines(enabled: Boolean) = dataSource.setQuickDeclines(enabled) // #577
+
+    // Maps Domain Models to DTOs before saving
+    @OptIn(InternalSerializationApi::class)
+    suspend fun updateRules(newRules: List<ScoringRule>) {
+        val dtos = newRules.map { rule ->
+            when (rule) {
+                is ScoringRule.MetricRule -> ScoringRuleDto.MetricRuleDto(
+                    id = rule.id,
+                    isEnabled = rule.isEnabled,
+                    metricType = rule.metricType.name,
+                    targetValue = rule.targetValue,
+                    autoDeclineOnFail = rule.autoDeclineOnFail
+                )
+
+                is ScoringRule.MerchantRule -> ScoringRuleDto.MerchantRuleDto(
+                    id = rule.id,
+                    isEnabled = rule.isEnabled,
+                    storeName = rule.storeName,
+                    action = rule.action.name
+                )
+            }
+        }
+        dataSource.updateRules(dtos)
+    }
+
+    suspend fun purgeDeadAutomationKeys() = dataSource.purgeDeadAutomationKeys()
+
+    /**
+     * THE materialized evaluation config (#436): eagerly shared so the
+     * side-effect engine's per-offer read is a value lookup instead of a cold
+     * DataStore combine inside its single serialized worker (head-of-line
+     * latency on every offer). Null until the first DataStore emission —
+     * consumers `filterNotNull()` rather than evaluate against a guessed
+     * default (mirrors [evidenceConfig]'s pattern, but fail-*waiting* instead
+     * of fail-closed: an offer must never be scored with wrong economics).
+     */
+    val evaluationConfig: StateFlow<EvaluationConfig?> = combine(
+        scoringRules,
+        protectStatsMode,
+        allowShopping,
+        appPreferencesRepository.userEconomy,
+        // One inner source keeps the outer combine within the typed five-source overload.
+        combine(dataSource.learnedShopRates, dataSource.learnedItemsPerUnitRatios,
+            dataSource.learnedTimeConstants) {
+            s, r, t -> Triple(s, r, t)
+        },
+    ) { rules, protect, shop, economy, (shopRates, itemsPerUnitRatios, timeConstants) ->
+        EvaluationConfig(
+            protectStatsMode = protect,
+            rules = rules,
+            allowShopping = shop,
+            userEconomy = economy,
+            // #588: carry the per-platform learned pace; the offer's own platform selects its entry at
+            // eval time via EvaluationConfig.forPlatform (a DoorDash-learned pace can no longer price an
+            // Instacart shop). It lives in the strategy store, not the user-economy store, so it's never
+            // reseeded by a vehicle-class change (#556).
+            shopRates = shopRates,
+            // #823 Phase 1: same per-platform discipline for the items:units ratio.
+            itemsPerUnitRatios = itemsPerUnitRatios,
+            timeConstants = timeConstants,
+        )
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+
+    /**
+     * #556/#588: fold a completed shop's measured pace into [platform]'s learned items/min (atomic).
+     * Returns the post-fold [LearnedShopRate] (#731) so the caller can log the relearn trajectory.
+     */
+    suspend fun recordShopRate(platform: Platform, items: Int, minutes: Double) =
+        dataSource.recordShopRate(platform, items, minutes)
+
+    /**
+     * #823 Phase 1: fold a completed units-shop's measured items:units ratio into [platform]'s learned
+     * ratio (atomic). Returns the post-fold [cloud.trotter.log.gig.domain.evaluation.LearnedItemsPerUnitRatio]
+     * so the caller can log the relearn trajectory (desk-observability, mirrors [recordShopRate]).
+     */
+    suspend fun recordItemsPerUnitRatio(platform: Platform, units: Int, items: Int) =
+        dataSource.recordItemsPerUnitRatio(platform, units, items)
+
+    suspend fun clearPreferences() {
+        Timber.tag("Strategy").w("Clearing Strategy Preferences")
+        dataSource.clear()
+    }
+}

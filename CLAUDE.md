@@ -12,7 +12,7 @@ every decision with a single-user, single-device assumption until explicitly tol
 
 ## Project Vision & Strategic Pillars
 
-DashBuddy exists to give independent contractor delivery drivers the same information the
+gig.log exists to give independent contractor delivery drivers the same information the
 platform already has about their own work. Mission: **driver sovereignty through
 transparent, on-device, user-owned tooling.**
 
@@ -47,7 +47,7 @@ per feature. PII scrubbing runs at the edge before any upload.
 **Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
 copy, marketing — describe the academic pillar as **empirical measurement of the visible
 offer surface**, never as reverse-engineering, model recovery, or algorithm characterization.
-The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; DashBuddy does not
+The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; gig.log does not
 do that and our written material must not suggest otherwise. See `LEGAL.md` for the
 good-faith ICA interpretation that governs scope decisions.
 
@@ -80,7 +80,7 @@ trusted installs; server #1157).
 # something, paste the reported seed into that property's pinned SEED const. The flag also
 # raises runTest's 60 s body budget to 20 min for every property (build.gradle.kts forwards
 # kotlinx.coroutines.test.default_timeout); the nightly job's timeout-minutes bounds a hang.
-./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
+./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Dgiglog.propExplore=true
 
 # Run instrumented tests (requires connected device/emulator)
 ./gradlew :app:connectedAndroidTest
@@ -117,7 +117,7 @@ census-contract (included build, Apache-2.0) ⇒ the census wire contract + the 
 ```
 
 **Feature modules (MAD Phase 6 — complete; no extractions remain).** UI extracted per-feature under
-`:feature:*` (`cloud.trotter.dashbuddy.feature.<name>` namespace), depending only DOWN the graph
+`:feature:*` (`cloud.trotter.log.gig.feature.<name>` namespace), depending only DOWN the graph
 (`:app → :feature:* → :domain / :core:*`); a feature module **never** depends on `:app` or on
 another feature. `:app` legitimately depends on each feature for its moved `@HiltViewModel`s and
 any screens/copy the app shell still hosts. Each module declares only the deps it uses (the
@@ -196,8 +196,8 @@ sibling surface, left for a future extraction.
   not a lazy first-query one that the projector/recovery supervision would swallow; just before the
   open it takes a pre-open file snapshot (`DatabaseBackup`, WAL-aware version read, dedup-marked,
   version-prefixed dirs, last 2, failure-tolerant) whenever the on-disk version ≠ the code version. Schema version is one SSOT const
-  (`DashBuddyDatabase.VERSION`). **Release checklist when changing the schema: bump
-  `DashBuddyDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
+  (`GigLogDatabase.VERSION`). **Release checklist when changing the schema: bump
+  `GigLogDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
   `AutoMigration` (or a manual `Migration`) covering the new edge → add its `MigrationTestHelper`
   case** (`core/database/src/androidTest`). Two **real gates** enforce this: the CI
   `Schemas committed (Room export drift)` step fails if the build regenerated an uncommitted schema
@@ -220,8 +220,8 @@ sibling surface, left for a future extraction.
   bump wipes — see §5.
 - **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`AppColors`),
   Hanken Grotesk + Space Grotesk fonts (tabular numerals), `AppTheme` + `LocalGlance` (the public
-  theme wrapper is `DashBuddyTheme`, the only `Dash`-named symbol kept — it's the app name, not a
-  platform term), and the shared component library (`AppCard`, `AppChip`, `AppStatTile`,
+  theme wrapper is `GigLogTheme`, named for the app; #1411 renamed the app from DashBuddy to gig.log and retired
+  the last `Dash*` brand symbols), and the shared component library (`AppCard`, `AppChip`, `AppStatTile`,
   `AppGaugeRing`, `AppSegmented`, `AppSlider`, `AppBarChart`, `AppAccordion`). The design-system
   brand vocabulary is `App*`, not `Dash*` (#468) — no platform-flavoured names. No M3 dynamic
   color. Feature-specific composables stay with their feature (Package by Feature); only generic,
@@ -231,7 +231,7 @@ sibling surface, left for a future extraction.
   `:app` analytics hub and `:feature:dashboard` each held a copy, and a feature module can never
   reach an `:app` owner).
 - **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
-  TTS, tips), Hilt DI wiring, and the `DashBuddyApplication` entry point.
+  TTS, tips), Hilt DI wiring, and the `GigLogApplication` entry point.
 - **`matchers/`** — the recognition **ruleset** source, as a self-contained **included Gradle build**
   (`includeBuild("matchers")` in the root `settings.gradle.kts`), NOT a `:core:*` project module. Owns the
   per-platform **JSON5 rule source** and the kotlinx-serialization canonicalizer. A platform source is
@@ -1286,7 +1286,7 @@ the brief additions live in `.claude/council.md`; the full `council` runs only w
    pins an explicit `PropSeeds.config(SEED)`, so PR CI draws the same samples on every run and a red
    property is a reproducible finding, never a re-run-and-move-on flake. Bump a site's `SEED`
    **deliberately** to explore new samples, NEVER to turn a red run green; the
-   unseeded breadth lives behind `-Ddashbuddy.propExplore=true` (10× samples, off the PR path).
+   unseeded breadth lives behind `-Dgiglog.propExplore=true` (10× samples, off the PR path).
 
 **Reviewer strength:** the reviewer runs at its highest effort (Sol at xhigh) and the session
 adjudicates every finding against the source; an adversary weaker than the author is theater. Record the
@@ -1528,5 +1528,5 @@ Convention: if you say "pre-work for #X" or "blocked by #Y" in an issue descript
 
 ## Device Setup Note
 
-To run on a physical device, manually enable DashBuddy under **Android Settings → Accessibility →
+To run on a physical device, manually enable gig.log under **Android Settings → Accessibility →
 Downloaded Apps**. The app requires `ACCESSIBILITY_SERVICE` and `ACCESS_FINE_LOCATION` permissions.

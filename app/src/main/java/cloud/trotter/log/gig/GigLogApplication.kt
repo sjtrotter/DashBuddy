@@ -1,0 +1,240 @@
+package cloud.trotter.log.gig
+
+import android.app.Application
+import android.content.Context
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import cloud.trotter.log.gig.core.data.location.OdometerRepository
+import cloud.trotter.log.gig.core.data.log.LogRepository
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
+import cloud.trotter.log.gig.domain.model.event.EventMetadata
+import cloud.trotter.log.gig.log.StateAwareTree
+import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.di.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import cloud.trotter.log.gig.worker.DailyGasPriceWorker
+import cloud.trotter.log.gig.worker.CensusUploadWorker
+import cloud.trotter.log.gig.worker.WeeklyPlanWorker
+import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Provider
+
+@HiltAndroidApp
+class GigLogApplication : Application(), Configuration.Provider {
+
+    @Inject
+    @ApplicationScope
+    lateinit var applicationScope: CoroutineScope
+
+    @Inject
+    lateinit var stateManagerV2: StateManagerV2
+
+    @Inject
+    lateinit var odometerRepository: OdometerRepository
+
+    @Inject
+    lateinit var logRepository: LogRepository
+
+    @Inject
+    lateinit var devSettingsRepository: DevSettingsRepository
+
+    // Needed for Hilt to inject repositories into WorkManager classes
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var jsonRuleInterpreter: JsonRuleInterpreter
+
+    @Inject
+    lateinit var ruleCapabilityRepository: cloud.trotter.log.gig.core.data.capability.RuleCapabilityRepository
+
+    @Inject
+    lateinit var strategyRepository: cloud.trotter.log.gig.core.data.strategy.StrategyRepository
+
+    @Inject
+    lateinit var dashVehicleStamper: cloud.trotter.log.gig.state.vehicle.DashVehicleStamper
+
+    @Inject
+    lateinit var shadowStoreChainLogger: cloud.trotter.log.gig.state.shadow.ShadowStoreChainLogger
+
+    @Inject
+    lateinit var analyticsProjector: cloud.trotter.log.gig.core.data.analytics.AnalyticsProjector
+
+    @Inject
+    lateinit var garageSeeder: cloud.trotter.log.gig.core.data.vehicle.GarageSeeder
+
+    // Global Context Accessor (Still useful for Utils, but avoid if possible)
+    companion object {
+        /** Stable Timber tag for the build-identity startup line (PR #1066, principle 7). */
+        const val BUILD_TAG = "App"
+
+        /**
+         * `BuildConfig.BUILD_TIME_MS` rendered as a machine-stable ISO-8601 UTC instant.
+         * `Locale.ROOT` because this is a machine string in a log file, never user-facing copy.
+         */
+        fun buildTimeIso(): String = DateTimeFormatter.ISO_INSTANT
+            .withLocale(Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
+            .format(Instant.ofEpochMilli(BuildConfig.BUILD_TIME_MS))
+
+        lateinit var instance: GigLogApplication
+            private set
+
+        val context: Context
+            get() = instance.applicationContext
+
+        fun createMetadata(): String {
+            // ... (Your existing metadata logic remains unchanged) ...
+            if (!::instance.isInitialized) return "{ \"test_mode\": true }"
+            val odometer = instance.odometerRepository.getCurrentMiles()
+            val battery = (instance.getSystemService(BATTERY_SERVICE) as android.os.BatteryManager)
+                .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val ver = instance.packageManager.getPackageInfo(instance.packageName, 0).versionName
+
+            val metadata = EventMetadata(
+                odometer = odometer,
+                batteryLevel = battery,
+                appVersion = ver,
+                networkType = "UNKNOWN"
+            )
+            return com.google.gson.Gson().toJson(metadata)
+        }
+    }
+
+    override fun onCreate() {
+        // Planted before super.onCreate() so injection-time code (DatabaseBackup #690, which runs
+        // during Hilt field injection inside super.onCreate()) can log. The plain DebugTree needs no
+        // injected dependencies; the StateAwareTree below does, so it stays planted after super.
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
+        super.onCreate()
+        instance = this
+
+        // 1. Setup Logging
+        val stateProvider = Provider {
+            try {
+                val platforms = stateManagerV2.state.value.regions.platforms
+                if (platforms.isEmpty()) "Idle"
+                else platforms.values.joinToString("|") { "${it.platform.name}:${it.mode.name}" }
+            } catch (_: Exception) {
+                "Uninitialized"
+            }
+        }
+
+        Timber.plant(
+            StateAwareTree(
+                logRepository,
+                devSettingsRepository,
+                stateProvider
+            )
+        )
+
+        // 1b. Build identity (PR #1066) — the FIRST line every log file carries, planted here so it
+        // lands in the shareable INFO+ export as well as the DEBUG firehose. A field-data pull must
+        // never again have to INFER which build the phone ran (2026-09-05: inferred from the
+        // ABSENCE of log lines, because installDebug reported an identical versionName for two
+        // different commits). PII-free by construction: our own version string and a build clock.
+        Timber.tag(BUILD_TAG).i(
+            "gig.log %s starting (built %s)",
+            BuildConfig.VERSION_NAME,
+            buildTimeIso(),
+        )
+
+        // 2. Compile the JSON rulesets off the main thread (#361): ~95KB of
+        // parse+regex-compile work. The classifier tolerates a null ruleset
+        // (classifies UNKNOWN) for the instants before the swap lands.
+        //
+        // First run the one-shot consent-schema migration (v1 #843 cleared auto-grants;
+        // v2 #1167 clears grants AND denials because the key shape changed) so nothing
+        // fires against a stale grant, THEN load the rules. Ordering it before
+        // loadDefaults means the reconcile publishes the enumeration into a
+        // store that already reflects the no-auto-grant policy; the consent
+        // prompt then collects fresh, explicit consent.
+        //
+        // The sequencing is a LOAD-BEARING fail-closed coupling, not incidental:
+        // if the migration THROWS, loadDefaults must NOT run — rules going live
+        // over an un-migrated store could tap against a stale auto-grant. Do NOT
+        // wrap the migration in a try/catch to "let the rules load anyway": that
+        // silently re-opens the stale-grant window this migration exists to shut.
+        // A failed migration correctly leaves rules unloaded (the #432 gate keeps
+        // sensing fail-closed); the next launch retries the whole sequence.
+        applicationScope.launch {
+            ruleCapabilityRepository.migrateConsentSchemaIfNeeded()
+            // #1113: an OPTIONAL cleanup — unlike the consent migration above, a failed purge must never
+            // keep the rules unloaded (that would gate recognition for the whole launch over a stale
+            // preference). Isolated: it runs after the migration, and a failure is a WARN, not a gate.
+            runCatching { strategyRepository.purgeDeadAutomationKeys() }
+                .onSuccess { if (it) Timber.tag("Strategy").i("Purged dead automation keys (#1113)") }
+                .onFailure { Timber.tag("Strategy").w(it, "Dead automation key purge failed; rules load anyway") }
+            jsonRuleInterpreter.loadDefaults()
+        }
+
+        // 3. Initialize State
+        stateManagerV2.initialize()
+        Timber.i("StateManagerV2 initialized.")
+
+        dashVehicleStamper.start(applicationScope)
+
+        // 3b. Shadow store-chain projection (#159 / #526 Step 3): debug-only, log-only — observe
+        // completed jobs and log the offer→pickup→dropoff→payout chain so we can verify store
+        // resolution against real dashes and build corpus before a persisting projector exists.
+        if (BuildConfig.DEBUG) {
+            shadowStoreChainLogger.start(applicationScope)
+        }
+
+        // 3c. Analytics read-model projector (#314): the event-sourced fold of app_events into the
+        // durable read-model tables (backfill on first launch, then incremental). NOT debug-gated —
+        // this is the product's historical earnings/miles source of truth, not debug telemetry.
+        analyticsProjector.start(applicationScope)
+        applicationScope.launch { garageSeeder.seed() }
+
+        // 4. Schedule Background Tasks
+        scheduleBackgroundWorkers()
+
+        Timber.i("GigLogApplication initialized.")
+    }
+
+    private fun scheduleBackgroundWorkers() {
+        // Require internet connection to run the gas fetcher
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val dailyWorkRequest = PeriodicWorkRequestBuilder<DailyGasPriceWorker>(24, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .build()
+
+        // KEEP policy ensures we don't accidentally restart the 24-hour clock every time they open the app
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_gas_price_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyWorkRequest
+        )
+        // #981 — the Sunday-evening Weekly Plan nudge. Re-anchored on every launch (the delay is
+        // computed from the wall clock), which is also what corrects a DST drift in the 7-day period.
+        WeeklyPlanWorker.schedule(this)
+        if (BuildConfig.DEBUG) CensusUploadWorker.schedule(this)
+
+        Timber.i("Background workers verified and scheduled.")
+    }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
+}

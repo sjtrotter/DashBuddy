@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "cloud.trotter.dashbuddy.core.data"
+    namespace = "cloud.trotter.log.gig.core.data"
     compileSdk {
         version = release(36)
     }

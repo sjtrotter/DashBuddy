@@ -96,7 +96,7 @@ Copyright 2026 Stephen Trotter
 
 ## Third-party components (non-normative note)
 
-DashBuddy links third-party libraries, each distributed under its own license; those licenses govern
+gig.log links third-party libraries, each distributed under its own license; those licenses govern
 those components, not the terms above.
 
 Called out here because its license was reviewed as part of adopting it (#1053): **RE2J**

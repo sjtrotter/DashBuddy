@@ -9,7 +9,7 @@
 
 ## Context
 
-DashBuddy processes three streams of platform events — accessibility window
+gig.log processes three streams of platform events — accessibility window
 changes, accessibility click events, and notifications — each through its own
 pipeline module. These pipelines grew organically and have divergent internal
 structures despite solving the same fundamental problem: receive a raw platform

@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name" translatable="false">DashBuddy</string>
-    <string name="accessibility_service_description">To help delivery drivers, DashBuddy reads the screens of the delivery apps you turn on and reads offers aloud while you drive. Screen reading and calculations happen on your phone. Accept and Decline need your tap in DashBuddy; each automatic tap needs its own permission. If you allow Screen events, DashBuddy also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Optional screenshots save the whole screen; your gallery may sync them. Android backup may copy your history and settings.</string>
+    <string name="app_name" translatable="false">gig.log</string>
+    <string name="accessibility_service_description">To help delivery drivers, gig.log reads the screens of the delivery apps you turn on and reads offers aloud while you drive. Screen reading and calculations happen on your phone. Accept and Decline need your tap in gig.log; each automatic tap needs its own permission. If you allow Screen events, gig.log also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Optional screenshots save the whole screen; your gallery may sync them. Android backup may copy your history and settings.</string>
 
 
 
@@ -8,27 +8,27 @@
 
 
 
-    <string name="perm_privacy_guarantee">DashBuddy doesn\'t sell your data. Android backup and online features can send data off your phone.</string>
+    <string name="perm_privacy_guarantee">gig.log doesn\'t sell your data. Android backup and online features can send data off your phone.</string>
     <string name="perm_under_the_hood_title">Data use</string>
 
     <string name="perm_title_accessibility">Screen reading (Accessibility)</string>
-    <string name="perm_pitch_accessibility">DashBuddy reads offers aloud as you drive. You tap Accept or Decline yourself; automatic taps need your permission.</string>
-    <string name="perm_hood_accessibility">DashBuddy reads the screens of the delivery apps you turn on. With Screen events on, it also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Screen reading and calculations happen on your phone. Customer names and addresses are saved as codes, not as text.\n\nAutomatic gas prices start off on a new install; an update keeps your setting. When on, Android\'s address lookup may send your location to its provider, and the U.S. Energy Information Administration gets a fuel-price request for your region. To stop it, set the bubble\'s gas price to manual.\n\nSetup sends your vehicle to the EPA for MPG only after you tap \"Look up my vehicle\", and remembers that choice. Neither lookup sends an account or install ID. The manual MPG search opens Google with your vehicle.\n\nOptional screenshots of the whole screen go to Pictures/DashBuddy, where gallery sync may copy them. Android may back up your history and settings to your Google account or a new phone, and restore them later; consent records are left out. History and settings stay until you clear them or uninstall, logs keep only recent entries, and screenshots and exports stay until you delete them. More: Privacy details in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+    <string name="perm_pitch_accessibility">gig.log reads offers aloud as you drive. You tap Accept or Decline yourself; automatic taps need your permission.</string>
+    <string name="perm_hood_accessibility">gig.log reads the screens of the delivery apps you turn on. With Screen events on, it also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Screen reading and calculations happen on your phone. Customer names and addresses are saved as codes, not as text.\n\nAutomatic gas prices start off on a new install; an update keeps your setting. When on, Android\'s address lookup may send your location to its provider, and the U.S. Energy Information Administration gets a fuel-price request for your region. To stop it, set the bubble\'s gas price to manual.\n\nSetup sends your vehicle to the EPA for MPG only after you tap \"Look up my vehicle\", and remembers that choice. Neither lookup sends an account or install ID. The manual MPG search opens Google with your vehicle.\n\nOptional screenshots of the whole screen go to Pictures/gig.log, where gallery sync may copy them. Android may back up your history and settings to your Google account or a new phone, and restore them later; consent records are left out. History and settings stay until you clear them or uninstall, logs keep only recent entries, and screenshots and exports stay until you delete them. More: Privacy details in Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <string name="perm_action_accessibility">Turn on screen reading</string>
 
     <string name="perm_title_listener">Notification access</string>
     <string name="perm_pitch_listener">Reads offer and tip alerts from delivery apps you turn on.</string>
-    <string name="perm_hood_listener">DashBuddy reads notifications only from the delivery apps you turn on, and skips other apps\' notifications unread. What it recognizes goes into your history, which Android backup may copy.</string>
+    <string name="perm_hood_listener">gig.log reads notifications only from the delivery apps you turn on, and skips other apps\' notifications unread. What it recognizes goes into your history, which Android backup may copy.</string>
     <string name="perm_action_listener">Turn on notification access</string>
 
     <string name="perm_title_location">Location</string>
     <string name="perm_pitch_location">Counts your shift miles to estimate profit after vehicle costs.</string>
-    <string name="perm_hood_location">DashBuddy uses GPS to count miles only during a shift, which saves battery and collects less location data. If automatic gas prices are on, it may send your last location, even outside a shift, to Android\'s address lookup. Automatic gas prices start off on a new install; an update keeps your setting. To stop them, set the bubble\'s gas price to manual. Your miles stay in your history, which Android backup may copy.</string>
+    <string name="perm_hood_location">gig.log uses GPS to count miles only during a shift, which saves battery and collects less location data. If automatic gas prices are on, it may send your last location, even outside a shift, to Android\'s address lookup. Automatic gas prices start off on a new install; an update keeps your setting. To stop them, set the bubble\'s gas price to manual. Your miles stay in your history, which Android backup may copy.</string>
     <string name="perm_action_location">Allow location</string>
 
     <string name="perm_title_post_notif">Notifications</string>
     <string name="perm_pitch_post_notif">Notifications keep the bubble running and show offer alerts with Accept and Decline.</string>
-    <string name="perm_hood_post_notif">Lets DashBuddy post the bubble and offer alerts. Opening the bubble also needs Android\'s Bubbles setting.</string>
+    <string name="perm_hood_post_notif">Lets gig.log post the bubble and offer alerts. Opening the bubble also needs Android\'s Bubbles setting.</string>
     <string name="perm_action_post_notif">Allow notifications</string>
 
     <string name="perm_title_bubbles">Bubble</string>
@@ -37,7 +37,7 @@
     <string name="perm_hood_bubbles">Android controls floating bubbles. Select \"All conversations can bubble\" on the next screen.</string>
 
     <string name="perm_toast_bubbles_hint">Select \"All conversations can bubble\"</string>
-    <string name="perm_toast_accessibility_hint">Find DashBuddy and turn it on.</string>
+    <string name="perm_toast_accessibility_hint">Find gig.log and turn it on.</string>
 
 
 
@@ -120,8 +120,8 @@
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
     <!-- setup/consent/ConsentPromptPage.kt (#843) — prompted per-capability consent, a page of the
          FrontDoorHost sheet (#1151) -->
-    <string name="consent_prompt_heading">Allow DashBuddy to tap for you?</string>
-    <string name="consent_prompt_body">DashBuddy can tap these buttons in the delivery app for you, depending on the app. Each stays off until you allow it; tap Not now to decide later. Pressing Accept or Decline yourself is your own choice.\n\nEach choice is recorded on this phone with its time, app version and privacy notice version, and left out of Android backup and phone transfer. The app log notes each choice too; it leaves your phone only in a bug report you export. Change them in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+    <string name="consent_prompt_heading">Allow gig.log to tap for you?</string>
+    <string name="consent_prompt_body">gig.log can tap these buttons in the delivery app for you, depending on the app. Each stays off until you allow it; tap Not now to decide later. Pressing Accept or Decline yourself is your own choice.\n\nEach choice is recorded on this phone with its time, app version and privacy notice version, and left out of Android backup and phone transfer. The app log notes each choice too; it leaves your phone only in a bug report you export. Change them in Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <string name="consent_prompt_source_bundled_format">%1$s, built in</string>
     <string name="consent_prompt_source_downloaded_format">%1$s, downloaded</string>
     <string name="consent_prompt_allow">Allow</string>
@@ -195,7 +195,7 @@
     <string name="ratings_screen_tile_lifetime_shops">Lifetime shops</string>
     <string name="ratings_screen_empty_title">No ratings yet</string>
     <string name="ratings_screen_empty_fallback_platform">your delivery app</string>
-    <string name="ratings_screen_empty_desc_format">Open the Ratings page in %1$s while DashBuddy is running.</string>
+    <string name="ratings_screen_empty_desc_format">Open the Ratings page in %1$s while gig.log is running.</string>
 
     <!-- main/MainActivity.kt -->
     <string name="main_activity_developer_options_title">Developer options</string>
@@ -206,7 +206,7 @@
     <string name="settings_home_title">Settings</string>
     <string name="settings_home_group_monitoring">Monitoring</string>
     <string name="settings_home_item_gig_apps_title">Delivery apps</string>
-    <string name="settings_home_item_gig_apps_subtitle">Which apps DashBuddy reads</string>
+    <string name="settings_home_item_gig_apps_subtitle">Which apps gig.log reads</string>
     <string name="settings_home_group_automation">Offers and costs</string>
     <string name="settings_home_item_strategy_title">Offer rules</string>
     <string name="settings_home_item_strategy_subtitle">Rules, priorities, test offer</string>
@@ -220,7 +220,7 @@
     <string name="settings_home_item_export_title">Export data</string>
     <string name="settings_home_item_export_subtitle">Miles and earnings for a spreadsheet or taxes</string>
     <string name="settings_home_item_consent_title">Automation &amp; consent</string>
-    <string name="settings_home_item_consent_subtitle">Taps DashBuddy may make for you</string>
+    <string name="settings_home_item_consent_subtitle">Taps gig.log may make for you</string>
     <string name="settings_home_group_app_system">App</string>
     <string name="settings_home_item_general_title">General</string>
     <string name="settings_home_item_general_subtitle">Bubble text and spoken language</string>
@@ -471,7 +471,7 @@
     <string name="session_detail_gross_source_summary">From the shift summary</string>
     <string name="session_detail_gross_source_counter">From the app\'s running total</string>
     <string name="session_detail_gross_source_driver">Entered by you</string>
-    <string name="session_detail_gross_source_none">Added up by DashBuddy, no total from the app</string>
+    <string name="session_detail_gross_source_none">Added up by gig.log, no total from the app</string>
     <string name="session_detail_stat_miles">Miles</string>
     <string name="session_detail_stat_deliveries">Deliveries</string>
     <string name="session_detail_duration_format">Duration %1$s</string>
@@ -558,13 +558,13 @@
          only device-derived value the feature ever handles is an ISO-639 code (kept out of the
          copy so nothing device-specific rides a user-visible surface). -->
     <string name="app_notice_channel_name">App notices</string>
-    <string name="app_notice_channel_description">Warnings when DashBuddy can\'t read or speak offers</string>
-    <string name="locale_notice_title">DashBuddy reads English screens only</string>
-    <string name="locale_notice_text">Your phone isn\'t in English. DashBuddy reads delivery apps only in English, so it may miss most offers and deliveries, and its privacy filters may miss customer details. Switching your phone to English fixes both, though no filter catches everything.</string>
+    <string name="app_notice_channel_description">Warnings when gig.log can\'t read or speak offers</string>
+    <string name="locale_notice_title">gig.log reads English screens only</string>
+    <string name="locale_notice_text">Your phone isn\'t in English. gig.log reads delivery apps only in English, so it may miss most offers and deliveries, and its privacy filters may miss customer details. Switching your phone to English fixes both, though no filter catches everything.</string>
 
     <!-- #937 recognition-health alarm (App notices channel) -->
-    <string name="recognition_health_notice_title">DashBuddy can\'t read %1$s right now</string>
-    <string name="recognition_health_notice_text">DashBuddy didn\'t recognize %2$d%% of recent screens from %1$s. That app probably changed. Offers, pickups and deliveries may go untracked until DashBuddy updates.</string>
+    <string name="recognition_health_notice_title">gig.log can\'t read %1$s right now</string>
+    <string name="recognition_health_notice_text">gig.log didn\'t recognize %2$d%% of recent screens from %1$s. That app probably changed. Offers, pickups and deliveries may go untracked until gig.log updates.</string>
     <string name="recognition_health_notice_platform_fallback">this delivery app</string>
 
     <!-- #991 speech-engine liveness notice (App notices channel). Device-independent copy: no
@@ -573,8 +573,8 @@
          process-scoped singleton, so bringing the activity back to the foreground rebuilds
          nothing. And retries are stated as happening per offer, because that is when they fire —
          there is no background retry loop. -->
-    <string name="tts_health_notice_title">DashBuddy stopped reading offers aloud</string>
-    <string name="tts_health_notice_text">Your phone\'s text-to-speech voice stopped working. DashBuddy retries on each offer. If offers stay silent, go to Android Settings > Apps > DashBuddy, tap Force stop, and reopen it. Offers still show on screen.</string>
+    <string name="tts_health_notice_title">gig.log stopped reading offers aloud</string>
+    <string name="tts_health_notice_text">Your phone\'s text-to-speech voice stopped working. gig.log retries on each offer. If offers stay silent, go to Android Settings > Apps > gig.log, tap Force stop, and reopen it. Offers still show on screen.</string>
 
     <!-- ui/bubble/BubbleManager.kt -->
     <string name="bubble_channel_stream_name">Bubble</string>
@@ -721,7 +721,7 @@
 
     <!-- Empty state -->
     <string name="weekly_plan_no_record_title">No shift history to plan from yet</string>
-    <string name="weekly_plan_no_record_body">Go online with DashBuddy running. The plan is built from those shifts.</string>
+    <string name="weekly_plan_no_record_body">Go online with gig.log running. The plan is built from those shifts.</string>
 
     <!-- Notification (its own channel, so it can be muted on its own) -->
     <string name="weekly_plan_channel_name">Weekly plan</string>
@@ -759,7 +759,7 @@
     <string name="playbook_heatmap_plan_outline_caption">Outlined hours are this week\'s plan</string>
     <!-- #1151 — debug builds only: shown instead of the Dashboard while wide event receipt is declined. -->
     <string name="debug_event_receipt_block_title">Screen events are off</string>
-    <string name="debug_event_receipt_block_body">This test build needs Screen events. While they are off, DashBuddy\'s Accessibility service stays off. Allow Screen events in %1$s, then turn the service on when asked.</string>
+    <string name="debug_event_receipt_block_body">This test build needs Screen events. While they are off, gig.log\'s Accessibility service stays off. Allow Screen events in %1$s, then turn the service on when asked.</string>
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
@@ -769,7 +769,7 @@
     <string name="session_report_dialog_amount">Total reported</string>
     <string name="session_report_dialog_set">Set</string>
     <string name="session_report_dialog_clear">No summary for this shift</string>
-    <string name="session_report_dialog_restore">Use the total DashBuddy read</string>
+    <string name="session_report_dialog_restore">Use the total gig.log read</string>
     <string name="session_report_dialog_note">Note (optional)</string>
 
     <!-- #254: local per-platform time learning and independent global overrides. -->
@@ -889,7 +889,7 @@
     <string name="vehicle_facts_use">Usage</string>
     <string name="vehicle_facts_dashes">Shifts</string>
     <string name="vehicle_facts_miles_tracked">Miles tracked</string>
-    <string name="vehicle_facts_usage_note">Counts shifts since DashBuddy started recording which vehicle you drove.</string>
+    <string name="vehicle_facts_usage_note">Counts shifts since gig.log started recording which vehicle you drove.</string>
     <string name="vehicle_facts_last_odometer">Last odometer reading</string>
     <string name="vehicle_facts_none_yet">None yet</string>
     <string name="vehicle_facts_retired">Retired</string>

@@ -5,7 +5,7 @@ issues: #859, #830
   `{storeName}` filenames.** The Uber offer screenshot now dedupes on the presentation (#830's
   `presentationKey`) instead of the churning quote hash, and a rule filename template whose field
   parsed null saves as `Offer` instead of the literal token.
-  **What to watch (Uber dash, evidence capture ON):** Pictures/DashBuddy holds roughly **one
+  **What to watch (Uber dash, evidence capture ON):** Pictures/gig.log holds roughly **one
   `Offer - <store>.png` per offer you actually saw** — no runs of 3–6 near-identical shots of the
   same card seconds apart; a *later* offer from the SAME store still gets its own shot (this is the
   regression to watch for — a missing capture for a repeat store means the dedupe went too far).

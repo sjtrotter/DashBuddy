@@ -1,26 +1,26 @@
-# DashBuddy privacy — what the app does, from the code
+# gig.log privacy — what the app does, from the code
 
 **Status: engineering ground truth, pre-counsel.** This document describes what the shipped code does, with the
 file that does it named for each claim, so it can be checked against the source and kept honest by code review.
 It is not yet a legal privacy policy; wording for the Play listing and the in-app disclosure is reviewed
 separately (#246). Where a claim and the code ever disagree, the code is the fact and this file is the bug.
 
-DashBuddy is **source-available**: the app is licensed under PolyForm Shield (`LICENSE`) and the recognition
+gig.log is **source-available**: the app is licensed under PolyForm Shield (`LICENSE`) and the recognition
 ruleset under `matchers/` is Apache-2.0 (`matchers/LICENSE`). Every statement below can be verified against the
 repository.
 
 ## 1. The one-sentence version
 
-DashBuddy assists delivery drivers by reading enabled delivery apps and speaking offers while driving. Recognition, evaluation and economic calculations run on the device. Pressing Accept or Decline in DashBuddy requests a verified tap in the delivery app; scoring rules do not accept or decline offers automatically. Automated decline confirmation and pay-breakdown expansion require their own grants. Gas-price refresh is off by default on new installs; an existing setting is kept. Setup vehicle lookup asks first and saves the choice (§6). Other app-managed uploads require separate opt-in. Android backup, gallery sync and a chosen export provider can also copy data off the device.
+gig.log assists delivery drivers by reading enabled delivery apps and speaking offers while driving. Recognition, evaluation and economic calculations run on the device. Pressing Accept or Decline in gig.log requests a verified tap in the delivery app; scoring rules do not accept or decline offers automatically. Automated decline confirmation and pay-breakdown expansion require their own grants. Gas-price refresh is off by default on new installs; an existing setting is kept. Setup vehicle lookup asks first and saves the choice (§6). Other app-managed uploads require separate opt-in. Android backup, gallery sync and a chosen export provider can also copy data off the device.
 
-## 2. What DashBuddy reads
+## 2. What gig.log reads
 
 ### 2.1 The accessibility service (the screen reader)
 
 Declared in `app/src/main/res/xml/accessibility_service_config.xml`:
 
-- `android:isAccessibilityTool="true"` — DashBuddy declares itself an accessibility tool because that is what it
-  is: it reads offers aloud. Accept and Decline happen when the dasher presses them in DashBuddy.
+- `android:isAccessibilityTool="true"` — gig.log declares itself an accessibility tool because that is what it
+  is: it reads offers aloud. Accept and Decline happen when the dasher presses them in gig.log.
   Automated actions need separate per-action grants; auto-accept is not built. The flag changes how Android classifies
   and warns about the service and which events it is eligible to receive (since Android 14 the system delivers
   events an app marks accessibility-data-sensitive only to services carrying it).
@@ -51,7 +51,7 @@ delivery apps' windows are inspected: another app's window is identified by pack
 stores nothing of its content. The one surface that can still capture another app's content is a whole-display
 evidence screenshot (§4), which is off by default and says so where it is turned on (`event_receipt_body`).
 
-In release builds, declining Screen events retains the supported-package subscription and leaves DashBuddy usable. In debug builds, declining disables the accessibility service until Screen events is allowed again (`ServiceInfoPolicy.shouldDisableSelf`). The debug permission note states this requirement.
+In release builds, declining Screen events retains the supported-package subscription and leaves gig.log usable. In debug builds, declining disables the accessibility service until Screen events is allowed again (`ServiceInfoPolicy.shouldDisableSelf`). The debug permission note states this requirement.
 
 ### 2.3 Notifications
 
@@ -74,10 +74,10 @@ what is forwarded).
 - **The gas-price refresh** (`FuelPriceRepository`, off by default on new installs; an existing setting is kept, §6): once per refresh the last known location
   is read (`FusedLocationDataSource.getUserLocation`) and passed to Android's `Geocoder` to resolve the state for
   the regional price. `Geocoder` is a platform service that may use the network to do that, so on this feature the
-  device's coordinates do leave the app, to Android's geocoding provider — not to DashBuddy and not to the EIA.
+  device's coordinates do leave the app, to Android's geocoding provider — not to gig.log and not to the EIA.
   The daily worker checks the saved automatic-refresh setting before fetching. Tap the bubble's gas price to enter manual mode, or turn off daily updates in setup and save setup, to stop automatic refreshes. Setup waits for the saved settings before its initial gas-price fetch (`WizardViewModel.loadExistingSettings`).
 
-### 2.5 What DashBuddy never processes
+### 2.5 What gig.log never processes
 
 Banking apps, messaging, browsers, email, photos, contacts, call logs, any app not in `android:packageNames`
 (subject to §2.2 and §4). Inside the delivery apps, the dasher's own sensitive screens are **dropped at the
@@ -94,7 +94,7 @@ These are recognition and marker filters, not a guarantee that every sensitive l
 
 ## 3. Customers are hashed, not stored
 
-A delivery screen names the customer. DashBuddy needs to tell customers apart (to join a pickup to its drop-off)
+A delivery screen names the customer. gig.log needs to tell customers apart (to join a pickup to its drop-off)
 but never needs to know who they are. Customer names and addresses are therefore replaced at the edge by a
 `sha256` digest (`customerNameHash`, `customerAddressHash` — the ruleset's `sha256` parse transform,
 `core/pipeline/.../rules/ParsedFieldsFactory`) before anything is persisted; the parsed customer plaintext is not kept in the event log or analytics tables. The shareable INFO+ log checks every line against known sensitive markers before writing; that finite filter is not a guarantee against every possible name, address or other sensitive detail. Debug capture envelopes are a separate storage surface: recognized screens receive rule redaction, while UNKNOWN screens rely on marker and customer-PII backstops. One of those backstops looks for an address block (#1116): on an UNKNOWN screen, a street line followed by a `City, ST ZIP` line is replaced with `[redacted]`, together with the quoted notes and short number codes in the same block, and a code or quoted note directly above a city line. Other details can still remain in local debug captures, even when upload is off: free text without quotes, inside or outside an address block; a separate unit line such as `Apt 4B` (between the street and the city line it leaves the whole block raw); a street or city line on its own; a city line above its street; a city line inside a container that has its own label; a one-line full address; and a tapped element captured without its address block. On an UNKNOWN screen, the customer's name in a `Return <name> to <store>` task line is also replaced with `[redacted]`; the store name is kept. Whole-display evidence screenshots are raw images (§4). With both developer upload/share toggles enabled and server trust granted, UNKNOWN screen captures can also reach the configured census server, whose operator can read them (§6). The dasher's own first
@@ -104,20 +104,20 @@ as text: they are the driver's business data, not a person.
 ## 4. Screenshots (evidence) — off by default
 
 `ScreenShotHandler` (`app/.../state/effects/`) can save a PNG of an offer card, a delivery receipt or a dash
-summary to the device's own gallery under `Pictures/DashBuddy/` through `MediaStore`. Nothing fires unless the
+summary to the device's own gallery under `Pictures/gig.log/` through `MediaStore`. Nothing fires unless the
 **master toggle AND the matching category toggle** are on (`EvidenceConfig`, #426); the master default is OFF.
 A capture is skipped if this switch is off or another app is in front when it fires. Anything else on screen,
 such as a video or keyboard, can appear in the image. After the 500 ms settle delay, the handler rechecks the
 master and category switches, then reads only the active window's package name. The front app must be an enabled
-delivery platform or DashBuddy itself, including its bubble; a missing or unreadable root skips the capture.
+delivery platform or gig.log itself, including its bubble; a missing or unreadable root skips the capture.
 A capture already being saved finishes. No window enumeration, content mapping or sensitive-marker scan runs
 at capture time. Pixel redaction is not done and remains tracked in #883.
 A screenshot is the **whole display** (`Display.DEFAULT_DISPLAY`), so an offer drawn over another app captures
-that app too. DashBuddy never uploads a screenshot. The file is an ordinary gallery image: your own gallery sync or
+that app too. gig.log never uploads a screenshot. The file is an ordinary gallery image: your own gallery sync or
 sharing applies to it, it survives uninstall like any photo, and you can delete it from the gallery at any time.
 Do not enable evidence capture on screens you would not want kept.
 
-## 5. Taps DashBuddy may perform — each one is its own consent
+## 5. Taps gig.log may perform — each one is its own consent
 
 Rules never actuate (#425). A rule may only point at a target ("the Accept button"); the app owns the taps, and
 each tap is gated three ways (`SideEffectEngine`, `UiInteractionHandler`):
@@ -127,7 +127,7 @@ each tap is gated three ways (`SideEffectEngine`, `UiInteractionHandler`):
    or later under Settings → Data & Privacy → Automation & Consent. A denial persists; a changed rule layout
    re-asks. The capabilities shipped today for DoorDash (`matchers/rules/doordash/offer.json5`,
    `dash-lifecycle.json5`): `accept_offer`, `decline_offer`, `confirm_decline`, `expand_earnings`.
-2. **User initiation and automated follow-ups.** Accept and Decline currently originate from an explicit user press in DashBuddy (`OfferEffects`, `ActionTrigger.USER`); scoring thresholds produce recommendations and flags, not autonomous offer acceptance or rejection. That press is its own consent and does not require a saved automation grant. Automated confirmation of a decline additionally requires quick declines to be enabled and the confirmation capability to be granted. Pay-breakdown expansion requires its capability grant and can run when a collapsed completed-delivery receipt is shown (`EffectMap.diffExpandAction`).
+2. **User initiation and automated follow-ups.** Accept and Decline currently originate from an explicit user press in gig.log (`OfferEffects`, `ActionTrigger.USER`); scoring thresholds produce recommendations and flags, not autonomous offer acceptance or rejection. That press is its own consent and does not require a saved automation grant. Automated confirmation of a decline additionally requires quick declines to be enabled and the confirmation capability to be granted. Pay-breakdown expansion requires its capability grant and can run when a collapsed completed-delivery receipt is shown (`EffectMap.diffExpandAction`).
 3. **Fire-time verification.** Before tapping, the handler re-finds the target in the live screen, checks it
    belongs to the delivery app, checks its label against an allowlist where the control has a label
    (`expand_earnings` is an icon-only chevron, verified by app boundary only — `RuleAction`), and aborts to manual
@@ -146,10 +146,10 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
-| Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. DashBuddy does not deliver it to the developer. |
+| Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
-Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct DashBuddy upload” does not mean that a selected cloud folder keeps the files on the phone.
+Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
 Notification census publication runs after admission, dedup and capture, before UNKNOWN rejection,
 independently of capture enablement. It scans the original five fields and all action labels with
@@ -165,7 +165,7 @@ stay OUT until a reliable screen fingerprint can accompany clicks (ADR-0011 §10
 **Android backup and device transfer.** The manifest sets `android:allowBackup="true"`. Unless you turn app backup
 off in Android's settings, the Room database (your event log and analytics tables) and general app/economy
 preferences are included in your Google account's app backup and in device-to-device transfer, under Android's
-backup encryption and Google's terms — DashBuddy does not send them anywhere itself. **The database follows the
+backup encryption and Google's terms — gig.log does not send them anywhere itself. **The database follows the
 user: restoring history and vehicle/economy settings on a new phone is expected.** The capability-grant/receipt
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
@@ -189,7 +189,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
   tables are a rebuildable projection of your own event log. The database is backed up and transferred so your
   history can be restored on a new phone (§6).
 - Expenses and fuel fill-ups the dasher logs from the bubble are events in that log and rows in two
-  read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the app's tracked miles at the fill-up, and an optional typed note. DashBuddy sends none of it anywhere and never writes the note to a
+  read-model tables (`expense_records`, `fuel_records`): amount, category, gallons, the app's tracked miles at the fill-up, and an optional typed note. gig.log sends none of it anywhere and never writes the note to a
   log at INFO or above. The rows are in the database, so Android backup and device transfer include
   them like the rest of the history (§6). Since #1388, car-care and gas receipts also store which saved
   vehicle they are for (its id, `vehicleId`, on-device), defaulting to the active vehicle. A pick applies
@@ -219,23 +219,23 @@ identity export. Vehicle/default resets preserve these learned preferences.
   A retired mark is kept when you remove a vehicle (its readings stay). Older entries are read into the typed shape
   with every value kept; unknown and incompatible fields ride along unread in the vehicle's `legacyExtras` map. The first time the app runs after this
   change it copies the car you entered in the setup wizard into the garage, once, and never adds a duplicate.
-  A reading is an event in the history log: the miles you typed, the vehicle's id, and DashBuddy's
+  A reading is an event in the history log: the miles you typed, the vehicle's id, and gig.log's
   own GPS mileage total at that moment. Readings never change GPS mileage or any dash figure.
   Since #1360 the event log also stores, per dash, which saved vehicle was active and the app's GPS
   total at that moment (`DASH_VEHICLE`, with the dash id in its payload, the time and START/SWAP kind).
   The header vehicle chip and swap menu (#1379) use these existing local records; nothing new is read, stored or sent.
   Switching within the first ten minutes can append a new stamp; the latest vehicle wins while the
   first stamp keeps the start time and GPS total. The stamps are part of the event log, so Android backup
-  and device transfer include them with the rest of your history; DashBuddy never sends them anywhere
+  and device transfer include them with the rest of your history; gig.log never sends them anywhere
   itself. Since #1387, a manual CSV export includes the dash's vehicle id and label in `sessions.csv`
   and deductible miles per vehicle per tax year in `summary.csv`; dashes without a known saved vehicle
   are labelled "Unknown vehicle". Vehicle names in the start and switch lines are not logged.
   The vehicle's two most recent readings are compared on the device to the app's own GPS mileage
   over the same span, counting only that vehicle's dash miles when stamps cover the span (older or
-  uncovered spans keep the original comparison rules); car, tracked and other miles are shown only to the dasher. DashBuddy sends none of it anywhere
+  uncovered spans keep the original comparison rules); car, tracked and other miles are shown only to the dasher. gig.log sends none of it anywhere
   and never writes a vehicle name to a log at INFO or above. Android backup and device transfer
   include both, like the rest of the history and preferences (§6).
-- The `odometer_prompts` app preference stores whether DashBuddy reminds you to log a reading: the
+- The `odometer_prompts` app preference stores whether gig.log reminds you to log a reading: the
   dock's Odometer block lit in accent for the first ten minutes of a dash and after a dash until a
   reading, and one "Log your odometer" line in the session-start notification (default on). It stays
   on the device and is included in preferences backup.
@@ -304,7 +304,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   car (#1355). Nothing new leaves the device. Receipts created under r5 retain that revision.
 - **r5 (2026-10-18)** — two new stored items: the vehicles you add (name, id, creation time, the active one) in the
   `vehicles` preferences file, and typed odometer readings as `ODOMETER_READING` events (the miles you typed, the
-  vehicle id, DashBuddy's own GPS total at that moment), compared on the device to the app's GPS mileage and shown only
+  vehicle id, gig.log's own GPS total at that moment), compared on the device to the app's GPS mileage and shown only
   to you; plus the `odometer_prompts` preference (#1333 S2f). Receipts created under r4 retain that revision.
 - **r4 (2026-10-18)** — one new stored item: the day and goal amount at which the HUD's daily goal was first met
   (`goal_met_mark` in `app_state`), so the goal animation plays once per day and goal (#1333 S2e). On device,

@@ -1,0 +1,1077 @@
+package cloud.trotter.log.gig.core.data.analytics
+
+import androidx.room.withTransaction
+import cloud.trotter.log.gig.core.data.event.AppEventRepo
+import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.database.GigLogDatabase
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
+import cloud.trotter.log.gig.core.database.event.AppEventDao
+import cloud.trotter.log.gig.domain.analytics.DeliveryAdjustmentFold
+import cloud.trotter.log.gig.domain.analytics.ReceiptRepriceFold
+import cloud.trotter.log.gig.domain.analytics.DeliveryFold
+import cloud.trotter.log.gig.domain.analytics.ExpenseLoggedFold
+import cloud.trotter.log.gig.domain.analytics.FuelFillupFold
+import cloud.trotter.log.gig.domain.analytics.JobAcceptMismatchResolver
+import cloud.trotter.log.gig.domain.analytics.LegStateCodec
+import cloud.trotter.log.gig.domain.analytics.LedgerVoidFold
+import cloud.trotter.log.gig.domain.analytics.OfferFold
+import cloud.trotter.log.gig.domain.analytics.OfferOutcomeCorrectionFold
+import cloud.trotter.log.gig.domain.analytics.OfferReconcileFold
+import cloud.trotter.log.gig.domain.analytics.PayAdjustmentFold
+import cloud.trotter.log.gig.domain.analytics.PayBasis
+import cloud.trotter.log.gig.domain.analytics.PickupFold
+import cloud.trotter.log.gig.domain.analytics.RecordFolds
+import cloud.trotter.log.gig.domain.analytics.SessionAssignFold
+import cloud.trotter.log.gig.domain.analytics.SessionFoldContext
+import cloud.trotter.log.gig.domain.analytics.SessionReportCorrectionFold
+import cloud.trotter.log.gig.domain.analytics.StoreResolution
+import cloud.trotter.log.gig.domain.evaluation.NetProfit
+import cloud.trotter.log.gig.domain.model.event.AppEventType
+import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.state.Platform
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * The durable analytics read-model projector (#314) — the event-sourced CQRS fold of the
+ * `app_events` log into the `delivery_records` / `session_records` / `offer_records` tables.
+ *
+ * **Trigger:** it observes the DB, not the engine — `AppEventDao.maxSequenceId()` (Room-invalidation
+ * driven) wakes a catch-up drain whenever new events land. The one-time **backfill is just the first
+ * drain from watermark 0** — there is no separate backfill path, so backfill ≡ incremental and every
+ * test of the incremental loop tests the backfill. A `projectorVersion` bump wipes the records and
+ * refolds the whole log (rebuild ≡ backfill).
+ *
+ * **Exactly-once:** each batch writes its records AND advances the watermark in ONE
+ * `db.withTransaction`, so a crash rolls the whole batch back and it re-folds cleanly. That atomic
+ * watermark is what makes it exactly-once: a committed batch is never re-folded. (The seq-PK
+ * `REPLACE` on delivery/offer rows makes re-writing THOSE idempotent, but the session counters are
+ * folded increments — re-folding a committed batch would double them, which the watermark prevents;
+ * idempotency does not rest on the PKs alone.)
+ *
+ * **Purity boundary:** all fold arithmetic lives in `:domain` [RecordFolds] (pure, `:domain:test`);
+ * this orchestrator owns only the impure edges — paging, restart-correct context hydration from the
+ * record tables, the inferred-close DB query, the live-economy read for the `CURRENT_FALLBACK`
+ * frozen basis, and the transaction.
+ *
+ * **Privacy (Principle 6/7):** no new capture, no network, no new PII surface — it re-reads a log
+ * that already passed the edge hash (`customerHash`/`addressHash` are sha256). The one INFO
+ * milestone and the per-batch DEBUG line carry **counts only**, never store/customer text.
+ */
+@Singleton
+class AnalyticsProjector @Inject constructor(
+    private val db: GigLogDatabase,
+    private val appEventRepo: AppEventRepo,
+    private val appEventDao: AppEventDao,
+    private val analyticsDao: AnalyticsDao,
+    private val appPreferencesRepository: AppPreferencesRepository,
+) {
+
+    private val ledgerDao = db.ledgerDao()
+
+    /** #159 store-resolution runner (row adapter over the pure `StoreResolver` core), run inside the
+     *  batch transaction against the job's committed rows. */
+    private val storeResolutionRunner = StoreResolutionRunner(analyticsDao)
+
+    /** Started from `GigLogApplication.onCreate` (NOT debug-gated). */
+    fun start(scope: CoroutineScope) {
+        scope.launch {
+            var backoffMs = INITIAL_BACKOFF_MS
+            // Supervise the projection (#430 pattern): a transient failure (SQLite IO, disk pressure)
+            // must not silence the projector for the rest of the process. The atomic watermark kept
+            // the committed state intact through any rolled-back batch, so on a crash we log ERROR,
+            // back off, and resubscribe — resuming from where the watermark left off.
+            while (isActive) {
+                try {
+                    rebuildIfVersionChanged()
+
+                    // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
+                    val backfillFrom = currentWatermark()
+                    val backfill = drain()
+                    if (backfillFrom == 0L && backfill.events > 0) {
+                        Timber.tag(TAG).i(
+                            "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
+                            backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
+                        )
+                    }
+
+                    backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
+                    // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
+                    // collect() only returns on cancellation, so control leaves this block only via a
+                    // throw (caught below) or cancellation (rethrown).
+                    appEventDao.maxSequenceId().conflate().collect { drain() }
+                    return@launch
+                } catch (e: CancellationException) {
+                    throw e // cooperative cancellation — never swallow it
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
+                    delay(backoffMs)
+                    backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
+                }
+            }
+        }
+    }
+
+    /** Aggregate counts for one drain (a run of catch-up batches). */
+    data class DrainStats(
+        val events: Int = 0,
+        val deliveries: Int = 0,
+        val sessions: Int = 0,
+        val offers: Int = 0,
+        val adjustmentSkips: Int = 0,
+    )
+
+    /**
+     * Run the version-rebuild check then drain the log once — the whole projection, synchronously.
+     * `start` uses this shape for the first (backfill) pass; tests drive it directly for a
+     * deterministic fold with no live `maxSequenceId` collector.
+     */
+    suspend fun catchUp(): DrainStats {
+        rebuildIfVersionChanged()
+        return drain()
+    }
+
+    /** Fold catch-up batches until the log is drained past the watermark. */
+    private suspend fun drain(): DrainStats {
+        // FIX 2 (drain-stable economy): read the live economy's cpm ONCE per drain/rebuild cycle and
+        // thread it through every batch. A per-batch read let an economy edit mid-refold freeze
+        // DIFFERENT `CURRENT_FALLBACK` cpm across batches of ONE rebuild — non-reproducible even by a
+        // second refold. One read per drain makes a whole drain economy-consistent by construction.
+        val currentCpm = currentCostPerMile()
+        var acc = DrainStats()
+        while (true) {
+            val batch = foldBatch(BATCH_SIZE, currentCpm) ?: break
+            acc = DrainStats(
+                events = acc.events + batch.events,
+                deliveries = acc.deliveries + batch.deliveries,
+                sessions = acc.sessions + batch.sessions,
+                offers = acc.offers + batch.offers,
+                adjustmentSkips = acc.adjustmentSkips + batch.adjustmentSkips,
+            )
+        }
+        return acc
+    }
+
+    /**
+     * Fold ONE page of events after the watermark and commit records + the advanced watermark in one
+     * transaction. Public test/direct-call entrypoint: reads a fresh economy cpm then delegates to
+     * [foldBatch]. [limit] pages the fold (bounded memory over a long log); a test passes a small
+     * limit to force multi-batch behaviour and simulate a restart between batches. The [drain] loop
+     * uses [foldBatch] directly so a whole drain shares ONE cpm read (FIX 2).
+     */
+    suspend fun processBatch(limit: Int = BATCH_SIZE): DrainStats? = foldBatch(limit, currentCostPerMile())
+
+    /**
+     * Fold ONE page of events against a pre-read [currentCpm], committing records + the advanced
+     * watermark in one transaction. Returns the batch's counts, or null when the log is already
+     * drained.
+     */
+    private suspend fun foldBatch(limit: Int, currentCpm: Double?): DrainStats? {
+        val watermark = currentWatermark()
+        val events = appEventRepo.getEventsAfter(after = watermark, limit = limit)
+        if (events.isEmpty()) return null
+
+        val contexts = HashMap<String, SessionFoldContext>()
+        val touched = LinkedHashSet<String>()
+        val deliveries = ArrayList<DeliveryFold>()
+        val offers = ArrayList<OfferFold>()
+        val pickups = ArrayList<PickupFold>()          // #159 visits rows
+        val resolutions = ArrayList<ResolutionTask>()  // #159 store-resolution triggers (seq-ordered)
+        // FIX 1: one event-sequence-ordered stream of adjustment decisions (PAY_ADJUSTMENT +
+        // DELIVERY_ADJUSTMENT interleaved), NOT two type-partitioned lists. Type-order apply mis-ordered
+        // a PA sequenced after a DA on the same row when they shared a batch (incremental ≠ refold).
+        val adjustments = ArrayList<Adjustment>()
+        var skips = 0
+
+        for (ev in events) {
+            val sid = ev.event.sessionId
+            val ctxIn = sid?.let { contexts[it] ?: hydrate(it) }
+            val outcome = RecordFolds.foldEvent(ev, ctxIn, currentCpm)
+
+            if (outcome.skip != null) skips++
+            outcome.delivery?.let { deliveries += it }
+            outcome.offer?.let { offers += it }
+            outcome.pickup?.let { pickups += it }
+            outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
+            outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.expenseLogged?.let { adjustments += Adjustment.ExpenseLogged(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.fuelFillup?.let { adjustments += Adjustment.FuelFillup(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.ledgerVoid?.let { adjustments += Adjustment.LedgerVoid(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.sessionReportCorrection?.let { adjustments += Adjustment.SessionReportCorrect(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.context?.let { ctx ->
+                contexts[ctx.sessionId] = ctx
+                touched += ctx.sessionId
+            }
+            // A fresh DASH_START infers the close of any still-open session on the same platform —
+            // a crash-orphaned dash the next one ends. (freshSession is false for a RECOVERY
+            // re-start of an already-started session, so that path does not re-close anything.)
+            // #159 F3: each inferred-closed session is also a store-resolution trigger.
+            if (outcome.freshSession) {
+                outcome.context?.let { inferredCloseOpenSessions(it, contexts, touched, resolutions, ev.sequenceId) }
+            }
+        }
+
+        val lastSeq = events.last().sequenceId
+        var adjustmentSkips = 0
+        db.withTransaction {
+            // #159 transaction order (M1/M2): deliveries → offers → pickups → sessions → adjustments →
+            // resolutions → watermark. Pickups + offers + adjustments are strictly BEFORE resolutions,
+            // so a same-batch pickup is an available anchor, the same-batch offer is linkable, and a
+            // same-batch store correction is already pinned when resolution runs.
+            deliveries.forEach { analyticsDao.upsertDelivery(it.toEntity()) }
+            offers.forEach { analyticsDao.upsertOffer(it.toEntity()) }
+            pickups.forEach { analyticsDao.upsertPickup(it.toEntity()) }
+            touched.forEach { sid -> contexts[sid]?.let { analyticsDao.upsertSession(it.toEntity()) } }
+            // Apply the driver corrections AFTER the batch's own delivery upserts (so a same-batch
+            // target is already written) and before the watermark, in ONE event-sequence order (FIX 1).
+            // Each apply reads its target row fresh by-PK, so two edits of one row compose in log order.
+            // Determinism: a correction always sequences after its target's completion, so a from-zero
+            // refold replays this same ascending order and reproduces identical rows.
+            adjustments.sortedBy { it.sequenceId }.forEach { adj ->
+                val skipped = when (adj) {
+                    is Adjustment.ExpenseLogged -> ledgerDao.applyExpenseLogged(adj.fold)
+                    is Adjustment.FuelFillup -> ledgerDao.applyFuelFillup(adj.fold)
+                    is Adjustment.LedgerVoid -> ledgerDao.applyLedgerVoid(adj.fold)
+                    is Adjustment.Pay -> applyPayAdjustment(adj.fold, adj.occurredAt)
+                    is Adjustment.Delivery -> applyDeliveryAdjustment(adj.fold, adj.occurredAt)
+                    is Adjustment.ReceiptReprice -> applyReceiptReprice(adj.fold)
+                    is Adjustment.SessionReportCorrect -> {
+                        // #1134 (fable review F1/F3): by-PK write only; the written triple (never a re-read) is
+                        // copied onto any in-memory context so a later same-batch upsert cannot wipe it.
+                        val written = analyticsDao.applySessionReportCorrection(adj.fold, adj.occurredAt)
+                        if (written != null) {
+                            contexts[adj.fold.sessionId]?.let { ctx ->
+                                contexts[adj.fold.sessionId] = ctx.copy(
+                                    reportOverrideMode = written.mode,
+                                    reportOverride = written.value,
+                                    reportCorrectedAt = written.correctedAt,
+                                )
+                            }
+                        }
+                        written == null
+                    }
+                    is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
+                    is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
+                    is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
+                }
+                if (skipped) adjustmentSkips++
+            }
+            // #159: store resolution reads the just-committed rows for each triggered job and stamps the
+            // storeKey back onto them (resolve-from-rows, F1). sequenceId-ordered (M1) so incremental
+            // fold ≡ from-zero refold.
+            resolutions.sortedBy { it.sequenceId }.forEach { storeResolutionRunner.resolve(it.resolution) }
+            analyticsDao.setWatermark(
+                AnalyticsProjectionStateEntity(watermarkSequenceId = lastSeq, projectorVersion = PROJECTOR_VERSION),
+            )
+        }
+
+        Timber.tag(TAG).d(
+            "batch: %d events (→seq %d) → %d deliveries, %d offers, %d sessions, %d re-priced, %d skipped",
+            events.size, lastSeq, deliveries.size, offers.size, touched.size,
+            adjustments.size - adjustmentSkips, skips,
+        )
+        if (skips > 0) {
+            Timber.tag(TAG).w("batch skipped %d event(s) with a missing/malformed payload", skips)
+        }
+        return DrainStats(events.size, deliveries.size, touched.size, offers.size, adjustmentSkips)
+    }
+
+    /**
+     * A driver correction to apply by-PK inside the batch transaction, carrying the source event's
+     * [sequenceId] so the two correction event types merge into ONE log-ordered stream (FIX 1).
+     */
+    private sealed interface Adjustment {
+        val sequenceId: Long
+        /** The source event's own `occurredAt` — the driver-edit stamp (#1033 round 6). */
+        val occurredAt: Long
+        data class ExpenseLogged(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ExpenseLoggedFold,
+        ) : Adjustment
+        data class FuelFillup(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: FuelFillupFold,
+        ) : Adjustment
+        data class LedgerVoid(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: LedgerVoidFold,
+        ) : Adjustment
+        data class Pay(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: PayAdjustmentFold,
+        ) : Adjustment
+        data class Delivery(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: DeliveryAdjustmentFold,
+        ) : Adjustment
+        data class ReceiptReprice(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ReceiptRepriceFold,
+        ) : Adjustment
+        data class SessionReportCorrect(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: SessionReportCorrectionFold,
+        ) : Adjustment
+        data class SessionAssign(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: SessionAssignFold,
+        ) : Adjustment
+        data class OfferReconcile(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferReconcileFold,
+        ) : Adjustment
+        data class OfferOutcomeCorrect(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferOutcomeCorrectionFold,
+        ) : Adjustment
+    }
+
+    /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
+     *  in-transaction apply (M1). */
+    private data class ResolutionTask(val sequenceId: Long, val resolution: StoreResolution)
+
+    /**
+     * Apply one legacy PAY_ADJUSTMENT re-price by-PK. Returns true iff the target row was missing (a
+     * counted skip, never a crash). A MANUAL row stays MANUAL (#650 review F1): a driver correcting
+     * their own statement leaves it a driver statement (the audit trail lives in the log), and its net
+     * keeps the MANUAL missing-terms-as-0 policy (net-additive) — the generic machine recompute would
+     * null the net and drop the dollars from period SUM. Machine rows flip to USER_CORRECTED with the
+     * machine recompute (null when not computable — the pre-existing #660-family seam, not widened).
+     * The re-price recomputes net against the row's OWN frozen cpm (never today's economy — an
+     * immutable historical fact); tip/basePay are left untouched.
+     */
+    private suspend fun applyPayAdjustment(adj: PayAdjustmentFold, occurredAt: Long): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("PAY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        val manual = row.payBasis == PayBasis.MANUAL
+        val net = when {
+            manual -> NetProfit.net(adj.newPay, row.realizedMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
+            row.frozenCostPerMile != null && row.realizedMiles != null ->
+                NetProfit.net(adj.newPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+            else -> null
+        }
+        analyticsDao.upsertDelivery(
+            row.copy(
+                realizedPay = adj.newPay,
+                payBasis = if (manual) PayBasis.MANUAL else PayBasis.USER_CORRECTED,
+                netProfit = net,
+                // #1033 round 6: a driver monetary edit — the machine re-price must never overwrite it.
+                driverAdjustedAt = occurredAt,
+            ),
+        )
+        return false
+    }
+
+    /**
+     * Apply one driver DELIVERY_ADJUSTMENT (#688) multi-field re-apply by-PK. Returns true iff the
+     * target row was missing (a counted skip). Copies each non-null field; null ⇒ that column is left
+     * unchanged. Two same-row edits compose because each apply reads the row fresh (a prior same-batch
+     * upsert is already visible).
+     */
+    private suspend fun applyDeliveryAdjustment(adj: DeliveryAdjustmentFold, occurredAt: Long): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("DELIVERY_ADJUSTMENT: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        // FIX 5 (#653 double-count guard): a SUSPECT_FULL_RECEIPT row's money was nulled because its
+        // siblings' shares already sum to the receipt — editing pay/tip back onto it re-opens the
+        // double count with one innocent tap. Block the pay+tip terms; store/cash/note still apply.
+        // `originalPayBasis` is the first-fold, never-rewritten basis, so this holds even after a
+        // prior non-pay edit. The dialog also disables the Pay field for these rows (a second gate).
+        val suspectReceipt = row.originalPayBasis == PayBasis.SUSPECT_FULL_RECEIPT
+        if (suspectReceipt && (adj.newPay != null || adj.newTip != null)) {
+            Timber.tag(TAG).w(
+                "DELIVERY_ADJUSTMENT: pay/tip edit blocked on SUSPECT_FULL_RECEIPT row %d (#653 double-count guard)",
+                adj.targetEventSequenceId,
+            )
+        }
+        val reqNewPay = if (suspectReceipt) null else adj.newPay
+        val reqNewTip = if (suspectReceipt) null else adj.newTip
+
+        // FIX 3 (#688 F3 invariant): cash is only meaningful on a SESSIONFUL row — gross counts it via a
+        // session join, net counts it session-inclusive. A null-session cash row would enter net but
+        // never gross, skewing the true-net waterfall cost negative. So drop a cash edit on a
+        // null-session row (one PII-safe WARN); every other field still applies. This makes the
+        // "cash-bearing rows are always sessionful" invariant real rather than merely documented.
+        val cashRejected = adj.newCashTip != null && row.sessionId == null
+        if (cashRejected) {
+            Timber.tag(TAG).w(
+                "DELIVERY_ADJUSTMENT: cash tip ignored on null-session row %d (F3 sessionful-cash invariant)",
+                adj.targetEventSequenceId,
+            )
+        }
+
+        val newStore = adj.newStoreName ?: row.storeName
+        val newPay = reqNewPay ?: row.realizedPay
+        val newTip = reqNewTip ?: row.tip
+        val newCashTip = if (cashRejected) row.cashTip else when (val cash = adj.newCashTip) {
+            null -> row.cashTip
+            0.0 -> null
+            else -> cash
+        }
+        val newMiles = adj.newMiles ?: row.realizedMiles
+        val manual = row.payBasis == PayBasis.MANUAL
+        val payChanged = reqNewPay != null
+        val milesChanged = adj.newMiles != null
+        // Basis (VET F1): payBasis rewrites exactly when realizedPay does. A machine row flips to
+        // USER_CORRECTED iff pay changed; a MANUAL row stays MANUAL; a cash/tip/store-only edit leaves
+        // the basis (and its "est. offer pay" disclosure) intact.
+        val newBasis = when {
+            manual -> PayBasis.MANUAL
+            payChanged -> PayBasis.USER_CORRECTED
+            else -> row.payBasis
+        }
+        // Net recompute only when a net-bearing term (pay or miles) changed; otherwise the stored
+        // netProfit is preserved byte-identically (cash/tip/store/note-only edits do not touch net).
+        // MANUAL keeps the missing-terms-as-0 net-additive policy over the FINAL values; a machine row
+        // recomputes against its OWN frozen cpm. #1133: a pay-less miles edit still carries −cost;
+        // missing miles or frozen cpm keeps net null.
+        val net = when {
+            !payChanged && !milesChanged -> row.netProfit
+            manual -> NetProfit.net(newPay ?: 0.0, newMiles ?: 0.0, row.frozenCostPerMile ?: 0.0)
+            else -> NetProfit.realized(newPay, newMiles, row.frozenCostPerMile)
+        }
+        // #159 H1: a driver-supplied newStoreName NULLS the resolved storeKey AND sets the pin, so the
+        // driver's fix wins the report-card grouping (its grouping becomes read-side
+        // normalizedChain(newStoreName), F9) and store resolution NEVER re-keys it back to the pickup
+        // anchor (every resolution UPDATE carries `WHERE storeKeyPinned = 0`). The pin is derived from
+        // this event, so a from-zero refold re-derives it (F8 wipe clears it, the replayed event resets
+        // it) — rebuild-deterministic. A store-name-less edit leaves storeKey/pin untouched.
+        val storeChanged = adj.newStoreName != null
+        val priorStoreKey = row.storeKey
+        analyticsDao.upsertDelivery(
+            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
+            row.copy(
+                storeName = newStore,
+                realizedPay = newPay,
+                tip = newTip,
+                cashTip = newCashTip,
+                realizedMiles = newMiles,
+                payBasis = newBasis,
+                netProfit = net,
+                storeKey = if (storeChanged) null else row.storeKey,
+                storeKeyPinned = if (storeChanged) 1 else row.storeKeyPinned,
+                // Pay, tip, and miles edits own the receipt economics. A cash-only edit owns
+                // the cash column, which the re-price never touches, so it is not pay ownership.
+                // A tip-only edit leaves payBasis intact (#688), so it still needs this stamp.
+                driverAdjustedAt = if (
+                    reqNewPay != null || reqNewTip != null || adj.newMiles != null
+                ) {
+                    occurredAt
+                } else {
+                    row.driverAdjustedAt
+                },
+            ),
+        )
+        // #906: the rename detached this row; sweep only its prior key in the batch transaction.
+        if (storeChanged && priorStoreKey != null) {
+            storeResolutionRunner.deleteStoreIfUnreferenced(priorStoreKey) // still referenced → kept, silently
+        }
+        return false
+    }
+
+    /**
+     * Apply one machine `DELIVERY_RECEIPT_REPRICE` (#1033 layer 2) by (jobId, taskId). Returns true
+     * iff the apply was SKIPPED (a counted skip + PII-safe WARN, ids only — never a crash).
+     *
+     * The row was priced off the #691 `OFFER_PAY` estimate because its `DELIVERY_COMPLETED` closed on
+     * a COLLAPSED receipt; the itemization that arrived seconds later is the real receipt, so the row
+     * takes the apportioned share as `realizedPay` with `payBasis` → [PayBasis.DROP_SHARE].
+     *
+     * The invariants it shares with every other apply:
+     *  - **Never re-costs.** Net recomputes against the row's OWN `frozenCostPerMile` and its stored
+     *    `realizedMiles` — the same helper [applyDeliveryAdjustment] uses — never today's economy.
+     *  - **`originalPayBasis` is preserved** (via `row.copy`), so the #691/#703 receipt-evidence
+     *    hydration still reads the FIRST-fold basis.
+     *  - **Cash, store keys, mileage and every other column are untouched.**
+     *
+     * Three guards, each a counted skip:
+     *  0. **Already priced** — the row already holds exactly these values on a `DROP_SHARE` basis, so
+     *     the re-price is redundant (the completion mint carried the same itemization). Skipped
+     *     WITHOUT a rewrite, so no `receiptRepricedAt` is stamped for a correction that corrected
+     *     nothing. This is where "already priced" lives since round 8: the state machine cannot know
+     *     which completions persisted, and its two attempts to model it both refused legitimate
+     *     corrections.
+     *  1. **Target row exists** (a re-price whose completion was never folded — the mid-stack shape
+     *     where the mint is still pending — leaves nothing to do; the pending mint will carry the
+     *     itemization itself).
+     *  2. **Never overrides a DRIVER row.** A `MANUAL` or `USER_CORRECTED` row states the driver's
+     *     own figure; a machine re-price must not silently overwrite it. Log order is what settles
+     *     the general case (a driver `DELIVERY_ADJUSTMENT` sequenced AFTER the re-price simply wins,
+     *     because each apply reads the row fresh), and this guard is the other direction: a driver
+     *     edit that came EARLIER is superseded for nothing at all. The documented asymmetry: an
+     *     earlier machine re-price IS superseded by a later driver adjustment's pay/tip, which is the
+     *     intended precedence — the driver is the higher authority on their own money.
+     */
+    private suspend fun applyReceiptReprice(adj: ReceiptRepriceFold): Boolean {
+        val row = analyticsDao.deliveryRecordByJobTask(adj.jobId, adj.taskId) ?: run {
+            // P7: ids only, no payload text.
+            Timber.tag(TAG).w(
+                "DELIVERY_RECEIPT_REPRICE: no delivery row for job %s task %s", adj.jobId, adj.taskId,
+            )
+            return true
+        }
+        // #1033 round 6: `driverAdjustedAt` is the load-bearing half of this guard. A TIP-ONLY
+        // DELIVERY_ADJUSTMENT deliberately leaves `payBasis` alone (#688 VET F1 — the row keeps its
+        // "est. offer pay" disclosure), so the basis test alone let a later re-price overwrite the
+        // driver's own tip. Either signal refuses.
+        if (row.driverAdjustedAt != null ||
+            row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED
+        ) {
+            Timber.tag(TAG).w(
+                "DELIVERY_RECEIPT_REPRICE: skipped driver-owned row %d (basis %s, driverAdjusted=%b)",
+                row.eventSequenceId, row.payBasis, row.driverAdjustedAt != null,
+            )
+            return true
+        }
+        // #1033 round 8: "already priced" is answered HERE, against the row itself — the state
+        // machine cannot know which completions actually persisted (it tried, through two review
+        // rounds, and both attempts refused legitimate corrections). A re-price whose values the row
+        // already holds is a no-op: no rewrite, so no `receiptRepricedAt` churn either. Refold-stable
+        // by construction — the comparison sees the same rows on a from-zero refold.
+        if (row.payBasis == PayBasis.DROP_SHARE &&
+            sameCents(row.realizedPay, adj.realizedPay) &&
+            sameCents(row.tip, adj.tip) &&
+            sameCents(row.basePay, adj.basePay)
+        ) {
+            // P7: ids + cents only.
+            Timber.tag(TAG).d(
+                "DELIVERY_RECEIPT_REPRICE: row %d already holds %d¢ — no-op",
+                row.eventSequenceId, Math.round(adj.realizedPay * 100.0),
+            )
+            return true
+        }
+        val net = if (row.frozenCostPerMile != null && row.realizedMiles != null) {
+            NetProfit.net(adj.realizedPay, row.realizedMiles!!, row.frozenCostPerMile!!)
+        } else {
+            null
+        }
+        analyticsDao.upsertDelivery(
+            // originalPayBasis (+ every unmentioned column) is preserved by `row.copy`.
+            row.copy(
+                realizedPay = adj.realizedPay,
+                tip = adj.tip,
+                basePay = adj.basePay,
+                payBasis = PayBasis.DROP_SHARE,
+                netProfit = net,
+                receiptRepricedAt = adj.repricedAt,
+            ),
+        )
+        return false
+    }
+
+    /** Cent-exact equality for two nullable money figures; two nulls are equal. */
+    private fun sameCents(a: Double?, b: Double?): Boolean = when {
+        a == null && b == null -> true
+        a == null || b == null -> false
+        else -> Math.round(a * 100.0) == Math.round(b * 100.0)
+    }
+
+    /**
+     * Apply one driver DELIVERY_SESSION_ASSIGN (#660 piece 2) — (re-)attribute an orphan
+     * "(No session)" delivery to its real ended dash, or UNASSIGN it back to the bucket (the undo).
+     * Returns true iff the apply was SKIPPED (a counted skip + PII-safe WARN, ids only — never a crash).
+     * Changes **attribution ONLY**: `sessionId` + the `sessionAssigned` marker via `row.copy`; every
+     * frozen economy column (pay, net, tip, `payBasis`, `originalPayBasis`, frozen cpm/fuel/nonfuel,
+     * `cashTip`, `storeKey`/pin, miles, `completedAt`) is byte-identical (categorizing never re-prices),
+     * and no `completedAt` edit keeps us out of the #688 VET-F2 anchor-determinism problem entirely.
+     *
+     * Five fail-closed guards (each a counted skip, never a crash):
+     *  1. **Target row exists** (same as the other applies).
+     *  2. **Movable rows only:** `row.sessionId == null || row.sessionAssigned == 1`. A machine- or
+     *     MANUAL-attributed sessionful row is NEVER moved — moving one would silently break its source
+     *     session's reported-vs-delivered reconciliation. (The UI only offers orphan/assigned rows; this
+     *     is the fail-closed backstop.)
+     *  3. **Assign target is a real, ENDED session** (`endedAt != null`). Load-bearing for determinism,
+     *     not hygiene: restart hydration derives `deliveredJobIds`/`receiptedJobIds`/prevDrop anchors from
+     *     `delivery_records` BY sessionId, so assigning into a LIVE session could make a later machine
+     *     `DELIVERY_COMPLETED`'s fold differ between incremental (no orphan row in the in-memory context)
+     *     and from-zero refold at a batch boundary (orphan row visible in the hydrated context). An ended
+     *     session folds no future machine completion, so that divergence class is inert. The stronger,
+     *     rules-independent backstop is at the DAO: the three hydration reads
+     *     ([AnalyticsDao.deliveredJobIdsInSession]/[AnalyticsDao.receiptedJobIdsInSession]/
+     *     [AnalyticsDao.lastDeliveryInSession], plus the #159 [AnalyticsDao.jobIdsForSession] resolution
+     *     enumerator) all filter `sessionAssigned = 0`, so a driver-assigned orphan is INVISIBLE to
+     *     machine-fold hydration and #159 resolution regardless of the session's ended state — a later-batch
+     *     correction on the same session (e.g. a note edit that re-hydrates + pass-through-upserts the
+     *     context) can no longer inflate `jobsCompleted` off the orphan's job, and incremental ≡ refold
+     *     holds even under the pathological post-`DASH_STOP` `DELIVERY_COMPLETED` shape the ended-session
+     *     assumption alone left as a residual.
+     *  4. **Platform coherence:** both platforms known and differing ⇒ skip (a DoorDash drop in an Uber
+     *     dash's reconciliation is never right). No platform re-stamp in v1.
+     *  5. **Cash-bearing unassign block:** `newSessionId == null && row.cashTip != null` ⇒ skip — the
+     *     mirror of the projector's F3 "cash-bearing rows are always sessionful" invariant (a null-session
+     *     cash row would reach net but not gross).
+     *
+     * The session `deliveries` counter is maintained by a RELATIVE ±1 UPDATE ([bumpSessionDeliveries]),
+     * order-safe with the batch's earlier session-context upserts and identical under incremental fold vs
+     * refold. `jobsCompleted` + store resolution are deliberately untouched (job counts are
+     * `COUNT(DISTINCT jobId)` and pick the row up automatically; re-anchoring #159 resolution is a v1
+     * non-goal).
+     */
+    private suspend fun applySessionAssign(adj: SessionAssignFold): Boolean {
+        val row = analyticsDao.deliveryRecord(adj.targetEventSequenceId) ?: run {
+            // P7: counts only, no payload text.
+            Timber.tag(TAG).w("DELIVERY_SESSION_ASSIGN: target row %d not found", adj.targetEventSequenceId)
+            return true
+        }
+        // Guard 2: movable rows only (null-session OR previously driver-assigned).
+        if (row.sessionId != null && row.sessionAssigned != 1) {
+            Timber.tag(TAG).w(
+                "DELIVERY_SESSION_ASSIGN: row %d is machine-attributed (session-bound, not driver-assigned) — skipped",
+                adj.targetEventSequenceId,
+            )
+            return true
+        }
+        val newSessionId = adj.newSessionId
+        if (newSessionId != null) {
+            // Guard 3: real, ENDED target session.
+            val session = analyticsDao.sessionRecord(newSessionId)
+            if (session == null || session.endedAt == null) {
+                Timber.tag(TAG).w(
+                    "DELIVERY_SESSION_ASSIGN: target session for row %d is missing or still live — skipped",
+                    adj.targetEventSequenceId,
+                )
+                return true
+            }
+            // Guard 4: platform coherence (both known and differing).
+            val rowPlatform = Platform.fromWire(row.platform)
+            val sessionPlatform = Platform.fromWire(session.platform)
+            if (rowPlatform != null && rowPlatform != Platform.Unknown &&
+                sessionPlatform != null && sessionPlatform != Platform.Unknown &&
+                rowPlatform != sessionPlatform
+            ) {
+                Timber.tag(TAG).w(
+                    "DELIVERY_SESSION_ASSIGN: row %d platform ≠ target session platform — skipped",
+                    adj.targetEventSequenceId,
+                )
+                return true
+            }
+        } else if (row.cashTip != null) {
+            // Guard 5: cash-bearing unassign block (F3 sessionful-cash invariant).
+            Timber.tag(TAG).w(
+                "DELIVERY_SESSION_ASSIGN: cannot unassign cash-bearing row %d (F3 sessionful-cash invariant) — skipped",
+                adj.targetEventSequenceId,
+            )
+            return true
+        }
+
+        val oldSessionId = row.sessionId
+        // Attribution-only: sessionId + marker via row.copy; every frozen column preserved byte-identically.
+        analyticsDao.upsertDelivery(
+            row.copy(sessionId = newSessionId, sessionAssigned = if (newSessionId != null) 1 else 0),
+        )
+        if (oldSessionId != null) analyticsDao.bumpSessionDeliveries(oldSessionId, -1)
+        if (newSessionId != null) analyticsDao.bumpSessionDeliveries(newSessionId, +1)
+        return false
+    }
+
+    /**
+     * #810 B2 Tier 1 — resolve a `JOB_ACCEPT_MISMATCH` orphan from committed store evidence
+     * (resolve-from-rows, the #159 pattern). Reads the closing job's accepted `offer_records` (by the
+     * payload's offer hashes + session) and its delivered `delivery_records`, runs the pure
+     * [JobAcceptMismatchResolver] over their store names, and stamps `UNASSIGNED_INFERRED` on the ONE
+     * cross-store orphan it proves. **Any ambiguity is a no-op** (INCONCLUSIVE → Tier 2) — it re-prices
+     * nothing and mutates only the new `outcomeResolved` column.
+     *
+     * **Paging-independence (review F1).** The evidence read is scoped to `eventSequenceId <
+     * [mismatchSeq]` — the rows sequenced BEFORE this mismatch event. The state machine now emits
+     * `JOB_ACCEPT_MISMATCH` AFTER the closing job's final `DELIVERY_COMPLETED` (both on the same close
+     * step; EffectMap review F1), so all of the job's delivered rows sort before the mismatch and this
+     * bound is a no-op on today's order — but it makes the reconcile deterministic across page
+     * boundaries AND for HISTORICAL logs carrying the OLD (mismatch-first) order: there the closing
+     * drop's row is `> mismatchSeq`, excluded, so the evidence is short one store and the mismatch
+     * deterministically falls to Tier 2 (fail-null) whether folded incrementally or from-zero.
+     *
+     * **Missing-evidence guard (review F2).** If ANY delivered row has NO usable store evidence (blank
+     * `storeName` AND empty decoded `payoutStoreForms`), the delivered-store set is incomplete and a
+     * DELIVERED offer could be mis-stamped as the orphan — so bail to INCONCLUSIVE (Tier 2).
+     *
+     * Returns true only for the defensive skips (no sessionId / no offer hashes / <2 accepted rows) — an
+     * INCONCLUSIVE resolution is a valid processed no-op, not a skip.
+     */
+    private suspend fun applyOfferReconcile(fold: OfferReconcileFold, mismatchSeq: Long): Boolean {
+        val sid = fold.sessionId ?: run {
+            Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: job has no sessionId — skipped")
+            return true
+        }
+        if (fold.acceptedOfferHashes.isEmpty()) {
+            Timber.tag(TAG).w("JOB_ACCEPT_MISMATCH reconcile: no accepted offer hashes on the mismatch — skipped")
+            return true
+        }
+        val acceptedRows = analyticsDao.offerRecordsByHashes(
+            fold.acceptedOfferHashes, sid, AppEventType.OFFER_ACCEPTED.name,
+        )
+        // Need ≥2 accepted rows to have an orphan to disambiguate (the resolver also guards this).
+        if (acceptedRows.size < 2) {
+            Timber.tag(TAG).w(
+                "JOB_ACCEPT_MISMATCH reconcile: %d accepted offer row(s) found (<2) — skipped",
+                acceptedRows.size,
+            )
+            return true
+        }
+        // F1: evidence is only the rows sequenced before this mismatch (paging + historical-order safe).
+        val deliveredRows = analyticsDao.deliveryRecordsForJob(fold.jobId)
+            .filter { it.eventSequenceId < mismatchSeq }
+        // F2: a delivered row with NO store evidence would silently shrink the delivered-store set and
+        // could make the resolver stamp a DELIVERED offer as the orphan — fail-null to Tier 2 instead.
+        val anyEvidenceless = deliveredRows.any {
+            it.storeName.isNullOrBlank() && StoreResolutionRunner.decodeForms(it.payoutStoreForms).isEmpty()
+        }
+        if (anyEvidenceless) return false
+        val deliveredForms = deliveredRows.flatMap { row ->
+            buildList {
+                row.storeName?.let { add(it) }
+                addAll(StoreResolutionRunner.decodeForms(row.payoutStoreForms))
+            }
+        }
+        val orphanSeq = JobAcceptMismatchResolver.resolveOrphan(
+            acceptedOffers = acceptedRows.map {
+                JobAcceptMismatchResolver.AcceptedOffer(it.eventSequenceId, it.merchantName)
+            },
+            deliveredStoreForms = deliveredForms,
+        ) ?: return false // INCONCLUSIVE (same-store tie / multi-unmatched / no evidence) → Tier 2.
+        analyticsDao.stampOfferOutcomeResolved(orphanSeq, OfferOutcomeResolution.UNASSIGNED_INFERRED)
+        return false
+    }
+
+    /**
+     * #810 B2 Tier 2 — apply a driver `OFFER_OUTCOME_CORRECTION` by-PK: stamp `offer_records
+     * .outcomeResolved` (`UNASSIGNED_ATTESTED`, or null to UNDO), never any frozen estimate column.
+     * Returns true iff SKIPPED (a counted skip + PII-safe WARN). Three fail-closed guards: target row
+     * exists, it is an ACCEPTED offer (only an accept can be an orphan), and the resolution value is
+     * known (`UNASSIGNED_ATTESTED` or null). Because the correction sequences after its target's
+     * `OFFER_ACCEPTED`, a from-zero refold reproduces the identical stamp.
+     */
+    private suspend fun applyOfferOutcomeCorrection(fold: OfferOutcomeCorrectionFold): Boolean {
+        val row = analyticsDao.offerRecord(fold.targetOfferEventSequenceId) ?: run {
+            Timber.tag(TAG).w("OFFER_OUTCOME_CORRECTION: target offer row %d not found", fold.targetOfferEventSequenceId)
+            return true
+        }
+        if (row.outcome != AppEventType.OFFER_ACCEPTED.name) {
+            Timber.tag(TAG).w(
+                "OFFER_OUTCOME_CORRECTION: offer row %d is not an accepted offer — skipped",
+                fold.targetOfferEventSequenceId,
+            )
+            return true
+        }
+        val resolved = fold.resolvedOutcome
+        if (resolved != null && resolved != OfferOutcomeResolution.UNASSIGNED_ATTESTED) {
+            Timber.tag(TAG).w(
+                "OFFER_OUTCOME_CORRECTION: unknown resolution value for offer row %d — skipped",
+                fold.targetOfferEventSequenceId,
+            )
+            return true
+        }
+        analyticsDao.stampOfferOutcomeResolved(fold.targetOfferEventSequenceId, resolved)
+        return false
+    }
+
+    // ── Version rebuild ─────────────────────────────────────────────────
+
+    private suspend fun rebuildIfVersionChanged() {
+        val state = analyticsDao.getWatermark() ?: return // no watermark yet → first fold is the backfill
+        if (state.projectorVersion == PROJECTOR_VERSION) return
+        Timber.tag(TAG).i(
+            "projector version %d→%d: wiping records and refolding the log",
+            state.projectorVersion, PROJECTOR_VERSION,
+        )
+        db.withTransaction {
+            ledgerDao.deleteAllExpenses()
+            ledgerDao.deleteAllFuel()
+            analyticsDao.deleteAllDeliveries()
+            analyticsDao.deleteAllSessions()
+            analyticsDao.deleteAllOffers()
+            // #159 F8: the wipe MUST also clear the store tables, or stale `stores` first-observed fields
+            // survive the refold and become permanently wrong (the forgotten-edge class the data-safety
+            // posture exists to catch). The refold repopulates both from the immutable log.
+            analyticsDao.deleteAllStores()
+            analyticsDao.deleteAllPickupRecords()
+            analyticsDao.setWatermark(
+                AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = PROJECTOR_VERSION),
+            )
+        }
+    }
+
+    private suspend fun currentWatermark(): Long =
+        analyticsDao.getWatermark()?.watermarkSequenceId ?: 0L
+
+    /**
+     * The live economy's operating cost-per-mile — the frozen `CURRENT_FALLBACK` basis only. A
+     * `null` here just means this batch's fallback-basis deliveries stamp `CostBasis.NONE` instead
+     * (never a wrong cpm); it must NOT swallow cancellation (the drain loop's own rule, `start`
+     * above) — only a real DataStore read failure is caught, logged, and degraded to `null`.
+     */
+    private suspend fun currentCostPerMile(): Double? =
+        try {
+            appPreferencesRepository.userEconomy.first().operatingCostPerMile
+        } catch (e: CancellationException) {
+            throw e // cooperative cancellation — never swallow it
+        } catch (e: Exception) {
+            // No PII: the failure class only, never preference contents.
+            Timber.tag(TAG).w(e, "currentCostPerMile: economy read failed; falling back to null cpm")
+            null
+        }
+
+    // ── Restart-correct context hydration (the record tables ARE the fold state) ──
+
+    private suspend fun hydrate(sessionId: String): SessionFoldContext? {
+        val session = analyticsDao.sessionRecord(sessionId) ?: return null
+        val lastDelivery = analyticsDao.lastDeliveryInSession(sessionId)
+        return session.toContext(
+            deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
+            receiptedJobIds = analyticsDao.receiptedJobIdsInSession(sessionId).toSet(),
+            prevDropOdometer = lastDelivery?.odometerAtCompletion,
+            lastEvaluatedCostPerMile = analyticsDao.lastOfferCostPerMileInSession(sessionId),
+            lastEvaluatedFuelPerMile = analyticsDao.lastOfferFuelPerMileInSession(sessionId),
+            lastEvaluatedNonFuelPerMile = analyticsDao.lastOfferNonFuelPerMileInSession(sessionId),
+        )
+    }
+
+    /**
+     * Close every still-open session for [fresh]'s platform except [fresh] itself — the
+     * crash-orphaned dash whose DASH_STOP never fired, ended by the next dash. Handles both the
+     * in-batch open contexts and the DB rows a prior batch left open. Its endedAt/lastOdometer stay
+     * honest (they were advanced while it lived), so its duration/miles remain meaningful.
+     */
+    private suspend fun inferredCloseOpenSessions(
+        fresh: SessionFoldContext,
+        contexts: HashMap<String, SessionFoldContext>,
+        touched: LinkedHashSet<String>,
+        resolutions: ArrayList<ResolutionTask>,
+        triggerSequenceId: Long,
+    ) {
+        // Collect the newly inferred-closed sessions from both sources, then emit their resolutions in a
+        // deterministic order (FIX 10): all these tasks share the DASH_START's triggerSequenceId, so the
+        // transaction's stable `sortedBy { sequenceId }` would otherwise preserve HashMap/query iteration
+        // order among them — non-deterministic between incremental fold and refold. Sorting by sessionId
+        // pins it.
+        val inferred = ArrayList<Pair<String, String>>() // sessionId → platformWire
+        // In-batch open contexts on the same platform.
+        for (ctx in contexts.values.toList()) {
+            if (ctx.sessionId == fresh.sessionId || ctx.platform != fresh.platform || ctx.endedAt != null) continue
+            contexts[ctx.sessionId] = ctx.copy(endedAt = ctx.lastEventAt, endSource = INFERRED)
+            touched += ctx.sessionId
+            inferred += ctx.sessionId to ctx.platform.wire
+        }
+        // DB rows still open for this platform, not already handled in this batch.
+        for (row in analyticsDao.openSessions(fresh.platform.wire)) {
+            if (row.sessionId == fresh.sessionId || contexts.containsKey(row.sessionId)) continue
+            contexts[row.sessionId] = row.toContext().copy(endedAt = row.lastEventAt, endSource = INFERRED)
+            touched += row.sessionId
+            inferred += row.sessionId to fresh.platform.wire
+        }
+        inferred.sortedBy { it.first }.forEach { (sessionId, platformWire) ->
+            resolutions += inferredResolution(sessionId, platformWire, triggerSequenceId)
+        }
+    }
+
+    /** #159 F3: an inferred session close is a store-resolution trigger too (session-level, jobId null),
+     *  carried under the triggering DASH_START's sequenceId for the seq-ordered in-transaction apply. */
+    private fun inferredResolution(
+        sessionId: String,
+        platformWire: String,
+        triggerSequenceId: Long,
+    ) = ResolutionTask(
+        triggerSequenceId,
+        StoreResolution(sessionId = sessionId, platform = platformWire, jobId = null, offerHashes = emptyList()),
+    )
+
+    // ── Entity ↔ domain mapping (the storage boundary; :domain cannot see :core:database) ──
+
+    private fun SessionFoldContext.toEntity() = SessionRecordEntity(
+        sessionId = sessionId,
+        platform = platform.wire,
+        startedAt = startedAt,
+        endedAt = endedAt,
+        lastEventAt = lastEventAt,
+        endSource = endSource,
+        startOdometer = startOdometer,
+        lastOdometer = lastOdometer,
+        reportedEarnings = reportedEarnings,
+        reportOverrideMode = reportOverrideMode,
+        reportOverride = reportOverride,
+        reportCorrectedAt = reportCorrectedAt,
+        reportedDurationMillis = reportedDurationMillis,
+        offersReceived = offersReceived,
+        offersAccepted = offersAccepted,
+        offersDeclined = offersDeclined,
+        offersTimeout = offersTimeout,
+        deliveries = deliveries,
+        jobsCompleted = jobsCompleted,
+        startSource = startSource,
+        // #688 phase B: persist the per-leg accumulator so it survives a batch-boundary rehydration.
+        legStateJson = LegStateCodec.encode(legState),
+    )
+
+    private fun SessionRecordEntity.toContext(
+        deliveredJobIds: Set<String> = emptySet(),
+        receiptedJobIds: Set<String> = emptySet(),
+        prevDropOdometer: Double? = null,
+        lastEvaluatedCostPerMile: Double? = null,
+        lastEvaluatedFuelPerMile: Double? = null,
+        lastEvaluatedNonFuelPerMile: Double? = null,
+    ) = SessionFoldContext(
+        sessionId = sessionId,
+        platform = Platform.fromWire(platform) ?: Platform.Unknown,
+        startedAt = startedAt,
+        lastEventAt = lastEventAt,
+        endedAt = endedAt,
+        endSource = endSource,
+        startOdometer = startOdometer,
+        lastOdometer = lastOdometer,
+        reportedEarnings = reportedEarnings,
+        reportOverrideMode = reportOverrideMode,
+        reportOverride = reportOverride,
+        reportCorrectedAt = reportCorrectedAt,
+        reportedDurationMillis = reportedDurationMillis,
+        offersAccepted = offersAccepted,
+        offersDeclined = offersDeclined,
+        offersTimeout = offersTimeout,
+        deliveries = deliveries,
+        deliveredJobIds = deliveredJobIds,
+        receiptedJobIds = receiptedJobIds,
+        prevDropOdometer = prevDropOdometer,
+        lastEvaluatedCostPerMile = lastEvaluatedCostPerMile,
+        lastEvaluatedFuelPerMile = lastEvaluatedFuelPerMile,
+        lastEvaluatedNonFuelPerMile = lastEvaluatedNonFuelPerMile,
+        // `started` rehydrates from the persisted [startSource] marker (#659, retro finding 2) — a
+        // real DASH_START stamped it ("interaction"/"recovery"), a placeholder synthesized before its
+        // DASH_START (or by a DASH_STOP that arrived first) left it null. This replaces the old
+        // `platform != Unknown` heuristic, under which a row synthesized by a real-platform DASH_STOP
+        // rehydrated as started and then took the RECOVERY non-clobber arm, keeping a near-zero
+        // startedAt. A still-`_unknown` placeholder (startSource null) is NOT started, so the
+        // DASH_START that lands in a later batch upgrades it with the real platform/startedAt (F1).
+        started = startSource != null,
+        startSource = startSource,
+        // #688 phase B: rehydrate the per-leg accumulator; fail-closed to empty on a garbage/null blob.
+        legState = LegStateCodec.decode(legStateJson),
+    )
+
+    private companion object {
+        private const val TAG = "Analytics"
+        private const val BATCH_SIZE = 500
+        private const val INFERRED = "inferred"
+
+        /** Supervised-restart backoff bounds after a drain crash (#430 pattern). */
+        private const val INITIAL_BACKOFF_MS = 1_000L
+        private const val MAX_BACKOFF_MS = 60_000L
+
+        /**
+         * Fold-logic version — bump to wipe records + refold the whole log on next start.
+         * v2 (#659): frozen fuel/non-fuel per-mile split on delivery_records + estFuel/NonFuelPerMile
+         * on offer_records + startSource on session_records — all populated from the immutable log on
+         * the refold this bump triggers.
+         * v3 (#653): the fold now drops a full-receipt stamp on an already-delivered multi-delivery
+         * job as SUSPECT (`PayBasis.SUSPECT_FULL_RECEIPT`, no realizedPay/tip/base) instead of
+         * double-counting the period SUM — the refold applies the guard to history.
+         * (#650 did NOT bump this: `MANUAL_DELIVERY`/`PAY_ADJUSTMENT` are new event types that cannot
+         * exist in already-folded history, so there was nothing to refold — a fresh drain folds them.)
+         * v4 (#703): the from-zero refold populates `originalPayBasis` (the first-fold basis, the
+         * receipt-evidence hydration anchor) for ALL history — corrections replay after their targets,
+         * so first-fold basis is reproduced faithfully, closing the #691 USER_CORRECTED hydration
+         * wrinkle for old rows too. This SUPERSEDES #650's "no bump needed" note: the bump is #703's
+         * refold requirement, not a corrections one (#688's DELIVERY_ADJUSTMENT is likewise a new event
+         * type that can't exist in folded history). Side effect (stated): the refold also re-stamps
+         * `CURRENT_FALLBACK` rows against today's economy (`CostBasis` is not rebuild-stable), so those
+         * rows' fallback net shifts on the bump — the same behaviour as the v2/v3 bumps. `cashTip`
+         * stays null in history (no cash events exist yet).
+         * v5 (#159): the from-zero refold populates the new `stores` + `pickup_records` tables and the
+         * `delivery_records.storeKey`/`payoutStoreForms` + `offer_records.storeKey`/`linkedJobId`
+         * columns for ALL history (rebuild ≡ backfill — the backfill is the first drain). The F8 wipe
+         * clears `stores`/`pickup_records` so the refold's first-observed store fields are correct.
+         * v6 (#688 phase B): the fold now reads the lifecycle leg-anchor events it previously ignored
+         * (PICKUP_ARRIVED/DELIVERY_ARRIVED/DELIVERY_CONFIRMED, and advances the anchor on
+         * PICKUP_CONFIRMED/DELIVERY_COMPLETED) and the from-zero refold populates per-drop
+         * `milesToStore`/`milesToDropoff` + redistributed `realizedMiles`/`netProfit` on stacked drops
+         * from the odometer stamps already in the immutable log — so per-drop net redistributes within a
+         * stack while the session total is ~conserved. Phase-A driver edits (`DELIVERY_ADJUSTMENT`)
+         * replay after their targets on the refold, so a driver's corrected total survives. Precedented
+         * side effect (as v2/v3/v4): `CURRENT_FALLBACK` rows re-stamp against today's economy.
+         * v7 (#773): store resolution gains the address-derived running-key FALLBACK — when a receipt is
+         * chain-bare (no `(code)`/` - Area` key) the from-zero refold now keys the store off its pickup
+         * address's leading street number (`@12125`), so a chain's per-location visits split into distinct
+         * `stores`/`storeKey` rows instead of collapsing into one chain-only "location unknown" bucket. The
+         * refold re-keys the address-bearing subset of history (pre-#159 folds carry no pickup address, so
+         * those stay chain-only — a partial, honest backfill). Purely a projection re-key: `app_events`,
+         * every frozen economy column, and pay/net/miles are untouched. Precedented side effect (as
+         * v2/v3/v4/v6): the refold also re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v8 (#810 B2): the from-zero refold re-processes the `JOB_ACCEPT_MISMATCH` tripwire events
+         * already in the log (the seq-114 orphan) through the Tier-1 store-evidence join, stamping
+         * `offer_records.outcomeResolved = UNASSIGNED_INFERRED` on any single cross-store orphan and
+         * leaving the fielded same-store shape NULL (for Tier-2 driver attestation). A new event type
+         * (`OFFER_OUTCOME_CORRECTION`) folds on a fresh drain and cannot exist in already-folded history,
+         * so the bump exists for the Tier-1 retro-resolve, not the correction. Purely a projection re-key
+         * of the new nullable column: `app_events`, every frozen economy column, and pay/net/miles are
+         * untouched. Precedented side effect (as v2/v3/v4/v6/v7): the refold also re-stamps
+         * `CURRENT_FALLBACK` rows against today's economy.
+         * v9 (#887): store resolution now DELETES the `stores` identity row a monotonic key upgrade
+         * superseded (address-tier `doordash|cvs|@23530` → receipt-tier `doordash|cvs|3551`) once nothing
+         * references it — the fielded 07-27 pull carried 2 such zero-visit phantoms out of 28 rows. The
+         * bump exists to HEAL the on-device rows: the orphans are already committed, and the fold is the
+         * one mechanism that owns what a `stores` row means, so the established wipe+refold
+         * (rebuild ≡ backfill) heals them without adding a second, marker-gated cleanup path. The F8 wipe
+         * clears `stores`/`pickup_records`; the refold repopulates them from the immutable log, minus the
+         * superseded rows. **Scope: the `stores` table ONLY** — the code change adds nothing but a guarded
+         * `DELETE FROM stores`, so every delivery/session/offer/pickup column folds byte-identically.
+         * Precedented side effect (as v2/v3/v4/v6/v7/v8): the refold re-stamps `CURRENT_FALLBACK` rows
+         * against today's economy.
+         * v10 (#1000): `StoreResolutionRunner` no longer discards the exact offer↔job link when a job
+         * has NO `pickup_records` row (a blown-through pickup that never confirmed, PICKUP_ARRIVED with
+         * no PICKUP_CONFIRMED) — the `DELIVERY_COMPLETED` trigger's own carried offer hashes already
+         * prove the link, and the old `pickups.isEmpty()` short-circuit threw it away with the missing
+         * anchor. The bump exists to HEAL the on-device 08-08 Zaxbys accept (1-of-5 lifetime offers left
+         * unlinked): the refold replays the delivery trigger through the new link-only arm. `storeKey`
+         * stays fail-null (no anchor to key with — an offer-form fallback was considered and REJECTED,
+         * see the design comment on #1000, fail-null beats fail-wrong). **Scope: `offer_records.
+         * linkedJobId` ONLY**, and only for rows the old code left unlinked — every other column, and
+         * every already-linked row, folds byte-identically. Precedented side effect (as v2 onward): the
+         * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         * v11 (#1030): `RecordFolds.reportedEarningsOf` (fold-time normalization — see its KDoc) now reads a
+         * DASH_STOP `totalEarnings` of `0.0` as **no report** on every non-summary end source. The
+         * stamp side is fixed at the source, but history cannot heal from that: the committed
+         * `early_offline` stops carry a literal `"totalEarnings": 0.0` and a refold replays them
+         * verbatim, so the bump is what re-stamps the already-committed rows.
+         * **Scope: `session_records.reportedEarnings` ONLY** — no frozen economy column moves
+         * (`reportedEarnings` is attribution metadata, never an input to `netProfit`/`frozenCostPerMile`),
+         * and a summary-screen row folds byte-identically. Precedented side effect (as v2 onward): the
+         * refold re-stamps `CURRENT_FALLBACK` rows against today's economy.
+         */
+        // 12: #1133 — pay-less rows carry −cost as net
+        // 13: #254 — backfill single-order provenance and aligned odometer anchors for time learning
+        // 14: #1108 — per-job mileage budgets and session completion high-water allocation
+        // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills readings surviving the bounded map)
+        // #1333: v16 refolded cash-only ownership and zero cash as no cash; v17 (S3b) stores a blank
+        // expense note as null, so rows projected before the rule are rebuilt too.
+        private const val PROJECTOR_VERSION = 17
+    }
+}

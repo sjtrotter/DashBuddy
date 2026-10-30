@@ -1,0 +1,163 @@
+package cloud.trotter.log.gig.replay
+
+import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
+import cloud.trotter.log.gig.core.pipeline.PipelineEvent
+import cloud.trotter.log.gig.core.pipeline.PipelineStats
+import cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers
+import cloud.trotter.log.gig.core.pipeline.CaptureWriter
+import cloud.trotter.log.gig.core.pipeline.accessibility.TreeSnapshot
+import cloud.trotter.log.gig.core.pipeline.rules.CompiledRedact
+import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
+import cloud.trotter.log.gig.domain.capture.CaptureBus
+import cloud.trotter.log.gig.domain.capture.ReplayMetadata
+import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
+import cloud.trotter.log.gig.domain.model.accessibility.UiNode
+import cloud.trotter.log.gig.domain.pipeline.UNKNOWN_TARGET
+import cloud.trotter.log.gig.test.util.PropSeeds
+import cloud.trotter.log.gig.test.util.TestRulesetFactory
+import io.kotest.property.Arb
+import io.kotest.property.RandomSource
+import io.kotest.property.arbitrary.arbitrary
+import io.kotest.property.checkAll
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertNull
+import org.junit.Test
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
+
+/**
+ * #590 fill-in — end-to-end `classify → gate → capture` on adversarial trees.
+ *
+ * Drives kotest-generated adversarial [UiNode] trees (bounded depth/width within the
+ * tree-budget caps, with hostile text: sensitive markers, homoglyph-mutated markers,
+ * SSN/PAN shapes, very long strings, unicode, blanks) through the REAL
+ * [ObservationClassifier] wired to the PRODUCTION rules ([TestRulesetFactory]) and then
+ * the real [CaptureWriter] fail-closed backstop. Asserts:
+ *  - classify + capture never throw (no crash on hostile input);
+ *  - the fail-closed invariant: an UNKNOWN frame that reaches the capture bus NEVER
+ *    carried a [SensitiveTextMarkers] hit — a toxic UNKNOWN is always dropped
+ *    (post the #590 evasion hardening, homoglyph markers are caught too).
+ *
+ * **No wall-clock assertion (#947).** An earlier version asserted `elapsedMs < 2_000`
+ * inside this 200-sample property — exactly the CI-runner-jitter flake shape the #878
+ * seeding doctrine exists to kill (a slow CI host, not a real regression, would redden a
+ * *reproducible-looking* seeded property, defeating the point of seeding). The functional
+ * assertions above carry the test; a genuine hang is caught by the test-runner's own
+ * timeout, not a per-sample stopwatch.
+ *
+ * Pipeline-service stages (the accessibility gate/dedup) need Android services and are
+ * out of scope; this exercises the classify + capture-scrub path directly, mirroring
+ * `CaptureScrubTest`'s wiring.
+ *
+ * **Determinism (#878).** The seed below pins PR CI, so a failure is a reproducible
+ * finding rather than a dice roll; bump it **deliberately** to explore new samples.
+ * Unseeded breadth lives on the `-Dgiglog.propExplore=true` path ([PropSeeds]).
+ */
+class ClassifyGateCaptureFuzzTest {
+
+    private companion object {
+        /** #878 pinned seed — pins PR CI. Bump deliberately to explore new samples. */
+        const val SEED = 0x0590_0009L
+    }
+
+    private val pkg = "com.doordash.driverapp"
+
+    /** No-op redaction source (UNKNOWN frames have no ruleId, so this is never consulted). */
+    private val noRedaction = object : ScreenRedactionSource {
+        override fun redactFor(ruleId: String): CompiledRedact? = null
+    }
+
+    private val classifier = ObservationClassifier(
+        mock<JsonRuleInterpreter> {
+            on { screenRuleset } doReturn TestRulesetFactory.screenRuleset
+        },
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
+    )
+
+    /** A capture bus that records whether it was offered a write this frame. */
+    private class RecordingBus : CaptureBus {
+        var offered = false
+        override fun offer(
+            captureId: String,
+            source: String,
+            classification: String?,
+            platform: String,
+            envelopeJson: String,
+            contentHash: Int?,
+        ): String? {
+            offered = true
+            return captureId
+        }
+    }
+
+    // --- Adversarial text pool ---------------------------------------------------
+
+    private val toxicTexts = listOf(
+        "Available Balance: \$152.10",
+        "Routing Number 021000021",
+        "123-45-6789",
+        "4111 1111 1111 1111",
+        "DasherDirect",
+        "Available Balance", // NBSP homoglyph — must still be caught post-#590
+        "R​outing Number",   // zero-width injected
+        "Ａvailable Balance", // fullwidth 'A'
+    )
+    private val benignTexts = listOf(
+        "Dash Now", "Accept", "Decline", "Pickup from Chipotle", "\$7.50", "3.2 mi",
+        "Deliver by 7:45 PM", "", "   ", "\uD800 lone-surrogate",
+    )
+
+    private fun textArb(rs: RandomSource): String = when (rs.random.nextInt(10)) {
+        0, 1 -> toxicTexts[rs.random.nextInt(toxicTexts.size)]
+        2 -> "x".repeat(3_000 + rs.random.nextInt(2_000)) // very long
+        else -> benignTexts[rs.random.nextInt(benignTexts.size)]
+    }
+
+    /** Build a bounded adversarial tree: depth <= [maxDepth], total nodes <= [maxNodes]. */
+    private fun buildTree(rs: RandomSource, maxDepth: Int, budget: IntArray): UiNode {
+        budget[0]--
+        val withId = rs.random.nextInt(4) == 0
+        val childCount = if (maxDepth <= 0 || budget[0] <= 0) 0 else rs.random.nextInt(4)
+        val children = (0 until childCount).mapNotNull {
+            if (budget[0] <= 0) null else buildTree(rs, maxDepth - 1, budget)
+        }
+        return UiNode(
+            text = textArb(rs),
+            viewIdResourceName = if (withId) "$pkg:id/n${rs.random.nextInt(50)}" else null,
+            children = children,
+        )
+    }
+
+    private val treeArb: Arb<UiNode> = arbitrary { rs ->
+        buildTree(rs, maxDepth = 6, budget = intArrayOf(200))
+    }
+
+    private fun event(tree: UiNode) = PipelineEvent.Screen(
+        timestamp = 1_000L,
+        tree = tree,
+        snapshot = TreeSnapshot(tree, packageName = pkg),
+        packageName = pkg,
+    )
+
+    @Test
+    fun `property - adversarial trees never crash classify or capture, and never leak an UNKNOWN sensitive frame`() = runTest {
+        checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { tree ->
+            val bus = RecordingBus()
+            val writer = CaptureWriter(bus, PipelineStats(), noRedaction)
+
+            val obs = classifier.classify(event(tree)) // must not throw
+            writer.captureScreen(obs, event(tree))      // must not throw
+
+            // Fail-closed invariant: a toxic UNKNOWN frame is always dropped before the bus.
+            if (obs.target == UNKNOWN_TARGET && bus.offered) {
+                assertNull(
+                    "an UNKNOWN frame with a sensitive marker reached the capture bus — backstop leaked",
+                    SensitiveTextMarkers.findMarker(tree),
+                )
+            }
+        }
+    }
+}

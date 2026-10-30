@@ -82,7 +82,7 @@ platform; Uber recognition exists but is thin (#826 accept undetectable, #251 mu
   open design question above. **#214** DSL onboarding rides with it.
 - **#193/#194** academic-pillar RFCs — future; **#1137/#1194** depend on them.
 - **#84** Play internal track — after the first tagged release (none pushed yet).
-- **#590** phase-2 unseeded fuzzing — runs nightly behind `-Ddashbuddy.propExplore=true`; the
+- **#590** phase-2 unseeded fuzzing — runs nightly behind `-Dgiglog.propExplore=true`; the
   remaining items are gated on #192.
 
 ## Recently resolved (2026-09 → 2026-10-04)

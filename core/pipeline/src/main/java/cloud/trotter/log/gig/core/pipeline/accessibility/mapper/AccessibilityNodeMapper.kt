@@ -1,0 +1,255 @@
+package cloud.trotter.log.gig.core.pipeline.accessibility.mapper
+
+import android.graphics.Rect
+import android.os.Build
+import android.view.accessibility.AccessibilityNodeInfo
+import cloud.trotter.log.gig.core.pipeline.BuildConfig
+import cloud.trotter.log.gig.domain.model.accessibility.UiNode
+import timber.log.Timber
+
+/**
+ * The mapper's tree limits, public so every other walk of the same live tree shares ONE owner
+ * (#1149 review J5: the executor's strategy-2b walk truncates exactly where the mapper would).
+ */
+object TreeLimits {
+    const val MAX_TREE_DEPTH = 60
+    const val MAX_TREE_NODES = 4_000
+}
+
+/**
+ * Per-tree ingestion budget (#363). Third-party trees are untrusted input:
+ * every `getChild(i)` is a binder IPC and the converted tree is serialized
+ * into the capture envelope, so a pathological/redesigned target UI must not
+ * be able to stack-overflow the accessibility service or balloon captures.
+ *
+ * Limits carry ~2×/10× margin over the golden corpus (max depth 27, max
+ * nodes 327). Truncation is LOUD — one warning per tree, never silent.
+ */
+internal class TreeBudget(
+    private val maxDepth: Int = MAX_TREE_DEPTH,
+    private val maxNodes: Int = MAX_TREE_NODES,
+) {
+    private var nodes = 0
+    var truncated = false
+        private set
+
+    /**
+     * True once the NODE budget is spent — no node can be admitted at ANY depth
+     * from here on. Distinct from [truncated], which also flips when a single deep
+     * branch hits the depth cap (a local cut that leaves shallower siblings
+     * admissible). The mapper's breadth short-circuit keys on THIS so a deep branch
+     * never suppresses an admissible sibling, but an exhausted budget stops all
+     * further getChild() IPC.
+     */
+    val nodesExhausted: Boolean
+        get() = nodes >= maxNodes
+
+    /** True if a node at [depth] may be ingested; flags truncation otherwise. */
+    fun admit(depth: Int): Boolean {
+        if (depth > maxDepth || nodes >= maxNodes) {
+            truncated = true
+            return false
+        }
+        nodes++
+        return true
+    }
+
+    fun logIfTruncated(rootClassName: CharSequence?) {
+        if (truncated) {
+            Timber.tag("Mapper").w(
+                "Tree ingestion truncated (maxDepth=%d, maxNodes=%d) — root class=%s. " +
+                    "Captured subtree is partial.",
+                maxDepth, maxNodes, rootClassName,
+            )
+        }
+    }
+
+    companion object {
+        const val MAX_TREE_DEPTH = TreeLimits.MAX_TREE_DEPTH
+        const val MAX_TREE_NODES = TreeLimits.MAX_TREE_NODES
+
+        /**
+         * Per-string ingestion cap (#590). Third-party text is untrusted: a node
+         * reporting a 100 000-char `text` would ride verbatim into the [UiNode] and
+         * the serialized capture envelope. Legitimate screen text nodes (labels,
+         * addresses, instruction bodies) never approach 4 KiB; the cap truncates a
+         * pathological string while leaving every real screen untouched. Applied to
+         * EVERY serialized string field — `text`, `contentDescription`,
+         * `stateDescription`, `viewIdResourceName`, `className` — at conversion (#590
+         * review F2: ids/classnames are tiny for legit frames and `matchesId` is an
+         * `endsWith` on short snippets, so the cap is behavior-free there while
+         * closing the same balloon-capture threat for a hostile mocked value).
+         */
+        const val MAX_TEXT_LENGTH = cloud.trotter.log.gig.domain.pipeline.UiTextBounds.MAX_TEXT_LENGTH // one owner (#1149 R2)
+    }
+}
+
+/**
+ * Convert an Android accessibility node into the immutable [UiNode] tree
+ * (#363): children are built bottom-up into a read-only list, parents are
+ * wired once at the root, and ingestion is bounded by [TreeBudget].
+ */
+fun AccessibilityNodeInfo?.toUiNode(): UiNode? {
+    if (this == null) return null
+    val budget = TreeBudget()
+    val root = convert(this, depth = 0, budget = budget, rootPackage = packageName?.toString()) ?: return null
+    budget.logIfTruncated(className)
+    return root.restoreParents()
+}
+
+/**
+ * Text-length cap (#590): a pathological node text can't ride verbatim into the
+ * [UiNode] / capture envelope. `take` is safe on any String and a no-op below the
+ * cap, so every real screen string is untouched.
+ */
+private fun String.capText(): String =
+    cloud.trotter.log.gig.domain.pipeline.UiTextBounds.cap(this) // #1149 R2: the shared cap
+
+private fun convert(
+    node: AccessibilityNodeInfo,
+    depth: Int,
+    budget: TreeBudget,
+    rootPackage: String?,
+    parentForeign: Boolean = false,
+): UiNode? {
+    // #1149 review V1: a foreign boundary is INHERITED — a same-package node beneath a foreign wrapper is
+    // foreign too, exactly as fire-time discovery never descends into the wrapper to reach it.
+    val foreign = parentForeign || node.packageName?.toString() != rootPackage
+    if (!budget.admit(depth)) return null
+
+    val childCount = node.childCount
+    var nullChildren = 0
+    val children = ArrayList<UiNode>(childCount.coerceAtMost(TreeBudget.MAX_TREE_NODES))
+    for (i in 0 until childCount) {
+        // Breadth short-circuit (#590): stop issuing getChild() binder IPC once no
+        // further child could be kept, so a node reporting a hostile childCount (e.g.
+        // 50 000, or Int.MAX_VALUE) can't drive one IPC per reported child. TWO bounds:
+        //  - nodesExhausted (not truncated) once the NODE budget is spent — but this
+        //    only flips when children MATERIALIZE and consume budget, so a hostile fan
+        //    of ALL-NULL children (getChild(i)==null never calls admit(), a FIELDED
+        //    shape — see the 👻 NULL CHILDREN log) would still spin every index;
+        //  - i >= MAX_TREE_NODES caps the loop index itself, so even an all-null fan
+        //    issues at most MAX_TREE_NODES binder calls (#590 review F1).
+        // nodesExhausted stays keyed on node budget (not truncated) so a deep branch
+        // hitting the depth cap does NOT suppress this node's shallower siblings.
+        if (budget.nodesExhausted || i >= TreeBudget.MAX_TREE_NODES) break
+
+        val childAccNode = node.getChild(i)
+        if (childAccNode != null) {
+            try {
+                convert(childAccNode, depth + 1, budget, rootPackage, foreign)?.let(children::add)
+            } finally {
+                @Suppress("DEPRECATION") // Required on API 30-32; a no-op on newer Android.
+                childAccNode.recycle()
+            }
+        } else {
+            nullChildren++
+        }
+    }
+
+    // In debug builds, log when children are reported but inaccessible. #551 P7: this is benign,
+    // frequent per-frame tree noise — VERBOSE (firehose only), not WARN. WARN must mean a defended
+    // invariant fired, and this noise was drowning the real WARNs (grace commits, gate denials).
+    if (BuildConfig.DEBUG && nullChildren > 0) {
+        Timber.tag("Mapper").v(
+            "👻 NULL CHILDREN: %d/%d null at depth=%d class=%s id=%s",
+            nullChildren, childCount, depth,
+            node.className, node.viewIdResourceName,
+        )
+    }
+
+    val hasClick = node.hasClickAction()
+    val clickable = node.isClickable
+    val focusable = node.isFocusable
+    val srFocusable = node.isScreenReaderFocusable
+    val bounds = Rect()
+    node.getBoundsInScreen(bounds)
+
+    // #1147: the ACTION_CLICK label is read only when the bitmask says a click action exists, so
+    // the per-node actionList materialization #1149 P6 avoided stays off the common path.
+    val clickLabel = node.clickActionLabelOrNull(hasClick)?.capText() // NodeClick.kt; bitmask read once (Z6)
+    // #1147 review W1: `getExtras()` allocates a Bundle on an extras-less node and forces a full
+    // unparcel on one that has extras — per node per frame. A role is published by an interactive
+    // control, so the extras are read ONLY for a node that takes a click or is (screen-reader)
+    // focusable; every other node maps `roleDescription = null` without touching them.
+    val role = if (clickable || hasClick || focusable || srFocusable) node.roleDescriptionOrNull() else null
+    val collection = node.collectionInfo
+    val item = node.collectionItemInfo
+
+    return UiNode(
+        text = node.text?.toString()?.capText(),
+        contentDescription = node.contentDescription?.toString()?.capText(),
+        stateDescription = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            node.stateDescription?.toString()?.capText()
+        } else null,
+        // #1147 (TalkBack study win 3): every new string is capText()-bounded and joins the #835
+        // scrub contract through UiNodeTextField; none reaches UiNode.allText.
+        paneTitle = node.paneTitle?.toString()?.capText(),
+        roleDescription = role?.capText(),
+        hintText = node.hintText?.toString()?.capText(),
+        tooltipText = node.tooltipText?.toString()?.capText(),
+        errorText = node.error?.toString()?.capText(),
+        clickActionLabel = clickLabel,
+        uniqueId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            node.uniqueId?.capText()
+        } else null,
+        viewIdResourceName = node.viewIdResourceName?.capText(),
+        className = node.className?.toString()?.capText(),
+        isClickable = clickable,
+        isEnabled = node.isEnabled,
+        isChecked = node.checkedTriState(),
+        // #1149 review J2: the advertised click action (the half of the live `takesClick()`).
+        hasClickAction = hasClick, // P6: the one live definition (NodeClick.kt)
+        isEditable = node.isEditable, // #919: the text-input flag the UNKNOWN scrub reads.
+        // #1149 review L3: an embedded node of ANOTHER package than the window root (bind-time parity with
+        // the executor's package-scoped label scan, which never reads such a subtree).
+        foreignPackage = foreign,
+        // #1149 review L4 + N6: every advertised child that did NOT materialize — a null getChild(), a
+        // depth refusal, node-budget exhaustion or the loop cap — so a bind over such a node cannot
+        // certify its label set complete.
+        unreadableChildren = (childCount - children.size).coerceAtLeast(0),
+        isVisibleToUser = node.isVisibleToUser,
+        isFocusable = focusable,
+        isScreenReaderFocusable = srFocusable,
+        isCheckable = node.isCheckable,
+        isSelected = node.isSelected,
+        isHeading = node.isHeading,
+        liveRegion = node.liveRegion,
+        collectionRows = collection?.rowCount ?: -1,
+        collectionCols = collection?.columnCount ?: -1,
+        itemRow = item?.rowIndex ?: -1,
+        itemCol = item?.columnIndex ?: -1,
+        boundsInScreen = bounds.toBoundingBox(),
+        children = children,
+    )
+}
+
+/**
+ * #1147: the role description a control publishes through the AndroidX
+ * `AccessibilityNodeInfoCompat.setRoleDescription` extra (Compose sets it for Button/Tab/…). Read
+ * straight off the framework extras by key so `:core:pipeline` takes no androidx dependency. The
+ * key is the AndroidX constant's value, not a platform literal. Called ONLY for a node that takes a
+ * click or is (screen-reader) focusable (review W1 — the extras read is the costly one).
+ */
+private const val ROLE_DESCRIPTION_EXTRA_KEY = "AccessibilityNodeInfo.roleDescription"
+
+private fun AccessibilityNodeInfo.roleDescriptionOrNull(): String? =
+    // The extras Bundle is third-party data unparcelled on first read; a malformed one must cost only
+    // this field, never the frame (the mapper never throws on hostile input — #590). Review W7:
+    // `Exception` only — a fatal Error (OOM, stack overflow) propagates to the supervised restart
+    // (#430) like every other read in convert(), never admitted on a possibly-corrupt heap.
+    try {
+        extras?.getCharSequence(ROLE_DESCRIPTION_EXTRA_KEY)?.toString()
+    } catch (e: Exception) {
+        null
+    }
+
+/**
+ * #1161: `getChecked()` (the tri-state 0/1/2) is API 36 (`BAKLAVA`) while minSdk is 30. Below 36 only the
+ * boolean `isChecked` exists, so the PARTIAL (2) state cannot be observed there — the value is whatever the
+ * platform reports as the boolean (the documented pre-36 limitation). Unguarded, this read threw `NoSuchMethodError` on every node below 36.
+ * (`isChecked` is deprecated on 36 in favour of `getChecked` — it is the ONLY read that exists below 36.)
+ */
+@Suppress("DEPRECATION")
+private fun AccessibilityNodeInfo.checkedTriState(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) checked else if (isChecked) 1 else 0

@@ -1,0 +1,40 @@
+package cloud.trotter.log.gig.core.data.chat
+
+import cloud.trotter.log.gig.core.database.chat.ChatDao
+import cloud.trotter.log.gig.core.database.chat.mappers.toDomain
+import cloud.trotter.log.gig.core.database.chat.mappers.toEntity
+import cloud.trotter.log.gig.domain.model.chat.ChatMessage
+import cloud.trotter.log.gig.domain.model.chat.ChatPersona
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class ChatRepository @Inject constructor(
+    private val chatDao: ChatDao
+) {
+    // Queries specific dash messages and maps them to pure Domain models
+    fun getMessages(dashId: String): Flow<List<ChatMessage>> {
+        return chatDao.getMessagesForSession(dashId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    suspend fun saveMessage(dashId: String?, text: String, persona: ChatPersona) {
+        val domainMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            dashId = dashId, // Saved!
+            text = text,
+            timestamp = System.currentTimeMillis(),
+            persona = persona
+        )
+
+        chatDao.insertMessage(domainMessage.toEntity())
+    }
+
+    fun getAllSessionIds(): Flow<List<String>> {
+        return chatDao.getAllSessionIds()
+    }
+}

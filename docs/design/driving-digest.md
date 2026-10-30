@@ -1,7 +1,7 @@
 # While-driving display guidance (digest, gathered 2026-10-21)
 
 Scope: these sources govern car head units (Android Auto / Automotive, CarPlay) and in-vehicle or mounted devices.
-DashBuddy's bubble is a phone app in a mount, so none of them binds it; they are the best published evidence on
+gig.log's bubble is a phone app in a mount, so none of them binds it; they are the best published evidence on
 how much a driver can read in a glance. Quoted text is marked; everything else is a summary of the named source.
 The Material digest (`docs/design/material-digest.md` §9) already quotes the Android for Cars task-flow and driving-state pages.
 

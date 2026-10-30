@@ -1,7 +1,7 @@
 status: review
 issues: #325
 
-- **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/DashBuddy` should
+- **Screenshots settle before capture (PR #325).** Captures saved to `Pictures/gig.log` should
   be **clean / fully-rendered** (UI settled), not grabbed mid-transition or half-drawn — there's now
   a 500ms settle before every screenshot. Spot-check the offer + post-task captures after a dash.
   - Confirmed: 0/2.

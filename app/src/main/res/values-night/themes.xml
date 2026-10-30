@@ -5,7 +5,7 @@
       UPDATED: Changed parent to a Material 3 theme.
       Using .NoActionBar because we are adding our own MaterialToolbar in the layout.
     -->
-    <style name="Theme.DashBuddy" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.gig.log" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- You can customize your M3 theme here if needed -->
         <!-- Example: -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->

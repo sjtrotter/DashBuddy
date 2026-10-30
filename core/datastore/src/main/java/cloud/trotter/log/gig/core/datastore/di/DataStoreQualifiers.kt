@@ -1,0 +1,45 @@
+package cloud.trotter.log.gig.core.datastore.di
+
+import javax.inject.Qualifier
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AppPreferences
+
+/** Device-local consent; excluded from Android backup and transfer (#1236). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class EventReceiptConsentPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AppStatePreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class DevSettingsPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class OdometerPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class StrategyPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class PlatformPreferences
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class RuleCapabilityPreferences
+/** #981 — the driver's saved weekly plans (a user artifact, not a rebuildable projection). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class WeeklyPlanPreferences
+
+/** User-owned garage, included in device backup like weekly_plan. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class VehiclePreferences

@@ -1,0 +1,195 @@
+package cloud.trotter.log.gig.domain.settings
+
+import cloud.trotter.log.gig.domain.state.Platform
+
+/**
+ * Per-platform grace / timing configuration (#438 item 6, Principle 8 — the
+ * per-platform timing seam). One grace-constant set used to time every
+ * platform; the values are genuinely platform-specific (e.g. [expandSettleMs]
+ * waits on DoorDash's summary-dialog animation, not a universal truth), so they
+ * are keyed by [Platform] instead of hard-coded globals.
+ *
+ * The timing fields are seeded with today's compile-time constants (formerly
+ * `TransitionPolicy.DEFAULT_GRACE_MS` / `AUTHORITATIVE_GRACE_MS` /
+ * `PAUSE_RESUME_GRACE_MS` and `EffectMap.PAUSE_TIMEOUT_BUFFER_MS` /
+ * `EXPAND_SETTLE_MS`). This companion is now the SSOT for those defaults;
+ * `TransitionPolicy` / `EffectMap` re-export them only for test/comment
+ * back-compat.
+ *
+ * A platform absent from the override map resolves to [DEFAULT], so with no
+ * saved overrides every platform behaves exactly as the old constants did.
+ */
+data class GraceConfig(
+    /** Provisional-destructive commit grace (session end / task retire on idle). */
+    val gracePeriodMs: Long = DEFAULT_GRACE_MS,
+    /** Short grace for an authoritative-looking destructive signal (#431). */
+    val authoritativeGraceMs: Long = AUTHORITATIVE_GRACE_MS,
+    /** Debounce for screen-implied Paused resumes (#605) and post-end hint-only starts (#1311). */
+    val pauseResumeGraceMs: Long = PAUSE_RESUME_GRACE_MS,
+    /**
+     * #1311: how long after a dash end a HINT-ONLY Online screen is graced instead of starting
+     * a dash immediately. The grace length itself reuses [pauseResumeGraceMs].
+     */
+    val postEndHintGraceWindowMs: Long = POST_END_HINT_GRACE_WINDOW_MS,
+    /** Whole-job abandonment after a marked no-orders idle screen (#1312). */
+    val jobAbandonGraceMs: Long = JOB_ABANDON_GRACE_MS,
+    /** Safety buffer added to a reported pause countdown before the offline timeout. */
+    val pauseTimeoutBufferMs: Long = PAUSE_TIMEOUT_BUFFER_MS,
+    /** Settle delay before the EXPAND_EARNINGS tap (waits on the dialog animation). */
+    val expandSettleMs: Long = EXPAND_SETTLE_MS,
+    /**
+     * How long an accepted-pending-consumption offer stays consumable by the task-edge mint
+     * (#438 B3, formerly `PlatformRegionStepper.ACCEPT_GRACE_MS`; #762 D2 made it per-platform).
+     * An accept is normally followed by the task flow within a couple of minutes; a generous window
+     * recovers the F3 teardown race while a stale survivor still can't leak into an unrelated later
+     * job. This is a per-platform grace value (Principle 8): on a platform with a fine-grained task
+     * flow (DoorDash) the survivor is consumed within seconds by the first pickup frame, so the
+     * default is 120s; on a coarse platform (Uber, whose `on_job_view`/`task:active` frame consumes
+     * the accept within seconds too) it is widened to a realistic full-drive fallback for a MISSED
+     * consume frame — see [Companion.codeDefault].
+     */
+    val acceptGraceMs: Long = DEFAULT_ACCEPT_GRACE_MS,
+    /**
+     * How long a parsed dash running-total read must stand **unchallenged** before it may move
+     * `Session.runningEarnings` (#1029 — the settle gate). The platform renders that total as an
+     * animated digit-wheel whose spin is ~1 s, and the content-changed pipeline is debounced on top
+     * of that, so 3 s is comfortably past any spin while still landing the figure on the HUD within
+     * a glance. Per-platform by construction (Principle 8): a platform that renders no wheel simply
+     * never parks a read, so the value costs it nothing — hence no [CODE_DEFAULTS] override today.
+     */
+    val sessionPaySettleMs: Long = SESSION_PAY_SETTLE_MS,
+    /**
+     * How long a **COLLAPSED** post-delivery receipt gets before its authoritative `TASK_RETIRE`
+     * grace commits the completion (#1033 layer 1) — used in place of [authoritativeGraceMs] when the
+     * receipt frame that armed (or re-armed) the grace carried no itemization (`parsedPay == null`).
+     *
+     * A collapsed receipt states a total and nothing else, so a completion committed off one is
+     * priced by the #691 `OFFER_PAY` estimate rather than the receipt. The itemization only exists
+     * once the breakdown is expanded — by the dasher, or by the app's own `EXPAND_EARNINGS` tap — and
+     * the fielded 2026-08-23 expansion landed 3.9 s after the collapsed frame, 1.3 s past the 2.5 s
+     * authoritative window. Widening the window ONLY for the un-itemized shape buys that expansion
+     * time to land, at the cost of a completion committing up to 5.5 s later on a receipt that stays
+     * collapsed; an EXPANDED frame keeps [authoritativeGraceMs] and TIGHTENS the deadline the moment
+     * it arrives (the arm takes `minOf(existing, new)`), so a normal expanded receipt is unchanged.
+     *
+     * Per-platform by construction (Principle 8): a platform that renders no collapsible receipt
+     * simply never arms with `parsedPay == null` off one, so the value costs it nothing — hence no
+     * [CODE_DEFAULTS] override today.
+     */
+    val receiptExpandGraceMs: Long = RECEIPT_EXPAND_GRACE_MS,
+    /**
+     * #1104: how long after the platform's confirm-decline sheet was last observed an offer's exit
+     * from presentation (without an accept) still counts as a DECLINE rather than a timeout. The
+     * sheet is transition evidence, not a commit — the dasher may cancel back to the card and let the
+     * offer expire — and the card ALWAYS re-renders for one frame after a real decline too (7/7
+     * fielded declines on 8.97.8: sheet → card 1.6–2.0 s → idle 2–9 s after the sheet), so "card seen
+     * after the sheet" cannot mean "cancelled". The window is what separates the two: a real decline
+     * leaves within seconds; a cancelled sheet leaves when the countdown ends. Per-platform data.
+     */
+    val declineSheetWindowMs: Long = DECLINE_SHEET_WINDOW_MS,
+    /**
+     * #1104: how close to the card's own countdown end an exit must land to be read as the
+     * countdown running out (an EXPIRY) rather than a decline — covers the frame debounce between
+     * the last countdown read and the actual zero.
+     */
+    val countdownExpirySlackMs: Long = COUNTDOWN_EXPIRY_SLACK_MS,
+) {
+    companion object {
+        const val JOB_ABANDON_GRACE_MS = 5_000L
+        const val DEFAULT_GRACE_MS = 10_000L
+        const val AUTHORITATIVE_GRACE_MS = 2_500L
+        const val PAUSE_RESUME_GRACE_MS = 8_000L
+        const val POST_END_HINT_GRACE_WINDOW_MS = 60_000L
+        const val PAUSE_TIMEOUT_BUFFER_MS = 1_000L
+        const val EXPAND_SETTLE_MS = 500L
+        const val SESSION_PAY_SETTLE_MS = 3_000L
+
+        /**
+         * The collapsed-receipt retire grace (#1033) — see [GraceConfig.receiptExpandGraceMs].
+         * 8 s: comfortably past the fielded 3.9 s expand latency plus the content-changed debounce,
+         * while still committing the delivery well inside the gap before the next offer.
+         */
+        const val RECEIPT_EXPAND_GRACE_MS = 8_000L
+
+        /** #1104: 15 s — the fielded sheet→exit spread is 2–9 s; a cancelled sheet's countdown is longer. */
+        const val DECLINE_SHEET_WINDOW_MS = 15_000L
+
+        /** #1104: 3 s — the offer-card frame debounce is ~3 s, so a countdown read can lag by that much. */
+        const val COUNTDOWN_EXPIRY_SLACK_MS = 3_000L
+
+        /**
+         * Default accept-consumption grace (DoorDash and any platform without an override): a fine-
+         * grained task flow consumes the accepted survivor within a couple of minutes. SSOT for the
+         * former `PlatformRegionStepper.ACCEPT_GRACE_MS`.
+         */
+        const val DEFAULT_ACCEPT_GRACE_MS = 120_000L
+
+        /**
+         * Uber's accept-consumption grace (#762 D2): 10 min. On Uber no fine-grained task flow
+         * exists between accept and the store — the coarse `task:active` (`on_job_view`) surface
+         * usually consumes the accept within seconds via its first frame, so this wide window is a
+         * belt-and-suspenders fallback for a MISSED consume frame that must still span a realistic
+         * drive rather than expire mid-trip.
+         */
+        const val UBER_ACCEPT_GRACE_MS = 600_000L
+
+        /** Code-constant default applied to any platform without an override. */
+        val DEFAULT = GraceConfig()
+
+        /**
+         * Per-platform **code defaults** (before any user override), keyed by [Platform] (Principle
+         * 8 — data keyed by platform, never `== Platform.X` in logic). A platform absent here uses
+         * [DEFAULT]; the only current divergence is Uber's wider [acceptGraceMs]. A future
+         * per-platform grace editor's DataStore override still wins over this in
+         * [GraceConfigProvider.forPlatform].
+         */
+        private val CODE_DEFAULTS: Map<Platform, GraceConfig> = mapOf(
+            Platform.Uber to GraceConfig(acceptGraceMs = UBER_ACCEPT_GRACE_MS),
+        )
+
+        /** The code default for [platform] — its [CODE_DEFAULTS] entry, else [DEFAULT]. */
+        fun codeDefault(platform: Platform): GraceConfig = CODE_DEFAULTS[platform] ?: DEFAULT
+    }
+}
+
+/**
+ * Synchronous value provider for the per-platform [GraceConfig] snapshot (#438
+ * item 6, vet M7). The Hilt-bound implementation reads
+ * [PlatformPreferences.graceConfig]`.value` — the same eagerly-materialized
+ * `.value` snapshot pattern the engine already uses for `evidenceConfig` — so
+ * the pure steppers and `EffectMap` never collect a Flow inside a reducer. Each
+ * use site reads one atomic snapshot **synchronously at the moment it computes a
+ * deadline/duration**, and every value is immediately stored in state or a timer
+ * — so a config flip landing mid-step is observationally identical to the edit
+ * landing between two steps (the timing fields carry no cross-field invariant).
+ *
+ * REPLAY-DETERMINISM TRADEOFF (pre-accepted, #438 design doc §B6): a grace edited
+ * between a live run and its crash replay changes the replayed commit timing — a
+ * DataStore-backed value is not replay-stable the way the old compile-time
+ * constants were. Accepted for the single-user alpha (grace edits are rare dev
+ * actions and the journal replays observations, not effect timing); documented
+ * here and at every injection site so the adversarial review doesn't re-litigate
+ * it.
+ */
+fun interface GraceConfigProvider {
+
+    /** The current per-platform override snapshot — one atomic read per use site. */
+    fun snapshot(): Map<Platform, GraceConfig>
+
+    /**
+     * The config for [platform]: a user override if present, else its per-platform code default.
+     *
+     * NOTE for a future per-platform grace editor (adversarial finding 6): a PARTIAL user override
+     * must be merged against [GraceConfig.codeDefault]`(platform)`, never built on a bare
+     * `GraceConfig()` — an override map entry replaces the code default WHOLESALE here, so a
+     * partial Uber entry constructed from field defaults (say, editing only `gracePeriodMs`) would
+     * silently reset `acceptGraceMs` from 600s back to the 120s field default.
+     */
+    fun forPlatform(platform: Platform): GraceConfig =
+        snapshot()[platform] ?: GraceConfig.codeDefault(platform)
+
+    companion object {
+        /** Code-constant defaults — the test / fallback provider (no overrides). */
+        val Defaults = GraceConfigProvider { emptyMap() }
+    }
+}

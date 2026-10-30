@@ -1646,7 +1646,7 @@ ships as `rules.json.sig` beside `rules.json`. Custom user-configured URLs may b
 
 Static file hosting only. No server-side compute.
 
-- **Distribution URL:** `raw.githubusercontent.com/sjtrotter/dashbuddy-matchers/main/rules.json`
+- **Distribution URL:** `raw.githubusercontent.com/sjtrotter/giglog-matchers/main/rules.json`
 - **Signature:** `rules.json.sig` (Ed25519 detached)
 - **Cost:** $0 (CDN-cached GitHub raw)
 - **Latency to publish a fix:** push to `main` -> CDN propagates within minutes -> apps pick
@@ -1700,4 +1700,4 @@ migrated and the agreement test (#213) is green, v1 support is dropped.
 - **Phase A2**: build the in-app interpreter (shipped via PR #210 -- uses v1 vocabulary)
 - **Phase A3**: migrate to v2 DSL; `JsonVsKotlinAgreementTest` (#213) passes all snapshots
 - **Phase A4**: hosting + Ed25519 signing + signature verification on client
-- **Phase C1+**: `dashbuddy-matchers` repo, CI/CD, community contribution model
+- **Phase C1+**: `giglog-matchers` repo, CI/CD, community contribution model

@@ -2,7 +2,7 @@ status: review
 issues: #426
 
 - **Evidence Locker settings are now real (#426).**
-  Screenshots (offer / delivery / dash-summary PNGs in Pictures/DashBuddy) previously fired
+  Screenshots (offer / delivery / dash-summary PNGs in Pictures/gig.log) previously fired
   unconditionally; they are now gated on the Evidence settings, whose master toggle defaults
   OFF. On a dash with settings untouched: working = NO new PNGs appear at all. Then flip
   Master Record + a category on mid-dash: working = only that category's screenshots appear.

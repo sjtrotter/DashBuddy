@@ -14,14 +14,14 @@ automatically substitutes the included build for those coordinates, exposing the
 contract transitively to the app's other modules. Run its tests through the root
 `censusContractTest` lifecycle task.
 
-The server pins a DashBuddy checkout and uses
+The server pins a gig.log checkout and uses
 `includeBuild("../DashBuddy/census-contract")` plus the same dependency coordinates.
 Keep the checkout's `gradle/libs.versions.toml` beside the build: its settings
 import that shared catalog. Pin the checkout revision so app/server contract and
 conformance data evolve together.
 
 To regenerate `conformance/skeletons.jsonl.gz` from the app's committed snapshot
-corpus, run from the DashBuddy root:
+corpus, run from the gig.log root:
 
 ```bash
 ./gradlew :app:testDebugUnitTest --tests "*CensusGoldenExportTest*" -DexportCensusGolden=true
@@ -36,7 +36,7 @@ this golden; it contains no plaintext text slots.
 
 ## Consuming from another build
 
-`census-contract/settings.gradle.kts` reads the version catalog at `../gradle/libs.versions.toml`, so the build must be included from a COMPLETE DashBuddy checkout (`includeBuild("<path>/DashBuddy/census-contract")`), never vendored as a bare directory. The `dashbuddy-census` server pins that checkout to a SHA in CI.
+`census-contract/settings.gradle.kts` reads the version catalog at `../gradle/libs.versions.toml`, so the build must be included from a COMPLETE gig.log checkout (`includeBuild("<path>/DashBuddy/census-contract")`), never vendored as a bare directory. The `dashbuddy-census` server pins that checkout to a SHA in CI.
 
 ## Wire authentication
 

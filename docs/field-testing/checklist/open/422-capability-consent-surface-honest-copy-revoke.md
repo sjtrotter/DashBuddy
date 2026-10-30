@@ -8,7 +8,7 @@ issues: #422, #417, #863, #1167, #843
   show as on by default; the switch writes through the same grant store the fail-closed engine gate (#417)
   reads at fire time.
   **What to watch:** (1) the screen lists the DoorDash capabilities with plain, accurate copy — each says
-  what DashBuddy taps, inside which app, and that it never acts without your go-ahead (no marketing fluff).
+  what gig.log taps, inside which app, and that it never acts without your go-ahead (no marketing fluff).
   (2) **Revocation is fail-closed:** turn OFF "Confirm a decline" (or "Open the pay breakdown"), then on the
   next dash confirm that automation *aborts to manual* — the quick-decline second tap no longer fires
   (you confirm the decline yourself) / the summary no longer auto-expands — while the same action left ON

@@ -1,0 +1,260 @@
+package cloud.trotter.log.gig.core.pipeline.accessibility.input
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
+import android.os.Build
+import android.view.accessibility.AccessibilityEvent
+import cloud.trotter.log.gig.core.pipeline.BuildConfig
+import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryReporter
+import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
+import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
+import cloud.trotter.log.gig.domain.settings.PlatformPreferences
+import cloud.trotter.log.gig.domain.state.Platform
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
+
+@AndroidEntryPoint
+class AccessibilityListener : AccessibilityService() {
+
+    @Inject
+    lateinit var accessibilitySource: AccessibilitySource
+
+    @Inject
+    lateinit var platformPreferences: PlatformPreferences
+
+    /**
+     * #938 — reports the English-locale boundary of recognition + the marker privacy scrubs.
+     * Injected as a `:domain` contract (the [PlatformPreferences] pattern) because the notice
+     * itself needs `:app`-owned pieces this module must not depend on.
+     */
+    @Inject
+    lateinit var localeBoundaryReporter: LocaleBoundaryReporter
+
+    /**
+     * #1151 — the dasher's wide-event-receipt consent (its one owner lives in `:core:data`). The
+     * listener is where it is ENFORCED: [applyEventReceipt] maps it through [ServiceInfoPolicy] onto
+     * `serviceInfo.packageNames`. No other code path widens the package subscription.
+     */
+    @Inject
+    lateinit var eventReceiptPreferences: EventReceiptPreferences
+
+    /** QQ3 — `disableSelf()` is called at most once per service instance. */
+    private var disabledSelf = false
+
+    /** Service-scoped; created in [onServiceConnected], cancelled in [onUnbind] / [onDestroy]. */
+    private var serviceScope: CoroutineScope? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        Timber.d("Accessibility service created")
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+
+        val pkg = event.packageName?.toString()
+
+        // In debug builds we receive ALL event types (packages are consent-gated in every build,
+        // #1151). Log unhandled types from enabled packages so we can see what fires, then return.
+        if (BuildConfig.DEBUG && event.eventType !in HANDLED_TYPES) {
+            if (pkg in platformPreferences.enabledPackages.value) {
+                Timber.d(
+                    "🔎 Unhandled event: type=0x%04x (%s) pkg=%s class=%s",
+                    event.eventType,
+                    AccessibilityEvent.eventTypeToString(event.eventType),
+                    pkg,
+                    event.className,
+                )
+            }
+            return
+        }
+
+        // #1148 D2: topology events (TYPE_WINDOWS_CHANGED) pass regardless of their package;
+        // every other handled type keeps the enabled-package gate. See [ListenerGate].
+        val admitted = ListenerGate.admit(
+            type = event.eventType,
+            pkg = pkg,
+            enabledPackages = platformPreferences.enabledPackages.value,
+            handledTypes = HANDLED_TYPES,
+        )
+        if (!admitted) return
+
+        accessibilitySource.emit(event)
+    }
+
+    override fun onInterrupt() {
+        Timber.d("Accessibility service interrupted")
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        cancelServiceScope()
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        cancelServiceScope()
+        super.onDestroy()
+        Timber.d("Accessibility service destroyed")
+    }
+
+    private fun cancelServiceScope() {
+        serviceScope?.cancel()
+        serviceScope = null
+    }
+
+    /**
+     * #1151 — apply the consent to the live subscription. `eventTypes` keeps the debug-only
+     * widening to every type (unhandled-type logging); `packageNames` is governed ONLY by the
+     * consent, in every build type. Never throws (PP3); returns whether the apply took effect.
+     */
+    private fun applyEventReceipt(consent: EventReceiptConsent): Boolean {
+        // PP3: an apply can never take sensing down — any failure (a RemoteException rethrown by
+        // getServiceInfo, setServiceInfo on a torn-down connection, the LL9 refusal) is ONE log line
+        // and the manifest's filtered footprint stays in force.
+        try {
+            // PP4: null only without a connection — no event can arrive then, and
+            // onServiceConnected re-applies on reconnect.
+            val info = serviceInfo ?: run {
+                Timber.tag("Pipeline").w("Event receipt: no serviceInfo (not connected) — apply skipped")
+                return false
+            }
+            val packageNames = try {
+                ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+            } catch (e: IllegalArgumentException) {
+                // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
+                Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")
+                return false
+            }
+            if (BuildConfig.DEBUG) {
+                info.eventTypes = AccessibilityServiceInfo.DEFAULT or AccessibilityEvent.TYPES_ALL_MASK
+            }
+            info.packageNames = packageNames
+            serviceInfo = info
+            Timber.tag("Pipeline").i("Event receipt: wide=%s", ServiceInfoPolicy.isWide(consent))
+            if (ServiceInfoPolicy.shouldWarnUnreliable(consent, Build.VERSION.SDK_INT, unreliableWarned.get())) {
+                if (unreliableWarned.compareAndSet(false, true)) {
+                    Timber.tag("Pipeline").w(
+                        "wide event receipt may not take effect on Android 11 (framework filter is additive)",
+                    )
+                }
+            }
+            return true
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Timber.tag("Pipeline").w(t, "Event receipt: apply failed — the LAST APPLIED subscription stays in force; retrying")
+            return false
+        }
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+
+        Timber.d("Accessibility service connected")
+
+        // #1151 review TT1 — ORDER: a debug build connecting with a known DECLINED consent turns
+        // itself off BEFORE anything registers: no consent scope, no `registerService` (a dying
+        // service must never become the live sensor), no #938 locale report (its notice is
+        // once-per-install). The collector's own disable branch covers a decline that arrives
+        // LATER, after registration, where tearing down the live service is legitimate.
+        if (ServiceInfoPolicy.shouldDisableSelf(
+                eventReceiptPreferences.consent.value ?: EventReceiptConsent.UNDECIDED,
+                BuildConfig.DEBUG,
+            )
+        ) {
+            disabledSelf = true
+            Timber.tag("Pipeline").i(
+                "event receipt declined on a debug build — disabling the accessibility service",
+            )
+            disableSelf()
+            return
+        }
+
+        // #1151: the package subscription follows the dasher's event-receipt consent — applied
+        // now (Main.immediate runs the StateFlow's current value synchronously, before the
+        // source registers) and re-applied on every change (Allow / revoke in Settings). Until
+        // the store is read the value is UNDECIDED, i.e. the filtered footprint (fail-closed).
+        // The debug build no longer clears packageNames unconditionally; only eventTypes widen.
+        cancelServiceScope()
+        // PP3: a handler so nothing thrown in this scope can reach the uncaught-exception path.
+        val handler = CoroutineExceptionHandler { _, t ->
+            Timber.tag("Pipeline").e(t, "Event receipt: consent collector failed — manifest footprint stays")
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + handler)
+        serviceScope = scope
+        scope.launch {
+            // null = the store is not read yet (or unreadable) ⇒ UNDECIDED, the filtered footprint.
+            // MM8/NN4: the APPLY dedups on the policy OUTPUT (wide or the one filtered list), so
+            // null, UNDECIDED and DECLINED — the same package list — apply (and log) once per
+            // connect. QQ3 needs every distinct consent (UNDECIDED → DECLINED is not an output
+            // change), so the collect sees each value and the output dedup lives here.
+            var appliedWide: Boolean? = null
+            eventReceiptPreferences.consent
+                .map { it ?: EventReceiptConsent.UNDECIDED }
+                .distinctUntilChanged()
+                .collectLatest { consent ->
+                    // QQ3: a debug decline disables BEFORE any apply — it never waits on IPC.
+                    if (!disabledSelf && ServiceInfoPolicy.shouldDisableSelf(consent, BuildConfig.DEBUG)) {
+                        disabledSelf = true
+                        Timber.tag("Pipeline").i(
+                            "event receipt declined on a debug build — disabling the accessibility service",
+                        )
+                        disableSelf()
+                        return@collectLatest
+                    }
+                    // SS2: a failed apply (a transient RemoteException, a torn-down connection) is
+                    // RETRIED with bounded backoff until it lands — otherwise a failed NARROWING would
+                    // leave the subscription wide indefinitely. A newer consent cancels the retry
+                    // (collectLatest).
+                    val wide = ServiceInfoPolicy.isWide(consent)
+                    var attempt = 0
+                    while (wide != appliedWide) {
+                        if (applyEventReceipt(consent)) {
+                            appliedWide = wide
+                            break
+                        }
+                        attempt++
+                        delay(ServiceInfoPolicy.retryDelayMs(attempt))
+                    }
+                }
+        }
+
+        // Register with the source
+        accessibilitySource.registerService(this)
+
+        // #938: this is the moment recognition actually goes live on this device, so it is where
+        // the English-only assumption of the anchors + marker scrubs is worth reporting. Fail-OPEN
+        // — a diagnostic must never be able to stop sensing from starting.
+        try {
+            localeBoundaryReporter.onSensorServiceConnected()
+        } catch (t: Throwable) {
+            Timber.tag("Pipeline").e(t, "Locale boundary report failed (#938) — sensing unaffected")
+        }
+    }
+
+    companion object {
+        /** MM2 — the Android 11 caveat WARN fires once per process. */
+        private val unreliableWarned = AtomicBoolean(false)
+
+        /** Event types that have pipeline handlers — everything else is "unhandled". */
+        internal val HANDLED_TYPES = setOf(
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED,
+        )
+    }
+}

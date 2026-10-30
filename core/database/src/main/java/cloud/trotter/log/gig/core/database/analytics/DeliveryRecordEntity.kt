@@ -1,0 +1,213 @@
+package cloud.trotter.log.gig.core.database.analytics
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+/**
+ * Durable analytics read-model row — one per `DELIVERY_COMPLETED` event (#314).
+ *
+ * A record is an **immutable historical fact**, not a cache of live state. The
+ * projector ([cloud.trotter.log.gig.core.data.analytics.AnalyticsProjector], PR2)
+ * folds the `app_events` log into these rows; the primary key is the *source*
+ * event's `sequenceId`, which is both its provenance and its idempotency key
+ * (replay/refold with `@Insert(onConflict = REPLACE)` is a byte-identical no-op).
+ *
+ * Miles are forward allocations from a measured per-job budget. Minutes allocate disjoint session
+ * time using a completion high-water mark in sequence order; they are not each task's duration.
+ * Task-scoped anchors (`phaseStartedAt`/`arrivedAt`) remain available for task duration views.
+ *
+ * **Frozen economics** ([frozenCostPerMile]/[netProfit]/[costBasis]) freeze the
+ * operating-cost basis this delivery was costed at (inherited in PR2 from the
+ * accepted offer's `OfferEvaluation.operatingCostPerMile`). Because a record is a
+ * historical fact, a later economy edit MUST NOT retroactively change these —
+ * they are a frozen decision, not a stale cache. [costBasis] records provenance
+ * exactly as [payBasis] does for realized pay.
+ *
+ * `storeName` is a **merchant** name, not customer PII — fine at rest in the DB,
+ * never emitted in INFO+ logs. `customerHash`/`addressHash` are already sha256'd
+ * upstream at the edge; kept here for dedup/correlation and future chain/entity
+ * resolution (#159), which becomes a clean additive later-add.
+ */
+@Entity(
+    tableName = "delivery_records",
+    indices = [
+        Index("completedAt"),                       // null-session fallback window + per-day charts
+        Index(value = ["platform", "completedAt"]), // per-platform ordering/charts (period bucketing is session-anchored, #655)
+        Index("sessionId"),                         // per-dash drilldown + fold hydration
+        Index(value = ["sessionId", "jobId"]),      // incremental distinct-job counting
+        Index("jobId"),                             // store resolution reads a job's rows by jobId (#159)
+        Index("storeName"),                         // per-store aggregation + chain resolution (#159)
+        Index("storeKey"),                          // resolved per-store economics grouping (#159)
+    ]
+)
+data class DeliveryRecordEntity(
+    /** sequenceId of the source DELIVERY_COMPLETED row in app_events — provenance AND idempotency. */
+    @PrimaryKey val eventSequenceId: Long,
+    /** app_events.aggregateId (nullable there → nullable here). */
+    val sessionId: String?,
+    /** Platform.wire ("doordash"), resolved from session context — NEVER id-parsed. */
+    val platform: String,
+    val jobId: String,
+    val taskId: String,
+    /** Merchant name — not customer PII; fine at rest, never in INFO logs. */
+    val storeName: String?,
+    /** Already sha256'd upstream (DeliveryPayload.customerHash). */
+    val customerHash: String?,
+    /** Already sha256'd upstream (DeliveryPayload.addressHash) — chain-resolution readiness (#159). */
+    val addressHash: String?,
+    val phaseStartedAt: Long,
+    /** dwell = completedAt − arrivedAt is DERIVED, not stored. */
+    val arrivedAt: Long?,
+    /** payload.completedAt ?: event.occurredAt — the period bucket key. */
+    val completedAt: Long,
+    /** On-time margin for the Phase-4 Time tab — free to carry now. */
+    val deadlineMillis: Long?,
+    /** dropRealizedPay ?: totalPay. */
+    val realizedPay: Double?,
+    /** "DROP_SHARE" | "RECEIPT_TOTAL" | "NONE" — per-row honesty. */
+    val payBasis: String,
+    /** parsedPay.totalTip — ONLY when this is the job's sole drop, else null. */
+    val tip: Double?,
+    /** parsedPay.totalBasePay — same single-drop-only rule. */
+    val basePay: Double?,
+    /** Raw metadata.odometer reading — the next drop's delta anchor. */
+    val odometerAtCompletion: Double?,
+    /** Machine allocation from the remaining measured job budget; driver edits may override. */
+    val realizedMiles: Double?,
+    /** Nonnegative session-time allocation above the prior completion high-water mark, in minutes. */
+    val realizedMinutes: Double?,
+
+    // ── Frozen economics (immutable historical fact — never re-costed on economy edit) ──
+    /** Operating cost-per-mile this delivery is costed at, frozen from the accepted offer (PR2). */
+    val frozenCostPerMile: Double?,
+    /**
+     * Fuel component of [frozenCostPerMile] (per-mile), frozen from the accepted offer's own
+     * evaluation (#659). Populated only off an `OFFER_FROZEN` basis; null for CURRENT_FALLBACK/NONE
+     * (the live economy read supplies a bare cpm, not its split) → the 4-step true-net waterfall
+     * falls back to 3-step for such rows. `frozenFuelPerMile + frozenNonFuelPerMile ≈
+     * frozenCostPerMile` when all present.
+     */
+    val frozenFuelPerMile: Double? = null,
+    /** Non-fuel component of [frozenCostPerMile] (per-mile), same OFFER_FROZEN-only rule (#659). */
+    val frozenNonFuelPerMile: Double? = null,
+    /**
+     * Frozen realized net = realizedPay − realizedMiles × frozenCostPerMile (PR2). Since #1133
+     * (projector v12) a row with NULL [realizedPay] that drove a positive distance carries
+     * `−realizedMiles × frozenCostPerMile` — so `netProfit != null` does NOT imply pay was recorded;
+     * readers that need pay evidence must test [realizedPay] (`NetProfit.realized` is the owner).
+     */
+    val netProfit: Double?,
+    /** Provenance of the cost basis: "OFFER_FROZEN" | "CAPTURED" | "CURRENT_FALLBACK" | "NONE". */
+    val costBasis: String,
+
+    // ── Driver-attested side columns (#688, v11) ────────────────────────────
+    /**
+     * Driver-entered CASH tip (#688). The tip provenance vocabulary: [tip] = platform-reported
+     * (on-app / receipt `totalTip`, sole-drop) · `cashTip` = driver-entered cash · a #550
+     * post-delivery additional tip is a future third source (its own column when the toast capture
+     * lands). Written ONLY by driver events (DELIVERY_ADJUSTMENT / MANUAL_DELIVERY), never by a
+     * machine completion. **Locked accounting:** cash lives OUTSIDE [realizedPay] and [netProfit] —
+     * it is added to gross/net only at the read sites, so the reconciliation's Σ-attributed
+     * (`SUM(realizedPay)`) stays structurally cash-free.
+     */
+    val cashTip: Double? = null,
+    /**
+     * The [payBasis] stamped at FIRST fold (#703), **never rewritten by any correction** (every
+     * orchestrator apply preserves it via `row.copy`; only the fold-time `toEntity` sets it). The
+     * #691 receipt-evidence hydration reads `COALESCE(originalPayBasis, payBasis)`, so a row re-priced
+     * to `USER_CORRECTED` still proves its original receipt evidence to a receipt-less sibling. Null
+     * on legacy rows until the `PROJECTOR_VERSION` 3→4 refold populates it from the immutable log.
+     */
+    val originalPayBasis: String? = null,
+
+    // ── Store entity resolution (#159, v12) ─────────────────────────────────
+    /**
+     * The resolved store entity key (`StoreKeys.storeKey`, #159), stamped/re-stamped by store
+     * resolution against the pickup anchor; null until resolved (a MANUAL row never in a job, or a
+     * not-yet-resolved row). The per-store economics query groups on it, falling back to the read-side
+     * `normalizedChain(storeName)` for unresolved rows (F9). Refold-deterministic (row-sourced key).
+     */
+    val storeKey: String? = null,
+    /**
+     * The FULL receipt store-form set (#159 B1/B2) — every `parsedPay.customerTips[].type` on the ONE
+     * completion that carried `parsedPay`, serialized as a JSON string array (null on the sibling
+     * drops that carried no receipt). Persists ALL the receipt's store lines (not just this drop's),
+     * because a stacked job settles on one end-of-job receipt riding a single completion — so resolution
+     * reads the running keys from ROWS (never a trigger event), keeping every store keyed and the key
+     * monotonic across a payout-less re-run. Merchant strings — fine at rest, never an INFO+ log
+     * surface (P7).
+     *
+     * **Named residual (FIX 13):** these strings come from the receipt-partition heuristic
+     * (`parsedPay.customerTips[].type`) and are merchant-shaped ONLY under the fielded DoorDash receipt.
+     * A future/unfielded platform that itemizes tips *per customer* would land customer-shaped text here,
+     * so any consumer that ever surfaces this column (a CSV/UI export) MUST scrub it — it is not
+     * guaranteed to be merchant-only for every platform. No consumer exports it today.
+     */
+    val payoutStoreForms: String? = null,
+    /**
+     * Driver-correction sticky bit (#159 H1). Set to 1 when a `DELIVERY_ADJUSTMENT` supplies a
+     * `newStoreName`; resolution SKIPS re-stamping any pinned row (`WHERE storeKeyPinned = 0`), so a
+     * correction that disagrees with the pickup anchor is never re-keyed back. Derived from the
+     * `DELIVERY_ADJUSTMENT` event ⇒ a from-zero refold re-derives it. Default 0 (SQL column default so
+     * the additive AutoMigration back-fills existing rows).
+     */
+    @ColumnInfo(defaultValue = "0") val storeKeyPinned: Int = 0,
+
+    // ── Per-leg mileage (#688 phase B, v13) ─────────────────────────────────
+    /**
+     * Claimed measured store leg (normalized store match, else FIFO, once per leg). Legacy drops
+     * stamp null and retain the existing closed-store-leg retirement policy. Provenance survives
+     * budget capping and driver edits; a leg-sum mismatch alone does not identify a driver edit.
+     */
+    val milesToStore: Double? = null,
+    /** Measured arrival leg for this task; allocation is capped by its job budget (#1108). */
+    val milesToDropoff: Double? = null,
+    /** Machine allocation: LEG_SUM / LEGACY_SPAN / BUDGET_CAPPED / UNKNOWN; retained on driver edits. */
+    @ColumnInfo(defaultValue = "'UNKNOWN'") val milesBasis: String = "UNKNOWN",
+
+    // ── Session-attribution marker (#660 piece 2, v14) ──────────────────────
+    /**
+     * Driver-attribution sticky bit (#660 piece 2). Set to 1 when a `DELIVERY_SESSION_ASSIGN` assigns
+     * this orphan ("(No session)") row into a real ended dash; 0 when machine-attributed, unassigned
+     * (back in the bucket), or MANUAL. The projector's apply guard only ever MOVES a row that is either
+     * null-session OR already `sessionAssigned = 1` — the fail-closed backstop that keeps a machine
+     * row's source-session reconciliation from being silently broken by one wrong tap (undo/re-assign
+     * are safe only because of this marker). Drives the drill-down's "assigned by you" caption + undo.
+     * Derived from the `DELIVERY_SESSION_ASSIGN` event ⇒ a from-zero refold re-derives it. Default 0
+     * (SQL column default so the additive AutoMigration back-fills existing rows).
+     */
+    @ColumnInfo(defaultValue = "0") val sessionAssigned: Int = 0,
+
+    // ── Machine receipt re-price marker (#1033 layer 2, v16) ────────────────
+    /**
+     * When a `DELIVERY_RECEIPT_REPRICE` re-priced this row from the post-delivery receipt's own
+     * itemization (#1033 layer 2), null otherwise. The receipt was EXPANDED after this drop's
+     * `DELIVERY_COMPLETED` had already been minted off the COLLAPSED shape, so the row had been
+     * priced by the #691 `OFFER_PAY` estimate; the re-price sets [realizedPay]/[tip]/[basePay] from
+     * the receipt, flips [payBasis] to `DROP_SHARE` and recomputes [netProfit] against this row's OWN
+     * [frozenCostPerMile] — never today's economy, and [originalPayBasis] is preserved.
+     *
+     * Drives the per-dash drill-down's "re-priced from the receipt" disclosure (the never-silent
+     * #689/#691 precedent). Event-derived, so a from-zero refold re-derives it; null on all history
+     * and on every row a driver `DELIVERY_ADJUSTMENT` later overrides (log order decides — a LATER
+     * adjustment wins the pay, and this stamp stays as the trail of what the machine had done).
+     */
+    val receiptRepricedAt: Long? = null,
+    /**
+     * When a DRIVER last made a MONETARY edit to this row (#1033 review round 6) —
+     * `DELIVERY_ADJUSTMENT` or the legacy `PAY_ADJUSTMENT`, stamped with the correction event's own
+     * `occurredAt`; null on an untouched machine row and on a store/note-only edit.
+     *
+     * The machine receipt re-price refuses any row carrying this, on top of the `payBasis` guard. The
+     * basis alone was not enough: a TIP-ONLY adjustment deliberately LEAVES `payBasis` intact (so a
+     * row keeps its "est. offer pay" disclosure — #688 VET F1), so a re-price arriving afterwards
+     * would have overwritten the driver's own tip with the receipt's. The driver is the higher
+     * authority on their own money; the machine never overwrites them, in either order.
+     */
+    val driverAdjustedAt: Long? = null,
+    val jobOfferCount: Int? = null,
+    val soleOfferHash: String? = null,
+    val odometerAtArrival: Double? = null,
+)

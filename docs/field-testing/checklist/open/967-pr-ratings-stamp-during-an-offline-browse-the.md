@@ -7,7 +7,7 @@ issues: #967, #968
   `ratings.capturedAt` stamp — opportunistic capture only worked mid-dash. Fielded on the very
   build that predates the fix (desk 07-31, the 07-30 dash: master @ 3bff50dd browsed Ratings
   14:51–14:52 while Offline and got no fresh stamp, corroborating #967 independently of the fix).
-  **What to watch (next install, once #968 is on the phone):** browse DashBuddy's Ratings screen
+  **What to watch (next install, once #968 is on the phone):** browse gig.log's Ratings screen
   while DoorDash mode is Offline (not dashing) — the ratings figures (points/tier/acceptance rate)
   should populate immediately, not stay blank/stale until the next Online dash. **Desk:** in
   `app_state_snapshots`, `ratings.capturedAt` should advance on an Offline-mode browse, not only on

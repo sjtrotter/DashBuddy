@@ -32,15 +32,15 @@ selected through `ANDROID_SERIAL` when needed:
 
 ```bash
 mkdir -p "$D/logs"
-adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/app.log "$D/app.log"
-adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log "$D/shareable.log"
-adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/logs/. "$D/logs/"
+adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/app.log "$D/app.log"
+adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/shareable.log "$D/shareable.log"
+adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/logs/. "$D/logs/"
 # Optional: the single previous shareable log, if it has rotated.
-adb pull /sdcard/Android/data/cloud.trotter.dashbuddy/files/shareable.log.1 "$D/shareable.log.1"
+adb pull /sdcard/Android/data/cloud.trotter.log.gig/files/shareable.log.1 "$D/shareable.log.1"
 ```
 
 `logs/` only exists on the device once rotations have been written or moved. If external storage was unavailable,
-the same relative paths are under internal `files/` (read them with `adb shell run-as cloud.trotter.dashbuddy`).
+the same relative paths are under internal `files/` (read them with `adb shell run-as cloud.trotter.log.gig`).
 
 ## Step 0 — identify the build
 
@@ -51,7 +51,7 @@ different commits).
 
 ```bash
 # the startup line — one per process, in app.log AND shareable.log (INFO, tag `App`)
-grep -h -m1 -E 'DashBuddy .* starting' "$D"/app.log "$D"/logs/app_log_rotated_*.log "$D"/shareable.log
+grep -h -m1 -E 'gig.log .* starting' "$D"/app.log "$D"/logs/app_log_rotated_*.log "$D"/shareable.log
 
 # or off ANY periodic summary line — the build id leads it
 grep -h -o -m1 'app=[^ ]*' "$D"/*.log "$D"/logs/*.log

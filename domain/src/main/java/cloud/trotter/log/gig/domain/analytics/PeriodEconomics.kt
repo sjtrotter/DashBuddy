@@ -1,0 +1,172 @@
+package cloud.trotter.log.gig.domain.analytics
+
+import cloud.trotter.log.gig.domain.state.Platform
+
+/**
+ * Below this magnitude an analytics money figure is effectively zero — half a cent (#973).
+ *
+ * ONE owner for the threshold every read-side money comparison uses: the hub's review callouts, the
+ * cash-tip marker, and [PayMix]'s negative-remainder test. It lives in `:domain` because both the
+ * pure models and the `:app` surfaces need it, and a threshold with two copies is one that can only
+ * ever drift apart (the #942 consolidation, widened a module down).
+ */
+const val ANALYTICS_MONEY_EPSILON = 0.005
+
+/**
+ * Economics for an [AnalyticsPeriod] (#314) — the home-glance/hub read model.
+ *
+ * **Net is frozen, not recomputed.** [netProfit] sums the per-delivery `netProfit`
+ * the projector already froze against each offer's accepted cost basis, plus
+ * [unattributedPay]. Editing the operating-cost economy later does NOT retroactively
+ * rewrite a historical period's net — a delivery's net is a decision record, not a
+ * cache of the current cost model (Principle 5: one owner for the number; the owner
+ * is the frozen stored value). This is why the repository takes no economy input.
+ *
+ * **Gross is the platform's word.** [grossEarnings] is reported-authoritative all-pay:
+ * per session the summary-screen `reportedEarnings` when present, else that session's
+ * Σ delivered pay; summed over the period's sessions. [unattributedPay] is the excess
+ * of reported over delivered (challenge bonuses, adjustments, or a delivery we failed
+ * to capture) — a per-period review flag (#650 lets the user reclassify it). It has no
+ * captured mileage cost, so it is treated as net-additive; the resulting [netProfit] is
+ * therefore a documented *estimate* (a missed delivery would have carried miles).
+ */
+data class PeriodEconomics(
+    val totals: PeriodTotals,
+    /** Reported-authoritative all-pay (incl. bonuses/adjustments), summed over sessions. */
+    val grossEarnings: Double,
+    /** Σ frozen delivery net + [unattributedPay]. Frozen — economy edits never change it. */
+    val netProfit: Double,
+    /** Σ (reportedEarnings − deliveredPay) where reported exceeds delivered; review flag (#650). */
+    val unattributedPay: Double,
+    /** [netProfit] ÷ online hours, or `null` when no measurable time has accrued. */
+    val netPerHour: Double?,
+    /** [netProfit] ÷ miles, or `null` when no miles are logged. */
+    val netPerMile: Double?,
+    /**
+     * Σ **frozen** fuel dollars over the period's deliveries (`Σ frozenFuelPerMile × realizedMiles`),
+     * or `null` when no delivery in the period carries a frozen split (#659). The first-class fuel
+     * cost row of the 4-step true-net waterfall (Gross → −Fuel → −Non-fuel → Net); when this (or
+     * [nonFuelCost]) is null the waterfall falls back to the 3-step (Gross → −Operating cost → Net).
+     * Non-negative by construction (per-mile ≥ 0, realized miles floored ≥ 0), so a reported<delivered
+     * session can never render a negative cost row — the cost is not derived as gross−net (#662-F1).
+     */
+    val fuelCost: Double? = null,
+    /** Σ frozen non-fuel dollars over the period's deliveries, or `null` when no frozen split exists (#659). */
+    val nonFuelCost: Double? = null,
+    /**
+     * Σ (deliveredPay − reportedEarnings) where delivered exceeds reported (#701) — the mirror of
+     * [unattributedPay], surfaced as a positive magnitude so an over-count (a phantom offer-pay
+     * estimate, a mixed-receipt over-stamp) is never silently floored to zero. **Display-only**: this
+     * is NEVER added to/subtracted from [netProfit] or [unattributedPay] — it is a review flag the
+     * Money tab renders alongside the unattributed callout, nothing more.
+     */
+    val overAttributedPay: Double = 0.0,
+    /**
+     * The "(No session)" bucket (#660 piece 1): Σ (realizedPay + cashTip) for deliveries whose source
+     * event carried NO `sessionId` at all — an orphan population [netProfit] already counted (via the
+     * frozen delivery net + cash, both null-session-inclusive) but that [grossEarnings] historically
+     * never saw (it was purely session-anchored), so a session-less completion could make displayed net
+     * exceed gross. **Folded INTO [grossEarnings]** here so that can no longer happen, and kept as its
+     * own field so the UI can still surface it as an explicit review/data-quality flag alongside
+     * [unattributedPay]/[overAttributedPay]. Zero when every delivery in the period belongs to a session.
+     */
+    val noSessionPay: Double = 0.0,
+    /** Count of the deliveries behind [noSessionPay] — the "(No session)" bucket's delivery count. */
+    val noSessionDeliveries: Int = 0,
+    val grossSources: GrossSources = GrossSources.EMPTY,
+    /** Σ realized pay on null-net rows, excluded when deriving car costs from gross minus net. Cash cancels separately. */
+    val payWithoutNet: Double = 0.0,
+) {
+    companion object {
+        val EMPTY = PeriodEconomics(
+            totals = PeriodTotals.EMPTY,
+            grossEarnings = 0.0,
+            netProfit = 0.0,
+            unattributedPay = 0.0,
+            netPerHour = null,
+            netPerMile = null,
+            fuelCost = null,
+            nonFuelCost = null,
+            overAttributedPay = 0.0,
+            noSessionPay = 0.0,
+            noSessionDeliveries = 0,
+        )
+    }
+}
+
+/**
+ * Read-time sources of Earned. To [ANALYTICS_MONEY_EPSILON],
+ * `summaryReported + counterReported + driverSetReported + recordedWithoutReport + sessionCash +
+ * noSessionPay == grossEarnings`. Session cash excludes the cash already in no-session pay.
+ */
+data class GrossSources(
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    /** Dashes with no report and NO recorded pay (a pay-less #1133-class delivery still counts here — this is a pay predicate, not a delivery count). */
+    val unreportedDashesNoPay: Int,
+    val sessionCash: Double,
+) {
+    fun sum(noSessionPay: Double): Double = summaryReported + counterReported + driverSetReported +
+        recordedWithoutReport + sessionCash + noSessionPay
+
+    companion object {
+        val EMPTY = GrossSources(0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 0.0)
+    }
+}
+
+/**
+ * One platform's slice of a window's economics (#973 / brief §4.2) — the Money tab's platform-split
+ * rows ("DoorDash · $214.60 · 18 deliveries").
+ *
+ * The [platform] is resolved from the stored wire through the [Platform] registry at the read edge, so
+ * every label downstream derives from the registry's own display metadata — no platform literal, no
+ * hand-written name (Principle 8). [economics] is the identical [PeriodEconomics] shape as the
+ * cross-platform read, assembled by the same fold, so a per-platform figure and its all-platform total
+ * can never disagree about what they mean.
+ */
+data class PlatformEconomics(
+    val platform: Platform,
+    val economics: PeriodEconomics,
+)
+
+/*
+ * `StoreEconomics` — the per-CHAIN period rollup — was deleted by #1024 part 2 (B5) along with the
+ * `perStoreEconomics` read that produced it and the `TopStoresCard` that rendered it. The app has one
+ * store list now, the Playbook's lifetime leaderboard, and its type is [StoreReportCard] below: a
+ * per-LOCATION entity with visit stats, not a period-scoped chain bucket. Two overlapping store models
+ * is precisely the drift Principle 5 names, so the unused one goes rather than waiting for a second
+ * surface to pick the wrong one.
+ */
+
+/**
+ * One store's report card (#159, the #315 Patterns tab consumer) — the resolved store entity plus its
+ * derived-at-read visit stats. A [runningKey] of null makes [locationKnown] false: this is a chain-only
+ * ("location unknown") bucket whose dwell population blends multiple physical locations, so its
+ * per-location [p50DwellMillis]/[p95DwellMillis] are partial by construction (F6). Store names /
+ * addresses are MERCHANT data — never customer PII.
+ */
+data class StoreReportCard(
+    val storeKey: String,
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
+    val runningKey: String?,
+    val address: String?,
+    /** True when a running key has been observed — a real per-location entity (else "location unknown"). */
+    val locationKnown: Boolean,
+    val pickups: Int,
+    val deliveries: Int,
+    val gross: Double,
+    val net: Double,
+    val avgDwellMillis: Double?,
+    val p50DwellMillis: Long?,
+    val p95DwellMillis: Long?,
+    val firstSeenAt: Long,
+    val lastSeenAt: Long,
+)

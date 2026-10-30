@@ -261,7 +261,7 @@ notifications. Projector/analytics unaffected (payload-compat test).
 ### B4 — item 8b: actuation identity end-to-end
 
 **Change shape:** per-offer PendingIntent identity via a `data` URI
-(`dashbuddy://offer/<platform-wire>/<offerHash>?action=accept|decline` — URIs participate
+(`giglog://offer/<platform-wire>/<offerHash>?action=accept|decline` — URIs participate
 in `Intent.filterEquals`, unlike extras; no request-code arithmetic), replacing the fixed
 request codes 10/11 in `BubbleManager`. Per-offer notification ids derived from
 `offerHash` (stable int hash), replacing the single `OFFER_NOTIFICATION_ID = 2`;

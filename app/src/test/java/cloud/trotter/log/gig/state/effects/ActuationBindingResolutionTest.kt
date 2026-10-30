@@ -1,0 +1,855 @@
+package cloud.trotter.log.gig.state.effects
+
+import cloud.trotter.log.gig.core.pipeline.accessibility.mapper.TreeLimits
+import cloud.trotter.log.gig.domain.action.RuleAction
+import cloud.trotter.log.gig.domain.action.TargetExpectation
+import cloud.trotter.log.gig.domain.model.accessibility.BoundingBox
+import cloud.trotter.log.gig.domain.model.accessibility.UiNode
+import cloud.trotter.log.gig.domain.pipeline.NodeRef
+import cloud.trotter.log.gig.test.util.TestResourceLoader
+import cloud.trotter.log.gig.test.util.TestRulesetFactory
+import cloud.trotter.log.gig.util.AccNodeUtils
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * #734 — actuation target-binding disambiguation.
+ *
+ * Field logs (07-07/07-08) showed [UiInteractionHandler] resolving **2 verified
+ * candidates** and falling back to "clicking first" for two RuleActions:
+ * `CONFIRM_DECLINE` on the offer confirm-decline sheet and `EXPAND_EARNINGS` on
+ * the collapsed delivery summary. "First in tree order" is luck, not
+ * verification, and violates #425's fail-closed posture.
+ *
+ * This test drives the **real compiled ruleset** (matchers JSON5 → generated
+ * assets → `TestRulesetFactory`) over the **committed corpus** and replays the
+ * handler's own candidate-resolution pipeline (find-by-viewId candidate set →
+ * label verification via the RuleAction's [TargetExpectation] → the real
+ * [ClickCandidateRanker]) over the same node tree. It asserts the tightened
+ * bindings resolve a single, decisive, *correct* target — never an
+ * [ClickCandidateRanker.Tier.UNRESOLVED] tie among >1 survivor (the case the
+ * paired handler change now aborts to manual).
+ *
+ * The replay mirrors the handler exactly:
+ *  - candidate set = every node whose `viewIdResourceName` equals the pinned
+ *    ref's `viewIdSuffix` (the handler's find-by-viewId strategy; corpus ids are
+ *    already suffix-form). Falls back to by-text like the handler when the ref
+ *    has no id.
+ *  - labels = `NodeRef.hintLabelsOf` — the ONE `:domain` label horizon (#1149 review I2): own
+ *    text/contentDescription + the subtree to depth 3 / 24 child slots, stopping at every clickable
+ *    descendant (its labels are its own, review I3). The bind side is `NodeRef.bindHintsOf` — the
+ *    bound node's action OWNER's region (L2), exactly what production binds.
+ *  - decision = `ClickCandidateRanker.rank`, then the handler's tie rule.
+ *  - #1149: every candidate is mapped to its action OWNER (nearest clickable self/ancestor, at
+ *    most [AccNodeUtils.MAX_OWNER_WALK] steps; "clickable" is `UiNode.takesClick`, the production
+ *    predicate — review L6), owner-less candidates are dropped, candidates sharing an owner are deduped, labels are collected on the owner plus the matched node's own (I8), and
+ *    semantic twins abort (I5). Legacy `"clickable"`-key fixtures are skipped, never given
+ *    invented owners (#1154).
+ *  - #1149 strategy 2b (`semantic = true`, the production order): a hinted ref is re-found by
+ *    its subtree labels BEFORE the bounds walk. The #1093 strategy-3 tests below pass
+ *    `semantic = false` to pin the bounds walk in isolation — it is exactly what production runs
+ *    when 2b finds nothing.
+ */
+class ActuationBindingResolutionTest {
+
+    private data class Resolution(
+        val verifiedCount: Int,
+        val tier: ClickCandidateRanker.Tier,
+        val resolved: UiNode?,
+        val decisive: Boolean,
+    )
+
+    /**
+     * The label horizon over a UiNode: the ONE `:domain` definition (`NodeRef.hintLabelsOf`, #1149
+     * review I2) — the same depth/slot caps and clickable-descendant ownership the executor's live
+     * scan applies ([Pair.second] = complete). A `UiNode` tree is one window of one package, so the
+     * production foreign-package skip has nothing to mirror here.
+     */
+    private fun scanLabels(node: UiNode): Pair<List<String>, Boolean> =
+        NodeRef.hintLabelsOf(node).let { it.labels to it.complete }
+
+    private fun collectLabels(node: UiNode): List<String> = scanLabels(node).first
+
+    /**
+     * Mirror of `UiInteractionHandler.findCandidates` (viewId → text → bounds walk) over a UiNode
+     * tree. Strategy 3 mirrors `findNodeByBounds` (#1093): same class, and EITHER the exact bounds
+     * OR a clickable node overlapping the ref by at least [UiInteractionHandler.RELAXED_BOUNDS_IOU]
+     * — the only strategy that can re-find an id-less, text-less container.
+     */
+    private data class Cand(
+        val node: UiNode, val boundsDerived: Boolean = false, val relaxed: Boolean = false,
+        val semantic: Boolean = false,
+        /** Indices (into the returned list) of bounds-derived candidates this one is nested inside. */
+        val ancestors: List<Int> = emptyList(),
+    )
+
+    /** The mirror's signal for production's incomplete-window abort (a single window here, so it is the active one). */
+    private class SemanticIncomplete : RuntimeException()
+
+    private fun findCandidates(tree: UiNode, ref: NodeRef, semantic: Boolean = false): List<Cand> {
+        ref.viewIdSuffix?.takeIf { it.isNotEmpty() }?.let { id ->
+            val byId = tree.findNodes { it.viewIdResourceName == id }
+            if (byId.isNotEmpty()) return byId.map { Cand(it) }
+        }
+        ref.text?.takeIf { it.isNotEmpty() }?.let { txt ->
+            val byText = tree.findNodes { (it.text?.contains(txt, ignoreCase = true) == true) }
+            if (byText.isNotEmpty()) return byText.map { Cand(it) }
+        }
+        if (semantic && ref.hasExactFingerprint) {
+            // Mirror of `findNodeBySemantics` + `decideSemanticOutcome` (#1149 L1) for ONE (active)
+            // window: nodes that `takesClick` (L6 — the production predicate), filtered on the bind's
+            // OWNER class (L2), whose COMPLETE label region is the ref's EXACT fingerprint; always
+            // descends, records nesting. An incomplete candidate region whose visible labels still fit
+            // marks the window incomplete (J4). No hit → fall through to strategy 3; hit(s) in an
+            // incomplete window → abort. The corpus trees (~60 nodes, depth <= 19) sit far inside the
+            // production depth/fetch bound, which the handler tests pin; the mirror asserts it.
+            val hits = mutableListOf<Cand>()
+            val path = ArrayList<Int>()
+            var incomplete = false
+            val ownerClass = ref.ownerClassHint // N7: null = the owner had no class → no filter
+            fun walk(node: UiNode, depth: Int) {
+                check(depth <= TreeLimits.MAX_TREE_DEPTH) { "corpus tree deeper than the 2b bound" }
+                val classOk = ownerClass == null || node.className == ownerClass
+                val hit = classOk && node.takesClick && scanLabels(node).let { (l, complete) ->
+                    if (!complete) { if (ref.visibleConsistentWith(l)) incomplete = true; false }
+                    else ref.fingerprintMatches(l)
+                }
+                if (hit) { hits += Cand(node, semantic = true, ancestors = path.toList()); path.add(hits.size - 1) }
+                node.children.forEach { walk(it, depth + 1) }
+                if (hit) path.removeAt(path.size - 1)
+            }
+            walk(tree, 0)
+            if (hits.isNotEmpty() && incomplete) throw SemanticIncomplete()
+            if (hits.isNotEmpty()) return hits
+        }
+        val b = ref.boundsInScreen
+        if (b.right <= b.left || b.bottom <= b.top) return emptyList() // degenerate rect: walk skipped
+        val out = mutableListOf<Cand>()
+        // Production-faithful walk (`findNodeByBounds`, #1093 rounds 2–3): a CLICKABLE same-class node
+        // at the exact rect OR overlapping it by >= the threshold is a hit; the walk ALWAYS descends
+        // (a wrapper at the captured rect must expose the row inside it) and drops nothing — each hit
+        // records the hits it is nested inside, and verification decides.
+        val path = ArrayList<Int>()
+        fun walk(node: UiNode) {
+            val classOk = ref.classNameHint == null || node.className == ref.classNameHint
+            val live = node.boundsInScreen
+            val hit = classOk && node.takesClick && (
+                live == ref.boundsInScreen ||
+                    ClickCandidateRanker.boundsIoU(live, ref.boundsInScreen) >= UiInteractionHandler.RELAXED_BOUNDS_IOU
+                )
+            if (hit) { out += Cand(node, boundsDerived = true, relaxed = live != ref.boundsInScreen, ancestors = path.toList()); path.add(out.size - 1) }
+            node.children.forEach(::walk)
+            if (hit) path.removeAt(path.size - 1)
+        }
+        walk(tree)
+        return out
+    }
+
+    /**
+     * Mirror of `AccNodeUtils.resolveActionOwner` over a UiNode (parent pointers from `restoreParents`).
+     * No fallback: fixtures whose clickability did not survive loading are SKIPPED ([modernSnapshots]),
+     * never given invented owners.
+     */
+    private fun ownerOf(node: UiNode): UiNode? {
+        var current: UiNode? = node
+        var steps = 0
+        while (current != null && steps < AccNodeUtils.MAX_OWNER_WALK) {
+            if (current.takesClick) return current // L6: the production predicate
+            current = current.parent
+            steps++
+        }
+        return null
+    }
+
+    /**
+     * The corpus folder minus the LEGACY fixtures: the January 2026 bare-DTO captures spell the flag
+     * `"clickable"` where `UiNodeDto` reads `isClickable`, so every node of such a tree loads as
+     * non-clickable and owner resolution — which is all about clickability — cannot be mirrored on
+     * them. Filed, not fixed: #1154 (normalizing that key could move rule classification, so it is
+     * deliberately NOT done in this zero-drift PR). The skip count is printed.
+     */
+    private fun modernSnapshots(dir: String): List<Triple<String, UiNode, List<String>>> {
+        val all = TestResourceLoader.loadSnapshots(dir)
+        val modern = all.filterNot { (name, _, _) -> hasLegacyClickableKey(java.io.File("src/test/resources/$dir/$name").readText()) }
+        println("ActuationBindingResolutionTest: $dir — skipped ${all.size - modern.size} of ${all.size} legacy-'clickable' fixtures (#1154)")
+        // Review J8: an emptied (or wholly-skipped) corpus must FAIL, not pass vacuously.
+        val floor = MODERN_FLOOR.getValue(dir)
+        assertTrue("$dir: only ${modern.size} modern fixtures survive the #1154 skip (floor $floor)", modern.size >= floor)
+        return modern
+    }
+
+    /** Review J8: the legacy key is detected on a NODE object (one carrying `bounds`), never as a substring of text. */
+    private fun hasLegacyClickableKey(json: String): Boolean {
+        fun walk(e: kotlinx.serialization.json.JsonElement): Boolean = when (e) {
+            is kotlinx.serialization.json.JsonObject ->
+                ("clickable" in e && "bounds" in e) || e.values.any(::walk)
+            is kotlinx.serialization.json.JsonArray -> e.any(::walk)
+            else -> false
+        }
+        return walk(kotlinx.serialization.json.Json.parseToJsonElement(json))
+    }
+
+    private companion object {
+        /** Modern (non-#1154) fixtures each corpus folder must keep — today 13 and 5. */
+        val MODERN_FLOOR = mapOf(
+            "snapshots/offer_popup_confirm_decline" to 13,
+            "snapshots/delivery_summary_collapsed" to 5,
+        )
+    }
+
+    /**
+     * Replay the full handler resolution: candidate set → owner resolution + dedupe (#1149) → label
+     * verification on the owner (+ the matched node's own labels, I8) → nested abort → semantic-twin
+     * abort (I5) → [ClickCandidateRanker] → the handler's tie rule. [Resolution.resolved] is the matched EVIDENCE node (the ranker's text/bounds
+     * source); the click itself lands on its owner.
+     */
+    private fun resolve(tree: UiNode, ref: NodeRef, expectation: TargetExpectation, semantic: Boolean = false): Resolution {
+        val candidates = try { findCandidates(tree, ref, semantic) } catch (_: SemanticIncomplete) {
+            return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
+        // Owner resolution + dedupe (identity: a UiNode's equals ignores children).
+        val owners = mutableListOf<UiNode>()
+        val members = mutableListOf<MutableList<Int>>()
+        val ownerIndexOf = arrayOfNulls<Int>(candidates.size)
+        candidates.forEachIndexed { i, c ->
+            val owner = ownerOf(c.node) ?: return@forEachIndexed
+            val j = owners.indexOfFirst { it === owner }
+            if (j >= 0) { members[j] += i; ownerIndexOf[i] = j } else { owners += owner; members += mutableListOf(i); ownerIndexOf[i] = owners.size - 1 }
+        }
+        val refText = ref.text?.takeIf { it.isNotBlank() }
+        data class Owned(val owner: UiNode, val evidence: UiNode, val boundsDerived: Boolean, val relaxed: Boolean, val semantic: Boolean, val ancestors: Set<Int>)
+        val owned = owners.mapIndexed { j, owner ->
+            val group = members[j].map { candidates[it] }
+            val evidence = group.firstOrNull { refText != null && it.node.text?.take(50) == refText }
+                ?: group.firstOrNull { it.boundsDerived && !it.relaxed } ?: group.first()
+            Owned(owner, evidence.node, group.any { it.boundsDerived }, group.all { it.relaxed }, group.any { it.semantic },
+                members[j].flatMap { candidates[it].ancestors }.mapNotNull { ownerIndexOf[it] }.filter { it != j }.toSet())
+        }
+        fun labelsOf(c: Owned): List<String> {
+            val own = collectLabels(c.owner)
+            val evidence = if (c.evidence === c.owner) emptyList() else listOfNotNull(c.evidence.text, c.evidence.contentDescription).filter { it.isNotBlank() }
+            return own + evidence.filterNot { it in own }
+        }
+        val verifiedIdx = owned.withIndex().filter { (_, c) ->
+            val (ownerLabels, complete) = scanLabels(c.owner)
+            val labels = labelsOf(c)
+            // #1093: a bounds-derived candidate must carry the bind's own subtree labels (a hint-less
+            // ref admits an exact match only); a #1149 semantic one its EXACT fingerprint — the
+            // handler's gate, mirrored.
+            val identified = when {
+                c.semantic -> complete && ref.fingerprintMatches(ownerLabels)
+                !c.boundsDerived -> true
+                ref.labelHintHashes.isEmpty() -> !c.relaxed
+                else -> ref.agreesWithLabels(labels)
+            }
+            identified && expectation.matchesLabels(labels)
+        }.map { it.index }.toSet()
+        val verified = verifiedIdx.sorted().map { owned[it] }
+        if (verified.isEmpty()) return Resolution(0, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        // Nested VERIFIED candidates are undecidable → the handler aborts to manual (round 3).
+        if (verifiedIdx.any { i -> owned[i].ancestors.any { it in verifiedIdx } }) {
+            return Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
+
+        // Review I5: semantic twins abort unless stored text decides exactly one.
+        if (verified.size > 1 && verified.any { it.semantic }) {
+            val refText2 = ref.text?.takeIf { it.isNotBlank() }
+            val byText = if (refText2 == null) emptyList() else verified.filter { it.evidence.text?.take(50) == refText2 }
+            return if (byText.size == 1) Resolution(verified.size, ClickCandidateRanker.Tier.EXACT_TEXT, byText.single().evidence, true)
+            else Resolution(verified.size, ClickCandidateRanker.Tier.UNRESOLVED, null, decisive = false)
+        }
+        val facts = verified.map { o ->
+            ClickCandidateRanker.CandidateFacts(
+                text = o.evidence.text,
+                labels = labelsOf(o),
+                bounds = o.evidence.boundsInScreen,
+            )
+        }
+        val ranked = ClickCandidateRanker.rank(ref, facts)
+        // The handler's tie rule: an UNRESOLVED ranking among >1 survivor is the
+        // ambiguous (now aborted) case; a single survivor, or a decisive tier, is fine.
+        val decisive = !(ranked.tier == ClickCandidateRanker.Tier.UNRESOLVED && verified.size > 1)
+        return Resolution(verified.size, ranked.tier, verified[ranked.index].evidence, decisive)
+    }
+
+    private fun matchTargets(tree: UiNode): Map<String, NodeRef> =
+        TestRulesetFactory.screenRuleset.matchFirst(tree)?.targets ?: emptyMap()
+
+    private fun subtreeHasText(node: UiNode, needle: String): Boolean {
+        if (node.text?.equals(needle, ignoreCase = true) == true) return true
+        return node.children.any { subtreeHasText(it, needle) }
+    }
+
+    // =========================================================================
+    // CONFIRM_DECLINE — offer_popup_confirm_decline
+    // =========================================================================
+
+    @Test
+    fun `confirm decline resolves exactly one verified button per corpus snapshot`() {
+        val action = RuleAction.CONFIRM_DECLINE
+        var withTarget = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/offer_popup_confirm_decline")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
+            withTarget++
+            val r = resolve(node, ref, action.verification)
+            // Exactly ONE node verifies (the confirm sheet's 'Decline offer' button); the
+            // dialog-body 'Are you sure you want to decline...' copy has no id so it is
+            // never in the find-by-viewId candidate set.
+            assertEquals("$filename: exactly one candidate must verify for CONFIRM_DECLINE", 1, r.verifiedCount)
+            assertTrue("$filename: resolution must be decisive (no UNRESOLVED tie)", r.decisive)
+            assertEquals("$filename: resolved target must be the 'Decline offer' button", "Decline offer", r.resolved?.text)
+        }
+        assertTrue("expected the confirm-decline corpus to bind confirmDeclineButton on some frames", withTarget >= 4)
+    }
+
+    /**
+     * The field scenario the corpus alone can't show (the corpus captured only the
+     * sheet's own button): the offer popup BEHIND the confirm sheet carries its own
+     * bare "Decline" title under the SAME `textView_prism_button_title` id. Under the
+     * old `hasTextContaining: "decline"` bind, `findNode`'s pre-order walk could pin the
+     * *first* such node (the offer-popup "Decline"), and both survive the `\bdecline\b`
+     * label check — a genuine 2-candidate ambiguity. The exact-text anchor pins the
+     * confirm sheet's "Decline offer", and the ranker's EXACT_TEXT tier then resolves
+     * the single correct node decisively.
+     */
+    @Test
+    fun `confirm decline binds the sheet button, not the offer-popup decline behind it`() {
+        val action = RuleAction.CONFIRM_DECLINE
+        // offer-popup "Decline" appears FIRST in pre-order; confirm sheet "Decline offer" second.
+        val tree = UiNode(
+            children = listOf(
+                UiNode(text = "Are you sure you want to decline this offer?"),
+                UiNode( // offer popup (behind the sheet)
+                    viewIdResourceName = "secondary_action_button_dash_plus",
+                    isClickable = true, // #1149: the title's action owner
+                    boundsInScreen = BoundingBox(40, 1600, 1000, 1720),
+                    children = listOf(
+                        UiNode(
+                            viewIdResourceName = "textView_prism_button_title",
+                            text = "Decline",
+                            boundsInScreen = BoundingBox(40, 1600, 1000, 1720),
+                        ),
+                    ),
+                ),
+                UiNode( // confirm sheet button
+                    isClickable = true, // #1149: the title's action owner
+                    boundsInScreen = BoundingBox(40, 2000, 1000, 2120),
+                    children = listOf(
+                        UiNode(
+                            viewIdResourceName = "textView_prism_button_title",
+                            text = "Decline offer",
+                            boundsInScreen = BoundingBox(40, 2000, 1000, 2120),
+                        ),
+                    ),
+                ),
+            ),
+        ).restoreParents()
+
+        val ref = matchTargets(tree)[action.targetBindName]
+        assertNotNull("confirm rule must bind confirmDeclineButton on the synthetic sheet", ref)
+        assertEquals("bound target must be the sheet's 'Decline offer' node", "Decline offer", ref!!.text)
+
+        val r = resolve(tree, ref, action.verification)
+        assertEquals("both prism titles match \\bdecline\\b, so 2 nodes verify", 2, r.verifiedCount)
+        assertEquals("EXACT_TEXT must break the tie decisively", ClickCandidateRanker.Tier.EXACT_TEXT, r.tier)
+        assertTrue("resolution must be decisive", r.decisive)
+        assertEquals("must resolve the confirm sheet's button", "Decline offer", r.resolved?.text)
+        assertNotEquals("must NOT resolve the offer-popup bare 'Decline'", "Decline", r.resolved?.text)
+    }
+
+    // =========================================================================
+    // EXPAND_EARNINGS — delivery_summary_collapsed
+    // =========================================================================
+
+    @Test
+    fun `expand earnings binds the pay-breakdown expandable, never the stats one`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var withTarget = 0
+        var decisiveFrames = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue // optional bind
+            if (ref.viewIdSuffix.isNullOrEmpty()) {
+                // #1093: the id-less arm may bind ONLY where no id-bearing pay expandable exists —
+                // `find` visits ancestors first, so a looser second arm would STEAL the target
+                // from its id-bearing descendant on the 07-17 frames (review finding 3).
+                val stolenFrom = node.findNodes {
+                    it.viewIdResourceName?.endsWith("expandable_view") == true && !subtreeHasText(it, "Total online time")
+                }
+                assertTrue("$filename: the id-less arm bound ahead of an id-bearing pay node ${stolenFrom.map { it.boundsInScreen }}", stolenFrom.isEmpty())
+                continue // covered by the id-less test below
+            }
+            withTarget++
+
+            // The independently-computed expected target: the sole expandable_view whose
+            // subtree does NOT carry the stats section's stable 'Total online time' row.
+            // Suffix-match the id (not exact-equality): corpus fixtures mix suffix-form
+            // ids (legacy captures) with full-form `com.doordash.driverapp:id/expandable_view`
+            // (modern envelope captures), and recognition itself keys on `hasIdSuffix`.
+            val payNode = node.findNodes {
+                it.viewIdResourceName?.endsWith("expandable_view") == true &&
+                    !subtreeHasText(it, "Total online time")
+            }.singleOrNull()
+            assertNotNull("$filename: exactly one pay-section expandable_view must exist", payNode)
+
+            // The tightened bind must select that pay node (was: first-in-tree stats node).
+            assertEquals(
+                "$filename: bound expandButton must be the pay ('This offer') expandable, not the stats one",
+                payNode!!.boundsInScreen, ref.boundsInScreen,
+            )
+
+            // EXPAND_EARNINGS is label-free, so both expandable_view nodes survive label
+            // verification (the shared id can't be narrowed). The ranker must therefore
+            // EITHER resolve the correct (pay) node via bounds, OR — on a degenerate frame
+            // whose pay rect is inverted/zero-area (3 of the 11 bound corpus frames:
+            // 165530_687 inverted, 180901_024 + 201237_957 zero-height) — return an
+            // UNRESOLVED tie, which the handler now ABORTS to manual (#734): a per-frame
+            // availability cost (~27% of bound corpus frames), mitigated per capture burst
+            // (most bursts contain a decisive sibling frame) and always preferable to the
+            // old behavior, which decisively clicked the WRONG (stats) node on exactly
+            // these frames. It must NEVER decisively resolve the stats node (a wrong click).
+            val r = resolve(node, ref, action.verification)
+            if (r.decisive) {
+                decisiveFrames++
+                val resolved = r.resolved
+                assertTrue(
+                    "$filename: a decisive resolution must be the pay section (no 'Total online time')",
+                    resolved != null && !subtreeHasText(resolved, "Total online time"),
+                )
+            }
+        }
+        // #1154: 13 of the 18 fixtures are legacy-'clickable' and skipped; the id-bearing arm binds only
+        // on the two modern 07-17 frames, so the floors are pinned to those (they were 5 / 4 over the
+        // full corpus when the legacy frames could still be mirrored).
+        assertEquals("the two modern 07-17 frames bind the id arm", 2, withTarget)
+        assertEquals("and both resolve decisively to the pay expandable", 2, decisiveFrames)
+    }
+
+    /**
+     * #1093 — DoorDash 8.93.7+ renders the collapsed receipt with NO view ids, so the id arm binds
+     * nothing and the tap was silently never emitted (dev field report 2026-09-08). The second
+     * arm binds the id-less CLICKABLE row whose subtree carries 'This offer'; at fire time the
+     * handler can only re-find it by class + bounds (strategy 3), which must resolve it DECISIVELY
+     * — a single verified candidate, or a bounds-ranked winner — and never the stats row or a
+     * wrapper. Pinned on the 09-07 field frames (a mid-spin and a settled one).
+     */
+    @Test
+    fun `expand earnings binds the id-less 'This offer' row on the 8_93_7+ receipt and re-finds it by bounds`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var idLessFrames = 0
+        var decisiveFrames = 0
+        val idLessFiles = mutableListOf<String>()
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            idLessFrames++
+
+            val expected = node.findNodes {
+                it.isClickable && it.viewIdResourceName.isNullOrBlank() &&
+                    subtreeHasText(it, "This offer") && !subtreeHasText(it, "Total online time")
+            }.singleOrNull()
+            assertNotNull("$filename: exactly one id-less clickable 'This offer' row must exist", expected)
+            assertEquals("$filename: the bind must select that row", expected!!.boundsInScreen, ref.boundsInScreen)
+            assertNull("$filename: the row has no text of its own — the ref must carry none", ref.text)
+
+            val r = resolve(node, ref, action.verification)
+            val diag = findCandidates(node, ref).joinToString(" | ") {
+                "${it.node.className?.substringAfterLast('.')} ${it.node.boundsInScreen} click=${it.node.isClickable} relaxed=${it.relaxed}"
+            }
+            assertEquals("$filename: the ref carries the row's letter-bearing subtree labels as HASHES (no amount, no plaintext)",
+                listOf(NodeRef.hintHash("This offer"), NodeRef.hintHash("Expand")), ref.labelHintHashes)
+            idLessFiles += filename
+            val b = ref.boundsInScreen
+            val degenerate = b.right <= b.left || b.bottom <= b.top
+            if (degenerate) {
+                // A mid-inflation frame whose pay row is a zero-area rect (the 07-17 corpus frame:
+                // the row sits at y=4500 with zero height) carries no bounds evidence, so a tie
+                // between the row and its same-rect wrapper is UNRESOLVED and the handler aborts
+                // to manual — the same per-frame availability cost the id-arm test above accepts.
+                // What it must never do is decisively pick the WRONG node.
+                if (r.decisive) assertFalse("$filename: a decisive pick on a degenerate rect must not be the stats section",
+                    subtreeHasText(r.resolved!!, "Total online time"))
+                continue
+            }
+            decisiveFrames++
+            assertTrue(
+                "$filename: the bounds walk must resolve decisively (got tier ${r.tier}, ${r.verifiedCount} verified; " +
+                    "ref=${ref.classNameHint} ${ref.boundsInScreen} text=${ref.text}; candidates: [$diag])",
+                r.decisive,
+            )
+            assertEquals("$filename: and resolve THE row, not a wrapper or the stats section",
+                expected.boundsInScreen, r.resolved!!.boundsInScreen)
+            assertFalse(subtreeHasText(r.resolved, "Total online time"))
+        }
+        // Pinned BY NAME (review round 2): a `>= 2` floor would let one of the three regress silently.
+        assertEquals(
+            listOf(
+                "2026-08-23_17-35-17-361__doordash__accessibility.window__delivery_summary_collapsed__c65d43.json",
+                "2026-09-07_08-20-05-311__doordash__accessibility.window__delivery_summary_collapsed__0ec166.json",
+                "2026-09-07_08-20-05-366__doordash__accessibility.window__delivery_summary_collapsed__8c8c83.json",
+            ),
+            idLessFiles.sorted(),
+        )
+        assertEquals("all three id-less frames resolve decisively by bounds", 3, decisiveFrames)
+        assertEquals(3, idLessFrames)
+    }
+
+    /**
+     * #1093 review finding 1: the ref is captured while the sheet may still be sliding and the tap
+     * lands after the settle delay. Capture the pay row 400 px LOW (mid-animation) and fire against
+     * the settled tree: the only overlapping clickable View is "Continue dashing" (IoU ≈ 0.77). It is
+     * a relaxed candidate whose labels share nothing with the bind's hints, so it must be REJECTED
+     * and the tap must abort — never a decisive click on a different control.
+     */
+    @Test
+    fun `a relaxed candidate that is a different control is rejected by the bind's label hints`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var checked = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            val b = ref.boundsInScreen
+            if (b.bottom <= b.top) continue
+            val shifted = ref.copy(boundsInScreen = b.copy(top = b.top + 400, bottom = b.bottom + 400))
+            val cands = findCandidates(node, shifted)
+            if (cands.none { it.relaxed && subtreeHasText(it.node, "Continue dashing") }) continue // geometry differs on this frame
+            checked++
+            val r = resolve(node, shifted, action.verification)
+            assertFalse("$filename: a shifted ref must not decisively click a different control", r.decisive)
+            assertEquals("$filename: nothing may survive verification", 0, r.verifiedCount)
+        }
+        assertTrue("expected at least one frame to exercise the shifted-ref sequence, got $checked", checked >= 1)
+    }
+
+    // =========================================================================
+    // #1093 round 2/3 — identity, not geometry
+    // =========================================================================
+
+    /** The settled 09-07 tree + its bound ref, the fixture the synthetic sequences below start from. */
+    private fun settledReceipt(): Pair<UiNode, NodeRef> {
+        val (_, node, _) = modernSnapshots("snapshots/delivery_summary_collapsed")
+            .single { it.first.contains("8c8c83") }
+        val ref = matchTargets(node)[RuleAction.EXPAND_EARNINGS.targetBindName]!!
+        return node to ref
+    }
+
+    private fun rowOf(tree: UiNode): UiNode = tree.findNodes {
+        it.isClickable && it.viewIdResourceName.isNullOrBlank() && subtreeHasText(it, "This offer")
+    }.single()
+
+    private fun node(
+        text: String? = null, desc: String? = null, cls: String = "android.view.View",
+        clickable: Boolean = false, bounds: BoundingBox, children: List<UiNode> = emptyList(),
+    ) = UiNode(text = text, contentDescription = desc, className = cls, isClickable = clickable,
+        boundsInScreen = bounds, children = children.toMutableList())
+
+    /**
+     * Round-2 finding 2: the row captured mid-inflation at EXACTLY the rect where "Continue
+     * dashing" sits once settled. An exact geometric match is not identity — it must fail the
+     * hint check and abort, never click the button.
+     */
+    @Test
+    fun `an exact-rect match on a different control is rejected — geometry is not identity`() {
+        val (tree, ref) = settledReceipt()
+        val button = tree.findNodes { it.isClickable && subtreeHasText(it, "Continue dashing") }
+            .minByOrNull { (it.boundsInScreen.right - it.boundsInScreen.left).toLong() * (it.boundsInScreen.bottom - it.boundsInScreen.top) }!!
+        val shifted = ref.copy(boundsInScreen = button.boundsInScreen)
+
+        val cands = findCandidates(tree, shifted)
+        assertTrue("the button is an exact bounds-derived candidate", cands.any { it.node === button && it.boundsDerived && !it.relaxed })
+        val r = resolve(tree, shifted, RuleAction.EXPAND_EARNINGS.verification)
+        assertFalse(r.decisive)
+        assertEquals(0, r.verifiedCount)
+    }
+
+    /**
+     * Round-2 finding 1a: ONE shared label is not identity. A clickable control one pixel off the
+     * row that carries the same AMOUNT but not the row's words must be rejected — amounts are
+     * never hints, and every hint must be present.
+     */
+    @Test
+    fun `a stranger sharing only the amount is rejected — numeric labels are not hints and all hints are required`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val stranger = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This dash so far", cls = "android.widget.TextView", bounds = b),
+            node(text = "$40.57", cls = "android.widget.TextView", bounds = b),
+        ))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(stranger)).restoreParents()
+
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertEquals("the stranger is found by overlap but must not survive", 1, findCandidates(synthetic, ref).size)
+        assertFalse(r.decisive)
+        assertEquals(0, r.verifiedCount)
+
+        // And the partial case: the words but only one of them.
+        val halfRow = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+        ))
+        val synthetic2 = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(halfRow)).restoreParents()
+        assertEquals(0, resolve(synthetic2, ref, RuleAction.EXPAND_EARNINGS.verification).verifiedCount)
+    }
+
+    /**
+     * Round-2 finding 1b / round-3 finding 1, revisited by #1149 review I3: a CLICKABLE wrapper around
+     * the row, which after a 40 px slide out-overlaps it (0.56 vs 0.52). Both are bounds hits, but the
+     * wrapper no longer inherits the row's labels (they belong to the clickable row), so it fails the
+     * hint check and the ROW is resolved — never the wrapper by overlap.
+     */
+    @Test
+    fun `a clickable wrapper that out-overlaps the slid row does not inherit its labels — the row resolves`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val movedRow = node(clickable = true, bounds = b.copy(top = b.top + 40, bottom = b.bottom + 40), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+            node(text = "$40.57", cls = "android.widget.TextView", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b.copy(top = b.top + 30, bottom = b.bottom + 30), children = listOf(movedRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        val cands = findCandidates(synthetic, ref)
+        assertEquals("both are hits, the row nested in the wrapper", listOf(wrapper, movedRow), cands.map { it.node })
+        assertEquals(listOf(0), cands[1].ancestors)
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertEquals("only the row carries the labels", 1, r.verifiedCount)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === movedRow)
+    }
+
+    /**
+     * Round-3 finding 1: a clickable wrapper at EXACTLY the captured rect with the row inside it. The
+     * old walk pruned at the exact match and tapped the wrapper; since #1149 review I3 the wrapper's
+     * labels exclude the clickable row's, so only the row verifies — and it, never the wrapper, resolves.
+     */
+    @Test
+    fun `an exact clickable wrapper around the row is not tapped — the row inside it resolves`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val innerRow = node(clickable = true, bounds = b.copy(top = b.top + 10), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b, children = listOf(innerRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        assertEquals(listOf(wrapper, innerRow), findCandidates(synthetic, ref).map { it.node })
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === innerRow)
+    }
+
+    /**
+     * Round-3 finding 2: a stray clickable child that carries only ONE of the labels overlaps the
+     * slid row. It fails verification and must NOT evict the row it sits in — the row wins.
+     */
+    @Test
+    fun `an unverified clickable descendant does not evict the row it sits in`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val strayChild = node(clickable = true, bounds = b.copy(top = b.top + 2, bottom = b.bottom + 2), children = listOf(
+            node(desc = "Expand", bounds = b),
+        ))
+        // The row owns its own "Expand" (non-clickable); the stray clickable child's copy is ITS label (I3).
+        val movedRow = node(clickable = true, bounds = b.copy(top = b.top + 1, bottom = b.bottom + 1), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+            strayChild,
+        ))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(movedRow)).restoreParents()
+
+        assertEquals(listOf(movedRow, strayChild), findCandidates(synthetic, ref).map { it.node })
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === movedRow)
+    }
+
+    /** An exact-rect match that is NOT clickable is a wrapper, not a target: skipped, descended. */
+    @Test
+    fun `an exact non-clickable match is skipped in favour of the clickable control inside it`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val b = row.boundsInScreen
+        val inner = node(clickable = true, bounds = b.copy(top = b.top + 2, bottom = b.bottom + 2), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val shell = node(clickable = false, bounds = b, children = listOf(inner))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(shell)).restoreParents()
+
+        assertEquals(listOf(inner), findCandidates(synthetic, ref).map { it.node })
+        assertTrue(resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification).resolved === inner)
+    }
+
+    /** A pre-#1093 ref (no hints) keeps the legacy behaviour: an exact clickable match, nothing looser. */
+    @Test
+    fun `a hint-less ref admits an exact match only`() {
+        val (tree, ref) = settledReceipt()
+        val legacy = ref.copy(labelHintHashes = emptyList())
+        assertTrue(resolve(tree, legacy, RuleAction.EXPAND_EARNINGS.verification).decisive)
+        val b = legacy.boundsInScreen
+        val slid = legacy.copy(boundsInScreen = b.copy(top = b.top + 40, bottom = b.bottom + 40))
+        assertEquals(0, resolve(tree, slid, RuleAction.EXPAND_EARNINGS.verification).verifiedCount)
+    }
+
+    // =========================================================================
+    // #1149 — strategy 2b (labels before geometry) on the real receipt frames
+    // =========================================================================
+
+    /**
+     * Production order on every id-less 8.93.7+ frame: 2b finds EXACTLY the row (no wrapper, no
+     * stats row) and it resolves decisively to it.
+     */
+    @Test
+    fun `the semantic walk re-finds exactly the id-less row on every id-less frame`() {
+        val action = RuleAction.EXPAND_EARNINGS
+        var frames = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/delivery_summary_collapsed")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            if (!ref.viewIdSuffix.isNullOrEmpty()) continue
+            frames++
+            val row = rowOf(node)
+            val cands = findCandidates(node, ref, semantic = true)
+            assertEquals("$filename: 2b must find the row and nothing else", listOf(row), cands.map { it.node })
+            assertTrue("$filename: tagged semantic", cands.single().semantic)
+            val r = resolve(node, ref, action.verification, semantic = true)
+            assertTrue("$filename: decisive", r.decisive)
+            assertTrue("$filename: THE row", r.resolved === row)
+        }
+        assertEquals(3, frames)
+    }
+
+    /**
+     * The #1102 shape on the settled 09-07 frame: the ref was captured mid-slide, 400 px low (where
+     * "Continue dashing" overlaps it), or exactly on the button's rect. Strategy 3 alone rejects the
+     * stranger and aborts (the tests above); in production order 2b re-finds the row by its labels
+     * first, so the tap lands on the row — never on "Continue dashing".
+     */
+    @Test
+    fun `a ref captured mid-slide resolves to the row by labels, never the control now at its rect`() {
+        val (tree, ref) = settledReceipt()
+        val row = rowOf(tree)
+        val button = tree.findNodes { it.isClickable && subtreeHasText(it, "Continue dashing") }
+            .minByOrNull { (it.boundsInScreen.right - it.boundsInScreen.left).toLong() * (it.boundsInScreen.bottom - it.boundsInScreen.top) }!!
+        val b = ref.boundsInScreen
+        val shifts = listOf(
+            ref.copy(boundsInScreen = b.copy(top = b.top + 400, bottom = b.bottom + 400)),
+            ref.copy(boundsInScreen = button.boundsInScreen),
+        )
+        for (shifted in shifts) {
+            val r = resolve(tree, shifted, RuleAction.EXPAND_EARNINGS.verification, semantic = true)
+            assertTrue("${shifted.boundsInScreen}: decisive", r.decisive)
+            assertTrue("${shifted.boundsInScreen}: the row, not the button", r.resolved === row)
+            assertFalse(subtreeHasText(r.resolved!!, "Continue dashing"))
+        }
+    }
+
+    /** Production order (I3): a label-less clickable wrapper is no 2b candidate — the row alone is found and resolves. */
+    @Test
+    fun `a clickable wrapper around the row is not a semantic candidate — the row resolves`() {
+        val (tree, ref) = settledReceipt()
+        val b = rowOf(tree).boundsInScreen
+        val innerRow = node(clickable = true, bounds = b.copy(top = b.top + 400, bottom = b.bottom + 400), children = listOf(
+            node(text = "This offer", cls = "android.widget.TextView", bounds = b),
+            node(desc = "Expand", bounds = b),
+        ))
+        val wrapper = node(clickable = true, bounds = b.copy(top = b.top + 390, bottom = b.bottom + 410), children = listOf(innerRow))
+        val synthetic = node(bounds = BoundingBox(0, 0, 1080, 2400), children = listOf(wrapper)).restoreParents()
+
+        assertEquals(listOf(innerRow), findCandidates(synthetic, ref, semantic = true).map { it.node })
+        val r = resolve(synthetic, ref, RuleAction.EXPAND_EARNINGS.verification, semantic = true)
+        assertTrue(r.decisive)
+        assertTrue(r.resolved === innerRow)
+    }
+
+    // =========================================================================
+    // #1149 review R1 / R7 — a refused bind emits NO reference; the census sees it
+    // =========================================================================
+
+    /** Rebuild [tree] with [mark] applied to the node [target] and its whole subtree (the UiNode tree is immutable). */
+    private fun rebuild(node: UiNode, target: UiNode, inside: Boolean = false, mark: (UiNode) -> UiNode): UiNode {
+        val here = inside || node === target
+        val kids = node.children.map { rebuild(it, target, here, mark) }
+        val copy = node.copy(children = kids)
+        return if (here) mark(copy) else copy
+    }
+
+    /**
+     * R1 end-to-end on the real settled receipt: the id-less expand row is FOREIGN (an embedded subtree
+     * of another package). The rule still matches, but the bind is refused — NO `expandButton` reference
+     * exists, so no strategy (not even strategy 3's exact-bounds arm, which would tap a same-class
+     * control at the captured rect on this expectation-less action) can fire. The census counts it.
+     */
+    @Test
+    fun `a refused foreign bind emits no reference and rides the bind census`() {
+        val (tree, _) = settledReceipt()
+        val row = rowOf(tree)
+        val foreignRow = rebuild(tree, row) { it.copy(foreignPackage = true) }.restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.log.gig.domain.pipeline.ParseShortfall>()
+        val match = TestRulesetFactory.screenRuleset.matchFirst(foreignRow, onParseShortfall = { shortfalls += it })
+        assertNotNull("the receipt still matches", match)
+        assertNull("a refused bind emits NO reference", match!!.targets[RuleAction.EXPAND_EARNINGS.targetBindName])
+        assertTrue("the refusal has its OWN census (S4), not the unresolved-optional one",
+            shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.refusedBindings })
+        assertFalse(shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unresolvedOptionalBindings })
+    }
+
+    /** R7: an action target bound over a node with an unreadable child is counted as unprovable. */
+    @Test
+    fun `an unprovable action-target bind is reported to the census`() {
+        val (tree, _) = settledReceipt()
+        val row = rowOf(tree)
+        // Mark ONLY the row itself as having an advertised child the mapper could not read (L4/N6).
+        val unreadable = rebuild(tree, row) { it }.let { copyTree ->
+            fun only(n: UiNode): UiNode {
+                val c = n.copy(children = n.children.map(::only))
+                return if (n.isClickable && n.boundsInScreen == row.boundsInScreen && subtreeHasText(n, "This offer")) {
+                    c.copy(unreadableChildren = 1)
+                } else c
+            }
+            only(copyTree)
+        }.restoreParents()
+        val shortfalls = mutableListOf<cloud.trotter.log.gig.domain.pipeline.ParseShortfall>()
+        val match = TestRulesetFactory.screenRuleset.matchFirst(unreadable, onParseShortfall = { shortfalls += it })
+        val ref = match!!.targets[RuleAction.EXPAND_EARNINGS.targetBindName]
+        assertNotNull("the reference still exists (strategies 1–3 remain)", ref)
+        assertFalse(ref!!.labelHintsComplete)
+        assertTrue(shortfalls.any { RuleAction.EXPAND_EARNINGS.targetBindName in it.unprovableBindings })
+    }
+
+    /**
+     * #1149 review R9 — corpus proof for the verification ownership rule (I3): on every modern
+     * confirm-decline frame the CONFIRM_DECLINE expectation is found on the OWNER's own label scan —
+     * which never reads through a clickable descendant — not merely via the matched node's own label
+     * (the I8 evidence path). I.e. fielded Prism buttons carry their title on a NON-clickable child.
+     */
+    @Test
+    fun `fielded confirm-decline owners carry the expectation label on their own scan`() {
+        val action = RuleAction.CONFIRM_DECLINE
+        var checked = 0
+        for ((filename, node, _) in modernSnapshots("snapshots/offer_popup_confirm_decline")) {
+            val ref = matchTargets(node)[action.targetBindName] ?: continue
+            var asserted = 0
+            for (m in findCandidates(node, ref).map { it.node }) {
+                // Only matched nodes whose OWN label satisfies the expectation are the case under proof.
+                if (!action.verification.matchesLabels(listOfNotNull(m.text, m.contentDescription))) continue
+                val owner = ownerOf(m)
+                assertNotNull("$filename: the matched title has an owner", owner)
+                val (labels, _) = scanLabels(owner!!)
+                assertTrue("$filename: the owner's OWN scan carries the expectation label: $labels",
+                    action.verification.matchesLabels(labels))
+                asserted++
+            }
+            if (asserted > 0) checked++
+        }
+        assertTrue("expected the modern confirm-decline corpus to be checked, got $checked", checked >= 4)
+    }
+}

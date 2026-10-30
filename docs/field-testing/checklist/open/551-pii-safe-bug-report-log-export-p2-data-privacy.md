@@ -4,7 +4,7 @@ issues: #551
 - **🆕 NEW — PII-safe bug-report log export (#551 P2): Data & Privacy → Export Data → Export log.**
   After a real dash (with at least one recognized offer/delivery so INFO milestones exist), go to
   Settings → Data & Privacy → Export Data, scroll to "Export a bug report", pick a folder, export.
-  How to tell it's working: (1) open `dashbuddy-log.txt` and **grep your shop's merchant name — ZERO
+  How to tell it's working: (1) open `giglog-bug-report.txt` and **grep your shop's merchant name — ZERO
   hits** (it's INFO+ milestones only, scrubbed at the sink); any `[scrubbed:<marker>]` lines are the
   gate catching a leak. (2) The success line's auto-scrub count is sane (usually 0, non-zero means an
   upstream site leaked and the sink caught it — worth reporting). (3) The firehose (`app.log` in the

@@ -1,0 +1,508 @@
+package cloud.trotter.log.gig.core.pipeline.rules
+
+import cloud.trotter.log.gig.domain.model.accessibility.ParsedTime
+import cloud.trotter.log.gig.domain.model.accessibility.UiNode
+import cloud.trotter.log.gig.test.util.TestResourceLoader
+import cloud.trotter.log.gig.test.util.TestRulesetFactory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+import java.io.File
+import java.time.ZoneId
+
+/**
+ * Corpus-wide parse-OUTPUT golden guard (#433).
+ *
+ * The intent-only golden ([GoldenSnapshotRegressionTest]) proved insufficient:
+ * the timeline rule's mojibake separator made `storeHint` parse null on every
+ * real capture while the whole suite stayed green. This harness pins the
+ * **typed fields** — the engine's actual product — for every golden snapshot:
+ *
+ * 1. Every snapshot under an intent folder is classified with the production
+ *    rulesets and its `ParsedFields.toFieldMap()` projection is compared to
+ *    the approved file (`snapshots/approved-parse-output.json`).
+ * 2. A deliberate rule/parser change regenerates the approval:
+ *    `./gradlew :app:testDebugUnitTest --tests "*ParseOutputGoldenTest*" -DupdateParseGolden=true`
+ *    then REVIEW THE DIFF (that review is the regression gate) and commit.
+ *
+ * Determinism: time-of-day transforms are anchored to a fixed clock
+ * ([TransformRegistry.withClock]) so `ParsedTime.time` is machine- and
+ * zone-independent.
+ *
+ * Companion guards in this file:
+ * - corpus coverage ratchet — every screen-rule intent should eventually have
+ *   a golden folder; the known-missing set is pinned and may only shrink.
+ * - dedupeKey lint — a `{field}` template in a matched rule's effect must
+ *   reference a field that parses non-null on that fixture (the #427 class of bug).
+ *   Only rules with corpus coverage are linted — the ratchet above is what makes
+ *   that blind spot visible.
+ */
+class ParseOutputGoldenTest {
+
+    companion object {
+        /** Not intent-named goldens (SENSITIVE is deliberately never parsed). */
+        private val SKIP = setOf("INBOX", "UNKNOWN", "SENSITIVE")
+
+        private const val APPROVED_PATH = "src/test/resources/snapshots/approved-parse-output.json"
+        private const val UPDATE_FLAG = "updateParseGolden"
+
+        /** Arbitrary but FIXED anchor (2026-06-01T00:00:00Z, UTC) — see kdoc. */
+        private const val FIXED_NOW_MS = 1_780_272_000_000L
+        private val FIXED_ZONE = ZoneId.of("UTC")
+
+        private val json = Json { prettyPrint = true }
+    }
+
+    private val screenRuleset: Ruleset<UiNode> get() = TestRulesetFactory.screenRuleset
+
+    // =========================================================================
+    // 1. The approval guard
+    // =========================================================================
+
+    @Test
+    fun `corpus parse output matches the approved golden file`() {
+        val actual = JsonObject(generateParseOutput())
+        val approvedFile = File(APPROVED_PATH)
+
+        if (System.getProperty(UPDATE_FLAG) == "true" || !approvedFile.exists()) {
+            approvedFile.writeText(json.encodeToString(JsonObject.serializer(), actual) + "\n")
+            fail(
+                "approved-parse-output.json (re)generated with ${actual.size} snapshots — " +
+                    "review the diff (that review IS the regression gate) and commit it.",
+            )
+        }
+
+        val approved = json.parseToJsonElement(approvedFile.readText()).jsonObject
+        if (approved == actual) return
+
+        val diffs = buildList {
+            (approved.keys - actual.keys).take(5)
+                .forEach { add("GONE (approved but no longer produced): $it") }
+            (actual.keys - approved.keys).take(5)
+                .forEach { add("NEW (produced but not approved): $it") }
+            actual.keys.intersect(approved.keys)
+                .filter { approved[it] != actual[it] }
+                .take(10)
+                .forEach {
+                    add("CHANGED: $it\n  approved: ${approved[it]}\n  actual:   ${actual[it]}")
+                }
+        }
+        fail(
+            "Parse output drifted from the approved golden (#433). If the change is deliberate, " +
+                "regenerate with -D$UPDATE_FLAG=true and review the diff.\n" +
+                diffs.joinToString("\n"),
+        )
+    }
+
+    /** snapshots/<folder>/<file> → {ruleId, intent, shape, fields} — sorted, normalized. */
+    private fun generateParseOutput(): Map<String, JsonElement> {
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        assertTrue("golden corpus must not be empty", dirs.isNotEmpty())
+
+        val out = LinkedHashMap<String, JsonElement>()
+        for (dir in dirs) {
+            for ((fn, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                out["${dir.name}/$fn"] = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    val result = screenRuleset.matchFirst(node)
+                        ?: return@withClock JsonObject(mapOf("intent" to JsonPrimitive("UNKNOWN")))
+                    val fields = ParsedFieldsFactory.create(result.shape, result.fields).toFieldMap()
+                    JsonObject(
+                        linkedMapOf<String, JsonElement>(
+                            "ruleId" to JsonPrimitive(result.ruleId),
+                            "intent" to JsonPrimitive(result.intent),
+                            "shape" to (result.shape?.let(::JsonPrimitive) ?: JsonNull),
+                            "fields" to JsonObject(
+                                fields.entries.sortedBy { it.key }
+                                    .associate { (k, v) -> k to normalize(v) },
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * Stable JSON projection of a parsed field value. [ParsedTime] is split
+     * explicitly (its millis are fixed-clock-stable; embedding it via
+     * toString would also work but this reads better in diffs). Unknown
+     * complex types (small data classes over primitives) fall back to
+     * toString — deterministic under the fixed clock.
+     */
+    private fun normalize(v: Any?): JsonElement = when (v) {
+        null -> JsonNull
+        is Boolean -> JsonPrimitive(v)
+        is Number -> JsonPrimitive(v)
+        is String -> JsonPrimitive(v)
+        is ParsedTime -> JsonObject(
+            mapOf(
+                "text" to JsonPrimitive(v.text),
+                "time" to (v.time?.let(::JsonPrimitive) ?: JsonNull),
+            ),
+        )
+        is Collection<*> -> JsonArray(v.map(::normalize))
+        is Map<*, *> -> JsonObject(
+            v.entries.sortedBy { it.key.toString() }
+                .associate { it.key.toString() to normalize(it.value) },
+        )
+        else -> JsonPrimitive(v.toString())
+    }
+
+    // =========================================================================
+    // 2. Corpus coverage ratchet
+    // =========================================================================
+
+    /**
+     * Screen-rule `platform:intent` pairs with no golden corpus behind them (#433 noted 13 DD
+     * intents + all of Uber). This set may only SHRINK: when you add corpus for one of these,
+     * delete it here; a NEW intent must ship with corpus (or be added here deliberately, in
+     * review).
+     *
+     * ### Keyed by PLATFORM, not intent alone (#941, review §4.4 item 4)
+     *
+     * The gap used to be "intent has no folder named after it". Intent names are shared across
+     * platforms (`idle_map`, `offer`, `home_dashboard`, `earnings_activity`…), and the folders
+     * are intent-named, not platform-named — so a folder populated entirely by DoorDash
+     * captures marked the same-named UBER intent covered. With Uber at a fraction of DoorDash's
+     * corpus depth, a meaningful share of its thinness was invisible to this gate, which is
+     * precisely the gate that decides whether the dedupeKey / effect-arg lints below have
+     * anything to look at.
+     *
+     * Coverage is now measured the way production classifies: a pair is covered iff SOME corpus
+     * snapshot classifies to that intent *within that platform's rule partition*
+     * (`matchFirst(node, platformWire = …)` — `ObservationClassifier` partitions by wire at all
+     * three call sites). Folder names no longer participate.
+     */
+    private val knownUncoveredIntents = setOf(
+        // ---- DoorDash — rules added from triage/synthetic fixtures, no capture yet ----
+        "doordash:dropoff_pre_arrival_completion",
+        "doordash:earnings",
+        "doordash:pickup_picked_up",
+        "doordash:pickup_pre_arrival_multi",
+        "doordash:pickup_verify",
+        // #501 item 3 — GoPuff (Drive) zone-arrival, recognize-only (dev decision 2026-07-07).
+        // Anchor strings are grounded (verbatim from issue #501's 2026-06-15 deep-dive over the
+        // real 06-14 captures), but the raw capture JSON itself was never committed to
+        // snapshots/INBOX before this build — only GoPuffRecognitionTest's hand-built UiNode
+        // covers it today. NOTE the anchors are NOT GoPuff-unique (every regular
+        // pickup_pre_arrival tree carries them); the rule leans on priority order + its rejects,
+        // so a real capture matters doubly here. Shrink this when one lands in the corpus.
+        "doordash:pickup_zone_arrival",
+        "doordash:safety",
+        "doordash:shopping_checkout",
+        // ---- Uber ----
+        // First captures landed 2026-07-18/19 (home_dashboard, splash); active_trip +
+        // awaiting_offer landed 2026-07-19. The 2026-07-21 dash (second Uber attempt) closed the
+        // rest: offer, earnings_activity, session_summary, customer_chat, delivery_confirmation,
+        // and pickup_verification_items all landed corpus. The uber.screen.offer "Offer -
+        // {storeName}" effect template was a dead effect-arg on the fielded frames; #813 gave the
+        // rule a top-level storeName parse so it now interpolates (pin removed from
+        // knownDeadArgTemplates).
+        //
+        // #941 note: platform-keying corrected the ATTRIBUTION of six of these. The pre-#941
+        // intent-only pin listed `photo_capture`, `pickup_verification_info`,
+        // `pickup_verification_pin`, `shop_and_pay_checkout` and `shop_and_pay_list` under a
+        // "DoorDash" comment header; they are declared by the UBER ruleset, and DoorDash's own
+        // same-named surfaces are covered. The gap's SIZE is unchanged (14 → 14): no
+        // cross-platform folder was masking a real gap today, so nothing was added to this pin.
+        // What changed is that it can no longer happen silently — the next Uber rule that
+        // borrows a DoorDash-covered intent name will show up here.
+        "uber:photo_capture",
+        "uber:pickup_verification_info",
+        "uber:pickup_verification_pin",
+        "uber:post_trip",
+        "uber:shop_and_pay_checkout",
+        "uber:shop_and_pay_list",
+    )
+
+    @Test
+    fun `screen-rule intent corpus coverage only ratchets up`() {
+        val rules = compileProductionScreenRules()
+
+        // Declared: every (platform, intent) the shipped screen rules can produce.
+        val declared = rules
+            .flatMap { rule ->
+                val wire = rule.id.substringBefore('.')
+                rule.branches.mapNotNull { it.intent }
+                    // blocked, never parsed — no goldens by design
+                    .filterNot { it.startsWith("sensitive") }
+                    .map { "$wire:$it" }
+            }
+            .toSet()
+
+        // Covered: what the corpus actually demonstrates, per platform partition.
+        val wires = rules.map { it.id.substringBefore('.') }.toSet()
+        val covered = mutableSetOf<String>()
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((_, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    for (wire in wires) {
+                        val intent = screenRuleset.matchFirst(node, platformWire = wire)?.intent
+                        if (intent != null) covered += "$wire:$intent"
+                    }
+                }
+            }
+        }
+
+        assertEquals(
+            "Corpus coverage gap changed. platform:intent pairs with no corpus behind them must " +
+                "only shrink — add corpus for closed gaps (and delete them from " +
+                "knownUncoveredIntents), and ship corpus with new intents instead of growing " +
+                "the pin. NOTE the key is platform-scoped (#941): a DoorDash-populated folder " +
+                "no longer marks the same-named Uber intent covered.",
+            knownUncoveredIntents,
+            declared - covered,
+        )
+    }
+
+    // =========================================================================
+    // 3. dedupeKey template lint (the #427 class)
+    // =========================================================================
+
+    /**
+     * Dead dedupeKey templates already known (ratchet — may only shrink):
+     * - `delivery_summary_collapsed:totalPay` — dedupeKeys are scanned
+     *   POST-resolution here, so a `{field}` token only reaches this lint on a
+     *   frame where the field parsed null (it survived interpolation). Most
+     *   collapsed cards DO parse `totalPay` (it resolves and never registers),
+     *   but two expand-only corpus frames render no `final_value`, so their
+     *   `delivery-ss-collapsed-{totalPay}` survives and pins this entry. The
+     *   `{totalPay}` parse is NOT dead — do not delete it; this mirrors the
+     *   same-key entry in [knownDeadArgTemplates]. (#801: 0.230.0 also dropped
+     *   the `earnings_ticker` id, so the collapsed dedupeKey was retired from
+     *   `{totalPay}-{sessionEarnings}` to `{totalPay}` — keeping the
+     *   `{sessionEarnings}` half would have made the new 0.230.0 frames, which
+     *   parse `sessionEarnings` null, register a *new* dead
+     *   `collapsed:sessionEarnings` entry; dropping it is what keeps this set
+     *   unchanged.)
+     * (The third original entry, `offer_popup:offerHash`, was the #427 bug —
+     * fixed by the reserved `{parsedHash}` token, resolved post-factory by the
+     * classifier via [DedupeTokens].)
+     * (`delivery_summary_expanded:sessionEarnings` was the mirror-image dead half on the
+     * EXPANDED rule — retired by #819, same treatment as #801's collapsed-rule fix above:
+     * the expanded dedupeKey dropped `{sessionEarnings}` in favour of `{totalPay}` alone,
+     * so the field no longer appears in any dedupeKey template and can't register here
+     * regardless of its parse outcome. The `sessionEarnings` parse itself is untouched —
+     * still id-anchored, still gracefully null on 0.230.0 — it just no longer drives
+     * dedupe.)
+     * (`delivery_summary_expanded:totalPay` joined the set with the 2026-08-24 corpus intake —
+     * NOT a rule change, a fielded PLATFORM change: DoorDash **8.93.7** re-rendered the summary
+     * sheet with NO money-bearing view ids at all. **#1029 re-anchored it and the pin is gone**:
+     * the rule now falls back to the currency-shaped sibling of the 'This offer' row, which every
+     * expanded fixture in the corpus — 8.93.7 included — resolves.
+     * The `delivery_summary_collapsed:totalPay` entry above deliberately did NOT come off with it,
+     * against the expectation recorded here before the work: the two are dead for DIFFERENT
+     * reasons. The expanded one was version rot, which #1029 fixed. The collapsed one is the
+     * CORPUS artifact described in its own bullet — two truncated 2026-01-28 mid-render captures
+     * (`20260128_173245_145`/`_150`) that carry no `final_value` AND nest 'This offer' as the sole
+     * child of its `section_title_container`, so it has no sibling to scan. Nothing about the
+     * fielded layout is broken there; the frames are half-laid-out. Fixing it would mean anchoring
+     * on something those frames actually render, which is a corpus question, not a rot one.)
+     * (`dash_summary:sessionDurationMillis` joined the set with **#1032**, and is the
+     * `delivery_summary_collapsed:totalPay` shape exactly — a CORPUS artifact, not a dead
+     * parse. 15 of the folder's 16 fixtures resolve the field (the 8.93.7 specimen among
+     * them, at 1 hr 58 min); the sole holdout is the truncated `2026-02-07_17-30-17`
+     * capture, whose tree carries no 'Total online time' row at all. It never registered
+     * before because the rule declared `fallback: 0` — #1032 deleted that, since a
+     * fabricated 0-millisecond dash is exactly the #936/#1030 shape the money side reads
+     * as a measurement, and `SessionEndedFields.sessionDurationMillis` is nullable for
+     * precisely this reason. The #801/#819 alternative — retiring `{sessionDurationMillis}`
+     * out of the dedupeKey — was REJECTED here: those retirements followed the PLATFORM
+     * dropping a field, whereas DoorDash still renders online time on every current sheet,
+     * so weakening a live dedupe key to satisfy one stale fixture would trade a real
+     * runtime property for a test-set entry. Pinning records the truth: on a frame that
+     * renders no duration, the key stays partly literal.)
+     * Entries are "snapshots/<folder>/<file>|<ruleId>|<field>" (#1045).
+     */
+    private val knownDeadDedupeTemplates = setOf(
+        // #1032 — see the KDoc above: one truncated 2026-02-07 fixture renders no
+        // 'Total online time' row, and the fabricated `fallback: 0` that used to mask
+        // that is gone.
+        "snapshots/dash_summary/2026-02-07_17-30-17__DASH_SUMMARY_SCREEN__182b139b.json|doordash.screen.dash_summary|sessionDurationMillis",
+        "snapshots/delivery_summary_collapsed/20260128_173245_145_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+        "snapshots/delivery_summary_collapsed/20260128_173245_150_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+    )
+
+    @Test
+    fun `dedupeKey templates reference fields the rule actually parses`() {
+        val template = Regex("\\{(\\w+)\\}")
+        // Scan post-resolution per fixture: a regression on ANY additional frame must
+        // grow the observed set, even if another frame already pins the same rule/field.
+        val dead = mutableSetOf<String>()
+        val exampleKey = mutableMapOf<String, String>()
+
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    screenRuleset.matchFirst(node)
+                } ?: continue
+                for (effect in result.effects) {
+                    val dk = effect.dedupeKey ?: continue
+                    for (m in template.findAll(dk)) {
+                        val field = m.groupValues[1]
+                        // Reserved tokens resolve post-factory in the
+                        // classifier (DedupeTokens, #427) — never raw fields.
+                        if (field in DedupeTokens.RESERVED_FIELD_NAMES) continue
+                        val key = "snapshots/${dir.name}/$filename|${result.ruleId}|$field"
+                        if (result.fields[field] == null) dead += key
+                        exampleKey.putIfAbsent(key, dk)
+                    }
+                }
+            }
+        }
+
+        assertRatchet(
+            "Dead dedupeKey templates changed (a {field} token that survived interpolation on the " +
+                "named FIXTURE — the field parsed null there, so the key stays partly literal; the " +
+                "#427/#433 class, pinned per fixture since #1045). Fixed one? Remove it from " +
+                "knownDeadDedupeTemplates. A NEW fixture here? The rule regressed on that frame — fix the rule.",
+            knownDeadDedupeTemplates,
+            dead,
+            exampleKey::get,
+        )
+    }
+
+    // =========================================================================
+    // 4. Effect-arg {field} template lint (the #606 class)
+    // =========================================================================
+
+    /**
+     * Effect-arg templates already known to leave a literal `{field}` in the
+     * saved string on at least one corpus frame (ratchet — may only shrink,
+     * same pattern as [knownDeadDedupeTemplates] above).
+     *
+     * Semantics (differs from the dedupeKey lint's wording): effect args are
+     * scanned POST-resolution — a `{token}` survives in the value ONLY on a
+     * frame where that field parsed null and so did not interpolate. So a key
+     * lands here iff its template failed to interpolate on ≥1 corpus frame,
+     * which is the right bar for a filename (a `Delivery - {totalPay}.png` on
+     * ANY frame is a broken name on that frame).
+     *
+     * - `doordash.screen.delivery_summary_collapsed:totalPay` — the collapsed
+     *   receipt parses `totalPay` non-null on most frames (it's usually behind
+     *   the expand but present on the collapsed card too), yet a couple of
+     *   corpus frames lack it, and each of THOSE saves a literal
+     *   `Delivery - {totalPay}.png` at runtime — real #606-class instances.
+     *   Pre-existing; out of scope for #606 (which only touches `offer_popup`'s
+     *   prefix and the EffectMap double-fire). The `{totalPay}` parse is NOT
+     *   dead — do not delete it as cleanup; fix by making the collapsed prefix
+     *   use a field the rule parses on every frame, when the summary rules are
+     *   next touched.
+     * (`doordash.screen.offer_popup:storeName` was the #606 bug itself —
+     * `storeName` lives inside the per-order `orders[]` array, never at the
+     * rule's top level where template resolution reads from, so
+     * `"Offer - {storeName}"` saved every offer screenshot as the literal
+     * filename `Offer - {storeName}.png`. Fixed by switching to `{payAmount}`,
+     * a field the rule guarantees non-null via its `fieldNotNull` validator.)
+     * Entries are "snapshots/<folder>/<file>|<ruleId>|<field>" (#1045).
+     */
+    private val knownDeadArgTemplates = setOf(
+        // Two truncated 2026-01-28 mid-render captures render neither `final_value` nor a
+        // scannable 'This offer' sibling, so `DeliveryBreakdown - {totalPay}.png` still ships
+        // literal on THOSE frames. A corpus artifact, not rot — see [knownDeadDedupeTemplates].
+        "snapshots/delivery_summary_collapsed/20260128_173245_145_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+        "snapshots/delivery_summary_collapsed/20260128_173245_150_DELIVERY_SUMMARY_COLLAPSED.json|doordash.screen.delivery_summary_collapsed|totalPay",
+        // (`delivery_summary_expanded:totalPay` was here from the 2026-08-24 intake and came OFF
+        // with #1029: the 8.93.7 id-less receipt now resolves `{totalPay}` through the
+        // 'This offer' sibling scan, so no expanded frame leaves the token unresolved.)
+        // uber.screen.offer:storeName was FIXED in #813: the rule now parses a
+        // top-level storeName (scoped to the offer card) so "Offer - {storeName}"
+        // interpolates on every fielded offer frame. Pin removed (the lint asserts
+        // known == dead, so a stale pin fails).
+    )
+
+    @Test
+    fun `effect arg templates reference fields the rule actually parses`() {
+        val template = Regex("\\{(\\w+)\\}")
+        // A (fixture, ruleId, field) whose {token} SURVIVED resolution in an effect arg
+        // on ≥1 corpus frame — i.e. the template failed to interpolate there and
+        // the saved string would carry a literal `{field}`. Args are scanned
+        // post-resolution, so a surviving token IS the failure (no non-null
+        // frame can leave the token behind). Mirrors the dedupeKey lint but
+        // scans every effect ARG value (screenshot prefix, bubble text, log
+        // payload, …) — the #606 bug (`"Offer - {storeName}"`) lived in a
+        // `prefix` arg the dedupeKey-only lint never looked at.
+        val dead = mutableSetOf<String>()
+        val exampleArg = mutableMapOf<String, String>()
+
+        val base = File("src/test/resources/snapshots")
+        val dirs = base.listFiles { f -> f.isDirectory && f.name !in SKIP }
+            ?.sortedBy { it.name } ?: emptyList()
+        for (dir in dirs) {
+            for ((filename, node, _) in TestResourceLoader.loadSnapshots("snapshots/${dir.name}")) {
+                val result = TransformRegistry.withClock(FIXED_NOW_MS, FIXED_ZONE) {
+                    screenRuleset.matchFirst(node)
+                } ?: continue
+                for (effect in result.effects) {
+                    for (argValue in effect.args.values) {
+                        for (m in template.findAll(argValue)) {
+                            // Any surviving token is a violation. Reserved tokens
+                            // (DedupeTokens, #427) resolve for dedupeKey but NOT
+                            // for args — a `{parsedHash}` in a prefix would ship
+                            // literal, so it must be flagged here, not skipped.
+                            val field = m.groupValues[1]
+                            val key = "snapshots/${dir.name}/$filename|${result.ruleId}|$field"
+                            dead += key
+                            exampleArg.putIfAbsent(key, argValue)
+                        }
+                    }
+                }
+            }
+        }
+
+        assertRatchet(
+            "Dead effect-arg {field} templates changed (a screenshot/bubble/log template that " +
+                "left a literal {field} in the saved string on ≥1 corpus frame — i.e. failed to " +
+                "interpolate, the #606 class). Fixed one? Remove it from " +
+                "knownDeadArgTemplates. Introduced one? Fix the rule.",
+            knownDeadArgTemplates,
+            dead,
+            exampleArg::get,
+        )
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private fun assertRatchet(
+        label: String,
+        pinned: Set<String>,
+        observed: Set<String>,
+        example: (String) -> String?,
+    ) {
+        assertEquals(
+            label + "\n" + observed.sorted().joinToString("\n") { "  $it (e.g. '${example(it)}')" },
+            pinned,
+            observed,
+        )
+    }
+
+    private fun compileProductionScreenRules(): List<CompiledRule<UiNode>> {
+        val dir = File(TestRulesetFactory.rulesDir)
+        val all = mutableListOf<CompiledRule<UiNode>>()
+        dir.listFiles { f -> f.extension == "json" }?.forEach { file ->
+            val root = Json.parseToJsonElement(file.readText()).jsonObject
+            (root["screens"] as? JsonArray)
+                ?.let { all += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
+        }
+        return all
+    }
+}

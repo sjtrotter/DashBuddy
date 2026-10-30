@@ -9,7 +9,7 @@ issues: #1054
   pause-safety deadline is now real state rather than a coroutine in memory, so it is re-armed on
   restore: before this, a restore into Paused left the dash with no timer of any kind and a pocketed
   phone kept the session alive indefinitely, which the next morning's dash then RESUMED.
-  **On-dash:** pause the dash, force-stop DashBuddy while the pause sheet is up, relaunch. The HUD
+  **On-dash:** pause the dash, force-stop gig.log while the pause sheet is up, relaunch. The HUD
   must read PAUSED, and stay that way until you actually bring DoorDash back online. Then do it
   again and simply let the DoorDash countdown run out with the app relaunched but idle. **Two
   separate things happen, about ten seconds apart** — the safety net fires ~1 s after the countdown

@@ -1,0 +1,320 @@
+package cloud.trotter.log.gig.ui.main
+
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import cloud.trotter.log.gig.ui.main.analytics.AnalyticsScreen
+import cloud.trotter.log.gig.ui.main.analytics.SessionDetailScreen
+import cloud.trotter.log.gig.ui.main.dashboard.DashboardScreen
+import cloud.trotter.log.gig.ui.main.navigation.Screen
+import cloud.trotter.log.gig.ui.main.plan.WeeklyPlanScreen
+import cloud.trotter.log.gig.ui.main.playbook.PlaybookScreen
+import timber.log.Timber
+import cloud.trotter.log.gig.ui.main.ratings.RatingsScreen
+import cloud.trotter.log.gig.ui.main.settings.AboutScreen
+import cloud.trotter.log.gig.ui.main.settings.garage.GarageScreen
+import cloud.trotter.log.gig.ui.main.settings.garage.VehicleAddScreen
+import cloud.trotter.log.gig.ui.main.settings.garage.VehicleDetailsScreen
+import cloud.trotter.log.gig.ui.main.settings.EconomySettingsScreen
+import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
+import cloud.trotter.log.gig.feature.settings.DataExportScreen
+import cloud.trotter.log.gig.feature.settings.DeveloperSettingsScreen
+import cloud.trotter.log.gig.feature.settings.EvidenceSettingsScreen
+import cloud.trotter.log.gig.feature.settings.GeneralSettingsScreen
+import cloud.trotter.log.gig.feature.settings.PlatformSettingsScreen
+import cloud.trotter.log.gig.ui.main.settings.SettingsHomeScreen
+import cloud.trotter.log.gig.feature.settings.StrategySettingsScreen
+import cloud.trotter.log.gig.ui.main.setup.consent.DebugEventReceiptLoading
+import cloud.trotter.log.gig.ui.main.setup.consent.DebugEventReceiptShell
+import cloud.trotter.log.gig.ui.main.setup.consent.EventReceiptConsentViewModel
+import cloud.trotter.log.gig.ui.main.setup.consent.FrontDoorViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
+import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    /**
+     * Deep-link target route pushed by an external launcher (the bubble's "Vehicle" just-in-time
+     * action, #693). Held in [MainShellViewModel]'s SavedStateHandle (#1151 review MM4) so a route
+     * waiting behind the debug block survives recreation; delivered once, then cleared.
+     */
+    private val shell: MainShellViewModel by viewModels()
+
+    /**
+     * #1151 review LL6 — the front door's deferral generation lives here (activity-scoped, survives
+     * rotation); [onStop] bumps it only on a REAL departure from the foreground.
+     */
+    private val frontDoor: FrontDoorViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        // Consume-once (#693 review F2b): getIntent() is sticky across recreation — without
+        // removing the extra, a rotation re-reads it in the new instance's onCreate and pushes a
+        // duplicate destination onto the restored back stack.
+        shell.offer(intent?.getStringExtra(EXTRA_ROUTE))
+        intent?.removeExtra(EXTRA_ROUTE)
+
+        setContent {
+            GigLogTheme {
+                val navController = rememberNavController()
+
+                // #1151 review LL4 — the debug decline gates the whole SHELL, not one screen: while
+                // `DEBUG && DECLINED` (the pure buildEventReceiptConsentState) the block replaces
+                // EVERY destination, deep links included (a pending route waits until unblocked).
+                // The one allowed way forward is the Automation & Consent screen, rendered inside
+                // the block host, plus Exit. The bubble HUD is a separate service and keeps running.
+                val eventReceiptViewModel: EventReceiptConsentViewModel = hiltViewModel()
+                val eventReceipt by eventReceiptViewModel.uiState.collectAsStateWithLifecycle()
+                // MM3: in DEBUG the shell fails CLOSED until the value is read (release: never).
+                if (eventReceipt.loading) {
+                    DebugEventReceiptLoading(onExit = { finishAffinity() })
+                    return@GigLogTheme
+                }
+                if (eventReceipt.blocked) {
+                    DebugEventReceiptShell(onExit = { finishAffinity() })
+                    return@GigLogTheme
+                }
+
+                // Deliver a deep-link route once, then clear it (#693 vehicle action). This is
+                // composed only AFTER the loading/blocked early returns above — composition order
+                // is the one gate, so a route waits (parked, MM4) behind the debug gate (NN7).
+                val route by shell.pendingRoute.collectAsStateWithLifecycle()
+                LaunchedEffect(route) {
+                    shell.deliver {
+                        // #693 review F3: MainActivity is exported (launcher) — a forged extra
+                        // carrying a non-route string would crash navigate() with
+                        // IllegalArgumentException. Fail closed: navigate only to known routes.
+                        if (it in Screen.allRoutes) navController.navigate(it)
+                        else Timber.tag("Main").w("Dropped unknown deep-link route (#693)")
+                    }
+                }
+
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Dashboard.route,
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+
+                        // --- MAIN DASHBOARD ---
+                        composable(Screen.Dashboard.route) {
+                            DashboardScreen(
+                                onNavigate = { route -> navController.navigate(route) },
+                                onNavigateToSettings = {
+                                    navController.navigate(Screen.SettingsHome.route)
+                                },
+                                onNavigateToWizard = { // <-- UPDATED CALLBACK
+                                    navController.navigate(Screen.Wizard.route)
+                                }
+                            )
+                        }
+
+                        // --- RATINGS (#316) ---
+                        composable(Screen.Ratings.route) {
+                            RatingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // --- ANALYTICS HUB (#315 H1 — Money tab v1) ---
+                        composable(Screen.Analytics.route) {
+                            AnalyticsScreen(
+                                onBack = { navController.popBackStack() },
+                                onExportCsv = { navController.navigate(Screen.DataExport.route) },
+                                onOpenSession = { sessionId ->
+                                    navController.navigate(Screen.SessionDetail.route(sessionId))
+                                }
+                            )
+                        }
+
+                        // --- WEEKLY PLAN (#981 — the Sunday notification's deep-link target) ---
+                        composable(Screen.WeeklyPlan.route) {
+                            WeeklyPlanScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // --- PLAYBOOK (#1024 — the next move: plan progress, heatmap, stores) ---
+                        composable(Screen.Playbook.route) {
+                            PlaybookScreen(
+                                onBack = { navController.popBackStack() },
+                                onOpenPlan = { navController.navigate(Screen.WeeklyPlan.route) }
+                            )
+                        }
+
+                        // --- PER-DASH DRILL-DOWN (#650 — read-only session detail) ---
+                        composable(
+                            Screen.SessionDetail.route,
+                            arguments = listOf(
+                                navArgument(Screen.SessionDetail.ARG_SESSION_ID) {
+                                    type = NavType.StringType
+                                }
+                            )
+                        ) {
+                            SessionDetailScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // --- INTERACTIVE WIZARD FLOW ---
+                        composable(Screen.Wizard.route) {
+                            WizardScreen(
+                                onComplete = {
+                                    // Pops the wizard off the stack, returning to the Dashboard
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+
+                        // ========================================================
+                        // SETTINGS HIERARCHY
+                        // ========================================================
+
+                        // 1. Settings Home (The Menu)
+                        composable(Screen.SettingsHome.route) {
+                            SettingsHomeScreen(
+                                onNavigate = { route -> navController.navigate(route) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        // 1.1. About screen
+                        composable(Screen.AboutSettings.route) {
+                            AboutScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 2. Strategy (The Visualizer)
+                        composable(Screen.StrategySettings.route) {
+                            StrategySettingsScreen()
+                        }
+
+                        // 3. Evidence Locker
+                        composable(Screen.EvidenceSettings.route) {
+                            EvidenceSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3a. Export Data (CSV, #319)
+                        composable(Screen.DataExport.route) {
+                            DataExportScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3c. Automation & Consent (capability grants, #422)
+                        composable(Screen.ConsentSettings.route) {
+                            CapabilityConsentScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3b. Personal Economy (operating costs, #145)
+                        composable(Screen.EconomySettings.route) {
+                            EconomySettingsScreen(
+                                onBack = { navController.popBackStack() },
+                                onOpenGarage = { navController.navigate(Screen.Garage.route) },
+                                onOpenVehicle = { id -> navController.navigate(Screen.VehicleEdit.route(id)) },
+                            )
+                        }
+
+                        composable(Screen.Garage.route) {
+                            GarageScreen(
+                                onBack = { navController.popBackStack() },
+                                onAdd = { navController.navigate(Screen.VehicleAdd.route) },
+                                onEdit = { id -> navController.navigate(Screen.VehicleEdit.route(id)) },
+                            )
+                        }
+                        composable(Screen.VehicleAdd.route) {
+                            VehicleAddScreen(onDone = { navController.popBackStack() })
+                        }
+                        composable(Screen.VehicleEdit.route,
+                            arguments = listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType }),
+                        ) {
+                            VehicleDetailsScreen(onDone = { navController.popBackStack() },
+                                onAddVehicle = { navController.navigate(Screen.VehicleAdd.route) })
+                        }
+
+                        // 4. General Settings
+                        composable(Screen.GeneralSettings.route) {
+                            GeneralSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 5. Developer Options — the field-experiment switches (#867).
+                        composable(Screen.DeveloperSettings.route) {
+                            DeveloperSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 6. Platform / Gig Apps
+                        composable(Screen.PlatformSettings.route) {
+                            PlatformSettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) frontDoor.onBackgrounded()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        shell.offer(intent.getStringExtra(EXTRA_ROUTE))
+        intent.removeExtra(EXTRA_ROUTE)
+    }
+
+    companion object {
+        /** Extra carrying a [Screen.route] to open on launch (the bubble's deep-link actions, #693). */
+        const val EXTRA_ROUTE = "cloud.trotter.log.gig.extra.ROUTE"
+
+        /**
+         * Build an [Intent] that opens [MainActivity] on [route]. Used by the bubble overlay (a
+         * separate task) to deep-link into settings, so it carries [Intent.FLAG_ACTIVITY_NEW_TASK].
+         */
+        fun routeIntent(context: Context, route: String): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                // SINGLE_TOP (#693 review F2a): without it, standard-launchMode + CLEAR_TOP
+                // DESTROYS an open MainActivity and delivers to a fresh instance's onCreate —
+                // onNewIntent never fires and the user's back stack is lost on every Vehicle tap.
+                // With it, the single-activity app's task-top instance receives onNewIntent live.
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+                putExtra(EXTRA_ROUTE, route)
+            }
+    }
+}

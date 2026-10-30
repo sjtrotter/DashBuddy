@@ -1,4 +1,4 @@
-# App copy style (DashBuddy)
+# App copy style (gig.log)
 
 Adopted 2026-10-06 from tropes.fyi (The Writing Whip, Ossama Chaib, v0.1.0) and Oxide RFD 576 §LLMs as writers.
 The full prose discipline is the dev's `prose-whip` skill; this file is the subset that governs user-facing copy:
@@ -37,7 +37,7 @@ The full prose discipline is the dev's `prose-whip` skill; this file is the subs
 ## Write for a reader who is not technical
 
 The dasher is not a developer (dev, 2026-10-29, #1407). Name what the app does, never how it is built: "on your phone",
-not "on-device"; "saved as a code, not the name itself", not "hashed"; "screens DashBuddy doesn't recognize", not
+not "on-device"; "saved as a code, not the name itself", not "hashed"; "screens gig.log doesn't recognize", not
 "UNKNOWN screens"; "test build", not "debug build". Android's own setting names stay exact. A privacy text keeps every
 fact it states, in short sentences; it never promises more than the code does.
 

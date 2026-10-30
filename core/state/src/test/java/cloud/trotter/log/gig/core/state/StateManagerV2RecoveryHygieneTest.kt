@@ -1,0 +1,670 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.core.database.observation.ObservationDao
+import cloud.trotter.log.gig.core.database.observation.ObservationEntity
+import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotDao
+import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
+import cloud.trotter.log.gig.domain.capture.ReplayMetadata
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.TimeoutType
+import cloud.trotter.log.gig.domain.settings.GraceConfig
+import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.Job
+import cloud.trotter.log.gig.domain.state.FlowRegion
+import cloud.trotter.log.gig.domain.state.Mode
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.DestructiveKind
+import cloud.trotter.log.gig.domain.state.PendingDestructive
+import cloud.trotter.log.gig.domain.state.PendingSessionPay
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.Regions
+import cloud.trotter.log.gig.domain.state.Session
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/**
+ * Crash recovery DROPS a restored dash-running-total park (#1029 review round 4), **at the live
+ * boundary** (#1052).
+ *
+ * A park is a read waiting out a settle window on the surface it came from — evidence, not a
+ * countdown. Nothing on the restore path re-arms its `SESSION_PAY_SETTLE` wake timer (the timer is
+ * an `AppEffect`, and an identical read after the restore keeps the deadline without scheduling
+ * anything), so a restored park either sits forever or is committed by whatever frame happens to
+ * land past its deadline — minting a pre-crash mid-spin figure as the dasher's earnings.
+ *
+ * WHERE that drop happens is the #1052 correction. Scrubbing the SNAPSHOT and then replaying the
+ * tail over it gets both halves wrong: the replay stops being faithful (a park whose commit timer
+ * sits in the tail committed live, and would not commit again through a cleaned base), and a park a
+ * TAIL frame re-creates survives into the installed state with a `ScheduleTimeout` the recovery
+ * fold really does arm — `ScheduleTimeout` is not an external effect. So the tail replays against
+ * the snapshot exactly as recorded and the FINAL state is what gets scrubbed; the
+ * recovery-scheduled timer then finds no park and no-ops.
+ *
+ * **Round 2 adds the other half: the drop must be DURABLE.** Installing a cleaned state in memory
+ * leaves the snapshot on disk carrying the park, so the NEXT restart — with no ordinary snapshot
+ * written in between, which is the normal case — replays it over a journal tail that has since
+ * grown, and a live frame past the deadline commits it after all. `restoreState` therefore
+ * checkpoints the cleaned state as the next replay base.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class StateManagerV2RecoveryHygieneTest {
+
+    private val settle = GraceConfig.SESSION_PAY_SETTLE_MS
+    private val t0 = 10_000L
+
+    /**
+     * A snapshot table whose first [failures] inserts throw — the #1052 round-3 G3 case. The
+     * recovery checkpoint is the write that makes the park hygiene durable, so a swallowed failure
+     * silently reopens the double-recovery hole; [attempts] is what proves the retry happened.
+     */
+    private class FlakySnapshotDao(
+        seed: AppStateSnapshotEntity,
+        private val failures: Int,
+        /** Called on every insert attempt, before it succeeds or fails. */
+        private val onAttempt: suspend (attempt: Int) -> Unit = {},
+    ) : AppStateSnapshotDao {
+        private val rows = LinkedHashMap<Long, AppStateSnapshotEntity>()
+        var attempts = 0
+            private set
+
+        init {
+            rows[seed.correlationVersion] = seed
+        }
+
+        override suspend fun insert(entity: AppStateSnapshotEntity) {
+            attempts++
+            onAttempt(attempts)
+            if (attempts <= failures) throw IllegalStateException("snapshot table unavailable")
+            rows[entity.correlationVersion] = entity
+        }
+
+        override suspend fun latest(): AppStateSnapshotEntity? =
+            rows.values.maxByOrNull { it.correlationVersion }
+
+        override suspend fun pruneOlderThan(cutoff: Long) {}
+    }
+
+    /**
+     * A pre-crash state: $16.70 committed, and whatever [pending] the case needs parked on the
+     * idle pill.
+     *
+     * R0 is stamped `Idle` on DoorDash because that is what the pre-crash frame left behind, and a
+     * park is owned by (flow, PLATFORM): a snapshot whose R0 does not own the park would have it
+     * dropped by the stepper's own ownership rule on the first replayed observation, which would
+     * make the tail cases prove nothing about the hygiene's placement.
+     */
+    private val openJob = Job(jobId = "job-1", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 200L)
+
+    private fun parkedState(
+        cv: Long,
+        pending: PendingSessionPay? = PendingSessionPay(470.00, t0, t0 + settle, Flow.Idle),
+        // #1103: a receipt's total accumulates only for a job this session owns; the receipt
+        // fixtures pass a live job so the replay exercises the fold, not the ownership refusal.
+        activeJob: Job? = null,
+    ) = AppState(
+        regions = Regions(
+            flow = FlowRegion(
+                flow = Flow.Idle,
+                sourceRuleId = "doordash.screen.waiting_for_offer",
+                activePlatform = Platform.DoorDash,
+                lastObservedAt = t0,
+            ),
+            platforms = mapOf(
+                Platform.DoorDash to PlatformRegion(
+                    platform = Platform.DoorDash,
+                    mode = Mode.Online,
+                    session = Session("s1", startedAt = 100L, runningEarnings = 16.70),
+                    activeJob = activeJob,
+                    lastActedFlow = Flow.Idle,
+                    lastObservedAt = t0,
+                    pendingSessionPay = pending,
+                ),
+            ),
+        ),
+        timestamp = t0,
+        correlationVersion = cv,
+    )
+
+    /** An idle frame, optionally carrying a running-total read. */
+    private fun tailRow(cv: Long, timestamp: Long, sessionPay: Double? = null) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "accessibility.window",
+        ruleId = "doordash.screen.waiting_for_offer",
+        platform = Platform.DoorDash.name,
+        flow = Flow.Idle.name,
+        modeHint = Mode.Online.name,
+        parsedJson = StateJson.encodeToString<ParsedFields>(
+            ParsedFields.IdleFields(sessionPay = sessionPay),
+        ),
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
+    )
+
+    /** A delivery receipt — a row whose replay ACCUMULATES pay, so a double replay is visible. */
+    private fun receiptRow(cv: Long, timestamp: Long, totalPay: Double) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "accessibility.window",
+        ruleId = "doordash.screen.delivery_summary_expanded",
+        platform = Platform.DoorDash.name,
+        flow = Flow.PostTask.name,
+        modeHint = Mode.Online.name,
+        parsedJson = StateJson.encodeToString<ParsedFields>(
+            ParsedFields.PostTaskFields(totalPay = totalPay, sessionEarnings = null),
+        ),
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
+    )
+
+    /** The park's OWN `SESSION_PAY_SETTLE` wake timer, as the journal persisted it pre-crash. */
+    private fun settleTimerRow(cv: Long, timestamp: Long) = ObservationEntity(
+        occurredAt = timestamp,
+        sessionId = "s1",
+        pipelineId = "internal.timeout",
+        ruleId = null,
+        platform = Platform.DoorDash.name,
+        flow = null,
+        modeHint = null,
+        parsedJson = "{}",
+        captureId = null,
+        metadataJson = "{}",
+        correlationVersion = cv,
+        timeoutType = TimeoutType.SESSION_PAY_SETTLE.name,
+        payloadJson = StateJson.encodeToString(
+            InternalObsPayload(targetPlatform = Platform.DoorDash.wire),
+        ),
+    )
+
+    private fun newManager(
+        tail: List<ObservationEntity>,
+        dispatcher: CoroutineDispatcher,
+        snapshot: AppState = parkedState(cv = 7L),
+    ): StateManagerV2 = newManagerOn(
+        journalDao = FakeObservationDao(tail),
+        snapshotDao = FixedSnapshotDao(snapshotOf(snapshot)),
+        dispatcher = dispatcher,
+    )
+
+    /** The same manager over CALLER-OWNED persistence, so two restarts can share one disk. */
+    private fun newManagerOn(
+        journalDao: ObservationDao,
+        snapshotDao: AppStateSnapshotDao,
+        dispatcher: CoroutineDispatcher,
+    ): StateManagerV2 = recoveryManager(journalDao, snapshotDao, InlineEffectExecutor(dispatcher), dispatcher)
+
+    @Test
+    fun `a park whose commit timer is IN the tail commits exactly as it did live`() = runTest {
+        // #1052 (a): the replay must be FAITHFUL. This park stood its whole window pre-crash and
+        // its own `SESSION_PAY_SETTLE` timer — journalled like any other observation — is the next
+        // thing in the log. Scrubbing the snapshot first would replay a history in which that
+        // timer landed on nothing, so the restored state would show $16.70 where the live process
+        // showed $25.20: recovery inventing a different past, which is the one thing it may not do.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val manager = newManager(
+            tail = listOf(settleTimerRow(cv = 8L, timestamp = t0 + settle)),
+            dispatcher = dispatcher,
+            snapshot = parkedState(
+                cv = 7L,
+                pending = PendingSessionPay(25.20, t0, t0 + settle, Flow.Idle),
+            ),
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        val state = manager.state.value
+        assertEquals("the tail must actually have replayed", 8L, state.correlationVersion)
+        val region = state.regions.platforms[Platform.DoorDash]
+        assertEquals(
+            "the timer landed in the replay exactly as it landed live",
+            25.20,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+        assertNull("and the commit consumed the park", region?.pendingSessionPay)
+    }
+
+    @Test
+    fun `a park a TAIL frame re-created is dropped from the installed state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        // #1052 (b): the snapshot is clean, so nothing pre-crash is in play — the park here is
+        // minted BY the replay, and its `ScheduleTimeout` is not an external effect, so the
+        // recovery fold really arms it. Left standing, that timer would commit pre-crash evidence
+        // with no fresh screen behind it; dropping at the live boundary leaves it to no-op.
+        val manager = newManager(
+            tail = listOf(tailRow(cv = 8L, timestamp = t0 + 2_000L, sessionPay = 470.00)),
+            dispatcher = dispatcher,
+            snapshot = parkedState(cv = 7L, pending = null, activeJob = openJob),
+        )
+
+        manager.initialize()
+        runCurrent()
+
+        val state = manager.state.value
+        assertEquals("the tail must actually have replayed", 8L, state.correlationVersion)
+        val region = state.regions.platforms[Platform.DoorDash]
+        assertNull("a replay-minted park is pre-crash evidence too", region?.pendingSessionPay)
+        assertEquals(
+            "the pre-crash mid-spin read must not become the dasher's earnings",
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1052 round 2 — the drop has to be DURABLE, not merely installed
+    // =========================================================================
+
+    /** The live frame that lands after a recovery — no read, and NOT a snapshot point. */
+    private fun liveIdle(timestamp: Long) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = "doordash.screen.waiting_for_offer",
+        metadata = ReplayMetadata.EMPTY,
+        flow = Flow.Idle,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.IdleFields(sessionPay = null),
+    )
+
+    @Test
+    fun `a SECOND restart does not replay the park the first restart dropped`() = runTest {
+        // Two real managers over ONE disk. Restart 1 installs the cleaned state — but the snapshot
+        // row still carried the park, and the journal keeps growing, so restart 2 replayed that
+        // same park over a tail that now contained a frame past its deadline. The lazy expiry
+        // committed $470 and no later hygiene could undo it: a committed value is just the
+        // dasher's earnings. The checkpoint is what makes the cleaned state the next replay base.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L)))
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertNull(
+            "restart 1 drops the park as it always did",
+            first.state.value.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+        assertEquals(
+            "and CHECKPOINTS the cleaned state — exactly once per recovery",
+            1,
+            snapshotDao.inserts,
+        )
+
+        // An ordinary live frame lands past the park's deadline (t0 + settle = 13_000). cv=6 is
+        // neither a cadence multiple (5) nor a major transition, so NO ordinary snapshot is
+        // written — which is precisely the gap the second restart used to fall into.
+        first.dispatch(liveIdle(20_000L))
+        runCurrent()
+
+        assertEquals("the live frame really was journalled", 6L, first.state.value.correlationVersion)
+        assertEquals(
+            "and wrote no ordinary snapshot — the recovery checkpoint is the only one on disk",
+            1,
+            snapshotDao.inserts,
+        )
+
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        val region = second.state.value.regions.platforms[Platform.DoorDash]
+        assertEquals(
+            "the tail must actually have replayed on the second restart",
+            6L,
+            second.state.value.correlationVersion,
+        )
+        assertEquals(
+            "the pre-crash mid-spin read must not become the dasher's earnings two restarts later",
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+        assertNull("and nothing is parked to try again", region?.pendingSessionPay)
+        assertEquals("each recovery checkpoints once", 2, snapshotDao.inserts)
+    }
+
+    @Test
+    fun `a fresh start writes no checkpoint`() = runTest {
+        // The checkpoint belongs to recovery. With no snapshot to restore there is no cleaned
+        // state to make durable, and writing one would put an empty AppState at cv=0 on disk.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FakeSnapshotDao()
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("nothing was recovered, so nothing is checkpointed", 0, snapshotDao.inserts)
+        assertEquals(AppState().correlationVersion, manager.state.value.correlationVersion)
+    }
+
+    // =========================================================================
+    // #1052 round 3 — the replay stamps each row's TRUE correlation version
+    // =========================================================================
+
+    @Test
+    fun `a GAPPED tail checkpoints at the real journal boundary, so a receipt folds once`() = runTest {
+        // `StateMachine.step` numbers its result `prev + 1`, so a fold over N rows lands at
+        // `snapshot + N` — the true boundary only while the journal is gap-free. It is not:
+        // `ObservationJournal.append` is a fire-and-forget queue whose writer LOGS and drops a
+        // failed insert. Here rows 6 and 7 were lost, so the old fold ended at cv=7 while the
+        // journal's own last row was 9 — and since round 2 that undercount is CHECKPOINTED, i.e.
+        // made the next replay base. The next restart then re-consumed rows 8 and 9 and the
+        // receipt's pay accumulated a second time: $20 out of a $10 delivery.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(
+            listOf(
+                receiptRow(cv = 8L, timestamp = t0 + 1_000L, totalPay = 10.00),
+                tailRow(cv = 9L, timestamp = t0 + 2_000L),
+            ),
+        )
+        val snapshotDao = FakeSnapshotDao(snapshotOf(parkedState(cv = 5L, pending = null, activeJob = openJob)))
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertEquals(
+            "the replayed state is stamped with the LAST ROW's version, not snapshot + count",
+            9L,
+            first.state.value.correlationVersion,
+        )
+        assertEquals(
+            "and the checkpoint therefore lands at the real journal boundary",
+            9L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+        assertEquals(
+            "the receipt folded once",
+            10.00,
+            first.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.accumulatedDeliveryPay ?: Double.NaN,
+            0.0001,
+        )
+
+        // The second restart reads that checkpoint back. With the boundary at 9 the tail is empty;
+        // with the old undercounted 7 it replayed 8 and 9 all over again.
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        assertEquals(9L, second.state.value.correlationVersion)
+        assertEquals(
+            "a $10 receipt must not become $20 because two rows were lost before it",
+            10.00,
+            second.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.accumulatedDeliveryPay ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1052 round 3 — a failed checkpoint is retried once, then LOUD
+    // =========================================================================
+
+    @Test
+    fun `a checkpoint that fails once is retried and lands`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 1)
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("the first attempt threw, the retry ran", 2, snapshotDao.attempts)
+        val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)
+        assertNull(
+            "and the cleaned state really is the next replay base",
+            onDisk.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+    }
+
+    @Test
+    fun `a checkpoint that never lands is attempted twice and does not block the restore`() = runTest {
+        // Refusing to install a recovered state because the DB is failing would trade a bounded,
+        // STATED risk (an ERROR line saying the cleaned state is not durable) for total sensing
+        // loss. So it proceeds — and the snapshot on disk is left carrying the pre-crash park,
+        // which is exactly what the ERROR says. (Round 4 then keeps trying on the live path; this
+        // case is the RECOVERY path's own budget, with no live observation to retry on.)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = Int.MAX_VALUE)
+
+        val manager = newManagerOn(FakeObservationDao(emptyList()), snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+
+        assertEquals("one attempt, one retry — never a loop", 2, snapshotDao.attempts)
+        assertNull(
+            "the recovered state still installs, park dropped",
+            manager.state.value.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+        assertEquals(
+            "the committed total is untouched",
+            16.70,
+            manager.state.value.regions.platforms[Platform.DoorDash]
+                ?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1052 round 4 — a failed checkpoint is RETRIED until it lands
+    // =========================================================================
+
+    @Test
+    fun `a checkpoint that failed twice is retried on the next live observation and lands`() = runTest {
+        // Round 3 reported the failure at ERROR and moved on — but reporting is not repairing. Two
+        // failed inserts leave the PRE-hygiene snapshot as the replay base while the journal keeps
+        // growing, so the next restart replays the pre-crash park over a tail that now holds a
+        // frame past its deadline and commits $470. The journal and the snapshot live in the SAME
+        // database, so a journal append that persists is evidence the checkpoint can land too:
+        // every live observation retries it.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        // The live retry's insert is held open, so the journal writer gets every chance to run
+        // while it is in flight — it must have nothing to write yet.
+        val retryHeld = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = 2) { attempt ->
+            if (attempt == 3) retryHeld.await()
+        }
+
+        val first = newManagerOn(journalDao, snapshotDao, dispatcher)
+        first.initialize()
+        runCurrent()
+
+        assertEquals("recovery spent its two attempts and lost them both", 2, snapshotDao.attempts)
+        assertEquals(
+            "so the snapshot on disk is still the PRE-hygiene one",
+            5L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+
+        // An ordinary live frame — not a cadence multiple (5), not a major transition, so it
+        // writes no ordinary snapshot of its own. The retry is the only write here.
+        first.dispatch(liveIdle(20_000L))
+        runCurrent()
+        assertEquals("the live observation is retrying the checkpoint", 3, snapshotDao.attempts)
+        assertEquals(
+            "…and has NOT journalled itself while the retry is in flight (#1271 scenario 4): a live " +
+                "row on disk over the pre-hygiene snapshot would replay the stale park at a crash",
+            0, journalDao.since(0L).size,
+        )
+        retryHeld.complete(Unit)
+        runCurrent()
+        assertEquals("once the retry landed, the observation is journalled", 1, journalDao.since(0L).size)
+        assertEquals(
+            "and it landed at the RECOVERED version — REPLACING the pre-hygiene row (#1271 scenario 4: " +
+                "the drained recovered state, never the live step's, whose effects may not have run)",
+            5L,
+            snapshotDao.latest()!!.correlationVersion,
+        )
+        val onDisk = StateJson.decodeFromString<AppState>(snapshotDao.latest()!!.stateJson)
+        assertNull(
+            "carrying the cleaned state — which is the whole point of the checkpoint",
+            onDisk.regions.platforms[Platform.DoorDash]?.pendingSessionPay,
+        )
+
+        // Once it lands the retry disarms — a second live frame writes nothing.
+        first.dispatch(liveIdle(21_000L))
+        runCurrent()
+        assertEquals("a landed checkpoint is not re-written on every frame", 3, snapshotDao.attempts)
+
+        // And the restart the whole mechanism exists for reads the cleaned state back.
+        val second = newManagerOn(journalDao, snapshotDao, dispatcher)
+        second.initialize()
+        runCurrent()
+
+        val region = second.state.value.regions.platforms[Platform.DoorDash]
+        assertNull("nothing pre-crash is parked", region?.pendingSessionPay)
+        assertEquals(
+            "and the mid-spin figure never becomes the dasher's earnings",
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    @Test
+    fun `a checkpoint that never lands keeps retrying without failing the live path`() = runTest {
+        // The pathological DB. Sensing must keep working, the state must keep installing, and the
+        // retry must simply stay armed — one attempt per live observation, no ERROR per frame.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val journalDao = FakeObservationDao(emptyList())
+        val snapshotDao = FlakySnapshotDao(snapshotOf(parkedState(cv = 5L)), failures = Int.MAX_VALUE)
+
+        val manager = newManagerOn(journalDao, snapshotDao, dispatcher)
+        manager.initialize()
+        runCurrent()
+        assertEquals(2, snapshotDao.attempts)
+
+        manager.dispatch(liveIdle(20_000L))
+        runCurrent()
+        manager.dispatch(liveIdle(21_000L))
+        runCurrent()
+
+        assertEquals("one retry per live observation — never a loop inside one", 4, snapshotDao.attempts)
+        assertEquals(
+            "and the live path is unaffected: both frames stepped and journalled",
+            7L,
+            manager.state.value.correlationVersion,
+        )
+        val region = manager.state.value.regions.platforms[Platform.DoorDash]
+        assertNull("the installed state is still the cleaned one", region?.pendingSessionPay)
+        assertEquals(
+            16.70,
+            region?.session?.runningEarnings ?: Double.NaN,
+            0.0001,
+        )
+    }
+
+    // =========================================================================
+    // #1078 — the re-based destructive grace keeps what it absorbed
+    // =========================================================================
+
+    @Test
+    fun `a re-based destructive grace keeps its absorbed retire (pure hygiene)`() {
+        // `recoveryHygiene` re-bases a live destructive grace onto its REMAINING window; it must
+        // carry the absorbed evidence across, or a crash mid-grace would turn an honored teardown
+        // back into the T3 force-stamp the guard refuses — the #1078 loss, recreated by a restart.
+        val pend = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 100_000L,
+            deadline = 102_500L,
+            authoritative = true,
+            absorbedRetireSince = 99_000L,
+            wakeId = 3L,
+            windowFrom = 100_000L,
+        )
+        val restored = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.SessionEnded, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Online,
+                        session = Session("dash-A", startedAt = 10_000L),
+                        pendingDestructive = pend,
+                    ),
+                ),
+            ),
+            timestamp = 101_000L,
+        )
+
+        val cleaned = restored.recoveryHygiene(nowMs = 500_000L)
+        val rebased = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+
+        assertEquals(
+            "the absorbed retire survives the re-base (#1078)",
+            99_000L, rebased.absorbedRetireSince,
+        )
+        assertEquals("…serving only the window it had left", 501_500L, rebased.deadline)
+        assertEquals(500_000L, rebased.servedFrom)
+    }
+
+
+    @Test
+    fun `the re-based grace carries its absorbed retire deadline forward by the same delta`() {
+        // #1078 round 6: `absorbedRetireDeadline` is a FLOOR on the pending's own deadline, so it
+        // lives in the same clock. Left at its stale pre-crash wall value it is already in the past
+        // after any real downtime, and a summary RE-RENDER after the restore tightens straight
+        // through it — committing the honored completion earlier than the retire's window, which is
+        // the whole thing the floor exists to prevent.
+        val pend = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 201_000L,
+            deadline = 210_000L,
+            authoritative = true,
+            absorbedRetireSince = 200_000L,
+            absorbedRetireDeadline = 210_000L,
+            wakeId = 3L,
+            windowFrom = 201_000L,
+        )
+        val restored = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.SessionEnded, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Online,
+                        session = Session("dash-A", startedAt = 10_000L),
+                        pendingDestructive = pend,
+                    ),
+                ),
+            ),
+            timestamp = 202_000L,
+        )
+
+        val cleaned = restored.recoveryHygiene(nowMs = 500_000L)
+        val rebased = cleaned.regions.platforms.getValue(Platform.DoorDash).pendingDestructive!!
+
+        // 210 000 − 201 000 = 9 000 ms of window, 1 000 ms of it observed → 8 000 ms remaining.
+        assertEquals("the grace serves only the window it had left", 508_000L, rebased.deadline)
+        assertEquals(
+            "the absorbed floor moved by the SAME delta, so the distance between them is preserved",
+            pend.absorbedRetireDeadline!! + (rebased.deadline - pend.deadline),
+            rebased.absorbedRetireDeadline,
+        )
+        assertEquals(
+            "…and it is still a FLOOR, not something in the past",
+            rebased.deadline, rebased.absorbedRetireDeadline,
+        )
+        assertEquals(
+            "`absorbedRetireSince` is a historical domain instant and is NOT shifted (#732)",
+            200_000L, rebased.absorbedRetireSince,
+        )
+    }
+}

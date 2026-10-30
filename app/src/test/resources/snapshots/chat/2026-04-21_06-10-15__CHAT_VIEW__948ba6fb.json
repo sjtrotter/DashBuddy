@@ -415,7 +415,7 @@
                                                                         }
                                                                     },
                                                                     {
-                                                                        "text": "DashBuddy",
+                                                                        "text": "gig.log",
                                                                         "id": "com.google.android.apps.nexuslauncher:id/icon_title",
                                                                         "class": "android.widget.TextView",
                                                                         "isEnabled": true,
@@ -462,7 +462,7 @@
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "desc": "DashBuddy",
+                                                                        "desc": "gig.log",
                                                                         "id": "com.google.android.apps.nexuslauncher:id/snapshot",
                                                                         "class": "android.widget.FrameLayout",
                                                                         "isEnabled": true,

@@ -1,0 +1,81 @@
+package cloud.trotter.log.gig.state.effects
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
+import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.ui.bubble.BubbleManager
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import timber.log.Timber
+import java.time.Clock
+
+/**
+ * Handles the offer notification's **Accept / Decline** action buttons. Each fires the same
+ * `UiInput` intent the bubble buttons do → EffectMap → `PerformRuleAction` (aimed by the offer
+ * rule's bound target, #425) → verified accessibility click — so the dasher can act straight
+ * from the heads-up notification without opening the bubble (which can't auto-expand from the
+ * background; see #110 field test 2026-06-09).
+ *
+ * Uses [EntryPointAccessors] rather than `@AndroidEntryPoint` so we don't need the Hilt
+ * `super.onReceive()` call (which doesn't compile against the abstract receiver in Kotlin).
+ */
+class OfferActionReceiver : BroadcastReceiver() {
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface Deps {
+        fun stateManager(): StateManagerV2
+
+        /** The instant a tap is stamped at (#1271 seam; production binds the system clock). */
+        fun clock(): Clock
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val deps = EntryPointAccessors.fromApplication(context.applicationContext, Deps::class.java)
+        val uiInput = uiInputFrom(intent, deps.clock().millis()) ?: return
+        // #731 desk-observability: the offer hash (PII-safe by construction) lets a desk pull join
+        // this tap to the resolved OFFER_ACCEPTED/OFFER_DECLINED event's hash (#438 B4). Logged in
+        // FULL — the same rendering as OfferEffects' offerHash= lines — so the join is an exact
+        // grep, not a prefix special case.
+        Timber.tag("Effects").i(
+            "OfferActionReceiver: %s on %s (offer=%s)",
+            uiInput.action, uiInput.targetPlatform?.wire ?: "?", uiInput.offerHash ?: "?",
+        )
+        // #457: dismiss the heads-up immediately — the dasher acted. (Offer resolution also fires
+        // CancelOfferNotification, but cancel now so the banner/shade entry doesn't linger.)
+        // #438 B4: dismiss ONLY this offer's banner (per-offer id from the tap's own carried hash),
+        // not every offer heads-up — a concurrent/replacement offer keeps its banner.
+        NotificationManagerCompat.from(context)
+            .cancel(BubbleManager.offerNotificationId(uiInput.offerHash))
+        deps.stateManager().dispatch(uiInput)
+    }
+
+    companion object {
+        const val ACTION = "cloud.trotter.log.gig.action.OFFER_ACTION"
+        const val EXTRA_ACTION = "offer_action"
+        const val EXTRA_PLATFORM = "offer_platform"
+        const val EXTRA_OFFER_HASH = "offer_hash"
+
+        /**
+         * Map the broadcast extras to the dispatched [Observation.UiInput] (#438 item 8a). The acted
+         * offer's identity (platform wire + offerHash) rides the PendingIntent extras so the input
+         * targets the owning region — an Unknown-platform tap steps no region post-#682. Pure +
+         * Hilt-free so the dispatch shape is unit-testable without the receiver's entry-point lookup.
+         */
+        fun uiInputFrom(intent: Intent, nowMs: Long = System.currentTimeMillis()): Observation.UiInput? {
+            val action = intent.getStringExtra(EXTRA_ACTION) ?: return null
+            return Observation.UiInput(
+                timestamp = nowMs,
+                action = action,
+                targetPlatform = intent.getStringExtra(EXTRA_PLATFORM)?.let(Platform::fromWire),
+                offerHash = intent.getStringExtra(EXTRA_OFFER_HASH),
+            )
+        }
+    }
+}

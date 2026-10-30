@@ -1,0 +1,219 @@
+package cloud.trotter.log.gig.test.suites
+
+import cloud.trotter.log.gig.core.pipeline.CaptureBackstopCorpusTest
+import cloud.trotter.log.gig.core.pipeline.RuleIdLogSafetyTest
+import cloud.trotter.log.gig.core.pipeline.SensitiveMarkerAssetCoverageTest
+import cloud.trotter.log.gig.core.pipeline.accessibility.event.type.view.clicked.ClickClassifierTest
+import cloud.trotter.log.gig.core.pipeline.notification.NotificationClassifierTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.GoldenSnapshotRegressionTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.OfferPipelineTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.SensitiveSurfaceBlockTest
+import cloud.trotter.log.gig.core.pipeline.rules.CaptureRedactionCorpusTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberTripRadarBoardRedactTest
+import cloud.trotter.log.gig.core.pipeline.rules.CurrencyShapePinTest
+import cloud.trotter.log.gig.core.pipeline.rules.DashSummaryReanchorTest
+import cloud.trotter.log.gig.core.pipeline.rules.DeliverySummaryReanchorTest
+import cloud.trotter.log.gig.core.pipeline.rules.ClickRulesetTest
+import cloud.trotter.log.gig.core.pipeline.rules.DefaultRulesIntegrationTest
+import cloud.trotter.log.gig.core.pipeline.rules.ChatComposeRedactionTest
+import cloud.trotter.log.gig.core.pipeline.rules.DropoffBannerRedactParityTest
+import cloud.trotter.log.gig.core.pipeline.rules.DropoffGiftSheetRecognitionTest
+import cloud.trotter.log.gig.core.pipeline.rules.DropoffSheetRedactionParityTest
+import cloud.trotter.log.gig.core.pipeline.rules.GoPuffRecognitionTest
+import cloud.trotter.log.gig.core.pipeline.rules.PickupWaitArrivalRecognitionTest
+import cloud.trotter.log.gig.core.pipeline.rules.ReceiptAnchorTest
+import cloud.trotter.log.gig.core.pipeline.rules.PickupArrivedRedactParityTest
+import cloud.trotter.log.gig.core.pipeline.rules.NotificationRulesetTest
+import cloud.trotter.log.gig.core.pipeline.rules.ParseOutputGoldenTest
+import cloud.trotter.log.gig.core.pipeline.rules.ScreenRulesetTest
+import cloud.trotter.log.gig.core.pipeline.rules.SessionPayOwnershipTest
+import cloud.trotter.log.gig.core.pipeline.rules.TriageRulesTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberDeclineClickRuleTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberHomeDashboardOfflineEvidenceTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberIdleMapOfflineEvidenceTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberOfferExpiryOverlayTest
+import cloud.trotter.log.gig.core.pipeline.rules.UberOfferKindAndStackStoreTest
+import org.junit.runner.RunWith
+import org.junit.runners.Suite
+
+/**
+ * Recognition / ruleset regression suite.
+ *
+ * Runs everything that validates the JSON rulesets against the snapshot corpus
+ * and synthetic fixtures, WITHOUT touching the rest of the unit suite (state
+ * machine, DB, network, UI). Use it as the fast pre-PR check:
+ *
+ *     ./gradlew :app:testDebugUnitTest --tests "*AllMatchersSuite*"
+ *
+ * Side-effect-free by design: this is pure verification. The corpus *intake*
+ * tools — [cloud.trotter.log.gig.core.pipeline.recognition.matchers.InboxProcessorTest]
+ * (sorts INBOX) and
+ * [cloud.trotter.log.gig.core.pipeline.recognition.matchers.UnknownScreenAnalysisTest]
+ * (re-triages UNKNOWN, graduating newly-recognized screens) — mutate the corpus
+ * and are deliberately NOT members; run those when adding/triaging captures.
+ *
+ * - [GoldenSnapshotRegressionTest] — positive guard: every snapshot in an intent
+ *   folder still classifies as that folder (SENSITIVE: sensitive rule or scanner).
+ * - [NegativeCorpusStaysUnknownTest] — #941, the general NEGATIVE guard: every frame in the
+ *   committed `snapshots/UNKNOWN/negative/` corpus must still classify UNKNOWN under its own
+ *   platform partition, with a minimum-count floor so an emptied folder fails instead of
+ *   green-passing. Over-match is the dangerous direction (it forges state — #857/#874/#875/#858);
+ *   the three Uber evidence tests below are the rule-SPECIFIC instances of the same guard and
+ *   their fixtures are copied, not moved, into this corpus.
+ * - [ParseOutputGoldenTest] — parse-OUTPUT guard (#433): every snapshot's typed
+ *   fields match `snapshots/approved-parse-output.json` (regen deliberately with
+ *   `-DupdateParseGolden=true` and review the diff); plus the corpus-coverage
+ *   ratchet and the dead-dedupeKey-template lint.
+ * - [ScreenRulesetTest] / [ClickRulesetTest] / [NotificationRulesetTest] — the
+ *   ruleset compiles and the core predicates behave.
+ * - [TriageRulesTest] — synthetic fixtures for rules added from capture triage.
+ * - [UberDeclineClickRuleTest] — #786: real device click envelopes pin `uber.click.decline_offer`
+ *   onto the offer card's anonymous childless dismiss Button, and pin BOTH the accept CardView tap
+ *   (subtree-labelled, non-leaf) and the fielded permission-nag "Settings"/"Not now" buttons
+ *   (labelled, but otherwise predicate-identical to the X) as NOT matching it — the separability
+ *   the rule rests on. Plus per-predicate mutation coverage, so no predicate can be dropped
+ *   silently.
+ * - [DefaultRulesIntegrationTest] — end-to-end rule compilation/wiring.
+ * - [NotificationClassifierTest] / [ClickClassifierTest] — classifier behavior.
+ * - [CaptureRedactionCorpusTest] — the #598/#620 redact predicates mask injected
+ *   PII across the corpus + notification redact blocks mask name/body, keep store.
+ * - [CaptureBackstopCorpusTest] — the #624 recognized-frame customer-marker
+ *   backstop finds ZERO leaks over the redacted corpus (false-positive pin).
+ * - [ChatComposeRedactionTest] — #919: the chat compose box masks on the RECOGNIZED chat frame by id
+ *   AND id-less by `EditText` class (the runtime UNKNOWN scrub never runs there).
+ * - [DropoffBannerRedactParityTest] — #993 combined-frame belt: EVERY screen rule in the
+ *   dropoff section declares the `arriving_at_title` redact (a rule's redact protects only
+ *   the frames that rule wins, and the arrival CTA hands the banner-bearing frame around),
+ *   each one actually masks a real banner node, and the id is in the runtime
+ *   `CustomerTextMarkers.ID_MARKERS` SSOT so the UNKNOWN path is covered too.
+ * - [DropoffSheetRedactionParityTest] — #1122/#1123: the 8.98.5 drop-off sheet — mask parity of the
+ *   id-less bottom-bar name across `dropoff_pre_arrival` and `dropoff_workflow_sheet`, every fielded
+ *   render shape claimed and masked at the right grade, the anchor matrix, and the four 09-20 fixtures.
+ * - [SensitiveSurfaceBlockTest] — #1059: the dasher's OWN Persona selfie/ID-verification flow, the
+ *   Red Card wallet screen and the passport variant of the ID-scan camera are claimed by the
+ *   priority-0 `doordash.screen.sensitive.known` rule (not merely by the toxic scanner, which is all
+ *   [GoldenSnapshotRegressionTest]'s SENSITIVE arm requires), classify as `SensitiveFields` so the
+ *   shared content gate drops them before `CaptureWriter`, trip the rules-independent
+ *   [cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers] backstop on every text-bearing
+ *   frame — and, the over-match half, that the four new markers appear nowhere in the committed
+ *   non-sensitive corpus ("pay with your Red Card" is legitimate pickup copy).
+ * - [SensitiveMarkerAssetCoverageTest] — #762 D10: every `parse.as == "sensitive"` rule's text
+ *   anchor across ALL platforms' generated assets is independently caught by the rules-INDEPENDENT
+ *   [cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers] backstop (a documented,
+ *   shrink-only ledger excuses pre-existing DoorDash debt out of D10's Uber scope).
+ * - [UberIdleMapOfflineEvidenceTest] — #857 negative guard: real partially-rendered Uber
+ *   home captures (`fixtures/uber_idle_map_partial/`) must classify UNKNOWN, so
+ *   `uber.screen.idle_map` can never claim `modeHint: offline` from absence again.
+ * - [UberHomeDashboardOfflineEvidenceTest] — #874, the same guard one rule down: real
+ *   Uber home captures carrying only the bottom nav (or a Trip Details screen stacked over
+ *   the dashboard) — `fixtures/uber_home_dashboard_partial/` — must classify UNKNOWN, so
+ *   `uber.screen.home_dashboard` branch 3 can no longer claim offline from absence either.
+ * - [UberOfferExpiryOverlayTest] — #858: real captures of Uber's expiry overlay
+ *   ("This request is no longer available", rendered OVER the dimmed card inside
+ *   `primary_touch_area`) must classify UNKNOWN, so a dead request can never mint an
+ *   offer or poison `storeName`/`presentationKey`; plus the paired over-rejection
+ *   guard that a clean uber offer still classifies `offer` with a real store.
+ * - [OfferPipelineTest] — Layer 2 (#105): a real `offer_popup/` snapshot through the SAME
+ *   production ruleset, feeding the recognized `ParsedOffer` into `OfferEvaluator` and pinning the
+ *   resulting `OfferEvaluation` — proves the recognition→parse→evaluate wiring, not just the
+ *   evaluator math (Layer 1, `:domain`'s `OfferEvaluatorTest`). Pure/side-effect-free like the rest
+ *   of this suite (no state machine, DB, or UI).
+ * - [PickupNoCustomerIdentityTest] — #548: source-scans every generated rule for the structural
+ *   invariant that a PICKUP surface never parses a customer identity (the #526 D6a
+ *   `customerNameHash` exception is node-pinned and separately asserted).
+ * - [RuleIdLogSafetyTest] — #862 review LOW-2: every reachable (non-sensitive) rule id is
+ *   [cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers]-clean, so a rule id can never
+ *   self-scrub the recognized-frame backstop WARN that interpolates it.
+ * - [PickupWaitArrivalRecognitionTest] — #1141: the restaurant wait screen's arrival-chrome branch
+ *   anchors `task:pickup:arrived` (curbside card id + text) and parses the task shape; survey-only
+ *   renders stay flowless; quoted chrome on a dropoff sheet / a combined unassign frame never arrive.
+ * - [GoPuffRecognitionTest] — #501: the GoPuff (DoorDash Drive) warehouse batch-pickup branches
+ *   (bin-scan arrival anchor, wait-survey/barcode-failure/multi-order-confirm recognize-only,
+ *   the hand-built zone-arrival CTA fixtures) against the real production ruleset.
+ * - [UberOfferKindAndStackStoreTest] — #881/#882: the Uber stacked-card `Delivery (N)` chip wins
+ *   the top-level display store but NOT the `orders[]`/`presentationKey` read (chip-anchored
+ *   identity, immune to the card cycling which store it shows), plus `offerKind: match|direct`
+ *   parsing from the CTA — against the fielded corpus.
+ * - [DashSummaryReanchorTest] — #1032: the dash-end summary sheet (the sole source of
+ *   `session_records.reportedEarnings`) parses off its rendered LABELS on the id-less DoorDash
+ *   8.93.7 layout as well as off the ids on the old one, a stat row that does not render parses
+ *   null rather than a fabricated 0 (#936/#1030), and the mid-dash "This dash so far" sheet —
+ *   which shares both stat labels — stays UNKNOWN.
+ * - [DeliverySummaryReanchorTest] — #1029: the delivery receipt's money fields on the same id-less
+ *   8.93.7 layout, against the fielded collapsed/expanded pair — the recovered total/tip, the dead
+ *   `$799` type-code fabrication, the honest nulls (`appPay`, a mid-spin dash total), the capped
+ *   scan that must not reach the NEXT row's money, and the #1036 shortfall signal staying silent.
+ * - [SessionPayOwnershipTest] — #1029: exactly ONE rule may parse `sessionPay`. The same
+ *   `earnings_pill` id renders "This dash" and "This week", and a weekly total written into
+ *   `Session.runningEarnings` would be a large, plausible, STABLE lie the settle gate would happily
+ *   commit.
+ * - [CurrencyShapePinTest] — #1029: every rule-declared money scan uses `CurrencyShape` verbatim,
+ *   so the rules and `parseGlyphCurrency` cannot drift into accepting different figures.
+ *
+ * ### Deliberately excluded (#947 membership reconciliation)
+ *
+ * These also compile the production ruleset via `TestRulesetFactory` but are NOT suite members:
+ *  - [cloud.trotter.log.gig.core.pipeline.recognition.matchers.InboxProcessorTest] /
+ *    [cloud.trotter.log.gig.core.pipeline.recognition.matchers.UnknownScreenAnalysisTest] —
+ *    corpus-*mutating* intake tools (see above); this suite is pure verification. Since #941
+ *    they are also excluded from an unfiltered `testDebugUnitTest` sweep at the BUILD level
+ *    (`app/build.gradle.kts`, alongside the `*Suite` exclusion), so suite membership is no
+ *    longer the only thing keeping a broad run from rewriting the corpus. Run them by name.
+ *  - [cloud.trotter.log.gig.core.pipeline.notification.NotificationPipelineSensitiveOrderingTest]
+ *    — a `RobolectricTestRunner` pipeline-ORDERING integration test (the sensitive gate must run
+ *    before `CaptureWriter`), not a ruleset/corpus regression; every other suite member is a plain
+ *    JVM test, and pulling in Robolectric's Android shadow runtime here would cost every pre-PR run
+ *    the startup it exists to avoid.
+ *  - [cloud.trotter.log.gig.state.effects.ActuationBindingResolutionTest] — validates the
+ *    EFFECTS-layer actuation target-binding resolution (`ClickCandidateRanker` /
+ *    `UiInteractionHandler` mirror, #734), which happens to replay a rule-bound target but is
+ *    testing the app's click-actuation logic, not screen/intent recognition; out of this suite's
+ *    stated scope ("WITHOUT touching the rest of the unit suite").
+ *  - [cloud.trotter.log.gig.replay.ClassifyGateCaptureFuzzTest] — a `PropSeeds`/`checkAll`
+ *    kotest PROPERTY test (200 adversarial-tree samples) in the #590/#878 security-fuzz family,
+ *    which is its own documented command (`-Dgiglog.propExplore=true`, see the root CLAUDE.md)
+ *    with its own seed-exploration doctrine — deliberately kept separate from this suite's
+ *    deterministic single-pass corpus/fixture checks.
+ */
+@RunWith(Suite::class)
+@Suite.SuiteClasses(
+    GoldenSnapshotRegressionTest::class,
+    NegativeCorpusStaysUnknownTest::class,
+    ParseOutputGoldenTest::class,
+    OfferPipelineTest::class,
+    ScreenRulesetTest::class,
+    ClickRulesetTest::class,
+    UberDeclineClickRuleTest::class,
+    UberTripRadarBoardRedactTest::class,
+    NotificationRulesetTest::class,
+    TriageRulesTest::class,
+    UberIdleMapOfflineEvidenceTest::class,
+    UberHomeDashboardOfflineEvidenceTest::class,
+    UberOfferExpiryOverlayTest::class,
+    DefaultRulesIntegrationTest::class,
+    NotificationClassifierTest::class,
+    ClickClassifierTest::class,
+    CaptureRedactionCorpusTest::class,
+    CaptureBackstopCorpusTest::class,
+    DropoffBannerRedactParityTest::class,
+    DropoffGiftSheetRecognitionTest::class,
+    PickupArrivedRedactParityTest::class,
+    ChatComposeRedactionTest::class,
+    DropoffSheetRedactionParityTest::class,
+    SensitiveMarkerAssetCoverageTest::class,
+    SensitiveSurfaceBlockTest::class,
+    PickupNoCustomerIdentityTest::class,
+    RuleIdLogSafetyTest::class,
+    GoPuffRecognitionTest::class,
+    PickupWaitArrivalRecognitionTest::class,
+    ReceiptAnchorTest::class,
+    UberOfferKindAndStackStoreTest::class,
+    cloud.trotter.log.gig.core.pipeline.rules.DoorDashAddonOfferTest::class,
+    DashSummaryReanchorTest::class,
+    DeliverySummaryReanchorTest::class,
+    SessionPayOwnershipTest::class,
+    CurrencyShapePinTest::class,
+)
+class AllMatchersSuite

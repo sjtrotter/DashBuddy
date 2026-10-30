@@ -1,0 +1,127 @@
+package cloud.trotter.log.gig.ui.bubble
+
+import android.app.NotificationManager
+import android.util.Log
+import cloud.trotter.log.gig.core.data.chat.ChatRepository
+import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.data.vehicle.Garage
+import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
+import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.model.chat.ChatPersona
+import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.test.util.RecordingTree
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import timber.log.Timber
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+
+/**
+ * #772 / Principle-7: the two "Chat" INFO milestones in [BubbleManager.postMessage] /
+ * [BubbleManager.postOfferNotification] used to interpolate [ChatPersona.displayName], which
+ * carries raw merchant/customer text ("H-E-B", "…'s customer") for name-bearing personas — a
+ * Principle-7 leak into the exportable `shareable.log`. They now log [ChatPersona.logLabel]
+ * (the persona KIND) instead; the DEBUG line directly below each keeps `displayName` for firehose
+ * fidelity. Drives the REAL [BubbleManager] (mocked collaborators only) through [RecordingTree] to
+ * prove the fix end-to-end, matching the [BubbleManagerIdentityTest] Robolectric precedent.
+ */
+@RunWith(RobolectricTestRunner::class)
+class BubbleManagerChatLogTest {
+
+    private fun buildManager(): BubbleManager {
+        val context = RuntimeEnvironment.getApplication()
+        val notificationManager: NotificationManager = mock()
+        val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
+        val stateManager: StateManagerV2 = mock()
+        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
+        val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
+        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
+    }
+
+    @Test
+    fun `a refresh-only offer post writes no chat summary and no INFO milestone (#1104)`() {
+        val context = RuntimeEnvironment.getApplication()
+        val notificationManager: NotificationManager = mock()
+        val chatRepository: ChatRepository = mock()
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
+        val stateManager: StateManagerV2 = mock()
+        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
+        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings,
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
+        val evaluation = cloud.trotter.log.gig.domain.evaluation.OfferEvaluation(
+            action = cloud.trotter.log.gig.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
+            qualityLevel = cloud.trotter.log.gig.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,
+            fuelCostEstimate = 0.5, netPayAmount = 12.0, distanceMiles = 8.5, dollarsPerMile = 1.4,
+            dollarsPerHour = 22.0, estimatedTimeMinutes = 33.0, itemCount = 1.0, merchantName = "H-E-B",
+        )
+        val offer = cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot.Offer.from(
+            parsedOffer = cloud.trotter.log.gig.domain.model.offer.ParsedOffer(offerHash = "h1", payAmount = 14.75, distanceMiles = 8.5),
+            evaluation = evaluation, offerHash = "h1", phaseStartedAt = 1_000L, expiresAt = 41_000L, countdownSeconds = 40,
+        )
+        val tree = RecordingTree()
+        Timber.plant(tree)
+        try {
+            manager.postOfferNotification(offer, evaluation, cloud.trotter.log.gig.domain.state.Platform.DoorDash, "sess-1", refreshOnly = true,
+                pending = cloud.trotter.log.gig.domain.state.PendingOffer("h1",
+                    cloud.trotter.log.gig.domain.state.ParsedFields.OfferFields(parsedOffer =
+                        cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5)),
+                    1_000L, evaluation, returnFlow = cloud.trotter.log.gig.domain.state.Flow.TaskPickupNavigation),
+                config = null)
+        } finally {
+            Timber.uproot(tree)
+        }
+        org.mockito.kotlin.verifyNoInteractions(chatRepository)
+        check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
+            "a refresh must not log an 'offer posted' milestone: ${tree.records}"
+        }
+        org.mockito.kotlin.verify(notificationManager).notify(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `chat INFO milestones log persona kind, never the raw merchant or customer name`() {
+        val manager = buildManager()
+        val tree = RecordingTree()
+        Timber.plant(tree)
+        try {
+            manager.postMessage("Pickup: H-E-B ready", ChatPersona.Merchant("H-E-B"))
+            manager.postMessage("Heading to H-E-B's customer", ChatPersona.Customer("H-E-B's customer"))
+        } finally {
+            Timber.uproot(tree)
+        }
+
+        // (a) The shareable INFO+ stream never carries the raw merchant/customer text.
+        tree.assertNoInfoPlusContains("H-E-B")
+
+        // (b) The INFO milestone lines carry the persona KIND label instead.
+        val infoChat = tree.records.filter { it.priority == Log.INFO && it.tag == "Chat" }
+        check(infoChat.any { it.message.contains("message posted [Merchant]") }) {
+            "No INFO 'Chat' line carried '[Merchant]'. Records: $infoChat"
+        }
+        check(infoChat.any { it.message.contains("message posted [Customer]") }) {
+            "No INFO 'Chat' line carried '[Customer]'. Records: $infoChat"
+        }
+
+        // (c) The DEBUG firehose keeps full fidelity — the raw store/customer text is still there.
+        tree.assertLevelContains(Log.DEBUG, "H-E-B")
+    }
+}

@@ -397,7 +397,7 @@ failure, and restart (periodic summary log line). **Every build identifies itsel
 `app/build.gradle.kts` computes `versionName = "<base>+<8-hex git sha>[.dirty]"` at configuration
 time (fail-safe to `nogit`; `versionCode` stays a hand-bumped constant because Android refuses a
 lower one on install), and that string rides `BuildConfig.GIT_SHA`/`BUILD_TIME_MS`, one INFO
-startup line (`DashBuddy <version> starting (built <ISO-8601>)`, tag `App`), and the **head of the
+startup line (`gig.log <version> starting (built <ISO-8601>)`, tag `App`), and the **head of the
 periodic `PipelineStats` summary** as `app=<versionName>` — injected through the same
 `@Named("appVersionName")` seam `ReplayMetadataProviderImpl` uses, so `:core:pipeline` never sees
 `:app`'s `BuildConfig`. A field-data pull reads the build off any log line instead of inferring it
