@@ -102,7 +102,7 @@
     <string name="about_screen_build_format">Build %1$s</string>
     <string name="about_screen_developer_label">Developer</string>
     <string name="about_screen_developer_name">Trotter Cloud Solutions</string>
-    <string name="about_screen_developer_email" translatable="false">support@dashbuddy.app</string>
+    <string name="about_screen_developer_email" translatable="false">support@trotter.cloud</string>
 
     <!-- settings/PlatformSettingsScreen.kt -->
     <!-- settings/components/ReorderableRule.kt -->
