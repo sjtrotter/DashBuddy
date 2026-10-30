@@ -4,6 +4,7 @@ import cloud.trotter.log.gig.core.datastore.settings.StoredPreference
 import cloud.trotter.log.gig.core.datastore.settings.StoredGasPrice
 import cloud.trotter.log.gig.core.datastore.settings.SaveCapture
 import cloud.trotter.log.gig.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.log.gig.core.datastore.settings.SimplePrefs
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindowSelection
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
@@ -43,16 +44,15 @@ class AppPreferencesRepository @Inject constructor(
     val estimatedMpg = dataSource.estimatedMpg.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.gasMpg?.toFloat() ?: if (garage.active == null) old else null }
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
-    val odometerPrompts = dataSource.odometerPrompts
-    val dailyKeptGoalDollars = dataSource.dailyKeptGoalDollars
-    val hudPillShowsEarnings = dataSource.hudPillShowsEarnings
-    val analyticsShowMore = dataSource.analyticsShowMore
+    val odometerPrompts = dataSource.read(SimplePrefs.odometerPrompts)
+    val dailyKeptGoalDollars = dataSource.read(SimplePrefs.dailyKeptGoalDollars)
+    val analyticsShowMore = dataSource.read(SimplePrefs.analyticsShowMore)
     val vehicleLookupAllowed = dataSource.vehicleLookupAllowed
-    val appTheme = dataSource.appTheme
+    val appTheme = dataSource.read(SimplePrefs.appTheme)
     /** Driving / glance mode (#318) — the HUD honors this, the main app window never does. */
-    val glanceMode = dataSource.glanceMode
+    val glanceMode = dataSource.read(SimplePrefs.glanceMode)
     /** Spoken-offer language override (#428 Half B); null ⇒ follow the system locale. */
-    val ttsLanguageTag = dataSource.ttsLanguageTag
+    val ttsLanguageTag = dataSource.read(SimplePrefs.ttsLanguageTag)
 
     private val legacyFuelType: Flow<FuelType> = dataSource.fuelType.map { savedType ->
         try {
@@ -284,15 +284,14 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun mirrorFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun mirrorVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
 
-    suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.setDailyKeptGoalDollars(value)
+    suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.write(SimplePrefs.dailyKeptGoalDollars, value)
 
-    suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.setOdometerPrompts(enabled)
+    suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.write(SimplePrefs.odometerPrompts, enabled)
 
-    suspend fun setHudPillShowsEarnings(enabled: Boolean) = dataSource.setHudPillShowsEarnings(enabled)
-    suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.setAnalyticsShowMore(enabled)
+    suspend fun setAnalyticsShowMore(enabled: Boolean) = dataSource.write(SimplePrefs.analyticsShowMore, enabled)
     suspend fun setVehicleLookupAllowed(allowed: Boolean) = dataSource.setVehicleLookupAllowed(allowed)
-    suspend fun setTheme(theme: String) = dataSource.setTheme(theme)
-    suspend fun setGlanceMode(enabled: Boolean) = dataSource.setGlanceMode(enabled)
+    suspend fun setTheme(theme: String) = dataSource.write(SimplePrefs.appTheme, theme)
+    suspend fun setGlanceMode(enabled: Boolean) = dataSource.write(SimplePrefs.glanceMode, enabled)
 
     /**
      * #970 — persist the analytics review window. The DataStore is the single source of truth for the
@@ -319,7 +318,7 @@ class AppPreferencesRepository @Inject constructor(
      * follows the system locale. The [TtsEffectHandler] observes [ttsLanguageTag] reactively, so
      * the change re-languages the live engine + spoken copy without a restart.
      */
-    suspend fun setTtsLanguageTag(tag: String?) = dataSource.setTtsLanguageTag(tag)
+    suspend fun setTtsLanguageTag(tag: String?) = dataSource.write(SimplePrefs.ttsLanguageTag, tag)
 
     suspend fun mirrorEconomySettings(
         year: String, make: String, model: String, trim: String,

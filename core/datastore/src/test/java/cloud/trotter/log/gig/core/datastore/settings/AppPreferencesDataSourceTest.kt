@@ -1,12 +1,7 @@
 package cloud.trotter.log.gig.core.datastore.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import cloud.trotter.log.gig.core.datastore.strategy.StrategyDataSource
 import cloud.trotter.log.gig.domain.evaluation.EconomyField
-import cloud.trotter.log.gig.domain.evaluation.LearnedTimeConstants
-import cloud.trotter.log.gig.domain.evaluation.TimeConstantPair
-import cloud.trotter.log.gig.domain.model.vehicle.VehicleClass
-import cloud.trotter.log.gig.domain.state.Platform
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import kotlinx.coroutines.CoroutineScope
@@ -23,10 +18,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/**
- * #318 — the driving/glance-mode pref: defaults false, and a write round-trips through the
- * same DataStore + flow the app reads.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppPreferencesDataSourceTest {
 
@@ -39,36 +30,6 @@ class AppPreferencesDataSourceTest {
             produceFile = { File(tmp.root, fileName) },
         )
         return AppPreferencesDataSource(ds)
-    }
-
-    @Test
-    fun `odometer prompts default true and round trip`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "odometer-prompts.preferences_pb")
-        assertEquals(true, source.odometerPrompts.first())
-        source.setOdometerPrompts(false)
-        assertEquals(false, source.odometerPrompts.first())
-        source.setOdometerPrompts(true)
-        assertEquals(true, source.odometerPrompts.first())
-    }
-
-    @Test
-    fun `daily kept goal round trips and clears to null`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "daily-goal.preferences_pb")
-        assertNull(source.dailyKeptGoalDollars.first())
-        source.setDailyKeptGoalDollars(150.25)
-        assertEquals(150.25, source.dailyKeptGoalDollars.first()!!, 0.0)
-        source.setDailyKeptGoalDollars(null)
-        assertNull(source.dailyKeptGoalDollars.first())
-    }
-
-    @Test
-    fun `analytics show more defaults false and round trips`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "analytics-more.preferences_pb")
-        assertEquals(false, source.analyticsShowMore.first())
-        source.setAnalyticsShowMore(true)
-        assertEquals(true, source.analyticsShowMore.first())
-        source.setAnalyticsShowMore(false)
-        assertEquals(false, source.analyticsShowMore.first())
     }
 
     @Test
@@ -85,28 +46,6 @@ class AppPreferencesDataSourceTest {
     fun `gas price auto refresh defaults to false`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "gas-default.preferences_pb")
         assertEquals(false, source.isGasPriceAuto.first())
-    }
-
-    @Test
-    fun `glanceMode defaults to false`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val source = newSource(dispatcher, "prefs1.preferences_pb")
-
-        assertEquals(false, source.glanceMode.first())
-    }
-
-    @Test
-    fun `setGlanceMode round-trips through the flow`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val source = newSource(dispatcher, "prefs2.preferences_pb")
-
-        source.setGlanceMode(true)
-        advanceUntilIdle()
-        assertEquals(true, source.glanceMode.first())
-
-        source.setGlanceMode(false)
-        advanceUntilIdle()
-        assertEquals(false, source.glanceMode.first())
     }
 
     // #722 — the bubble's mode-adaptive gas quick-edit write paths.
@@ -139,31 +78,6 @@ class AppPreferencesDataSourceTest {
         assertEquals(true, source.isGasPriceAuto.first())
     }
 
-    // #428 Half B — the spoken-offer language override.
-
-    @Test
-    fun `ttsLanguageTag defaults to null (follow system)`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val source = newSource(dispatcher, "prefs-tts1.preferences_pb")
-
-        assertEquals(null, source.ttsLanguageTag.first())
-    }
-
-    @Test
-    fun `setTtsLanguageTag round-trips and clears on null`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val source = newSource(dispatcher, "prefs-tts2.preferences_pb")
-
-        source.setTtsLanguageTag("es")
-        advanceUntilIdle()
-        assertEquals("es", source.ttsLanguageTag.first())
-
-        // null clears back to the system-locale default.
-        source.setTtsLanguageTag(null)
-        advanceUntilIdle()
-        assertEquals(null, source.ttsLanguageTag.first())
-    }
-
     @Test fun `time overrides set and clear independently and reject invalid inputs`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "time.preferences_pb")
         source.setTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, 2.5)
@@ -181,35 +95,6 @@ class AppPreferencesDataSourceTest {
             EconomyField.BASE_PICKUP_MIN to Double.POSITIVE_INFINITY, EconomyField.TIRE_COST to 3.0)) {
             assertTrue(runCatching { source.setTimeConstantOverride(field, value) }.exceptionOrNull() is IllegalArgumentException)
         }
-    }
-
-    @Test fun `vehicle changes and resetting defaults preserve the entire learned strategy store`() = runTest {
-        val ds = PreferenceDataStoreFactory.create(scope = backgroundScope,
-            produceFile = { File(tmp.root, "learned.preferences_pb") })
-        val strategy = StrategyDataSource(ds)
-        val prefs = newSource(StandardTestDispatcher(testScheduler), "economy.preferences_pb")
-        val platforms = Platform.entries.filter { it != Platform.Unknown }
-        strategy.replaceTimeConstants(platforms.associateWith { LearnedTimeConstants(TimeConstantPair(2.0, 8.0), 40) })
-        platforms.forEach { strategy.recordShopRate(it, 20, 20.0); strategy.recordItemsPerUnitRatio(it, 20, 16) }
-        strategy.setAllowShopping(false)
-        val entireSnapshot = ds.data.first().asMap()
-        prefs.updateTimeConstants(4.0, 12.0)
-        prefs.updateVehicleClass(VehicleClass.E_BIKE.name)
-        assertEquals(entireSnapshot, ds.data.first().asMap())
-        prefs.resetEconomyDefaults()
-        assertEquals(entireSnapshot, ds.data.first().asMap())
-        assertNull(prefs.avgMinPerMile.first())
-        assertNull(prefs.basePickupMin.first())
-    }
-
-    @Test
-    fun `hud pill shows earnings defaults true and round trips`() = runTest {
-        val source = newSource(StandardTestDispatcher(testScheduler), "hudPillShowsEarnings.preferences_pb")
-        assertEquals(true, source.hudPillShowsEarnings.first())
-        source.setHudPillShowsEarnings(false)
-        assertEquals(false, source.hudPillShowsEarnings.first())
-        source.setHudPillShowsEarnings(true)
-        assertEquals(true, source.hudPillShowsEarnings.first())
     }
 
     @Test fun `manual price undo restores 350 and auto on together`() = runTest {

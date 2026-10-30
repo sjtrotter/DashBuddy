@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.core.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import cloud.trotter.log.gig.core.datastore.settings.AppPreferencesDataSource
+import cloud.trotter.log.gig.core.datastore.settings.SimplePrefs
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.core.datastore.vehicle.VehicleDataSource
 import kotlinx.coroutines.flow.first
@@ -21,7 +22,7 @@ class OdometerPromptsPreferenceTest {
                 produceFile = { tmp.newFile("vehicles.preferences_pb") }))))
         assertTrue(repo.odometerPrompts.first())
         repo.setOdometerPrompts(false)
-        assertFalse(source.odometerPrompts.first())
+        assertFalse(source.read(SimplePrefs.odometerPrompts).first())
         assertFalse(repo.odometerPrompts.first())
         repo.setOdometerPrompts(true)
         assertTrue(repo.odometerPrompts.first())
