@@ -10,7 +10,7 @@ enum class OverlayRejectReason {
     /** The display area is unknown — no display metrics (there is deliberately no window-bounds fallback, BB4) — fail closed. */
     NO_DISPLAY_AREA,
 
-    /** Smaller than [cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.MIN_OVERLAY_AREA_FRACTION] of the display (status bar, puck, heads-up, toast). */
+    /** Smaller than [cloud.trotter.log.gig.core.pipeline.accessibility.input.FrameWindowResolver.MIN_OVERLAY_AREA_FRACTION] of the display (status bar, puck, heads-up, toast). */
     TOO_SMALL,
 
     /** Large enough, but its root could not be read, so its package cannot be verified — fail closed. */

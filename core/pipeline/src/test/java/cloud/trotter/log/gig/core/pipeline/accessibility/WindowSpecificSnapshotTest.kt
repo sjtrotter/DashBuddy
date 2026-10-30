@@ -34,6 +34,11 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.Foreground
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.FrameWindowResolver
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.LiveFrameWindowAccess
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.LocatedWindow
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.WindowVerdictCache
 
 /**
  * #1148 D4 as reworked by review F1 + G5 — which window a content/state frame is read from.
@@ -76,7 +81,7 @@ class WindowSpecificSnapshotTest : WindowResolverTestBase() {
         val emitted = collect(h, kind, windowId = 3) // fired by the hidden activity
 
         assertEquals(listOf("dd-sheet"), emitted.map { it.tree.text })
-        verify(h.source, never()).foregroundWindow(any())
+        verify(h.source.frames, never()).foregroundWindow(any())
         verify(h.source, never()).getWindowSnapshot(any(), any(), any())
         verify(h.service, never()).windows // H4: no enumeration on the active-root path
         assertEquals(null, emitted.single().windowContext)
@@ -202,16 +207,18 @@ class WindowSpecificSnapshotTest : WindowResolverTestBase() {
     fun `post-map invariant drops a snapshot whose package is not enabled (belt-and-braces, H5)`() {
         val events = MutableSharedFlow<AccEvent>(extraBufferCapacity = 4)
         val bubble = node(ownPkg, "bubble")
-        val located = AccessibilitySource.LocatedWindow(mock(), mock(), 2)
+        val located = LocatedWindow<AccessibilityWindowInfo, AccessibilityNodeInfo>(mock(), mock(), 2)
         val source = mock<AccessibilitySource> {
             on { this.events } doReturn events
             on { getLiveNativeRoot() } doReturn bubble
-            on { foregroundWindow(any()) } doReturn AccessibilitySource.Foreground.Found(located)
             on { getWindowSnapshot(any(), any(), any()) } doReturn
                 AccessibilitySource.RootSnapshot(tree = UiNode(text = "bubble"), packageName = ownPkg)
         }
 
         val stats = PipelineStats()
+        val resolver = spy(FrameWindowResolver(LiveFrameWindowAccess(source), stats, WindowVerdictCache()))
+        doReturn(Foreground.Found(located)).whenever(resolver).foregroundWindow(any())
+        doReturn(resolver).whenever(source).frames
         val emitted = collectWith(
             events, ContentChangedPipeline(source, FakePlatformPreferences(setOf(ddPkg)), stats).output(),
             event(Kind.CONTENT.type, windowId = 3),

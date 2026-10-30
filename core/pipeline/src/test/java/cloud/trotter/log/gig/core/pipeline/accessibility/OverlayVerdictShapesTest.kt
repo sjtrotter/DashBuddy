@@ -34,6 +34,7 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.FrameWindowResolver
 
 /**
  * #1152 / PR #1155 — the verdict cache and walk-budget shapes as seen through the event path: memo
@@ -75,7 +76,7 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
         repeat(3) { scan ->
             val before = fetches
             assertTrue("scan $scan refused", collect(h, Kind.STATE, windowId = 3).isEmpty())
-            assertTrue("scan $scan fetched ${fetches - before} roots", fetches - before <= AccessibilitySource.MAX_SCAN_ROOT_FETCHES)
+            assertTrue("scan $scan fetched ${fetches - before} roots", fetches - before <= FrameWindowResolver.MAX_SCAN_ROOT_FETCHES)
         }
         assertEquals(3L, h.stats.foregroundSkipCount(ForegroundSkipReason.SCAN_BUDGET))
     }
@@ -113,7 +114,7 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
         // Mixed cache: 8 COLD large readable non-overlay windows above the memoized overlay spend the
         // whole budget; the overlay's revalidation fetch must not be free.
         val shade = node(systemUiPkg, "big")
-        val cold = (0 until AccessibilitySource.MAX_SCAN_ROOT_FETCHES).map { i ->
+        val cold = (0 until FrameWindowResolver.MAX_SCAN_ROOT_FETCHES).map { i ->
             window(100 + i, 20 + i, shade, windowType = system, bounds = OverlayGeometry.FULL_SCREEN)
         }
         whenever(h.service.windows).thenReturn(listOf(bubbleWindow) + cold + listOf(overlay, ddWindow))
@@ -159,8 +160,7 @@ class OverlayVerdictShapesTest : WindowResolverTestBase() {
             enabled = setOf(ddPkg, uberPkg, other),
         )
         // Seed a STALE memoized CANDIDATE naming another (enabled) package for the overlay's id.
-        val field = AccessibilitySource::class.java.getDeclaredField("packageCache").apply { isAccessible = true }
-        val cache = field.get(h.source) as cloud.trotter.log.gig.core.pipeline.accessibility.input.WindowVerdictCache
+        val cache = h.source.frames.cacheForTest
         val b = OverlayGeometry.UBER_OFFER
         cache.putVerdict(
             9, other, cloud.trotter.log.gig.core.pipeline.accessibility.input.WindowVerdictCache.Verdict.CANDIDATE,

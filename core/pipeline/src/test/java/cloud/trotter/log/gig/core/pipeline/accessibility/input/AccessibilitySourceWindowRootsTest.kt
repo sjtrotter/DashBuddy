@@ -183,7 +183,7 @@ class AccessibilitySourceWindowRootsTest {
         }
         val source = sourceFor(service)
 
-        val located = (source.foregroundWindow { it == "com.doordash.driverapp" } as AccessibilitySource.Foreground.Found).located
+        val located = (source.frames.foregroundWindow { it == "com.doordash.driverapp" } as Foreground.Found).located
 
         assertEquals("highest-layer enabled window below our bubble (the IME is no candidate)", 7, located.window.id)
         assertSame(dialogRoot, located.root)
@@ -204,8 +204,8 @@ class AccessibilitySourceWindowRootsTest {
         }
 
         assertEquals(
-            AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED),
-            sourceFor(service).foregroundWindow { it == "com.doordash.driverapp" },
+            Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED),
+            sourceFor(service).frames.foregroundWindow { it == "com.doordash.driverapp" },
         )
     }
 

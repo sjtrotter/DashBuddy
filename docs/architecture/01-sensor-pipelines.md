@@ -532,6 +532,25 @@ frames the pipeline ever sees*:
   with #1145. The one kept control: an UNKNOWN frame whose title carries a sensitive marker is
   dropped (`WindowTitleScrubTest`).
 
+**Frame-window ownership (#1422 slice B).** Both `snapshotForEvent` and
+`WindowsChangedPipeline` delegate acquisition and selection to `FrameWindowResolver<W, R>` in
+`accessibility/input/`. Its `FrameWindowAccess<W, R>` port passes window/root handles unchanged;
+`LiveFrameWindowAccess` owns Android frame I/O, and the test-only `MemoryFrameWindowAccess` uses
+scalar windows and scripted roots on the JVM. The resolver owns the scalar `WindowVerdictCache`
+and generic `FrontWindowWalk`; `FramePolicy.kt` contains the pure event/topology tables. The older
+`AccessibilitySource.foregroundWindow` / `resolveActive` / `overlayProbe` references below describe
+those responsibilities, now housed in the resolver and walk. `AccessibilitySource` retains service
+events, raw/tap roots, active-flag extraction, mapping, and the context builder; taps retain their
+own ambiguity rule. Every generation is explicit and captured before its enumeration. Overlay
+scanning precedes active-root acquisition, except the native-by-id fallback needed when no single
+active flag exists. One display lazy is shared by all walks and active-overlay classification in a
+resolution; it is allocated only after the native fast-path decision (or when that path needs a
+foreground enumeration). The accepted slice-B change is that a display resize within one resolution
+no longer changes the area used by a later check. The cheap generation read still precedes the
+overlay-enabled check. With an enabled or null native root and no overlay platform enabled, the
+fast path enumerates no windows and fetches only the native root; a non-enabled native root retains
+the existing foreground enumeration.
+
 **Platform offer overlays (#1152) — the one system-layer window that is read.** Ground truth (the
 #248 record, verified on-device 2026-05-15): the Uber offer "popup" is a `SYSTEM_ALERT_WINDOW` from
 `com.ubercab.driver`, reported to accessibility services as `AccessibilityWindowInfo.TYPE_SYSTEM` —

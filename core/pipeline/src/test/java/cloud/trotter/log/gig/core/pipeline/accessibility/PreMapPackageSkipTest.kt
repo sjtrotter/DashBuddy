@@ -28,6 +28,12 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.robolectric.RobolectricTestRunner
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.Foreground
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.FrameWindowResolver
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.LiveFrameWindowAccess
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.WindowVerdictCache
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.whenever
 
 /**
  * #435 item 3 + #1148 — pins the check-before-map skip in the two event-driven window pipelines.
@@ -61,13 +67,16 @@ class PreMapPackageSkipTest {
         snapshot: AccessibilitySource.RootSnapshot?,
     ): AccessibilitySource {
         val activeRoot = mock<AccessibilityNodeInfo> { on { packageName } doReturn activePkg }
-        return mock {
+        val source = mock<AccessibilitySource> {
             on { this.events } doReturn events
             on { getLiveNativeRoot() } doReturn activeRoot
-            on { foregroundWindow(any()) } doReturn
-                AccessibilitySource.Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
             on { getCurrentRootSnapshot(any<AccessibilityNodeInfo>()) } doReturn snapshot
         }
+        val resolver = spy(FrameWindowResolver(LiveFrameWindowAccess(source), PipelineStats(), WindowVerdictCache()))
+        doReturn(Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED))
+            .whenever(resolver).foregroundWindow(any())
+        doReturn(resolver).whenever(source).frames
+        return source
     }
 
     private val prefs = FakePlatformPreferences(setOf(targetPkg))

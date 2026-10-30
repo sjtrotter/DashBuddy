@@ -33,6 +33,9 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.FrameWindowResolver
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.LiveFrameWindowAccess
+import cloud.trotter.log.gig.core.pipeline.accessibility.input.WindowVerdictCache
 
 /**
  * Shared harness for the event-driven window-resolution tests (#1148 D4, #1152, PR #1155 review HH7 —
@@ -111,6 +114,8 @@ abstract class WindowResolverTestBase {
         val stats = PipelineStats()
         val source = spy(AccessibilitySource(stats).apply { registerService(service) })
         doReturn(events).whenever(source).events
+        doReturn(spy(FrameWindowResolver(LiveFrameWindowAccess(source), stats, WindowVerdictCache())))
+            .whenever(source).frames
         return Harness(service, source, events, FakePlatformPreferences(enabled), stats)
     }
 
