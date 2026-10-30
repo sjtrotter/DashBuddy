@@ -1,0 +1,117 @@
+package cloud.trotter.log.gig.locale
+
+import android.app.NotificationManager
+import android.content.Context
+import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.notice.AppNoticeChannel
+import cloud.trotter.log.gig.core.data.state.AppStateRepository
+import cloud.trotter.log.gig.domain.di.ApplicationScope
+import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryCheck
+import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryReporter
+import cloud.trotter.log.gig.domain.pipeline.RecognitionLocale
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.util.Locale
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * The side-effecting half of the #938 English-locale boundary detection: one WARN per sensor
+ * start plus a **once-per-install** dasher-visible notice when the device language is outside
+ * the recognition/marker vocabulary.
+ *
+ * The decision itself is pure and lives in `:domain` ([RecognitionLocale]); this class owns only
+ * the edges — the current locale, the DataStore flag, the log line, and the notification — so the
+ * behaviour under test is the pure half plus three thin branches here.
+ *
+ * **Fail-open by construction.** [onSensorServiceConnected] returns immediately (the flag read is
+ * a suspend DataStore call, so the work is dispatched onto the app scope) and every step is
+ * wrapped: a locale diagnostic must never be able to stop sensing from starting, and a
+ * notification the OS refuses (POST_NOTIFICATIONS not granted) degrades to the WARN alone.
+ *
+ * **PII posture:** the only device-derived value that reaches a log line or the notification is an
+ * ISO-639 language code — principle 7's INFO+ contract holds trivially.
+ */
+@Singleton
+class LocaleBoundaryNotifier @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val notificationManager: NotificationManager,
+    private val appStateRepository: AppStateRepository,
+    @param:ApplicationScope private val scope: CoroutineScope,
+) : LocaleBoundaryReporter {
+
+    override fun onSensorServiceConnected() {
+        // Dispatched, never inline: the flag read is a suspend DataStore call and this runs on the
+        // service's connected callback (main thread).
+        scope.launch { report(Locale.getDefault()) }
+    }
+
+    /**
+     * The whole decision + side effects for one sensor start. Takes the locale as a parameter
+     * (rather than reading the JVM default here) so the test drives it without mutating global
+     * state — the same shape `TimeFormats`/`Formats` use for their locale policy.
+     */
+    internal suspend fun report(locale: Locale) {
+        val outcome = try {
+            RecognitionLocale.check(
+                locale = locale,
+                alreadyNotified = appStateRepository.localeBoundaryNoticeShown.first(),
+            )
+        } catch (e: CancellationException) {
+            throw e // structured concurrency — never swallowed by the fail-open catch (#909)
+        } catch (t: Throwable) {
+            // Fail-open: a flag/locale read failure must not surface as anything but a log line.
+            Timber.tag(TAG).e(t, "Locale boundary check failed — skipping (#938)")
+            return
+        }
+
+        if (outcome !is LocaleBoundaryCheck.Unsupported) return
+
+        Timber.tag(TAG).w(
+            "Device language '%s' is not '%s': recognition anchors and the text-marker privacy " +
+                "scrubs are English-only today (#938), so recognition thins toward UNKNOWN and " +
+                "the marker-based scrubs weaken. The id-based scrub layer is locale-immune.",
+            outcome.language,
+            RecognitionLocale.SUPPORTED_LANGUAGE,
+        )
+
+        if (!outcome.notifyUser) return
+
+        try {
+            postNotice()
+            appStateRepository.setLocaleBoundaryNoticeShown()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            // Leave the flag unset so a later start retries the notice.
+            Timber.tag(TAG).e(t, "Locale boundary notice could not be posted (#938)")
+        }
+    }
+
+    private fun postNotice() {
+        // The shared "App notices" channel and its notification shape (#937 moved the id + copy
+        // into AppNoticeChannel when the recognition-health notice joined this family; #991 moved
+        // the posting itself there when the third member arrived — one owner, principle 5).
+        AppNoticeChannel.postNotice(
+            context = context,
+            notificationManager = notificationManager,
+            notificationId = NOTIFICATION_ID,
+            requestCode = REQUEST_CODE,
+            title = context.getString(R.string.locale_notice_title),
+            text = context.getString(R.string.locale_notice_text),
+        )
+    }
+
+    companion object {
+        private const val TAG = "LocaleBoundary"
+
+        /** This notice's id on the shared channel — see [AppNoticeChannel.Ids]. */
+        const val NOTIFICATION_ID = AppNoticeChannel.Ids.LOCALE_BOUNDARY
+
+        private const val REQUEST_CODE = 938
+    }
+}

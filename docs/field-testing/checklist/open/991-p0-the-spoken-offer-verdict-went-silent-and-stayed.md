@@ -16,7 +16,7 @@ issues: #991, #428
   process.
   **What to watch:** if the offer read goes quiet mid-dash, it should come back **by itself within
   roughly a minute** — the next offer or two after the silent one should speak again. If the engine
-  is genuinely dead (e.g. the TTS package is mid-update), you should instead get the "DashBuddy has
+  is genuinely dead (e.g. the TTS package is mid-update), you should instead get the "gig.log has
   stopped reading offers aloud" notification rather than open-ended silence; force-stopping and
   reopening should then restore it. Note whether the notice appeared, and whether the voice
   self-recovered without any intervention. **Desk:** `grep 'Tts' app.log` — the fix working looks

@@ -1,0 +1,34 @@
+package cloud.trotter.log.gig.ui.main.ratings
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.state.focusedPlatform
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import javax.inject.Inject
+
+/**
+ * State holder for the Ratings screen (#316). Reads the focused platform's
+ * [cloud.trotter.log.gig.domain.model.ratings.RatingsSnapshot] out of
+ * [StateManagerV2]'s `AppState` and projects it to an immutable [RatingsUiState].
+ *
+ * The focused platform is registry-resolved (Principle 8) — flow's active
+ * platform, else most-recent activity — never a `== DoorDash` literal.
+ */
+@HiltViewModel
+class RatingsViewModel @Inject constructor(
+    stateManager: StateManagerV2,
+) : ViewModel() {
+
+    val uiState: StateFlow<RatingsUiState> = stateManager.state
+        .map { state ->
+            val platform = state.focusedPlatform()
+            val snapshot = platform?.let { state.regions.platforms[it]?.ratings }
+            RatingsUiState.from(platform, snapshot)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RatingsUiState.EMPTY)
+}

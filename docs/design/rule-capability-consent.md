@@ -155,7 +155,7 @@ resolved-node key had (see *History*).
 
 ### What the user actually consents to (UI = #422 PR 3)
 
-"DashBuddy may **tap Decline** for you on **DoorDash**" — per action, per
+"gig.log may **tap Decline** for you on **DoorDash**" — per action, per
 platform, pinned to the rule's current binding definition. Consent copy is
 **app-owned string resources** (#428), never rule-supplied text: the rule
 contributes only a bind name and predicate, neither of which is driver-legible

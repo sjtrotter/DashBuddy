@@ -1,4 +1,4 @@
-# DashBuddy Field Testing Log
+# gig.log Field Testing Log
 
 Running log of observations made while actively dashing in the field, captured
 in real time during sessions. Each session is its own file under `sessions/`,

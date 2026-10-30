@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
-        android:name=".DashBuddyApplication"
+        android:name=".GigLogApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -22,7 +22,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DashBuddy"
+        android:theme="@style/Theme.gig.log"
         android:enableOnBackInvokedCallback="true">
 
         <provider
@@ -55,9 +55,9 @@
         </activity>
 
         <service
-            android:name="cloud.trotter.dashbuddy.core.pipeline.accessibility.input.AccessibilityListener"
+            android:name="cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilityListener"
             android:exported="true"
-            android:label="DashBuddy"
+            android:label="gig.log"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -68,8 +68,8 @@
         </service>
 
         <service
-            android:name="cloud.trotter.dashbuddy.core.pipeline.notification.input.NotificationListener"
-            android:label="DashBuddy Notification Watcher"
+            android:name="cloud.trotter.log.gig.core.pipeline.notification.input.NotificationListener"
+            android:label="gig.log Notification Watcher"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

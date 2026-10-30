@@ -15,21 +15,21 @@
 # (Timber.tag("X").i(...) or Timber.tag("X")\n    .i(...) both satisfy the guard), then lower
 # or remove the line below.
 
-app/src/main/java/cloud/trotter/dashbuddy/DashBuddyApplication.kt 3
-app/src/main/java/cloud/trotter/dashbuddy/di/DispatchersModule.kt 1
-core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/DiskCaptureBus.kt 1
-core/data/src/main/java/cloud/trotter/dashbuddy/core/data/capture/NoOpCaptureBus.kt 1
-core/database/src/main/java/cloud/trotter/dashbuddy/core/database/DataTypeConverters.kt 1
-core/datastore/src/main/java/cloud/trotter/dashbuddy/core/datastore/strategy/StrategyDataSource.kt 1
-core/location/src/main/java/cloud/trotter/dashbuddy/core/location/FusedLocationDataSource.kt 6
-core/network/src/main/java/cloud/trotter/dashbuddy/core/network/vehicle/efficiency/epa/EpaVehicleDataSource.kt 5
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/FrameGate.kt 1
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineStats.kt 1
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/PipelineSupervision.kt 1
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/accessibility/AccessibilityPipeline.kt 2
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/JsonRuleInterpreter.kt 14
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/ParsedFieldsFactory.kt 2
-core/pipeline/src/main/java/cloud/trotter/dashbuddy/core/pipeline/rules/Ruleset.kt 2
-core/state/src/main/java/cloud/trotter/dashbuddy/core/state/EffectMap.kt 1
-core/state/src/main/java/cloud/trotter/dashbuddy/core/state/ObservationJournal.kt 3
-core/state/src/main/java/cloud/trotter/dashbuddy/core/state/OfferEffects.kt 4
+app/src/main/java/cloud/trotter/log/gig/GigLogApplication.kt 3
+app/src/main/java/cloud/trotter/log/gig/di/DispatchersModule.kt 1
+core/data/src/main/java/cloud/trotter/log/gig/core/data/capture/DiskCaptureBus.kt 1
+core/data/src/main/java/cloud/trotter/log/gig/core/data/capture/NoOpCaptureBus.kt 1
+core/database/src/main/java/cloud/trotter/log/gig/core/database/DataTypeConverters.kt 1
+core/datastore/src/main/java/cloud/trotter/log/gig/core/datastore/strategy/StrategyDataSource.kt 1
+core/location/src/main/java/cloud/trotter/log/gig/core/location/FusedLocationDataSource.kt 6
+core/network/src/main/java/cloud/trotter/log/gig/core/network/vehicle/efficiency/epa/EpaVehicleDataSource.kt 5
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/FrameGate.kt 1
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/PipelineStats.kt 1
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/PipelineSupervision.kt 1
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/accessibility/AccessibilityPipeline.kt 2
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/rules/JsonRuleInterpreter.kt 14
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/rules/ParsedFieldsFactory.kt 2
+core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/rules/Ruleset.kt 2
+core/state/src/main/java/cloud/trotter/log/gig/core/state/EffectMap.kt 1
+core/state/src/main/java/cloud/trotter/log/gig/core/state/ObservationJournal.kt 3
+core/state/src/main/java/cloud/trotter/log/gig/core/state/OfferEffects.kt 4

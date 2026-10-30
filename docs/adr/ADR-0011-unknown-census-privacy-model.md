@@ -665,7 +665,7 @@ vocabulary rows that lose eligibility.
 | IP addresses | **never stored and never logged — no exception** (#1180, 2026-10-05: the earlier "72 h abuse log, advertised as `ipLogging`" clause is withdrawn; the server never implemented it and `GET /v1/policy` has no such field). The Caddy edge rate limiter retains the peer address only in process memory for a single window (no access log, forwarded-IP headers stripped); client IPs are never persisted or logged |
 
 The **operator-trust statement** (the residual no design removes): the official server is one
-machine operated by the DashBuddy maintainer running the published image digest of an AGPL-3.0
+machine operated by the gig.log maintainer running the published image digest of an AGPL-3.0
 repository; `GET /v1/policy` reports the digest and the retention numbers. The operator can see
 shapes, counts, the text of their OWN trusted devices' redacted envelopes (`k_unblind` — for a trusted install, i.e. the operator's own device, k = 1 by definition; the **k = 10** `k_ship` gate in §4 is the COMMUNITY-install gate and explicitly excludes trusted installs), and — once
 a token entered the shipped chrome vocabulary by one of §4's two routes — that vocabulary; for a community install the

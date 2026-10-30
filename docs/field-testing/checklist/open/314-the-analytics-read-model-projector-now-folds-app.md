@@ -2,7 +2,7 @@ status: review
 issues: #314
 
 - **🆕 NEW — the analytics read-model projector now folds `app_events` into durable records (#314 PR2). READ THE DB / LOG AFTER THE FIRST DASH POST-UPDATE.**
-  The projector runs on `DashBuddyApplication` startup (not debug-gated) and event-sources the
+  The projector runs on `GigLogApplication` startup (not debug-gated) and event-sources the
   `app_events` log into `delivery_records` / `session_records` / `offer_records`. On the **first
   launch after installing this build** it backfills the entire existing log; watch the INFO log for a
   single line tagged `Analytics`: `Analytics backfill complete: N events → D deliveries, S sessions,

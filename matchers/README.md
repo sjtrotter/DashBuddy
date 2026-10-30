@@ -1,6 +1,6 @@
 # matchers/ — the JSON5 rule source + canonicalizer (N1, #635)
 
-This directory owns the **single source of truth for DashBuddy recognition rules**. It is an
+This directory owns the **single source of truth for gig.log recognition rules**. It is an
 in-repo stand-in for the future separate, forkable, Apache-2.0 **matchers repo** (Pillar 2 /
 Epic #192) — same Gradle topology, so when the repo splits out (licensing settled Apache-2.0 per
 #246) this becomes a git **submodule** with no consumer-side change. See
@@ -133,7 +133,7 @@ verification fails.
 ## License
 
 This ruleset is licensed under the **[Apache License 2.0](LICENSE)** (see [`NOTICE`](NOTICE)) —
-separately from the DashBuddy application, which is source-available under PolyForm Shield 1.0.0.
+separately from the gig.log application, which is source-available under PolyForm Shield 1.0.0.
 The Apache-2.0 boundary is deliberate (Pillar 2 / Epic #192): the recognition layer is meant to be
 **forkable** so that if an upstream source is compromised, drivers can switch to another via
 configuration. Keeping the ruleset Apache-2.0 while in this monorepo lets it move to its own repo
@@ -141,7 +141,7 @@ configuration. Keeping the ruleset Apache-2.0 while in this monorepo lets it mov
 
 **Framing (non-negotiable, per the project framing discipline).** This ruleset is **empirical
 measurement of the visible offer surface** — it encodes the information a driver already sees on
-their own screen so DashBuddy can present it back to them on-device. It is **not** reverse-
+their own screen so gig.log can present it back to them on-device. It is **not** reverse-
 engineering, model recovery, or algorithm characterization of any platform, and public-facing
 descriptions of it must never suggest otherwise (the DoorDash ICA §15.4 prohibits reverse-
-engineering; DashBuddy does not do that).
+engineering; gig.log does not do that).

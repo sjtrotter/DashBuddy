@@ -8,7 +8,7 @@ issues: #4
   window's real package (our overlay is dropped), and the offer rule demands the `accept_button`
   structure our overlay lacks. To test: on an offer, **open the bubble** over the DoorDash offer →
   confirm the verdict / notification / spoken read **stay stable** (no flip to DECLINE, no re-eval)
-  while the bubble is up. Watch the log for `🚫 Skip active window: non-target pkg=cloud.trotter.dashbuddy`
+  while the bubble is up. Watch the log for `🚫 Skip active window: non-target pkg=cloud.trotter.log.gig`
   (proof our overlay is being dropped) and **no** second `offer_popup` classification. Real orders.
   - Confirmed: 0/2.
   desk: desk-verifiable: correlate active-window package attribution with offer captures; the app's own overlay must create no DoorDash offer.

@@ -9,7 +9,7 @@
 
 ## Context
 
-DashBuddy currently extracts offer / pickup / delivery fields by reasoning
+gig.log currently extracts offer / pickup / delivery fields by reasoning
 from the DoorDash UI surface — "what does the screen show?". That works for
 one platform but bakes platform UI shape into the domain. The state machine,
 evaluator, and event log all consume types (`ParsedOffer`, `ParsedOrder`,
@@ -121,7 +121,7 @@ as a leading indicator of platform UI changes. Frequency and shape of UI
 A/B tests visible from outside. Decision-deadline adequacy under cognitive-
 load models. Mistap rate on offer screens. Notification cadence vs accept
 rate. Privacy preservation of on-device cohort + DP aggregation under
-realistic adversary models (DashBuddy itself as testbed). Accessibility
+realistic adversary models (gig.log itself as testbed). Accessibility
 coverage of the platform UI.
 
 **Social science.** Ambient algorithmic pressure: how do countdown timers

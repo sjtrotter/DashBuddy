@@ -1,0 +1,42 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.CrossPlatformRegion
+import cloud.trotter.log.gig.domain.state.Mode
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Region 1 stepper — cross-platform aggregator.
+ *
+ * Derived, read-only from platform regions. Recomputed after Regions 2+ step.
+ * The HUD's aggregate tab reads from this region.
+ */
+@Singleton
+class CrossPlatformRegionStepper @Inject constructor() {
+
+    fun step(
+        prev: CrossPlatformRegion,
+        prevPlatforms: Map<Platform, PlatformRegion>,
+        nextPlatforms: Map<Platform, PlatformRegion>,
+        obs: Observation,
+    ): CrossPlatformRegion {
+        val anyOnline = nextPlatforms.values.any { it.mode != Mode.Offline }
+        val activeSessions = nextPlatforms.values.count { it.session != null }
+
+        // Find most recent activity
+        val mostRecent = nextPlatforms.entries
+            .maxByOrNull { it.value.lastObservedAt }
+
+        // Period totals are NOT aggregated here — they are history, owned by the
+        // read side (AnalyticsRepository, #314). A pure stepper never reads the DB.
+        return prev.copy(
+            anyPlatformOnline = anyOnline,
+            activeSessionCount = activeSessions,
+            mostRecentActivityAt = mostRecent?.value?.lastObservedAt ?: prev.mostRecentActivityAt,
+            mostRecentActivityPlatform = mostRecent?.key,
+        )
+    }
+}

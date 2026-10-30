@@ -1,0 +1,30 @@
+package cloud.trotter.log.gig.feature.bubble.hud
+
+import cloud.trotter.log.gig.domain.model.offer.AddOnStops
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
+import cloud.trotter.log.gig.domain.model.offer.ownedStoreKeys
+import cloud.trotter.log.gig.domain.model.offer.storeKey
+import cloud.trotter.log.gig.domain.state.Job
+import cloud.trotter.log.gig.domain.state.TaskPhase
+
+object TripLineMapper {
+    fun offer(o: ParsedOffer): TripLineModel = capped(listOf(TripNode(TrackIcon.NAV_PIN)) +
+        List(stores(o.orders.map { it.storeName }).size.coerceAtLeast(1)) { TripNode(TrackIcon.STORE) } +
+        List(o.orders.size.coerceAtLeast(1)) { TripNode(TrackIcon.HOUSE) })
+
+    fun withAddOn(job: Job, o: ParsedOffer): TripLineModel {
+        val pickups = job.tasks.filter { it.phase == TaskPhase.PICKUP }
+        val addedStores = AddOnStops.newStores(ownedStoreKeys(job.tasks), o)
+        val oldStores = pickups.size.coerceAtLeast(1)
+        val drops = job.tasks.count { it.phase == TaskPhase.DROPOFF }.coerceAtLeast(1)
+        return capped(listOf(TripNode(TrackIcon.NAV_PIN)) +
+            List(oldStores) { TripNode(TrackIcon.STORE) } + List(drops) { TripNode(TrackIcon.HOUSE) } +
+            List(addedStores.size) { TripNode(TrackIcon.STORE, added = true) } +
+            List(AddOnStops.addedDropoffs(o.stopCount, addedStores.size)) { TripNode(TrackIcon.HOUSE, added = true) })
+    }
+
+    private fun stores(names: List<String>) = names.map(::storeKey)
+        .filter { it.isNotEmpty() }.distinct()
+    private fun capped(nodes: List<TripNode>) = TripLineModel(if (nodes.size <= 9) nodes else
+        nodes.take(8) + TripNode(TrackIcon.NAV_PIN, nodes.drop(8).any { it.added }, overflow = nodes.size - 8))
+}

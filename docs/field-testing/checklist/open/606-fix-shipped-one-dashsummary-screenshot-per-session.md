@@ -16,7 +16,7 @@ issues: #606, #433
   #433 family) now catches this whole class going forward: any `{field}` template in a rule's
   screenshot/bubble/log effect args that leaves a literal `{field}` in the saved string on ≥1
   corpus frame (i.e. fails to interpolate) fails the build. **Confirm on dash: 0/2 —** after a
-  session ends, `Pictures/DashBuddy` should contain exactly **one** `DashSummary - <earnings>.png`
+  session ends, `Pictures/gig.log` should contain exactly **one** `DashSummary - <earnings>.png`
   for that end (not two ~2.5s apart), and offer screenshots from that dash should be named
   `Offer - <pay>.png` (a dollar amount), never the literal `Offer - {storeName}.png`. (Trailing
   zeros drop — `Offer - 26.7.png` for a $26.70 offer, `Offer - 5.0.png` for $5.00, is correct;

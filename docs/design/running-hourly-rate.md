@@ -21,7 +21,7 @@ event log we'd mine for history (`core/database/.../event/AppEventEntity.kt` +
 "$/hr" is the single number a dasher steers by. It is also the easy number to
 get subtly wrong, because the honest version depends on a denominator (time)
 that is partly *estimated*, partly *not yet elapsed*, and partly *not even your
-own choice* (a dry market, a slow merchant). DashBuddy currently shows three
+own choice* (a dry market, a slow merchant). gig.log currently shows three
 different "$/hr" numbers with three different definitions, none of which behave
 the way the developer expects when watched live. This doc fixes the definition
 before anyone touches the rendering again.

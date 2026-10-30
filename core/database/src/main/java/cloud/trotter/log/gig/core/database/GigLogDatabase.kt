@@ -1,0 +1,150 @@
+package cloud.trotter.log.gig.core.database
+
+import cloud.trotter.log.gig.core.database.analytics.TimeConstantDao
+import androidx.room.AutoMigration
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
+import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ExpenseRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.FuelRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.LedgerDao
+import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.StoreEntity
+import cloud.trotter.log.gig.core.database.chat.ChatDao
+import cloud.trotter.log.gig.core.database.chat.ChatMessageEntity
+import cloud.trotter.log.gig.core.database.effects.EffectsFiredDao
+import cloud.trotter.log.gig.core.database.effects.EffectsFiredEntity
+import cloud.trotter.log.gig.core.database.event.AppEventDao
+import cloud.trotter.log.gig.core.database.event.AppEventEntity
+import cloud.trotter.log.gig.core.database.observation.ObservationDao
+import cloud.trotter.log.gig.core.database.observation.ObservationEntity
+import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotDao
+import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
+
+@Database(
+    entities = [
+        AppEventEntity::class,
+        AppStateSnapshotEntity::class,
+        ChatMessageEntity::class,
+        EffectsFiredEntity::class,
+        ObservationEntity::class,
+        // Analytics read-model (#314) — purely additive; folded from app_events.
+        DeliveryRecordEntity::class,
+        ExpenseRecordEntity::class,
+        FuelRecordEntity::class,
+        SessionRecordEntity::class,
+        OfferRecordEntity::class,
+        AnalyticsProjectionStateEntity::class,
+        // Store entity resolution (#159) — additive: identity table + per-pickup visits table.
+        StoreEntity::class,
+        PickupRecordEntity::class,
+    ],
+    version = GigLogDatabase.VERSION,
+    exportSchema = true,
+    // v8→v9 adds only new tables (the analytics read-model). AutoMigration is a
+    // no-op for existing tables, so it CANNOT wipe app_events (unlike the
+    // destructive fallback, which is left untouched — the auto-migration provides
+    // the path so the fallback never fires on this upgrade).
+    // v9→v10 (#659) is additive-only: three new nullable columns —
+    // delivery_records.frozenFuelPerMile/frozenNonFuelPerMile (frozen fuel/non-fuel
+    // split for the 4-step true-net waterfall), offer_records.estFuelPerMile/
+    // estNonFuelPerMile (rebuild-stable split hydration), session_records.startSource
+    // (retro finding 2 — `started` provenance). Every value repopulates from the
+    // immutable log on the PROJECTOR_VERSION 1→2 refold, so the ADD COLUMN nulls are
+    // transient. Additive ⇒ never wipes app_events or the existing analytics rows.
+    // v10→v11 (#688/#703) is additive-only: two new nullable columns on delivery_records
+    // — cashTip (driver-entered cash tip, added to gross/net only at read sites) and
+    // originalPayBasis (the first-fold payBasis, never rewritten by a correction — the
+    // #703 receipt-evidence hydration anchor). Both repopulate from the immutable log on
+    // the PROJECTOR_VERSION 3→4 refold this bump triggers (cashTip stays null in history —
+    // no cash events exist; originalPayBasis is stamped for every row). Additive ⇒ never
+    // wipes app_events or the existing analytics rows.
+    // v11→v12 (#159) is additive-only: two new tables (`stores` + `pickup_records`) plus new
+    // nullable/defaulted columns — delivery_records.{storeKey, payoutStoreForms, storeKeyPinned},
+    // offer_records.{storeKey, linkedJobId} — and new indices (delivery_records.jobId/storeKey,
+    // offer_records.linkedJobId). The `PROJECTOR_VERSION` 4→5 refold this bump triggers populates the
+    // two new tables + the storeKey columns for ALL history (rebuild ≡ backfill; the backfill is just
+    // the first drain). Additive ⇒ never wipes app_events or the existing analytics rows.
+    // v12→v13 (#688 phase B) is additive-only: two new nullable REAL columns on delivery_records
+    // (milesToStore, milesToDropoff — the per-leg driving mileage) + one new nullable TEXT column on
+    // session_records (legStateJson — the serialized per-leg accumulator persisted across batch
+    // boundaries). The `PROJECTOR_VERSION` 5→6 refold this bump triggers folds the lifecycle
+    // metadata.odometer stamps (already in the immutable log) into per-drop milesToStore/milesToDropoff
+    // + redistributed realizedMiles/netProfit on stacked drops. Additive ⇒ never wipes app_events or
+    // the existing analytics rows.
+    // v13→v14 (#660 piece 2) is additive-only: one new nullable-defaulted INTEGER column on
+    // delivery_records (sessionAssigned — the driver-attribution marker set by DELIVERY_SESSION_ASSIGN,
+    // DEFAULT 0 back-fills existing rows). There is NO `PROJECTOR_VERSION` bump: DELIVERY_SESSION_ASSIGN
+    // is a new event type that cannot exist in already-folded history, and the DEFAULT 0 is correct for
+    // all history — a fresh drain folds new assigns; nothing needs refolding. Additive ⇒ never wipes
+    // app_events or the existing analytics rows.
+    // v14→v15 (#810 B2) is additive-only: one new nullable TEXT column on offer_records
+    // (outcomeResolved — the resolved fate of an accepted orphan offer, "UNASSIGNED_INFERRED" from the
+    // projector store-evidence join or "UNASSIGNED_ATTESTED" from a driver OFFER_OUTCOME_CORRECTION;
+    // NULL for every normal offer, back-filled NULL on existing rows). The `PROJECTOR_VERSION` 7→8
+    // refold this bump triggers re-processes the `JOB_ACCEPT_MISMATCH` events already in the log (the
+    // seq-114 orphan), stamping `UNASSIGNED_INFERRED` on any cross-store single orphan and leaving the
+    // same-store fielded shape NULL for Tier-2 driver attestation. Additive ⇒ never wipes app_events or
+    // the existing analytics rows.
+    // v15→v16 (#1033 layer 2) is additive-only: TWO new nullable INTEGER columns on delivery_records
+    // — receiptRepricedAt (set when a DELIVERY_RECEIPT_REPRICE re-prices a drop from a late-expanded
+    // receipt) and driverAdjustedAt (set by any DRIVER monetary correction, the re-price's
+    // never-overwrite-the-driver guard). Both NULL for every untouched row and back-filled NULL on
+    // existing ones. There is NO `PROJECTOR_VERSION` bump: DELIVERY_RECEIPT_REPRICE is a new event
+    // type that cannot exist in already-folded history, and NULL is correct for all of it — a fresh
+    // drain folds new re-prices; nothing needs refolding. `driverAdjustedAt` likewise re-derives from
+    // the immutable correction events on any future refold. Additive ⇒ never wipes app_events or the
+    // existing analytics rows.
+    // v17→v18 (#254): seven nullable time-learning evidence columns; projector 13 backfills them.
+    autoMigrations = [
+        AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12),
+        AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
+        AutoMigration(from = 14, to = 15),
+        AutoMigration(from = 15, to = 16),
+        AutoMigration(from = 16, to = 17),
+        AutoMigration(from = 17, to = 18),
+        AutoMigration(from = 18, to = 19), // #1108 machine mileage allocation basis
+        AutoMigration(from = 19, to = 20), // #1333 ledger tables
+        AutoMigration(from = 20, to = 21), // #1388 nullable vehicleId on both ledger tables; no refold
+    ],
+)
+@TypeConverters(DataTypeConverters::class)
+abstract class GigLogDatabase : RoomDatabase() {
+
+    // Abstract methods for each of your DAOs
+    abstract fun appEventDao(): AppEventDao
+    abstract fun appStateSnapshotDao(): AppStateSnapshotDao
+    abstract fun chatDao(): ChatDao
+    abstract fun effectsFiredDao(): EffectsFiredDao
+    abstract fun observationDao(): ObservationDao
+    abstract fun timeConstantDao(): TimeConstantDao
+    abstract fun ledgerDao(): LedgerDao
+    abstract fun analyticsDao(): AnalyticsDao
+
+    companion object {
+        /**
+         * On-disk database file name. SSOT for both the Room builder and the pre-open backup
+         * belt ([cloud.trotter.log.gig.core.database.di.DatabaseBackup]).
+         */
+        const val NAME = "giglog.db"
+
+        /**
+         * The schema version this build ships. SSOT: consumed by the `@Database` annotation
+         * above, by the pre-open backup's "is an upgrade pending?" check, and asserted equal to
+         * the newest exported schema JSON by the unit-level `SchemaVersionGuardTest` (#690). Bump
+         * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
+         * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
+         */
+        const val VERSION = 21
+    }
+
+}

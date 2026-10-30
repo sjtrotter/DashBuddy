@@ -1,0 +1,108 @@
+package cloud.trotter.log.gig.core.data.analytics
+
+import cloud.trotter.log.gig.core.database.analytics.AcceptedOfferRealizedRow
+import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.OfferListRow
+import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.SessionWithCashRow
+import cloud.trotter.log.gig.domain.analytics.AcceptedOfferOutcomeSample
+import cloud.trotter.log.gig.domain.analytics.MilesBasis
+import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
+import cloud.trotter.log.gig.domain.analytics.OfferListing
+import cloud.trotter.log.gig.domain.analytics.OfferOutcome
+import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.SessionReportRule
+import cloud.trotter.log.gig.domain.state.Platform
+
+/**
+ * Room-entity → domain mappers for the analytics read model (#314 PR3). The
+ * repository maps at the boundary so consumers never see persistence types
+ * (the `AppEventRepo.toDomain` convention). Platform is registry-resolved from the
+ * stored wire string, never compared as a literal (Principle 8).
+ */
+
+internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
+    eventSequenceId = eventSequenceId,
+    sessionId = sessionId,
+    platform = Platform.fromWire(platform) ?: Platform.Unknown,
+    jobId = jobId,
+    taskId = taskId,
+    storeName = storeName,
+    completedAt = completedAt,
+    realizedPay = realizedPay,
+    payBasis = payBasis,
+    netProfit = netProfit,
+    realizedMiles = realizedMiles,
+    realizedMinutes = realizedMinutes,
+    tip = tip,
+    basePay = basePay,
+    cashTip = cashTip,
+    milesToStore = milesToStore,
+    milesToDropoff = milesToDropoff,
+    milesBasis = try { MilesBasis.valueOf(milesBasis) } catch (_: IllegalArgumentException) { MilesBasis.UNKNOWN },
+    sessionAssigned = sessionAssigned == 1,
+    receiptRepriced = receiptRepricedAt != null,
+)
+
+internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
+    sessionId = sessionId,
+    platform = Platform.fromWire(platform) ?: Platform.Unknown,
+    startedAt = startedAt,
+    endedAt = endedAt,
+    reportedEarnings = SessionReportRule.effectiveReported(reportedEarnings, endSource, reportOverrideMode, reportOverride),
+    machineReportedEarnings = reportedEarnings,
+    reportOverrideMode = reportOverrideMode,
+    reportOverride = reportOverride,
+    reportCorrectedAt = reportCorrectedAt,
+    endSource = endSource,
+    reportedDurationMillis = reportedDurationMillis,
+    miles = if (startOdometer != null && lastOdometer != null) {
+        (lastOdometer!! - startOdometer!!).coerceAtLeast(0.0)
+    } else {
+        null
+    },
+    deliveries = deliveries,
+    jobsCompleted = jobsCompleted,
+    offersReceived = offersReceived,
+    offersAccepted = offersAccepted,
+    offersDeclined = offersDeclined,
+    offersTimeout = offersTimeout,
+)
+
+/**
+ * Recent-dashes row → domain (#688 F7): the embedded session row mapped as usual, with its Σ cash
+ * tips carried onto [SessionRecord.cashTips] for the additive "+cash" marker.
+ */
+internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain().copy(cashTips = cash)
+
+/**
+ * Offers-list row → domain (#975 / brief §7.4). Platform is registry-resolved and the stored
+ * `AppEventType` name becomes the typed [OfferOutcome] — an outcome this build doesn't recognize maps
+ * to `null` (fail-null, rendered as an unknown pill) rather than crashing the list.
+ */
+internal fun OfferListRow.toDomain(): OfferListing = OfferListing(
+    eventSequenceId = eventSequenceId,
+    platform = Platform.fromWire(platform) ?: Platform.Unknown,
+    storeName = merchantName,
+    decidedAt = decidedAt,
+    payAmount = payAmount,
+    distanceMiles = distanceMiles,
+    estDollarsPerHour = estDollarsPerHour,
+    score = score,
+    outcome = OfferOutcome.fromEventTypeName(outcome),
+)
+
+/**
+ * Estimate-vs-reality join row → domain sample (#975 / brief §7.5). A straight pass-through: every
+ * inclusion rule (null estimate, no link, stacked job, unmeasured job) is applied by the pure
+ * [cloud.trotter.log.gig.domain.analytics.EstimateVsReality.Companion.of], not here.
+ */
+internal fun AcceptedOfferRealizedRow.toSample(): AcceptedOfferOutcomeSample = AcceptedOfferOutcomeSample(
+    offerEventSequenceId = offerEventSequenceId,
+    estPerHour = estPerHour,
+    linkedJobId = linkedJobId,
+    realizedNet = realizedNet,
+    realizedPay = realizedPay,
+    realizedCashTip = realizedCashTip,
+    realizedMinutes = realizedMinutes,
+)

@@ -1,4 +1,4 @@
-# DashBuddy — Analytics & Home Redesign Brief
+# gig.log — Analytics & Home Redesign Brief
 
 **For:** Claude Code (implementation)
 **From:** design exploration in `Analytics Explorations.dc.html` (turns 1–5)

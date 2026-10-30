@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "cloud.trotter.dashbuddy.feature.setup"
+    namespace = "cloud.trotter.log.gig.feature.setup"
     compileSdk {
         version = release(36)
     }

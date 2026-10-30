@@ -1,0 +1,401 @@
+package cloud.trotter.log.gig.core.database.analytics
+
+import androidx.room.Embedded
+
+/**
+ * Aggregate query-result projections for [AnalyticsDao] (#314). Plain POJOs Room
+ * maps SUM/COUNT rows into — NOT entities, NOT persisted. They stay in
+ * `:core:database` next to the DAO whose queries produce them; the read-side
+ * repository (`:core:data`, PR3) folds economy in on top.
+ */
+
+/**
+ * One recent session row + its Σ driver-entered cash tips (#688 F7). [session] is the whole
+ * `session_records` row (`@Embedded`); [cash] is `COALESCE(SUM(cashTip), 0)` over that session's
+ * delivery rows — a LEFT-JOINed `GROUP BY sessionId` subquery (one row per session, no fan-out, the
+ * same shape as `AnalyticsDao.sessionGrossRows`). Kept as its OWN column — never folded into the
+ * session row — so the recent-dashes list can show a "+cash" marker WITHOUT rewriting the
+ * platform-reported earnings number (the label stays honest; cash is additive-visible only).
+ */
+data class SessionWithCashRow(
+    @Embedded val session: SessionRecordEntity,
+    val cash: Double,
+)
+
+/**
+ * Cross-platform delivery totals for a period. [net] is Σ **frozen** per-delivery net
+ * (the projector's `netProfit`, costed against each accepted offer's basis) — an economy
+ * edit never re-costs it (#314 PR3).
+ */
+data class DeliveryTotalsRow(
+    val pay: Double,
+    val net: Double,
+    val deliveries: Int,
+    val jobs: Int,
+    /**
+     * Σ driver-entered cash tips = `COALESCE(SUM(cashTip), 0)` (#688). Kept as its OWN alias — NOT
+     * folded into [pay]/[net] — so the locked accounting adds cash to gross/net explicitly at the
+     * repository while the reconciliation's Σ-attributed ([pay]) stays cash-free.
+     */
+    val cash: Double,
+    /**
+     * Σ **frozen** fuel dollars for the period = `SUM(frozenFuelPerMile × realizedMiles)` (#659) —
+     * the first-class fuel cost row of the 4-step true-net waterfall. Nullable and left un-`COALESCE`d
+     * on purpose: SQL `SUM` of all-null terms is NULL, which is the "no frozen split coverage" signal
+     * (the waterfall falls back to 3-step). Non-negative by construction (per-mile ≥ 0, miles floored
+     * ≥ 0), so it can never render a negative cost row (the #662-F1 fix — cost is not gross−net).
+     */
+    val fuelCost: Double?,
+    /** Σ frozen non-fuel dollars = `SUM(frozenNonFuelPerMile × realizedMiles)`; same null-coverage rule (#659). */
+    val nonFuelCost: Double?,
+    /** Pay excluded from SUM(netProfit); never an inferred mileage cost. */
+    val payWithoutNet: Double = 0.0,
+)
+
+/** Per-platform delivery totals (GROUP BY platform). */
+data class PlatformDeliveryTotalsRow(
+    val platform: String,
+    val pay: Double,
+    val net: Double,
+    val deliveries: Int,
+    val jobs: Int,
+    /** Σ driver-entered cash tips for the platform's period rows (#688) — see [DeliveryTotalsRow.cash]. */
+    val cash: Double,
+    /** Σ frozen fuel dollars for the platform's period rows (#659) — see [DeliveryTotalsRow.fuelCost]. */
+    val fuelCost: Double?,
+    /** Σ frozen non-fuel dollars for the platform's period rows (#659). */
+    val nonFuelCost: Double?,
+    /** Pay excluded from SUM(netProfit); never an inferred mileage cost. */
+    val payWithoutNet: Double = 0.0,
+)
+
+/**
+ * One store's report-card rollup (#159, the #315 Patterns tab) — the `stores` metadata plus
+ * derived-at-read pickup/delivery counts and realized gross/net. Dwell percentiles are computed in the
+ * repository from [StoreDwellSample]. A [runningKey] of null is a **chain-only ("location unknown")**
+ * bucket (F6): its dwell population blends multiple physical locations, so per-location stats are
+ * partial by construction.
+ */
+data class StoreReportRow(
+    val storeKey: String,
+    val platform: String,
+    val normalizedChain: String,
+    val chainDisplay: String,
+    val runningKey: String?,
+    val address: String?,
+    val firstSeenAt: Long,
+    val lastSeenAt: Long,
+    val pickups: Int,
+    val deliveries: Int,
+    val gross: Double,
+    val net: Double,
+)
+
+/** One pickup dwell sample (`confirmedAt − arrivedAt`) keyed by storeKey — the raw input the repository
+ *  folds into per-store avg/p50/p95 (#159; SQLite has no native percentile). */
+data class StoreDwellSample(
+    val storeKey: String?,
+    val dwellMillis: Long,
+)
+
+/**
+ * Reported-authoritative gross + the unattributed delta for a period (#314 PR3).
+ * Computed per session (reported summary total when present, else that session's Σ
+ * delivered pay), then summed. [unattributed] is the excess of reported over delivered
+ * — bonuses/adjustments/a missed capture; a review flag (#650). [overAttributed] is the
+ * mirror excess of delivered over reported (#701) — a **display-only** review signal, never
+ * folded into [unattributed]/`netProfit`.
+ */
+data class GrossTotalsRow(
+    val gross: Double,
+    val unattributed: Double,
+    val overAttributed: Double,
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    val unreportedDashesNoPay: Int,
+    val sessionCash: Double,
+)
+
+/** Per-platform gross + unattributed + overAttributed (GROUP BY platform, #701). */
+data class PlatformGrossTotalsRow(
+    val platform: String,
+    val gross: Double,
+    val unattributed: Double,
+    val overAttributed: Double,
+    val summaryReported: Double,
+    val summaryDashes: Int,
+    val counterReported: Double,
+    val counterDashes: Int,
+    val driverSetReported: Double,
+    val driverSetDashes: Int,
+    val recordedWithoutReport: Double,
+    val unreportedDashesWithPay: Int,
+    val unreportedDashesNoPay: Int,
+    val sessionCash: Double,
+)
+
+/**
+ * One session's start instant + reported-authoritative gross (#315 H6) — the per-day earnings-chart
+ * input, one row per session started in the window. [gross] = the summary-screen `reportedEarnings`
+ * when present, else that session's Σ delivered pay (the same per-session definition as
+ * [GrossTotalsRow]); the repository buckets it onto [startedAt]'s local day (session-anchored, #655).
+ */
+data class SessionGrossRow(
+    val startedAt: Long,
+    val gross: Double,
+    /**
+     * The session's FROZEN kept money (#970 §7.3) — Σ `netProfit` + Σ `cashTip` + this session's
+     * unattributed remainder, the same three terms `PeriodEconomics.netProfit` folds. Bucketed onto
+     * the same start day as [gross], so the per-day net axis decomposes the period net exactly.
+     */
+    val net: Double = 0.0,
+    /**
+     * The session's own folded delivery count (#973 / brief §4.2) — the third figure a tapped day bar
+     * states. Comes from the same `GROUP BY sessionId` subquery as [gross]/[net], so all three
+     * describe one population; a session with nothing folded yet reads 0.
+     */
+    val deliveries: Int = 0,
+)
+
+/**
+ * The "(No session)" bucket (#660 piece 1): Σ realized pay + Σ cash tip + count for deliveries whose
+ * source event carried NO `sessionId` at all — the same null-session population [DeliveryTotalsRow]
+ * already folds into net via its own `completedAt` (#655), but that [GrossTotalsRow]/[SessionGrossRow]
+ * never see because those iterate `session_records` and a null-session row joins to nothing. The
+ * repository adds [pay] + [cash] into `grossEarnings` so gross can no longer read below the net that
+ * already counts this pay, and exposes the same totals as an explicit review signal so an orphaned
+ * delivery is a visible data-quality flag, never a silent inconsistency.
+ */
+data class NoSessionTotalsRow(
+    val pay: Double,
+    val cash: Double,
+    val deliveries: Int,
+)
+
+/**
+ * The window's **pay-mix parts** (#973 / brief §7.6) — Σ base pay, Σ platform-reported tip, Σ
+ * driver-entered cash tip, and the coverage counters, over the exact delivery population
+ * [DeliveryTotalsRow] describes (byte-identical `WHERE`).
+ *
+ * [withBreakdown] < [deliveries] is the NORMAL case, not an error: `basePay`/`tip` are stamped only on
+ * a job's sole drop, so a window containing stacked jobs itemizes only part of its pay. The read side
+ * turns that gap into a stated caveat rather than letting the un-itemized remainder masquerade as
+ * bonus money.
+ */
+data class PayMixTotalsRow(
+    val basePay: Double,
+    val tips: Double,
+    val cashTips: Double,
+    val deliveries: Int,
+    val withBreakdown: Int,
+    val offerEstimatePay: Double,
+    val offerEstimateDeliveries: Int,
+    val paylessDeliveries: Int,
+)
+
+/** Per-platform variant of [NoSessionTotalsRow] (GROUP BY platform) — grouped on the delivery's own
+ *  denormalized `platform` column, since there is no session to derive it from. */
+data class PlatformNoSessionTotalsRow(
+    val platform: String,
+    val pay: Double,
+    val cash: Double,
+    val deliveries: Int,
+)
+
+/**
+ * One session-less delivery's own completion instant + gross (pay + cash) — the "(No session)"
+ * bucket's per-day chart input (#660), mirroring [SessionGrossRow] for rows that join to no session.
+ * The repository buckets each onto the LOCAL DAY of its own [completedAt] (there is no session start
+ * to anchor on, so this mirrors [DeliveryTotalsRow]'s null-session `completedAt` fallback).
+ */
+data class NoSessionDailyRow(
+    val completedAt: Long,
+    val gross: Double,
+    /** The row's FROZEN kept money (#970 §7.3) — `netProfit + cashTip`, the terms this bucket
+     *  contributes to `PeriodEconomics.netProfit`. */
+    val net: Double = 0.0,
+)
+
+/** Cross-platform session totals for a period: miles = Σ odo delta, onlineMillis = Σ duration, sessions = COUNT. */
+data class SessionTotalsRow(
+    val miles: Double,
+    val onlineMillis: Long,
+    /** Dashes (sessions) that started in the period — the Time-tab dash count / avg-dash denominator (#315 H4). */
+    val sessions: Int,
+)
+
+/**
+ * One session's online span (#315 H5 Patterns heatmap) — [startMillis] = `startedAt`, [endMillis] =
+ * effective end `COALESCE(endedAt, lastEventAt)` (a still-open session uses its last event). The
+ * repository apportions this span across the hour-of-week grid's coverage denominator. Lifetime-scoped
+ * (the heatmap has no period selector), so the query is unbounded.
+ */
+data class SessionSpanRow(
+    val startMillis: Long,
+    val endMillis: Long,
+)
+
+/**
+ * One completed delivery's net + completion instant (#315 H5 Patterns heatmap numerator).
+ * [netDollars] = `COALESCE(netProfit, 0) + COALESCE(cashTip, 0)` — the frozen realized net plus the
+ * driver-entered cash tip (#688; cash lives outside `netProfit`, added at the read site). A null-net
+ * (no cost basis) row contributes its cash only — the frozen-net philosophy, never recomputed.
+ */
+data class DeliveryNetRow(
+    val completedAt: Long,
+    val netDollars: Double,
+)
+
+/** Per-platform session totals (GROUP BY platform). */
+data class PlatformSessionTotalsRow(
+    val platform: String,
+    val miles: Double,
+    val onlineMillis: Long,
+    /** Dashes for the platform's period rows (#315 H4). */
+    val sessions: Int,
+)
+
+/**
+ * Time-tab delivery aggregates for a period (#315 H4) — session-anchored (#655), same WHERE shape as
+ * [DeliveryTotalsRow]. [deliveryMinutes]/[deliveryMiles] are Σ per-delivery realized **partition
+ * deltas** (nullable and left un-`COALESCE`d: SQL `SUM` of an empty set is NULL — the "nothing
+ * measured" signal, never a fabricated 0 miles/minutes). [withDeadline]/[onTime] cover ONLY
+ * deadline-carrying rows (a delivery with no captured deadline is excluded from both, never counted
+ * as late). [avgDeadlineMarginMillis] = `AVG(deadlineMillis − completedAt)` over deadline-carrying
+ * rows, positive when the driver typically finished early (nullable — null when no row carried a
+ * deadline).
+ */
+data class DeliveryTimeTotalsRow(
+    val deliveryMinutes: Double?,
+    val deliveryMiles: Double?,
+    val withDeadline: Int,
+    val onTime: Int,
+    val avgDeadlineMarginMillis: Double?,
+    /** COUNT of the population — the door-dwell coverage denominator (#983). */
+    val deliveries: Int = 0,
+    /** Σ `completedAt − arrivedAt` over arrival-stamped rows — measured door time (#983). */
+    val dropoffDwellMillis: Long = 0L,
+    /** How many rows carried a usable arrival stamp — the coverage numerator (#983). */
+    val dropoffsTimed: Int = 0,
+)
+
+/**
+ * Store-dwell aggregate for a window's pickups (#983 / brief §6) — Σ `confirmedAt − arrivedAt` over the
+ * pickups that stamped both, how many those were ([timed]), and the population's own COUNT ([pickups]).
+ *
+ * [timed] < [pickups] is the NORMAL case (a pickup that never stamped an arrival still happened), which
+ * is why the coverage counter travels with the sum: the "typical online hour" surface states it rather
+ * than implying every stop was measured (§9).
+ */
+data class PickupDwellTotalsRow(
+    val dwellMillis: Long,
+    val timed: Int,
+    val pickups: Int,
+)
+
+/**
+ * One session-scoped read-model row reduced to `(sessionId, sequenceId, timestamp)` — the §7.8 gap
+ * fold's input (#983), for both the completion side (`delivery_records.completedAt`) and the accept
+ * side (`offer_records.decidedAt`).
+ *
+ * [sequenceId] is the source event's `sequenceId` (each table's PK) and orders the fold; [timestamp] is
+ * the row's own domain timestamp and measures the duration — the #732 contract's two halves kept
+ * distinct all the way down to the DTO.
+ */
+data class SessionEventRow(
+    val sessionId: String,
+    val sequenceId: Long,
+    val timestamp: Long,
+)
+
+/** One in-window dash's effective end (`COALESCE(endedAt, lastEventAt)`) — the §7.8 fold's bound (#983). */
+data class SessionEndRow(
+    val sessionId: String,
+    val endMillis: Long,
+)
+
+/**
+ * Per-outcome offer counts + Σ frozen `estNetPay` for a period (#315 H3, Decisions tab). One row
+ * per closing [outcome] ("OFFER_ACCEPTED" / "OFFER_DECLINED" / "OFFER_TIMEOUT") — the funnel counts
+ * and the value-of-saying-no input (Σ est net of the declined group). Estimates are the offer's
+ * FROZEN decision-time snapshot (an economy edit never re-costs them), never realized net.
+ */
+data class OutcomeCountRow(
+    val outcome: String,
+    val count: Int,
+    val estNetSum: Double,
+    /**
+     * How many of the group's [count] rows carried a non-null `estNetPay` at all (#975 / brief §5).
+     * SQL `SUM` already skips nulls, so [estNetSum] is honest — but silently so: a window of declines
+     * the #936 evaluator refused to score sums to `0.0`, indistinguishable from "the declines really
+     * were worth nothing". This counter is what lets the read side STATE the population ("across N of
+     * M declines with estimates") instead of implying full coverage (§9).
+     */
+    val withEstimate: Int,
+)
+
+/**
+ * One ACCEPTED offer of the window joined to what its linked job realized (#975 / brief §7.5) — the
+ * estimate-vs-reality input. LEFT-joined on `delivery_records.jobId = offer_records.linkedJobId` and
+ * grouped per offer, so an offer with no link and a job with no deliveries both still produce a row:
+ * they are part of the DENOMINATOR the surface has to state, and filtering them out in SQL would
+ * leave the read unable to say how much of the window it describes.
+ *
+ * The nullable SUMs are deliberately un-`COALESCE`d — SQL `SUM` of an all-null set is NULL, the
+ * honest "never measured" signal, where a `0` would drag the realized mean toward zero for a job
+ * that simply wasn't recorded. The whole inclusion policy lives in
+ * [EstimateVsReality.of][cloud.trotter.log.gig.domain.analytics.EstimateVsReality.Companion.of].
+ */
+data class AcceptedOfferRealizedRow(
+    val offerEventSequenceId: Long,
+    /** The offer's FROZEN decision-time `estDollarsPerHour`; null on a #936 no-verdict evaluation. */
+    val estPerHour: Double?,
+    /** The job store resolution linked this offer to (#159 F4); null when it was never linked. */
+    val linkedJobId: String?,
+    /** Σ frozen `netProfit` over the job's deliveries; NULL when none carried one. */
+    val realizedNet: Double?,
+    /** Σ `realizedPay` over the job's deliveries; NULL when no drop recorded pay (#1133 — net alone no longer proves it). */
+    val realizedPay: Double?,
+    /** Σ driver-entered `cashTip` over the same deliveries (#688 — additive at the read site). */
+    val realizedCashTip: Double,
+    /** Σ measured `realizedMinutes` over the same deliveries; NULL when none was measured. */
+    val realizedMinutes: Double?,
+)
+
+/**
+ * One row of the paged recent-offers list (#975 / brief §7.4) — the projection behind the Offers
+ * tab's list. A frozen decision record: the offer's quoted pay/distance plus the verdict's frozen
+ * est. $/hr and score, and how it closed.
+ *
+ * No customer fields exist on `offer_records`, so this projection cannot carry PII; [merchantName]
+ * is driver-owned merchant display data (Principle 6).
+ */
+data class OfferListRow(
+    val eventSequenceId: Long,
+    val platform: String,
+    val merchantName: String?,
+    val decidedAt: Long,
+    val payAmount: Double?,
+    val distanceMiles: Double?,
+    val estDollarsPerHour: Double?,
+    val score: Double?,
+    val outcome: String,
+)
+
+/**
+ * Per-outcome score / est-$/hr averages for a period (#315 H3) — the "is my judgment matching the
+ * verdicts" read. [avgScore]/[avgEstPerHour] are SQL `AVG`s (nullable — a group whose rows all
+ * carried a null `score`/`estDollarsPerHour` yields null, never a fabricated 0). Frozen estimates.
+ */
+data class ScoreOutcomeRow(
+    val outcome: String,
+    val count: Int,
+    val avgScore: Double?,
+    val avgEstPerHour: Double?,
+)

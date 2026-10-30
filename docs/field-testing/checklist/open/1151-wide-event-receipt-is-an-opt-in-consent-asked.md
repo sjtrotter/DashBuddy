@@ -5,7 +5,7 @@ issues: #1151, #1148, #1152
   The accessibility service receives window-change notices from other apps (what the #1148/#1152
   overlay path needs) ONLY after you allow it, and the question now comes first in the setup
   sheets. **How to tell it works:**
-  1. Fresh install: the "Let DashBuddy notice windows from other apps" step appears BEFORE the
+  1. Fresh install: the "Let gig.log notice windows from other apps" step appears BEFORE the
      accessibility-service request (Allow / Don't allow, no "Not now"). The accessibility card never
      appears before you answer. On an install where the service was already on, the step still
      appears once.

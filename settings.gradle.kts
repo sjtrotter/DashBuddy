@@ -33,7 +33,7 @@ includeBuild("census-contract") {
     name = "census-contract"
 }
 
-rootProject.name = "DashBuddy"
+rootProject.name = "gig-log"
 include(":app")
 include(":domain")
 include(":core:designsystem")

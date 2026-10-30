@@ -14,7 +14,7 @@ dev-decided Option B — no re-stamp):** `sequenceId` is the authoritative fold/
 may lag it (sole carrier: `PICKUP_CONFIRMED`, whose `occurredAt` is the grace-armed
 `Task.completedAt`). Consumers order by `sequenceId`; "when did it really happen" reads the payload's
 own domain timestamp. KDoc at `AppEventEntity`; `GracedCommitOrderingInvariantTest` trips any silent
-re-stamp. `AnalyticsProjector` (`:core:data`, started from `DashBuddyApplication`,
+re-stamp. `AnalyticsProjector` (`:core:data`, started from `GigLogApplication`,
 runs every launch off-main + supervised) folds `app_events` → `delivery_records`/`session_records`/
 `offer_records` via the pure `RecordFolds`/`SessionFoldContext` (`:domain`). The fold is
 **exactly-once** — records + a watermark advance in one `db.withTransaction`, record PKs are the
@@ -744,7 +744,7 @@ All three join `BOOKKEEPING_EVENTS`; their odometer stamps never feed mileage me
 Room v19 to v20 adds `expense_records` and `fuel_records` by `AutoMigration`, with exported schema
 and migration checks. Each row uses its source `eventSequenceId` as primary key and carries nullable
 `sessionId` and `voidedAt`. Expenses hold category, amount, and optional note; fuel holds total,
-optional gallons, and optional `odometerMiles` from `OdometerRepository.totalMiles(): Double?` (DashBuddy's
+optional gallons, and optional `odometerMiles` from `OdometerRepository.totalMiles(): Double?` (gig.log's
 GPS odometer, which runs only while a dash is tracked; null until loaded).
 Both carry `occurredAt`. `ExpenseCategorySerializer` encodes payload categories by name and decodes
 with `ExpenseCategory.fromStorage`; unknown names in payload JSON or Room fall back to `OTHER`

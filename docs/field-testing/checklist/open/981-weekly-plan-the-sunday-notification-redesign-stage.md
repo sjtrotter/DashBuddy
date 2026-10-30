@@ -7,7 +7,7 @@ issues: #981
   (a) **Getting there:** Home shows no plan row until you save one. Reach the screen the first time
   by waiting for the Sunday ~6 PM notification ("Your weekly plan") and tapping it — it must open
   the Weekly Plan screen, not the home screen. Its notification channel is its own: check
-  Settings → Apps → DashBuddy → Notifications lists a **Weekly plan** channel separate from
+  Settings → Apps → gig.log → Notifications lists a **Weekly plan** channel separate from
   **App notices**, and muting one must not mute the other.
   (b) **The numbers are two, always:** the headline `N hours on your best windows ≈ $X kept` must
   ALWAYS be followed by the comparison line `The same N hours placed at random ≈ $Y — the plan is

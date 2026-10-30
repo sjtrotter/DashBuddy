@@ -1,7 +1,7 @@
 # #940 — the #878 seeded-CI design's missing exploration half.
 #
 # PR CI pins every kotest property to an explicit seed (deterministic, reproducible reds);
-# the breadth that seeding traded away lives behind -Ddashbuddy.propExplore=true (10x samples,
+# the breadth that seeding traded away lives behind -Dgiglog.propExplore=true (10x samples,
 # unseeded) and was designed to run "off the PR path (nightly/manual)" — this is that home.
 #
 # When a property fails here, the kotest output REPORTS THE SEED. The whole point of this
@@ -51,7 +51,7 @@ jobs:
       - name: Explore (unseeded, 10x samples)
         # --continue: one red property must never hide the other module's half of the suite
         # (09-30 → 10-19 the :app properties never ran because :core:pipeline failed first).
-        run: ./gradlew --continue :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Ddashbuddy.propExplore=true
+        run: ./gradlew --continue :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Dgiglog.propExplore=true
 
       - name: Surface failing-property reports
         # A red exploration run's value IS the seed in the kotest failure output — put the

@@ -1,0 +1,255 @@
+package cloud.trotter.log.gig.core.pipeline.accessibility.event.type.view.clicked
+
+import cloud.trotter.log.gig.domain.model.accessibility.UiNode
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.capture.ReplayMetadata
+import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
+import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
+import cloud.trotter.log.gig.core.pipeline.PipelineEvent
+import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.test.util.TestRulesetFactory
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
+
+class ClickClassifierTest {
+
+    private val classifier = ObservationClassifier(
+        mock<JsonRuleInterpreter> {
+            on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
+        },
+        mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
+        PlatformAppVersions.NONE,
+    )
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private fun node(
+        viewId: String? = null,
+        text: String? = null,
+        contentDescription: String? = null,
+    ) = UiNode(
+        viewIdResourceName = viewId,
+        text = text,
+        contentDescription = contentDescription,
+    )
+
+    /**
+     * Prime (or clear) a platform's cached screen context so rules with a `screenIs`
+     * constraint can match (#438 item 2 — the classifier keys screen targets per
+     * platform wire). #910 turned the cache value into a `ScreenContext(target,
+     * ruleId)` pair — the click envelope now inherits the screen RULE's redact — so
+     * this reflects the nested value type rather than a bare String.
+     */
+    private fun primeScreenContext(wire: String, target: String?) {
+        @Suppress("UNCHECKED_CAST")
+        val contexts = ObservationClassifier::class.java
+            .getDeclaredField("lastScreenContexts").apply { isAccessible = true }
+            .get(classifier) as MutableMap<String, Any>
+        contexts.clear()
+        if (target == null) return
+        val ctor = Class.forName("cloud.trotter.log.gig.core.pipeline.ObservationClassifier\u0024ScreenContext")
+            .declaredConstructors.first().apply { isAccessible = true }
+        contexts[wire] = ctor.newInstance(target, null)
+    }
+
+    private fun classifyClick(node: UiNode, screenTarget: String? = null): Observation.Click {
+        // Prime this platform's screen context so rules with screenIs constraints can
+        // match (#438 item 2 — the classifier now keys screen targets per platform wire).
+        // The click carries DoorDash's package so it resolves to the "doordash" wire.
+        primeScreenContext(Platform.DoorDash.wire, screenTarget)
+        return classifier.classify(
+            PipelineEvent.Click(
+                System.currentTimeMillis(), node,
+                packageName = Platform.DoorDash.packageName,
+            ),
+        )
+    }
+
+    private fun Observation.Click.intent(): String =
+        (parsed as ParsedFields.ClickFields).intent
+
+    private fun Observation.Click.clickFields(): ParsedFields.ClickFields =
+        parsed as ParsedFields.ClickFields
+
+    // =========================================================================
+    // AcceptOffer
+    // =========================================================================
+
+    @Test
+    fun `classifies accept_button as AcceptOffer`() {
+        val result = classifyClick(node(viewId = "accept_button"), "offer_popup")
+        assertEquals("accept_offer", result.intent())
+    }
+
+    @Test
+    fun `AcceptOffer takes priority over text when both present`() {
+        val result = classifyClick(node(viewId = "accept_button", text = "Decline offer"), "offer_popup")
+        assertEquals("accept_offer", result.intent())
+    }
+
+    // =========================================================================
+    // DeclineOffer
+    // =========================================================================
+
+    @Test
+    fun `classifies 'Decline offer' text as DeclineOffer`() {
+        val result = classifyClick(node(text = "Decline offer"), "offer_popup_confirm_decline")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    @Test
+    fun `DeclineOffer matches case-insensitively`() {
+        val result = classifyClick(node(text = "decline offer"), "offer_popup_confirm_decline")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    /**
+     * #1104 — the FIELDED shape, from 2026-09-10 10:07:18.192 (and again 09-12): the dasher taps
+     * the confirm sheet's button, but the tap is classified 24-229 ms BEFORE the sheet's own frame
+     * is admitted, so the platform's cached screen target is still `offer_popup` and the
+     * single-valued `screenIs` dropped the click to UNKNOWN — the offer then expired with no
+     * decline recorded. The clicked node is an id-LESS Button whose only text lives on a
+     * `textView_prism_button_title` child ("Decline offer"), which is why the widening is safe:
+     * the offer card's own control is a bare "Decline" on an id-bearing button claimed by
+     * `initial_decline`.
+     */
+    private fun fieldedConfirmDeclineButton() = UiNode(
+        className = "android.widget.Button",
+        isClickable = true,
+        children = listOf(
+            UiNode(
+                viewIdResourceName = "com.doordash.driverapp:id/textView_prism_button_title",
+                className = "android.widget.TextView",
+                text = "Decline offer",
+            ),
+        ),
+    )
+
+    @Test
+    fun `the confirm tap classifies while the screen context still says offer_popup (#1104)`() {
+        val result = classifyClick(fieldedConfirmDeclineButton(), "offer_popup")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    @Test
+    fun `the same confirm tap still classifies once the sheet IS admitted (#1104)`() {
+        val result = classifyClick(fieldedConfirmDeclineButton(), "offer_popup_confirm_decline")
+        assertEquals("decline_offer", result.intent())
+    }
+
+    @Test
+    fun `the confirm tap stays Unknown on a screen the rule does not name (#1104)`() {
+        // The widening is per-target and enumerated — it is not "any screen". A "Decline offer"
+        // label tapped while the board is idle must never be read as a committed decline.
+        val result = classifyClick(fieldedConfirmDeclineButton(), "waiting_for_offer")
+        assertEquals("unknown", result.intent())
+    }
+
+    // =========================================================================
+    // ArrivedAtStore
+    // =========================================================================
+
+    @Test
+    fun `classifies primary_action_button + 'Arrived at store' text as ArrivedAtStore`() {
+        val result = classifyClick(
+            node(viewId = "primary_action_button", text = "Arrived at store"), "pickup_arrival"
+        )
+        assertEquals("arrived_at_store", result.intent())
+    }
+
+    @Test
+    fun `classifies primary_action_button + 'Arrived' text as ArrivedAtStore`() {
+        val result = classifyClick(
+            node(viewId = "primary_action_button", text = "Arrived"), "pickup_arrival"
+        )
+        assertEquals("arrived_at_store", result.intent())
+    }
+
+    @Test
+    fun `primary_action_button without Arrived text is Unknown`() {
+        val result = classifyClick(
+            node(viewId = "primary_action_button", text = "Confirm pickup")
+        )
+        assertEquals("unknown", result.intent())
+    }
+
+    @Test
+    fun `Arrived text without primary_action_button is Unknown`() {
+        val result = classifyClick(
+            node(viewId = "some_other_button", text = "Arrived")
+        )
+        assertEquals("unknown", result.intent())
+    }
+
+    // =========================================================================
+    // Unknown
+    // =========================================================================
+
+    @Test
+    fun `returns Unknown for unrecognized node`() {
+        val result = classifyClick(node(viewId = "some_button", text = "Some action"))
+        assertEquals("unknown", result.intent())
+    }
+
+    @Test
+    fun `Unknown preserves nodeId for analysis`() {
+        val result = classifyClick(node(viewId = "confirm_delivery_button"))
+        val fields = result.clickFields()
+        assertEquals("confirm_delivery_button", fields.nodeId)
+    }
+
+    @Test
+    fun `Unknown preserves nodeText for analysis`() {
+        val result = classifyClick(node(viewId = "primary_action_button", text = "Complete delivery"))
+        val fields = result.clickFields()
+        assertEquals("Complete delivery", fields.nodeText)
+    }
+
+    @Test
+    fun `Unknown with null viewId and null text has null fields`() {
+        val result = classifyClick(node())
+        val fields = result.clickFields()
+        assertNull(fields.nodeId)
+        assertNull(fields.nodeText)
+    }
+
+    // =========================================================================
+    // Per-platform screen context (#438 item 2)
+    // =========================================================================
+
+    @Test
+    fun `another platform's screen target does not gate this platform's click`() {
+        // Prime ONLY Uber's screen context with pickup_arrival, then classify a
+        // DoorDash click whose rule requires screenIs=pickup_arrival. Before item 2
+        // the single global would have leaked Uber's screen and matched; now the
+        // DoorDash click has no primed target of its own and stays Unknown.
+        primeScreenContext(Platform.Uber.wire, "pickup_arrival")
+
+        val result = classifier.classify(
+            PipelineEvent.Click(
+                System.currentTimeMillis(),
+                node(viewId = "primary_action_button", text = "Arrived"),
+                packageName = Platform.DoorDash.packageName,
+            ),
+        )
+        assertEquals("unknown", result.intent())
+    }
+
+    @Test
+    fun `Unknown strips no_id placeholder from nodeId`() {
+        val result = classifyClick(node(viewId = "no_id", text = "Got it"))
+        val fields = result.clickFields()
+        assertNull(fields.nodeId)
+        assertNotNull(fields.nodeText)
+    }
+}

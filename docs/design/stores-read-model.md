@@ -145,7 +145,7 @@ progression). A pickup that never confirms folds no row (no dwell to report).
 
 ### Migration checklist (per CLAUDE.md `:core:database` posture)
 
-Bump `DashBuddyDatabase.VERSION` 11 → 12 → regenerate exported schema JSON → `AutoMigration`
+Bump `GigLogDatabase.VERSION` 11 → 12 → regenerate exported schema JSON → `AutoMigration`
 (pure additive: two new tables + `delivery_records.{storeKey,payoutStoreForms,storeKeyPinned}` +
 `offer_records.{storeKey,linkedJobId}` + `pickup_records.storeKey`, all nullable / defaulted) →
 `MigrationTestHelper` case in `core/database/src/androidTest` →

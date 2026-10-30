@@ -1,6 +1,6 @@
-# DashBuddy Recognition Pipeline Tests
+# gig.log Recognition Pipeline Tests
 
-This directory contains the **Snapshot Testing Infrastructure** for the DashBuddy Screen Recognition
+This directory contains the **Snapshot Testing Infrastructure** for the gig.log Screen Recognition
 Pipeline. Unlike standard unit tests, this system is **data-driven**, using captured UI
 hierarchies (JSON) to verify that the app correctly identifies screens.
 

@@ -1,0 +1,291 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.domain.evaluation.OfferAction
+import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
+import cloud.trotter.log.gig.domain.model.accessibility.ParsedTime
+import cloud.trotter.log.gig.domain.model.offer.OfferBadge
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
+import cloud.trotter.log.gig.domain.model.order.OrderType
+import cloud.trotter.log.gig.domain.model.order.ParsedOrder
+import cloud.trotter.log.gig.domain.model.ratings.RatingsSnapshot
+import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.domain.state.DestructiveKind
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.FlowRegion
+import cloud.trotter.log.gig.domain.state.Job
+import cloud.trotter.log.gig.domain.state.JobReceiptAnchors
+import cloud.trotter.log.gig.domain.state.Mode
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.PendingDestructive
+import cloud.trotter.log.gig.domain.state.PendingModeResume
+import cloud.trotter.log.gig.domain.state.PendingOffer
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.Regions
+import cloud.trotter.log.gig.domain.state.Session
+import cloud.trotter.log.gig.domain.state.Task
+import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.TimelineTaskEntry
+import kotlinx.serialization.encodeToString
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import cloud.trotter.log.gig.domain.evaluation.OfferQuality
+
+/**
+ * #353 — the Gson→kotlinx.serialization migration's safety net.
+ *
+ * 1. Every [ParsedFields] subtype round-trips through the polymorphic sealed
+ *    serializer (the journal's parsed column) — the compile-time [coverageGuard]
+ *    breaks when a subtype is added until it's covered here too.
+ * 2. A fully-populated [AppState] round-trips losslessly (the snapshot path).
+ * 3. Schema drift decodes with defaults instead of Gson's silent nulls; true
+ *    corruption throws (callers handle loudly).
+ */
+class SerializationRoundTripTest {
+
+    @Test
+    fun `session earnings round-trip null and read zero distinctly (#1041)`() {
+        for (earnings in listOf(null, 0.0, 12.50)) {
+            val session = Session("s1", startedAt = 100L, runningEarnings = earnings, accumulatedDeliveryPay = earnings)
+            assertEquals(session, StateJson.decodeFromString<Session>(StateJson.encodeToString(session)))
+        }
+    }
+
+    @Test
+    fun `legacy session zeros stay read zeros and missing earnings default to null (#1041)`() {
+        val legacy = """{"sessionId":"s1","startedAt":100,"runningEarnings":0.0,"accumulatedDeliveryPay":0.0}"""
+        assertEquals(
+            Session("s1", startedAt = 100L, runningEarnings = 0.0, accumulatedDeliveryPay = 0.0),
+            StateJson.decodeFromString<Session>(legacy),
+        )
+        assertEquals(
+            Session("s1", startedAt = 100L),
+            StateJson.decodeFromString<Session>("""{"sessionId":"s1","startedAt":100}"""),
+        )
+    }
+
+    private val parsedTime = ParsedTime(text = "5:39 PM", time = 1_000_000L)
+
+    private fun allSubtypes(): List<ParsedFields> = listOf(
+        ParsedFields.None,
+        ParsedFields.IdleFields(zoneName = "Cypress", sessionPay = 12.5, spotSaveDeadline = 99L),
+        ParsedFields.OfferFields(
+            parsedOffer = ParsedOffer(
+                offerHash = "h1", payAmount = 7.5, distanceMiles = 3.2,
+                badges = setOf(OfferBadge.HIGH_PAYING),
+                orders = listOf(
+                    ParsedOrder(
+                        orderIndex = 0, orderType = OrderType.PICKUP, storeName = "HEB",
+                        itemCount = 3, isItemCountEstimated = false, badges = emptySet(),
+                    )
+                ),
+            ),
+        ),
+        ParsedFields.TaskFields(
+            phase = TaskPhase.PICKUP, subFlow = TaskSubFlow.NAVIGATION,
+            storeName = "HEB", deadline = parsedTime, itemsShopped = 2,
+        ),
+        ParsedFields.PostTaskFields(totalPay = 9.75, customerTips = 3.25, isExpanded = true),
+        ParsedFields.SessionEndedFields(totalEarnings = 55.25, offersAccepted = 7, offersTotal = 9),
+        ParsedFields.PausedFields(remainingText = "29 min", remainingMillis = 1_740_000L),
+        ParsedFields.TimelineFields(
+            sessionEarnings = 12.0,
+            tasks = listOf(TimelineTaskEntry("pickup", "abc", parsedTime, "HEB", isCurrent = true)),
+        ),
+        ParsedFields.RatingsFields(customerRating = 4.97, lifetimeDeliveries = 812),
+        ParsedFields.SensitiveFields(),
+        ParsedFields.NoiseFields(),
+        ParsedFields.ClickFields(intent = "accept_offer", nodeId = "accept_button"),
+        ParsedFields.NotificationFields(intent = "tip", amount = 3.0, storeName = "HEB"),
+    )
+
+    /**
+     * Compile-time completeness guard: adding a ParsedFields subtype makes this
+     * exhaustive `when` fail to compile until it (and [allSubtypes]) cover it.
+     */
+    @Suppress("unused")
+    private fun coverageGuard(p: ParsedFields): String = when (p) {
+        is ParsedFields.None -> "covered"
+        is ParsedFields.IdleFields -> "covered"
+        is ParsedFields.OfferFields -> "covered"
+        is ParsedFields.TaskFields -> "covered"
+        is ParsedFields.PostTaskFields -> "covered"
+        is ParsedFields.SessionEndedFields -> "covered"
+        is ParsedFields.PausedFields -> "covered"
+        is ParsedFields.TimelineFields -> "covered"
+        is ParsedFields.RatingsFields -> "covered"
+        is ParsedFields.SensitiveFields -> "covered"
+        is ParsedFields.NoiseFields -> "covered"
+        is ParsedFields.ClickFields -> "covered"
+        is ParsedFields.NotificationFields -> "covered"
+    }
+
+    @Test
+    fun `every ParsedFields subtype round-trips polymorphically`() {
+        val subtypes = allSubtypes()
+        assertEquals(13, subtypes.size)
+
+        subtypes.forEach { original ->
+            val json = StateJson.encodeToString<ParsedFields>(original)
+            val decoded = StateJson.decodeFromString<ParsedFields>(json)
+            assertEquals(original, decoded)
+            assertEquals(original::class, decoded::class)
+        }
+    }
+
+    @Test
+    fun `a fully-populated AppState snapshot round-trips losslessly`() {
+        val evaluation = OfferEvaluation(
+            action = OfferAction.ACCEPT, score = 74.0, qualityLevel = OfferQuality.GOOD, payAmount = 7.50,
+            fuelCostEstimate = 0.5, netPayAmount = 6.50, distanceMiles = 3.2,
+            dollarsPerMile = 2.03, dollarsPerHour = 22.0, estimatedTimeMinutes = 18.0,
+            itemCount = 3.0, merchantName = "HEB", warnings = listOf("target high"),
+        )
+        val offerFields = allSubtypes().filterIsInstance<ParsedFields.OfferFields>().first()
+        val state = AppState(
+            regions = Regions(
+                flow = FlowRegion(
+                    flow = Flow.OfferPresented,
+                    sourceRuleId = "doordash.screen.offer_popup",
+                    activePlatform = Platform.DoorDash,
+                    lastObservedAt = 1_000L,
+                ),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash,
+                        mode = Mode.Online,
+                        // #438 B3: offers live on the region now.
+                        pendingOffers = listOf(
+                            PendingOffer(
+                                offerHash = "h1", offerFields = offerFields,
+                                presentedAt = 1_000L, evaluation = evaluation,
+                                returnFlow = Flow.Idle, lastClickIntent = "accept_offer",
+                            ),
+                        ),
+                        session = Session("session-doordash-1000-0", startedAt = 100L, runningEarnings = 41.25),
+                        activeJob = Job(
+                            jobId = "job-doordash-1000-1",
+                            offerStoreHint = listOf("HEB"),
+                            parentOfferHash = "h1",
+                            startedAt = 200L,
+                        ),
+                        activeTask = Task(
+                            taskId = "task-doordash-1000-2", jobId = "job-doordash-1000-1",
+                            phase = TaskPhase.PICKUP, storeName = "HEB", startedAt = 300L,
+                        ),
+                        pendingDestructive = PendingDestructive(
+                            DestructiveKind.TASK_RETIRE, since = 800L, deadline = 1_000L,
+                        ),
+                        pendingModeResume = PendingModeResume(since = 700L, deadline = 8_700L),
+                        ratings = RatingsSnapshot(customerRating = 4.97, capturedAt = 900L),
+                        lastPostTaskFields = ParsedFields.PostTaskFields(totalPay = 9.75),
+                        mintCounter = 3L,
+                        lastObservedAt = 1_000L,
+                    ),
+                ),
+            ),
+            timestamp = 1_000L,
+            correlationVersion = 42L,
+        )
+
+        val decoded = StateJson.decodeFromString<AppState>(StateJson.encodeToString(state))
+
+        assertEquals(state, decoded)
+    }
+
+    @Test
+    fun `schema drift decodes with defaults, not nulls`() {
+        // Unknown future field + missing optional regions — must decode with defaults.
+        val json = """{"timestamp":123,"correlationVersion":7,"someFutureField":"x"}"""
+
+        val state = StateJson.decodeFromString<AppState>(json)
+
+        assertEquals(7L, state.correlationVersion)
+        assertEquals(Flow.Idle, state.regions.flow.flow) // defaulted, NOT null
+        assertTrue(state.regions.platforms.isEmpty())
+    }
+
+    @Test
+    fun `a SESSION_END carrying an absorbed retire round-trips, and a pre-1078 pending decodes to null`() {
+        // #1078: `absorbedRetireSince` is additive, nullable and defaulted, so it must survive a
+        // snapshot round-trip AND a snapshot written before it existed must decode to null (the
+        // pre-#1078 teardown), never fail the restore.
+        val honored = PendingDestructive(
+            kind = DestructiveKind.SESSION_END,
+            since = 1_000L,
+            deadline = 3_500L,
+            authoritative = true,
+            absorbedRetireSince = 900L,
+            absorbedRetireDeadline = 10_900L,
+            wakeId = 7L,
+            windowFrom = 1_000L,
+        )
+        val decoded = StateJson.decodeFromString<PendingDestructive>(StateJson.encodeToString(honored))
+        assertEquals(honored, decoded)
+        assertEquals(900L, decoded.absorbedRetireSince)
+        assertEquals(
+            "round 5: the absorbed retire's WINDOW rides with it — it is a floor on this deadline",
+            10_900L, decoded.absorbedRetireDeadline,
+        )
+
+        val legacy = StateJson.decodeFromString<PendingDestructive>(
+            """{"kind":"SESSION_END","since":1000,"deadline":3500,"authoritative":true}""",
+        )
+        assertEquals(null, legacy.absorbedRetireSince)
+        assertEquals("a pre-round-5 snapshot carries no floor", null, legacy.absorbedRetireDeadline)
+        assertEquals(DestructiveKind.SESSION_END, legacy.kind)
+    }
+
+    @Test
+    fun `honoredRetireAt round-trips, and a pre-round-7 task JSON decodes to null`() {
+        // #1078 round 7: the honor mark is the emitter's provenance signal, so it has to survive a
+        // snapshot — and a task written before it existed must decode to null, which is the refusing
+        // answer (a pre-round-7 teardown stamp was never honored).
+        val honored = Task(
+            taskId = "d1", jobId = "J1", phase = TaskPhase.DROPOFF,
+            startedAt = 1_000L, arrivedAt = 2_000L, completedAt = 3_000L,
+            honoredRetireAt = 3_000L,
+        )
+        val decoded = StateJson.decodeFromString<Task>(StateJson.encodeToString(honored))
+        assertEquals(honored, decoded)
+        assertEquals(3_000L, decoded.honoredRetireAt)
+
+        val legacy = StateJson.decodeFromString<Task>(
+            """{"taskId":"d1","jobId":"J1","phase":"DROPOFF","startedAt":1000,"completedAt":3000}""",
+        )
+        assertEquals("a pre-round-7 snapshot carries no honor mark", null, legacy.honoredRetireAt)
+        assertEquals(3_000L, legacy.completedAt)
+    }
+
+    @Test
+    fun `exitMintedTaskIds round-trips, and a pre-round-4 anchors JSON decodes to the empty set`() {
+        // #1078 round 4: the per-task exit-mint record is durable state the teardown mint and the
+        // #810 tripwire read, so it has to survive a snapshot — and a snapshot written before it
+        // existed must decode to the empty set, which is the pre-#1078 answer everywhere it is read.
+        val anchors = JobReceiptAnchors(
+            jobId = "J1",
+            firstEnteredAt = 10_000L,
+            exitedPostTask = true,
+            exitMintedTaskIds = setOf("d1", "d2"),
+        )
+        val decoded = StateJson.decodeFromString<JobReceiptAnchors>(StateJson.encodeToString(anchors))
+        assertEquals(anchors, decoded)
+        assertEquals(setOf("d1", "d2"), decoded.exitMintedTaskIds)
+
+        val legacy = StateJson.decodeFromString<JobReceiptAnchors>(
+            """{"jobId":"J1","firstEnteredAt":10000,"exitedPostTask":true}""",
+        )
+        assertTrue("a pre-round-4 snapshot decodes to no recorded mints", legacy.exitMintedTaskIds.isEmpty())
+        assertTrue(legacy.exitedPostTask)
+    }
+
+    @Test
+    fun `corrupted parsed json throws so callers can be loud`() {
+        val result = runCatching {
+            StateJson.decodeFromString<ParsedFields>("""{"definitely":"not-a-parsed-fields"}""")
+        }
+        assertTrue(result.isFailure)
+    }
+}

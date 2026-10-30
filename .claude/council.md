@@ -1,4 +1,4 @@
-# Council members (DashBuddy)
+# Council members (gig.log)
 
 Read by `council`, `interrogate` and `sol-loop`; overrides `~/.claude/council.md`. Reviews are read-only.
 

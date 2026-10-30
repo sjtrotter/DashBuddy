@@ -1,0 +1,42 @@
+package cloud.trotter.log.gig.core.pipeline
+
+import cloud.trotter.log.gig.domain.di.ApplicationScope
+import cloud.trotter.log.gig.domain.model.state.StateEvent
+import cloud.trotter.log.gig.core.pipeline.accessibility.AccessibilityPipeline
+import cloud.trotter.log.gig.core.pipeline.notification.NotificationPipeline
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.shareIn
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class PipelineV2 @Inject constructor(
+    accessibilityPipeline: AccessibilityPipeline,
+    notificationPipeline: NotificationPipeline,
+    stats: PipelineStats,
+    @ApplicationScope scope: CoroutineScope,
+) {
+    /**
+     * HOT shared stream (#361). The upstream chain runs side effects — frame
+     * dedup state and disk captures — inside its operators; as a cold flow,
+     * every additional collector (test harness, debug surface) would re-run
+     * them, double-writing captures and racing the dedup state. One shared
+     * upstream collector now feeds all subscribers; both sub-pipelines emit
+     * Observation subtypes, which extend StateEvent.
+     *
+     * The merged upstream is [supervised] (#430): a crash anywhere in the
+     * chain logs + counts a restart and resubscribes with backoff instead of
+     * silencing all sensing for the rest of the process.
+     */
+    val events: SharedFlow<StateEvent> = merge(
+        accessibilityPipeline.output(),
+        notificationPipeline.output(),
+    )
+        .supervised(stats, tag = "sensing")
+        // No flowOn: shareIn runs the single upstream collector in [scope],
+        // whose dispatcher is Default in production and virtual in tests.
+        .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 0)
+}

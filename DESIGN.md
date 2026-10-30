@@ -1,6 +1,6 @@
 # DESIGN.md
 
-How DashBuddy's screens should look and behave. Read it before designing, reshaping or reviewing any screen,
+How gig.log's screens should look and behave. Read it before designing, reshaping or reviewing any screen,
 sheet, notification or piece of UI copy. Where this file and a general design rule disagree, this file wins. Two
 topics have their own owner and this file only points at them: user-facing words (`docs/design/copy-style.md`) and
 keeping time values fresh (CLAUDE.md § Reactive UI Principles).
@@ -11,7 +11,7 @@ current app.
 
 ## Product and user
 
-DashBuddy runs beside a delivery app and shows the driver (the dasher) the facts about their own work: offers,
+gig.log runs beside a delivery app and shows the driver (the dasher) the facts about their own work: offers,
 pay, miles, time and profit. The dasher works alone in a car, phone in a mount, often at night. They glance at the
 phone for one to three seconds at a stoplight or in a parking lot, and read longer only when parked or at home.
 They are not technical. Their main goal: decide quickly whether an offer is worth taking, and know what the shift
@@ -19,7 +19,7 @@ is earning after vehicle costs.
 
 ## Two surfaces: the bubble and the main app
 
-DashBuddy has two surfaces with different jobs and different rules. Decide which one a feature belongs to before
+gig.log has two surfaces with different jobs and different rules. Decide which one a feature belongs to before
 designing it. Notifications (the offer pop-up, the shift notification, the weekly plan grade, app notices) and the
 spoken offer follow the bubble's rules, because they are read or heard in the same moment.
 
@@ -88,7 +88,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 
 ## Android and Material 3
 
-DashBuddy follows Material 3 and Android's own guidance, in the current Material 3 Expressive version, through
+gig.log follows Material 3 and Android's own guidance, in the current Material 3 Expressive version, through
 Compose Material 3 (BOM in `gradle/libs.versions.toml`). The digest at `docs/design/material-digest.md` quotes the
 rules with their sources; the rules below are the ones that come up most.
 
@@ -112,7 +112,7 @@ rules with their sources; the rules below are the ones that come up most.
   and surface tint (use the surface container roles). New work avoids all three.
 - **Chips filter or suggest; buttons finish a task.** An amount that commits an entry is a button.
 
-### Where DashBuddy departs from Material on purpose
+### Where gig.log departs from Material on purpose
 - **No dynamic colour.** The palette is fixed and the same on every phone, so good, warn and bad always mean the
   same thing (#94, #313).
 - **Brand fonts** instead of Roboto: Hanken Grotesk for words, Space Grotesk with tabular figures for numbers.
@@ -161,7 +161,7 @@ Rules:
 
 ## Type
 
-- **Words:** Hanken Grotesk through `AppTypography`, on DashBuddy's own scale rather than Material's sizes:
+- **Words:** Hanken Grotesk through `AppTypography`, on gig.log's own scale rather than Material's sizes:
   body 15, 13 and 11 sp; labels 13, 11 and 10 sp; titles 13 to 18 sp.
 - **Numbers:** Space Grotesk with tabular figures through `AppTheme.num.*`, so digits line up and do not jump as
   they tick. The hero shows dollars at 60 sp and cents at 28 sp, or 30 and 18 sp when compact. State

@@ -1,0 +1,254 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.core.database.observation.ObservationDao
+import cloud.trotter.log.gig.core.database.observation.ObservationEntity
+import cloud.trotter.log.gig.domain.capture.ReplayMetadata
+import cloud.trotter.log.gig.domain.pipeline.ObservationPayload
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.TimeoutType
+import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.IdleSurface
+import cloud.trotter.log.gig.domain.state.Mode
+import cloud.trotter.log.gig.domain.state.OfferSurface
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.Platform
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Persisted projection of the non-flow observations (#352, folded by #366):
+ * the payload itself is now the TYPED sealed [ObservationPayload], serialized
+ * polymorphically — no per-key map rebuilding on replay.
+ */
+@Serializable
+internal data class InternalObsPayload(
+    val action: String? = null,
+    val effect: String? = null,
+    val targetPlatform: String? = null,
+    val payload: ObservationPayload? = null,
+    // #438 item 8a: UiInput's offer identity round-trips so a recovery-replayed accept/decline
+    // targets the owning region (an identity-less UiInput Unknown-skips at StateMachine.kt:75).
+    // Additive: old journal rows without this key decode with a null default.
+    val offerHash: String? = null,
+    // #1104: a Screen's rule-declared offer surface (`decline_confirm`) is transition EVIDENCE the
+    // lifecycle reads; a replay that dropped it would resolve the same offer differently from the
+    // live run (DECLINED live, TIMEOUT replayed — a second contradictory closing row). Additive.
+    val offerSurface: String? = null,
+    // #1312: preserve the no-orders witness on replay; old rows default to null.
+    val idleSurface: String? = null,
+)
+
+/**
+ * The append-only observation log (#352) — owns persistence, the replay-tail read,
+ * and the entity↔observation codec. Extracted from StateManagerV2 so recovery
+ * fidelity is testable in isolation.
+ */
+@Singleton
+class ObservationJournal @Inject constructor(
+    private val observationDao: ObservationDao,
+) {
+
+    /**
+     * Single-writer queue: entries land in submission order with no gaps. The old
+     * per-insert fire-and-forget launches could land out of order, and a crash
+     * could persist cv=N+1 while cv=N was still in flight.
+     */
+    private val writeQueue = Channel<ObservationEntity>(Channel.UNLIMITED)
+
+    /** Starts the single writer. Call once; [dispatcher] is IO in production. */
+    fun start(scope: CoroutineScope, dispatcher: CoroutineDispatcher) {
+        scope.launch(dispatcher) {
+            for (entity in writeQueue) {
+                try {
+                    observationDao.insert(entity)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Timber.e(e, "Failed to persist observation cv=%d", entity.correlationVersion)
+                }
+            }
+        }
+    }
+
+    /** Append to the log — ordered, asynchronous. */
+    fun append(obs: Observation, state: AppState) {
+        writeQueue.trySend(obs.toEntity(state))
+    }
+
+    /**
+     * One row of the replay tail: the observation and the correlation version it was PERSISTED
+     * with (#1052 round 3).
+     *
+     * The version is not derivable from the replay. `StateMachine.step` numbers its result
+     * `prev.correlationVersion + 1`, so a fold over N rows lands at `snapshot + N` — which is the
+     * true boundary only while the journal is gap-free, and it is not: [append] is a fire-and-
+     * forget queue whose writer LOGS and drops a failed insert. After one lost row the replayed
+     * state undercounts, and since #1052 round 2 the recovery checkpoint makes that wrong boundary
+     * DURABLE — the next restart then replays rows the previous one already consumed and
+     * re-applies their effects (a receipt's pay accumulates twice). The row's own version is the
+     * only honest answer, and it costs one field.
+     */
+    data class JournalRow(val correlationVersion: Long, val observation: Observation)
+
+    /** The replay tail after [afterVersion], in correlation-version order. */
+    suspend fun tailAfter(afterVersion: Long): List<JournalRow> =
+        observationDao.since(afterVersion).map { JournalRow(it.correlationVersion, it.toObservation()) }
+
+    suspend fun pruneOlderThan(cutoff: Long) = observationDao.pruneOlderThan(cutoff)
+
+    // ── Codec ───────────────────────────────────────────────────────────
+
+    internal fun Observation.toEntity(state: AppState): ObservationEntity {
+        val flowObs = this as? Observation.FlowObservation
+        val session = state.regions.platforms[platform]?.session
+        return ObservationEntity(
+            occurredAt = timestamp,
+            sessionId = session?.sessionId,
+            pipelineId = pipelineIdOf(this),
+            ruleId = ruleId,
+            platform = platform.name,
+            flow = flowObs?.flow?.name,
+            modeHint = flowObs?.modeHint?.name,
+            parsedJson = if (flowObs != null) {
+                StateJson.encodeToString<ParsedFields>(flowObs.parsed)
+            } else "{}",
+            captureId = captureId,
+            metadataJson = StateJson.encodeToString(metadata),
+            correlationVersion = state.correlationVersion,
+            timeoutType = (this as? Observation.Timeout)?.type?.name,
+            payloadJson = internalPayloadOf(this)?.let { StateJson.encodeToString(it) },
+        )
+    }
+
+    private fun internalPayloadOf(obs: Observation): InternalObsPayload? = when (obs) {
+        is Observation.Screen -> if (obs.offerSurface != null || obs.idleSurface != null) {
+            InternalObsPayload(offerSurface = obs.offerSurface?.wire, idleSurface = obs.idleSurface?.wire)
+        } else null
+        is Observation.Timeout ->
+            if (obs.targetPlatform != null || obs.payload != null) {
+                InternalObsPayload(targetPlatform = obs.targetPlatform?.wire, payload = obs.payload)
+            } else null
+        // Persisting the REAL action is safe: PerformRuleAction is classified
+        // external (#341), so recovery can never replay an offer tap from it. Identity
+        // (targetPlatform/offerHash) round-trips so the replayed input lands on its region (#438 8a).
+        is Observation.UiInput -> InternalObsPayload(
+            action = obs.action,
+            targetPlatform = obs.targetPlatform?.wire,
+            offerHash = obs.offerHash,
+        )
+        is Observation.Loopback -> InternalObsPayload(
+            effect = obs.effect,
+            targetPlatform = obs.targetPlatform?.wire,
+            payload = obs.payload,
+        )
+        else -> null
+    }
+
+    /** Reconstruct an [Observation] from a persisted row, for crash-recovery replay. */
+    internal fun ObservationEntity.toObservation(): Observation {
+        val payload = payloadJson?.let {
+            try {
+                StateJson.decodeFromString<InternalObsPayload>(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to decode internal payload — replaying as stub")
+                null
+            }
+        }
+        return when (pipelineId) {
+            "accessibility.window" -> Observation.Screen(
+                timestamp = occurredAt,
+                captureId = captureId,
+                ruleId = ruleId,
+                metadata = ReplayMetadata.EMPTY,
+                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
+                modeHint = modeHint?.let { runCatching { enumValueOf<Mode>(it) }.getOrNull() },
+                parsed = deserializeParsed(parsedJson),
+                target = ruleId?.substringAfterLast('.'),
+                offerSurface = payload?.offerSurface?.let(OfferSurface::fromWire),
+                idleSurface = payload?.idleSurface?.let(IdleSurface::fromWire),
+            )
+
+            "accessibility.click" -> Observation.Click(
+                timestamp = occurredAt,
+                captureId = captureId,
+                ruleId = ruleId,
+                metadata = ReplayMetadata.EMPTY,
+                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
+                modeHint = modeHint?.let { runCatching { enumValueOf<Mode>(it) }.getOrNull() },
+                parsed = deserializeParsed(parsedJson),
+                target = ruleId?.substringAfterLast('.'),
+            )
+
+            "notification" -> Observation.Notification(
+                timestamp = occurredAt,
+                captureId = captureId,
+                ruleId = ruleId,
+                metadata = ReplayMetadata.EMPTY,
+                flow = flow?.let { runCatching { enumValueOf<Flow>(it) }.getOrNull() },
+                modeHint = modeHint?.let { runCatching { enumValueOf<Mode>(it) }.getOrNull() },
+                parsed = deserializeParsed(parsedJson),
+                target = ruleId?.substringAfterLast('.'),
+            )
+
+            "internal.timeout" -> Observation.Timeout(
+                timestamp = occurredAt,
+                type = timeoutType?.let {
+                    runCatching { enumValueOf<TimeoutType>(it) }.getOrNull()
+                } ?: TimeoutType.SETTLE_UI,
+                targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
+                payload = payload?.payload,
+            )
+
+            "internal.ui" -> Observation.UiInput(
+                timestamp = occurredAt,
+                action = payload?.action ?: "replay",
+                targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
+                offerHash = payload?.offerHash,
+            )
+
+            "internal.loopback" -> Observation.Loopback(
+                timestamp = occurredAt,
+                effect = payload?.effect ?: "replay",
+                targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
+                // Typed payload round-trips losslessly (#366) — a replayed
+                // offer_evaluated lands its evaluation with no key rebuilding.
+                payload = payload?.payload,
+            )
+
+            else -> Observation.Loopback(
+                timestamp = occurredAt,
+                effect = "unknown_pipeline:$pipelineId",
+            )
+        }
+    }
+
+    private fun pipelineIdOf(obs: Observation): String = when (obs) {
+        is Observation.Screen -> "accessibility.window"
+        is Observation.Click -> "accessibility.click"
+        is Observation.Notification -> "notification"
+        is Observation.Timeout -> "internal.timeout"
+        is Observation.UiInput -> "internal.ui"
+        is Observation.Loopback -> "internal.loopback"
+    }
+
+    private fun deserializeParsed(json: String): ParsedFields {
+        // Non-flow observations persist "{}" — that's a legitimate None, not corruption.
+        if (json.isBlank() || json == "{}") return ParsedFields.None
+        return try {
+            StateJson.decodeFromString<ParsedFields>(json)
+        } catch (e: Exception) {
+            // LOUD (#353): a silent fallback here hid replay corruption entirely.
+            Timber.e(e, "Failed to decode persisted ParsedFields — replaying as None: %s", json.take(120))
+            ParsedFields.None
+        }
+    }
+}

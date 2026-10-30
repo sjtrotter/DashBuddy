@@ -1,0 +1,501 @@
+package cloud.trotter.log.gig.core.pipeline.rules
+
+import cloud.trotter.log.gig.domain.model.accessibility.ParsedTime
+import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.log.gig.domain.model.offer.OfferScope
+import cloud.trotter.log.gig.domain.model.offer.OfferKind
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
+import cloud.trotter.log.gig.domain.model.order.CountUnit
+import cloud.trotter.log.gig.domain.model.order.OrderBadge
+import cloud.trotter.log.gig.domain.model.order.OrderType
+import cloud.trotter.log.gig.domain.model.order.ParsedOrder
+import cloud.trotter.log.gig.domain.model.pay.ParsedPay
+import cloud.trotter.log.gig.domain.model.pay.ParsedPayItem
+import cloud.trotter.log.gig.domain.pipeline.StateMachineContract
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.SessionType
+import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.state.TaskSubFlow
+import cloud.trotter.log.gig.domain.state.TimelineTaskEntry
+import timber.log.Timber
+
+/**
+ * Maps raw `Map<String, Any?>` from the parse phase into typed [ParsedFields] subtypes.
+ *
+ * Each shape has a builder that extracts named fields with safe type coercion.
+ * Bad types log a warning and fall back to [ParsedFields.None].
+ */
+object ParsedFieldsFactory {
+
+    /**
+     * The label on the SYNTHESIZED app-pay component of a receipt whose itemization is missing
+     * (see [buildPostTask]). Platform-NEUTRAL by requirement (#1052, principle 8): `:core:pipeline`
+     * is the shared recognition spine and must not name a gig platform, and the old `"DoorDash pay"`
+     * literal would also have read as a real DoorDash label on any other platform's receipt.
+     *
+     * It must keep containing `"pay"` (case-insensitively): [buildPostTask]'s partition of a REAL
+     * itemization splits app-pay from tips on exactly that token, and a synthesized component that
+     * failed it would be sorted as a customer tip. Asserted in the factory's own test.
+     */
+    const val SYNTHESIZED_APP_PAY_LABEL = "Platform pay"
+
+    /**
+     * Required parse fields per shape. The rule compiler verifies at load time
+     * that any parse block declaring a shape includes these field names.
+     * Shapes not listed here have no required fields.
+     */
+    val REQUIRED_FIELDS_BY_SHAPE: Map<String, Set<String>> = mapOf(
+        "offer" to setOf("payAmount", "distance"),
+        "post_task" to setOf("totalPay"),
+        "session_ended" to setOf("totalEarnings"),
+    )
+
+    /**
+     * "At least one of" constraints per shape. Each entry is a set of field names
+     * where at least one must be present. Platforms may use different field names
+     * for the same concept (e.g. DoorDash: deliveryTimeText, Uber: timeToCompleteMinutes).
+     */
+    val REQUIRED_ONE_OF_BY_SHAPE: Map<String, List<Set<String>>> = mapOf(
+        "offer" to listOf(setOf("deliveryTimeText", "timeToCompleteMinutes")),
+    )
+
+    /**
+     * Validate that a parse block declares all required fields for its shape.
+     * @throws RuleCompileException if required fields are missing.
+     */
+    fun validateShapeFields(shape: String, declaredFields: Set<String>, ruleId: String) {
+        val required = REQUIRED_FIELDS_BY_SHAPE[shape]
+        if (required != null) {
+            val missing = required - declaredFields
+            if (missing.isNotEmpty()) {
+                throw RuleCompileException(
+                    "Rule '$ruleId' declares shape '$shape' but parse block is missing required " +
+                        "fields: ${missing.joinToString(", ") { "'$it'" }}",
+                    isolable = true, // authoring-level shape violation — the rule isolates (#293 item 4)
+                )
+            }
+        }
+        val oneOfGroups = REQUIRED_ONE_OF_BY_SHAPE[shape]
+        if (oneOfGroups != null) {
+            for (group in oneOfGroups) {
+                if (group.none { it in declaredFields }) {
+                    throw RuleCompileException(
+                        "Rule '$ruleId' declares shape '$shape' but parse block must include " +
+                            "at least one of: ${group.joinToString(", ") { "'$it'" }}",
+                        isolable = true, // authoring-level shape violation — the rule isolates (#293 item 4)
+                    )
+                }
+            }
+        }
+    }
+
+    fun create(shape: String?, fields: Map<String, Any?>): ParsedFields {
+        if (shape == null) return ParsedFields.None
+
+        return try {
+            when (shape) {
+                // Shapes that require no parsed fields
+                "sensitive" -> ParsedFields.SensitiveFields()
+                "noise" -> ParsedFields.NoiseFields()
+                "none" -> ParsedFields.None
+
+                // Shapes that require parsed fields
+                "idle" -> if (fields.isEmpty()) ParsedFields.None else buildIdle(fields)
+                "task" -> if (fields.isEmpty()) ParsedFields.None else buildTask(fields)
+                "post_task" -> if (fields.isEmpty()) ParsedFields.None else buildPostTask(fields)
+                "session_ended" -> if (fields.isEmpty()) ParsedFields.None else buildSessionEnded(fields)
+                "paused" -> if (fields.isEmpty()) ParsedFields.None else buildPaused(fields)
+                "timeline" -> if (fields.isEmpty()) ParsedFields.None else buildTimeline(fields)
+                "ratings" -> if (fields.isEmpty()) ParsedFields.None else buildRatings(fields)
+                "offer" -> if (fields.isEmpty()) ParsedFields.None else buildOffer(fields)
+                "click" -> if (fields.isEmpty()) ParsedFields.None else buildClick(fields)
+                "notification" -> if (fields.isEmpty()) ParsedFields.None else buildNotification(fields)
+
+                else -> {
+                    Timber.w("ParsedFieldsFactory: unknown shape '$shape'")
+                    ParsedFields.None
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "ParsedFieldsFactory: failed to build shape '$shape'")
+            ParsedFields.None
+        }
+    }
+
+    private fun buildIdle(f: Map<String, Any?>) = ParsedFields.IdleFields(
+        activity = f.str("activity"),
+        zoneName = f.str("zoneName"),
+        sessionType = f.str("sessionType")?.let {
+            try { SessionType.valueOf(it) } catch (_: Exception) { null }
+        },
+        sessionPay = f.double("sessionPay"),
+        waitTimeEstimate = f.str("waitTimeEstimate"),
+        isHeadingBackToZone = f.bool("isHeadingBackToZone") ?: false,
+        spotSaveDeadline = f.long("spotSaveDeadline"),
+        startingSession = f.bool("startingSession") ?: false,
+    )
+
+    private fun buildTask(f: Map<String, Any?>) = ParsedFields.TaskFields(
+        activity = f.str("activity"),
+        phase = f.str("phase")?.let {
+            try { TaskPhase.valueOf(it) } catch (_: Exception) { null }
+        } ?: TaskPhase.PICKUP,
+        subFlow = f.str("subFlow")?.let {
+            try { TaskSubFlow.valueOf(it) } catch (_: Exception) { null }
+        } ?: TaskSubFlow.NAVIGATION,
+        storeName = f.str("storeName"),
+        storeAddress = f.str("storeAddress"),
+        customerNameHash = f.str("customerNameHash"),
+        customerAddressHash = f.str("customerAddressHash"),
+        deadline = f.parsedTime("deadline", "deadlineText", "deadlineMillis"),
+        itemsRemaining = f.int("itemsRemaining"),
+        itemsShopped = f.int("itemsShopped"),
+        redCardTotal = f.double("redCardTotal"),
+        arrivalConfirmed = f.bool("arrivalConfirmed") ?: false,
+    )
+
+    /**
+     * The receipt shape (#1029). `parsedPay` is what prices a job's drops: `DropPayApportioner`
+     * returns an EMPTY map for a null one — for a SINGLE drop too — so no drop gets
+     * `dropRealizedPay`, every one falls to an `OFFER_PAY` estimate, `payoutStoreForms` never
+     * mints, and the #653 reconciliation guard is off. On DoorDash 8.93.7 the itemization is
+     * id-less (`pay_line_item_title` is gone), so `payLineItems` is EMPTY on every fielded
+     * receipt and post-delivery pricing died silently — silently because `totalPay` still
+     * resolves, so the #1036 shortfall census sees a healthy parse.
+     *
+     * The bridge: when the itemization is missing but the receipt's own SCALARS are both there,
+     * synthesize the breakdown from them. Deliberately narrow —
+     *  - `payLineItems` empty AND `totalPay > 0` AND `customerTips` non-null AND `total >= tips`.
+     *    The tips line is exposed only while the breakdown is VISIBLE, which is what keeps every
+     *    COLLAPSED receipt (old or new) at `parsedPay == null` — the `sameTaskCollapsedDowngrade`
+     *    logic in `PlatformRegionStepper` depends on that being the collapsed signal.
+     *  - the app-pay side is one synthetic [SYNTHESIZED_APP_PAY_LABEL] component of `total - tips`;
+     *    the tip side carries a BLANK type, so `injectiveTipMatch` declines and a stacked job
+     *    even-splits (which is what it already did whenever the tip types didn't match anyway).
+     * Per-store tip itemization off the flat 8.93.7 row is #1051's ask — it needs a fielded
+     * STACKED 8.93.7 receipt to pin, and this bridge is what keeps single-drop and expanded
+     * receipts on a real `DROP_SHARE` basis until then.
+     *
+     * (`totalPay`'s own `?: 0.0` below is the #1030/#1041 fabrication class — a missed parse
+     * becomes a measured zero. Left alone here deliberately: changing it is a state/fold-visible
+     * change, not part of this bridge.)
+     */
+    private fun buildPostTask(f: Map<String, Any?>): ParsedFields.PostTaskFields {
+        @Suppress("UNCHECKED_CAST")
+        val rawLineItems = f["payLineItems"] as? List<Map<String, Any?>> ?: emptyList()
+
+        val total = f.double("totalPay")
+        val tips = f.double("customerTips")
+        val parsedPay = if (rawLineItems.isNotEmpty()) {
+            val allItems = rawLineItems.map { item ->
+                ParsedPayItem(
+                    type = item.str("type") ?: "",
+                    amount = item.double("amount") ?: 0.0,
+                )
+            }
+            // Split: DoorDash pay components have labels like "Base pay", "Peak pay";
+            // customer tips have store names/IDs that don't contain "pay".
+            val (appPay, tipItems) = allItems.partition {
+                it.type.contains("pay", ignoreCase = true)
+            }
+            ParsedPay(appPayComponents = appPay, customerTips = tipItems)
+        } else if (total != null && total > 0.0 && tips != null && total - tips >= 0.0) {
+            ParsedPay(
+                appPayComponents = listOf(ParsedPayItem(SYNTHESIZED_APP_PAY_LABEL, total - tips)),
+                customerTips = if (tips > 0.0) listOf(ParsedPayItem("", tips)) else emptyList(),
+            )
+        } else null
+
+        return ParsedFields.PostTaskFields(
+            activity = f.str("activity"),
+            totalPay = total ?: 0.0,
+            appPay = f.double("appPay"),
+            customerTips = tips,
+            parsedPay = parsedPay,
+            isExpanded = f.bool("isExpanded") ?: false,
+            expandButtonId = f.str("expandButtonId"),
+            sessionEarnings = f.double("sessionEarnings"),
+        )
+    }
+
+    private fun buildSessionEnded(f: Map<String, Any?>) = ParsedFields.SessionEndedFields(
+        activity = f.str("activity"),
+        // #1030: NO `?: 0.0` — a missed parse must stay absent. Coercing it here fabricated the
+        // exact "$0 reported" the fold/DAO/drill-down then trust as a measurement.
+        totalEarnings = f.double("totalEarnings"),
+        sessionDurationMillis = f.long("sessionDurationMillis"),
+        offersAccepted = f.int("offersAccepted"),
+        offersTotal = f.int("offersTotal"),
+        weeklyEarnings = f.double("weeklyEarnings"),
+    )
+
+    private fun buildPaused(f: Map<String, Any?>) = ParsedFields.PausedFields(
+        activity = f.str("activity"),
+        remainingText = f.str("remainingText"),
+        remainingMillis = f.long("remainingMillis"),
+    )
+
+    private fun buildTimeline(f: Map<String, Any?>): ParsedFields.TimelineFields {
+        @Suppress("UNCHECKED_CAST")
+        val rawTasks = f["tasks"] as? List<Map<String, Any?>> ?: emptyList()
+        val tasks = rawTasks.map { t ->
+            TimelineTaskEntry(
+                taskType = t.str("taskType") ?: "",
+                nameHash = t.str("nameHash"),
+                deadline = t.parsedTime("deadline", "deadlineText", "deadlineMillis"),
+                storeHint = t.str("storeHint"),
+                isCurrent = t.bool("isCurrent") ?: false,
+            )
+        }
+        return ParsedFields.TimelineFields(
+            activity = f.str("activity"),
+            sessionEarnings = f.double("sessionEarnings"),
+            offerEarnings = f.double("offerEarnings"),
+            endsAtText = f.str("endsAtText"),
+            endsAtMillis = f.long("endsAtMillis"),
+            tasks = tasks,
+        )
+    }
+
+    private fun buildRatings(f: Map<String, Any?>) = ParsedFields.RatingsFields(
+        activity = f.str("activity"),
+        acceptanceRate = f.double("acceptanceRate"),
+        completionRate = f.double("completionRate"),
+        onTimeRate = f.double("onTimeRate"),
+        customerRating = f.double("customerRating"),
+        deliveriesLast30Days = f.int("deliveriesLast30Days"),
+        lifetimeDeliveries = f.int("lifetimeDeliveries"),
+        originalItemsFoundRate = f.double("originalItemsFoundRate"),
+        totalItemsFoundRate = f.double("totalItemsFoundRate"),
+        substitutionIssuesRate = f.double("substitutionIssuesRate"),
+        itemsWithQualityIssuesRate = f.double("itemsWithQualityIssuesRate"),
+        itemsWrongOrMissingRate = f.double("itemsWrongOrMissingRate"),
+        lifetimeShoppingOrders = f.int("lifetimeShoppingOrders"),
+        overallRatingPoints = f.int("overallRatingPoints"),
+        tierLabel = f.str("tierLabel"),
+        qualityRate = f.double("qualityRate"),
+    )
+
+    private fun buildClick(f: Map<String, Any?>) = ParsedFields.ClickFields(
+        activity = f.str("activity"),
+        intent = f.str("intent") ?: "unknown",
+        nodeId = f.str("nodeId"),
+        nodeText = f.str("nodeText"),
+    )
+
+    private fun buildNotification(f: Map<String, Any?>) = ParsedFields.NotificationFields(
+        activity = f.str("activity"),
+        intent = f.str("intent") ?: "unknown",
+        amount = f.double("amount"),
+        storeName = f.str("storeName"),
+        deliveredAt = f.str("deliveredAt"),
+        rawText = f.str("rawText"),
+    )
+
+    private fun buildOffer(f: Map<String, Any?>): ParsedFields {
+        @Suppress("UNCHECKED_CAST")
+        val rawOrders = f["orders"] as? List<Map<String, Any?>> ?: emptyList()
+        val orders = rawOrders.mapIndexed { idx, o ->
+            val badges = buildSet {
+                if (o.bool("isRedCard") == true) add(OrderBadge.RED_CARD)
+                if (o.bool("isLargeOrder") == true) add(OrderBadge.LARGE_ORDER)
+                if (o.bool("hasAlcohol") == true) add(OrderBadge.ALCOHOL)
+            }
+            ParsedOrder(
+                orderIndex = idx,
+                // Distinguish two cases: an ABSENT orderType is the neutral bare-delivery default
+                // (PICKUP, silent); a PRESENT-but-unrecognized string is a real gap between the
+                // rule-source vocabulary and [OrderType] → UNKNOWN + a WARN. The string is
+                // rule-source vocabulary, not PII, so it's safe to log verbatim.
+                orderType = o.str("orderType")?.let { raw ->
+                    try {
+                        OrderType.valueOf(raw)
+                    } catch (_: IllegalArgumentException) {
+                        Timber.tag("Rules").w("ParsedFieldsFactory: unrecognized orderType '$raw' -> UNKNOWN")
+                        OrderType.UNKNOWN
+                    }
+                } ?: OrderType.PICKUP,
+                storeName = o.str("storeName") ?: "",
+                itemCount = o.int("itemCount") ?: 1,
+                isItemCountEstimated = o.int("itemCount") == null,
+                badges = badges,
+                // #823 Phase 1: which label the count was denominated by. UNITS only when the rule
+                // parsed "UNITS" (a units-only "(64 units)") AND a real count was read (not the
+                // estimated default) — an estimated/absent count is meaningless to denominate.
+                countUnit = if (o.int("itemCount") != null && o.str("itemCountUnit") == "UNITS") {
+                    CountUnit.UNITS
+                } else {
+                    CountUnit.ITEMS
+                },
+            )
+        }
+
+        val payAmount = f.double("payAmount")
+        val distance = f.double("distance")
+        val deliveryTimeText = f.str("deliveryTimeText")
+        val timeToCompleteMinutes = f.long("timeToCompleteMinutes")
+        val stopCount = f.int("stopCount")
+
+        // Compute offer hash from extracted fields (same as Kotlin parser)
+        val storeNames = orders.joinToString(",") { it.storeName }
+        // #1069 (Astra r1 P1): a parsed assignment token is part of the offer's CONTENT identity too — two
+        // different assignments with identical economics must not share an offerHash, or the stepper's
+        // same-hash arm merges them before the presentation key is ever consulted. Absent token → the
+        // pre-#1069 input byte for byte (Uber's churn fixtures keep their hashes).
+        val assignmentId = f.str("assignmentId")?.trim()?.takeIf { it.isNotEmpty() }
+        val quoteBasis = if (f.str("quoteBasis") == StateMachineContract.QUOTE_BASIS_INCREMENTAL) {
+            OfferQuoteBasis.INCREMENTAL
+        } else OfferQuoteBasis.TOTAL
+        val offerScope = if (f.str("offerScope") == StateMachineContract.OFFER_SCOPE_ADD_ON) {
+            OfferScope.ADD_ON
+        } else OfferScope.STANDALONE
+        val baseHashInput = "$payAmount|$distance|${deliveryTimeText ?: timeToCompleteMinutes}|$storeNames"
+        // Astra r2: the token LEADS the input. A tokenless input always starts with the pay amount (a number
+        // or "null"), so no store name can forge the `assignment=` segment — a suffix could be forged by a
+        // store name that happens to contain it. Tokenless bytes are unchanged.
+        val identityHashInput = if (assignmentId != null) "assignment=$assignmentId|$baseHashInput" else baseHashInput
+        val hashInput = if (quoteBasis == OfferQuoteBasis.INCREMENTAL) "incremental|$identityHashInput" else identityHashInput
+        // Fail-closed hash (#362): on digest failure fall back to a
+        // non-reversible identity — NEVER the plaintext input.
+        val offerHash = f.str("offerHash")
+            ?: sha256OrNull(hashInput)
+            ?: "offer-${hashInput.hashCode()}"
+
+        // Presentation identity (#830) — hash of the STABLE subset only (store names + order
+        // count + order types), excluding the pay/distance/time economics that already feed
+        // [offerHash] and that tick on a live-re-quoting card (Uber). Platform-agnostic: pure data,
+        // no Platform branch. Fail-CLOSED (#362): a null key (digest failure) leaves it null so the
+        // state machine falls back to today's replace-on-any-hash-change — a false MERGE is never
+        // possible, only a false SPLIT that degrades to prior behavior. NEVER the plaintext input.
+        //
+        // Fail-closed on a CONTENT-FREE key too (review F1): a partially-rendered frame that
+        // extracted pay but NO orders (or all-blank store names) would otherwise hash the constant
+        // "|0|" (or "|N|" over empty stores) — one key every such offer on every platform shares, so
+        // two genuinely different order-less offers would enrich-MERGE (offer 2 inheriting offer 1's
+        // presentedAt + click latches → a phantom OFFER_ACCEPTED with offer 2's economics). No stable
+        // subset → no presentation identity → null → replace. (#1069: that guard governs the STORE fallback
+        // only — a parsed assignment token is an exact identity and OUTRANKS it, order rows or not; today
+        // branch 0's anchors keep an order-less View frame UNKNOWN, so the precedence is latent.)
+        //
+        // #1069: identity is ruleset data. A parsed assignment token supplies an EXACT key;
+        // otherwise a declared "store" fallback uses the #830 stable subset above; "economics"
+        // (also the undeclared default) supplies no key, replacing on any hash change. Economics
+        // is the default because a false MERGE is the dangerous failure (lost presentation and
+        // inherited latches); a false SPLIT only costs a duplicate presentation.
+        val orderTypes = orders.joinToString(",") { it.orderType.name }
+        val assignmentIdHash = assignmentId?.let { sha256OrNull("assignment|$it") } // fail-closed null
+        val identity = f.str("presentationIdentity") ?: StateMachineContract.PRESENTATION_IDENTITY_ECONOMICS
+        val presentationKey = when {
+            // Astra r1 P3: a PRESENT token decides, hash or null — a digest failure must never fall through
+            // to a mergeable store key.
+            assignmentId != null -> assignmentIdHash
+            identity == StateMachineContract.PRESENTATION_IDENTITY_STORE ->
+                if (orders.isEmpty() || orders.all { it.storeName.isBlank() }) null
+                else sha256OrNull("$storeNames|${orders.size}|$orderTypes")
+            else -> null // economics: replace on any hash change (the existing fail-closed path)
+        }
+
+        return ParsedFields.OfferFields(
+            activity = f.str("activity"),
+            parsedOffer = ParsedOffer(
+                offerHash = offerHash,
+                quoteBasis = quoteBasis,
+                offerScope = offerScope,
+                presentationKey = presentationKey,
+                assignmentIdHash = assignmentIdHash,
+                // #461: the offer's item count is the SHOP item count — sum only the shop orders'
+                // CONFIRMED counts. A pickup order has no items but defaults to itemCount=1
+                // (isItemCountEstimated), so the old `sumOf{itemCount}.coerceAtLeast(1)` added a
+                // phantom +1 per pickup (Sprouts 25 + 1 pickup read 26; a pure-pickup stack read its
+                // order count). 0 here means "no shop items" → the [cart N] badge shows no number.
+                itemCount = orders
+                    .filter { it.orderType == OrderType.SHOP_FOR_ITEMS && !it.isItemCountEstimated }
+                    .sumOf { it.itemCount },
+                // #823 Phase 1: the summed shop count is units-denominated iff there is at least one
+                // contributing (confirmed) shop order AND every one of them was units-denominated —
+                // the units-only shape this converts for the time estimate. A mixed stack (some items,
+                // some units) stays false → no ratio applied → unchanged behaviour (Phase 1 scopes the
+                // fielded units-only single-shop offer; mixing denominations in one summed number is a
+                // pre-existing shape this deliberately does not touch).
+                itemCountIsUnits = orders
+                    .filter { it.orderType == OrderType.SHOP_FOR_ITEMS && !it.isItemCountEstimated }
+                    .let { shopOrders ->
+                        shopOrders.isNotEmpty() && shopOrders.all { it.countUnit == CountUnit.UNITS }
+                    },
+                payAmount = payAmount,
+                distanceMiles = distance,
+                dueByTimeText = deliveryTimeText,
+                dueByTimeMillis = f.long("deliveryTime"),
+                timeToCompleteMinutes = timeToCompleteMinutes,
+                stopCount = stopCount,
+                // #1104: the card's REMAINING countdown at this frame (seconds) — transition evidence
+                // for the outcome resolver (an exit at the countdown's end is an expiry, whatever
+                // else was seen). Never folded into offerHash/presentationKey: it ticks every frame.
+                initialCountdownSeconds = f.int("initialCountdownSeconds"),
+                orders = orders,
+                // #881: the presentation kind, from the rule's own wire vocabulary. Fail-NULL on an
+                // absent OR unrecognized value (a wrong kind is worse than no kind) — and, unlike
+                // orderType, an unrecognized string is not WARNed: a rule is free to declare no
+                // offerKind at all, so there is no "gap" to report, only a platform without the
+                // concept. Never folded into offerHash/presentationKey (see OfferKind).
+                offerKind = OfferKind.fromWire(f.str("offerKind")),
+                // #882: the card's own headline store text — DISPLAY only (see
+                // ParsedOffer.displayStoreText). Keeps the identity-bearing orders[].storeName
+                // untouched, which is the whole point of the split.
+                displayStoreName = f.str("storeName"),
+            ),
+        )
+    }
+
+    // ========================================================================
+    //  Safe type coercion helpers
+    // ========================================================================
+
+    private fun Map<String, Any?>.str(key: String): String? = get(key)?.toString()
+
+    private fun Map<String, Any?>.double(key: String): Double? = when (val v = get(key)) {
+        is Number -> v.toDouble()
+        is String -> v.toDoubleOrNull()
+        else -> null
+    }
+
+    private fun Map<String, Any?>.int(key: String): Int? = when (val v = get(key)) {
+        is Number -> v.toInt()
+        is String -> v.toIntOrNull()
+        else -> null
+    }
+
+    private fun Map<String, Any?>.long(key: String): Long? = when (val v = get(key)) {
+        is Number -> v.toLong()
+        is String -> v.toLongOrNull()
+        else -> null
+    }
+
+    private fun Map<String, Any?>.bool(key: String): Boolean? = when (val v = get(key)) {
+        is Boolean -> v
+        is String -> v.toBooleanStrictOrNull()
+        else -> null
+    }
+
+    /**
+     * Build a [ParsedTime] from either a nested map or separate text/millis fields.
+     */
+    private fun Map<String, Any?>.parsedTime(
+        compositeKey: String,
+        textKey: String,
+        millisKey: String,
+    ): ParsedTime? {
+        // Try composite (from a nested parse expression that returns a map)
+        @Suppress("UNCHECKED_CAST")
+        val composite = get(compositeKey) as? Map<String, Any?>
+        if (composite != null) {
+            val text = composite.str("text") ?: return null
+            val millis = composite.long("millis")
+            return ParsedTime(text, millis)
+        }
+        // Try separate fields
+        val text = str(textKey) ?: return null
+        val millis = long(millisKey)
+        return ParsedTime(text, millis)
+    }
+}

@@ -1,6 +1,6 @@
 # Your first recognition rule (current in-tree workflow)
 
-This is a start-to-finish walkthrough for a new contributor adding their **first DashBuddy
+This is a start-to-finish walkthrough for a new contributor adding their **first gig.log
 recognition rule** — the "what screen is this and what does it say" logic that turns a raw
 Android accessibility tree into a typed `Observation` the rest of the app consumes.
 
@@ -76,7 +76,7 @@ tests actually read, and it's rebuilt from your `.json5` source every time.
 ## 2. The capture → corpus loop
 
 Before you can write a rule for a screen, you need a **real captured snapshot** of that screen's
-accessibility tree — DashBuddy's debug build writes these automatically while you use the target
+accessibility tree — gig.log's debug build writes these automatically while you use the target
 app (DoorDash/Uber Driver) with accessibility service + capture enabled. Each capture is a
 `CaptureEnvelope` JSON file. Grab the ones relevant to your new screen and:
 
@@ -322,7 +322,7 @@ alters compiled recognition behavior and generated assets, so never use `[skip c
 
 ## 5. Privacy rules of the road
 
-DashBuddy's non-negotiable Pledges (full text: root `CLAUDE.md`) apply to every rule you write, not
+gig.log's non-negotiable Pledges (full text: root `CLAUDE.md`) apply to every rule you write, not
 just ones that happen to touch obviously-sensitive screens:
 
 - **The dasher's own sensitive screens are blocked, never parsed or stored.** Banking/DasherDirect
@@ -369,7 +369,7 @@ lets a banking screen fall through to ordinary recognition.
 ## 6. When the matchers repo split lands
 
 Everything above describes the **in-tree** workflow: `matchers/` is a self-contained included
-Gradle build living inside the DashBuddy monorepo, and there is no publish step between editing a
+Gradle build living inside the gig.log monorepo, and there is no publish step between editing a
 `.json5` file and seeing it picked up by tests. Pillar 2 (Distributed Integrity) calls for
 `matchers/` to eventually become its own separate, forkable, Apache-2.0 repository consumed as a
 git submodule (see [ADR-0009](../adr/ADR-0009-rule-distribution-channels.md) for the target

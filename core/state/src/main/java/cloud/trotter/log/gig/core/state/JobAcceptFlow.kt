@@ -1,0 +1,365 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.domain.model.offer.AddOnStops
+import cloud.trotter.log.gig.domain.model.offer.newStores
+import cloud.trotter.log.gig.domain.model.offer.ownedStoreKeys
+import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.log.gig.domain.model.offer.OfferScope
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.AcceptedOfferEconomics
+import cloud.trotter.log.gig.domain.state.DestructiveKind
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.Job
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.PendingOffer
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.StoreNameMatch
+import cloud.trotter.log.gig.domain.state.Task
+import cloud.trotter.log.gig.domain.state.TaskPhase
+import java.util.Locale
+
+/**
+ * #526 / #237 — the **accept → job-mint → placeholder → swap** unit, extracted from
+ * [PlatformRegionStepper] (which had grown past the ~1200-line ceiling the #237 family guards). Pure
+ * move: the accepted-offer consumption ([consumeAcceptIntoJob]), the fresh-mint / add-on append, the
+ * pre-created dropoff + pickup placeholders, and the D4a mis-bind swap guard — all as `internal`
+ * extension functions on [PlatformRegionStepper] so they still share its deterministic
+ * [PlatformRegionStepper.mintId] / [PlatformRegionStepper.completeActiveJob] helpers and the top-level
+ * [isJobPhysicallyComplete]. (#438 B3 retired the accept-stash arming/consumption — the accepted
+ * offer now lives on the region's own `pendingOffers`, so [OfferLifecycle] owns its lifecycle.)
+ */
+/**
+ * #503 slice 3b: pre-create one customer-TBD dropoff placeholder per order an accepted offer
+ * covers, so a Job owns ordered dropoffs for a stack (not just a single drop). Each dropoff
+ * screen later RESOLVES its customer onto the next open placeholder by name (slice 3 + 3b-2).
+ * The count comes from the offer's parsed order list (fallback 1 when the offer wasn't parsed);
+ * ids are minted at [startOffset]..[startOffset]+count-1 off the region's mint counter, which the
+ * caller advances past in the same copy().
+ *
+ * #997: each slot is stamped with [offerHash] — the accept that produced it — so the receipt-less
+ * pay estimate can split each absorbed offer's OWN quote across its OWN drops instead of pooling a
+ * multi-accept job into one job-wide average. This is the only point at which the mapping is free and
+ * unambiguous (both mint paths call here per accept); nothing downstream can recover it. Null hash
+ * (an offer that carried none) simply leaves the lineage absent → the pooled degrade arm.
+ */
+internal fun PlatformRegionStepper.preCreatedDropoffs(
+    region: PlatformRegion,
+    obs: Observation,
+    jobId: String,
+    count: Int,
+    startOffset: Long,
+    offerHash: String?,
+): List<Task> = (0 until count).map { i ->
+    Task(
+        taskId = mintId("task", region, obs, offset = startOffset + i),
+        jobId = jobId,
+        phase = TaskPhase.DROPOFF,
+        customerNameHash = null,
+        startedAt = obs.timestamp,
+        mintedByOfferHash = offerHash,
+    )
+}
+
+/**
+ * #438 B3 (was #526 D1): the accepted-offer inputs a job mint needs, sourced from the region's own
+ * accepted-pending-consumption [PendingOffer] via [acceptInputsFromPending]. One shape so
+ * [consumeAcceptIntoJob] is source-agnostic — it serves the accept-adjacent happy path AND the F3
+ * teardown-race recovery (both now read the same owned survivor, so the old stash variant is gone).
+ */
+internal data class AcceptInputs(
+    val offerHash: String?,
+    val economics: AcceptedOfferEconomics,
+    /** Raw per-order store hints (`orders.map { storeName }`); empty when the offer wasn't parsed. */
+    val storeHints: List<String>,
+    /**
+     * One dropoff placeholder per listed order (the FRESH-mint count, also for an INCREMENTAL card
+     * reaching `mintFreshJobFromAccept` with no active job — there the card's whole-route listing IS
+     * the job, so one drop per row is right); fallback 1 when the offer wasn't parsed.
+     * `appendAddOn` derives its own count from [stopCount] instead (#1304).
+     */
+    val dropoffCount: Int,
+    /** #1304: the INCREMENTAL card's `+N stops` — pickups + dropoffs added; null when unparsed. */
+    val stopCount: Int? = null,
+    /**
+     * null when the offer was not parsed; the consumer then keeps today's append behaviour
+     * (fail toward the old rule, never toward a surprise close).
+     */
+    val offerScope: OfferScope? = null,
+)
+
+internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer?, acceptedAt: Long?): AcceptInputs {
+    val parsedOffer = pending?.offerFields?.parsedOffer
+    val basis = parsedOffer?.quoteBasis ?: pending?.evaluation?.quoteBasis ?: OfferQuoteBasis.TOTAL
+    val eval = pending?.evaluation
+    val totalEval = eval?.takeIf { basis == OfferQuoteBasis.TOTAL }
+    // #936: an evaluation of a distance-less offer carries 0.0 PLACEHOLDERS in its rate-bearing
+    // fields (it scored nothing), so those are read only from an evaluation that actually had a
+    // distance — otherwise the parse wins, and a null distance is preferable to a 0.0 that would
+    // masquerade as a measurement in the accepted job's economics. `payAmount` (real gross) and
+    // `estMinutes` (the handling floor) are not rates. Incremental quotes have no handling floor.
+    val scoredEval = totalEval?.takeIf { it.hasDistanceMetrics }
+    val storeHints = parsedOffer?.orders?.map { it.storeName } ?: emptyList()
+    return AcceptInputs(
+        offerHash = pending?.offerHash,
+        economics = AcceptedOfferEconomics(
+            offerHash = pending?.offerHash,
+            quoteBasis = basis,
+            payAmount = eval?.payAmount ?: parsedOffer?.payAmount,
+            netPay = scoredEval?.netPayAmount,
+            estMinutes = if (basis == OfferQuoteBasis.TOTAL) {
+                totalEval?.estimatedTimeMinutes ?: parsedOffer?.timeToCompleteMinutes?.toDouble()
+            } else null,
+            distanceMiles = scoredEval?.distanceMiles ?: parsedOffer?.distanceMiles,
+            handlingMinutes = totalEval?.handlingMinutes,
+            nonShopLegs = totalEval?.nonShopLegs ?: 0,
+            isShop = parsedOffer?.isShop == true,
+            // #1304: an incremental card lists the owned order too, so its counts are not the new order's.
+            quotedItemCount = totalEval?.itemCount?.toInt(),
+            pricedShopItemsPerMinute = totalEval?.pricedShopItemsPerMinute,
+            pricedBasePickupMinutes = totalEval?.pricedBasePickupMinutes,
+            // #823 Phase 1: capture the offer's quoted UNITS count when it was units-denominated, so
+            // the pickup-confirmed shop-rate site can pair it with the ground-truth items shopped and
+            // learn the items:units ratio. Null for an items-denominated / non-shop offer.
+            offerUnitCount = parsedOffer?.takeIf { basis == OfferQuoteBasis.TOTAL && it.itemCountIsUnits }?.itemCount,
+            // #997: keep this accept's OWN quoted stores. `Job.offerStoreHint` flattens every
+            // accept's hints together, so a multi-accept job could not say which store belonged to
+            // which quote — and the store is the authoritative offer↔drop correspondence at close
+            // (the slot stamp is only a hint; placeholders activate blind first-open).
+            storeHints = storeHints,
+            // The honest accept moment (the accept-click time); falls back to the consume frame.
+            acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
+        ),
+        storeHints = storeHints,
+        dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
+        stopCount = parsedOffer?.stopCount,
+        offerScope = parsedOffer?.effectiveScope,
+    )
+}
+
+/**
+ * #438 B3 (was #526 D1): consume an accepted offer into the job graph — fresh mint, #596 T2
+ * close+mint on an independent offer over a finished job, or add-on append. The caller has already
+ * removed the consumed offer from [PlatformRegion.pendingOffers]; this only assembles the job graph.
+ * The single entry point shared by the accept-adjacent, add-on, and fallback branches.
+ */
+internal fun PlatformRegionStepper.consumeAcceptIntoJob(
+    region: PlatformRegion,
+    obs: Observation.FlowObservation,
+    inputs: AcceptInputs,
+): PlatformRegion {
+    val existing = region.activeJob ?: return mintFreshJobFromAccept(region, obs, inputs)
+
+    // #596 T2: an accept while the active job is already physically complete is an INDEPENDENT
+    // offer, not an add-on — do NOT fold it into a never-closed job (the 06-30 job-61 case: one
+    // never-closed job swallowed three offers, $19 of $45.75 unattributed). #749 restored this guard
+    // for a same-customer multi-order job, whose leftover TBD placeholder used to defeat the
+    // completeness predicate here (`isJobPhysicallyComplete`'s per-customer coverage arm). Close the old job and
+    // mint a fresh one. At accept time the final drop may still be inside its TASK_RETIRE grace
+    // (activeTask not yet retired); commit that retire inline first (honest completion = pend.since,
+    // matching retireActiveTask) so the completeness check sees the finished drop. Skipped when the
+    // retire was armed by deliberating on THIS add-on offer (armedFromFlow == OfferPresented).
+    run {
+        val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+        if (pend?.armedFromFlow == Flow.OfferPresented) return@run
+        // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
+        val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
+        val recentForCheck =
+            if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
+        if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
+            val committed = if (justRetired != null) {
+                region.copy(
+                    activeTask = null,
+                    recentTasks = recentForCheck.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
+                    pendingDestructive = null,
+                )
+            } else region
+            return mintFreshJobFromAccept(completeActiveJob(committed, obs.timestamp), obs, inputs)
+        }
+    }
+
+    // #1119 slice 1: re-accepting an owned offer is a no-op only while the job is still physically open.
+    if (inputs.offerHash != null && existing.acceptedOffers.any { it.offerHash == inputs.offerHash }) return region
+
+    // #1119 slice 1: a parsed STANDALONE offer accepted over a live job means the live job is stale on our side
+    // (the platform only stacks through an ADD_ON card). Close it through the #1312 whole-job abandon: open tasks
+    // are marked unassigned, arrived drops complete, and the new offer mints fresh. An ADD_ON or an
+    // unparsed offer keeps the append path. Field evidence: design/2026-10-12-1312/addon-card-evidence.md.
+    if (inputs.offerScope == OfferScope.STANDALONE) {
+        // #1119 slice 1: TASK_RETIRE has nothing left to commit after abandon; other pending kinds survive.
+        val stale = if (region.pendingDestructive?.kind == DestructiveKind.TASK_RETIRE) {
+            region.copy(pendingDestructive = null)
+        } else region
+        return mintFreshJobFromAccept(
+            abandonActiveJob(stale, obs.timestamp, reason = "standalone offer accepted over a live job (#1119)",
+                arrivedDropsComplete = true),
+            obs, inputs,
+        )
+    }
+
+    return appendAddOn(region, existing, obs, inputs)
+}
+
+/**
+ * Mint a fresh Job from an accepted offer: jobId at offset 0, the D customer-TBD dropoff
+ * placeholders at offsets 1..D, then (#526 D2) one PICKUP placeholder per distinct store at
+ * offsets D+1..D+P — all in one copy() that advances the mint counter past the whole batch (#344).
+ */
+internal fun PlatformRegionStepper.mintFreshJobFromAccept(
+    base: PlatformRegion,
+    obs: Observation.FlowObservation,
+    inputs: AcceptInputs,
+): PlatformRegion {
+    val jobId = mintId("job", base, obs)
+    val dropoffs = preCreatedDropoffs(
+        base, obs, jobId, inputs.dropoffCount, startOffset = 1, offerHash = inputs.offerHash,
+    )
+    // #526 D2: one PICKUP placeholder per distinct store, minted AFTER the dropoffs so existing
+    // dropoff ids (and the slice-3/3b tests) are unchanged — offsets job=0, dropoffs=1..D,
+    // pickups=D+1..D+P.
+    val pickupHints = distinctStoreHints(inputs.storeHints)
+    val pickups = preCreatedPickups(base, obs, jobId, pickupHints, startOffset = (1 + inputs.dropoffCount).toLong())
+    return base.copy(
+        activeJob = Job(
+            jobId = jobId,
+            offerStoreHint = inputs.storeHints,
+            parentOfferHash = inputs.offerHash,
+            acceptedOffers = listOf(inputs.economics),
+            startedAt = obs.timestamp,
+            tasks = dropoffs + pickups,
+        ),
+        // job(1) + D dropoffs + P pickups, all minted in this one copy() (#344).
+        mintCounter = base.mintCounter + 1 + inputs.dropoffCount + pickups.size,
+    )
+}
+
+/**
+ * Append an add-on accept into the active job: its own D dropoff placeholders (offsets 0..D-1),
+ * plus (#526 D2) pickup placeholders only for stores without an OPEN pickup (a same-store
+ * add-on folds into an open pickup, #499; never a confirmed one, #1315), at offsets D..D+P-1.
+ * No job mint this step.
+ * For an INCREMENTAL add-on, D = stopCount − new pickup hints, floored at 1;
+ * counts outside 1..AddOnStops.MAX_ADDON_STOPS or unparsed → 1 (#1304).
+ * Deduped by offerHash so a re-entered OfferPresented for the same offer can't double-count.
+ */
+internal fun PlatformRegionStepper.appendAddOn(
+    region: PlatformRegion,
+    existing: Job,
+    obs: Observation.FlowObservation,
+    inputs: AcceptInputs,
+): PlatformRegion {
+    val alreadyCounted = inputs.offerHash != null &&
+        existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
+    if (alreadyCounted) return region
+    // #526 FIX3c: compare both offer hints and resolved names (including bare-fallback pickups).
+    val pickups = existing.tasks.filter { it.phase == TaskPhase.PICKUP }
+    fun pickupHints(tasks: List<Task>) = tasks
+        .flatMap { listOfNotNull(it.expectedStoreHint, it.storeName) }
+        .map { it.lowercase(Locale.ROOT) }.toSet()
+    val openPickupHints = pickupHints(pickups.filter { it.confirmedAt == null && it.unassignedAt == null })
+    val hints = distinctStoreHints(inputs.storeHints)
+    // #1315 r3: +N stops counts stores new to the ROUTE, deduplicated against ALL pickups.
+    // A confirmed same-store revisit needs a placeholder but is not a new store in this arithmetic.
+    val newStoreHints = newStores(ownedStoreKeys(existing.tasks), hints)
+    val addOnPickupHints = hints.filter { it.lowercase(Locale.ROOT) !in openPickupHints }
+    // #1304: an INCREMENTAL card lists the OWNED order beside the new one, so `orders.size` over-mints.
+    // +N stops minus stores new to the route gives added drops; TOTAL keeps its per-order count.
+    // A null `stopCount` (a route with 3+ digits the bounded regex refuses, or a journal row replayed
+    // from before #1304) → ONE drop, never `orders.size`.
+    // Floored at ONE, never zero (review of PR #1305): an add-on is by definition at least one new order,
+    // so it always adds at least one drop. The zero floor broke the mid-job start — a job tracked from
+    // its first DROPOFF has no pickup tasks, so BOTH rows on a whole-route card look like new pickups,
+    // the subtraction hits zero, the new order gets no placeholder, and the owned drop's completion
+    // closes the job early (`JobCompleteness` ignores outstanding pickups), stranding the new order
+    // in a fresh job without its accepted economics.
+    val addOnDropoffCount = if (inputs.economics.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
+        AddOnStops.addedDropoffs(inputs.stopCount, newStoreHints.size)
+    } else inputs.dropoffCount
+    val addOnDropoffs = preCreatedDropoffs(
+        region, obs, existing.jobId, addOnDropoffCount, startOffset = 0, offerHash = inputs.offerHash,
+    )
+    val addOnPickups = preCreatedPickups(region, obs, existing.jobId, addOnPickupHints, startOffset = addOnDropoffCount.toLong())
+    return region.copy(
+        activeJob = existing.copy(
+            acceptedOffers = existing.acceptedOffers + inputs.economics,
+            arrivalEstimate = null,
+            arrivalEstimateRequestedAt = null,
+            arrivalEstimateObservedItems = null,
+            offerStoreHint = existing.offerStoreHint + inputs.storeHints,
+            tasks = existing.tasks + addOnDropoffs + addOnPickups,
+        ),
+        mintCounter = region.mintCounter + addOnDropoffCount + addOnPickups.size,
+    )
+}
+
+/**
+ * #526 D2: pre-create one PICKUP placeholder per **distinct store** an accepted offer covers, the
+ * symmetric counterpart to [preCreatedDropoffs]. Two orders at the *same* store are ONE combined
+ * pickup on DoorDash (the #499 fold-in), so [distinctStoreHints] must already be de-duplicated.
+ * Each placeholder carries its order's [Task.expectedStoreHint]; the authoritative [Task.storeName]
+ * is filled when a pickup screen resolves onto it. ids are minted at [startOffset]..[startOffset]+
+ * size-1; the caller advances the counter in the same copy().
+ */
+internal fun PlatformRegionStepper.preCreatedPickups(
+    region: PlatformRegion,
+    obs: Observation,
+    jobId: String,
+    distinctStoreHints: List<String>,
+    startOffset: Long,
+): List<Task> = distinctStoreHints.mapIndexed { i, hint ->
+    Task(
+        taskId = mintId("task", region, obs, offset = startOffset + i),
+        jobId = jobId,
+        phase = TaskPhase.PICKUP,
+        expectedStoreHint = hint,
+        storeName = null,
+        startedAt = obs.timestamp,
+    )
+}
+
+/** De-duplicate raw offer store hints case-insensitively, preserving first-seen order. */
+internal fun PlatformRegionStepper.distinctStoreHints(storeHints: List<String>): List<String> =
+    storeHints.map { it.trim() }.filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase(Locale.ROOT) }
+
+/**
+ * #526 D4a: repair a mis-bound pickup slot. If the active PICKUP task's parsed store this frame
+ * bestMatches (>=1 shared leading token) exactly ONE OTHER open pickup placeholder's hint AND
+ * shares 0 leading tokens with the active task's own hint, the accumulation is on the wrong order
+ * slot — swap it onto the correctly-hinted slot (identity-preserving, no re-mint) and return the
+ * post-swap job + the now-correct active task. Otherwise returns `(region.activeJob, activeTask)`
+ * unchanged. Conservative: unique match + clean 0-token divergence only; ambiguous → no swap.
+ * Both slots must be OPEN (the active task by definition; the other via `storeName == null &&
+ * completedAt == null`) — the D4 lifecycle contract that keeps [swapTaskAccumulation]'s timestamp
+ * swap safe.
+ */
+internal fun PlatformRegionStepper.maybeSwapMisboundPickup(
+    region: PlatformRegion,
+    activeTask: Task,
+    taskPhase: TaskPhase,
+    taskFields: ParsedFields.TaskFields?,
+): Pair<Job?, Task> {
+    val noSwap = region.activeJob to activeTask
+    if (taskPhase != TaskPhase.PICKUP || activeTask.completedAt != null) return noSwap
+    val job = region.activeJob ?: return noSwap
+    if (job.tasks.none { it.taskId == activeTask.taskId }) return noSwap
+    val screenStore = taskFields?.storeName?.trim()?.takeIf { it.isNotEmpty() } ?: return noSwap
+    val displacedIds = region.recentTasks.mapTo(HashSet()) { it.taskId }
+    val others = job.tasks.filter {
+        it.phase == TaskPhase.PICKUP && it.storeName == null && it.completedAt == null &&
+            it.taskId != activeTask.taskId && it.taskId !in displacedIds &&
+            it.expectedStoreHint != null
+    }
+    val match = others
+        .filter { StoreNameMatch.sharedLeadingTokens(screenStore, it.expectedStoreHint!!) >= 1 }
+        .singleOrNull() ?: return noSwap
+    // #526 FIX3a: the 0-token divergence must be measured against SOMETHING the active slot owns.
+    // Prefer its offer hint; fall back to its accumulated storeName when the hint is null (a
+    // bare-fallback pickup). If the active slot owns NEITHER a hint nor a store, there is no
+    // basis to claim divergence — never swap (a null hint made the check vacuously true, causing
+    // wrong swaps).
+    val ownAnchor = activeTask.expectedStoreHint ?: activeTask.storeName ?: return noSwap
+    if (StoreNameMatch.sharedLeadingTokens(screenStore, ownAnchor) >= 1) return noSwap
+    val swappedJob = job.withSwappedAccumulation(activeTask.taskId, match.taskId)
+    val newActive = swappedJob.tasks.firstOrNull { it.taskId == match.taskId } ?: return noSwap
+    return swappedJob to newActive
+}

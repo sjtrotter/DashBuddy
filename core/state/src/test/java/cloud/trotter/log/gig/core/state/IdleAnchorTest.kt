@@ -1,0 +1,199 @@
+package cloud.trotter.log.gig.core.state
+
+import cloud.trotter.log.gig.domain.capture.ReplayMetadata
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.DestructiveKind
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.FlowRegion
+import cloud.trotter.log.gig.domain.state.Mode
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.Session
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Tests for [PlatformRegion.idleEnteredAt] lifecycle management
+ * in [PlatformRegionStepper].
+ */
+class IdleAnchorTest {
+
+    private val stepper = PlatformRegionStepper()
+    private val flowStepper = FlowRegionStepper()
+    private val policy = TransitionPolicy()
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private fun screen(
+        flow: Flow?,
+        modeHint: Mode? = null,
+        timestamp: Long = 1000L,
+        ruleId: String = "doordash.screen.test",
+    ) = Observation.Screen(
+        timestamp = timestamp,
+        captureId = null,
+        ruleId = ruleId,
+        metadata = ReplayMetadata.EMPTY,
+        flow = flow,
+        modeHint = modeHint,
+        parsed = ParsedFields.None,
+    )
+
+    private fun onlineRegion(
+        idleEnteredAt: Long? = null,
+        timestamp: Long = 500L,
+    ) = PlatformRegion(
+        platform = Platform.DoorDash,
+        mode = Mode.Online,
+        session = Session(sessionId = "test-session", startedAt = 100L),
+        lastObservedAt = timestamp,
+        idleEnteredAt = idleEnteredAt,
+    )
+
+    private fun offlineRegion() = PlatformRegion(
+        platform = Platform.DoorDash,
+        mode = Mode.Offline,
+    )
+
+    private fun step(
+        prev: PlatformRegion,
+        obs: Observation,
+        prevFlow: FlowRegion = FlowRegion(),
+    ): PlatformRegion {
+        val nextFlow = if (obs is Observation.FlowObservation) {
+            flowStepper.step(prevFlow, obs)
+        } else prevFlow
+        return stepper.step(prev, prevFlow, nextFlow, obs, policy)
+    }
+
+    // =========================================================================
+    // Tests
+    // =========================================================================
+
+    @Test
+    fun `idleEnteredAt set when flow enters Idle while Online`() {
+        val obs = screen(flow = Flow.Idle, modeHint = Mode.Online, timestamp = 1000L)
+        val result = step(onlineRegion(), obs)
+        assertEquals(1000L, result.idleEnteredAt)
+    }
+
+    @Test
+    fun `idleEnteredAt cleared when flow leaves Idle`() {
+        val prev = onlineRegion(idleEnteredAt = 800L)
+        val prevFlow = FlowRegion(flow = Flow.Idle)
+        val obs = screen(flow = Flow.OfferPresented, timestamp = 1200L)
+        val result = step(prev, obs, prevFlow)
+        assertNull(result.idleEnteredAt)
+    }
+
+    @Test
+    fun `idleEnteredAt not set when Offline`() {
+        val obs = screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 1000L)
+        val result = step(offlineRegion(), obs)
+        assertNull(result.idleEnteredAt)
+    }
+
+    @Test
+    fun `idleEnteredAt preserved through repeated Idle observations`() {
+        val prev = onlineRegion(idleEnteredAt = 800L)
+        val prevFlow = FlowRegion(flow = Flow.Idle)
+        val obs = screen(flow = Flow.Idle, modeHint = Mode.Online, timestamp = 1200L)
+        val result = step(prev, obs, prevFlow)
+        // Should keep the original timestamp, not overwrite with the new one
+        assertEquals(800L, result.idleEnteredAt)
+    }
+
+    @Test
+    fun `idleEnteredAt cleared when the session-end grace commits (#431)`() {
+        val prev = onlineRegion(idleEnteredAt = 800L)
+        val prevFlow = FlowRegion(flow = Flow.Idle)
+        val obs = screen(flow = Flow.SessionEnded, modeHint = Mode.Offline, timestamp = 1500L)
+        val graced = step(prev, obs, prevFlow)
+        // The summary arms the authoritative grace; the anchor survives until commit.
+        assertNotNull(graced.pendingDestructive)
+
+        val committed = step(
+            graced,
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 1500L + 3_000L),
+            prevFlow,
+        )
+        assertNull(committed.session)
+        assertNull(committed.idleEnteredAt)
+    }
+
+    @Test
+    fun `session-ended summary while already offline ends the session (summary after idle)`() {
+        // Dash ends: the idle/offline screen comes first → session preserved under grace.
+        val offlineGraced = step(
+            onlineRegion(),
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = 1000L),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNotNull("session preserved under grace", offlineGraced.session)
+        assertNotNull("grace armed", offlineGraced.pendingDestructive)
+        assertEquals(DestructiveKind.SESSION_END, offlineGraced.pendingDestructive?.kind)
+
+        // dash_summary then arrives while STILL offline (mode unchanged). It
+        // TIGHTENS the grace to the short authoritative window (#431) — the
+        // session stays alive briefly so a misrecognized summary can still be
+        // cancelled by a task-flow frame — and the commit fires at the
+        // tightened deadline, attributing the summary to the just-ended dash.
+        val tightened = step(
+            offlineGraced,
+            screen(flow = Flow.SessionEnded, modeHint = Mode.Offline, timestamp = 2000L),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNotNull("session alive through the short grace", tightened.session)
+        val pend = tightened.pendingDestructive!!
+        assertTrue("summary marks the pending authoritative", pend.authoritative)
+        assertEquals(
+            "deadline tightened to summary + short grace",
+            2000L + TransitionPolicy.AUTHORITATIVE_GRACE_MS,
+            pend.deadline,
+        )
+        assertEquals("original offline flash stays the honest end time", 1000L, pend.since)
+
+        val ended = step(
+            tightened,
+            screen(flow = Flow.Idle, modeHint = Mode.Offline, timestamp = pend.deadline + 100),
+            prevFlow = FlowRegion(flow = Flow.Idle),
+        )
+        assertNull("session ended at the tightened deadline", ended.session)
+    }
+
+    @Test
+    fun `idleEnteredAt reset after leaving and re-entering Idle`() {
+        // Start idle at 800
+        val prev = onlineRegion(idleEnteredAt = 800L)
+        val idleFlow = FlowRegion(flow = Flow.Idle)
+
+        // Leave idle (offer arrives)
+        val offerObs = screen(flow = Flow.OfferPresented, timestamp = 1000L)
+        val afterOffer = step(prev, offerObs, idleFlow)
+        assertNull(afterOffer.idleEnteredAt)
+
+        // Re-enter idle at 1500
+        val offerFlow = FlowRegion(flow = Flow.OfferPresented)
+        val idleObs = screen(flow = Flow.Idle, modeHint = Mode.Online, timestamp = 1500L)
+        val afterIdle = step(afterOffer, idleObs, offerFlow)
+        assertEquals(1500L, afterIdle.idleEnteredAt)
+    }
+
+    @Test
+    fun `idleEnteredAt cleared when mode transitions to Paused`() {
+        val prev = onlineRegion(idleEnteredAt = 800L)
+        val prevFlow = FlowRegion(flow = Flow.Idle)
+        val obs = screen(flow = Flow.Idle, modeHint = Mode.Paused, timestamp = 1200L)
+        val result = step(prev, obs, prevFlow)
+        // Paused is not Online, so idle anchor should be cleared
+        // (the early return for Offline won't fire, but the mode changes to Paused
+        // and Flow.Idle + Paused mode should not have an idle anchor)
+        assertNull(result.idleEnteredAt)
+    }
+}

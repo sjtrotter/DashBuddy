@@ -4,7 +4,7 @@ issues: #349
 - **Screenshots still save + no offer-time jank (#349).** Screenshot saving moved fully off the
   main thread (the PNG compress + MediaStore write used to run on main, right when the offer
   card/notification renders). Confirm: (a) offer + dash-summary screenshots still land in
-  `Pictures/DashBuddy`; (b) no visible stutter the moment an offer arrives (should be same or
+  `Pictures/gig.log`; (b) no visible stutter the moment an offer arrives (should be same or
   smoother than before).
   - Confirmed: 0/2.
   desk: needs field: verify saved screenshots and observe offer-time stutter; successful files alone cannot establish smooth rendering.

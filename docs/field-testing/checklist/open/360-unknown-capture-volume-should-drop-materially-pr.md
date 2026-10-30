@@ -6,7 +6,7 @@ issues: #360, #388
   capture once instead of per frame), with a 200-per-process cap (logged loudly when hit).
   Post-dash check: count files in the capture INBOX vs a May session of similar length —
   the May baseline was ~66% UNKNOWN; expect a large drop. Also confirm genuinely NEW
-  unknown screens (any screen you visited that DashBuddy doesn't know) still produce a
+  unknown screens (any screen you visited that gig.log doesn't know) still produce a
   capture, and grep the log for the cap warning — hitting 200 on a normal dash would mean
   the suppressor is too weak.
   - Confirmed: 0/2.

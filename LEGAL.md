@@ -2,7 +2,7 @@
 
 > **Status:** Working draft, maintainer-authored. **Not legal advice.** This document
 > records the project's good-faith reading of the DoorDash Independent Contractor
-> Agreement (ICA) and the operating discipline DashBuddy applies to stay within it.
+> Agreement (ICA) and the operating discipline gig.log applies to stay within it.
 > Pending review by qualified counsel before public launch.
 >
 > **Document version:** v1.0
@@ -11,7 +11,7 @@
 
 ## Purpose
 
-DashBuddy is built by a working DoorDash contractor for working DoorDash contractors.
+gig.log is built by a working DoorDash contractor for working DoorDash contractors.
 The maintainer is themself bound by the ICA and intends to remain in compliance with
 it. This document exists so that:
 
@@ -21,12 +21,12 @@ it. This document exists so that:
 3. Outside reviewers (counsel, journalists, researchers, regulators) can audit the
    project's legal reasoning.
 
-The ICA is a contract between an individual driver and DoorDash. DashBuddy itself is
+The ICA is a contract between an individual driver and DoorDash. gig.log itself is
 not a party to that contract; each driver who runs the app is. The discipline below is
-written so that a driver who runs DashBuddy as designed remains in compliance with
+written so that a driver who runs gig.log as designed remains in compliance with
 their own ICA.
 
-## Clauses That Affirmatively Support DashBuddy
+## Clauses That Affirmatively Support gig.log
 
 ### §2.3 — Driver Independence
 
@@ -45,25 +45,25 @@ decision-support workflow.
 > Contractor's reasonable discretion and business judgment …"
 
 The contractor's acceptance and cancellation decisions are the contractor's own.
-DashBuddy surfaces information (True Net Profitability, deadhead distance, expected
+gig.log surfaces information (True Net Profitability, deadhead distance, expected
 duration) that supports the exercise of that judgment. It does not substitute the
 platform's judgment, and it does not remove the contractor's discretion — every
 acceptance/decline action remains a contractor action.
 
-## Clauses That Constrain DashBuddy
+## Clauses That Constrain gig.log
 
 ### §15.1 — Platform Modification
 
 > "Contractor agrees not to modify, rent, lease, loan, sell, distribute, or create
 > derivative works based on the DoorDash Platform …"
 
-DashBuddy does not modify the DoorDash app. It does not patch the binary, inject code
+gig.log does not modify the DoorDash app. It does not patch the binary, inject code
 into the DoorDash process, alter network traffic, replace screens, or override platform
 behavior. It runs as a separate Android application using Android's documented
 AccessibilityService API to read the contents of the contractor's own screen — the
 same API screen-readers, password managers, and accessibility utilities use.
 
-DashBuddy is not a derivative work of the DoorDash Platform. It contains no DoorDash
+gig.log is not a derivative work of the DoorDash Platform. It contains no DoorDash
 code, no DoorDash assets, no decompiled DoorDash material, and no protocol
 implementations derived from DoorDash internals. Its recognition layer matches against
 on-screen text rendered by the platform, in the same way a sighted contractor reads
@@ -75,14 +75,14 @@ their own screen.
 > attempt to derive the source code or the underlying ideas, algorithms, structure,
 > or organization of the DoorDash Platform."
 
-This is the clause DashBuddy treats with the most care. The discipline is:
+This is the clause gig.log treats with the most care. The discipline is:
 
-- DashBuddy does not decompile, disassemble, or static-analyze the DoorDash app
+- gig.log does not decompile, disassemble, or static-analyze the DoorDash app
   binary.
-- DashBuddy does not intercept, replay, or characterize DoorDash network traffic.
-- DashBuddy does not attempt to recover, infer, or model the routing algorithm, the
+- gig.log does not intercept, replay, or characterize DoorDash network traffic.
+- gig.log does not attempt to recover, infer, or model the routing algorithm, the
   pricing algorithm, the dispatch algorithm, or any other internal platform system.
-- DashBuddy does not attempt to characterize the "underlying ideas, algorithms,
+- gig.log does not attempt to characterize the "underlying ideas, algorithms,
   structure, or organization" of the platform.
 
 The academic federation pillar (§7 of the technical architecture document; RFC #194)
@@ -110,7 +110,7 @@ offer fields."
 > Manipulation/abuse provisions limited to (a) location tampering, (b) collection of
 > ineligible promotions, (c) operating multiple accounts.
 
-DashBuddy does none of these. It does not spoof location. It does not manipulate
+gig.log does none of these. It does not spoof location. It does not manipulate
 promotion eligibility. It does not enable multi-accounting. It is, with respect to
 §7.7, a compliant tool.
 
@@ -118,24 +118,24 @@ promotion eligibility. It does not enable multi-accounting. It is, with respect 
 
 > Disputes between contractor and DoorDash are subject to individual arbitration.
 
-Practical implication: enforcement risk for an individual driver running DashBuddy is
+Practical implication: enforcement risk for an individual driver running gig.log is
 far more likely to be **deactivation** than litigation. The class-action shield works
 in both directions; DoorDash is unlikely to litigate, but a driver who is deactivated
-generally has limited recourse beyond arbitration. DashBuddy contributors should
+generally has limited recourse beyond arbitration. gig.log contributors should
 weigh that asymmetry when designing features and writing public copy.
 
 ### §17.1 — Termination
 
 > DoorDash may terminate the contractor relationship at the platform's discretion.
 
-The realistic worst case for an individual contractor running DashBuddy is platform
+The realistic worst case for an individual contractor running gig.log is platform
 deactivation. The application's design — on-device computation, no platform
 interaction, no traffic interception, no automated platform actions without explicit
 per-action driver consent — is intended to minimize the deactivation surface. It does
 not eliminate it. Drivers should understand that DoorDash retains discretion to
 terminate the relationship.
 
-## What DashBuddy Does
+## What gig.log Does
 
 - Reads the contractor's own device screen via Android's AccessibilityService API.
 - Recognizes which platform screen is displayed via a chain of `ScreenMatcher`
@@ -147,7 +147,7 @@ terminate the relationship.
 - Optionally (opt-in, k=10, DP-budgeted, PII-scrubbed) contributes anonymized
   observations to an academic federation.
 
-## What DashBuddy Does Not Do
+## What gig.log Does Not Do
 
 - Does not modify, patch, or interact with the DoorDash app process.
 - Does not decompile, disassemble, or analyze the DoorDash binary.

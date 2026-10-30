@@ -2,8 +2,8 @@ status: review
 issues: #938, #954
 
 - **🆕 NEW — #938 / PR #954 — English-locale boundary notice.** Briefly switch the phone's
-  language to Spanish (Settings → System → Languages), then toggle DashBuddy's accessibility
-  service off and back on. Expect: exactly **one** system notification titled "DashBuddy solo lee
+  language to Spanish (Settings → System → Languages), then toggle gig.log's accessibility
+  service off and back on. Expect: exactly **one** system notification titled "gig.log solo lee
   pantallas en inglés" under a new "Avisos de la aplicación" channel, and a `WARN/LocaleBoundary`
   line naming `'es'` (and **not** a region) in the log. Toggle the service again — the WARN
   repeats, the notification does **not**. Switch back to English and toggle once more — neither

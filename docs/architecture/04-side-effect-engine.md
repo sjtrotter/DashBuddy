@@ -106,12 +106,12 @@ as `Offer`, never the literal token — a fail-safe under, not a replacement for
 another app is in front when it fires. Anything else on screen, such as a video or keyboard, can appear in the
 image. After the 500 ms settle delay, `ScreenShotHandler` calls the live master/category callback, `stillAllowed()`.
 If allowed, it reads only `service.rootInActiveWindow?.packageName` and recycles the root in `finally`.
-`EvidenceCaptureBoundary` checks disabled capture, a null front package, DashBuddy's own package (allowed for
+`EvidenceCaptureBoundary` checks disabled capture, a null front package, gig.log's own package (allowed for
 its bubble), then membership in the enabled delivery platforms, in that order. Root or package read failures
 skip the capture. There is no window enumeration, tree mapping, capture budget or sensitive-marker scan.
 Any denial skips `takeScreenshot` and logs `Evidence capture skipped at capture time: %s` at INFO under `Effects`,
 with only the verdict substituted. A capture already being saved finishes. Images contain the whole display
-(`Display.DEFAULT_DISPLAY`), save to `Pictures/DashBuddy`, are not uploaded by DashBuddy and survive uninstall;
+(`Display.DEFAULT_DISPLAY`), save to `Pictures/gig.log`, are not uploaded by gig.log and survive uninstall;
 gallery sync or sharing can send them. Pixel redaction remains in #883.
 
 The pipeline's `AccessibilityNodeMapper` recycles every obtained child in `finally`, including rejected children
@@ -181,7 +181,7 @@ are on #1102). #1149 rebuilt that re-find as strategy 2b under exactly those con
 
 **Tap target re-resolution (#1149).** From the 2026-09-21 TalkBack study
 (`~/dashbuddy/research/talkback-study/ASTRA-REPORT.md`, wins 1 + 2: refresh the actual action owner before
-dispatch; re-resolve a bind semantically before geometry). DashBuddy taps with `performAction(ACTION_CLICK)`,
+dispatch; re-resolve a bind semantically before geometry). gig.log taps with `performAction(ACTION_CLICK)`,
 never coordinates, so frozen bounds never aimed a tap — they decided WHICH node resolved.
 
 - **Owner first (D1).** `AccNodeUtils.resolveActionOwner` is the one "what does a tap land on" rule: self →
@@ -345,7 +345,7 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   the field item watches the `semantic re-find inconclusive` WARN rate. (1) **The accessibility rebind race —
   ACCEPTED (review L9).** After an owner `refresh()`, the
   accessibility client's subtree cache can still serve a pre-rebind copy of a CHILD to `getChild`; every
-  accessibility consumer lives with this, and DashBuddy refreshes the owner and the matched evidence node (I1/J1)
+  accessibility consumer lives with this, and gig.log refreshes the owner and the matched evidence node (I1/J1)
   but cannot force-refresh a whole subtree cheaply. (2) **A label-less incomplete region no longer vetoes
   (review R4):** a region vetoes only with ≥ 1 visible letter-bearing key, all in the ref's set; a hidden twin
   under an unreadable label-less region is the accepted residual. (3) An unreadable APPLICATION window of

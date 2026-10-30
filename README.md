@@ -1,8 +1,8 @@
-# DashBuddy
+# gig.log
 
 ![Platform](https://img.shields.io/badge/Platform-Android%2011%2B-green) ![Recognition](https://img.shields.io/badge/Recognition-Data%E2%80%91driven%20JSON%20rules-blue) ![Privacy](https://img.shields.io/badge/Processing-100%25%20on%E2%80%91device-brightgreen) ![Status](https://img.shields.io/badge/Status-Alpha-orange)
 
-**DashBuddy gives delivery drivers the same view of their own work that the platform already
+**gig.log gives delivery drivers the same view of their own work that the platform already
 has.** It reads your delivery app's screen on-device, in real time, and turns it into the numbers
 the app doesn't show you — your *true* net pay per offer (after fuel, time, and vehicle cost),
 your real mileage, what your past dashes actually earned per hour, and a heads-up when a dash gets
@@ -32,7 +32,7 @@ paused. Nothing leaves your phone unless you turn a specific upload on.
   before you lose the slot, with a countdown for the remaining window.
 * **A glanceable bubble HUD.** A floating overlay you can read at a glance while driving — built so
   a stale number is treated as a bug, not a styling choice. Offers can also be spoken aloud.
-* **Consented, per-action automation.** DashBuddy can tap Accept / Decline / expand-earnings for
+* **Consented, per-action automation.** gig.log can tap Accept / Decline / expand-earnings for
   you, but only after you allow **each** automation individually; nothing is ever granted by
   default, and a denial sticks across updates.
 * **Your data stays yours.** All recognition and math happen on-device. Release builds upload
@@ -54,16 +54,16 @@ recognition rules (a great [first contribution](#help-2-write-or-fix-recognition
    *(No release posted yet? See [Getting a build before the first release](#getting-a-build-before-the-first-release) below.)*
 2. **Install it.** Open the downloaded file. Android will ask you to allow installing apps from
    your browser/Files app — accept, then install.
-3. **Walk the front door.** On first launch DashBuddy asks, in order: whether it may receive
+3. **Walk the front door.** On first launch gig.log asks, in order: whether it may receive
    screen events beyond the delivery apps themselves (needed to see overlay offers; declining
    keeps it filtered to the delivery apps), then the **accessibility service** — this is how it
    reads the delivery app's screen; enable it under **Settings → Accessibility → Downloaded apps →
-   DashBuddy** when prompted — then location (used for mileage), notifications, and finally one
+   gig.log** when prompted — then location (used for mileage), notifications, and finally one
    Allow / Don't allow row per automation it could perform for you.
-4. **Dash like normal.** DashBuddy runs in the background and surfaces the bubble HUD over your
+4. **Dash like normal.** gig.log runs in the background and surfaces the bubble HUD over your
    delivery app.
 
-> **Why sideloading?** DashBuddy is source-available, not (yet) on the Play Store. Installing the
+> **Why sideloading?** gig.log is source-available, not (yet) on the Play Store. Installing the
 > signed APK directly is the intended path while the project is in alpha.
 
 ### Getting a build before the first release
@@ -91,14 +91,14 @@ the app's Kotlin code.
 
 ### Help #1: Report a bug or an unrecognized screen
 
-If DashBuddy misreads a screen, ignores one it should handle, or shows a stale/wrong number while
+If gig.log misreads a screen, ignores one it should handle, or shows a stale/wrong number while
 you dash, that's a high-value report.
 
 1. Open an [issue](https://github.com/sjtrotter/DashBuddy/issues/new) and describe **which
    platform, which screen, and what went wrong** (a phone screenshot helps a lot).
 2. Add the **`on-dash-testing`** and **`bug`** labels if you can.
 
-If you're comfortable pulling files off your phone: debug builds save the screens DashBuddy
+If you're comfortable pulling files off your phone: debug builds save the screens gig.log
 *couldn't* recognize to the app's external files directory (your own sensitive screens are dropped
 before capture, and customer names and addresses are hashed, never stored in clear). Attaching one
 of those capture files turns "it didn't recognize the new pickup screen" into something a rule can
@@ -106,7 +106,7 @@ be written against immediately.
 
 ### Help #2: Write or fix recognition rules
 
-**This is the heart of the project, and it's just JSON — no app code.** DashBuddy recognizes
+**This is the heart of the project, and it's just JSON — no app code.** gig.log recognizes
 screens with data-driven rules, not hand-written code. If you can read JSON, you can teach it to
 recognize a new screen or fix one it gets wrong.
 
@@ -147,7 +147,7 @@ genuinely useful work.
 
 ## How it works (the short version)
 
-DashBuddy's core challenge is understanding a third-party app with no API. The solution is a
+gig.log's core challenge is understanding a third-party app with no API. The solution is a
 pipeline that turns raw screen events into trustworthy state:
 
 ```mermaid
@@ -242,7 +242,7 @@ Privacy is a design input, not a feature bolted on. Protection is layered:
   fail-closed scrub for sensitive markers before it is written.
 
 See [LEGAL.md](LEGAL.md) for the good-faith reading of the platform terms that governs scope:
-DashBuddy performs **empirical measurement of the visible offer surface**, never reverse
+gig.log performs **empirical measurement of the visible offer surface**, never reverse
 engineering of the platform.
 
 ---
@@ -259,7 +259,7 @@ If you do want to work on the app code:
    ./gradlew testDebugUnitTest :domain:test censusContractTest    # run all unit tests
    ./gradlew :app:testDebugUnitTest --tests "*AllMatchersSuite*"  # recognition regressions only
    ```
-4. Enable **DashBuddy** under **Settings → Accessibility → Downloaded apps** to run on a device.
+4. Enable **gig.log** under **Settings → Accessibility → Downloaded apps** to run on a device.
 
 See [CLAUDE.md](CLAUDE.md) for architecture, conventions, and the full build/test commands.
 

@@ -1,0 +1,74 @@
+package cloud.trotter.log.gig.domain.model.event
+
+enum class AppEventType {
+    // --- Session Lifecycle ---
+    DASH_START,
+    DASH_PAUSED,
+    DASH_STOP,
+    ZONE_SWITCH,
+    NOTIFICATION_RECEIVED,
+
+    // --- Offer Phase ---
+    OFFER_RECEIVED,
+    OFFER_ACCEPTED,
+    OFFER_DECLINED,
+    OFFER_TIMEOUT, // Timeout
+
+    // --- Pickup Phase ---
+    PICKUP_NAV_STARTED,
+    PICKUP_ARRIVED,
+    PICKUP_CONFIRMED, // Picked up food
+
+    // --- Delivery Phase ---
+    DELIVERY_NAV_STARTED,
+    DELIVERY_ARRIVED,
+    DELIVERY_CONFIRMED, // Dasher finished the drop-off (handoff or POD photo done); analogue of PICKUP_CONFIRMED
+    DELIVERY_COMPLETED, // PostTask exit (receipt dismissed); carries pay breakdown
+
+    // --- Task abandonment (#736) ---
+    TASK_UNASSIGNED, // The dasher unassigned the order mid-flow (via help). Teardown, NOT a completion:
+                     // no pay/miles ever attributes, and the close-out sweep can never confirm it.
+
+    // --- Job-close reconciliation tripwire (#810 B1) ---
+    JOB_ACCEPT_MISMATCH, // A job closed with MORE accepted offers than accounted physical orders (delivered
+                         // drops + unassign-marked orders) — the invisible-unassign class (seq-114): an offer
+                         // died with no capturable commit surface, so no TASK_UNASSIGNED ever fired. A pure
+                         // tripwire: read-model-inert (the projector's liveness `else` arm), NO state mutation,
+                         // NO re-attribution — it only makes the silent seam observable. Payload = hashes +
+                         // counts only (PII-safe, P7).
+
+    // --- Machine receipt re-price (#1033 layer 2) ---
+    DELIVERY_RECEIPT_REPRICE, // The post-delivery receipt was EXPANDED after its DELIVERY_COMPLETED had
+                              // already been minted off a collapsed (un-itemized) one, so the drop was
+                              // priced by the #691 OFFER_PAY estimate. An append-only TIER-1 (automatic)
+                              // correction: it re-prices the drop from the receipt's own itemization
+                              // (payBasis → DROP_SHARE) and never rewrites the original completion event.
+                              // One event per delivered drop of the job; payload = money + ids only (P7).
+
+    // --- User corrections (#650) ---
+    MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)
+    PAY_ADJUSTMENT,  // A driver re-price of an already-recorded delivery (the original event stays)
+    DELIVERY_ADJUSTMENT, // A driver multi-field edit of an already-recorded delivery (#688) — widens
+                         // PAY_ADJUSTMENT (store/pay/tip/cash-tip/miles/note); the original event stays
+    /** #1333: A user-logged expense. */
+    EXPENSE_LOGGED,
+    /** #1333: A user-logged fuel fill-up. */
+    FUEL_FILLUP,
+    /** A platform-free car comparison; never enters any read model. */
+    ODOMETER_READING,
+
+    /** #1360: which vehicle drove a dash; bookkeeping, never a session row */
+    DASH_VEHICLE,
+    /** #1333: Voids an expense or fuel entry. */
+    LEDGER_ENTRY_VOIDED,
+    SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays
+    DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
+                             // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays
+    OFFER_OUTCOME_CORRECTION, // A driver attests (or undoes) which accepted offer was invisibly unassigned
+                              // (#810 B2 Tier 2) — stamps offer_records.outcomeResolved only (never pay/net);
+                              // the original OFFER_ACCEPTED event/outcome stays
+
+    // --- System / Generic ---
+    SCREEN_VIEWED, // For generic screen transitions like "Earnings Screen"
+    ERROR_OCCURRED
+}

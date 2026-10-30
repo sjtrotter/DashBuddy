@@ -25,7 +25,7 @@
 
 ## Context
 
-DashBuddy's pipeline and state machine have grown organically. The accessibility
+gig.log's pipeline and state machine have grown organically. The accessibility
 pipelines (`WindowPipeline`, `ClickedPipeline`, `NotificationPipeline`) each have
 their own ad-hoc shape with kitchen-sink factory classes that mix classification,
 snapshotting, breadcrumb and odometer enrichment. The state machine uses a 10-class
@@ -1012,7 +1012,7 @@ loader rejects the entire bundle and falls back to the previous good version.
 
 ## 9. Ruleset Distribution
 
-### 9.1 New repository: `dashbuddy-matchers`
+### 9.1 New repository: `giglog-matchers`
 
 Apache-2.0 license (per Pillar 2 architectural posture).
 
@@ -1207,7 +1207,7 @@ For **each** Kotlin parser:
 
 ### Phase 7 — Multi-platform readiness + ruleset distribution
 
-- Create `dashbuddy-matchers` repo and CI/CD per Section 9.
+- Create `giglog-matchers` repo and CI/CD per Section 9.
 - App-side `RulesetFetcher` + signature verification.
 - App-side capture upload worker + opt-in toggle.
 - `EnabledPlatforms`, watched-package settings (#217).
@@ -1291,7 +1291,7 @@ For **each** Kotlin parser:
 - `app/.../pipeline/notification/mapper/NotificationMapper.kt` — Phase 0 fix
 - `app/.../pipeline/notification/NotificationFilter.kt` — Phase 0 fix
 - `app/.../ui/bubble/BubbleScreen.kt` — read multi-region `AppState`; tabs
-- `core/database/.../DashBuddyDatabase.kt` — DB version bump
+- `core/database/.../GigLogDatabase.kt` — DB version bump
 - `domain/.../model/dash/*` — rename package to `model/session/`; `DashType` →
   `SessionType`
 

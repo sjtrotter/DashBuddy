@@ -13,7 +13,7 @@ plugins {
 }
 
 android {
-    namespace = "cloud.trotter.dashbuddy.core.pipeline"
+    namespace = "cloud.trotter.log.gig.core.pipeline"
     compileSdk {
         version = release(36)
     }

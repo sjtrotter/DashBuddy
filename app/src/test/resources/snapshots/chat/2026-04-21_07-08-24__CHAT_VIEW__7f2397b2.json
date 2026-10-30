@@ -216,7 +216,7 @@
                                                                 },
                                                                 "children": [
                                                                     {
-                                                                        "desc": "DashBuddy",
+                                                                        "desc": "gig.log",
                                                                         "id": "com.google.android.apps.nexuslauncher:id/snapshot",
                                                                         "class": "android.widget.FrameLayout",
                                                                         "isEnabled": true,

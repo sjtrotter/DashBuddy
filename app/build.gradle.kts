@@ -70,11 +70,11 @@ val buildTimeMs: Long = System.currentTimeMillis()
 
 
 android {
-    namespace = "cloud.trotter.dashbuddy"
+    namespace = "cloud.trotter.log.gig"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "cloud.trotter.dashbuddy"
+        applicationId = "cloud.trotter.log.gig"
         minSdk = 30
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -119,10 +119,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // The sideloaded test build installs beside the Play build: Android refuses to replace an
+            // app signed with a different key, so the two need different application IDs (#1411).
+            applicationIdSuffix = ".debug"
+        }
         release {
             // R8 posture (#434): minify stays OFF until the remaining
             // reflective surfaces are keep-ruled or removed — Gson over
-            // EventMetadata in DashBuddyApplication.createMetadata(), and
+            // EventMetadata in GigLogApplication.createMetadata(), and
             // kotlinx-serialization's generated serializers are safe but
             // unaudited under shrinking. The hot-path reflection that made
             // this dangerous (EffectMap's gate extraction) was replaced by
@@ -284,7 +289,7 @@ dependencies {
     // TestRulesetFactory + SessionReplay, which resolve here). Same runner-agnostic
     // JUnit-4 usage as :core:pipeline; NOT the Kotest runner, NOT jqwik/Jazzer.
     testImplementation(libs.kotest.property)
-    // #314 — Robolectric DAO round-trip tests build an in-memory DashBuddyDatabase;
+    // #314 — Robolectric DAO round-trip tests build an in-memory GigLogDatabase;
     // Room's builder API is only transitively runtime-visible via :core:database
     // (implementation), so surface it on the test compile classpath. room-ktx (the
     // suspend/Flow DAO runtime) is already transitive on the test runtime classpath.

@@ -5,7 +5,7 @@ issues: #1, #3
   The click was searching the wrong window (`rootInActiveWindow` = the bubble); now it searches **all**
   windows, and the collapse cast was fixed (`findActivity`). To test: open the bubble (tap its head,
   since auto-expand is still off — that's the separate notification work), then on an offer tap
-  **Accept** or **Decline** → confirm DashBuddy actually taps DoorDash's button (Accept accepts;
+  **Accept** or **Decline** → confirm gig.log actually taps DoorDash's button (Accept accepts;
   Decline opens DoorDash's confirm), **and** the bubble **collapses to its head** afterward (vs
   dismiss — note which). Watch the log for `Performing offer action …` *without* a following
   `Could not find any live node`. Real orders — watch carefully.
