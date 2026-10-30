@@ -199,8 +199,9 @@ read only far enough to recognise them, then dropped before anything is parsed, 
 
 ## Where the code differs today
 
-Known gaps between the rules above and the code. A change that touches one of these fixes it or leaves it no worse.
-Most come from the 2026-10-30 design audit, which has file and line references for each.
+Known gaps between the rules above and the code, found by the 2026-10-30 design audit and the review of this file.
+It lists the known gaps, not every one: when a change meets code that breaks a rule here, it fixes the code or
+adds the gap below, and never leaves it worse.
 
 - **`text3` carries words** in about 157 places, including `AppStatTile`'s labels and subtitles and the bubble's
   state labels, gas row and gauge units.
@@ -210,7 +211,11 @@ Most come from the 2026-10-30 design audit, which has file and line references f
   rows), expense label chips, goal buttons (44 dp), the hub's segments, "More numbers" and needs-a-look rows.
 - **The offer pop-up's colours** come from the dark palette whatever the phone's theme.
 - **Numbers outside a number style:** the setup sliders' values (`MetricSliderCard`, Material `displayMedium`) and
-  the bubble's gas prices (`GasQuickEdit`).
+  the bubble's gas prices (`GasQuickEdit`, which also reads Material colour roles instead of `AppTheme.colors`).
+- **Bubble text the driving multiplier misses:** the offer card's literal `20.sp` text and `14.sp` countdown label
+  (`OfferCard.kt`) skip `glanceSp`.
+- **Fixed-height rows holding text:** `CompactHeroRow` (48 dp) and `GasRow` (56 dp), besides the offer pop-up.
+- **Setup's first step has no Back button** (`WizardScreen`), though Home opens it.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state; `AppAccordion` no role or expanded state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **The offer channels disagree:** the card has no verdict word, while the pop-up title and the spoken offer still
