@@ -17,6 +17,8 @@ import org.junit.Test
 
 class FrameWindowsPledgePropertyTest {
     @Test fun `resolved frames always carry the exact freshly checked enabled root and never our bubble`() = runTest {
+        // #1422 review S3: the property must not pass vacuously — both paths must resolve real frames, cold and warm.
+        val resolved = IntArray(4) // [event cold, event warm, topology cold, topology warm]
         checkAll(PropSeeds.samples(600), PropSeeds.config(0x1422_000BL), Arb.list(Arb.int(0, 100_000), 0..20), Arb.int(0, 255)) { codes, scenario ->
             val enabled = if (scenario and 1 == 0) ENABLED else setOf(APP)
             val packages = listOf(APP, OVERLAY, OWN, OTHER, null)
@@ -51,9 +53,10 @@ class FrameWindowsPledgePropertyTest {
             for (topology in listOf(false, true)) {
                 val h = harness()
                 // Repeat with the same cache: covers cold probes and later revalidation/deferred fetches.
-                repeat(2) {
+                repeat(2) { pass ->
                     val frame = if (topology) h.topology(enabled) else (h.event(enabled) as? EventSnapshot.Resolved)?.snapshot
                     if (frame != null) {
+                        resolved[(if (topology) 2 else 0) + pass]++
                         assertTrue(frame.packageName in enabled)
                         assertNotEquals(OWN, frame.packageName)
                         val mapped = h.access.mappedRoots.last()
@@ -66,5 +69,7 @@ class FrameWindowsPledgePropertyTest {
                 }
             }
         }
+        val names = listOf("event cold", "event warm", "topology cold", "topology warm")
+        resolved.forEachIndexed { k, n -> assertTrue("no ${names[k]} resolution was generated", n > 0) }
     }
 }

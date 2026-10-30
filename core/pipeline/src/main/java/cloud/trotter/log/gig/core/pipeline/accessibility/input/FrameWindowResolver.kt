@@ -34,11 +34,12 @@ internal class FrameWindowResolver<W : Any, R : Any>(
         } else {
             null
         }
-        val display = if (windows != null) walk.lazyDisplayArea() else null
+        // DD11 + #1422 review S2: the display area is read once per resolution, and its lazy holder is created
+        // only on a branch that scans or walks (the skip and native-map branches allocate nothing).
         val step: Step = if (windows == null) {
-            preOverlayRead(access.nativeRoot(), null, gen, null, isEnabled, windowId, eventPackage)
+            preOverlayRead(access.nativeRoot(), null, gen, isEnabled, windowId, eventPackage)
         } else {
-            resolveOnList(windows, gen, display!!, isEnabled, windowId, eventPackage)
+            resolveOnList(windows, gen, isEnabled, windowId, eventPackage)
         }
         val snapshot = when (step) {
             is Step.Skip -> return EventSnapshot.Skipped(step.reason)
@@ -72,7 +73,6 @@ internal class FrameWindowResolver<W : Any, R : Any>(
     private fun resolveOnList(
         windows: List<W>,
         gen: Long,
-        display: Lazy<Long>,
         isEnabled: (String?) -> Boolean,
         windowId: Int,
         eventPackage: String?,
@@ -83,11 +83,12 @@ internal class FrameWindowResolver<W : Any, R : Any>(
             // BEFORE scanning to locate its window by ID. Reuse that root after the scan.
             val native = access.nativeRoot()
             val w = native?.let(access::rootWindowId)?.takeIf { it >= 0 }?.let { id -> windows.firstOrNull { access.id(it) == id } }
-                ?: return preOverlayRead(native, windows, gen, display, isEnabled, windowId, eventPackage)
+                ?: return preOverlayRead(native, windows, gen, isEnabled, windowId, eventPackage)
             nativeForWindow = native
             w
         }
         val provenNative = nativeForWindow
+        val display = walk.lazyDisplayArea() // the overlay scan needs it; shared with every later read
         return scanThen(windows, active, gen, display, isEnabled, windowId) {
             val resolution = provenNative?.let { classify(active, it, isEnabled, gen) }
                 ?: resolveActive(active, isEnabled, gen)
@@ -183,7 +184,6 @@ internal class FrameWindowResolver<W : Any, R : Any>(
         // KK1: the generation the caller read BEFORE producing [windows]; never re-read here (#1422 — a
         // re-read after the enumeration let a mid-frame clear file old-list verdicts under the new generation).
         gen: Long,
-        display: Lazy<Long>?,
         isEnabled: (String?) -> Boolean,
         windowId: Int,
         eventPackage: String?,
@@ -195,7 +195,7 @@ internal class FrameWindowResolver<W : Any, R : Any>(
         return if (isEnabled(access.packageName(activeRoot))) {
             Step.Frame(access.mapNative(activeRoot))
         } else {
-            frontRead(windows, gen, display, isEnabled, windowId, eventPackage)
+            frontRead(windows, gen, windows?.let { walk.lazyDisplayArea() }, isEnabled, windowId, eventPackage)
         }
     }
 

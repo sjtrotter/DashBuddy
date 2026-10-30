@@ -19,6 +19,9 @@ class WindowsChangedPipeline @Inject constructor(
     private val platformPreferences: PlatformPreferences,
     private val stats: PipelineStats,
 ) {
+    // #1422 review S1: one supplier per pipeline, so a topology burst allocates no capturing lambda.
+    private val enabledPackages: () -> Set<String> = { platformPreferences.enabledPackages.value }
+
     fun output(): Flow<TreeSnapshot> = source.events
         .filter { it.type == AccessibilityEvent.TYPE_WINDOWS_CHANGED }
         // #1148 D3: the same bounded shape as content changes — quiet 100 ms, scheduled max-wait
@@ -31,7 +34,7 @@ class WindowsChangedPipeline @Inject constructor(
         )
         .onEach { n -> Timber.tag("Pipeline").d("\uD83E\uDE9F WINDOWS_CHANGED (coalesced n=%d)", n) }
         .transform { coalesced ->
-            source.frames.topology { platformPreferences.enabledPackages.value }?.let {
+            source.frames.topology(enabledPackages)?.let {
                 emit(TreeSnapshot(
                     it.tree, it.packageName, it.windowContext,
                     TreeSnapshot.Trigger(
