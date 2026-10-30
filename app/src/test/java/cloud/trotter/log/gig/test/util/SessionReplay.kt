@@ -313,6 +313,7 @@ object SessionReplay {
             }
             val transition = machine.step(state, obs)
             state = transition.newState
+            StepEffectsRecorder.record(transition.effects)
             ReplayStep(
                 frame = frame,
                 observation = obs,
@@ -359,3 +360,26 @@ object SessionReplay {
         PlatformAppVersions.NONE,
     )
 }
+
+/**
+ * Identity aid for behaviour-preserving state-machine refactors (#1423): when the environment variable
+ * `GIGLOG_STEP_EFFECTS_DIR` names a directory, every replayed step's effects are appended, in order, to one
+ * file per calling test method. Run the replay suites before and after a refactor (with `--rerun`) and diff
+ * the two directories. Off (a no-op) when the variable is unset, which is every normal run.
+ */
+internal object StepEffectsRecorder {
+    private val dir: java.io.File? = System.getenv("GIGLOG_STEP_EFFECTS_DIR")?.let { java.io.File(it) }
+
+    fun record(effects: List<AppEffect>) {
+        val out = dir ?: return
+        val caller = Throwable().stackTrace.firstOrNull { frame ->
+            !frame.className.startsWith("cloud.trotter.log.gig.test.util.") && frame.className.startsWith("cloud.trotter.log.gig.")
+        } ?: return
+        val name = "${caller.className}.${caller.methodName}".replace(Regex("[^A-Za-z0-9._-]"), "_")
+        out.mkdirs()
+        java.io.File(out, "$name.txt").appendText(
+            effects.joinToString(separator = "", postfix = "--\n") { "${it::class.qualifiedName} $it\n" },
+        )
+    }
+}
+
