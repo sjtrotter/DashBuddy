@@ -228,7 +228,7 @@ data class PlatformRegion(
      * has nothing the new session can own, and its read is DROPPED instead of parked. Ownership by
      * (flow, platform) cannot see that: the carried-over frame really IS `PostTask` on DoorDash. The
      * pill is exempt by construction — it renders the live dash's own total and describes no job.
-     * `PlatformRegionStepper.ownsReceiptJob` is the one implementation, consulted by the gate and by
+     * `SessionPaySettleGate.ownsReceiptJob` is the one implementation, consulted by the gate and by
      * the expiry's contradiction check alike.
      *
      * Cost: a genuinely-changed total lands one settle window late, which for a figure the dasher is
@@ -506,7 +506,7 @@ data class PendingReceiptReprice(
  *
  * **A park is FROZEN, not discarded, while the dash is not [Mode.Online]; its window restarts on
  * the transition back to Online** (#1052 round 3 — the canonical statement of this rule; the
- * stepper's expiry block, `applyModeTransition` and CLAUDE.md §3 point here). A read taken under a
+ * `SessionPaySettleGate.lapse` / `modeChanged` and CLAUDE.md §3 point here). A read taken under a
  * pause sheet is still the freshest evidence there is, so it parks in any mode; what a non-Online
  * dash cannot do is CONFIRM it — its total is not moving and no screen behind the sheet can
  * contradict the figure — so the expiry is skipped wholesale while non-Online: no commit, no drop.
@@ -571,7 +571,7 @@ data class PendingSessionPay(
      * True while this park is RE-BASED pre-pause evidence that no live read has agreed with yet
      * (#1052 round 4).
      *
-     * Re-basing on the resume ([PlatformRegionStepper]'s `applyModeTransition`) hands a frozen read
+     * Re-basing on the resume (`SessionPaySettleGate.modeChanged`) hands a frozen read
      * a brand-new window — and a window is only evidence if something could have challenged it.
      * On the fielded shape nothing can: the resume commits as a wake TIMER, the settle timer is
      * re-armed by that same re-base, and if no readable idle frame lands in between then the FIRST
@@ -580,9 +580,9 @@ data class PendingSessionPay(
      * a window in which nothing was ever on screen.
      *
      * So a re-based park is held UNCONFIRMED until a fresh read on its own surface agrees with it
-     * (`settleSessionPay`'s equal-value arm clears the flag; a different value replaces the park
-     * outright, which parks confirmed by construction). At the deadline an unconfirmed park is
-     * DROPPED rather than committed: a null read means the wheel was unreadable, and a bare timer
+     * (`SessionPaySettleGate.settleSessionPay`'s equal-value arm clears the flag; a different value
+     * replaces the park outright, which parks confirmed by construction). At the deadline an
+     * unconfirmed park is DROPPED rather than committed: a null read means the wheel was unreadable, and a bare timer
      * means nothing was looked at at all — fail-null (#745). The committed figure stands, and the
      * settled value arrives later as a NEW observation identity (`FrameGate` admits it, because the
      * pause frames moved `lastIdentity`) and re-parks normally.
