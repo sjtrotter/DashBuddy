@@ -1,41 +1,16 @@
 package cloud.trotter.log.gig.core.pipeline.accessibility.input
 
-import android.graphics.Rect
-import android.util.DisplayMetrics
-import android.view.accessibility.AccessibilityNodeInfo
-import android.view.accessibility.AccessibilityWindowInfo
 import cloud.trotter.log.gig.core.pipeline.PipelineStats
 import cloud.trotter.log.gig.core.pipeline.accessibility.ForegroundSkipReason
 import cloud.trotter.log.gig.core.pipeline.accessibility.OverlayRejectReason
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.Companion.MAX_SCAN_ROOT_FETCHES
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.Companion.MIN_OVERLAY_AREA_FRACTION
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.Foreground
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.LocatedWindow
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.OverlayProbe
-import cloud.trotter.log.gig.core.pipeline.accessibility.input.AccessibilitySource.OverlayScan
 import cloud.trotter.log.gig.domain.state.Platform
 
-/**
- * The front-window walk (#1152, PR #1155 review FF9 — extracted from [AccessibilitySource], principle
- * 3): the ONE walk ([walk]) that reports what it STOPPED at as data ([WalkStop], review JJ10), and the
- * one-line policies over it — [foreground] (readable-top-or-refuse, also behind [frontAbove]) and
- * [overlayFront] (only an overlay winner); the overlay candidacy probe (TYPE → SIZE → PACKAGE)
- * over the [WindowVerdictCache]; the per-walk root-fetch budget; the display-area read. Pure decision
- * logic over already-enumerated windows — [AccessibilitySource] stays the I/O seam (events, service
- * handle, roots, snapshot mapping) and delegates here. The result types ([Foreground],
- * [LocatedWindow], [OverlayProbe], [OverlayScan]) stay declared on [AccessibilitySource], their public
- * home.
- *
- * [ownPackage] is this app's package (our bubble), [displayMetrics] the service's display metrics
- * (null when unbound); [cache] is the source's verdict cache (cleared by `AccessibilitySource.emit`).
- */
-internal class FrontWindowWalk(
-    private val ownPackage: () -> String?,
+/** The shared bounded, readable-top-or-refuse walk over framework-independent handles. */
+internal class FrontWindowWalk<W : Any, R : Any>(
+    private val access: FrameWindowAccess<W, R>,
     private val cache: WindowVerdictCache,
     private val stats: PipelineStats,
-    private val displayMetrics: () -> DisplayMetrics?,
 ) {
-
     /**
      * PR #1155 review DD11: the display area, read at most ONCE per resolution (on first use — a walk
      * that meets no system window never reads it) and passed down to every check of that resolution.
@@ -54,30 +29,30 @@ internal class FrontWindowWalk(
      * - [Exhausted] — the root-fetch budget ran out (CC5/DD4); [NoDisplayArea] — a system window on an
      *   unknown display (DD8); [NoCandidate] — nothing decided; [Failed] — the walk threw (DD7).
      */
-    sealed interface WalkStop {
+    sealed interface WalkStop<out W : Any, out R : Any> {
         enum class Kind { APPLICATION, SYSTEM_CANDIDATE }
 
-        class Stopped(
-            val window: AccessibilityWindowInfo,
+        class Stopped<W : Any, R : Any>(
+            val window: W,
             val kind: Kind,
             val readable: Boolean,
             val packageName: String?,
-            val root: AccessibilityNodeInfo?,
+            val root: R?,
             val total: Int,
-            val fetchRoot: () -> RootFetch,
-        ) : WalkStop
+            val fetchRoot: () -> RootFetch<R>,
+        ) : WalkStop<W, R>
 
-        data object Exhausted : WalkStop
-        data object NoDisplayArea : WalkStop
-        data object NoCandidate : WalkStop
-        data object Failed : WalkStop
+        data object Exhausted : WalkStop<Nothing, Nothing>
+        data object NoDisplayArea : WalkStop<Nothing, Nothing>
+        data object NoCandidate : WalkStop<Nothing, Nothing>
+        data object Failed : WalkStop<Nothing, Nothing>
     }
 
     /** A budget-charged root fetch after the walk (FF3's deferred fetch). */
-    sealed interface RootFetch {
-        data object Exhausted : RootFetch
-        data object Unreadable : RootFetch
-        data class Root(val root: AccessibilityNodeInfo) : RootFetch
+    sealed interface RootFetch<out R : Any> {
+        data object Exhausted : RootFetch<Nothing>
+        data object Unreadable : RootFetch<Nothing>
+        data class Root<R : Any>(val root: R) : RootFetch<R>
     }
 
     /**
@@ -86,12 +61,12 @@ internal class FrontWindowWalk(
      * `FRONT_UNREADABLE`; another app in front refuses `FRONT_NOT_ENABLED`.
      */
     fun foreground(
-        windows: List<AccessibilityWindowInfo>,
+        windows: List<W>,
         isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
+        display: Lazy<Long>,
         total: Int = windows.size,
         gen: Long,
-    ): Foreground = when (val stop = walk(windows, isEnabled, display, total, gen)) {
+    ): Foreground<W, R> = when (val stop = walk(windows, isEnabled, display, total, gen)) {
         WalkStop.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
         WalkStop.NoDisplayArea -> Foreground.Refused(ForegroundSkipReason.NO_DISPLAY_AREA)
         WalkStop.NoCandidate -> Foreground.Refused(ForegroundSkipReason.NO_CANDIDATE)
@@ -106,7 +81,7 @@ internal class FrontWindowWalk(
                 RootFetch.Exhausted -> Foreground.Refused(ForegroundSkipReason.SCAN_BUDGET)
                 RootFetch.Unreadable -> Foreground.Refused(ForegroundSkipReason.FRONT_UNREADABLE)
                 is RootFetch.Root ->
-                    if (isEnabled(fetched.root.packageName?.toString())) {
+                    if (isEnabled(access.packageName(fetched.root))) {
                         Foreground.Found(LocatedWindow(stop.window, fetched.root, stop.total))
                     } else {
                         Foreground.Refused(ForegroundSkipReason.FRONT_NOT_ENABLED)
@@ -121,12 +96,12 @@ internal class FrontWindowWalk(
      * snapshot's WindowContext is the whole enumeration.
      */
     fun frontAbove(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
+        windows: List<W>,
+        active: W,
         isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
+        display: Lazy<Long>,
         gen: Long,
-    ): Foreground = foreground(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)
+    ): Foreground<W, R> = foreground(windows.filter { access.layer(it) > access.layer(active) }, isEnabled, display, windows.size, gen)
 
     /**
      * PR #1155 review DD3 — the ONE "is an enabled overlay in front above the active window" policy,
@@ -140,13 +115,13 @@ internal class FrontWindowWalk(
      *   stays the ground truth (#1148).
      */
     fun overlayFront(
-        windows: List<AccessibilityWindowInfo>,
-        active: AccessibilityWindowInfo,
+        windows: List<W>,
+        active: W,
         isEnabled: (String?) -> Boolean,
-        display: Lazy<Long> = lazyDisplayArea(),
+        display: Lazy<Long>,
         gen: Long,
-    ): OverlayScan = try {
-        when (val stop = walk(windows.filter { it.layer > active.layer }, isEnabled, display, windows.size, gen)) {
+    ): OverlayScan<W, R> = try {
+        when (val stop = walk(windows.filter { access.layer(it) > access.layer(active) }, isEnabled, display, windows.size, gen)) {
             WalkStop.Exhausted -> OverlayScan.Refused(ForegroundSkipReason.SCAN_BUDGET)
             is WalkStop.Stopped -> when {
                 stop.kind == WalkStop.Kind.APPLICATION -> OverlayScan.None
@@ -164,29 +139,29 @@ internal class FrontWindowWalk(
      * PiP skipped) and overlay candidates; the first deciding window stops it ([WalkStop]).
      */
     fun walk(
-        windows: List<AccessibilityWindowInfo>,
+        windows: List<W>,
         isEnabled: (String?) -> Boolean,
         display: Lazy<Long>,
         total: Int,
         // PR #1155 review KK1: the generation the CALLER read BEFORE its enumeration — a clear landing
         // between `getWindows()` and this walk must discard every verdict decided on the old list.
         gen: Long,
-    ): WalkStop = try {
-        val ownPkg = ownPackage()
+    ): WalkStop<W, R> = try {
+        val ownPkg = access.ownPackage()
         val ordered = windows
             .filter {
-                !it.isInPictureInPictureMode &&
-                    (it.type == AccessibilityWindowInfo.TYPE_APPLICATION || it.type == AccessibilityWindowInfo.TYPE_SYSTEM)
+                !access.pip(it) &&
+                    (access.kind(it) == WindowKind.APPLICATION || access.kind(it) == WindowKind.SYSTEM)
             }
-            .sortedByDescending { it.layer }
-        // CC5: at most MAX_SCAN_ROOT_FETCHES root fetches per walk (DD4: every one charged).
-        val budget = ScanBudget(MAX_SCAN_ROOT_FETCHES)
-        val fetchCharged: (AccessibilityWindowInfo) -> RootFetch = { w ->
+            .sortedByDescending { access.layer(it) }
+        // CC5: at most FrameWindowResolver.MAX_SCAN_ROOT_FETCHES root fetches per walk (DD4: every one charged).
+        val budget = ScanBudget(FrameWindowResolver.MAX_SCAN_ROOT_FETCHES)
+        val fetchCharged: (W) -> RootFetch<R> = { w ->
             if (!budget.take()) RootFetch.Exhausted else fetchRoot(w)?.let { RootFetch.Root(it) } ?: RootFetch.Unreadable
         }
-        var stop: WalkStop = WalkStop.NoCandidate
+        var stop: WalkStop<W, R> = WalkStop.NoCandidate
         for (w in ordered) {
-            if (w.type == AccessibilityWindowInfo.TYPE_SYSTEM) {
+            if (access.kind(w) == WindowKind.SYSTEM) {
                 val displayArea = display.value // DD11: one read per resolution, on first use
                 stop = when (val probe = overlayProbe(w, displayArea, budget, gen)) {
                     OverlayProbe.NotCandidate -> continue // small, or a verified non-overlay package
@@ -205,7 +180,7 @@ internal class FrontWindowWalk(
                 break // the first candidate (or an unverifiable one) decides
             }
             // Application window (#1148, cache-aware since #1152 D3).
-            val cached = cache.get(w.id)?.packageName
+            val cached = cache.get(access.id(w))?.packageName
             if (cached != null && ownPkg != null && cached == ownPkg) continue
             if (cached != null) {
                 // FF3: decided from the cache — no fetch; a caller that maps it fetches (charged).
@@ -216,13 +191,13 @@ internal class FrontWindowWalk(
                 stop = WalkStop.Exhausted
                 break
             }
-            val root = w.root
+            val root = access.root(w)
             if (root == null) { // unreadable application window on top
                 stop = WalkStop.Stopped(w, WalkStop.Kind.APPLICATION, false, null, null, total) { RootFetch.Unreadable }
                 break
             }
-            val pkg = root.packageName?.toString()
-            pkg?.let { cache.putPackage(w.id, it, gen) }
+            val pkg = access.packageName(root)
+            pkg?.let { cache.putPackage(access.id(w), it, gen) }
             if (ownPkg != null && pkg == ownPkg) continue // our own bubble is never "in front"
             stop = WalkStop.Stopped(w, WalkStop.Kind.APPLICATION, true, pkg, root, total) { RootFetch.Root(root) }
             break // the first candidate decides
@@ -241,15 +216,15 @@ internal class FrontWindowWalk(
      * the walk "not an overlay after all — keep walking".
      */
     private fun decideOverlay(
-        w: AccessibilityWindowInfo,
-        probe: OverlayProbe.Candidate,
+        w: W,
+        probe: OverlayProbe.Candidate<R>,
         total: Int,
         gen: Long,
         budget: ScanBudget,
         displayArea: Long,
         isEnabled: (String?) -> Boolean,
-    ): WalkStop? {
-        val unreadable = WalkStop.Stopped(w, WalkStop.Kind.SYSTEM_CANDIDATE, false, null, null, total) { RootFetch.Unreadable }
+    ): WalkStop<W, R>? {
+        val unreadable = WalkStop.Stopped<W, R>(w, WalkStop.Kind.SYSTEM_CANDIDATE, false, null, null, total) { RootFetch.Unreadable }
         val root = probe.root ?: run {
             if (!budget.take()) return WalkStop.Exhausted
             fetchRoot(w) // HH3: throwing ≡ null
@@ -257,7 +232,7 @@ internal class FrontWindowWalk(
             stats.onOverlayRejected(OverlayRejectReason.UNREADABLE) // JJ4
             return unreadable
         }
-        val live = root.packageName?.toString()
+        val live = access.packageName(root)
         if (live == null) { // FF4: a package-less fresh root is UNREADABLE, not a package change
             stats.onOverlayRejected(OverlayRejectReason.UNREADABLE)
             return unreadable
@@ -269,7 +244,7 @@ internal class FrontWindowWalk(
             } else {
                 WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM
             }
-            cache.putVerdict(w.id, live, corrected, boundsOf(w), displayArea, gen)
+            cache.putVerdict(access.id(w), live, corrected, access.bounds(w), displayArea, gen)
             if (corrected != WindowVerdictCache.Verdict.CANDIDATE || !isEnabled(live)) return null
         }
         return WalkStop.Stopped(w, WalkStop.Kind.SYSTEM_CANDIDATE, true, live, root, total) { RootFetch.Root(root) }
@@ -279,7 +254,7 @@ internal class FrontWindowWalk(
     /**
      * #1152 D2 — is [w] a platform offer overlay? TYPE, then SIZE, then PACKAGE (cheapest first):
      * 1. `TYPE_SYSTEM` and not picture-in-picture;
-     * 2. its bounds cover ≥ [MIN_OVERLAY_AREA_FRACTION] of [displayArea] (the status bar, the nav
+     * 2. its bounds cover ≥ [FrameWindowResolver.MIN_OVERLAY_AREA_FRACTION] of [displayArea] (the status bar, the nav
      *    bar, the 142×142 Uber puck, heads-up notifications and toasts fail here WITHOUT a root
      *    fetch); an unknown display area (≤ 0) admits nothing — fail closed;
      * 3. its root's package is in [Platform.overlayPackages] (the registry flag, principle 8), read
@@ -291,33 +266,33 @@ internal class FrontWindowWalk(
      * given, bounds the root fetches of the walk it belongs to (CC5). Counts every refusal.
      */
     fun overlayProbe(
-        w: AccessibilityWindowInfo,
+        w: W,
         displayArea: Long,
         budget: ScanBudget? = null,
         // PR #1155 review DD9: the WALK's generation, read before its enumeration was used — a probe
         // on a window from an older list after a mid-walk clear must not write under the new one.
         gen: Long,
-    ): OverlayProbe {
-        if (w.type != AccessibilityWindowInfo.TYPE_SYSTEM || w.isInPictureInPictureMode) return OverlayProbe.NotCandidate
+    ): OverlayProbe<R> {
+        if (access.kind(w) != WindowKind.SYSTEM || access.pip(w)) return OverlayProbe.NotCandidate
         // CC1: an unknown display area admits nothing — checked BEFORE the memo, so a cached
         // CANDIDATE is never honoured without a measurable display. Not memoized (it can become known).
         if (displayArea <= 0L) return reject(OverlayRejectReason.NO_DISPLAY_AREA, OverlayProbe.NoDisplayArea)
-        val bounds = boundsOf(w)
+        val bounds = access.bounds(w)
         // BB7: a DECIDED verdict is memoized per window id — no root fetch, no count — but (CC1) only
         // while the window's CURRENT bounds equal the bounds it was decided on.
-        val entry = cache.get(w.id)
+        val entry = cache.get(access.id(w))
         // DD5: … and the display area it was decided against (a rotation / display change re-probes).
         if (entry?.verdict != null && entry.bounds == bounds && entry.displayArea == displayArea) {
             when (entry.verdict) {
                 WindowVerdictCache.Verdict.TOO_SMALL, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM -> return OverlayProbe.NotCandidate
-                WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate(it, null) }
+                WindowVerdictCache.Verdict.CANDIDATE -> entry.packageName?.let { return OverlayProbe.Candidate<R>(it, null) }
             }
         }
-        if (bounds.area().toDouble() < MIN_OVERLAY_AREA_FRACTION * displayArea) { // DD11: the one area definition
-            cache.putVerdict(w.id, null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, displayArea, gen)
+        if (bounds.area().toDouble() < FrameWindowResolver.MIN_OVERLAY_AREA_FRACTION * displayArea) { // DD11: the one area definition
+            cache.putVerdict(access.id(w), null, WindowVerdictCache.Verdict.TOO_SMALL, bounds, displayArea, gen)
             return reject(OverlayRejectReason.TOO_SMALL, OverlayProbe.NotCandidate)
         }
-        var root: AccessibilityNodeInfo? = null
+        var root: R? = null
         val pkg: String = entry?.packageName ?: run {
             if (budget != null && !budget.take()) return OverlayProbe.BudgetExhausted // CC5
             // Not memoized: an unreadable root is retried next frame.
@@ -326,52 +301,22 @@ internal class FrontWindowWalk(
             // event path would read beneath.
             val fetched = fetchRoot(w) ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
             root = fetched
-            fetched.packageName?.toString() ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
+            access.packageName(fetched) ?: return reject(OverlayRejectReason.UNREADABLE, OverlayProbe.Unreadable)
         }
         if (pkg !in Platform.overlayPackages) {
-            cache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, bounds, displayArea, gen)
+            cache.putVerdict(access.id(w), pkg, WindowVerdictCache.Verdict.NOT_OVERLAY_PLATFORM, bounds, displayArea, gen)
             return reject(OverlayRejectReason.NOT_OVERLAY_PLATFORM, OverlayProbe.NotCandidate)
         }
-        cache.putVerdict(w.id, pkg, WindowVerdictCache.Verdict.CANDIDATE, bounds, displayArea, gen)
+        cache.putVerdict(access.id(w), pkg, WindowVerdictCache.Verdict.CANDIDATE, bounds, displayArea, gen)
         return OverlayProbe.Candidate(pkg, root)
     }
 
-    /** [w]'s current screen bounds (parceled with the window — no binder call). */
-    private fun boundsOf(w: AccessibilityWindowInfo): WindowVerdictCache.Bounds {
-        val r = Rect()
-        w.getBoundsInScreen(r)
-        return WindowVerdictCache.Bounds(r.left, r.top, r.right, r.bottom)
-    }
-
-
-    private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe): OverlayProbe {
+    private fun reject(reason: OverlayRejectReason, outcome: OverlayProbe<R>): OverlayProbe<R> {
         stats.onOverlayRejected(reason)
         return outcome
     }
 
-    /**
-     * The display area in px² (#1152 D2): the service's display metrics, else 0 — no overlay is
-     * admitted (`NO_DISPLAY_AREA`, fail closed). PR #1155 review BB4: there is deliberately NO
-     * window-bounds fallback — the largest application window can be a small PiP, which would make
-     * the 142×142 puck "half the display" and a candidate.
-     */
-    fun displayArea(): Long {
-        // PR #1155 review DD5 (replaces CC9's per-generation memo): read once per RESOLUTION — a
-        // display change need not produce a topology event (and release never bumps the generation
-        // until #1151), and `resources.displayMetrics` is a cheap local read.
-        val metrics = try {
-            displayMetrics()
-        } catch (_: Exception) {
-            null
-        }
-        if (metrics != null && metrics.widthPixels > 0 && metrics.heightPixels > 0) {
-            return metrics.widthPixels.toLong() * metrics.heightPixels.toLong()
-        }
-        return 0L
-    }
-
-    /** A window's on-screen area in px² (bounds are parceled with the window — no binder call). */
-    fun areaOf(w: AccessibilityWindowInfo): Long = boundsOf(w).area() // DD11: one definition
+    fun displayArea(): Long = access.displayArea()
 
     /** PR #1155 review CC5 — a per-walk root-fetch allowance. Not thread-shared (one per walk). */
     class ScanBudget(private var left: Int) {
@@ -380,8 +325,8 @@ internal class FrontWindowWalk(
     }
 
     /** A root fetch whose failure (a stale window, a dead binder) reads as unreadable, never throws (HH3). */
-    private fun fetchRoot(w: AccessibilityWindowInfo): AccessibilityNodeInfo? = try {
-        w.root
+    private fun fetchRoot(w: W): R? = try {
+        access.root(w)
     } catch (_: Exception) {
         null
     }

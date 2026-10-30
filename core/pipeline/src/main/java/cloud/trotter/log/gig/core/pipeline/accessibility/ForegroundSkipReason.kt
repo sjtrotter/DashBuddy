@@ -27,7 +27,7 @@ enum class ForegroundSkipReason {
 
     /**
      * The front-window walk ran out of its root-fetch budget (PR #1155 review CC5,
-     * `AccessibilitySource.MAX_SCAN_ROOT_FETCHES`) before it could verify what is on top — refused,
+     * `FrameWindowResolver.MAX_SCAN_ROOT_FETCHES`) before it could verify what is on top — refused,
      * never fallen through.
      */
     SCAN_BUDGET,
