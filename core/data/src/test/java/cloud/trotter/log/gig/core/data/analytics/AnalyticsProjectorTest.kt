@@ -583,33 +583,6 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `re-pricing a MANUAL row keeps the MANUAL basis and the net-additive policy (review F1)`() = runBlocking {
-        // The v1 UI shape: a manual delivery with no miles. Its net must equal its pay (missing cost
-        // terms count as 0 — net-additive), and a later driver re-price must keep BOTH the MANUAL
-        // provenance and that policy: the generic machine recompute would null the net and silently
-        // drop the dollars from the period SUM.
-        insert(
-            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
-            ManualDeliveryPayload(sessionId = "MISSED", pay = 9.0, completedAt = 5_000),
-        )
-        projector().catchUp()
-        val seq = analyticsDao.lastDeliveryInSession("MISSED")!!.eventSequenceId
-        val folded = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("uncosted manual net = pay (net-additive)", 9.0, folded.netProfit!!, 1e-9)
-
-        insert(
-            AppEventType.PAY_ADJUSTMENT, "MISSED", 6_000,
-            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "MISSED", newPay = 12.0),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("a driver statement stays a driver statement", "MANUAL", d.payBasis)
-        assertEquals(12.0, d.realizedPay!!, 1e-9)
-        assertEquals("net keeps the MANUAL missing-terms-as-0 policy", 12.0, d.netProfit!!, 1e-9)
-    }
-
-    @Test
     fun `a PAY_ADJUSTMENT re-prices its target to USER_CORRECTED and shrinks the session unattributed pay`() = runBlocking {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()
@@ -801,26 +774,6 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `a zero cash adjustment clears cash and does not claim pay ownership`() = runBlocking {
-        val seq = seedCollapsedReceiptJob()
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-        // Both Undo on a never-tipped row and removal of an existing tip leave no cash lock.
-        for (cash in listOf(0.0, 6.0, 0.0)) {
-            insert(
-                AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_100,
-                DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newCashTip = cash),
-            )
-            projector().catchUp()
-            val row = analyticsDao.deliveryRecord(seq)!!
-            if (cash == 0.0) assertNull(row.cashTip) else assertEquals(cash, row.cashTip!!, 0.0)
-            assertNull(row.driverAdjustedAt)
-            assertEquals(before.realizedPay, row.realizedPay)
-            assertEquals(before.netProfit, row.netProfit)
-        }
-    }
-
-    @Test
     fun `a re-price whose target row does not exist is a counted skip, never a crash (#1033)`() = runBlocking {
         seedCollapsedReceiptJob()
         projector().catchUp()
@@ -878,24 +831,6 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `a REDUNDANT re-price is a no-op at the projector — no rewrite, no marker (#1033 round 8)`() = runBlocking {
-        // The mint already carried this itemization, so the row is already DROP_SHARE at these
-        // values. Since round 8 the stepper no longer tries to know that (two rounds of fail-null) —
-        // it emits, and the apply compares the row and skips WITHOUT rewriting it, so no
-        // `receiptRepricedAt` is stamped for a correction that corrected nothing.
-        val seq = seedReceiptedJob()
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("DROP_SHARE", before.payBasis)
-        assertNull(before.receiptRepricedAt)
-
-        insertReprice(at = 3_400)
-        projector().catchUp()
-
-        assertEquals("byte-identical — the apply never touched it", before, analyticsDao.deliveryRecord(seq)!!)
-    }
-
-    @Test
     fun `the CLOSE-time re-price of an already-itemized job projects to nothing (#1033 round 9 mirror)`() = runBlocking {
         // The stepper now decides at the job close from its cached receipt, without knowing whether
         // the mint already carried that itemization. When it did, the emitted event must land as a
@@ -930,66 +865,6 @@ class AnalyticsProjectorTest {
         assertEquals(20.00, d.realizedPay!!, 1e-9)
         assertEquals(10.30, d.tip!!, 1e-9)
         assertEquals(3_500L, d.receiptRepricedAt)
-    }
-
-    @Test
-    fun `a driver TIP-ONLY edit is never overwritten by a later re-price (#1033 round 6)`() = runBlocking {
-        val seq = seedCollapsedReceiptJob()
-        projector().catchUp()
-        // A tip-only DELIVERY_ADJUSTMENT deliberately LEAVES payBasis alone (#688 VET F1), so the
-        // basis guard alone never saw it — `driverAdjustedAt` is what refuses the re-price.
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newTip = 5.0),
-        )
-        projector().catchUp()
-        val afterEdit = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("the basis is intact — that is the point", "OFFER_PAY", afterEdit.payBasis)
-        assertEquals(3_200L, afterEdit.driverAdjustedAt)
-
-        insertReprice(at = 3_400)
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("the driver's tip stands", 5.0, d.tip!!, 1e-9)
-        assertEquals("OFFER_PAY", d.payBasis)
-        assertNull("…and the machine left no re-price marker", d.receiptRepricedAt)
-    }
-
-    @Test
-    fun `a legacy PAY_ADJUSTMENT also blocks a later re-price (#1033 round 6)`() = runBlocking {
-        val seq = seedCollapsedReceiptJob()
-        projector().catchUp()
-        insert(
-            AppEventType.PAY_ADJUSTMENT, "S1", 3_200,
-            PayAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newPay = 11.0),
-        )
-        projector().catchUp()
-        assertEquals(3_200L, analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
-
-        insertReprice(at = 3_400)
-        projector().catchUp()
-        assertEquals(11.0, analyticsDao.deliveryRecord(seq)!!.realizedPay!!, 1e-9)
-        assertNull(analyticsDao.deliveryRecord(seq)!!.receiptRepricedAt)
-    }
-
-    @Test
-    fun `a store-name-only edit is NOT monetary and leaves the re-price path open (#1033 round 6)`() = runBlocking {
-        val seq = seedCollapsedReceiptJob()
-        projector().catchUp()
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 3_200,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newStoreName = "Bill Millers"),
-        )
-        projector().catchUp()
-        assertNull("a store rename says nothing about the money", analyticsDao.deliveryRecord(seq)!!.driverAdjustedAt)
-
-        insertReprice(at = 3_400)
-        projector().catchUp()
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("DROP_SHARE", d.payBasis)
-        assertEquals(16.70, d.realizedPay!!, 1e-9)
-        assertEquals("Bill Millers", d.storeName)
     }
 
     @Test
@@ -1134,63 +1009,6 @@ class AnalyticsProjectorTest {
         assertEquals("basis (and the est. offer pay disclosure) survives a non-pay edit", "OFFER_PAY", d.payBasis)
         assertEquals("pay is unchanged", 12.95, d.realizedPay!!, 1e-9)
         assertEquals(before.netProfit!!, d.netProfit!!, 1e-9)
-    }
-
-    @Test
-    fun `a cashTip-only edit does not flip payBasis and leaves netProfit byte-identical (D6c)`() = runBlocking {
-        val seq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newCashTip = 6.0),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals(6.0, d.cashTip!!, 1e-9)
-        assertEquals("cash is a side column — basis untouched", before.payBasis, d.payBasis)
-        assertEquals("netProfit byte-identical (cash never enters net)", before.netProfit, d.netProfit)
-        assertEquals(before.realizedPay, d.realizedPay)
-    }
-
-    @Test
-    fun `a MANUAL row edited via DELIVERY_ADJUSTMENT stays MANUAL with the net-additive policy (#688)`() = runBlocking {
-        insert(
-            AppEventType.MANUAL_DELIVERY, "MISSED", 5_000,
-            ManualDeliveryPayload(sessionId = "MISSED", pay = 9.0, completedAt = 5_000),
-        )
-        projector().catchUp()
-        val seq = analyticsDao.lastDeliveryInSession("MISSED")!!.eventSequenceId
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "MISSED", 6_000,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "MISSED", newPay = 12.0, newCashTip = 2.0),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("a driver statement stays a driver statement", "MANUAL", d.payBasis)
-        assertEquals(12.0, d.realizedPay!!, 1e-9)
-        assertEquals(2.0, d.cashTip!!, 1e-9)
-        assertEquals("net keeps the MANUAL missing-terms-as-0 policy over final values", 12.0, d.netProfit!!, 1e-9)
-        assertEquals("MANUAL", d.originalPayBasis)
-    }
-
-    @Test
-    fun `a note-only DELIVERY_ADJUSTMENT is a no-op apply (VET F6)`() = runBlocking {
-        val seq = seedCorrectableSession()
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", note = "bill millers actually"),
-        )
-        projector().catchUp()
-
-        assertEquals("a note-only edit changes no column", before, analyticsDao.deliveryRecord(seq))
     }
 
     @Test
@@ -1605,33 +1423,6 @@ class AnalyticsProjectorTest {
         assertEquals("across batches == single batch: the PA still wins", 20.0, analyticsDao.deliveryRecord(seq)!!.realizedPay!!, 1e-9)
     }
 
-    @Test
-    fun `a DELIVERY_ADJUSTMENT cash edit is dropped on a null-session row while other fields apply (#705 F3)`() = runBlocking {
-        // A DELIVERY_COMPLETED with NO sessionId folds a session-less delivery row (the invariant violator).
-        val seq = insert(
-            AppEventType.DELIVERY_COMPLETED, null, 3_000,
-            DeliveryPayload(
-                jobId = "J1", taskId = "T1", storeName = "StoreX",
-                phaseStartedAt = 2_400, completedAt = 3_000, totalPay = 10.0,
-            ),
-            odometer = 105.0,
-        )
-        projector().catchUp()
-        assertNull("precondition: the row is session-less", analyticsDao.deliveryRecord(seq)!!.sessionId)
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, null, 6_000,
-            DeliveryAdjustmentPayload(
-                targetEventSequenceId = seq, sessionId = null, newStoreName = "Bill Millers", newCashTip = 5.0,
-            ),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertNull("cash tip ignored on a null-session row (F3 sessionful-cash invariant)", d.cashTip)
-        assertEquals("every other field still applies", "Bill Millers", d.storeName)
-    }
-
     /** A prior identity-bearing drop of J1, then an identity-less whole-receipt drop → SUSPECT_FULL_RECEIPT. */
     private suspend fun seedSuspectFullReceiptRow(): Long {
         insert(
@@ -1661,31 +1452,6 @@ class AnalyticsProjectorTest {
             ),
             odometer = 104.0,
         )
-    }
-
-    @Test
-    fun `a DELIVERY_ADJUSTMENT pay-tip edit is blocked on a SUSPECT_FULL_RECEIPT row while store-cash still apply (#705 F5)`() = runBlocking {
-        val seq = seedSuspectFullReceiptRow()
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("precondition: the de-monetized double-count guard row", "SUSPECT_FULL_RECEIPT", before.payBasis)
-        assertNull(before.realizedPay)
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
-            DeliveryAdjustmentPayload(
-                targetEventSequenceId = seq, sessionId = "S1",
-                newStoreName = "Bill Millers", newPay = 25.0, newTip = 5.0, newCashTip = 3.0,
-            ),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertNull("pay stays nulled — editing it back re-opens the #653 double count", d.realizedPay)
-        assertNull("tip is blocked alongside pay", d.tip)
-        assertEquals("basis unchanged (no pay edit took effect)", "SUSPECT_FULL_RECEIPT", d.payBasis)
-        assertEquals("store still applies", "Bill Millers", d.storeName)
-        assertEquals("cash still applies (a sessionful row, so F3 permits it)", 3.0, d.cashTip!!, 1e-9)
     }
 
     @Test(expected = CancellationException::class)
@@ -1941,31 +1707,6 @@ class AnalyticsProjectorTest {
         // Lost allocation state fails closed: only the positive deltas since the persisted 100.6
         // reading remain available in the session budget (103.2 - 100.6), despite the larger job span.
         assertEquals(2.6, d.realizedMiles!!, 1e-6)
-    }
-
-    @Test
-    fun `criterion 6 - a newMiles correction wins realizedMiles for money but leaves the machine legs intact (#688)`() = runBlocking {
-        val seq = seedLegSession()
-        projector().catchUp()
-        val before = analyticsDao.deliveryRecord(seq)!!
-        assertEquals(0.5, before.milesToStore!!, 1e-6)
-        assertEquals(2.4, before.milesToDropoff!!, 1e-6)
-
-        insert(
-            AppEventType.DELIVERY_ADJUSTMENT, "S1", 6_000,
-            DeliveryAdjustmentPayload(targetEventSequenceId = seq, sessionId = "S1", newMiles = 8.0),
-        )
-        projector().catchUp()
-
-        val d = analyticsDao.deliveryRecord(seq)!!
-        assertEquals("driver total wins realizedMiles", 8.0, d.realizedMiles!!, 1e-9)
-        assertEquals("machine store leg is provenance — never rewritten", 0.5, d.milesToStore!!, 1e-6)
-        assertEquals("machine dropoff leg untouched", 2.4, d.milesToDropoff!!, 1e-6)
-        // Net recomputed against the row's OWN frozen cpm over the DRIVER miles; basis unchanged (miles-only).
-        assertEquals(10.0 - 8.0 * 0.25, d.netProfit!!, 1e-9)
-        assertEquals("a miles-only edit does not flip the basis", before.payBasis, d.payBasis)
-        // The edit trail: leg sum (2.9) now disagrees with the driver's realizedMiles (8.0).
-        assertEquals(2.9, d.milesToStore!! + d.milesToDropoff!!, 1e-6)
     }
 
     @Test

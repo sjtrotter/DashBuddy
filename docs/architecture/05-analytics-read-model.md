@@ -951,3 +951,17 @@ The Economy settings host and shared editor family remain in `:app`. The new pre
 receives immutable display data and callbacks; lifecycle-aware collection keeps recommendations,
 effective values, eligible counts, default progress and latest-30 disclosures visible under overrides.
 Automated build/migration/export-drift checks and two field confirmations are separate completion gates.
+
+### Row-local corrections are pure (#1420)
+
+`DeliveryCorrections` (`:core:data`, `analytics/DeliveryCorrections.kt`) owns the single-row decisions of the three
+delivery corrections: `applyPay` (legacy `PAY_ADJUSTMENT`), `applyDelivery` (`DELIVERY_ADJUSTMENT`) and
+`applyReceiptReprice` (`DELIVERY_RECEIPT_REPRICE`). Each takes the row the projector already read and returns
+`CorrectionOutcome.Write(row, followUps)` or, for a re-price only, `Skip(DriverOwned | AlreadyPriced)`. Pay and delivery
+always write (a note-only edit writes an identical row; `adjustmentSkips` depends on it). Follow-ups are the two WARN
+notices (#653 suspect-receipt pay/tip block, F3 sessionless cash) and `SweepStoreIfUnreferenced(priorKey)`, which the
+projector runs AFTER the upsert (#906: before it, the row still references the old key). The projector keeps the DAO
+reads, the missing-row skips, every log line byte-identical, the upsert and the transaction; corrections that touch other
+rows (session assignment, offer reconciliation, store-rename resolution) stay orchestrated there. The functions take the
+Room entity, not the domain `DeliveryRecord`, which lacks the frozen cost per mile, original pay basis, driver-adjusted
+time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-receipt guard (tracked separately).
