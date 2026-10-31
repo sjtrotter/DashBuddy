@@ -46,7 +46,15 @@ class SimplePrefsDeclarationTest {
     }
 
     @Test
-    fun `daily kept goal declaration`() = runTest {
+    fun `daily goal declaration`() = runTest {
+        assertDeclared(
+            SimplePrefs.dailyGoalDollars, doublePreferencesKey("daily_goal_dollars"),
+            default = null, seed = 150.25, written = 200.50,
+        )
+    }
+
+    @Test
+    fun `retired daily kept goal declaration`() = runTest {
         assertDeclared(
             SimplePrefs.dailyKeptGoalDollars, doublePreferencesKey("daily_kept_goal_dollars"),
             default = null, seed = 150.25, written = 200.50,
@@ -75,6 +83,7 @@ class SimplePrefsDeclarationTest {
             SimplePrefs.odometerPrompts.key.name,
             SimplePrefs.analyticsShowMore.key.name,
             SimplePrefs.glanceMode.key.name,
+            SimplePrefs.dailyGoalDollars.key.name,
             SimplePrefs.dailyKeptGoalDollars.key.name,
             SimplePrefs.appTheme.key.name,
             SimplePrefs.ttsLanguageTag.key.name,

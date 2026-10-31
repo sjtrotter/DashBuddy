@@ -479,6 +479,8 @@ interface AnalyticsDao {
      * both directions. `unattributed` is left byte-for-byte untouched.
      *
      * #1134: a driver SET / CLEAR override wins; `SessionReportRule.effectiveReported` owns the rule.
+     * #1443: `gross`'s `COALESCE(effective, deliveredPay, 0)` is the SQL twin of `ShiftEarnings.rested`,
+     * the bubble's at-rest figure (a CLEAR is no report there too, so both fall back to delivered pay).
      *
      * **A stored `0.0` on a non-summary end source is no-report (#1030)** — the read-side mirror of
      * `SessionReportRule.effectiveReported`, which owns the rule, kept here for pre-refold rows and

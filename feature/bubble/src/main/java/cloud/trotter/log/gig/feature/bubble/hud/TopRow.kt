@@ -27,11 +27,9 @@ import cloud.trotter.log.gig.feature.bubble.R
 fun TopRow(model: TopRowModel) {
     val c = AppTheme.colors
     val ink = if (model.dimmed) c.text2 else c.text
+    // #1443: no Earned cell; the hero already shows the shift's earnings.
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-        TopMetric(stringResource(R.string.hud_top_earned), "hud.top.earned", Modifier.weight(1f), Alignment.Start) {
-            TopNumber(model.earned, ink)
-        }
-        TopMetric(stringResource(R.string.hud_top_online), "hud.top.online", Modifier.weight(1f), Alignment.CenterHorizontally) {
+        TopMetric(stringResource(R.string.hud_top_online), "hud.top.online", Modifier.weight(1f), Alignment.Start) {
             OnlineValue(model.online, ink)
         }
         TopMetric(stringResource(R.string.hud_top_miles), "hud.top.miles", Modifier.weight(1f), Alignment.End) {

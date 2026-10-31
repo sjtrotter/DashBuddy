@@ -5,7 +5,6 @@ import org.junit.Assert.*
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.state.*
 import cloud.trotter.log.gig.domain.model.cards.*
 import cloud.trotter.log.gig.domain.model.event.AppEventType
@@ -23,12 +22,12 @@ class GoalPillMapperTest {
     }
 
     @Test
-    fun `no profit figure yet shows the em dash and zero progress`() {
+    fun `no earnings figure yet shows the em dash and zero progress`() {
         assertEquals(GoalPillState.InProgress(cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE, 0f), GoalPillMapper.map(150.0, null))
     }
 
     @Test
-    fun `zero profit today gives the full goal to go and zero progress`() {
+    fun `zero earnings today gives the full goal to go and zero progress`() {
         assertEquals(GoalPillState.InProgress(Formats.money0(150.0), 0f), GoalPillMapper.map(150.0, 0.0))
     }
 
@@ -44,12 +43,12 @@ class GoalPillMapperTest {
     }
 
     @Test
-    fun `profit equal to the goal is met`() {
+    fun `earnings equal to the goal is met`() {
         assertEquals(GoalPillState.Met, GoalPillMapper.map(150.0, 150.0))
     }
 
     @Test
-    fun `profit over the goal is met with no overage`() {
+    fun `earnings over the goal is met with no overage`() {
         assertEquals(GoalPillState.Met, GoalPillMapper.map(150.0, 170.0))
     }
 
@@ -59,13 +58,13 @@ class GoalPillMapperTest {
     }
 
     @Test
-    fun `cents in the goal and the profit do not overstate the remainder`() {
+    fun `cents in the goal and the earnings do not overstate the remainder`() {
         // 100.01 - 63.01 is 37.000000000000014 in doubles; a plain ceil would say 38.
         assertEquals(Formats.money0(37.0), (GoalPillMapper.map(100.01, 63.01) as GoalPillState.InProgress).remaining)
     }
 
     @Test
-    fun `profit within a cent of the goal is met`() {
+    fun `earnings within a cent of the goal is met`() {
         assertEquals(GoalPillState.Met, GoalPillMapper.map(100.0, 99.999))
     }
 

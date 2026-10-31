@@ -37,7 +37,7 @@ import org.mockito.kotlin.verifyNoInteractions
 
 class LedgerRepositoryTest {
     private val events: AppEventRepo = mock()
-    private val repo = LedgerRepository(events, mock(), mock())
+    private val repo = LedgerRepository(events, mock())
 
     @Test
     fun `each ledger write appends exactly one typed event without metadata`() = runTest {
@@ -93,7 +93,7 @@ class LedgerRepositoryTest {
         val dao: AppEventDao = mock()
         whenever(dao.insert(any())).thenReturn(101L, 205L)
         val appEvents = AppEventRepo(mock(), dao, mock())
-        val ledger = LedgerRepository(appEvents, mock(), mock())
+        val ledger = LedgerRepository(appEvents, mock())
 
         assertEquals(101L, ledger.logExpense("S", ExpenseCategory.FOOD, 5.0, "lunch", 100))
         assertEquals(205L, ledger.logFuel("S", 30.0, null, null, 200))
@@ -102,7 +102,7 @@ class LedgerRepositoryTest {
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun `unassigned rows filter by local day across DST and preserve projection updates`() = runTest {
         val dao: LedgerDao = mock()
-        val ledger = LedgerRepository(events, dao, mock())
+        val ledger = LedgerRepository(events, dao)
         val zone = ZoneId.of("America/Chicago")
         val date = LocalDate.of(2026, 11, 1) // Fall-back day lasts 25 hours.
         val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
@@ -150,7 +150,7 @@ class LedgerRepositoryTest {
         val notes = MutableStateFlow(listOf("wipers", "wash"))
         whenever(dao.recentNotes("CAR_CARE", 6)).thenReturn(notes)
         whenever(dao.recentNotes("CAR_CARE", 2)).thenReturn(notes)
-        val ledger = LedgerRepository(events, dao, mock())
+        val ledger = LedgerRepository(events, dao)
         assertEquals(listOf("wipers", "wash"), ledger.recentLabels(ExpenseCategory.CAR_CARE).first())
         notes.value = listOf("wash")
         assertEquals(listOf("wash"), ledger.recentLabels(ExpenseCategory.CAR_CARE, 2).first())
@@ -182,7 +182,7 @@ class LedgerRepositoryTest {
             ExpenseRecordEntity(1, "S", 100, "CAR_CARE", 18.4, "wipers", null, "car")))
         whenever(dao.allFuel()).thenReturn(listOf(
             FuelRecordEntity(2, "S", 200, 42.0, 11.125, 1234.5, null, "car")))
-        val ledger = LedgerRepository(events, dao, mock())
+        val ledger = LedgerRepository(events, dao)
         assertEquals("car", ledger.allExpenses().single().vehicleId)
         assertEquals("car", ledger.allFuel().single().vehicleId)
     }

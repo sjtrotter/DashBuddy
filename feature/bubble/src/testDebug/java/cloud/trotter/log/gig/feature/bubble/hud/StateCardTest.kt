@@ -39,10 +39,10 @@ class StateCardTest {
     }
     @After fun cleanup() { Locale.setDefault(locale) }
 
-    private fun show(model: StateCardModel, kept: Double? = null) {
+    private fun show(model: StateCardModel, earned: Double? = null) {
         compose.setContent {
             GigLogTheme {
-                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model, kept) }
+                CompositionLocalProvider(LocalNowProvider provides clock) { StateCard(model, earned) }
             }
         }
         settle()
@@ -140,15 +140,15 @@ class StateCardTest {
         compose.onNodeWithText("Last offer").assertExists()
         compose.onNodeWithText("$4.25").assertExists()
         compose.onNodeWithText("declined").assertExists()
-        compose.onNodeWithText("Profit/hr").assertExists()
+        compose.onNodeWithText("Earned/hr").assertExists()
     }
-    @Test fun `waiting at dash start shows no offer yet and no profit per hour`() {
+    @Test fun `waiting at dash start shows no offer yet and no earned per hour`() {
         clock.millis = T0
         show(StateCardModel.Waiting(T0, T0, 0, 0, 0, null))
         figure("0:00").assertExists()
         compose.onNodeWithText("0").assertExists()
         compose.onNodeWithText("No offer yet").assertExists()
-        compose.onNodeWithText("Profit/hr").assertDoesNotExist()
+        compose.onNodeWithText("Earned/hr").assertDoesNotExist()
         compose.onNodeWithText("$0.00").assertDoesNotExist()
     }
     @Test fun `shopping shows count of total and items per minute`() {

@@ -5,7 +5,6 @@ import org.junit.Assert.*
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.state.*
 import cloud.trotter.log.gig.domain.model.cards.*
 import cloud.trotter.log.gig.domain.model.event.AppEventType

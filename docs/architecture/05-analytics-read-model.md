@@ -777,13 +777,23 @@ row, and is dropped with a `WARN` and a log line to the dasher when the task is 
 appears within a bound after the dash ends. ADR-0012 lists four questions open before slice 3,
 including how a cash tip interacts with the #1033 re-price guard (`driverAdjustedAt`).
 
-**Daily goal (#1333 S3c).** The HUD writes the existing `app_prefs.daily_kept_goal_dollars`
-through `AppPreferencesRepository`; null means no goal, and the preference stays set across local
-calendar days. There is no goal event or new projection. The existing S2e `goal_met_mark` stores
-only the latest `date|goalCents` key. The sequence runs when profit crosses the goal with the goal
-sheet closed. While editing, a crossed goal shows Met without a sequence or mark write. Closing
-with an already-met goal writes its new key silently; stepping between crossed values cannot
-replay the sequence. A later profit crossing of an unmarked goal still celebrates once.
+**Daily goal (#1333 S3c, re-based by #1443).** The goal is app earnings only (no cash, no costs),
+across every app, for the local day; it does not follow the switcher. The HUD writes
+`app_prefs.daily_goal_dollars` through `AppPreferencesRepository`; null means no goal, and the
+preference stays set across local calendar days. The old profit goal (`daily_kept_goal_dollars`) is
+no longer read and is left in place, so the pill reads "Set goal" once. There is no goal event or new
+projection. `TodayEarnings.of` (`:domain`) sums each shift once by session id: the day's ENDED rows
+(`HudShiftDao.endedSessionsBetween`, started inside `[dayStart, dayEnd)`) at `ShiftEarnings.rested`,
+and every platform region's live session started inside the same bounds at `ShiftEarnings.live`
+(its recorded pay from `sessionDetail`, keyed by id); a live id wins over its ended row. The bounds
+come from the date `goalDay`'s per-date `flatMapLatest` carries, never a fresh clock read. Accepted
+gap: between a shift leaving state and its `DASH_STOP` fold it is neither live nor ended there, so it
+briefly adds nothing. `goal_met_mark` stores only the latest `date|earned|goalCents` key; #1443 added
+the metric, so an old `date|goalCents` profit mark never suppresses the first earnings celebration.
+The sequence runs when earnings cross the goal with the goal sheet closed. While editing, a crossed
+goal shows Met without a sequence or mark write. Closing with an already-met goal writes its new key
+silently; stepping between crossed values cannot replay the sequence. A later earnings crossing of an
+unmarked goal still celebrates once.
 
 **Odometer readings (#1333 S2f).** `ODOMETER_READING` is a bookkeeping event: the typed car reading (whole miles), the vehicle id and `OdometerRepository.totalMiles()` at that moment; `sessionId` is always null. It is in `RecordFolds.BOOKKEEPING_EVENTS` and has an explicit `foldMeasuredEvent` arm returning an empty `FoldOutcome` with no context, like the ledger events, so a session-attributed reading can never re-upsert a session row (proven by `folds to nothing with a session context present` and the projector case `a session attributed odometer reading upserts no session row`). The GPS odometer stays the mileage source of every fold; a reading never moves it. `MileageReconciliation` (`:domain`, pure) compares the active vehicle's two most recent readings, never a dash: it returns car miles (the readings' difference), tracked miles (per-vehicle dash miles on the GPS axis when covered, otherwise the GPS reading stamps' difference), other miles (car minus tracked, a figure in its own right, never an error) and the span's start time; null with fewer than two readings, when a GPS stamp is missing, when the tracked span is negative (a reset GPS store), when the later reading is below the earlier (a mistyped reading), or, for spans before the first stamped dash or otherwise outside attribution coverage, when another vehicle has a reading inside the span (the legacy per-device fallback; a switch without a reading remains undetected there). A covered span keeps its comparison even when another vehicle has a reading inside it. The sheet's live check keeps its existing withholding rule unchanged. Three review rounds of a dash-bracketing rule (a window around the dash start) each found a new hole, so the dash was dropped from the rule (the dev's ruling named two readings over one span, not a dash); the dock's Odometer block lights in accent at the start of a dash and after one until a reading (`OdometerCue`, behind the `odometer_prompts` pref; the dev replaced the two text links with the lit block on 2026-10-19 because the block sits directly below them), which steers the dasher to read at the start and the end and makes a dash's span the usual pair. No fold, no read-model column, no projector change.
 
@@ -833,15 +843,38 @@ GPS totals and session anchors, the odometer reading flow and `OdometerCue` are 
 
 **Vehicles as types (#1358).** `VehicleProfile` is sealed by type (gas car by class, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle). Each type produces the one `VehicleEconomyInputs` (energy per mile from its own consumption and price, wear per mile from part cost over part life, depreciation, fixed costs over annual miles, a travel profile) and `UserEconomy.from(inputs, shared)` assembles the economy the evaluator reads, so the evaluator never sees a type; the sedan with defaults is pinned to today's cost per mile to the cent. Presets are estimates in one `VehiclePresets` object. `VehicleStorage` is versioned: a v1 garage is read through a legacy mapping that keeps every typed figure and carries unknown keys as extras, and is rewritten on the first successful write. The current learning source is a Room observation query without vehicle provenance; production still materializes only platform medians. Producing vehicle-specific histories is blocked on the provenance decision and must not relabel historical samples using today's active vehicle. Frozen per-record economics are untouched.
 
-`LedgerRepository.sessionNet(sessionId)` maps `sessionDetail` from its injected `AnalyticsRepository`
-to `SessionNet`: the hub's per-dash net terms (delivered net with a null net as zero, cash tips,
-unattributed pay). It does not subscribe to expense or fuel sums.
-`AnalyticsRepository` depends on neither `LedgerRepository` nor `LedgerDao`.
-`SessionNet.kept()` is delivered net plus cash tips plus unattributed pay; expenses and fuel are
-a separate ledger that never enters kept or the goal (2026-10-19 ruling). The deduction preference
-is removed; its old key remains unread in the existing DataStore.
-It is null when `sessionDetail` is null, or when there are no delivery rows and both `cashTips`
-and `unattributedPay` are zero. Expenses alone do not make it non-null; the HUD discloses projector lag.
+**The bubble's headline (#1443).** `SessionNet`, `LedgerRepository.sessionNet` and
+`BubbleViewModel.sessionNet` are retired: the hero is the displayed shift's earnings, unlabelled,
+never changed by tips or costs, and cash tips show apart as `+$X cash` (only the displayed shift's
+attributed cash, only when above zero). `ShiftEarnings` (`:domain`) is the figure's one owner: a live
+shift shows the larger of `Session.runningEarnings` and its recorded pay; an ended shift its effective
+report (`SessionReportRule`: SET wins, a summary total including `$0.00` is authoritative, CLEAR is no
+report), else its recorded pay, the same fallback as analytics gross (`COALESCE(effective,
+deliveredPay, 0)` in `grossAndUnattributed`, the SQL twin). Recorded pay is
+`SessionDetail.recordedPay`: the delivery rows' `realizedPay` (re-priced in place, cash-free,
+`OFFER_PAY` rows included), null unless a row is priced, so an unpriced shift shows the em dash
+(#1041); `deliveredPay` stays non-null for its accounting readers. `Session.accumulatedDeliveryPay` is
+never read (a receipt re-entry can add it twice, #1460). Nothing in the settle gate, `Session`,
+`ModeEffects` or any fold changed. The early-ended shift's reported total (#1459) and quoted pay at
+delivery recognition (#1458) are separate issues.
+
+`BubbleViewModel.displayedShift` is the one shift every hero and resting input reads. Its identity
+(`DisplayedShifts.target`, `:feature:bubble`) is built inside one `flatMapLatest` on the focused
+platform (else `lastSession`'s at rest with nothing focused): a region holding a session is live, even
+in an end grace while the HUD rests; otherwise `HudShiftDao.latestSession(platform.wire)` (newest by
+`startedAt`, open rows included) is accepted only when its platform matches, it has ended, and it did
+not end before the region's `lastSessionEndedAt` (the state machine and `DASH_STOP` stamp the same
+honest end instant). A rejected or still-loading row shows the em dash with no cash mark and no
+cash-entry target, never an older shift. One `sessionDetail(id)` subscription keyed by the displayed
+id supplies recorded pay, cash and the live row; each emission is tagged with its id and an id change
+emits `(newId, null)` first, so the hero shows a figure or cash only from the displayed id's read. The
+platform chip, `RestingModel` (span, deliveries, offers, Earned/hr), the resting top row and the
+cash-tip sheet's target key off it; first run and the odometer cue stay on the cross-platform
+`lastSession`. The two shift reads live in `HudShiftDao`/`HudShiftRepository`, a small owner beside
+`AnalyticsDao` (no schema change). `AnalyticsRepository` depends on neither `LedgerRepository` nor
+`LedgerDao`; expenses and fuel are a separate ledger that never enters the headline or the goal
+(2026-10-19 ruling). The deduction preference is removed; its old key remains unread in the existing
+DataStore.
 `LedgerDao.allExpenses()` / `allFuel()`, surfaced through `LedgerRepository`, read every projection
 row ordered by `occurredAt`, including voids. Settings → Export Data writes `expenses.csv`
 (`date,time,category,label,amount,dash_id,voided`) and `fuel.csv`

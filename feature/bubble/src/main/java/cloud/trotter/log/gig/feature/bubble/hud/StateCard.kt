@@ -20,11 +20,11 @@ import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.feature.bubble.R
 
 @Composable
-fun StateCard(model: StateCardModel?, kept: Double?, pendingCashTip: Long? = null) {
+fun StateCard(model: StateCardModel?, earned: Double?, pendingCashTip: Long? = null) {
     if (model == null) return
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp)) {
         when (model) {
-            is StateCardModel.Waiting -> WaitingCard(model, kept)
+            is StateCardModel.Waiting -> WaitingCard(model, earned)
             is StateCardModel.TaskCard -> TaskCard(model)
             is StateCardModel.Shopping -> ShoppingCard(model)
             is StateCardModel.Receipt -> ReceiptCard(model)

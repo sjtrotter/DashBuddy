@@ -21,7 +21,7 @@ import timber.log.Timber
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GoalMetMarkRepositoryTest {
-    private val key = "2026-10-18|7900"
+    private val key = "2026-10-18|earned|7900"
 
     /** Real data-source edit, held before the transformed preferences become durable. */
     private class HeldStore(
@@ -46,7 +46,7 @@ class GoalMetMarkRepositoryTest {
         val store = HeldStore(holdFirstOnly = true)
         val source = AppStateDataSource(store)
         val repository = AppStateRepository(source, backgroundScope)
-        val latest = "2026-10-18|8000"
+        val latest = "2026-10-18|earned|8000"
         val persisted = mutableListOf<String?>()
         var logged = false
         val tree = object : Timber.Tree() {
@@ -114,7 +114,7 @@ class GoalMetMarkRepositoryTest {
         runCurrent()
         assertEquals(key, source.goalMetMark.first())
         assertEquals(key, observed.last())
-        val other = "2026-10-18|8000"
+        val other = "2026-10-18|earned|8000"
         source.setGoalMetMark(other)
         runCurrent()
         assertEquals(other, source.goalMetMark.first())
@@ -130,7 +130,7 @@ class GoalMetMarkRepositoryTest {
         )
         val source = AppStateDataSource(store)
         val repository = AppStateRepository(source, backgroundScope)
-        val other = "2026-10-18|8000"
+        val other = "2026-10-18|earned|8000"
         val observed = mutableListOf<String?>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             repository.goalMetMark.collect { observed += it }
@@ -167,7 +167,7 @@ class GoalMetMarkRepositoryTest {
         runCurrent()
         assertEquals(0, store.edits)
 
-        val other = "2026-10-18|8000"
+        val other = "2026-10-18|earned|8000"
         store.release.complete(Unit)
         source.setGoalMetMark(other)
         assertEquals(other, repository.goalMetMark.first())

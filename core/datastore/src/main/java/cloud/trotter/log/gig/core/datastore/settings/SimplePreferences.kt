@@ -28,6 +28,9 @@ object SimplePrefs {
 
     // Driving / glance mode (#318) — bumps the HUD's LocalGlance multiplier.
     val glanceMode = Pref(booleanPreferencesKey("glance_mode"), false, scalar<Boolean>())
+    /** #1443: the daily goal in app earnings (no cash, no costs). */
+    val dailyGoalDollars = Pref(doublePreferencesKey("daily_goal_dollars"), null, optional<Double>())
+    /** Retired by #1443: the old profit goal. No longer read; a stored value is left in place. */
     val dailyKeptGoalDollars = Pref(doublePreferencesKey("daily_kept_goal_dollars"), null, optional<Double>())
     val appTheme = Pref(stringPreferencesKey("app_theme"), null, optional<String>())
 

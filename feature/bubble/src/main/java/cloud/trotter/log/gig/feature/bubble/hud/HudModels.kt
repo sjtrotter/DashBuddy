@@ -20,13 +20,20 @@ data class HudUiState(
     val vehicleChip: VehicleChipModel? = null,
 )
 enum class HudMode { LIVE, OFFER, LOG, RESTING }
-data class TopRowModel(val earned: String, val online: OnlineSpan, val miles: String, val dimmed: Boolean)
+data class TopRowModel(val online: OnlineSpan, val miles: String, val dimmed: Boolean)
 sealed interface OnlineSpan {
     data class Ticking(val startedAt: Long) : OnlineSpan
     data class Fixed(val ms: Long) : OnlineSpan
     data object Unknown : OnlineSpan
 }
-data class HeroModel(val profit: Double?, val goal: GoalPillState, val celebrateKey: String? = null, val markLoading: Boolean = false)
+/** #1443: [earnings] is the displayed shift's earnings, unlabelled; [cashTips] is its cash, shown apart when > 0. */
+data class HeroModel(
+    val earnings: Double?,
+    val goal: GoalPillState,
+    val celebrateKey: String? = null,
+    val markLoading: Boolean = false,
+    val cashTips: Double? = null,
+)
 sealed interface GoalPillState {
     data object NoGoal : GoalPillState
     data class InProgress(val remaining: String, val progress: Float) : GoalPillState
@@ -39,7 +46,7 @@ enum class DockItemState { NORMAL, LIT, ACCENT, DISABLED }
 data class RestingModel(
     val startedAt: Long,
     val endedAt: Long?,
-    val profitPerHour: String,
+    val earnedPerHour: String,
     val deliveries: Int,
     val offersAccepted: Int,
     val offersReceived: Int,

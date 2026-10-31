@@ -456,6 +456,7 @@
     <string name="money_tab_orphan_offers_callout_click_label">Review these offers</string>
     <string name="money_tab_recent_sessions_title">LATEST SHIFTS, REPORTED TOTALS</string>
     <string name="money_tab_no_sessions_recorded_yet">No shifts recorded</string>
+    <!-- Duplicated on purpose as :feature:bubble's hud_hero_cash (#1443); this copy is authoritative. -->
     <string name="money_tab_cash_marker_format">+%1$s cash</string>
 
     <!-- main/analytics/SessionDetailScreen.kt -->

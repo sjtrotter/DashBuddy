@@ -40,8 +40,8 @@ fun RestingCard(model: RestingModel?) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(model.profitPerHour, style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.alignByBaseline())
-                Text(stringResource(R.string.hud_rest_profit_hr), style = MaterialTheme.typography.labelSmall, color = c.text2,
+                Text(model.earnedPerHour, style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.alignByBaseline())
+                Text(stringResource(R.string.hud_rest_earned_hr), style = MaterialTheme.typography.labelSmall, color = c.text2,
                     modifier = Modifier.alignByBaseline())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

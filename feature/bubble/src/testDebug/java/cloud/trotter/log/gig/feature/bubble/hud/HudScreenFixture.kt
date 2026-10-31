@@ -9,7 +9,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.state.*
@@ -47,14 +46,19 @@ internal abstract class HudScreenFixture {
     protected fun state(
         vehicleChip: cloud.trotter.log.gig.feature.bubble.hud.vehicle.VehicleChipModel? = null,
         flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
-        profit: Double? = 71.2, goal: Double? = null, today: Double? = null, logOpen: Boolean = false, cashTipCue: Boolean = false,
+        earnings: Double? = 71.2, cash: Double? = null, goal: Double? = null, today: Double? = null,
+        logOpen: Boolean = false, cashTipCue: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
             Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
         flow = flow, platform = Platform.DoorDash, switchable = emptyList(), vehicleChip = vehicleChip,
-        earnings = 100.0, miles = 42.5, lastSession = if (first) null else last(),
-        net = profit?.let { SessionNet("live", it, 0.0, 0.0) },
-        goal = goal, todayProfit = today,
+        shift = when {
+            first -> null
+            resting -> DisplayedShift(Platform.DoorDash, "last", live = false, earnings = earnings, cashTips = cash, record = last())
+            else -> DisplayedShift(Platform.DoorDash, "live", live = true, earnings = earnings, cashTips = cash, record = null)
+        },
+        miles = 42.5, lastSession = if (first) null else last(),
+        goal = goal, todayEarned = today,
         hasActiveCard = !resting && !first, hasOfferCard = flow == Flow.OfferPresented, logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cashTipCue, odometerLoaded = true,
     )
 

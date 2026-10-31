@@ -22,6 +22,14 @@ data class SessionDetail(
     val deliveredPay: Double get() = deliveries.sumOf { it.realizedPay ?: 0.0 }
 
     /**
+     * #1443: [deliveredPay] for the bubble's headline ([ShiftEarnings]), null unless at least one delivery has a
+     * priced row, so a shift with nothing priced shows the em dash, never `$0.00` (#1041). A genuinely priced
+     * `$0.00` stays `0.0`. [deliveredPay] stays non-null for its accounting readers.
+     */
+    val recordedPay: Double?
+        get() = deliveries.mapNotNull { it.realizedPay }.takeIf { it.isNotEmpty() }?.sum()
+
+    /**
      * Σ driver-entered cash tips for THIS session (#688). Added to the displayed gross/net as its
      * OWN line — never folded into [deliveredPay] or [unattributedPay], so recording a cash tip
      * raises gross/net without shrinking the reported-vs-captured reconciliation.

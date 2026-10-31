@@ -5,42 +5,29 @@ import org.junit.Assert.*
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.state.*
 import cloud.trotter.log.gig.domain.model.cards.*
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 
 class TopRowMapperTest {
     @Test
-    fun `live uses the counter earnings the session start and live miles`() {
-        val model = TopRowMapper.live(71.2, 1_000, 42.5)
-        assertEquals(Formats.money(71.2), model.earned)
+    fun `live uses the session start and live miles`() {
+        val model = TopRowMapper.live(1_000, 42.5)
         assertEquals(OnlineSpan.Ticking(1_000), model.online)
         assertEquals(Formats.decimal(42.5, 1), model.miles)
         assertFalse(model.dimmed)
     }
 
     @Test
-    fun `live null earnings shows the em dash not zero`() {
-        assertEquals(EMPTY_VALUE, TopRowMapper.live(null, 1_000, 0.0).earned)
-    }
-
-    @Test
     fun `live without a session start is unknown online`() {
-        assertEquals(OnlineSpan.Unknown, TopRowMapper.live(0.0, null, 0.0).online)
+        assertEquals(OnlineSpan.Unknown, TopRowMapper.live(null, 0.0).online)
     }
 
     @Test
     fun `resting uses the last dash and dims`() {
         val model = TopRowMapper.resting(lastDash())
-        assertEquals(Formats.money(100.0), model.earned)
         assertEquals(Formats.decimal(42.5, 1), model.miles)
         assertTrue(model.dimmed)
-    }
-
-    @Test
-    fun `resting null reported earnings shows the em dash`() {
-        assertEquals(EMPTY_VALUE, TopRowMapper.resting(lastDash().copy(reportedEarnings = null)).earned)
     }
 
     @Test
@@ -59,7 +46,7 @@ class TopRowMapperTest {
     }
 
     @Test
-    fun `first run is three em dashes`() {
-        assertEquals(TopRowModel(EMPTY_VALUE, OnlineSpan.Unknown, EMPTY_VALUE, true), TopRowMapper.firstRun())
+    fun `first run is unknown online and an em dash`() {
+        assertEquals(TopRowModel(OnlineSpan.Unknown, EMPTY_VALUE, true), TopRowMapper.firstRun())
     }
 }

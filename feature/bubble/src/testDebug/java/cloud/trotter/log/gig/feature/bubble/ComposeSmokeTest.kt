@@ -40,7 +40,7 @@ class ComposeSmokeTest {
         compose.setContent {
             GigLogTheme {
                 StateCard(StateCardModel.Receipt("Store", 1_700_000_000_000L,
-                    lines = emptyList(), tip = 4.0, total = 11.75), kept = null)
+                    lines = emptyList(), tip = 4.0, total = 11.75), earned = null)
             }
         }
         compose.onNodeWithText("Delivery total").assertIsDisplayed()

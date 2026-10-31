@@ -25,14 +25,14 @@ class AppStateGoalMarkTest {
         val firstJob = Job()
         val first = source(firstJob)
         assertNull(first.goalMetMark.first())
-        first.setGoalMetMark("2026-10-17|7900")
-        first.setGoalMetMark("2026-10-18|8000")
-        assertEquals("2026-10-18|8000", first.goalMetMark.first())
+        first.setGoalMetMark("2026-10-17|earned|7900")
+        first.setGoalMetMark("2026-10-18|earned|8000")
+        assertEquals("2026-10-18|earned|8000", first.goalMetMark.first())
         firstJob.cancelAndJoin()
         val secondJob = Job()
         try {
             val reopened = source(secondJob)
-            assertEquals("2026-10-18|8000", reopened.goalMetMark.first())
+            assertEquals("2026-10-18|earned|8000", reopened.goalMetMark.first())
             reopened.clear()
             assertNull(reopened.goalMetMark.first())
         } finally {

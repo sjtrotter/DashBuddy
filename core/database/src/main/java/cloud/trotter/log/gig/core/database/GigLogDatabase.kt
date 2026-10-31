@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEnt
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.ExpenseRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.FuelRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
@@ -129,6 +130,7 @@ abstract class GigLogDatabase : RoomDatabase() {
     abstract fun timeConstantDao(): TimeConstantDao
     abstract fun ledgerDao(): LedgerDao
     abstract fun analyticsDao(): AnalyticsDao
+    abstract fun hudShiftDao(): HudShiftDao
 
     companion object {
         /**

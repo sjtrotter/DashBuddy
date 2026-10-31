@@ -31,13 +31,12 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     val platform by viewModel.focusedPlatform.collectAsStateWithLifecycle()
     val region by viewModel.focusedRegion.collectAsStateWithLifecycle()
     val miles by viewModel.sessionMiles.collectAsStateWithLifecycle()
-    val earnings by viewModel.sessionEarnings.collectAsStateWithLifecycle()
     val lastSession by viewModel.lastSession.collectAsStateWithLifecycle()
-    val net by viewModel.sessionNet.collectAsStateWithLifecycle()
+    val shift by viewModel.displayedShift.collectAsStateWithLifecycle()
     val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
     val goalDay by viewModel.goalDay.collectAsStateWithLifecycle()
     val goalMark by viewModel.goalMark.collectAsStateWithLifecycle()
-    val todayProfit = goalDay?.profit
+    val todayEarned = goalDay?.earned
     val gasPrice by viewModel.gasPrice.collectAsStateWithLifecycle()
     val gasAuto by viewModel.isGasPriceAuto.collectAsStateWithLifecycle()
     val gasRefreshing by viewModel.isGasPriceRefreshing.collectAsStateWithLifecycle()
@@ -80,7 +79,8 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
         } else if (inSheet) odometerVehicleMenuOpen = true else vehicleMenuOpen = true
     }
     val odometer = rememberOdometerHud(viewModel, closeLog, openVehicleAdd)
-    val cashTip = rememberCashTipHud(viewModel, region?.session?.sessionId ?: lastSession?.sessionId, closeLog)
+    // #1443: the displayed shift is the cash-entry target; none while its row is not known yet.
+    val cashTip = rememberCashTipHud(viewModel, shift?.sessionId, closeLog)
     val expense = rememberExpenseHud(viewModel, closeLog, openVehicleAdd)
     val goalHud = rememberGoalHud(viewModel, closeLog)
     val sheets = rememberBubbleSheetHost(listOf(
@@ -128,21 +128,21 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
     // Keep the closing frame silent even when the saved preset and close arrive together.
     var goalSheetWasOpen by rememberSaveable { mutableStateOf(false) }
     var editedGoalKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val pillGoal = GoalPillMapper.map(goal, todayProfit)
+    val pillGoal = GoalPillMapper.map(goal, todayEarned)
     val metGoalKey = if (pillGoal == GoalPillState.Met)
         goalDay?.date?.let { date -> goal?.let { GoalMetMark.key(date, it) } } else null
     val editKey = if (goalEditing || goalSheetWasOpen) metGoalKey else editedGoalKey
     SideEffect {
-        editedGoalKey = if (todayProfit != null && pillGoal != GoalPillState.Met) null else editKey
+        editedGoalKey = if (todayEarned != null && pillGoal != GoalPillState.Met) null else editKey
         goalSheetWasOpen = goalEditing
     }
     val silentGoalMark = GoalCelebrationResolver.markAfterEditing(
         pillGoal, goalDay?.date, goal, goalMark, goalEditing, editKey)
     LaunchedEffect(silentGoalMark) { silentGoalMark?.let(viewModel::goalCelebrated) }
-    val state = remember(region, flow, platform, switchable, earnings, miles, lastSession,
-        net, goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerShown, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, vehicleChip) {
-        HudStateMapper.map(region, flow, platform, switchable, earnings, miles, lastSession,
-            net, goal, todayProfit, cards.stack.active != null,
+    val state = remember(region, flow, platform, switchable, shift, miles, lastSession,
+        goal, goalDay, goalMark, cards.stack.active, logOpen, gas, model, odometerLoaded, odometerShown, odometerCue, cashTipCue, expenseCue, goalEditing, editKey, vehicleChip) {
+        HudStateMapper.map(region, flow, platform, switchable, shift, miles, lastSession,
+            goal, todayEarned, cards.stack.active != null,
             pendingOffer != null, logOpen, gas, cashTipCue = model?.cuesCashTip == true || cashTipCue,
             goalDay = goalDay?.date, mark = goalMark, odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue,
             goalSheetOpen = goalEditing, editedGoalKey = editKey, vehicleChip = vehicleChip, odometerShown = odometerShown)
@@ -194,7 +194,7 @@ fun BubbleScreen(viewModel: BubbleViewModel = hiltViewModel()) {
                     is cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot.PostTask -> active.taskId
                     else -> null
                 }
-                StateCard(model, state.hero.profit, cashTip.Pending(taskId))
+                StateCard(model, state.hero.earnings, cashTip.Pending(taskId))
             },
             offer = {
                 pendingOffer?.let { pending ->
