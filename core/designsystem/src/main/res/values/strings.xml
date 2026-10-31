@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppAccordion's TalkBack state (#1457). -->
+    <string name="app_accordion_expanded">Expanded</string>
+    <string name="app_accordion_collapsed">Collapsed</string>
+</resources>

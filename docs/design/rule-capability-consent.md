@@ -74,7 +74,7 @@ RuleCapability(
     targetBindName: String,  // display only
     key: String,             // the grant key — see below
     source: String,          // "asset:doordash.json" | "cdn:<url>" | "fork:<id>"
-    layoutCount: Int = 1,    // distinct definitions covered; display only
+    layoutCount: Int = 1,    // distinct definitions covered; no longer shown in the UI (#1457)
 )
 
 key = sha256( canonicalJson({
@@ -91,8 +91,8 @@ is recursively key-sorted canonical JSON; a binding with no recorded definition
 is not consentable at all (it enumerates no capability); `compileBindBlock` always
 records one, so this is a defensive boundary. `defs` contains the **distinct canonical strings**,
 sorted lexicographically, rather than raw JSON objects. An inherited duplicate
-counts once. `layoutCount` is this set's size, so the UI can disclose how many card
-layouts one grant covers without making the count a separate key input.
+counts once. `layoutCount` is this set's size, kept without making the count a separate key
+input; since #1457 the prompt and Settings no longer show it.
 
 The key pins the entire set of binding definitions:
 
@@ -126,6 +126,22 @@ keyed by the `sourceRuleId` + `action` carried by `PerformRuleAction`. Consent
 uses authoritative state rather than keys threaded through effect pipelines.
 
 Store schema v2 (#1167) cleared every pre-v2 grant and denial; the prompt re-collected.
+
+**Actions with no automatic trigger (#1457).** `RuleAction.hasAutomaticTrigger` is true only for
+`CONFIRM_DECLINE` and `EXPAND_EARNINGS`, the two actions the app fires by itself (the only
+`ObservationPayload.DeferredAction` sites in `EffectMap`, pinned by `AutomationTriggerGuardTest`).
+Accept and Decline fire only from the dasher's press, which is its own consent. The consent prompt
+filters on the flag (`buildConsentPromptState`), so an undecided Accept or Decline key never opens
+the front door; Settings lists such a key only while it holds a decision, with a switch that can
+only turn off; and `SideEffectEngine` refuses an AUTOMATION `PerformRuleAction` of an unflagged action
+(WARN, tag `Effects`) before the grant lookup. Nothing migrates: an existing decision stays.
+
+**Future step, not built: a consent epoch.** Before an action's automation ships, `RuleAction`
+gains a `consentEpoch` that joins the key hash, omitted while it is 1 so today's keys stay
+byte-identical (the key hashes a canonical JSON object, so an absent field changes nothing). Bumping
+it for one action changes every key for that action, including the keys a ruleset that is not
+loaded right now computes when it returns, so old grants stop matching while other actions'
+decisions stay. The test to add then: a returning stale ruleset is undecided.
 
 ### Dynamic: tap-time verification (fire time) — implemented
 
@@ -176,7 +192,7 @@ undecodable receipt JSON means no record, without changing grants or the Screen-
 
 Automation & Consent shows the receipt under each capability and the Screen-events switch, with
 status, local date, app version and disclosure revision, plus a link to the root `PRIVACY.md`.
-Receipts stay on the device and leave it only in a bug-report export the user chooses to share.
+Receipts stay on the device and are not exported; a bug-report export carries the automatic-tap decision log lines, not the receipts.
 
 ### Source policy (superseded by #843 — no auto-grant)
 
@@ -209,12 +225,14 @@ wide accessibility event receipt (#1151) today, the UNKNOWN-screen census
 - **a durable decline** — "Don't allow" persists;
 - **debug requires, release offers; copy differs by source-set override, same key** (#1151 RR1):
   `event_receipt_requirement_note` is "Optional…" in `:feature:settings` `src/main/res` and
-  "Required in this debug build…" in `src/debug/res`; it is rendered on the chain's step AND on
-  the Automation & Consent switch row. The disclosure body stays one shared string;
+  "Required in this test build…" in `src/debug/res`; it is rendered on the chain's step, the
+  Automation & Consent dialog and its "What this does" section. The disclosure body stays one
+  shared string; where to change the choice is the separate `event_receipt_change_later_format`;
 - **asked BEFORE the accessibility grant** (dev re-sequencing, 2026-09-30): the
   event-receipt consent is the FIRST step of the permission chain
   (`PermissionsBottomSheet` / `PermissionsViewModel`, the "Screen events" card —
-  the disclosure with Allow / Don't allow, no "Not now"), so the service is
+  the disclosure with Allow / Don't allow of equal weight; either is a lasting
+  decision, and only closing the sheet puts the step off, #1457), so the service is
   never enabled — and never recognizes a screen — before the dasher decided.
   The pure `buildPermissionsUiState` withholds the accessibility step until a
   decision (`accessibilityOffered`); a release decline proceeds to the grant
@@ -236,12 +254,23 @@ hosts only the per-capability prompt (#843); "Not now" closes it for this
 foreground, anchored on a FOREGROUND GENERATION held by the activity-scoped
 `FrontDoorViewModel` (bumped by `MainActivity.onStop` unless changing
 configurations), so a deferral survives rotation, navigation and re-entry. It
-has ONE "Not now" string (`consent_front_door_not_now`).
+has ONE "Not now" string (`consent_front_door_not_now`), which the permission sheet's steps 3 to 6
+reuse (#1457; their deferral lives in the process-wide `PermissionDeferrals`, cleared only by a cold
+start or Home's gate card).
 
-The disclosure copy is ONE string (`event_receipt_body`, resolved by
-`eventReceiptDisclosure()` in `:feature:settings`, naming the screen through the
-one `event_receipt_settings_path` string) rendered by the chain's step, the
-Settings switch and the debug block, in the Play prominent-disclosure shape so
+**Automation & Consent, Screen events (#1457).** Turning the switch on, from undecided or declined,
+first shows the disclosure in an `AlertDialog`; Allow writes ALLOWED and Don't allow writes DECLINED,
+each through `EventReceiptPreferences.set` with its receipt in the same edit; Back and the scrim write
+nothing; a failed write closes the dialog and the switch reads back the stored value. Off is immediate
+in release; a test build asks first (`event_receipt_off_confirm`), because there Off also turns
+screen reading off. The status line ("Allowed", "Not allowed", "Not decided") comes from the
+decision, with the receipt's date, app version and privacy notice version after it when present.
+
+The disclosure copy is ONE string (`event_receipt_body`, resolved with the requirement note, the
+Android 11 caveat and the change-later line by `eventReceiptDisclosureParts()` in
+`:feature:settings`, which names the screen through the one `event_receipt_settings_path` string)
+rendered by the chain's step, the Settings dialog and its "What this does" section, and the debug
+block, in the Play prominent-disclosure shape so
 #1138 M3 can reuse it. It carries no state-dependent sentence, and states the
 full scope: events of every subscribed type from every app; only enabled
 delivery-app windows are inspected or captured; other windows are identified by

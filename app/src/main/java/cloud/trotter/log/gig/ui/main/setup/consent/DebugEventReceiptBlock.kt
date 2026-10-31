@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.R
 import kotlinx.coroutines.delay
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
-import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosure
+import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.feature.settings.eventReceiptSettingsPath
 
 /**
@@ -128,9 +128,11 @@ fun DebugEventReceiptBlock(
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Spacer(Modifier.height(12.dp))
-                // The same disclosure the prompt and the switch show — one string (review LL10/LL12).
+                // The same disclosure the chain's step and the Settings dialog show — one resolution
+                // (review LL10/LL12, #1457 eventReceiptDisclosureParts).
+                val disclosure = eventReceiptDisclosureParts()
                 Text(
-                    text = eventReceiptDisclosure(),
+                    text = listOfNotNull(disclosure.body, disclosure.android11Caveat).joinToString(" "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )

@@ -5,57 +5,84 @@ import androidx.annotation.StringRes
 import cloud.trotter.log.gig.R
 
 /**
- * Defines the standard "Trust Card" content for each permission gig.log requires.
+ * One OS permission of the gate, with its fixed place among the six steps (#1457: "Step N of 6";
+ * step 1 is the Screen events consent, [PermissionStep.ScreenEvents]) and the copy its card shows.
+ *
+ * [card] is null for [Accessibility], whose step is its own disclosure screen
+ * ([AccessibilityDisclosureCard]) rather than the shared [PermissionCard].
  */
 sealed class PermissionType(
-    @param:DrawableRes val iconRes: Int,
+    val stepNumber: Int,
     @param:StringRes val titleRes: Int,
-    @param:StringRes val pitchRes: Int,
-    @param:StringRes val hoodRes: Int,
-    @param:StringRes val actionRes: Int
+    /** What stops working without the grant; the card's "Without it" line. */
+    @param:StringRes val withoutRes: Int,
+    val card: CardCopy?,
 ) {
-    // 1. The Heavy Lifter (Special System Permission)
+    /** The shared card's copy: what the permission does (pitch), what it reads (body), the grant button. */
+    data class CardCopy(
+        @param:DrawableRes val iconRes: Int,
+        @param:StringRes val pitchRes: Int,
+        @param:StringRes val bodyRes: Int,
+        @param:StringRes val actionRes: Int,
+    )
+
     data object Accessibility : PermissionType(
-        iconRes = R.drawable.ic_accessibility,
+        stepNumber = 2,
         titleRes = R.string.perm_title_accessibility,
-        pitchRes = R.string.perm_pitch_accessibility,
-        hoodRes = R.string.perm_hood_accessibility,
-        actionRes = R.string.perm_action_accessibility
+        withoutRes = R.string.perm_without_accessibility,
+        card = null,
     )
 
-    // 2. The Radar (Special System Permission)
     data object NotificationListener : PermissionType(
-        iconRes = R.drawable.ic_read_notifications,
+        stepNumber = 3,
         titleRes = R.string.perm_title_listener,
-        pitchRes = R.string.perm_pitch_listener,
-        hoodRes = R.string.perm_hood_listener,
-        actionRes = R.string.perm_action_listener
+        withoutRes = R.string.perm_without_listener,
+        card = CardCopy(
+            iconRes = R.drawable.ic_read_notifications,
+            pitchRes = R.string.perm_pitch_listener,
+            bodyRes = R.string.perm_body_listener,
+            actionRes = R.string.perm_action_listener,
+        ),
     )
 
-    // 3. The Standard Stuff (Native Android Popup)
     data object Location : PermissionType(
-        iconRes = R.drawable.ic_location,
+        stepNumber = 4,
         titleRes = R.string.perm_title_location,
-        pitchRes = R.string.perm_pitch_location,
-        hoodRes = R.string.perm_hood_location,
-        actionRes = R.string.perm_action_location
+        withoutRes = R.string.perm_without_location,
+        card = CardCopy(
+            iconRes = R.drawable.ic_location,
+            pitchRes = R.string.perm_pitch_location,
+            bodyRes = R.string.perm_body_location,
+            actionRes = R.string.perm_action_location,
+        ),
     )
 
-    // 4. The Standard Stuff (Native Android Popup)
     data object PostNotifications : PermissionType(
-        iconRes = R.drawable.ic_notifications,
+        stepNumber = 5,
         titleRes = R.string.perm_title_post_notif,
-        pitchRes = R.string.perm_pitch_post_notif,
-        hoodRes = R.string.perm_hood_post_notif,
-        actionRes = R.string.perm_action_post_notif
+        withoutRes = R.string.perm_without_post_notif,
+        card = CardCopy(
+            iconRes = R.drawable.ic_notifications,
+            pitchRes = R.string.perm_pitch_post_notif,
+            bodyRes = R.string.perm_body_post_notif,
+            actionRes = R.string.perm_action_post_notif,
+        ),
     )
 
-    // 5. Bubbles (special permission)
-    object Bubbles : PermissionType(
-        iconRes = R.drawable.bag_red_idle, // Or whichever drawable you prefer!
+    data object Bubbles : PermissionType(
+        stepNumber = 6,
         titleRes = R.string.perm_title_bubbles,
-        pitchRes = R.string.perm_pitch_bubbles,
-        actionRes = R.string.perm_action_bubbles,
-        hoodRes = R.string.perm_hood_bubbles
+        withoutRes = R.string.perm_without_bubbles,
+        card = CardCopy(
+            iconRes = R.drawable.bag_red_idle,
+            pitchRes = R.string.perm_pitch_bubbles,
+            bodyRes = R.string.perm_body_bubbles,
+            actionRes = R.string.perm_action_bubbles,
+        ),
     )
+
+    companion object {
+        /** The gate's steps in all: Screen events plus the five OS permissions. */
+        const val STEP_COUNT = 6
+    }
 }

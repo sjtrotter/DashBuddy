@@ -244,7 +244,8 @@ class SideEffectEngineTest {
     // #341/#425 — recovery suppression: PerformRuleAction must never replay a tap
     // =========================================================================
 
-    private fun acceptActionEffect(trigger: ActionTrigger = ActionTrigger.AUTOMATION) =
+    /** The dasher's own Accept press; [trigger] AUTOMATION is the #1457 refusal case. */
+    private fun acceptActionEffect(trigger: ActionTrigger = ActionTrigger.USER) =
         AppEffect.PerformRuleAction(
             action = RuleAction.ACCEPT_OFFER,
             platform = Platform.DoorDash,
@@ -259,10 +260,26 @@ class SideEffectEngineTest {
             trigger = trigger,
         )
 
+    /** An app-initiated tap: the collapsed receipt's pay-details chevron, an action with an automatic trigger. */
+    private fun expandActionEffect(trigger: ActionTrigger = ActionTrigger.AUTOMATION) =
+        AppEffect.PerformRuleAction(
+            action = RuleAction.EXPAND_EARNINGS,
+            platform = Platform.DoorDash,
+            targetRef = NodeRef(
+                viewIdSuffix = null,
+                text = null,
+                classNameHint = "android.view.View",
+                boundsInScreen = BoundingBox(0, 300, 200, 350),
+                pathFingerprint = "View[0]/View[3]",
+            ),
+            sourceRuleId = "doordash.screen.delivery_summary_collapsed",
+            trigger = trigger,
+        )
+
     @Test
     fun `PerformRuleAction is suppressed during recovery and executes live`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
-        val effect = acceptActionEffect()
+        val effect = expandActionEffect()
 
         engine.process(effect, recovering = true)
         runCurrent()
@@ -273,7 +290,7 @@ class SideEffectEngineTest {
         verify(uiInteractionHandler, times(1)).performVerifiedClick(
             eq(effect.targetRef),
             eq(Platform.DoorDash.packageName),
-            eq(RuleAction.ACCEPT_OFFER.verification),
+            eq(RuleAction.EXPAND_EARNINGS.verification),
             any(),
             eq(false), // AUTOMATION trigger → no retry (#618 F2: retry is USER-taps only)
         )
@@ -286,9 +303,9 @@ class SideEffectEngineTest {
         whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(true)
 
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
 
         // Second fire inside RULE_ACTION_THROTTLE_MS is swallowed — an
@@ -305,9 +322,9 @@ class SideEffectEngineTest {
         whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(false, true)
 
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
 
         verify(uiInteractionHandler, times(2)).performVerifiedClick(any(), any(), any(), any(), any())
@@ -322,9 +339,9 @@ class SideEffectEngineTest {
         whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(false)
 
-        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
         runCurrent()
-        engine.process(acceptActionEffect().copy(trigger = ActionTrigger.USER))
+        engine.process(acceptActionEffect(trigger = ActionTrigger.USER))
         runCurrent()
 
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
@@ -336,11 +353,11 @@ class SideEffectEngineTest {
         whenever(uiInteractionHandler.performVerifiedClick(any(), any(), any(), any(), any()))
             .thenReturn(true)
 
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
-        engine.process(acceptActionEffect())
+        engine.process(expandActionEffect())
         runCurrent()
 
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
@@ -392,7 +409,7 @@ class SideEffectEngineTest {
         whenever { capabilityGrants.isActionGranted(anyOrNull(), any()) }
             .thenReturn(false)
 
-        engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
+        engine.process(expandActionEffect())
         runCurrent()
 
         verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
@@ -402,13 +419,26 @@ class SideEffectEngineTest {
     fun `an AUTOMATION fire with a granted capability fires`() = runTest {
         val engine = buildEngine(StandardTestDispatcher(testScheduler))
 
-        engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
+        engine.process(expandActionEffect())
         runCurrent()
 
         verify(uiInteractionHandler, times(1)).performVerifiedClick(any(), any(), any(), any(), any())
         verifyBlocking(capabilityGrants) {
-            isActionGranted(eq("doordash.screen.offer_popup"), eq(RuleAction.ACCEPT_OFFER))
+            isActionGranted(eq("doordash.screen.delivery_summary_collapsed"), eq(RuleAction.EXPAND_EARNINGS))
         }
+    }
+
+    @Test
+    fun `an AUTOMATION fire of an action with no automatic trigger is refused even when granted (#1457)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        // The mock grants every capability: the refusal must come from the action flag alone.
+        assertFalse(RuleAction.ACCEPT_OFFER.hasAutomaticTrigger)
+
+        engine.process(acceptActionEffect(trigger = ActionTrigger.AUTOMATION))
+        runCurrent()
+
+        verify(uiInteractionHandler, never()).performVerifiedClick(any(), any(), any(), any(), any())
+        verifyBlocking(capabilityGrants, never()) { isActionGranted(anyOrNull(), any()) }
     }
 
     @Test

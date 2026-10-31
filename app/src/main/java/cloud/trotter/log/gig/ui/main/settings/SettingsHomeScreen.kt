@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
@@ -141,6 +142,12 @@ fun SettingsHomeScreen(
 
             // Section 2: Data
             SettingsGroup(title = stringResource(R.string.settings_home_group_data_privacy)) {
+                SettingsNavItem(
+                    icon = Icons.Default.PrivacyTip,
+                    title = stringResource(R.string.settings_home_item_privacy_title),
+                    subtitle = stringResource(R.string.settings_home_item_privacy_subtitle),
+                    onClick = { onNavigate(Screen.PrivacySettings.route) }
+                )
                 SettingsNavItem(
                     icon = Icons.Default.Folder,
                     title = stringResource(R.string.settings_home_item_evidence_title),

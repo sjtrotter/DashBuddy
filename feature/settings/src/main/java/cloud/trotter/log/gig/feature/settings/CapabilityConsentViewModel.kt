@@ -42,29 +42,23 @@ class CapabilityConsentViewModel @Inject constructor(
 
     val uiState: StateFlow<ConsentUiState> =
         combine(
-            grants.capabilities,
-            grants.grantedKeys,
+            combine(grants.capabilities, grants.grantedKeys, grants.deniedKeys, ::Triple),
             eventReceipt.consent,
             grants.receipts,
             eventReceipt.receipt,
-        ) { capabilities, grantedKeys, consent, receipts, eventRecord ->
-            buildConsentUiState(capabilities, grantedKeys)
-                .copy(
-                    eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED,
-                    receipts = receipts,
-                    eventReceipt = eventRecord,
-                )
+        ) { (capabilities, grantedKeys, deniedKeys), consent, receipts, eventRecord ->
+            buildConsentUiState(capabilities, grantedKeys, deniedKeys)
+                .withEventReceipt(consent, receipts, eventRecord)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             // MM7: seeded from the synchronously readable values — the switch never renders OFF
             // for a frame for an ALLOWED dasher.
-            initialValue = buildConsentUiState(grants.capabilities.value, grants.grantedKeys.value)
-                .copy(
-                    eventReceiptAllowed = eventReceipt.consent.value == EventReceiptConsent.ALLOWED,
-                    receipts = grants.receipts.value,
-                    eventReceipt = eventReceipt.receipt.value,
-                ),
+            initialValue = buildConsentUiState(
+                grants.capabilities.value,
+                grants.grantedKeys.value,
+                grants.deniedKeys.value,
+            ).withEventReceipt(eventReceipt.consent.value, grants.receipts.value, eventReceipt.receipt.value),
         )
 
     /** Grant or revoke one capability. Revoking is fail-closed (persists a denial). */
@@ -72,7 +66,11 @@ class CapabilityConsentViewModel @Inject constructor(
         viewModelScope.launch { grants.setGranted(key, granted) }
     }
 
-    /** #1151 — on ⇒ ALLOWED, off ⇒ a durable DECLINED (an explicit act, never back to UNDECIDED). */
+    /**
+     * #1151 — on ⇒ ALLOWED, off ⇒ a durable DECLINED (an explicit act, never back to UNDECIDED).
+     * #1457: the screen calls this only from the disclosure dialog's Allow / Don't allow and from
+     * turning the switch off; closing the dialog any other way writes nothing.
+     */
     fun setEventReceiptAllowed(allowed: Boolean) {
         viewModelScope.launch {
             // NN3: a failed write is logged by the repository; the switch reads back the old value.
@@ -86,8 +84,34 @@ data class ConsentUiState(
     val sources: List<ConsentSourceGroup> = emptyList(),
     /** #1151 — the "Screen events" switch: true only when the consent is ALLOWED. */
     val eventReceiptAllowed: Boolean = false,
+    /** #1457 — the Screen events status line, from the decision itself (never from a receipt). */
+    val eventReceiptStatus: ConsentStatus = ConsentStatus.UNDECIDED,
     val receipts: Map<String, ConsentReceipt> = emptyMap(),
     val eventReceipt: ConsentReceipt? = null,
+)
+
+/**
+ * #1457 — what a status line says: the decision the store holds. A receipt, when present, only adds
+ * its date, app version and privacy notice version after it.
+ */
+enum class ConsentStatus { ALLOWED, NOT_ALLOWED, UNDECIDED }
+
+/** The Screen events decision as a status; an unread consent shows as not decided. */
+fun EventReceiptConsent?.toConsentStatus(): ConsentStatus = when (this) {
+    EventReceiptConsent.ALLOWED -> ConsentStatus.ALLOWED
+    EventReceiptConsent.DECLINED -> ConsentStatus.NOT_ALLOWED
+    EventReceiptConsent.UNDECIDED, null -> ConsentStatus.UNDECIDED
+}
+
+private fun ConsentUiState.withEventReceipt(
+    consent: EventReceiptConsent?,
+    receipts: Map<String, ConsentReceipt>,
+    eventRecord: ConsentReceipt?,
+): ConsentUiState = copy(
+    eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED,
+    eventReceiptStatus = consent.toConsentStatus(),
+    receipts = receipts,
+    eventReceipt = eventRecord,
 )
 
 /** One ruleset source (a bundled asset file, or a future downloaded source). */
@@ -99,7 +123,7 @@ data class ConsentSourceGroup(
      * True for a bundled (asset) source — shipped inside the APK. Since #843
      * killed auto-grant this is display-only provenance: bundled and downloaded
      * sources are BOTH off until the user turns each on (here or via the consent
-     * prompt). It only selects the header/note copy ("built-in" vs "downloaded").
+     * prompt). Only a downloaded source is labelled ("…, downloaded").
      */
     val isBundled: Boolean,
     val capabilities: List<ConsentCapabilityRow>,
@@ -112,22 +136,33 @@ data class ConsentCapabilityRow(
     /** The app-owned action; the composable maps it to disclosure copy. */
     val action: RuleAction,
     val granted: Boolean,
-    /** Number of distinct card layouts covered by this consent decision (#1167); display only. */
-    val layoutCount: Int,
-)
+    /** #1457 — the decision the store holds for [key]: granted, denied, or neither. */
+    val status: ConsentStatus,
+) {
+    /**
+     * #1457 — false for an action with no automatic trigger (Accept, Decline): the row is listed
+     * only because it holds an earlier decision, and its switch can only turn off.
+     */
+    val active: Boolean get() = action.hasAutomaticTrigger
+}
 
 /**
  * Pure UiState assembly (testable without Android): group the enumerated
  * capabilities by source, resolve each source's platform + bundled flag, and
- * join each capability's grant state from [grantedKeys]. Deterministic ordering:
+ * join each capability's decision from [grantedKeys] and [deniedKeys]. Deterministic ordering:
  * bundled sources first, then by source string; within a source by action then
  * rule id, so the list never reshuffles between recompositions.
+ *
+ * #1457: an action with no automatic trigger is listed only while its key holds a decision, so a
+ * dasher can still turn an earlier Allow off; an undecided one is left out, as in the prompt.
  */
 fun buildConsentUiState(
     capabilities: List<RuleCapability>,
     grantedKeys: Set<String>,
+    deniedKeys: Set<String>,
 ): ConsentUiState {
     val groups = capabilities
+        .filter { it.action.hasAutomaticTrigger || it.key in grantedKeys || it.key in deniedKeys }
         .groupBy { it.source }
         .map { (source, caps) ->
             val isBundled = source.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX)
@@ -141,8 +176,12 @@ fun buildConsentUiState(
                         ConsentCapabilityRow(
                             key = cap.key,
                             action = cap.action,
-                            layoutCount = cap.layoutCount,
                             granted = cap.key in grantedKeys,
+                            status = when (cap.key) {
+                                in grantedKeys -> ConsentStatus.ALLOWED
+                                in deniedKeys -> ConsentStatus.NOT_ALLOWED
+                                else -> ConsentStatus.UNDECIDED
+                            },
                         )
                     },
             )

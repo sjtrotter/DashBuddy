@@ -200,6 +200,9 @@ Rules:
   (`LocaleAllowlistGuardTest`). No user-facing text is hard-coded in a composable.
 - Each automatic tap is asked for separately, there is no "allow all", and a denial lasts (#843, #1167). Consent
   copy says only what `PRIVACY.md` says the app does.
+- Each permission and consent screen says only what its own permission does (#1457). Facts that belong to no one
+  card live on the privacy page (Settings > Data & privacy > Privacy, the `privacy_*` strings), which a change to a
+  `PRIVACY.md` claim updates in the same PR.
 
 ## On-screen privacy
 
@@ -227,13 +230,21 @@ adds the gap below, and never leaves it worse.
   (`OfferCard.kt`) skip `glanceSp`.
 - **Fixed-height rows holding text:** `CompactHeroRow` (48 dp) and `GasRow` (56 dp), besides the offer pop-up.
 - **Setup's first step has no Back button** (`WizardScreen`), though Home opens it.
-- **Missing semantics:** `AppSegmented` exposes no role or selected state; `AppAccordion` no role or expanded state.
+- **Missing semantics:** `AppSegmented` exposes no role or selected state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
 - **Undesigned states:** loading on Home, the hub, Ratings, shift detail and the Garage; paused in the bubble (an
-  empty panel); a failed gas-price lookup; a permanently denied permission.
+  empty panel); a failed gas-price lookup.
 
 ## Settled decisions
+
+- #1457 (2026-10-31): the permission sheet is six numbered steps (Screen events, screen reading, notification
+  access, location, notifications, bubbles), each card a title, what it does, what it reads and what stops working
+  without it; no reassurance strip. Screen reading has its own disclosure screen before Android's settings, with
+  a filled Allow; optional choices (Screen events, each automatic tap) are equal tonal buttons. Steps 3 to 6 have
+  Not now; closing the sheet puts off every pending step until Home's gate card or a cold start. A refused runtime
+  permission with no rationale points to Android settings. Accept and Decline are not asked for until gig.log can
+  tap them by itself (council and dev, 2026-10-31).
 
 - #1442 (2026-10-30): offer surfaces show facts and preference notes, with no score or verdict. One domain
   story feeds the card, pop-up, chat line and voice. Titles use the registry's plain app name. Add-ons default

@@ -309,6 +309,16 @@ class SideEffectEngine @Inject constructor(
                     Timber.tag("Effects").w("Denied %s — ACCESSIBILITY tier not granted (fail closed)", effect.action.wire)
                     return
                 }
+                // #1457: an automatic tap exists only for an action the app has an automatic
+                // trigger for. Accept and Decline fire only from the dasher's press, so a grant on
+                // them never authorizes an AUTOMATION fire (fail closed, before the grant lookup).
+                if (effect.trigger == ActionTrigger.AUTOMATION && !effect.action.hasAutomaticTrigger) {
+                    Timber.tag("Effects").w(
+                        "Denied %s — the action has no automatic trigger (fail closed)",
+                        effect.action.wire,
+                    )
+                    return
+                }
                 if (effect.trigger == ActionTrigger.AUTOMATION &&
                     !capabilityGrants.isActionGranted(effect.sourceRuleId, effect.action)
                 ) {

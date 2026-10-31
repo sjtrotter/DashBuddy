@@ -4,6 +4,7 @@
 file that does it named for each claim, so it can be checked against the source and kept honest by code review.
 It is not yet a legal privacy policy; wording for the Play listing and the in-app disclosure is reviewed
 separately (#246). Where a claim and the code ever disagree, the code is the fact and this file is the bug.
+A change to a claim here updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR.
 
 gig.log is **source-available**: the app is licensed under PolyForm Shield (`LICENSE`) and the recognition
 ruleset under `matchers/` is Apache-2.0 (`matchers/LICENSE`). Every statement below can be verified against the
@@ -125,7 +126,7 @@ each tap is gated three ways (`SideEffectEngine`, `UiInteractionHandler`):
 1. **Per-tap consent.** Every app-initiated automated tap requires a granted *capability* that lands **undecided**; nothing is granted
    automatically (#843). You allow or deny each one in the prompt that appears when the app comes to the foreground,
    or later under Settings → Data & Privacy → Automation & Consent. A denial persists; a changed rule layout
-   re-asks. The capabilities shipped today for DoorDash (`matchers/rules/doordash/offer.json5`,
+   re-asks. Accept and Decline are not asked for until gig.log can tap them by itself; earlier decisions stay listed and can only be turned off. An automatic tap whose action has no automatic trigger is refused (`SideEffectEngine`). The capabilities shipped today for DoorDash (`matchers/rules/doordash/offer.json5`,
    `dash-lifecycle.json5`): `accept_offer`, `decline_offer`, `confirm_decline`, `expand_earnings`.
 2. **User initiation and automated follow-ups.** Accept and Decline currently originate from an explicit user press in gig.log (`OfferEffects`, `ActionTrigger.USER`); scoring thresholds produce recommendations and flags, not autonomous offer acceptance or rejection. That press is its own consent and does not require a saved automation grant. Automated confirmation of a decline additionally requires quick declines to be enabled and the confirmation capability to be granted. Pay-breakdown expansion requires its capability grant and can run when a collapsed completed-delivery receipt is shown (`EffectMap.diffExpandAction`).
 3. **Fire-time verification.** Before tapping, the handler re-finds the target in the live screen, checks it
@@ -144,7 +145,8 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **off by default on new installs; an existing setting is kept**; tap the bubble gas price for manual mode, or disable daily updates in setup and save | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | asks first (#1258): off until "Look up my vehicle" is tapped; choice is saved | the U.S. EPA public vehicle API (`fueleconomy.gov`) | vehicle-list request after opt-in, including on later setup visits; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
-| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md`. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
+| Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
+| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -281,6 +283,12 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r12 (2026-10-31)** — §5: Accept and Decline are not asked for until gig.log can tap them by itself;
+  earlier decisions stay listed and can only be turned off, and an automatic tap whose action has no
+  automatic trigger is refused (#1457). §6: a text-to-speech row (spoken offers go to the phone's
+  engine, which may use the network), and the census row names the daily recognition-health counts and
+  the install ID. The in-app privacy page (Settings > Data & privacy > Privacy) restates this file.
+  Receipts created under r11 retain that revision.
 - **r11 (2026-10-20)** — car-care and gas receipts store which saved vehicle they are for
   (its id, on-device), defaulting to the active vehicle with a per-entry pick (#1388).
   `expenses.csv` and `fuel.csv` include its id and label in the chosen folder/provider.

@@ -24,6 +24,10 @@ import javax.inject.Inject
  * only write is [onDecision], routing THROUGH [RuleCapabilityGrants] — the same
  * grant store the fail-closed engine gate (#417) reads at fire time. This is an
  * acquisition surface, never a second enforcement point.
+ *
+ * #1457: only actions with an automatic trigger ([RuleAction.hasAutomaticTrigger]) are asked
+ * for. Accept and Decline fire only from the dasher's own press, so asking for them would ask
+ * for a choice that changes nothing; an undecided key for them never opens the front door.
  */
 @HiltViewModel
 class ConsentPromptViewModel @Inject constructor(
@@ -74,15 +78,14 @@ data class ConsentPromptRow(
     val action: RuleAction,
     /** The platform whose rules enable this — display only (copy + source label). */
     val platform: Platform,
-    /** True for a bundled (asset) source — selects the "Built-in" source label. */
+    /** True for a bundled (asset) source; only a downloaded source is labelled ("…, downloaded"). */
     val isBundled: Boolean,
-    /** Number of distinct card layouts covered by this consent decision (#1167); display only. */
-    val layoutCount: Int,
 )
 
 /**
  * The prompt-trigger projection (pure, testable without Android): the undecided
- * set is `capabilities − granted − denied`. A capability is undecided when its
+ * set is `capabilities − granted − denied`, kept to actions with an automatic
+ * trigger (#1457). A capability is undecided when its
  * content-pinned [RuleCapability.key] is in neither the granted nor the denied
  * set. One row per undecided key ([distinctBy] guards a rare duplicate key
  * across sources), deterministically ordered (action then rule id) so the sheet
@@ -95,6 +98,7 @@ fun buildConsentPromptState(
     deniedKeys: Set<String>,
 ): ConsentPromptUiState {
     val rows = capabilities
+        .filter { it.action.hasAutomaticTrigger }
         .filter { it.key !in grantedKeys && it.key !in deniedKeys }
         .distinctBy { it.key }
         .sortedWith(compareBy({ it.action.ordinal }, { it.ruleId }))
@@ -102,7 +106,6 @@ fun buildConsentPromptState(
             ConsentPromptRow(
                 key = cap.key,
                 action = cap.action,
-                layoutCount = cap.layoutCount,
                 platform = Platform.fromRuleId(cap.ruleId),
                 isBundled = cap.source.startsWith(RuleCapabilityGrants.ASSET_SOURCE_PREFIX),
             )

@@ -52,6 +52,7 @@ import cloud.trotter.log.gig.ui.main.analytics.ReviewList
 import cloud.trotter.log.gig.ui.main.analytics.reviewTexts
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import cloud.trotter.log.gig.ui.main.setup.consent.FrontDoorHost
+import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionType
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsViewModel
 import kotlinx.coroutines.launch
@@ -105,30 +106,32 @@ fun DashboardScreen(
     // event-receipt consent's Screen-events step, from PermissionsViewModel (the same nav-entry
     // instance the sheet uses). ON_RESUME re-polls the OS; the consent is reactive. Nothing is
     // decided until the consent is READ (`consentRead`) — then the gate opens whenever a step is
-    // outstanding, the Screen-events step always at its head.
+    // PENDING (outstanding and not put off, #1457), the Screen-events step always at its head.
     val permissionsViewModel: PermissionsViewModel = hiltViewModel()
     val permissions by permissionsViewModel.uiState.collectAsStateWithLifecycle()
     val hasPermissions: Boolean? = if (permissions.consentRead) permissions.allGranted else null
+    val stepsPending = permissions.consentRead && permissions.pendingSteps.isNotEmpty()
     var showPermissionSheet by remember { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permissionsViewModel.refresh() }
-    LaunchedEffect(permissions.consentRead, permissions.allGranted) {
-        if (permissions.consentRead && !permissions.allGranted) showPermissionSheet = true
+    LaunchedEffect(stepsPending) {
+        if (stepsPending) showPermissionSheet = true
     }
 
     // ========================================================================
-    // THE GATE: If a step is outstanding, force the Bottom Sheet to appear
+    // THE GATE: If a step is pending, force the Bottom Sheet to appear
     // ========================================================================
     if (showPermissionSheet) {
         PermissionsBottomSheet(
-            onAllGranted = { showPermissionSheet = false },
+            onClosed = { showPermissionSheet = false },
             viewModel = permissionsViewModel,
         )
     }
 
     // The front door (#843 capability consent): once the permission chain — whose FIRST step is the
     // #1151 event-receipt consent (`ScreenEventsCard`) — is complete, the capability prompt may
-    // show. Held back while the permission gate is up so no two sheets ever stack.
+    // show. Held back while the permission gate is up so no two sheets ever stack. #1457: a
+    // deferred step keeps it held back too (it waits for every step to be granted) — intended.
     if (hasPermissions == true && !showPermissionSheet) {
         FrontDoorHost()
     }
@@ -147,13 +150,16 @@ fun DashboardScreen(
                     // Empty state while calculating.
                 }
 
-                // CASE 1: Permissions Missing (The Gate)
+                // CASE 1: Permissions Missing (The Gate). #1457: the button forgets every
+                // deferral and reopens the sheet at its first pending step (the disclosure card,
+                // never Android settings directly).
                 hasPermissions == false -> {
-                    StatusCard(
-                        title = stringResource(R.string.dashboard_screen_permissions_required_title),
-                        subtitle = stringResource(R.string.dashboard_screen_permissions_required_subtitle),
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        textColor = MaterialTheme.colorScheme.onErrorContainer
+                    PermissionGateCard(
+                        screenReadingOff = PermissionType.Accessibility in permissions.missing,
+                        onContinue = {
+                            permissionsViewModel.reopen()
+                            showPermissionSheet = true
+                        },
                     )
                     SettingsLink(onNavigateToSettings)
                 }
@@ -324,6 +330,38 @@ private fun EntryTileRow(onNavigate: (String) -> Unit, onNavigateToSettings: () 
             label = stringResource(R.string.dashboard_screen_entry_settings),
             modifier = Modifier.weight(1f),
             onClick = onNavigateToSettings,
+        )
+    }
+}
+
+/**
+ * #1457 — Home while a permission step is open: screen reading off gets its own card and button;
+ * anything else is "Setup isn't finished" with Continue setup.
+ */
+@Composable
+private fun PermissionGateCard(screenReadingOff: Boolean, onContinue: () -> Unit) {
+    StatusCard(
+        title = stringResource(
+            if (screenReadingOff) R.string.dashboard_screen_permissions_a11y_title
+            else R.string.dashboard_screen_permissions_setup_title,
+        ),
+        subtitle = stringResource(
+            if (screenReadingOff) R.string.dashboard_screen_permissions_a11y_subtitle
+            else R.string.dashboard_screen_permissions_setup_subtitle,
+        ),
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+        textColor = MaterialTheme.colorScheme.onErrorContainer
+    )
+    Spacer(Modifier.height(16.dp))
+    Button(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onContinue,
+    ) {
+        Text(
+            stringResource(
+                if (screenReadingOff) R.string.perm_action_accessibility
+                else R.string.dashboard_screen_permissions_continue,
+            ),
         )
     }
 }

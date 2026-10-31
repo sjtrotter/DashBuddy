@@ -109,13 +109,13 @@ class CapabilityConsentViewModelTest {
     fun `groups by source, marks bundled, joins grant state, orders deterministically`() {
         val state = buildConsentUiState(
             capabilities = listOf(
-                // Deliberately out of order: decline before accept, fork before asset.
-                cap("fork-accept", "uber.screen.offer", RuleAction.ACCEPT_OFFER, "fork:community"),
-                cap("dd-decline", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER, "asset:rules/doordash.json"),
-                cap("dd-accept", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")
-                    .copy(layoutCount = 2),
+                // Deliberately out of order: expand before confirm-decline, fork before asset.
+                cap("fork-expand", "uber.screen.receipt", RuleAction.EXPAND_EARNINGS, "fork:community"),
+                cap("dd-expand", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json"),
+                cap("dd-confirm", "doordash.screen.offer_popup_confirm_decline", RuleAction.CONFIRM_DECLINE, "asset:rules/doordash.json"),
             ),
-            grantedKeys = setOf("dd-accept"), // asset accept granted; decline revoked; fork pending
+            grantedKeys = setOf("dd-confirm"), // asset confirm granted; expand revoked; fork pending
+            deniedKeys = setOf("dd-expand"),
         )
 
         assertEquals(2, state.sources.size)
@@ -124,9 +124,8 @@ class CapabilityConsentViewModelTest {
         assertTrue(bundled.isBundled)
         assertEquals(Platform.DoorDash, bundled.platform)
         assertEquals(2, bundled.capabilities.size)
-        // ACCEPT_OFFER (ordinal 0) before DECLINE_OFFER (ordinal 1) — deterministic.
-        assertEquals(RuleAction.ACCEPT_OFFER, bundled.capabilities[0].action)
-        assertEquals("#1167: layout coverage reaches the settings row", 2, bundled.capabilities[0].layoutCount)
+        // CONFIRM_DECLINE (ordinal 2) before EXPAND_EARNINGS (ordinal 3) — deterministic.
+        assertEquals(RuleAction.CONFIRM_DECLINE, bundled.capabilities[0].action)
         assertTrue("granted key reflects true", bundled.capabilities[0].granted)
         assertFalse("revoked key reflects false", bundled.capabilities[1].granted)
 
@@ -138,7 +137,75 @@ class CapabilityConsentViewModelTest {
 
     @Test
     fun `empty enumeration yields empty state`() {
-        assertTrue(buildConsentUiState(emptyList(), emptySet()).sources.isEmpty())
+        assertTrue(buildConsentUiState(emptyList(), emptySet(), emptySet()).sources.isEmpty())
+    }
+
+    // =========================================================================
+    // #1457 — status from the decision; inactive actions only with a decision
+    // =========================================================================
+
+    @Test
+    fun `status comes from the decision, with or without a receipt`() {
+        val state = buildConsentUiState(
+            capabilities = listOf(
+                cap("allowed", "doordash.screen.offer_popup_confirm_decline", RuleAction.CONFIRM_DECLINE, "asset:rules/doordash.json"),
+                cap("denied", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json"),
+                cap("open", "uber.screen.receipt", RuleAction.EXPAND_EARNINGS, "asset:rules/uber.json"),
+            ),
+            grantedKeys = setOf("allowed"),
+            deniedKeys = setOf("denied"),
+        )
+        val byKey = state.sources.flatMap { it.capabilities }.associateBy { it.key }
+        assertEquals(ConsentStatus.ALLOWED, byKey.getValue("allowed").status)
+        assertEquals(ConsentStatus.NOT_ALLOWED, byKey.getValue("denied").status)
+        assertEquals(ConsentStatus.UNDECIDED, byKey.getValue("open").status)
+        assertTrue("no receipt was needed for any status", state.receipts.isEmpty())
+    }
+
+    @Test
+    fun `the Screen events status maps every consent value`() {
+        assertEquals(ConsentStatus.ALLOWED, EventReceiptConsent.ALLOWED.toConsentStatus())
+        assertEquals(ConsentStatus.NOT_ALLOWED, EventReceiptConsent.DECLINED.toConsentStatus())
+        assertEquals(ConsentStatus.UNDECIDED, EventReceiptConsent.UNDECIDED.toConsentStatus())
+        val unread: EventReceiptConsent? = null
+        assertEquals(ConsentStatus.UNDECIDED, unread.toConsentStatus())
+    }
+
+    @Test
+    fun `allowed and denied show without a receipt, for both consent kinds`() = runTest {
+        for (consent in listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED)) {
+            val grants = FakeGrants()
+            grants.setEnumeration(
+                listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
+            )
+            val allow = consent == EventReceiptConsent.ALLOWED
+            if (allow) grants.setGrantedKeys(setOf("k1")) else grants.setDeniedKeys(setOf("k1"))
+            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent))
+
+            val state = vm.uiState.first { it.sources.isNotEmpty() }
+            val expected = if (allow) ConsentStatus.ALLOWED else ConsentStatus.NOT_ALLOWED
+            assertEquals("$consent capability", expected, state.sources[0].capabilities[0].status)
+            assertEquals("$consent Screen events", expected, state.eventReceiptStatus)
+            assertTrue(state.receipts.isEmpty())
+            assertEquals(null, state.eventReceipt)
+        }
+    }
+
+    @Test
+    fun `an inactive action is listed only while it holds a decision, and is off-only`() {
+        val caps = listOf(
+            cap("accept-granted", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json"),
+            cap("decline-denied", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER, "asset:rules/doordash.json"),
+            cap("accept-open", "uber.screen.offer", RuleAction.ACCEPT_OFFER, "asset:rules/uber.json"),
+        )
+        val state = buildConsentUiState(caps, grantedKeys = setOf("accept-granted"), deniedKeys = setOf("decline-denied"))
+
+        val rows = state.sources.flatMap { it.capabilities }
+        assertEquals("an undecided inactive key is left out", setOf("accept-granted", "decline-denied"), rows.map { it.key }.toSet())
+        assertTrue("its source drops out with it", state.sources.none { it.platform == Platform.Uber })
+        rows.forEach { assertFalse("${it.key} has no automatic trigger", it.active) }
+        assertEquals(ConsentStatus.ALLOWED, rows.single { it.key == "accept-granted" }.status)
+        assertEquals(ConsentStatus.NOT_ALLOWED, rows.single { it.key == "decline-denied" }.status)
     }
 
     // =========================================================================
@@ -149,7 +216,7 @@ class CapabilityConsentViewModelTest {
     fun `uiState reflects the enumeration reactively`() = runTest {
         val grants = FakeGrants()
         grants.setEnumeration(
-            listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")),
+            listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
         )
         grants.setGrantedKeys(setOf("k1"))
         val vm = CapabilityConsentViewModel(grants, FakeEventReceipt())
@@ -197,7 +264,7 @@ class CapabilityConsentViewModelTest {
             // A non-empty enumeration lets the test wait for the COMBINED emission, not the default.
             val grants = FakeGrants()
             grants.setEnumeration(
-                listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json")),
+                listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
             )
             val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent))
             val state = vm.uiState.first { it.sources.isNotEmpty() }

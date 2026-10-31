@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name" translatable="false">gig.log</string>
-    <string name="accessibility_service_description">To help delivery drivers, gig.log reads the screens of the delivery apps you turn on and reads offers aloud while you drive. Screen reading and calculations happen on your phone. Accept and Decline need your tap in gig.log; each automatic tap needs its own permission. If you allow Screen events, gig.log also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Optional screenshots save the whole screen; your gallery may sync them. Android backup may copy your history and settings.</string>
+    <string name="accessibility_service_description">gig.log uses Android\'s Accessibility service to read the screens of the delivery apps you turn on. It reads offers aloud while you drive and records your shifts, deliveries and pay. Screen reading and calculations happen on your phone. With Screen events on, it also sees which other app is open. It drops recognized screens with your banking, payment or ID details, the ID camera and the signature pad without saving anything, and saves customer names and addresses in your history only as codes. If you turn on screenshots, it can save a picture of the whole screen, with everything on it. It taps a delivery app\'s button only when you press Accept or Decline in gig.log, or for an automatic tap you allow. gig.log itself sends nothing it reads off your phone. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Android backup and exports you make can copy your history.</string>
 
 
 
@@ -8,33 +8,56 @@
 
 
 
-    <string name="perm_privacy_guarantee">gig.log doesn\'t sell your data. Android backup and online features can send data off your phone.</string>
-    <string name="perm_under_the_hood_title">Data use</string>
+    <!-- #1457 — the permission sheet, six steps in a fixed order: 1 Screen events (its copy is
+         :feature:settings event_receipt_*), 2 screen reading (the accessibility disclosure,
+         perm_a11y_*), 3 notification access, 4 location, 5 notifications, 6 bubbles. Each card
+         says only what its own permission does; everything else is on the privacy page
+         (:feature:settings privacy_*). -->
+    <string name="perm_step_format">Step %1$d of %2$d</string>
+    <string name="perm_without_label">Without it</string>
+
+    <string name="perm_pitch_screen_events">Lets gig.log catch a delivery offer that pops up over another app.</string>
 
     <string name="perm_title_accessibility">Screen reading (Accessibility)</string>
-    <string name="perm_pitch_accessibility">gig.log reads offers aloud as you drive. You tap Accept or Decline yourself; automatic taps need your permission.</string>
-    <string name="perm_hood_accessibility">gig.log reads the screens of the delivery apps you turn on. With Screen events on, it also sees which other app is open. It discards recognized screens with your banking, payment or ID details, or that photograph a document or take a signature, before reading or saving their details. Screen reading and calculations happen on your phone. Customer names and addresses are saved as codes, not as text.\n\nAutomatic gas prices start off on a new install; an update keeps your setting. When on, Android\'s address lookup may send your location to its provider, and the U.S. Energy Information Administration gets a fuel-price request for your region. To stop it, set the bubble\'s gas price to manual.\n\nSetup sends your vehicle to the EPA for MPG only after you tap \"Look up my vehicle\", and remembers that choice. Neither lookup sends an account or install ID. The manual MPG search opens Google with your vehicle.\n\nOptional screenshots of the whole screen go to Pictures/gig.log, where gallery sync may copy them. Android may back up your history and settings to your Google account or a new phone, and restore them later; consent records are left out. History and settings stay until you clear them or uninstall, logs keep only recent entries, and screenshots and exports stay until you delete them. More: Privacy details in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+    <string name="perm_a11y_use">gig.log uses Android\'s Accessibility service to read the screens of the delivery apps you turn on. It reads offers aloud while you drive and records your shifts, deliveries and pay.</string>
+    <string name="perm_a11y_data">It reads the text and buttons on those screens. With Screen events on, it also sees which other app is open. When it recognizes a screen with your banking, payment or ID details, the ID camera or the signature pad, it drops it without saving anything. Customer names and addresses in your delivery history are saved only as codes.</string>
+    <string name="perm_a11y_screenshots">If you turn on screenshots, it can save a picture of the whole screen, with everything on it.</string>
+    <string name="perm_a11y_where">Screen reading and calculations happen on your phone. gig.log itself sends nothing it reads off your phone. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Android backup and exports you make can copy your history.</string>
+    <string name="perm_a11y_taps">It taps a button in a delivery app only when you press Accept or Decline in gig.log, or for an automatic tap you allow.</string>
+    <string name="perm_without_accessibility">gig.log can\'t read offer screens or track shifts.</string>
+    <!-- Also Home's button while screen reading is off (#1457). -->
     <string name="perm_action_accessibility">Turn on screen reading</string>
 
     <string name="perm_title_listener">Notification access</string>
-    <string name="perm_pitch_listener">Reads offer and tip alerts from delivery apps you turn on.</string>
-    <string name="perm_hood_listener">gig.log reads notifications only from the delivery apps you turn on, and skips other apps\' notifications unread. What it recognizes goes into your history, which Android backup may copy.</string>
+    <string name="perm_pitch_listener">Reads offer and tip alerts from the delivery apps you turn on.</string>
+    <string name="perm_body_listener">gig.log skips every other app\'s notifications without reading them. What it recognizes is saved in your history.</string>
+    <string name="perm_without_listener">gig.log misses alerts such as added tips.</string>
     <string name="perm_action_listener">Turn on notification access</string>
 
     <string name="perm_title_location">Location</string>
-    <string name="perm_pitch_location">Counts your shift miles to estimate profit after vehicle costs.</string>
-    <string name="perm_hood_location">gig.log uses GPS to count miles only during a shift, which saves battery and collects less location data. If automatic gas prices are on, it may send your last location, even outside a shift, to Android\'s address lookup. Automatic gas prices start off on a new install; an update keeps your setting. To stop them, set the bubble\'s gas price to manual. Your miles stay in your history, which Android backup may copy.</string>
+    <string name="perm_pitch_location">Counts your miles during a shift.</string>
+    <string name="perm_body_location">gig.log counts miles with GPS only while a shift is on. Choose Precise; approximate location counts no miles. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift, and Android\'s address lookup may send it to its provider to find your region.</string>
+    <string name="perm_without_location">gig.log can\'t track your driven miles.</string>
     <string name="perm_action_location">Allow location</string>
 
     <string name="perm_title_post_notif">Notifications</string>
-    <string name="perm_pitch_post_notif">Notifications keep the bubble running and show offer alerts with Accept and Decline.</string>
-    <string name="perm_hood_post_notif">Lets gig.log post the bubble and offer alerts. Opening the bubble also needs Android\'s Bubbles setting.</string>
+    <string name="perm_pitch_post_notif">Keeps the bubble running and shows offer alerts with Accept and Decline.</string>
+    <string name="perm_body_post_notif">Lets gig.log post its own notifications. It reads nothing with this.</string>
+    <string name="perm_without_post_notif">No bubble and no offer alerts.</string>
     <string name="perm_action_post_notif">Allow notifications</string>
 
     <string name="perm_title_bubbles">Bubble</string>
-    <string name="perm_pitch_bubbles">Allow the bubble to show offer figures over your delivery app.</string>
+    <string name="perm_pitch_bubbles">Shows offer figures and your shift over the delivery app.</string>
+    <string name="perm_body_bubbles">Android controls bubbles, which also need notifications. On the next screen, choose All conversations can bubble.</string>
+    <string name="perm_without_bubbles">The bubble can\'t open.</string>
     <string name="perm_action_bubbles">Allow bubbles</string>
-    <string name="perm_hood_bubbles">Android controls floating bubbles. Select \"All conversations can bubble\" on the next screen.</string>
+
+    <!-- #1457 — a runtime permission whose dialog Android no longer shows. The copy names no
+         cause: a dismissed dialog lands here too. -->
+    <string name="perm_settings_route_location">Turn on Location for gig.log in Android settings, under Permissions.</string>
+    <string name="perm_action_open_app_settings">Open app settings</string>
+    <string name="perm_settings_route_post_notif">Allow notifications in Android settings.</string>
+    <string name="perm_action_open_notification_settings">Open notification settings</string>
 
     <string name="perm_toast_bubbles_hint">Select \"All conversations can bubble\"</string>
     <string name="perm_toast_accessibility_hint">Find gig.log and turn it on.</string>
@@ -112,18 +135,13 @@
     <string name="analytics_screen_title">Analytics</string>
     <string name="analytics_screen_content_desc_export_csv">Export data as a spreadsheet</string>
 
-    <!-- setup/permissions/PermissionCard.kt -->
-    <string name="permission_card_content_desc_privacy">Privacy</string>
-    <string name="permission_card_content_desc_expand">Expand</string>
 
     <!-- settings/DataExportScreen.kt -->
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
     <!-- setup/consent/ConsentPromptPage.kt (#843) — prompted per-capability consent, a page of the
          FrontDoorHost sheet (#1151) -->
     <string name="consent_prompt_heading">Allow gig.log to tap for you?</string>
-    <string name="consent_prompt_body">gig.log can tap these buttons in the delivery app for you, depending on the app. Each stays off until you allow it; tap Not now to decide later. Pressing Accept or Decline yourself is your own choice.\n\nEach choice is recorded on this phone with its time, app version and privacy notice version, and left out of Android backup and phone transfer. The app log notes each choice too; it leaves your phone only in a bug report you export. Change them in Settings > Data &amp; privacy > Automation &amp; consent.</string>
-    <string name="consent_prompt_source_bundled_format">%1$s, built in</string>
-    <string name="consent_prompt_source_downloaded_format">%1$s, downloaded</string>
+    <string name="consent_prompt_body">Each tap stays off until you allow it. Change your choices in Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <string name="consent_prompt_allow">Allow</string>
     <string name="consent_prompt_deny">Don\'t allow</string>
     <!-- settings/components/FakeOfferCard.kt -->
@@ -213,6 +231,8 @@
     <string name="settings_home_economy_fallback_subtitle">Gas, electricity, phone, time</string>
     <string name="settings_home_item_economy_title">Costs</string>
     <string name="settings_home_group_data_privacy">Data &amp; privacy</string>
+    <string name="settings_home_item_privacy_title">Privacy</string>
+    <string name="settings_home_item_privacy_subtitle">What gig.log reads, saves and sends</string>
     <string name="settings_home_item_evidence_title">Screenshots</string>
     <string name="settings_home_item_evidence_subtitle">Offer, delivery and shift screenshots</string>
     <string name="settings_home_item_export_title">Export data</string>
@@ -346,8 +366,13 @@
     <!-- main/dashboard/DashboardScreen.kt -->
     <!-- dashboard_screen_content_desc_settings went with the settings FAB (#1024 D5) — Settings is
          an entry tile now, labelled like its three peers rather than described as an icon. -->
-    <string name="dashboard_screen_permissions_required_title">Permissions needed</string>
-    <string name="dashboard_screen_permissions_required_subtitle">Finish the permission sheet to start.</string>
+    <!-- #1457 — Home's gate card: screen reading off has its own card (button perm_action_accessibility);
+         any other open step is "Setup isn't finished". -->
+    <string name="dashboard_screen_permissions_a11y_title">Screen reading is off</string>
+    <string name="dashboard_screen_permissions_a11y_subtitle">gig.log can\'t read offer screens or track shifts without it.</string>
+    <string name="dashboard_screen_permissions_setup_title">Setup isn\'t finished</string>
+    <string name="dashboard_screen_permissions_setup_subtitle">Some setup steps are still open.</string>
+    <string name="dashboard_screen_permissions_continue">Continue setup</string>
     <string name="dashboard_screen_first_run_title">Permissions granted</string>
     <string name="dashboard_screen_first_run_subtitle">Set your offer targets next.</string>
     <string name="dashboard_screen_personalize_strategy_button">Set targets</string>

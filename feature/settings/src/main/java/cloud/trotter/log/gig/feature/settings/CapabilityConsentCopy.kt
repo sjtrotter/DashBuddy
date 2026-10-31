@@ -12,6 +12,11 @@ import cloud.trotter.log.gig.domain.action.RuleAction
  * describe the same tap identically. Copy is always resolved from the app-owned
  * [RuleAction] vocabulary — never from rule-supplied text (see
  * `docs/design/rule-capability-consent.md`).
+ *
+ * [CapabilityCopy.description] says what allowing changes. An action with no automatic trigger
+ * ([RuleAction.hasAutomaticTrigger], #1457) changes nothing today, so its description is the
+ * inactive note; the prompt never shows those actions, and Settings lists them only while they
+ * hold an earlier decision.
  */
 data class CapabilityCopy(val title: String, val description: String)
 
@@ -19,11 +24,11 @@ data class CapabilityCopy(val title: String, val description: String)
 fun capabilityCopy(action: RuleAction, platformName: String): CapabilityCopy = when (action) {
     RuleAction.ACCEPT_OFFER -> CapabilityCopy(
         stringResource(R.string.consent_cap_accept_title),
-        stringResource(R.string.consent_cap_accept_desc, platformName),
+        stringResource(R.string.consent_inactive_note),
     )
     RuleAction.DECLINE_OFFER -> CapabilityCopy(
         stringResource(R.string.consent_cap_decline_title),
-        stringResource(R.string.consent_cap_decline_desc, platformName),
+        stringResource(R.string.consent_inactive_note),
     )
     RuleAction.CONFIRM_DECLINE -> CapabilityCopy(
         stringResource(R.string.consent_cap_confirm_decline_title),

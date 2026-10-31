@@ -21,15 +21,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.booleanResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.log.gig.core.designsystem.component.AppAccordion
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.format.formatShortDate
@@ -38,12 +42,11 @@ import java.time.ZoneId
 import java.util.Locale
 
 /**
- * Capability-consent surface (#422 PR 3): a Google-Play-consistent
- * prominent-disclosure header plus, per ruleset source, one row per automation
- * tap the rules enable — each with honest disclosure copy and a grant/revoke
- * switch. The switch writes THROUGH [CapabilityConsentViewModel.setGranted] into
- * the same grant store the fail-closed engine gate (#417) reads at fire time;
- * revoking a capability makes the next automation tap abort to manual.
+ * Capability-consent surface (#422 PR 3): the Screen events choice, then a short header and, per
+ * ruleset source, one row per automation tap the rules enable — each with what allowing changes, its
+ * status and a grant/revoke switch. The switch writes THROUGH [CapabilityConsentViewModel.setGranted]
+ * into the same grant store the fail-closed engine gate (#417) reads at fire time; revoking a
+ * capability makes the next automation tap abort to manual.
  *
  * All copy is app-owned string resources keyed off the [RuleAction] vocabulary,
  * never rule-supplied text (see `docs/design/rule-capability-consent.md`).
@@ -81,6 +84,7 @@ fun CapabilityConsentScreen(
             Spacer(Modifier.height(8.dp))
             EventReceiptSection(
                 allowed = uiState.eventReceiptAllowed,
+                status = uiState.eventReceiptStatus,
                 receipt = uiState.eventReceipt,
                 onAllowedChange = viewModel::setEventReceiptAllowed,
             )
@@ -118,15 +122,27 @@ fun CapabilityConsentScreen(
 }
 
 /**
- * #1151 — "Screen events": the wide-event-receipt FEATURE consent's record. The switch writes
- * through [CapabilityConsentViewModel.setEventReceiptAllowed]; the listener enforces it.
+ * #1151 — "Screen events": the wide-event-receipt FEATURE consent's record; the listener enforces it.
+ *
+ * #1457: turning the switch on (from undecided or declined) first shows the disclosure in
+ * [EventReceiptConsentDialog]; only its Allow or Don't allow writes, each through
+ * [CapabilityConsentViewModel.setEventReceiptAllowed] (one edit with its receipt). Off is immediate,
+ * except in a test build, where it asks first ([EventReceiptOffConfirmDialog]) because there it turns
+ * screen reading off. The switch always shows the stored value, so a failed write reads back.
  */
 @Composable
 private fun EventReceiptSection(
     allowed: Boolean,
+    status: ConsentStatus,
     receipt: ConsentReceipt?,
     onAllowedChange: (Boolean) -> Unit,
 ) {
+    var showDisclosure by rememberSaveable { mutableStateOf(false) }
+    var showOffConfirm by rememberSaveable { mutableStateOf(false) }
+    var whatThisDoesOpen by rememberSaveable { mutableStateOf(false) }
+    val offNeedsConfirm = booleanResource(R.bool.event_receipt_off_confirm)
+    val disclosure = eventReceiptDisclosureParts()
+
     Column(Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.event_receipt_settings_section),
@@ -145,13 +161,47 @@ private fun EventReceiptSection(
             Column(Modifier.padding(horizontal = 16.dp)) {
                 SwitchRow(
                     label = stringResource(R.string.event_receipt_settings_switch),
-                    subtitle = eventReceiptSettingsHelper(),
+                    subtitle = stringResource(R.string.event_receipt_summary),
                     checked = allowed,
-                    onCheckedChange = onAllowedChange,
+                    onCheckedChange = { on ->
+                        when {
+                            on -> showDisclosure = true
+                            offNeedsConfirm -> showOffConfirm = true
+                            else -> onAllowedChange(false)
+                        }
+                    },
                 )
-                receipt?.let { ConsentReceiptCaption(it) }
+                ConsentStatusLine(status = status, receipt = receipt)
+                AppAccordion(
+                    title = stringResource(R.string.event_receipt_what_this_does),
+                    expanded = whatThisDoesOpen,
+                    onToggle = { whatThisDoesOpen = !whatThisDoesOpen },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                ) {
+                    EventReceiptDisclosureText(disclosure)
+                }
             }
         }
+    }
+
+    if (showDisclosure) {
+        EventReceiptConsentDialog(
+            disclosure = disclosure,
+            onDecision = { allow ->
+                showDisclosure = false
+                onAllowedChange(allow)
+            },
+            onDismiss = { showDisclosure = false },
+        )
+    }
+    if (showOffConfirm) {
+        EventReceiptOffConfirmDialog(
+            onConfirm = {
+                showOffConfirm = false
+                onAllowedChange(false)
+            },
+            onDismiss = { showOffConfirm = false },
+        )
     }
 }
 
@@ -194,7 +244,7 @@ private fun ConsentSourceSection(
         ?: stringResource(R.string.consent_platform_unknown)
 
     val header = if (group.isBundled) {
-        stringResource(R.string.consent_source_bundled_format, platformName)
+        platformName
     } else {
         stringResource(R.string.consent_source_downloaded_format, platformName)
     }
@@ -214,7 +264,7 @@ private fun ConsentSourceSection(
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 2.dp,
         ) {
-            Column {
+            Column(Modifier.padding(horizontal = 16.dp)) {
                 group.capabilities.forEach { cap ->
                     ConsentCapabilityRowView(
                         row = cap,
@@ -228,7 +278,10 @@ private fun ConsentSourceSection(
     }
 }
 
-/** The consent switch row, with distinct layout coverage directly below its title (#1167). */
+/**
+ * One consent switch row and its status. #1457: an inactive row (an action with no automatic
+ * trigger, listed only because it holds a decision) can only be turned off.
+ */
 @Composable
 private fun ConsentCapabilityRowView(
     row: ConsentCapabilityRow,
@@ -240,44 +293,55 @@ private fun ConsentCapabilityRowView(
     SwitchRow(
         label = copy.title,
         subtitle = copy.description,
-        note = if (row.layoutCount > 1) stringResource(R.string.consent_layout_count_format, row.layoutCount) else null,
         checked = row.granted,
-        onCheckedChange = { onSetGranted(row.key, it) },
+        enabled = row.active || row.granted,
+        onCheckedChange = { on -> if (row.active || !on) onSetGranted(row.key, on) },
     )
-    receipt?.let { ConsentReceiptCaption(it, Modifier.padding(horizontal = 16.dp)) }
+    ConsentStatusLine(status = row.status, receipt = receipt)
 }
 
+/** "Allowed", "Not allowed" or "Not decided", with the receipt's details after it when there is one. */
 @Composable
-private fun ConsentReceiptCaption(receipt: ConsentReceipt, modifier: Modifier = Modifier) {
+private fun ConsentStatusLine(status: ConsentStatus, receipt: ConsentReceipt?) {
     Text(
-        text = formatConsentReceipt(
+        text = formatConsentStatus(
+            status = stringResource(
+                when (status) {
+                    ConsentStatus.ALLOWED -> R.string.consent_receipt_allowed
+                    ConsentStatus.NOT_ALLOWED -> R.string.consent_receipt_denied
+                    ConsentStatus.UNDECIDED -> R.string.consent_status_undecided
+                },
+            ),
             receipt = receipt,
             format = stringResource(R.string.consent_receipt_format),
-            allowed = stringResource(R.string.consent_receipt_allowed),
-            denied = stringResource(R.string.consent_receipt_denied),
             locale = LocalConfiguration.current.locales[0],
         ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier.padding(bottom = 12.dp),
+        modifier = Modifier.padding(bottom = 12.dp),
     )
 }
 
-/** Pure receipt caption; date formatting shares the app's localized calendar-date policy. */
-internal fun formatConsentReceipt(
-    receipt: ConsentReceipt,
+/**
+ * Pure status line: the decision's label alone, or, with a receipt, the label followed by its local
+ * date, app version and privacy notice version. Date formatting shares the app's localized
+ * calendar-date policy.
+ */
+internal fun formatConsentStatus(
+    status: String,
+    receipt: ConsentReceipt?,
     format: String,
-    allowed: String,
-    denied: String,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
-): String = String.format(
-    locale,
-    format,
-    if (receipt.granted) allowed else denied,
-    formatShortDate(receipt.decidedAt, zone, locale),
-    receipt.appVersion,
-    receipt.disclosureRevision,
-)
+): String = if (receipt == null) {
+    status
+} else {
+    String.format(
+        locale,
+        format,
+        status,
+        formatShortDate(receipt.decidedAt, zone, locale),
+        receipt.appVersion,
+        receipt.disclosureRevision,
+    )
+}

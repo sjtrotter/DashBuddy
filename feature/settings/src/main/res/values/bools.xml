@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #1457 — release values; src/debug/res/values/bools.xml overrides both for the test build
+         (one key per fact, two source sets, never a BuildConfig branch). -->
+    <!-- The privacy page's Test builds section. -->
+    <bool name="privacy_show_test_builds">false</bool>
+    <!-- Turning Screen events off asks first only where it also turns screen reading off. -->
+    <bool name="event_receipt_off_confirm">false</bool>
+</resources>

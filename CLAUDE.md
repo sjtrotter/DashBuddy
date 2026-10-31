@@ -42,7 +42,7 @@ info — so an alcohol delivery's ID-CHECK instruction screen and arrival card a
 hashed), only the literal scanner/signature surfaces are blocked. The dasher's own name in
 first-last-initial form (e.g. the main-menu greeting) is fine to process. Network access is opt-in
 per feature. PII scrubbing runs at the edge before any upload.
-`PRIVACY.md` (repo root) is the engineering ground-truth privacy document; a change to what the app reads, stores or sends updates it in the same PR.
+`PRIVACY.md` (repo root) is the engineering ground-truth privacy document; a change to what the app reads, stores or sends updates it in the same PR. A change to a claim there updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR (#1457).
 
 **Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
 copy, marketing — describe the academic pillar as **empirical measurement of the visible
@@ -904,7 +904,9 @@ Screen design follows `DESIGN.md` (repo root): the bubble's glance rules versus 
      Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline
      is its own consent (integrity checks still apply). Consent is collected by a **prompt**
      (`ConsentPromptPage` in the `FrontDoorSheet`, #843/#1151 — the app's front door, joining the a11y/notification permission
-     chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅`, one Allow /
+     chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅` among actions with
+     an automatic trigger (`RuleAction.hasAutomaticTrigger`, #1457: not Accept/Decline, whose
+     AUTOMATION fire `SideEffectEngine` refuses), one Allow /
      Don't-allow row per undecided capability, no "allow all"; "Not now" defers, a denial is
      durable) and reviewed/revoked in Settings → Data & Privacy → **Automation & Consent**
      (`CapabilityConsentScreen`/`ViewModel`, writing through `RuleCapabilityGrants.setGranted`);
