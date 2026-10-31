@@ -8,6 +8,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # #1450 — the signing secrets live in the `release` environment, which only `v*.*.*` tags can use,
+    # so no branch workflow can read them.
+    environment: release
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
