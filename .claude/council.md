@@ -16,7 +16,8 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
   started as a background Bash call from the PR's worktree
 - effort: xhigh
 - plan dir: `~/dashbuddy/design/<date>-<issue>/`
-- the sandbox cannot run Gradle; the brief points at the saved gate log (`~/dashbuddy/tools/pr-loop/gt.sh` output)
+- the sandbox cannot run Gradle; the brief points at the green PR CI run's `gate-summary.txt` (downloaded with
+  `gh run download <id> -n junit-results-<pr>`, #1450)
 
 ## Claude
 
