@@ -32,6 +32,7 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
 - run: Agent tool, `subagent_type: general-purpose`, `model: fable`, a fresh context, read-only brief
 - effort: high
 - skip the seat and say so when the usage budget is tight or the call fails on a limit; never substitute a model
+- never beside a Gradle run (host memory, CLAUDE.local.md)
 
 ## Astra (only when added)
 

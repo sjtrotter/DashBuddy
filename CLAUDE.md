@@ -1431,7 +1431,7 @@ Rules, in precedence order:
    Fable writes the bounded spec to a scratchpad file (named files, exact change shape, done
    criteria, which suites must go green); the Opus subagent builds it in the PR's worktree, may run
    a small compile or one module's tests through `gt.sh`'s memory guard (never the full gate, never
-   beside another Gradle run), and does not commit; the session commits, pushes to the draft PR and
+   beside another Gradle run or a Claude analysis agent), and does not commit; the session commits, pushes to the draft PR and
    reads PR CI. Builders never open `~/dashbuddy/logs` or raw captures (Sol reviews may, see Git
    Workflow). The builder spends Claude budget again, so rule 5 applies at every delegation; when the
    budget is tight, the codex Astra builder (`timeout N codex exec -m gpt-6-astra -s workspace-write
