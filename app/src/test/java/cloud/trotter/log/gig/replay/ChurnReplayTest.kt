@@ -125,6 +125,10 @@ class ChurnReplayTest {
         }
         val speaks = effects(steps).count { it is AppEffect.SpeakOffer }
         assertEquals("SpeakOffer fires once per physical presentation, not once per re-quote", 1, speaks)
+        assertEquals(
+            "PostOfferChat writes one chat row per physical presentation, not once per re-quote",
+            1, effects(steps).count { it is AppEffect.PostOfferChat },
+        )
 
         val posts = effects(steps).count { it is AppEffect.PostOfferNotification }
         // Three eval loopbacks land (one per variant) → three live heads-up updates, one read aloud.

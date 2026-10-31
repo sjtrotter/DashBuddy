@@ -158,6 +158,11 @@ class InterleavedPlatformsE2ETest {
                 posts.groupingBy { it.args[2] as Platform }.eachCount(),
             )
             assertEquals("one utterance per physical presentation (3 DoorDash + 1 Uber)", 4, replay.tts.spoken.size)
+            assertEquals(
+                "one chat row per physical presentation: Uber's re-quotes write none",
+                mapOf(Platform.DoorDash to 3, Platform.Uber to 1),
+                replay.bubble.calls("postOfferChat").groupingBy { it.args[1] as Platform }.eachCount(),
+            )
             val bannerIds = (listOf(cp.cvsHash, cp.peterPiperHash, cp.journeyOfferHash) + cp.uberHashes)
                 .map(BubbleManager::offerNotificationId).toSet()
             assertTrue("no offer banner outlives the run", replay.activeNotificationIds().none { it in bannerIds })

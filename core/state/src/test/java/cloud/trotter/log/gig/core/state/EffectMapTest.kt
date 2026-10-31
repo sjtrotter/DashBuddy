@@ -495,16 +495,16 @@ class EffectMapTest {
     }
 
     @Test
-    fun `the offer heads-up notification carries the resolving platform's session too (#867)`() {
-        // The eval-land step ALSO writes a chat line (the offer summary) via BubbleManager, so
-        // PostOfferNotification carries the same provenance.
+    fun `the offer chat row carries the resolving platform's session too (#867)`() {
+        // The eval-land step ALSO writes a chat line (the offer summary) via PostOfferChat, so it
+        // carries the same provenance.
         val uberOffer = testPendingOffer.copy(sourceRuleId = "uber.screen.offer")
         val prev = multiAppOfferState(uberOffer)
         val next = multiAppOfferState(uberOffer.copy(evaluation = testEvaluation))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
-        val post = effects.effectsOfType<AppEffect.PostOfferNotification>().single()
-        assertEquals("uber-sess", post.sessionId)
+        val chat = effects.effectsOfType<AppEffect.PostOfferChat>().single()
+        assertEquals("uber-sess", chat.sessionId)
     }
 
     @Test

@@ -8,14 +8,32 @@ import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.domain.evaluation.OfferAction
+import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
+import cloud.trotter.log.gig.domain.evaluation.OfferQuality
+import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.model.chat.ChatPersona
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
+import cloud.trotter.log.gig.domain.model.order.OrderType
+import cloud.trotter.log.gig.domain.model.order.ParsedOrder
+import cloud.trotter.log.gig.domain.offer.story.AddOnSpeech
 import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.ParsedFields
+import cloud.trotter.log.gig.domain.state.PendingOffer
+import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.test.util.RecordingTree
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.timeout
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyBlocking
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -26,7 +44,7 @@ import java.time.ZoneOffset
 
 /**
  * #772 / Principle-7: the two "Chat" INFO milestones in [BubbleManager.postMessage] /
- * [BubbleManager.postOfferNotification] used to interpolate [ChatPersona.displayName], which
+ * [BubbleManager.postOfferChat] used to interpolate [ChatPersona.displayName], which
  * carries raw merchant/customer text ("H-E-B", "…'s customer") for name-bearing personas — a
  * Principle-7 leak into the exportable `shareable.log`. They now log [ChatPersona.logLabel]
  * (the persona KIND) instead; the DEBUG line directly below each keeps `displayName` for firehose
@@ -36,91 +54,81 @@ import java.time.ZoneOffset
 @RunWith(RobolectricTestRunner::class)
 class BubbleManagerChatLogTest {
 
-    private fun buildManager(): BubbleManager {
-        val context = RuntimeEnvironment.getApplication()
-        val notificationManager: NotificationManager = mock()
+    private fun buildManager(): BubbleManager = manager(mock(), mock())
+
+    @Test
+    fun `postOfferChat writes the one chat row with a PII-safe INFO milestone`() {
         val chatRepository: ChatRepository = mock()
-        val preferences: AppPreferencesRepository = mock()
-        val garage: GarageRepository = mock()
-        val readings: OdometerReadingRepository = mock()
-        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
-        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
-        whenever(readings.readings).thenReturn(flowOf(emptyList()))
-        val stateManager: StateManagerV2 = mock()
-        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        val lazyStateManager = dagger.Lazy<StateManagerV2> { stateManager }
-        return BubbleManager(context, notificationManager, chatRepository, lazyStateManager, preferences, garage, readings,
-            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
-    }
-
-    @Test
-    fun `a refresh-only offer post writes no chat summary and no INFO milestone (#1104)`() {
-        assertNoChat(refreshOnly = true, requote = false)
-    }
-
-    @Test
-    fun `a re-quote writes no chat summary and no INFO milestone`() {
-        assertNoChat(refreshOnly = false, requote = true)
-    }
-
-    @Test
-    fun `a post that owes the chat row writes one summary even on a re-quote`() {
-        val (chatRepository, tree) = postOffer(writeChat = true, refreshOnly = false, requote = true)
-        org.mockito.kotlin.verifyBlocking(chatRepository, org.mockito.kotlin.timeout(5_000)) {
-            saveMessage(org.mockito.kotlin.eq("sess-1"), org.mockito.kotlin.any(), org.mockito.kotlin.any())
-        }
-        check(tree.records.any { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
-            "the owed chat row must log its 'offer posted' milestone: ${tree.records}"
-        }
-    }
-
-    private fun assertNoChat(refreshOnly: Boolean, requote: Boolean) {
-        val (chatRepository, tree) = postOffer(writeChat = false, refreshOnly = refreshOnly, requote = requote)
-        org.mockito.kotlin.verifyNoInteractions(chatRepository)
-        check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
-            "a refresh must not log an 'offer posted' milestone: ${tree.records}"
-        }
-    }
-
-    private fun postOffer(writeChat: Boolean, refreshOnly: Boolean, requote: Boolean): Pair<ChatRepository, RecordingTree> {
-        val context = RuntimeEnvironment.getApplication()
-        val notificationManager: NotificationManager = mock()
-        val chatRepository: ChatRepository = mock()
-        val preferences: AppPreferencesRepository = mock()
-        val garage: GarageRepository = mock()
-        val readings: OdometerReadingRepository = mock()
-        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
-        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
-        whenever(readings.readings).thenReturn(flowOf(emptyList()))
-        val stateManager: StateManagerV2 = mock()
-        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
-        val manager = BubbleManager(context, notificationManager, chatRepository, dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings,
-            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
-        val evaluation = cloud.trotter.log.gig.domain.evaluation.OfferEvaluation(
-            action = cloud.trotter.log.gig.domain.evaluation.OfferAction.ACCEPT, score = 74.0,
-            qualityLevel = cloud.trotter.log.gig.domain.evaluation.OfferQuality.GOOD, payAmount = 14.75,
-            fuelCostEstimate = 0.5, netPayAmount = 12.0, distanceMiles = 8.5, dollarsPerMile = 1.4,
-            dollarsPerHour = 22.0, estimatedTimeMinutes = 33.0, itemCount = 1.0, merchantName = "H-E-B",
-        )
-        val offer = cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot.Offer.from(
-            parsedOffer = cloud.trotter.log.gig.domain.model.offer.ParsedOffer(offerHash = "h1", payAmount = 14.75, distanceMiles = 8.5),
-            evaluation = evaluation, offerHash = "h1", phaseStartedAt = 1_000L, expiresAt = 41_000L, countdownSeconds = 40,
-        )
         val tree = RecordingTree()
         Timber.plant(tree)
         try {
-            manager.postOfferNotification(offer, evaluation, cloud.trotter.log.gig.domain.state.Platform.DoorDash, "sess-1", refreshOnly = refreshOnly, requote = requote,
-                pending = cloud.trotter.log.gig.domain.state.PendingOffer("h1",
-                    cloud.trotter.log.gig.domain.state.ParsedFields.OfferFields(parsedOffer =
-                        cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5)),
-                    1_000L, evaluation, returnFlow = cloud.trotter.log.gig.domain.state.Flow.TaskPickupNavigation),
-                config = null, addOnSpeech = cloud.trotter.log.gig.domain.offer.story.AddOnSpeech.JOB_TOTALS,
-                writeChat = writeChat)
+            manager(chatRepository, mock()).postOfferChat(pendingOffer(), Platform.DoorDash, job = null, sessionId = "sess-1",
+                config = null, addOnSpeech = AddOnSpeech.JOB_TOTALS)
         } finally {
             Timber.uproot(tree)
         }
-        org.mockito.kotlin.verify(notificationManager).notify(org.mockito.kotlin.any(), org.mockito.kotlin.any())
-        return chatRepository to tree
+        verifyBlocking(chatRepository, timeout(5_000).times(1)) { saveMessage(eq("sess-1"), any(), any()) }
+        check(tree.records.any { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted [Offer]") }) {
+            "the chat row must log its 'offer posted' milestone: ${tree.records}"
+        }
+        // #551 P7: the summary names the store; only the DEBUG firehose may carry it.
+        tree.assertNoInfoPlusContains("H-E-B")
+        tree.assertLevelContains(Log.DEBUG, "H-E-B")
+    }
+
+    @Test
+    fun `postOfferNotification writes no chat row and no INFO milestone (fresh, re-quote, refresh)`() {
+        for ((refreshOnly, requote) in listOf(false to false, false to true, true to false)) {
+            val chatRepository: ChatRepository = mock()
+            val notificationManager: NotificationManager = mock()
+            val tree = RecordingTree()
+            Timber.plant(tree)
+            try {
+                val pending = pendingOffer()
+                val offer = FlowCardSnapshot.Offer.from(
+                    parsedOffer = pending.offerFields.parsedOffer, evaluation = evaluation, offerHash = "h1",
+                    phaseStartedAt = 1_000L, expiresAt = 41_000L, countdownSeconds = 40,
+                )
+                manager(chatRepository, notificationManager).postOfferNotification(offer, evaluation, Platform.DoorDash,
+                    refreshOnly = refreshOnly, requote = requote, pending = pending, config = null,
+                    addOnSpeech = AddOnSpeech.JOB_TOTALS)
+            } finally {
+                Timber.uproot(tree)
+            }
+            verify(notificationManager).notify(any(), any())
+            verifyNoInteractions(chatRepository)
+            check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
+                "a heads-up post must not log an 'offer posted' milestone: ${tree.records}"
+            }
+        }
+    }
+
+    private val evaluation = OfferEvaluation(
+        action = OfferAction.ACCEPT, score = 74.0, qualityLevel = OfferQuality.GOOD, payAmount = 14.75,
+        fuelCostEstimate = 0.5, netPayAmount = 12.0, distanceMiles = 8.5, dollarsPerMile = 1.4,
+        dollarsPerHour = 22.0, estimatedTimeMinutes = 33.0, itemCount = 1.0, merchantName = "H-E-B",
+    )
+
+    private fun pendingOffer() = PendingOffer(
+        "h1",
+        ParsedFields.OfferFields(parsedOffer = ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5, orders = listOf(
+            ParsedOrder(orderIndex = 0, orderType = OrderType.PICKUP, storeName = "H-E-B", itemCount = 1,
+                isItemCountEstimated = false, badges = emptySet()),
+        ))),
+        1_000L, evaluation, returnFlow = Flow.TaskPickupNavigation,
+    )
+
+    private fun manager(chatRepository: ChatRepository, notificationManager: NotificationManager): BubbleManager {
+        val preferences: AppPreferencesRepository = mock()
+        val garage: GarageRepository = mock()
+        val readings: OdometerReadingRepository = mock()
+        whenever(preferences.odometerPrompts).thenReturn(flowOf(false))
+        whenever(garage.garage).thenReturn(flowOf(Garage(emptyList(), null, readable = true)))
+        whenever(readings.readings).thenReturn(flowOf(emptyList()))
+        val stateManager: StateManagerV2 = mock()
+        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
+        return BubbleManager(RuntimeEnvironment.getApplication(), notificationManager, chatRepository,
+            dagger.Lazy<StateManagerV2> { stateManager }, preferences, garage, readings, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC))
     }
 
     @Test

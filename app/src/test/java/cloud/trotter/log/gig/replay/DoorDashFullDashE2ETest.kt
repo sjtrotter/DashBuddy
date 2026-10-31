@@ -153,6 +153,7 @@ class DoorDashFullDashE2ETest {
             assertTrue("the offer heads-up was posted before the tap", bannerId in checkpoints.notificationsBeforeTap)
             assertFalse("the receiver's own cancel removed it on the tap", bannerId in checkpoints.notificationsAfterTap)
             assertEquals("one heads-up post", 1, replay.bubble.calls("postOfferNotification").size)
+            assertEquals("one chat row", 1, replay.bubble.calls("postOfferChat").size)
             assertTrue(
                 "the resolved offer's heads-up is cancelled by the engine as well",
                 replay.bubble.calls("cancelOfferNotification").any { it.args.single() == offer.offerHash },

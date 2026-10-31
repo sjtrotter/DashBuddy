@@ -33,7 +33,7 @@ import org.junit.Test
  *   - [OfferLifecycle.pushOrReplaceOffer] three-way (same hash / enrich-as-variant / replace) and
  *     the speak-once marker set by `landOfferEval`;
  *   - [OfferEffects.diffOfferLifecycle] gating OFFER_TIMEOUT/heads-up-cancel on a REAL replacement
- *     (different presentationKey) and `SpeakOffer` on the once-per-presentation marker.
+ *     (different presentationKey) and `SpeakOffer` + `PostOfferChat` on the once-per-presentation marker.
  *
  * Mutation-meaningful: severing the presentationKey comparison collapses an enrich into a replace
  * (the "no OFFER_TIMEOUT" / "presentedAt survives" assertions fail); severing the speak-once gate
@@ -231,20 +231,20 @@ class PresentationScopedOfferTest {
     // landOfferEval — speak-once marker
     // =============================================================================================
 
+    /** The evaluation loopback for [hash], as the engine emits it. */
+    private fun evalLoop(t: Long, hash: String) = Observation.Loopback(
+        timestamp = t, effect = Observation.Loopback.EFFECT_OFFER_EVALUATED,
+        targetPlatform = PLATFORM,
+        payload = ObservationPayload.EvaluationResult(OfferAction.ACCEPT.name, hash, evalOf()),
+    )
+
     @Test
     fun `landOfferEval stamps firstEvalLandedAt on the first landing and never moves it`() {
         val start = region(pending("H1", "P", presentedAt = 1_000L))
-        val loop = { t: Long, hash: String ->
-            Observation.Loopback(
-                timestamp = t, effect = Observation.Loopback.EFFECT_OFFER_EVALUATED,
-                targetPlatform = PLATFORM,
-                payload = ObservationPayload.EvaluationResult(OfferAction.ACCEPT.name, hash, evalOf()),
-            )
-        }
-        val afterFirst = drive(start, loop(1_200L, "H1"))
+        val afterFirst = drive(start, evalLoop(1_200L, "H1"))
         assertEquals("marker set to the first landing time", 1_200L, afterFirst.presentedOffer()!!.firstEvalLandedAt)
         // A later landing on the same presentation must NOT move the marker.
-        val afterSecond = drive(afterFirst, loop(1_400L, "H1"))
+        val afterSecond = drive(afterFirst, evalLoop(1_400L, "H1"))
         assertEquals("marker unchanged on a later landing", 1_200L, afterSecond.presentedOffer()!!.firstEvalLandedAt)
     }
 
@@ -326,6 +326,64 @@ class PresentationScopedOfferTest {
         assertFalse("no re-speak on a variant re-eval", fx.any { it is AppEffect.SpeakOffer })
         assertTrue(fx.filterIsInstance<AppEffect.PostOfferNotification>().single().requote)
         assertTrue("but the heads-up still live-updates", fx.any { it is AppEffect.PostOfferNotification })
+    }
+
+    // =============================================================================================
+    // PostOfferChat — the presentation's one chat row, beside SpeakOffer
+    // =============================================================================================
+
+    @Test
+    fun `PostOfferChat fires once on the FIRST eval landing, beside SpeakOffer, with the step's session`() {
+        val prev = region(pending("H1", "P", presentedAt = 1_000L, firstEvalLandedAt = null))
+        val next = region(pending("H1", "P", presentedAt = 1_000L, evaluation = evalOf(), firstEvalLandedAt = 1_200L))
+        val fx = diff(prev, next, 1_200L)
+        val chat = fx.filterIsInstance<AppEffect.PostOfferChat>().single()
+        val spoken = fx.filterIsInstance<AppEffect.SpeakOffer>().single()
+        assertEquals(spoken.pending, chat.pending)
+        assertEquals(spoken.platform, chat.platform)
+        assertEquals(spoken.job, chat.job)
+        assertEquals("sess-1", chat.sessionId)
+    }
+
+    @Test
+    fun `PostOfferChat does NOT fire on a same-hash deadline refresh`() {
+        val prev = region(pending("H1", "P", presentedAt = 1_000L, evaluation = evalOf(), firstEvalLandedAt = 1_200L)
+            .copy(countdownExpiresAt = 40_000L))
+        val next = region(pending("H1", "P", presentedAt = 1_000L, evaluation = evalOf(), firstEvalLandedAt = 1_200L)
+            .copy(countdownExpiresAt = 41_000L))
+        val fx = diff(prev, next, 2_000L)
+        assertTrue("the refresh re-posts the heads-up", fx.filterIsInstance<AppEffect.PostOfferNotification>().single().refreshOnly)
+        assertTrue("no second chat row", fx.none { it is AppEffect.PostOfferChat })
+    }
+
+    @Test
+    fun `an enrich-as-variant hash change writes no second chat row, neither on the change nor on its eval landing`() {
+        val start = region(pending("H1", "P", presentedAt = 1_000L))
+        val landed = drive(start, evalLoop(1_200L, "H1"))
+        val varied = drive(landed, offerObs(2_000L, "H2", "P"))
+        val relanded = drive(varied, evalLoop(2_300L, "H2"))
+        assertEquals("the variant kept the presentation", "H2", relanded.presentedOffer()!!.offerHash)
+
+        val onLanding = diff(start, landed, 1_200L)
+        val onVariant = diff(landed, varied, 2_000L)
+        val onRelanding = diff(varied, relanded, 2_300L)
+        assertEquals("the first landing writes the row", 1, onLanding.count { it is AppEffect.PostOfferChat })
+        assertEquals(listOf("H1"), onVariant.filterIsInstance<AppEffect.CancelOfferNotification>().map { it.offerHash })
+        assertTrue("the hash change writes none", onVariant.none { it is AppEffect.PostOfferChat })
+        assertTrue("the re-quote still re-posts the heads-up",
+            onRelanding.filterIsInstance<AppEffect.PostOfferNotification>().single().requote)
+        assertTrue("the re-quote's landing writes none", onRelanding.none { it is AppEffect.PostOfferChat })
+    }
+
+    @Test
+    fun `a genuine replacement writes its own chat row on its first eval landing`() {
+        val landed = drive(region(pending("H1", "P1", presentedAt = 1_000L)), evalLoop(1_200L, "H1"))
+        val replaced = drive(landed, offerObs(2_000L, "H2", "P2", store = "Whataburger"))
+        val relanded = drive(replaced, evalLoop(2_300L, "H2"))
+
+        assertTrue("the replacement step writes none", diff(landed, replaced, 2_000L).none { it is AppEffect.PostOfferChat })
+        val chat = diff(replaced, relanded, 2_300L).filterIsInstance<AppEffect.PostOfferChat>().single()
+        assertEquals("the new offer's own row", "H2", chat.pending.offerHash)
     }
 
     @Test

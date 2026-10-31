@@ -102,14 +102,12 @@ class SideEffectEngine @Inject constructor(
 
     /**
      * #1104: a delayed offer post still in its settle window. `fresh` = it owes the FIRST post's
-     * obligations (the one alert; the chat row is `chatOwed`'s); a refresh-only post that supersedes a pending
-     * fresh one inherits them, or a deadline moving inside the 750 ms window would cancel the fresh
-     * post and the offer would surface with no summary at all (Astra #1104 r6). `chatOwed` = it owes
-     * the presentation's ONE chat row: a fresh, non-re-quote post owes it, and any post that
-     * supersedes a pending owing post inherits it (a re-quote or refresh must neither drop nor
-     * duplicate the row).
+     * obligations (the one alert); a refresh-only post that supersedes a pending fresh one inherits
+     * them, or a deadline moving inside the 750 ms window would cancel the fresh post and the offer
+     * would surface with no alert at all (Astra #1104 r6). The chat row is not a post's obligation:
+     * it is [AppEffect.PostOfferChat]'s, emitted once per presentation.
      */
-    private class PendingOfferPost(val job: Job, val fresh: Boolean, val chatOwed: Boolean)
+    private class PendingOfferPost(val job: Job, val fresh: Boolean)
 
     companion object {
         /** Default throttle between repeated firings of the same action. */
@@ -397,6 +395,14 @@ class SideEffectEngine @Inject constructor(
                 if (!dispatchRuleEffect(effect.effect)) return
             }
 
+            // The presentation's one chat row: immediate, never behind the heads-up's hash-keyed
+            // debounce, so a re-quote that cancels the old hash's pending post cannot lose it.
+            is AppEffect.PostOfferChat -> bubbleManager.postOfferChat(
+                effect.pending, effect.platform, effect.job, effect.sessionId,
+                config = strategyRepository.evaluationConfig.value,
+                addOnSpeech = devSettingsRepository.addOnSpeech.value,
+            )
+
             is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(OfferStories.build(effect.pending, effect.job,
                 strategyRepository.evaluationConfig.value, effect.platform).forPresentation(devSettingsRepository.addOnSpeech.value))
 
@@ -526,18 +532,16 @@ class SideEffectEngine @Inject constructor(
                 superseded?.job?.cancel()
                 // #1104: a refresh that coalesces a still-pending FRESH post takes over its obligations.
                 val fresh = !effect.refreshOnly || (superseded?.fresh == true)
-                val chatOwed = (!effect.refreshOnly && !effect.requote) || (superseded?.chatOwed == true)
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
-                        effect.offer, effect.evaluation, effect.platform, effect.sessionId,
+                        effect.offer, effect.evaluation, effect.platform,
                         refreshOnly = !fresh, pending = effect.pending, job = effect.job,
                         config = strategyRepository.evaluationConfig.value,
                         requote = effect.requote, addOnSpeech = devSettingsRepository.addOnSpeech.value,
-                        writeChat = chatOwed,
                     )
                 }
-                val pending = PendingOfferPost(job, fresh, chatOwed)
+                val pending = PendingOfferPost(job, fresh)
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, pending) }
                 pendingOfferNotifications[hashKey] = pending
                 job.start()
@@ -851,6 +855,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,
         is AppEffect.SpeakOffer,
+        is AppEffect.PostOfferChat,
         is AppEffect.PostOfferNotification,
         -> true
         else -> false

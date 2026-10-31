@@ -214,6 +214,7 @@ class TransitionOutcomeTest {
             assertEquals(each.pending.platform, each.platform)
         }
         assertTrue("no chat card for a deadline refresh", effects.none { it is AppEffect.UpdateBubble })
+        assertTrue("no chat row for a deadline refresh", effects.none { it is AppEffect.PostOfferChat })
     }
 
     @Test

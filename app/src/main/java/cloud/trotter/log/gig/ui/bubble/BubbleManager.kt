@@ -460,7 +460,7 @@ class BubbleManager @Inject constructor(
      * Post the offer evaluation. The offer reaches the dasher on three surfaces (#457):
      *  - the in-bubble offer **card** (state-driven `LiveCardBuilder`, shown when the bubble is open) —
      *    not touched here;
-     *  - the **chat stream** entry (saved below, the in-bubble history);
+     *  - the **chat stream** entry ([postOfferChat], its own once-per-presentation effect);
      *  - a **separate heads-up notification** with Accept/Decline ([showOfferHeadsUp]) — the
      *    actionable surface that pops over DoorDash.
      *
@@ -473,8 +473,6 @@ class BubbleManager @Inject constructor(
         offer: FlowCardSnapshot.Offer,
         evaluation: OfferEvaluation,
         platform: Platform,
-        /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
-        sessionId: String? = null,
         /**
          * #1104: a countdown-anchor REFRESH of an already-surfaced offer — update the existing
          * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert).
@@ -486,27 +484,50 @@ class BubbleManager @Inject constructor(
         job: DeliveryJob? = null,
         requote: Boolean = false,
         addOnSpeech: AddOnSpeech,
-        /**
-         * Write the presentation's one chat summary row. The engine decides it across coalesced
-         * posts (a re-quote or refresh that supersedes a pending first post inherits the row).
-         */
-        writeChat: Boolean,
     ) {
+        val text = offerText(pending, job, config, platform, requote, addOnSpeech)
+        Timber.tag("Chat").d("offer heads-up posted [%s] (%s)", text.persona.logLabel,
+            if (refreshOnly) "refresh" else if (requote) "re-quote" else "first")
+        val card = OfferCardMapper.map(text.story, pending, job)
+        showOfferHeadsUp(card, pending.offerHash, text.summary, text.persona, platform, OfferStoryText.note(text.story, context.resources))
+    }
+
+    /**
+     * The presentation's one chat row: the offer summary line, saved to the chat stream. Its effect
+     * fires once per presentation beside the spoken read, so a re-quote or a deadline refresh writes
+     * no second row.
+     */
+    fun postOfferChat(
+        pending: PendingOffer,
+        platform: Platform,
+        job: DeliveryJob?,
+        /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
+        sessionId: String?,
+        config: EvaluationConfig?,
+        addOnSpeech: AddOnSpeech,
+    ) {
+        val text = offerText(pending, job, config, platform, requote = false, addOnSpeech = addOnSpeech)
+        // #551 P7: the offer summary contains the merchant name (raw third-party UI text), so
+        // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
+        Timber.tag("Chat").i("offer posted [%s] (%d chars)", text.persona.logLabel, text.summary.length)
+        Timber.tag("Chat").d("[%s]: %s", text.persona.displayName, text.summary)
+        scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, text.summary, text.persona) }
+    }
+
+    /** The story, its one-line summary and its persona: the one assembly both offer surfaces share. */
+    private class OfferText(val story: OfferStory, val summary: String, val persona: ChatPersona.Offer)
+
+    private fun offerText(
+        pending: PendingOffer,
+        job: DeliveryJob?,
+        config: EvaluationConfig?,
+        platform: Platform,
+        requote: Boolean,
+        addOnSpeech: AddOnSpeech,
+    ): OfferText {
         val story = OfferStories.build(pending, job, config, platform, requote).forPresentation(addOnSpeech)
-        val summary = OfferStoryText.line(story, context.resources)
-        val persona = ChatPersona.Offer(OfferStoryText.title(story, context.resources))
-        if (writeChat) {
-            // #551 P7: the offer summary contains the merchant name (raw third-party UI text), so
-            // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
-            Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
-            Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
-            scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary, persona) }
-        } else {
-            Timber.tag("Chat").d("offer heads-up refreshed [%s] (%s)", persona.logLabel,
-                if (refreshOnly) "countdown anchors" else "re-quote")
-        }
-        val card = OfferCardMapper.map(story, pending, job)
-        showOfferHeadsUp(card, pending.offerHash, summary, persona, platform, OfferStoryText.note(story, context.resources))
+        return OfferText(story, OfferStoryText.line(story, context.resources),
+            ChatPersona.Offer(OfferStoryText.title(story, context.resources)))
     }
 
     /**

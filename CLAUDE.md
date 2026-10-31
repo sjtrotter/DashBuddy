@@ -617,8 +617,8 @@ displayed cents through `Formats.wholeDollars`, names losses, and speaks once pe
 minimum net, max distance and max items become limit notes ("Net under $7.00", "Over 10.0 mi", "Over 30 items"),
 judged on the shown figures at displayed precision, never on an add-on's deltas; `OfferStory.preferences()` is the one
 order (store and shopping rules, limits, Protect last): the pop-up note and voice take the first (voice speaks one
-clause, never items or Protect), the card badges and chat line list all. One chat row per presentation: the engine
-carries `chatOwed` across coalesced posts.
+clause, never items or Protect), the card badges and chat line list all. One chat row per presentation: `PostOfferChat`,
+emitted beside `SpeakOffer` under the same once-per-presentation rule, external (skipped on replay).
 Re-quotes update the heads-up without adding a chat row. The evaluator and stored score/action/quality
 columns, folds and analytics readers remain unchanged.
 
