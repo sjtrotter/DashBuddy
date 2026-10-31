@@ -12,9 +12,6 @@ import cloud.trotter.log.gig.core.data.analytics.LedgerRepository
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.ExpenseRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.FuelRecordEntity
-import cloud.trotter.log.gig.domain.analytics.AnalyticsPeriod
-import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.ExpenseCategory
 import cloud.trotter.log.gig.domain.analytics.ExpenseRecord
@@ -25,6 +22,7 @@ import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.log.gig.feature.bubble.hud.LogData
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.HudShiftRepository
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluator
@@ -63,7 +61,6 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
-import cloud.trotter.log.gig.feature.bubble.hud.sessionEarningsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,8 +117,8 @@ class BubbleViewModelTest {
     private val fuelPriceRepository: FuelPriceRepository = mock()
     private val ledgerRepository: LedgerRepository = mock()
     private val goalFlow = MutableStateFlow<Double?>(null)
-    private val todayFlow = MutableStateFlow(PeriodEconomics.EMPTY)
     private val analyticsRepository: AnalyticsRepository = mock()
+    private val hudShiftRepository: HudShiftRepository = mock()
     private val devSettingsRepository: DevSettingsRepository = mock()
 
     private val dispatcher = StandardTestDispatcher()
@@ -147,9 +144,10 @@ class BubbleViewModelTest {
         whenever(odometerRepository.sessionMilesFlow).thenReturn(flowOf(0.0))
         whenever(odometerRepository.totalMilesFlow).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.odometerPrompts).thenReturn(flowOf(true))
-        whenever(appPreferencesRepository.dailyKeptGoalDollars).thenReturn(goalFlow)
-        whenever(analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(todayFlow)
-        whenever(ledgerRepository.sessionNet(any())).thenReturn(flowOf(null))
+        whenever(appPreferencesRepository.dailyGoalDollars).thenReturn(goalFlow)
+        whenever(hudShiftRepository.latestShift(any())).thenReturn(flowOf(null))
+        whenever(hudShiftRepository.endedShiftsBetween(any(), any())).thenReturn(flowOf(emptyList()))
+        whenever(analyticsRepository.sessionDetail(any())).thenReturn(flowOf(null))
         whenever(ledgerRepository.expensesUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
         whenever(ledgerRepository.fuelUnassignedOn(any(), any())).thenReturn(flowOf(emptyList()))
         whenever(appPreferencesRepository.glanceMode).thenReturn(flowOf(false))
@@ -193,6 +191,7 @@ class BubbleViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         fuelPriceRepository = fuelPriceRepository,
         analyticsRepository = analyticsRepository,
+        hudShiftRepository = hudShiftRepository,
         ledgerRepository = ledger,
         devSettingsRepository = devSettingsRepository,
         correctionRepository = mock(),
@@ -488,7 +487,7 @@ class BubbleViewModelTest {
             )
         }
         if (live) state.value = earningsState("session-dd", startedAt = start)
-        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao, analyticsRepository), testClock = tickingClock)
+        val vm = viewModel(ledger = LedgerRepository(appEventRepo, dao), testClock = tickingClock)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.logData.collect {} }
         runCurrent()
         assertEquals(listOf(20L), vm.logData.value.expenses.map { it.eventSequenceId })
@@ -554,35 +553,271 @@ class BubbleViewModelTest {
         logCollector.cancel()
     }
 
+    // ── #1443: the displayed shift ──────────────────────────────────────────────────────────
+
+    private fun record(
+        id: String,
+        platform: Platform = Platform.DoorDash,
+        startedAt: Long = 1_000L,
+        endedAt: Long? = 5_000L,
+        reported: Double? = null,
+        deliveries: Int = 2,
+    ) = SessionRecord(
+        sessionId = id, platform = platform, startedAt = startedAt, endedAt = endedAt,
+        reportedEarnings = reported, reportedDurationMillis = null, miles = 4.2,
+        deliveries = deliveries, jobsCompleted = deliveries, offersReceived = 3, offersAccepted = 2,
+        offersDeclined = 1, offersTimeout = 0,
+    )
+
+    private fun detailOf(row: SessionRecord, vararg pays: Double?, cash: Double = 0.0) = SessionDetail(
+        row,
+        pays.mapIndexed { i, pay ->
+            DeliveryRecord(i.toLong(), row.sessionId, row.platform, "job-$i", "task-$i", null, 2_000L + i, pay,
+                "DROP_SHARE", null, null, null, null, null, cashTip = cash.takeIf { i == 0 && it > 0.0 })
+        },
+    )
+
+    private fun shiftState(active: Platform?, vararg regions: PlatformRegion) = AppState(
+        regions = Regions(flow = FlowRegion(activePlatform = active), platforms = regions.associateBy { it.platform }),
+    )
+
+    private fun liveRegion(platform: Platform, id: String, running: Double? = null, startedAt: Long = 6_000L,
+        mode: Mode = Mode.Online) = PlatformRegion(platform = platform, mode = mode,
+        session = Session(id, startedAt = startedAt, runningEarnings = running))
+
+    private fun restingRegion(platform: Platform, lastEnd: Long?) =
+        PlatformRegion(platform = platform, mode = Mode.Offline, lastSessionEndedAt = lastEnd)
+
+    private fun TestScope.collectShift(vm: BubbleViewModel) =
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.displayedShift.collect {} }
+
     @Test
-    fun `sessionNet follows the displayed session`() = runTest {
-        val last = session("last", 10.0, 1)
-        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(last)))
-        val lastNet = SessionNet("last", 8.0, 0.0, 0.0)
-        val ddNet = lastNet.copy(sessionId = "session-dd", deliveredNet = 18.0)
-        val uberFlow = MutableStateFlow(lastNet.copy(sessionId = "session-uber", deliveredNet = 28.0))
-        whenever(ledgerRepository.sessionNet("last")).thenReturn(flowOf(lastNet))
-        whenever(ledgerRepository.sessionNet("session-dd")).thenReturn(flowOf(ddNet))
-        whenever(ledgerRepository.sessionNet("session-uber")).thenReturn(uberFlow)
-        // The event log points somewhere else: the resting net must use recentSessions instead.
-        whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf("different-chat-session"))
+    fun `the live shift shows the larger of the running total and recorded pay, with its cash apart`() = runTest {
+        stubNoDashes()
+        val open = record("live", endedAt = null)
+        val detail = MutableStateFlow<SessionDetail?>(detailOf(open, 12.0, 8.0, cash = 3.0))
+        whenever(analyticsRepository.sessionDetail("live")).thenReturn(detail)
+        state.value = shiftState(Platform.DoorDash, liveRegion(Platform.DoorDash, "live", running = 12.5))
         val vm = viewModel()
-        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.sessionNet.collect {} }
+        collectShift(vm)
         runCurrent()
-        assertEquals(lastNet, vm.sessionNet.value)
-        state.value = appState(Platform.DoorDash, *dualOnline)
+        var shift = vm.displayedShift.value!!
+        assertTrue(shift.live)
+        assertEquals("live", shift.sessionId)
+        assertEquals(20.0, shift.earnings!!, 0.0) // recorded pay ahead of a lagging running total
+        assertEquals(3.0, shift.cashTips!!, 0.0)
+        state.value = shiftState(Platform.DoorDash, liveRegion(Platform.DoorDash, "live", running = 31.0))
         runCurrent()
-        assertEquals(ddNet, vm.sessionNet.value)
+        shift = vm.displayedShift.value!!
+        assertEquals(31.0, shift.earnings!!, 0.0) // the app's own total has overtaken it
+        assertEquals(3.0, shift.cashTips!!, 0.0) // never folded into the figure
+    }
+
+    @Test
+    fun `nothing priced shows the em dash and a priced zero or offer-pay row shows a figure`() = runTest {
+        stubNoDashes()
+        val open = record("live", endedAt = null)
+        val detail = MutableStateFlow<SessionDetail?>(detailOf(open))
+        whenever(analyticsRepository.sessionDetail("live")).thenReturn(detail)
+        state.value = shiftState(Platform.DoorDash, liveRegion(Platform.DoorDash, "live"))
+        val vm = viewModel()
+        collectShift(vm)
+        runCurrent()
+        assertNull(vm.displayedShift.value!!.earnings)
+        detail.value = detailOf(open, null, null)
+        runCurrent()
+        assertNull(vm.displayedShift.value!!.earnings)
+        detail.value = detailOf(open, 0.0)
+        runCurrent()
+        assertEquals(0.0, vm.displayedShift.value!!.earnings!!, 0.0)
+        detail.value = SessionDetail(open, detailOf(open, 7.0).deliveries.map { it.copy(payBasis = "OFFER_PAY") })
+        runCurrent()
+        assertEquals(7.0, vm.displayedShift.value!!.earnings!!, 0.0)
+    }
+
+    @Test
+    fun `switching platforms while the new detail withholds its first emission shows no foreign figure or cash`() = runTest {
+        stubNoDashes()
+        val dd = record("session-dd", endedAt = null)
+        whenever(analyticsRepository.sessionDetail("session-dd")).thenReturn(flowOf(detailOf(dd, 15.0, cash = 4.0)))
+        val uberDetail = MutableSharedFlow<SessionDetail?>()
+        whenever(analyticsRepository.sessionDetail("session-uber")).thenReturn(uberDetail)
+        state.value = shiftState(Platform.DoorDash,
+            liveRegion(Platform.DoorDash, "session-dd", running = 10.0, startedAt = 1_000L),
+            liveRegion(Platform.Uber, "session-uber", startedAt = 2_000L))
+        val vm = viewModel()
+        collectShift(vm)
+        runCurrent()
+        assertEquals(15.0, vm.displayedShift.value!!.earnings!!, 0.0)
+        assertEquals(4.0, vm.displayedShift.value!!.cashTips!!, 0.0)
         vm.selectPlatform(Platform.Uber)
         runCurrent()
-        assertEquals(uberFlow.value, vm.sessionNet.value)
-        uberFlow.value = uberFlow.value.copy(cashTips = 5.0)
+        var shift = vm.displayedShift.value!!
+        assertEquals(Platform.Uber, shift.platform)
+        assertEquals("session-uber", shift.sessionId)
+        assertNull(shift.earnings)
+        assertNull(shift.cashTips)
+        uberDetail.emit(detailOf(record("session-uber", Platform.Uber, endedAt = null), 6.0))
         runCurrent()
-        assertEquals(uberFlow.value, vm.sessionNet.value)
-        state.value = AppState()
+        shift = vm.displayedShift.value!!
+        assertEquals(6.0, shift.earnings!!, 0.0)
+        assertEquals(0.0, shift.cashTips!!, 0.0)
+    }
+
+    @Test
+    fun `an ended shift on the focused platform shows its own figures, chip, stats and cash target`() = runTest {
+        // A (DoorDash) is live and started after B (Uber) ended; the HUD is focused on Uber.
+        val b = record("b", Platform.Uber, startedAt = 1_000L, endedAt = 5_000L, reported = 22.0, deliveries = 4)
+        val a = record("a", Platform.DoorDash, startedAt = 6_000L, endedAt = null, deliveries = 1)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(a)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.Uber)).thenReturn(flowOf(b))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(flowOf(a))
+        whenever(analyticsRepository.sessionDetail("b")).thenReturn(flowOf(detailOf(b, 18.0, cash = 2.5)))
+        whenever(analyticsRepository.sessionDetail("a")).thenReturn(flowOf(detailOf(a, 40.0, cash = 9.0)))
+        state.value = shiftState(Platform.Uber,
+            liveRegion(Platform.DoorDash, "a", running = 40.0, startedAt = 6_000L),
+            restingRegion(Platform.Uber, lastEnd = 5_000L))
+        val vm = viewModel()
+        collectShift(vm)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.focusedRegion.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lastSession.collect {} }
         runCurrent()
-        assertEquals(lastNet, vm.sessionNet.value)
-        job.cancel()
+        val shift = vm.displayedShift.value!!
+        assertEquals(Platform.Uber, shift.platform)
+        assertEquals("b", shift.sessionId) // the cash-entry target
+        assertFalse(shift.live)
+        assertEquals(22.0, shift.earnings!!, 0.0)
+        assertEquals(2.5, shift.cashTips!!, 0.0)
+        assertEquals(b, shift.record)
+        val hud = cloud.trotter.log.gig.feature.bubble.hud.HudStateMapper.map(
+            vm.focusedRegion.value, Flow.Idle, Platform.Uber, emptyList(), shift, 0.0, vm.lastSession.value,
+            null, null, hasActiveCard = false, hasOfferCard = false, logOpen = false,
+            gas = cloud.trotter.log.gig.feature.bubble.hud.GasRowModel(null, true), odometerLoaded = true)
+        assertEquals(Platform.Uber, hud.platform)
+        val resting = hud.resting!!
+        assertEquals(4, resting.deliveries)
+        assertEquals(b.startedAt, resting.startedAt)
+        assertEquals(22.0, hud.hero.earnings!!, 0.0)
+    }
+
+    @Test
+    fun `resting during an end grace shows the live session`() = runTest {
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(record("older", reported = 50.0))))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(flowOf(record("older", reported = 50.0)))
+        whenever(analyticsRepository.sessionDetail("graced")).thenReturn(flowOf(null))
+        state.value = shiftState(Platform.DoorDash,
+            liveRegion(Platform.DoorDash, "graced", running = 17.0, mode = Mode.Offline))
+        val vm = viewModel()
+        collectShift(vm)
+        runCurrent()
+        val shift = vm.displayedShift.value!!
+        assertTrue(shift.live)
+        assertEquals("graced", shift.sessionId)
+        assertEquals(17.0, shift.earnings!!, 0.0)
+    }
+
+    @Test
+    fun `a session that left state with its row still open shows the em dash, never the older shift`() = runTest {
+        val older = record("older", endedAt = 5_000L, reported = 50.0)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(older)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash))
+            .thenReturn(flowOf(record("new", startedAt = 6_000L, endedAt = null)))
+        whenever(analyticsRepository.sessionDetail("older")).thenReturn(flowOf(detailOf(older, 50.0, cash = 5.0)))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 9_000L))
+        val vm = viewModel()
+        collectShift(vm)
+        runCurrent()
+        val shift = vm.displayedShift.value!!
+        assertNull(shift.sessionId)
+        assertNull(shift.earnings)
+        assertNull(shift.cashTips)
+        assertNull(shift.record)
+    }
+
+    @Test
+    fun `a shift whose start and stop folds are both withheld shows the em dash across a resubscription`() = runTest {
+        val older = record("older", endedAt = 5_000L, reported = 50.0)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(older)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        val latest = MutableStateFlow<SessionRecord?>(older)
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(latest)
+        whenever(analyticsRepository.sessionDetail("older")).thenReturn(flowOf(detailOf(older, 50.0, cash = 5.0)))
+        val just = record("just", startedAt = 6_000L, endedAt = 9_000L, reported = 31.0)
+        whenever(analyticsRepository.sessionDetail("just")).thenReturn(flowOf(detailOf(just, 30.0, cash = 1.0)))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 9_000L))
+        val vm = viewModel()
+        val first = collectShift(vm)
+        runCurrent()
+        assertNull(vm.displayedShift.value!!.sessionId)
+        assertNull(vm.displayedShift.value!!.earnings)
+        first.cancel()
+        advanceTimeBy(6_000L)
+        runCurrent()
+        val emissions = mutableListOf<cloud.trotter.log.gig.feature.bubble.hud.DisplayedShift?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.displayedShift.collect { emissions += it } }
+        runCurrent()
+        assertTrue(emissions.all { it?.sessionId == null && it?.earnings == null && it?.cashTips == null })
+        latest.value = just
+        runCurrent()
+        val shift = vm.displayedShift.value!!
+        assertEquals("just", shift.sessionId)
+        assertEquals(31.0, shift.earnings!!, 0.0)
+        assertEquals(1.0, shift.cashTips!!, 0.0)
+    }
+
+    @Test
+    fun `a resubscription never replays a shown shift after a newer shift ended with both folds withheld`() = runTest {
+        // A is shown at rest; the bubble stops collecting past the sharing timeout; B starts and ends while the
+        // projector holds both of B's folds, so the latest row is still A; the bubble reopens.
+        val a = record("a", endedAt = 5_000L, reported = 50.0)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(a)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(flowOf(a))
+        whenever(analyticsRepository.sessionDetail("a")).thenReturn(flowOf(detailOf(a, 50.0, cash = 5.0)))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 5_000L))
+        val vm = viewModel()
+        val first = collectShift(vm)
+        runCurrent()
+        assertEquals("a", vm.displayedShift.value!!.sessionId)
+        assertEquals(50.0, vm.displayedShift.value!!.earnings!!, 0.0)
+        first.cancel()
+        advanceTimeBy(6_000L)
+        runCurrent()
+        state.value = shiftState(Platform.DoorDash, liveRegion(Platform.DoorDash, "b", running = 20.0, startedAt = 6_000L))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 9_000L))
+        val emissions = mutableListOf<cloud.trotter.log.gig.feature.bubble.hud.DisplayedShift?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.displayedShift.collect { emissions += it } }
+        runCurrent()
+        assertTrue(emissions.isNotEmpty())
+        assertTrue(emissions.none { it?.sessionId == "a" || it?.earnings != null || it?.cashTips != null })
+        assertNull(vm.displayedShift.value!!.sessionId)
+    }
+
+    @Test
+    fun `switching platforms at rest while the new latest-row read withholds its first emission is loading`() = runTest {
+        val dd = record("dd", reported = 40.0)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(dd)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(flowOf(dd))
+        whenever(hudShiftRepository.latestShift(Platform.Uber)).thenReturn(MutableSharedFlow())
+        whenever(analyticsRepository.sessionDetail("dd")).thenReturn(flowOf(detailOf(dd, 40.0, cash = 6.0)))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 5_000L))
+        val vm = viewModel()
+        collectShift(vm)
+        runCurrent()
+        assertEquals("dd", vm.displayedShift.value!!.sessionId)
+        assertEquals(6.0, vm.displayedShift.value!!.cashTips!!, 0.0)
+        state.value = shiftState(Platform.Uber, restingRegion(Platform.DoorDash, lastEnd = 5_000L))
+        runCurrent()
+        val shift = vm.displayedShift.value!!
+        assertEquals(Platform.Uber, shift.platform)
+        assertNull(shift.sessionId)
+        assertNull(shift.earnings)
+        assertNull(shift.cashTips)
+        assertNull(shift.record)
     }
 
     @Test
@@ -611,19 +846,65 @@ class BubbleViewModelTest {
     }
 
     @Test
-    fun `todayProfit reads today's period net`() = runTest {
+    fun `todayEarned counts each app's shifts once, ignores the switcher and follows an unfocused platform`() = runTest {
         stubNoDashes()
+        val today = clock.millis()
+        whenever(hudShiftRepository.endedShiftsBetween(any(), any())).thenReturn(flowOf(listOf(
+            cloud.trotter.log.gig.domain.analytics.EndedShiftPay("ended", today, 30.0, 20.0),
+            // Ended in the read model but still live in state: counted once, with its live figure.
+            cloud.trotter.log.gig.domain.analytics.EndedShiftPay("session-dd", today, 99.0, 12.0),
+        )))
+        val ddRow = record("session-dd", endedAt = null)
+        whenever(analyticsRepository.sessionDetail("session-dd")).thenReturn(flowOf(detailOf(ddRow, 12.0, cash = 8.0)))
+        whenever(analyticsRepository.sessionDetail("session-uber")).thenReturn(flowOf(null))
+        state.value = shiftState(Platform.DoorDash,
+            liveRegion(Platform.DoorDash, "session-dd", running = 10.0, startedAt = today),
+            liveRegion(Platform.Uber, "session-uber", running = 5.0, startedAt = today))
         val vm = viewModel()
-        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.todayProfit.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.todayEarned.collect {} }
         runCurrent()
-        todayFlow.value = PeriodEconomics.EMPTY.copy(netProfit = 71.2, grossEarnings = 99.0)
+        assertEquals(47.0, vm.todayEarned.value!!, 0.0) // 12 (recorded ahead of 10) + 5 + 30; no cash
+        vm.selectPlatform(Platform.Uber)
         runCurrent()
-        assertEquals(71.2, vm.todayProfit.value!!, 0.0)
-        todayFlow.value = todayFlow.value.copy(netProfit = 82.5)
+        assertEquals(47.0, vm.todayEarned.value!!, 0.0)
+        state.value = shiftState(Platform.Uber,
+            liveRegion(Platform.DoorDash, "session-dd", running = 25.0, startedAt = today),
+            liveRegion(Platform.Uber, "session-uber", running = 5.0, startedAt = today))
         runCurrent()
-        assertEquals(82.5, vm.todayProfit.value!!, 0.0)
-        verify(analyticsRepository).periodEconomics(AnalyticsPeriod.TODAY)
-        job.cancel()
+        assertEquals(60.0, vm.todayEarned.value!!, 0.0)
+    }
+
+    @Test
+    fun `todayEarned is zero with nothing known and resets at local midnight`() = runTest {
+        stubNoDashes()
+        val zone = ZoneId.systemDefault()
+        val midnight = java.time.LocalDate.of(2026, 10, 18).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val initialNow = midnight - 5 * 60_000L
+        val tickingClock = object : Clock() {
+            override fun getZone() = zone
+            override fun withZone(zone: ZoneId): Clock = this
+            override fun instant(): Instant = Instant.ofEpochMilli(initialNow + testScheduler.currentTime)
+        }
+        val ended = listOf(cloud.trotter.log.gig.domain.analytics.EndedShiftPay("ended", midnight - 3_600_000L, 20.0, null))
+        whenever(hudShiftRepository.endedShiftsBetween(any(), any())).thenAnswer { call ->
+            val from = call.getArgument<Long>(0)
+            val until = call.getArgument<Long>(1)
+            flowOf(ended.filter { it.startedAt >= from && it.startedAt < until })
+        }
+        whenever(analyticsRepository.sessionDetail("late")).thenReturn(flowOf(null))
+        val vm = viewModel(testClock = tickingClock)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalDay.collect {} }
+        runCurrent()
+        assertEquals(20.0, vm.goalDay.value!!.earned!!, 0.0)
+        state.value = shiftState(Platform.DoorDash,
+            liveRegion(Platform.DoorDash, "late", running = 10.0, startedAt = midnight - 60_000L))
+        runCurrent()
+        assertEquals(30.0, vm.goalDay.value!!.earned!!, 0.0)
+        advanceTimeBy(6 * 60_000L)
+        runCurrent()
+        // Yesterday's shift, ended or still live, adds nothing to the new day.
+        assertEquals(java.time.LocalDate.of(2026, 10, 19), vm.goalDay.value!!.date)
+        assertEquals(0.0, vm.goalDay.value!!.earned!!, 0.0)
     }
 
     private fun session(
@@ -791,114 +1072,6 @@ class BubbleViewModelTest {
             ),
         ),
     )
-
-    @Test
-    fun `never-parsed session earnings render the placeholder (#1041)`() = runTest {
-        stubNoDashes()
-        state.value = earningsState("session-1")
-        val vm = viewModel()
-        assertNull(vm.sessionEarnings.value)
-        val job = launch { vm.sessionEarnings.collect {} }
-        advanceUntilIdle()
-
-        assertNull(vm.sessionEarnings.value)
-        assertEquals(EMPTY_VALUE, sessionEarningsText(vm.sessionEarnings.value))
-
-        state.value = earningsState("session-1", 12.50)
-        advanceUntilIdle()
-        assertEquals(Formats.money(12.50), sessionEarningsText(vm.sessionEarnings.value))
-        job.cancel()
-    }
-
-    @Test
-    fun `a new session resets carried earnings to null (#1041)`() = runTest {
-        stubNoDashes()
-        state.value = earningsState("session-1", 12.50)
-        val vm = viewModel()
-        val job = launch { vm.sessionEarnings.collect {} }
-        advanceUntilIdle()
-        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-
-        state.value = earningsState("session-2")
-        advanceUntilIdle()
-        assertNull(vm.sessionEarnings.value)
-        assertEquals(EMPTY_VALUE, sessionEarningsText(vm.sessionEarnings.value))
-
-        state.value = earningsState("session-2", 7.25)
-        advanceUntilIdle()
-        assertEquals(7.25, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-        job.cancel()
-    }
-
-    @Test
-    fun `a new session immediately shows its own existing figure (#1041)`() = runTest {
-        stubNoDashes()
-        state.value = earningsState("session-1", 12.50)
-        val vm = viewModel()
-        val emissions = mutableListOf<Double?>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            vm.sessionEarnings.collect { emissions.add(it) }
-        }
-        runCurrent()
-        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-        emissions.clear()
-
-        state.value = earningsState("session-2", 7.25)
-        runCurrent()
-        assertEquals(listOf(7.25), emissions)
-        assertEquals(Formats.money(7.25), sessionEarningsText(vm.sessionEarnings.value))
-        job.cancel()
-    }
-
-    @Test
-    fun `session earnings restart keeps the cached figure without a placeholder emission (#1041)`() = runTest {
-        stubNoDashes()
-        state.value = earningsState("session-1", 12.50)
-        val vm = viewModel()
-        val firstJob = launch { vm.sessionEarnings.collect {} }
-        runCurrent()
-        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-
-        firstJob.cancel()
-        runCurrent()
-        advanceTimeBy(6_000L)
-        runCurrent()
-        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-
-        // Eager collection catches even a transient null that StateFlow could otherwise conflate.
-        val emissions = mutableListOf<Double?>()
-        val restartedJob = launch(UnconfinedTestDispatcher(testScheduler)) {
-            vm.sessionEarnings.collect { emissions.add(it) }
-        }
-        runCurrent()
-        assertEquals(listOf(12.50), emissions)
-
-        state.value = earningsState("session-1", 16.70)
-        runCurrent()
-        assertEquals(listOf(12.50, 16.70), emissions)
-        restartedJob.cancel()
-    }
-
-    @Test
-    fun `session earnings carry the last non-null figure including a read zero (#1041)`() = runTest {
-        stubNoDashes()
-        state.value = earningsState("session-1", 12.50)
-        val vm = viewModel()
-        val job = launch { vm.sessionEarnings.collect {} }
-        advanceUntilIdle()
-
-        state.value = earningsState("session-1")
-        advanceUntilIdle()
-        assertEquals(12.50, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-
-        state.value = earningsState("session-1", 0.0)
-        advanceUntilIdle()
-        assertEquals(Formats.money(0.0), sessionEarningsText(vm.sessionEarnings.value))
-        state.value = earningsState("session-1")
-        advanceUntilIdle()
-        assertEquals(0.0, vm.sessionEarnings.value ?: Double.NaN, 0.0001)
-        job.cancel()
-    }
 
     @Test
     fun `follow-active tracks the platform that produced the last frame`() = runTest {

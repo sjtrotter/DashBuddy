@@ -45,7 +45,7 @@ class AppPreferencesRepository @Inject constructor(
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
     val odometerPrompts = dataSource.read(SimplePrefs.odometerPrompts)
-    val dailyKeptGoalDollars = dataSource.read(SimplePrefs.dailyKeptGoalDollars)
+    val dailyGoalDollars = dataSource.read(SimplePrefs.dailyGoalDollars)
     val analyticsShowMore = dataSource.read(SimplePrefs.analyticsShowMore)
     val vehicleLookupAllowed = dataSource.vehicleLookupAllowed
     val appTheme = dataSource.read(SimplePrefs.appTheme)
@@ -284,7 +284,7 @@ class AppPreferencesRepository @Inject constructor(
     suspend fun mirrorFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun mirrorVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
 
-    suspend fun setDailyKeptGoalDollars(value: Double?) = dataSource.write(SimplePrefs.dailyKeptGoalDollars, value)
+    suspend fun setDailyGoalDollars(value: Double?) = dataSource.write(SimplePrefs.dailyGoalDollars, value)
 
     suspend fun setOdometerPrompts(enabled: Boolean) = dataSource.write(SimplePrefs.odometerPrompts, enabled)
 

@@ -20,7 +20,7 @@ import java.time.ZoneOffset
 class ExpenseActionsTest {
     private val events: AppEventRepo = mock { on { appendUserEvent(any(), anyOrNull()) } doReturn 71L }
     private val clock = Clock.fixed(Instant.ofEpochMilli(100), ZoneOffset.UTC)
-    private fun actions(scope: CoroutineScope) = ExpenseActions(scope, LedgerRepository(events, mock(), mock()), clock)
+    private fun actions(scope: CoroutineScope) = ExpenseActions(scope, LedgerRepository(events, mock()), clock)
     private suspend fun appended(): List<AppEvent> {
         val captor = argumentCaptor<AppEvent>()
         verify(events, atLeastOnce()).appendUserEvent(captor.capture(), anyOrNull())

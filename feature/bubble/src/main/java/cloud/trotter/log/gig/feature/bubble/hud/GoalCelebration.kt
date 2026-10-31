@@ -3,8 +3,13 @@ package cloud.trotter.log.gig.feature.bubble.hud
 import cloud.trotter.log.gig.domain.format.Formats
 import java.time.LocalDate
 
+/**
+ * The persisted goal-met mark: the day, the goal's metric and its cents. #1443 added the metric (`earned`), so a
+ * mark left by the old profit goal (`date|cents`) never suppresses the first earnings celebration.
+ */
 object GoalMetMark {
-    fun key(date: LocalDate, goal: Double): String = "$date|${Formats.cents(goal)}"
+    private const val METRIC = "earned"
+    fun key(date: LocalDate, goal: Double): String = "$date|$METRIC|${Formats.cents(goal)}"
 }
 
 sealed interface MarkRead {
@@ -19,7 +24,7 @@ object GoalCelebrationResolver {
         return unmarked(goal, day, goalDollars, mark)?.takeUnless { it == editedGoalKey }
     }
 
-    /** Editing can reach Met, but only profit crossings outside the sheet run the sequence. */
+    /** Editing can reach Met, but only earnings crossings outside the sheet run the sequence. */
     fun markAfterEditing(goal: GoalPillState, day: LocalDate?, goalDollars: Double?, mark: MarkRead,
         goalSheetOpen: Boolean, editedGoalKey: String?): String? {
         if (goalSheetOpen) return null

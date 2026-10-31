@@ -24,6 +24,7 @@ A `?` suffix on a status (`status: must-watch?`, `status: superseded?`) marks a 
 
 ## §1 Must-watch (dev-confirmed 2026-10-07 — read these first)
 
+- [🆕 NEW — the bubble headline is the shift's earnings (#1443)](checklist/open/1443-the-bubble-headline-is-the-shift-s-earnings.md)
 - [Odometer capability (#1361)](checklist/open/1361-odometer-capability.md)
 - [Receipt vehicle (#1388)](checklist/open/1388-receipt-vehicle.md)
 - [Vehicle editor (#1385)](checklist/open/1385-vehicle-editor.md)

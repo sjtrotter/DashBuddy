@@ -52,7 +52,7 @@ class ExpenseHudSheetTest {
     private fun show(pick: ExpensePick = ExpensePick.Fuel) {
         whenever(vm.odometerActions).thenReturn(odometerActions)
         runBlocking { whenever(events.appendUserEvent(any(), anyOrNull())).thenReturn(71L) }
-        whenever(vm.expenseActions).thenReturn(ExpenseActions(scope, LedgerRepository(events, mock(), mock()), clock))
+        whenever(vm.expenseActions).thenReturn(ExpenseActions(scope, LedgerRepository(events, mock()), clock))
         whenever(vm.vehicleChip).thenReturn(model)
         whenever(vm.gpsTotalMiles).thenReturn(MutableStateFlow(1234.5))
         whenever(vm.expenseOwner()).thenReturn("dash")

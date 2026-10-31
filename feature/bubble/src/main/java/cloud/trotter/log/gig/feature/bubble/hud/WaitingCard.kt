@@ -15,18 +15,18 @@ import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.feature.bubble.R
 
 @Composable
-internal fun WaitingCard(model: StateCardModel.Waiting, kept: Double?) {
+internal fun WaitingCard(model: StateCardModel.Waiting, earned: Double?) {
     StateLine(stringResource(R.string.hud_state_waiting), R.string.hud_state_since, model.since)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom) {
         // The clock is read only when there is a time to draw: an anchorless card stays static.
-        val now = if (model.since != null || (kept != null && model.sessionStartedAt != null)) rememberNow().value else null
+        val now = if (model.since != null || (earned != null && model.sessionStartedAt != null)) rememberNow().value else null
         StateFigure(StateHeadline.waiting(model.since, now ?: 0L))
-        profitPerHour(kept, if (now != null) model.sessionStartedAt?.let { now - it } else null)?.let {
-            Column(horizontalAlignment = Alignment.End) {
-                StateNumber(moneyOrEmpty(it), AppTheme.colors.text, size = 18)
-                StateLabel(stringResource(R.string.hud_state_profit_hr))
-            }
+        // #1443: Earned/hr is the hero's figure over the shift's online time; unknown is the em dash.
+        val rate = perHour(earned, if (now != null) model.sessionStartedAt?.let { now - it } else null)
+        Column(horizontalAlignment = Alignment.End) {
+            StateNumber(moneyOrEmpty(rate), AppTheme.colors.text, size = 18)
+            StateLabel(stringResource(R.string.hud_state_earned_hr))
         }
     }
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {

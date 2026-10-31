@@ -23,17 +23,3 @@ data class FuelRecord(
 ) {
     val pricePerGallon: Double? get() = gallons?.takeIf { it > 0 }?.let { totalAmount / it }
 }
-
-/**
- * #1333: the HUD's kept figure. [deliveredNet] is the sum of the dash's delivery `netProfit`
- * with a null net as zero, the hub's per-dash net rule; [cashTips] and [unattributedPay] are
- * `SessionDetail`'s. Expenses and fuel are a separate ledger that never enters kept or the goal.
- */
-data class SessionNet(
-    val sessionId: String,
-    val deliveredNet: Double,
-    val cashTips: Double,
-    val unattributedPay: Double,
-) {
-    fun kept(): Double = deliveredNet + cashTips + unattributedPay
-}

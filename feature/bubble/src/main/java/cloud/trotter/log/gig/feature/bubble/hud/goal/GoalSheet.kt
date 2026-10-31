@@ -37,7 +37,7 @@ fun GoalSheet(
 ) {
     val c = AppTheme.colors
     val goal = model.goalDollars
-    val progress = GoalPillMapper.map(goal?.toDouble(), model.todayProfit)
+    val progress = GoalPillMapper.map(goal?.toDouble(), model.todayEarned)
     val clearEnabled = goal != null && !model.busy
     Column(Modifier.fillMaxSize().testTag("goal.sheet").padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -103,7 +103,7 @@ fun GoalSheet(
                         Spacer(Modifier.height(6.dp))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(stringResource(R.string.hud_goal_profit_today, model.todayProfit?.let(Formats::money) ?: EMPTY_VALUE),
+                        Text(stringResource(R.string.hud_goal_earned_today, model.todayEarned?.let(Formats::money) ?: EMPTY_VALUE),
                             color = c.text2, style = MaterialTheme.typography.labelSmall)
                         if (goal != null) Text(when (progress) {
                             GoalPillState.Met -> stringResource(R.string.hud_goal_met)

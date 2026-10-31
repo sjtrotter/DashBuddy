@@ -62,9 +62,10 @@ class BubbleScreenTest {
         whenever(vm.focusedRegion).thenReturn(MutableStateFlow(
             PlatformRegion(Platform.DoorDash, Mode.Online, Session("dash", clock.millis()))))
         whenever(vm.sessionMiles).thenReturn(MutableStateFlow(0.0))
-        whenever(vm.sessionEarnings).thenReturn(MutableStateFlow(0.0))
         whenever(vm.lastSession).thenReturn(MutableStateFlow(null))
-        whenever(vm.sessionNet).thenReturn(MutableStateFlow(null))
+        whenever(vm.displayedShift).thenReturn(MutableStateFlow(
+            DisplayedShift(Platform.DoorDash, "dash", live = true, earnings = null, cashTips = null, record = null)))
+        whenever(vm.todayEarned).thenReturn(MutableStateFlow(null))
         whenever(vm.dailyGoal).thenReturn(MutableStateFlow(null))
         whenever(vm.goalDay).thenReturn(MutableStateFlow(null))
         whenever(vm.goalMark).thenReturn(MutableStateFlow(MarkRead.Loaded(null)))
@@ -108,6 +109,16 @@ class BubbleScreenTest {
             }
         }
         settle()
+    }
+
+    @Test fun `the hero shows the displayed shift's earnings with its cash apart`() {
+        val vm = model()
+        whenever(vm.displayedShift).thenReturn(MutableStateFlow(
+            DisplayedShift(Platform.DoorDash, "dash", live = true, earnings = 42.0, cashTips = 3.0, record = null)))
+        show(vm)
+        compose.onNodeWithContentDescription("Earned $42.00").assertIsDisplayed()
+        compose.onNodeWithText("+$3.00 cash").assertIsDisplayed()
+        compose.onNodeWithText("Profit").assertDoesNotExist()
     }
 
     @Test fun `stored odometer visibility updates the dock while the vehicle chip stays reachable`() {
@@ -372,14 +383,14 @@ class BubbleScreenTest {
             doSuspendableAnswer { invocation ->
                 releaseWrite.await()
                 stored.value = invocation.getArgument<Double?>(0)
-            }.whenever(preferences).setDailyKeptGoalDollars(anyOrNull())
+            }.whenever(preferences).setDailyGoalDollars(anyOrNull())
         }
         val vm = model()
         val actions = GoalActions(scope, preferences)
         whenever(vm.goalActions).thenReturn(actions)
         whenever(vm.dailyGoal).thenReturn(stored)
         whenever(vm.goalDay).thenReturn(MutableStateFlow(GoalDay(day, 200.0)))
-        whenever(vm.todayProfit).thenReturn(MutableStateFlow(200.0))
+        whenever(vm.todayEarned).thenReturn(MutableStateFlow(200.0))
         whenever(vm.goalMark).thenReturn(mark)
         doAnswer { invocation ->
             mark.value = MarkRead.Loaded(invocation.getArgument<String>(0))
@@ -426,7 +437,7 @@ class BubbleScreenTest {
                 goalPhase(GoalMetPhase.DONE)
             }
             compose.runOnIdle { verify(vm, times(1)).goalCelebrated(any()) }
-            runBlocking { verify(preferences, times(1)).setDailyKeptGoalDollars(125.0) }
+            runBlocking { verify(preferences, times(1)).setDailyGoalDollars(125.0) }
         } finally {
             // EntryWriter deliberately keeps writes alive across scope cancellation.
             releaseWrite.complete(Unit)
@@ -441,7 +452,7 @@ class BubbleScreenTest {
         val vm = model()
         whenever(vm.dailyGoal).thenReturn(MutableStateFlow(125.0))
         whenever(vm.goalDay).thenReturn(goalDay)
-        whenever(vm.todayProfit).thenReturn(MutableStateFlow(100.0))
+        whenever(vm.todayEarned).thenReturn(MutableStateFlow(100.0))
         whenever(vm.goalMark).thenReturn(mark)
         doAnswer { invocation ->
             mark.value = MarkRead.Loaded(invocation.getArgument<String>(0))

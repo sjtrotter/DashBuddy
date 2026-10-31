@@ -26,7 +26,7 @@ internal class GoalActions(scope: CoroutineScope, private val preferences: AppPr
     private fun write(dollars: Double?, closeEntryId: Long?) {
         writer.write {
             failure.value = false
-            preferences.setDailyKeptGoalDollars(dollars)
+            preferences.setDailyGoalDollars(dollars)
             closeEntryId?.let { writer.commit(it) }
         }
     }

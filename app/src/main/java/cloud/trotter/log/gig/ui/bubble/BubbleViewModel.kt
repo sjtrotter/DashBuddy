@@ -14,9 +14,10 @@ import java.time.ZoneId
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.LedgerRepository
-import cloud.trotter.log.gig.domain.analytics.AnalyticsPeriod
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.HudShiftRepository
+import cloud.trotter.log.gig.domain.analytics.LiveShiftPay
+import cloud.trotter.log.gig.domain.analytics.TodayEarnings
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
@@ -46,7 +47,12 @@ import cloud.trotter.log.gig.feature.bubble.cards.BubbleCards
 import cloud.trotter.log.gig.feature.bubble.cards.CardStackAssembler
 import cloud.trotter.log.gig.feature.bubble.cards.FlowCardMapper
 import cloud.trotter.log.gig.feature.bubble.cards.LiveCardBuilder
+import cloud.trotter.log.gig.feature.bubble.hud.DisplayedShift
+import cloud.trotter.log.gig.feature.bubble.hud.DisplayedShifts
+import cloud.trotter.log.gig.feature.bubble.hud.LatestShiftRead
 import cloud.trotter.log.gig.feature.bubble.hud.LogData
+import cloud.trotter.log.gig.feature.bubble.hud.ShiftDetailRead
+import cloud.trotter.log.gig.feature.bubble.hud.ShiftTarget
 import cloud.trotter.log.gig.feature.bubble.session.BubbleSessionPresentation
 import cloud.trotter.log.gig.feature.bubble.session.BubbleSessionResolver
 import cloud.trotter.log.gig.feature.bubble.session.CardSource
@@ -62,13 +68,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import cloud.trotter.log.gig.state.vehicle.VehicleSwapLock
@@ -84,6 +89,7 @@ class BubbleViewModel @Inject constructor(
     private val appPreferencesRepository: AppPreferencesRepository,
     private val fuelPriceRepository: FuelPriceRepository,
     private val analyticsRepository: AnalyticsRepository,
+    private val hudShiftRepository: HudShiftRepository,
     correctionRepository: CorrectionRepository,
     private val ledgerRepository: LedgerRepository,
     devSettingsRepository: DevSettingsRepository,
@@ -272,26 +278,6 @@ class BubbleViewModel @Inject constructor(
         })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // Session earnings: carries the last known value forward through states
-    // that don't have it. Resets when session changes.
-    val sessionEarnings: StateFlow<Double?> = combine(stateManager.state, focusedPlatform) { state, platform ->
-        platform?.let { state.regions.platforms[it] }
-    }.scan(Pair<String?, Double?>(null, null)) { (lastSessionId, lastKnown), region ->
-        val session = region?.session
-        val sessionId = session?.sessionId
-        val isNewSession = sessionId != null && sessionId != lastSessionId && lastSessionId != null
-        val earnings = when {
-            isNewSession -> session.runningEarnings
-            session != null -> session.runningEarnings ?: lastKnown
-            else -> lastKnown
-        }
-        Pair(sessionId ?: lastSessionId, earnings)
-    }
-        .drop(1)
-        .map { it.second }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-
     /**
      * Messages scoped to the DISPLAYED dash session (#867 — it was the *active* one).
      *
@@ -443,24 +429,82 @@ class BubbleViewModel @Inject constructor(
         .map { it.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    /** The displayed dash's ledger, with the durable last dash as the resting fallback. */
+    /**
+     * #1443: the displayed shift's identity. The focused platform (else the last shift's, at rest with nothing
+     * focused) is read inside ONE `flatMapLatest`, so its region and its latest row restart together on a switch,
+     * and a row read that has not emitted yet for the new platform is [LatestShiftRead.Loading], never the old
+     * platform's row. Shared so the detail read and [displayedShift] observe one copy. Both reset to null when
+     * sharing stops ([SHIFT_SHARING]), so a resubscription never replays a shift the region has since moved past.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val sessionNet: StateFlow<SessionNet?> = combine(focusedRegion, lastSession) { region, last ->
-        region?.session?.sessionId ?: last?.sessionId
-    }.distinctUntilChanged().flatMapLatest { id ->
-        if (id == null) flowOf(null) else ledgerRepository.sessionNet(id)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val shiftTarget: StateFlow<ShiftTarget?> = combine(focusedPlatform, lastSession) { focused, last ->
+        focused ?: last?.platform
+    }.distinctUntilChanged().flatMapLatest { platform ->
+        if (platform == null) flowOf(null)
+        else combine(
+            stateManager.state.map { it.regions.platforms[platform] },
+            hudShiftRepository.latestShift(platform)
+                .map<_, LatestShiftRead> { LatestShiftRead.Loaded(it) }
+                .onStart { emit(LatestShiftRead.Loading) },
+        ) { region, read -> DisplayedShifts.target(platform, region, read) }
+    }.distinctUntilChanged().stateIn(viewModelScope, SHIFT_SHARING, null)
 
-    val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyKeptGoalDollars
+    /**
+     * The one `sessionDetail` subscription, keyed by the displayed id: recorded pay, cash tips and the live row.
+     * Each emission carries the id it was read for, and an id change emits `(newId, null)` first, so a slow read
+     * can never lend the old shift's figure or cash to the new one.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val shiftDetail: Flow<ShiftDetailRead> = shiftTarget.map { it?.sessionId }.distinctUntilChanged()
+        .flatMapLatest { id ->
+            if (id == null) flowOf(ShiftDetailRead(null, null))
+            else analyticsRepository.sessionDetail(id).map { ShiftDetailRead(id, it) }
+                .onStart { emit(ShiftDetailRead(id, null)) }
+        }
+
+    /** #1443: the one shift every hero and resting input keys off; it follows the switcher. */
+    val displayedShift: StateFlow<DisplayedShift?> = combine(shiftTarget, shiftDetail) { target, read ->
+        target?.let { DisplayedShifts.resolve(it, read) }
+    }.distinctUntilChanged().stateIn(viewModelScope, SHIFT_SHARING, null)
+
+    val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyGoalDollars
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    /** Deduplicate wakeups; each new day subscribes with fresh bounds and pairs its own total. */
+    /**
+     * The goal's live half: every platform region's session (not [liveSessions], which hides earnings changes),
+     * with its recorded pay from the read model keyed by session id.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val goalDay: StateFlow<GoalDay?> = currentLocalDateFlow(now = clock::millis).distinctUntilChanged().flatMapLatest { date ->
-        analyticsRepository.periodEconomics(AnalyticsPeriod.TODAY).map { GoalDay(date, it.netProfit) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val liveShiftPays: Flow<List<LiveShiftPay>> = run {
+        val sessions = stateManager.state.map { state ->
+            state.regions.platforms.values.mapNotNull { it.session }.sortedBy { it.sessionId }
+        }
+        val pays = sessions.map { live -> live.map { it.sessionId } }.distinctUntilChanged().flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyMap<String, Double?>())
+            else combine(ids.map { id -> analyticsRepository.sessionDetail(id).map { id to it?.recordedPay } }) { it.toMap() }
+        }
+        combine(sessions, pays) { live, pay ->
+            live.map { LiveShiftPay(it.sessionId, it.startedAt, it.runningEarnings, pay[it.sessionId]) }
+        }.distinctUntilChanged()
+    }
 
-    val todayProfit: StateFlow<Double?> = goalDay.map { it?.profit }
+    /**
+     * #1443: today's app earnings across every app, for the goal; it does not follow the switcher. Each new day
+     * subscribes with that date's bounds (never a fresh clock read) and pairs its own total.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val goalDay: StateFlow<GoalDay?> = run {
+        val zone = ZoneId.systemDefault()
+        currentLocalDateFlow(zone = zone, now = clock::millis).distinctUntilChanged().flatMapLatest { date ->
+            val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
+            val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            combine(hudShiftRepository.endedShiftsBetween(start, end), liveShiftPays) { ended, live ->
+                GoalDay(date, TodayEarnings.of(ended, live, start, end))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+
+    val todayEarned: StateFlow<Double?> = goalDay.map { it?.earned }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val goalMark: StateFlow<MarkRead> = appStateRepository.goalMetMark.map { MarkRead.Loaded(it) }
@@ -563,5 +607,12 @@ class BubbleViewModel @Inject constructor(
     }
 }
 
-/** Date and profit travel together so midnight cannot pair a new date with the old total. */
-data class GoalDay(val date: LocalDate, val profit: Double?)
+/**
+ * #1443: the displayed shift's sharing. The cached value is dropped the moment sharing stops, so a new subscription
+ * starts unknown (the em dash) and re-derives from the current region instead of replaying an older shift's figure,
+ * cash and cash-entry target.
+ */
+private val SHIFT_SHARING = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000, replayExpirationMillis = 0)
+
+/** Date and earnings travel together so midnight cannot pair a new date with the old total. */
+data class GoalDay(val date: LocalDate, val earned: Double?)

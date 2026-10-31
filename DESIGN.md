@@ -57,10 +57,13 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   notice. A goal change saves at once and is changed back the same way.
 - **Nothing moves by itself** except values that change with time (countdowns, elapsed time), a progress
   indicator while something loads, and the one-time goal-met sequence. No auto-scrolling text.
-- **The headline is what the delivery app says you earned.** The hero shows the shift's earnings as the delivery
-  app reports them, with no label, not changed by tips or costs (dev, 2026-10-30). Cash tips are shown apart from
-  it, either as a small "$X cash" mark beside the hero or as the running cash total on the cash-tip button. The
-  offer is the only bubble figure judged against vehicle costs.
+- **The headline is the shift's earnings.** The hero shows the displayed shift's earnings with no label, not
+  changed by tips or costs (dev, 2026-10-30). Live, it is the delivery app's own running total, or the pay the app
+  recorded for the shift's deliveries when that is larger (the app's total can lag a delivery); after the shift,
+  the app's reported total, else the recorded pay (dev, 2026-10-31, #1443). Cash tips are shown apart as a small
+  "+$X cash" mark under the hero, only when above zero. The top row is Online and Miles; Earned/hr replaces
+  Profit/hr. The goal pill counts app earnings across every app today. The offer is the only bubble figure judged
+  against vehicle costs.
 - **One offer, one story.** The offer card, the offer pop-up, the chat line in the shift notification and the spoken offer
   name the same figures in the same words, produced by one owner. Each delivery app shapes what that owner can
   say (Uber's offers re-quote live and carry different fields), never a second copy of the wording.
@@ -248,7 +251,8 @@ adds the gap below, and never leaves it worse.
 - #1024: three destinations: Home is today, the hub is the past, the Playbook is the next move.
 - #1255: two presentation tiers behind one "More numbers" setting.
 - `docs/design/copy-style.md` (adopted 2026-10-06) governs every user-facing word.
-- #1333: the bubble is one read-and-act surface. Profit is the hero; Earned, Online and Miles sit in the top row;
+- #1333: the bubble is one read-and-act surface. Profit was the hero, with Earned, Online and Miles in the top row
+  (#1443 replaced both: the hero is the shift's earnings and the top row is Online and Miles);
   entries live in a thumb-zone dock and open inline sheets; undo replaces confirmation; a dropoff phase colour was
   added. The offer pop-up shows the same offer card without the verdict word, badges, trip line or gauge bars (S2g).
 - #1379, #1383, #1385: the vehicle chip in the bubble head; save as you go with a snackbar Undo; the Garage's
@@ -259,13 +263,17 @@ adds the gap below, and never leaves it worse.
   vehicle costs as the dasher selects. Labels move off `text3`; confirmations only for lasting effects; one offer
   story from one owner; a title bar and back button on every screen below Home; every state designed; light and
   dark both supported at the same sizes, with a theme setting to come.
+- #1443 (dev, 2026-10-30 and 2026-10-31): the hero is the displayed shift's earnings, unlabelled (TalkBack reads
+  "Earned $X"), per app and following the switcher. Live it is the larger of the delivery app's running total and
+  the shift's recorded delivery pay, with no estimate mark; at rest the shift's effective reported total, else its
+  recorded pay. Cash tips show as "+$X cash" under it. The top row drops Earned; Earned/hr replaces Profit/hr.
+  The daily goal is app earnings only, across every app, today, under a new setting (the old profit goal is not
+  carried over). Offer surfaces keep net.
 
 ## Open questions
 
 - **The bubble declutter.** A 2026-10-21 study proposes thinning the waiting and shift-start states. It waits on
   the developer and lives outside the repo.
-- **Where cash tips show in the bubble:** a "$X cash" mark beside the hero, or the running cash total on the
-  cash-tip button.
 - **Light theme colours.** On the light `bg`, small text in `accent` (3.0:1), `warn` (2.7:1), `good` (3.1:1) and
   `neutral` (4.0:1) falls under 4.5:1; those tokens change, or the surface is redesigned for light.
 - **Dropoff colour.** `stDropoff` is 3.8:1 on `surface2` in the dark theme; fine for the phase strip, too faint for

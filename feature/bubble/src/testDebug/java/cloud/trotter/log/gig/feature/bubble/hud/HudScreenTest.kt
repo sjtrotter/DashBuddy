@@ -21,7 +21,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.state.*
@@ -51,13 +50,12 @@ internal class HudScreenTest : HudScreenFixture() {
     @Test fun `top row keeps its slots across live states`() {
         var flow by mutableStateOf(Flow.Idle)
         show({ state(flow = flow) })
-        val tags = listOf("hud.top.earned", "hud.top.online", "hud.top.miles")
+        val tags = listOf("hud.top.online", "hud.top.miles")
         val bounds = tags.map { compose.onNodeWithTag(it).getBoundsInRoot() }
         for (next in listOf(Flow.TaskPickupArrived, Flow.TaskDropoffNavigation)) {
             compose.runOnIdle { flow = next }
             settle()
             assertEquals(bounds, tags.map { compose.onNodeWithTag(it).getBoundsInRoot() })
-            value("hud.top.earned", "$100.00").assertExists()
             value("hud.top.online", "2 hr 40 min").assertExists()
             value("hud.top.miles", "42.5").assertExists()
         }
@@ -95,17 +93,41 @@ internal class HudScreenTest : HudScreenFixture() {
         org.junit.Assert.assertTrue(dollars.single().layoutInput.style.fontSize > cents.single().layoutInput.style.fontSize)
     }
 
-    @Test fun `null profit shows the em dash hero`() {
-        show({ state(profit = null) })
+    @Test fun `null earnings show the em dash hero`() {
+        show({ state(earnings = null) })
         value("hud.hero", EMPTY_VALUE).assertIsDisplayed()
         compose.onNodeWithText("$0.00").assertDoesNotExist()
+    }
+
+    @Test fun `the hero is unlabelled, named Earned for TalkBack, with no earnings cell in the top row`() {
+        show()
+        compose.onNodeWithContentDescription("Earned $71.20").assertIsDisplayed()
+        compose.onNodeWithText("Profit").assertDoesNotExist()
+        compose.onNodeWithText("Earned").assertDoesNotExist()
+        compose.onNodeWithTag("hud.top.earned").assertDoesNotExist()
+        compose.onNodeWithTag("hud.hero.cash").assertDoesNotExist()
+    }
+
+    @Test fun `cash tips show apart from the earnings under the hero`() {
+        show({ state(cash = 5.0) })
+        value("hud.hero", "+$5.00 cash").assertIsDisplayed()
+        value("hud.hero", "71").assertIsDisplayed()
+    }
+
+    @Test fun `the compact hero names its figure Earned and keeps the cash mark`() {
+        show({ state(cash = 5.0, logOpen = true) })
+        compose.onNodeWithContentDescription("Earned $71.20").assertIsDisplayed()
+        val cash = value("hud.hero.compact", "+$5.00 cash").assertIsDisplayed().getBoundsInRoot()
+        // Under the figure, as on the full hero, not beside it.
+        val figure = value("hud.hero.compact", "$71").getBoundsInRoot()
+        assertTrue(cash.top >= figure.bottom)
     }
 
     @Test fun `offer mode shows the offer slot and hides the chrome below the head`() {
         show({ state(flow = Flow.OfferPresented) })
         compose.onNodeWithTag("hud.slot.offer").assertIsDisplayed()
         compose.onNodeWithText("Offer slot").assertIsDisplayed()
-        listOf("hud.top.earned", "hud.top.online", "hud.top.miles", "hud.hero", "hud.goal", "hud.ribbon")
+        listOf("hud.top.online", "hud.top.miles", "hud.hero", "hud.goal", "hud.ribbon")
             .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
         DockKind.entries.forEach { compose.onNodeWithTag("hud.dock.$it").assertDoesNotExist() }
     }
@@ -141,7 +163,6 @@ internal class HudScreenTest : HudScreenFixture() {
         show({ state(resting = true) })
         compose.onNodeWithText("Last shift").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
-        value("hud.top.earned", "$100.00").assertExists()
         value("hud.top.online", "2 hr 0 min").assertExists()
         value("hud.top.miles", "42.5").assertExists()
         listOf(DockKind.CASH_TIP, DockKind.EXPENSE, DockKind.ODOMETER, DockKind.LOG, DockKind.SETTINGS).forEach { compose.onNodeWithTag("hud.dock.$it").assertIsDisplayed() }
@@ -158,12 +179,35 @@ internal class HudScreenTest : HudScreenFixture() {
     }
 
     @Test fun `first run shows em dashes and the resting dock`() {
-        show({ state(first = true, profit = null) })
-        listOf("hud.top.earned", "hud.top.online", "hud.top.miles").forEach { value(it, EMPTY_VALUE).assertExists() }
+        show({ state(first = true, earnings = null) })
+        listOf("hud.top.online", "hud.top.miles").forEach { value(it, EMPTY_VALUE).assertExists() }
         compose.onNodeWithText("No shift yet").assertIsDisplayed()
         compose.onNodeWithTag("hud.dock.CASH_TIP").assertDoesNotExist()
         compose.onNodeWithTag("hud.dock.EXPENSE").assertIsEnabled()
         compose.onNodeWithTag("hud.dock.ODOMETER").assertIsEnabled()
+    }
+
+    @Test fun `a pending shift at rest shows em dashes, never the first-run copy`() {
+        show({ state(resting = true, pending = true) })
+        compose.onNodeWithText("Last shift").assertIsDisplayed()
+        compose.onNodeWithText("No shift yet").assertDoesNotExist()
+        compose.onNodeWithText("earned/hr").assertIsDisplayed()
+        compose.onNodeWithTag("hud.hero.cash").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Earned $EMPTY_VALUE").assertIsDisplayed()
+    }
+
+    @Test fun `an end grace rests with a ticking Earned per hour`() {
+        // One hour online at $41, then two: the rate ticks without a state change.
+        val start = T0 - 3_600_000
+        compose.setContent {
+            GigLogTheme { CompositionLocalProvider(LocalNowProvider provides clock) {
+                RestingCard(RestingModel(start, null, 41.0, OnlineSpan.Ticking(start), 2, 1, 2))
+            } }
+        }
+        settle()
+        compose.onNodeWithText("$41.00").assertIsDisplayed()
+        tick(3_600_000)
+        compose.onNodeWithText("$20.50").assertIsDisplayed()
     }
 
     @Test fun `ribbon is present live and absent at rest`() {
@@ -204,7 +248,7 @@ internal class HudScreenTest : HudScreenFixture() {
                 CompositionLocalProvider(LocalNowProvider provides clock) {
                     val presented = region.presentedOffer()
                     val model = HudStateMapper.map(region, Flow.OfferPresented, Platform.DoorDash,
-                        emptyList(), 100.0, 42.5, null, null, null, null,
+                        emptyList(), null, 42.5, null, null, null,
                         hasActiveCard = snapshot != null, hasOfferCard = presented != null,
                         logOpen = false, gas = GasRowModel(3.5f, true), odometerLoaded = true)
                     HudScreen(model, ribbon = null, onDockClick = {}, stateCard = { Text("State slot") },
@@ -272,7 +316,7 @@ internal class HudScreenTest : HudScreenFixture() {
         assertEquals(emptyList<String>(), calls)
         compose.runOnIdle { mode = HudMode.LIVE }; settle()
         compose.onNodeWithTag("hud.goal").assert(SemanticsMatcher.expectValue(GoalMetPhaseKey, GoalMetPhase.CLOSE))
-        assertEquals(listOf("2026-10-18|7900"), calls)
+        assertEquals(listOf("2026-10-18|earned|7900"), calls)
     }
     @Test fun offerMidSequence_returnsToEndState() {
         var mode by mutableStateOf(HudMode.LIVE)

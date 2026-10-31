@@ -23,11 +23,11 @@ internal class GoalHud(private val viewModel: BubbleViewModel, private val entry
     @Composable
     fun Sheet() {
         val goal by viewModel.dailyGoal.collectAsStateWithLifecycle()
-        val profit by viewModel.todayProfit.collectAsStateWithLifecycle()
+        val earned by viewModel.todayEarned.collectAsStateWithLifecycle()
         val actions = viewModel.goalActions
         val busy by actions.busy.collectAsStateWithLifecycle()
         val failed by actions.failed.collectAsStateWithLifecycle()
-        GoalSheet(GoalSheetModel(goal?.roundToInt(), profit, busy, failed),
+        GoalSheet(GoalSheetModel(goal?.roundToInt(), earned, busy, failed),
             onSet = { actions.set(it) },
             onClear = { actions.clear(entry.entryId) },
             onPreset = { actions.set(it, entry.entryId) })

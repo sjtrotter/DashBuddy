@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.bubble
 
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.HudShiftRepository
 import cloud.trotter.log.gig.core.data.analytics.LedgerRepository
 import cloud.trotter.log.gig.core.data.chat.ChatRepository
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
@@ -12,8 +13,6 @@ import cloud.trotter.log.gig.core.data.state.AppStateRepository
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.core.datastore.appstate.AppStateDataSource
 import cloud.trotter.log.gig.core.state.StateManagerV2
-import cloud.trotter.log.gig.domain.analytics.AnalyticsPeriod
-import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.model.bubble.BubbleSessionMode
 import cloud.trotter.log.gig.domain.state.AppState
@@ -47,6 +46,7 @@ class BubbleGoalMarkTest {
     private val marks = MutableSharedFlow<String?>(replay = 1)
     private val appState: AppStateRepository = mock()
     private val analytics: AnalyticsRepository = mock()
+    private val shifts: HudShiftRepository = mock()
     private val preferences: AppPreferencesRepository = mock()
     private val state: StateManagerV2 = mock()
     private val strategy: StrategyRepository = mock()
@@ -58,7 +58,8 @@ class BubbleGoalMarkTest {
         Dispatchers.setMain(dispatcher)
         whenever(appState.goalMetMark).thenReturn(marks)
         whenever(analytics.recentSessions(any())).thenReturn(flowOf(emptyList()))
-        whenever(analytics.periodEconomics(AnalyticsPeriod.TODAY)).thenReturn(flowOf(PeriodEconomics.EMPTY))
+        whenever(shifts.latestShift(any())).thenReturn(flowOf(null))
+        whenever(shifts.endedShiftsBetween(any(), any())).thenReturn(flowOf(emptyList()))
         whenever(state.state).thenReturn(MutableStateFlow(AppState()))
         whenever(strategy.evaluationConfig).thenReturn(MutableStateFlow<EvaluationConfig?>(null))
         whenever(events.getMostRecentSessionId()).thenReturn(flowOf(null))
@@ -68,7 +69,7 @@ class BubbleGoalMarkTest {
         whenever(dev.bubbleSessionMode).thenReturn(flowOf(BubbleSessionMode.Default))
         whenever(preferences.glanceMode).thenReturn(flowOf(false))
         whenever(preferences.odometerPrompts).thenReturn(flowOf(true))
-        whenever(preferences.dailyKeptGoalDollars).thenReturn(flowOf(null))
+        whenever(preferences.dailyGoalDollars).thenReturn(flowOf(null))
         whenever(preferences.gasPrice).thenReturn(flowOf(null))
         whenever(preferences.isGasPriceAuto).thenReturn(flowOf(true))
     }
@@ -91,7 +92,7 @@ class BubbleGoalMarkTest {
     private fun model(repository: AppStateRepository = appState) = BubbleViewModel(
         chatRepository = mock<ChatRepository>(), odometerRepository = odometer, stateManager = state,
         appEventRepo = events, appPreferencesRepository = preferences, fuelPriceRepository = mock<FuelPriceRepository>(),
-        analyticsRepository = analytics, ledgerRepository = mock<LedgerRepository>(),
+        analyticsRepository = analytics, hudShiftRepository = shifts, ledgerRepository = mock<LedgerRepository>(),
         devSettingsRepository = dev, strategyRepository = strategy, appStateRepository = repository,
         garageRepository = garage(), odometerReadingRepository = readings(),
         correctionRepository = mock(),
@@ -110,9 +111,9 @@ class BubbleGoalMarkTest {
     }
     @Test fun `goal actions feed the existing daily goal flow and pill without a new event`() = runTest(dispatcher) {
         val stored = MutableStateFlow<Double?>(null)
-        whenever(preferences.dailyKeptGoalDollars).thenReturn(stored)
+        whenever(preferences.dailyGoalDollars).thenReturn(stored)
         doSuspendableAnswer { invocation -> stored.value = invocation.getArgument<Double?>(0) }
-            .whenever(preferences).setDailyKeptGoalDollars(anyOrNull())
+            .whenever(preferences).setDailyGoalDollars(anyOrNull())
         val vm = model()
         val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.dailyGoal.collect {} }
         runCurrent()
@@ -133,12 +134,12 @@ class BubbleGoalMarkTest {
     }
     @Test fun `a new view model after collapse sees the pending mark`() = runTest(dispatcher) {
         val releaseWrite = CompletableDeferred<Unit>()
-        val persisted = MutableStateFlow<String?>("2026-10-17|7900")
+        val persisted = MutableStateFlow<String?>("2026-10-17|earned|7900")
         val source: AppStateDataSource = mock()
         whenever(source.goalMetMark).thenReturn(persisted)
         doSuspendableAnswer {
             releaseWrite.await()
-            persisted.value = "2026-10-18|7900"
+            persisted.value = "2026-10-18|earned|7900"
         }.whenever(source).setGoalMetMark(any())
         // One real singleton repository, with a scope that outlives both activity ViewModels.
         val repository = AppStateRepository(source, backgroundScope)
@@ -159,7 +160,7 @@ class BubbleGoalMarkTest {
             }
         }
         runCurrent()
-        assertEquals("2026-10-17|7900", persisted.value)
+        assertEquals("2026-10-17|earned|7900", persisted.value)
         assertEquals(MarkRead.Loaded(key), second.goalMark.value)
         assertTrue(resolved.isNotEmpty())
         assertTrue(resolved.all { it == null })
@@ -170,12 +171,23 @@ class BubbleGoalMarkTest {
         secondRead.cancel()
     }
     @Test fun goalMark_recreatedViewModelUsesDurableMark() = runTest(dispatcher) {
+        marks.emit("2026-10-18|earned|7900")
+        val vm = model()
+        val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalMark.collect {} }
+        runCurrent()
+        assertEquals(MarkRead.Loaded("2026-10-18|earned|7900"), vm.goalMark.value)
+        verify(appState, never()).setGoalMetMark(any())
+        read.cancel()
+    }
+    // Migration input: the old profit goal's mark, `date|cents`, left in the store.
+    @Test fun `an old profit mark does not suppress the first earnings celebration`() = runTest(dispatcher) {
         marks.emit("2026-10-18|7900")
         val vm = model()
         val read = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.goalMark.collect {} }
         runCurrent()
-        assertEquals(MarkRead.Loaded("2026-10-18|7900"), vm.goalMark.value)
-        verify(appState, never()).setGoalMetMark(any())
+        val day = LocalDate.of(2026, 10, 18)
+        assertEquals(GoalMetMark.key(day, 79.0),
+            GoalCelebrationResolver.resolve(GoalPillState.Met, HudMode.LIVE, day, 79.0, vm.goalMark.value))
         read.cancel()
     }
 }

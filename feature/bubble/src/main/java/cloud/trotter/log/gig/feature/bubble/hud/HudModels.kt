@@ -20,13 +20,20 @@ data class HudUiState(
     val vehicleChip: VehicleChipModel? = null,
 )
 enum class HudMode { LIVE, OFFER, LOG, RESTING }
-data class TopRowModel(val earned: String, val online: OnlineSpan, val miles: String, val dimmed: Boolean)
+data class TopRowModel(val online: OnlineSpan, val miles: String, val dimmed: Boolean)
 sealed interface OnlineSpan {
     data class Ticking(val startedAt: Long) : OnlineSpan
     data class Fixed(val ms: Long) : OnlineSpan
     data object Unknown : OnlineSpan
 }
-data class HeroModel(val profit: Double?, val goal: GoalPillState, val celebrateKey: String? = null, val markLoading: Boolean = false)
+/** #1443: [earnings] is the displayed shift's earnings, unlabelled; [cashTips] is its cash, shown apart when > 0. */
+data class HeroModel(
+    val earnings: Double?,
+    val goal: GoalPillState,
+    val celebrateKey: String? = null,
+    val markLoading: Boolean = false,
+    val cashTips: Double? = null,
+)
 sealed interface GoalPillState {
     data object NoGoal : GoalPillState
     data class InProgress(val remaining: String, val progress: Float) : GoalPillState
@@ -36,14 +43,27 @@ data class DockModel(val items: List<DockItem>)
 data class DockItem(val kind: DockKind, val state: DockItemState)
 enum class DockKind { CASH_TIP, EXPENSE, ODOMETER, LOG, NOW, SETTINGS }
 enum class DockItemState { NORMAL, LIT, ACCENT, DISABLED }
+/**
+ * The resting card's shift (#1443). Null fields are unknown and render as the em dash: a shift whose row has not
+ * been projected yet is pending, never "No shift yet" (that copy is first run only, a null model). [online] is the
+ * Earned/hr span: fixed once the shift ended, ticking from the live start during an end grace.
+ */
 data class RestingModel(
-    val startedAt: Long,
+    val startedAt: Long?,
     val endedAt: Long?,
-    val profitPerHour: String,
-    val deliveries: Int,
-    val offersAccepted: Int,
-    val offersReceived: Int,
-)
+    val earnings: Double?,
+    val online: OnlineSpan,
+    val deliveries: Int?,
+    val offersAccepted: Int?,
+    val offersReceived: Int?,
+) {
+    /** Earned/hr: [earnings] over the online time; a ticking span reads [now]. Null renders as the em dash. */
+    fun earnedPerHour(now: Long): Double? = perHour(earnings, when (val span = online) {
+        is OnlineSpan.Fixed -> span.ms
+        is OnlineSpan.Ticking -> now - span.startedAt
+        OnlineSpan.Unknown -> null
+    })
+}
 data class GasRowModel(
     val price: Float?,
     val auto: Boolean,

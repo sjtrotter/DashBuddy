@@ -5,22 +5,29 @@ import org.junit.Assert.*
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
-import cloud.trotter.log.gig.domain.analytics.SessionNet
 import cloud.trotter.log.gig.domain.state.*
 import cloud.trotter.log.gig.domain.model.cards.*
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 
 class HudStateMapperTest {
-    private fun map(rest: Boolean = false, net: SessionNet? = SessionNet("dash", 60.0, 5.0, 2.0),
+    private companion object { const val T_NOW = 99_000_000L }
+
+    private fun liveShift(earnings: Double? = 67.0, cash: Double? = 5.0) =
+        DisplayedShift(Platform.DoorDash, "dash", live = true, earnings = earnings, cashTips = cash, record = null)
+    private fun restedShift(row: SessionRecord = lastDash(), earnings: Double? = 67.0, cash: Double? = 0.0) =
+        DisplayedShift(row.platform, row.sessionId, live = false, earnings = earnings, cashTips = cash, record = row)
+
+    private fun map(rest: Boolean = false, shift: DisplayedShift? = if (rest) restedShift() else liveShift(),
         last: SessionRecord? = lastDash(), cue: Boolean = false, logOpen: Boolean = false,
         odometerLoaded: Boolean = true, odometerCue: Boolean = false, odometerShown: Boolean = true,
         goal: Double? = null, today: Double? = null, goalSheetOpen: Boolean = false,
-        editedGoalKey: String? = null) = HudStateMapper.map(
-        region = if (rest) null else PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online,
-            session = Session("dash", 1_000)),
+        editedGoalKey: String? = null, region: PlatformRegion? = if (rest) null else PlatformRegion(
+            platform = Platform.DoorDash, mode = Mode.Online, session = Session("dash", 1_000)),
+    ) = HudStateMapper.map(
+        region = region,
         flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
-        earnings = 90.0, miles = 20.0, lastSession = last, net = net,
-        goal = goal, todayProfit = today, hasActiveCard = !rest, hasOfferCard = false,
+        shift = shift, miles = 20.0, lastSession = last,
+        goal = goal, todayEarned = today, hasActiveCard = !rest, hasOfferCard = false,
         logOpen = logOpen, gas = GasRowModel(3.5f, true), cashTipCue = cue,
         odometerLoaded = odometerLoaded, odometerCue = odometerCue, odometerShown = odometerShown,
         goalDay = java.time.LocalDate.of(2026, 10, 18), mark = MarkRead.Loaded(null),
@@ -44,15 +51,28 @@ class HudStateMapperTest {
         val open = map(goal = 90.0, today = 96.0, goalSheetOpen = true)
         assertEquals(GoalPillState.Met, open.hero.goal)
         assertNull(open.hero.celebrateKey)
-        val closing = map(goal = 90.0, today = 96.0, editedGoalKey = "2026-10-18|9000")
+        val closing = map(goal = 90.0, today = 96.0, editedGoalKey = "2026-10-18|earned|9000")
         assertEquals(GoalPillState.Met, closing.hero.goal)
         assertNull(closing.hero.celebrateKey)
-        assertEquals("2026-10-18|9000", map(goal = 90.0, today = 96.0).hero.celebrateKey)
+        assertEquals("2026-10-18|earned|9000", map(goal = 90.0, today = 96.0).hero.celebrateKey)
     }
 
     @Test
-    fun `live hero reads the session net`() {
-        assertEquals(67.0, map().hero.profit!!, 0.0)
+    fun `live hero reads the displayed shift's earnings and cash apart`() {
+        val hero = map().hero
+        assertEquals(67.0, hero.earnings!!, 0.0)
+        assertEquals(5.0, hero.cashTips!!, 0.0)
+    }
+
+    @Test
+    fun `no cash mark without cash`() {
+        assertNull(map(shift = liveShift(cash = 0.0)).hero.cashTips)
+        assertNull(map(shift = liveShift(cash = null)).hero.cashTips)
+    }
+
+    @Test
+    fun `the top row has no earnings cell and keeps the live span`() {
+        assertEquals(TopRowMapper.live(1_000, 20.0), map().top)
     }
 
     @Test fun `odometer cue reaches both docks and respects loading`() {
@@ -80,32 +100,89 @@ class HudStateMapperTest {
     }
 
     @Test
-    fun `resting hero reads the last dash net`() {
+    fun `resting hero reads the displayed shift`() {
         val state = map(rest = true)
         assertEquals(HudMode.RESTING, state.mode)
-        assertEquals(67.0, state.hero.profit!!, 0.0)
+        assertEquals(67.0, state.hero.earnings!!, 0.0)
         assertEquals(Platform.DoorDash, state.platform)
     }
 
     @Test
-    fun `null net shows the em dash hero not zero`() {
-        assertNull(map(net = null).hero.profit)
-        assertEquals(EMPTY_VALUE, moneyOrEmpty(map(net = null).hero.profit))
+    fun `resting chip stats and top row are the displayed shift's, not the newer cross-platform last shift`() {
+        val uber = lastDash().copy(sessionId = "uber", platform = Platform.Uber, startedAt = 9_000_000,
+            endedAt = 9_600_000, miles = 3.0, deliveries = 1, offersAccepted = 1, offersReceived = 1)
+        val doordash = lastDash().copy(deliveries = 7)
+        val state = map(rest = true, shift = restedShift(doordash), last = uber)
+        assertEquals(Platform.DoorDash, state.platform)
+        val resting = state.resting!!
+        assertEquals(7, resting.deliveries)
+        assertEquals(doordash.startedAt, resting.startedAt)
+        assertEquals(TopRowMapper.resting(doordash), state.top)
     }
 
     @Test
-    fun `resting profit per hour is kept over online hours`() {
-        assertEquals(Formats.money(33.5), map(rest = true).resting!!.profitPerHour)
+    fun `resting with no acceptable row shows unknowns, never another shift`() {
+        val pending = DisplayedShift(Platform.DoorDash, null, live = false, earnings = null, cashTips = null, record = null)
+        val state = map(rest = true, shift = pending)
+        assertNull(state.hero.earnings)
+        assertNull(state.hero.cashTips)
+        // Pending shift data is em dashes, never the first-run "No shift yet" (a null model).
+        assertFalse(state.firstRun)
+        assertEquals(RestingModel(null, null, null, OnlineSpan.Unknown, null, null, null), state.resting)
+        assertNull(state.resting!!.earnedPerHour(T_NOW))
+        assertEquals(TopRowMapper.firstRun(), state.top)
+        assertEquals(Platform.DoorDash, state.platform)
     }
 
     @Test
-    fun `resting profit per hour without an end is the em dash`() {
-        assertEquals(EMPTY_VALUE, map(rest = true, last = lastDash().copy(endedAt = null)).resting!!.profitPerHour)
+    fun `resting during an end grace shows the live shift`() {
+        val graced = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline, session = Session("dash", 1_000))
+        val open = lastDash().copy(sessionId = "dash", endedAt = null)
+        val state = map(rest = true, region = graced,
+            shift = liveShift(earnings = 41.0).copy(record = open), last = lastDash().copy(sessionId = "older"))
+        assertEquals(HudMode.RESTING, state.mode)
+        assertEquals(41.0, state.hero.earnings!!, 0.0)
+        assertEquals(TopRowMapper.live(1_000, 20.0), state.top)
+        val resting = state.resting!!
+        assertEquals(open.startedAt, resting.startedAt)
+        assertNull(resting.endedAt)
+        // Earned/hr ticks from the live start until the shift ends: $41 over one hour, then two.
+        assertEquals(OnlineSpan.Ticking(1_000), resting.online)
+        assertEquals(41.0, resting.earnedPerHour(1_000 + 3_600_000)!!, 1e-9)
+        assertEquals(20.5, resting.earnedPerHour(1_000 + 7_200_000)!!, 1e-9)
+    }
+
+    @Test
+    fun `an end grace with the row still loading keeps the live start and earnings`() {
+        val graced = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline, session = Session("dash", 1_000))
+        val resting = map(rest = true, region = graced, shift = liveShift(earnings = 41.0)).resting!!
+        assertEquals(1_000L, resting.startedAt)
+        assertEquals(41.0, resting.earnedPerHour(1_000 + 3_600_000)!!, 1e-9)
+        assertNull(resting.deliveries)
+    }
+
+    @Test
+    fun `null earnings show the em dash hero not zero`() {
+        assertNull(map(shift = liveShift(earnings = null)).hero.earnings)
+        assertEquals(EMPTY_VALUE, moneyOrEmpty(map(shift = liveShift(earnings = null)).hero.earnings))
+    }
+
+    @Test
+    fun `resting earned per hour is the shift's earnings over online hours`() {
+        val resting = map(rest = true).resting!!
+        assertEquals(OnlineSpan.Fixed(7_200_000), resting.online)
+        assertEquals(33.5, resting.earnedPerHour(T_NOW)!!, 1e-9)
+    }
+
+    @Test
+    fun `resting earned per hour without an end or earnings is unknown`() {
+        assertNull(map(rest = true, shift = restedShift(lastDash().copy(endedAt = null))).resting!!.earnedPerHour(T_NOW))
+        assertNull(map(rest = true, shift = restedShift(earnings = null)).resting!!.earnedPerHour(T_NOW))
     }
 
     @Test
     fun `first run when no session and no last dash`() {
-        val state = map(rest = true, net = null, last = null)
+        val state = map(rest = true, shift = null, last = null)
         assertTrue(state.firstRun)
         assertNull(state.resting)
         assertNull(state.platform)
@@ -116,13 +193,13 @@ class HudStateMapperTest {
         assertEquals(DockItemState.NORMAL, map(cue = false).dock.items.single { it.kind == DockKind.CASH_TIP }.state)
         assertFalse(map(rest = true, last = null, cue = true).dock.items.any { it.kind == DockKind.CASH_TIP })
     }
-    @Test fun `profit per hour preserves unknowns and real zero`() {
-        assertNull(profitPerHour(null, 3_600_000))
-        assertNull(profitPerHour(10.0, null))
-        assertNull(profitPerHour(10.0, 0))
-        assertNull(profitPerHour(10.0, -1))
-        assertEquals(0.0, profitPerHour(0.0, 3_600_000)!!, 0.0)
-        assertEquals(20.0, profitPerHour(10.0, 1_800_000)!!, 0.0)
+    @Test fun `per hour preserves unknowns and real zero`() {
+        assertNull(perHour(null, 3_600_000))
+        assertNull(perHour(10.0, null))
+        assertNull(perHour(10.0, 0))
+        assertNull(perHour(10.0, -1))
+        assertEquals(0.0, perHour(0.0, 3_600_000)!!, 0.0)
+        assertEquals(20.0, perHour(10.0, 1_800_000)!!, 0.0)
     }
 
     @Test fun `log open at rest keeps resting and shows Now`() {

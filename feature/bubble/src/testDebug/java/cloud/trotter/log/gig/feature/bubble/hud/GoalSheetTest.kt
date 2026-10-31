@@ -90,39 +90,39 @@ class GoalSheetTest {
         compose.onNodeWithTag("goal.figure").assertTextEquals(EMPTY_VALUE)
         compose.onNodeWithTag("goal.minus").assertIsNotEnabled()
         compose.onNodeWithTag("goal.bar").assertDoesNotExist()
-        compose.onNodeWithText("Profit today $71.20").assertIsDisplayed()
+        compose.onNodeWithText("Earned today $71.20").assertIsDisplayed()
         compose.onNodeWithText("to go", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("goal.plus").performClick()
         compose.onNodeWithTag("goal.figure").assertTextEquals("$5")
     }
 
-    @Test fun `progress and remaining use today profit with whole dollar remainder`() {
+    @Test fun `progress and remaining use today earnings with whole dollar remainder`() {
         show()
         bar((71.20 / 150).toFloat())
         assertEquals(6.dp, compose.onNodeWithTag("goal.bar").getBoundsInRoot().height)
-        compose.onNodeWithText("Profit today $71.20").assertIsDisplayed()
+        compose.onNodeWithText("Earned today $71.20").assertIsDisplayed()
         compose.onNodeWithText("$79 to go").assertIsDisplayed()
-        compose.runOnIdle { model = model.copy(todayProfit = -2.0) }
+        compose.runOnIdle { model = model.copy(todayEarned = -2.0) }
         bar(0f)
-        compose.onNodeWithText("Profit today -$2.00").assertIsDisplayed()
+        compose.onNodeWithText("Earned today -$2.00").assertIsDisplayed()
         compose.onNodeWithText("$152 to go").assertIsDisplayed()
-        for (profit in listOf(150.0, 171.0)) {
-            compose.runOnIdle { model = model.copy(todayProfit = profit) }
+        for (earned in listOf(150.0, 171.0)) {
+            compose.runOnIdle { model = model.copy(todayEarned = earned) }
             bar(1f)
             compose.onNodeWithText("Met").assertIsDisplayed()
             compose.onNodeWithText("to go", substring = true).assertDoesNotExist()
         }
     }
 
-    @Test fun `unknown profit keeps bar empty and shows em dashes`() {
-        model = model.copy(todayProfit = null)
+    @Test fun `unknown earnings keep bar empty and shows em dashes`() {
+        model = model.copy(todayEarned = null)
         show()
         bar(0f)
-        compose.onNodeWithText("Profit today $EMPTY_VALUE").assertIsDisplayed()
+        compose.onNodeWithText("Earned today $EMPTY_VALUE").assertIsDisplayed()
         compose.onNodeWithText("$EMPTY_VALUE to go").assertIsDisplayed()
         compose.runOnIdle { model = model.copy(goalDollars = null) }
         compose.onNodeWithTag("goal.bar").assertDoesNotExist()
-        compose.onNodeWithText("Profit today $EMPTY_VALUE").assertIsDisplayed()
+        compose.onNodeWithText("Earned today $EMPTY_VALUE").assertIsDisplayed()
     }
 
     @Test fun `short HUD at large font keeps the bar and both progress lines displayed`() {
@@ -134,8 +134,8 @@ class GoalSheetTest {
                         val state = HudStateMapper.map(
                             region = PlatformRegion(Platform.DoorDash, Mode.Online, Session("live", 1_000)),
                             flow = Flow.Idle, platform = Platform.DoorDash, switchable = emptyList(),
-                            earnings = 100.0, miles = 42.5, lastSession = null, net = null,
-                            goal = 150.0, todayProfit = 71.2,
+                            shift = null, miles = 42.5, lastSession = null,
+                            goal = 150.0, todayEarned = 71.2,
                             hasActiveCard = true, hasOfferCard = false, logOpen = false,
                             gas = GasRowModel(3.5f, true), odometerLoaded = true, goalSheetOpen = true)
                         HudScreen(state, null, {}, sheetOpen = true,
@@ -146,7 +146,7 @@ class GoalSheetTest {
         }
         compose.onNodeWithTag("goal.bar").assertIsDisplayed()
         assertEquals(6.dp, compose.onNodeWithTag("goal.bar").getBoundsInRoot().height)
-        compose.onNodeWithText("Profit today $71.20").assertIsDisplayed()
+        compose.onNodeWithText("Earned today $71.20").assertIsDisplayed()
         compose.onNodeWithText("$79 to go").assertIsDisplayed()
         assertTrue(compose.onNodeWithTag("goal.progress").getBoundsInRoot().height >= 56.dp)
     }

@@ -63,15 +63,15 @@ class HudFontScaleTest {
         hasText(text) and hasAnyAncestor(hasTestTag(tag)), useUnmergedTree = true)
     @Test fun scale100_labelsUnderFigures() {
         show()
-        val figure = value("hud.top.earned", "$98.50").getBoundsInRoot()
-        val label = value("hud.top.earned", "Earned").getBoundsInRoot()
+        val figure = value("hud.top.online", "2 hr 41 min").getBoundsInRoot()
+        val label = value("hud.top.online", "Online").getBoundsInRoot()
         assertTrue(label.top >= figure.bottom)
         compose.onNodeWithTag("state.jobColumn").assertExists()
     }
     @Test fun scale130_labelsBesideFigures() {
         show(1.3f)
-        val figure = value("hud.top.earned", "$98.50").getBoundsInRoot()
-        val label = value("hud.top.earned", "Earned").getBoundsInRoot()
+        val figure = value("hud.top.online", "2 hr 41 min").getBoundsInRoot()
+        val label = value("hud.top.online", "Online").getBoundsInRoot()
         assertTrue(label.left >= figure.right)
         assertTrue(label.top < figure.bottom)
         compose.onNodeWithTag("state.jobColumn").assertExists()
@@ -92,31 +92,31 @@ class HudFontScaleTest {
     @Test
     @Config(sdk = [35], qualifiers = "w390dp-h900dp")
     fun `top row figures fit at font scale 2_0 in the bubble width`() {
-        assertTopRowFits("$100.00", "142.6")
+        assertTopRowFits("142.6")
     }
     @Test
     @Config(sdk = [35], qualifiers = "w390dp-h900dp")
     fun `top row figures fit at font scale 2_0 with driving glance`() {
-        assertTopRowFits("$1000.00", "1042.6", glance = 1.3f)
+        assertTopRowFits("1042.6", glance = 1.3f)
     }
-    private fun assertTopRowFits(earned: String, miles: String, glance: Float = 1f) {
+    private fun assertTopRowFits(miles: String, glance: Float = 1f) {
         compose.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, 2f)) {
                 GigLogTheme(glance = glance) {
                     CompositionLocalProvider(LocalHudTier provides FontScaleTier.of(2f, LocalGlance.current)) {
                         Box(Modifier.width(390.dp).padding(start = 22.dp, end = 16.dp)) {
-                            TopRow(TopRowModel(earned, OnlineSpan.Fixed((12 * 60 + 41) * 60_000L), miles, false))
+                            TopRow(TopRowModel(OnlineSpan.Fixed((12 * 60 + 41) * 60_000L), miles, false))
                         }
                     }
                 }
             }
         }
         settle()
-        listOf("hud.top.earned" to earned, "hud.top.online" to "12 hr 41 min", "hud.top.miles" to miles)
+        listOf("hud.top.online" to "12 hr 41 min", "hud.top.miles" to miles)
             .forEach { (tag, figure) ->
                 val slot = compose.onNodeWithTag(tag).getBoundsInRoot()
-                assertEquals(352f / 3f, slot.width.value, 1f)
+                assertEquals(352f / 2f, slot.width.value, 1f)
                 val node = value(tag, figure)
                 assertEquals(figure, node.fetchSemanticsNode().config[SemanticsProperties.Text].single().text)
                 val bounds = node.getBoundsInRoot()

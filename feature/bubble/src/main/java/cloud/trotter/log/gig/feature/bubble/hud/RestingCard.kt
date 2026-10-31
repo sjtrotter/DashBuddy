@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.core.designsystem.time.rememberTimeFormatter
@@ -24,10 +25,10 @@ fun RestingCard(model: RestingModel?) {
             Text(stringResource(R.string.hud_first_run_title), style = MaterialTheme.typography.titleLarge, color = c.text)
             Text(stringResource(R.string.hud_first_run_body), style = MaterialTheme.typography.bodyMedium, color = c.text2)
         } else {
+            val now = rememberNow()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.hud_rest_last_dash), style = MaterialTheme.typography.titleLarge, color = c.text)
                 model.endedAt?.let { ended ->
-                    val now = rememberNow()
                     val minutes by remember(ended) { derivedStateOf { (now.value - ended).coerceAtLeast(0) / 60_000 } }
                     val hm = HoursMinutes.of(minutes * 60_000)
                     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -39,21 +40,26 @@ fun RestingCard(model: RestingModel?) {
                     }
                 }
             }
+            // A ticking span (an end grace) re-derives the rate every second; a fixed one never changes it.
+            val rate by remember(model) { derivedStateOf { model.earnedPerHour(now.value) } }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(model.profitPerHour, style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.alignByBaseline())
-                Text(stringResource(R.string.hud_rest_profit_hr), style = MaterialTheme.typography.labelSmall, color = c.text2,
+                Text(moneyOrEmpty(rate), style = AppTheme.num.stateNum, color = c.text, modifier = Modifier.alignByBaseline())
+                Text(stringResource(R.string.hud_rest_earned_hr), style = MaterialTheme.typography.labelSmall, color = c.text2,
                     modifier = Modifier.alignByBaseline())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(model.deliveries.toString(), style = AppTheme.num.mdNum, color = c.text)
-                Text(pluralStringResource(R.plurals.hud_deliveries, model.deliveries), color = c.text2)
+                Text(model.deliveries?.toString() ?: EMPTY_VALUE, style = AppTheme.num.mdNum, color = c.text)
+                Text(pluralStringResource(R.plurals.hud_deliveries, model.deliveries ?: 0), color = c.text2)
                 Spacer(Modifier.weight(1f))
-                Text(stringResource(R.string.hud_rest_accepted, model.offersAccepted, model.offersReceived), color = c.text)
+                val accepted = model.offersAccepted
+                val received = model.offersReceived
+                Text(if (accepted != null && received != null)
+                    stringResource(R.string.hud_rest_accepted, accepted, received) else EMPTY_VALUE, color = c.text)
                 Text(stringResource(R.string.hud_rest_accepted_label), color = c.text2)
             }
             val time = rememberTimeFormatter()
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(time(model.startedAt), color = c.text3, style = MaterialTheme.typography.labelSmall)
+                Text(model.startedAt?.let(time) ?: EMPTY_VALUE, color = c.text3, style = MaterialTheme.typography.labelSmall)
                 model.endedAt?.let {
                     Text(stringResource(R.string.hud_rest_span_to), color = c.text3, style = MaterialTheme.typography.labelSmall)
                     Text(time(it), color = c.text3, style = MaterialTheme.typography.labelSmall)
