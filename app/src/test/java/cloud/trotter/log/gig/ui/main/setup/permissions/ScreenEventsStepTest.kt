@@ -33,7 +33,7 @@ class ScreenEventsStepTest {
     fun `UNDECIDED - the Screen-events step leads and the accessibility step is withheld`() {
         for (debug in listOf(true, false)) {
             val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.UNDECIDED, debug)
-            assertEquals(PermissionStep.ScreenEvents, s.steps.first())
+            assertEquals(PermissionStep.ScreenEvents, s.pendingSteps.first())
             assertFalse(PermissionType.Accessibility in s.missing)
         }
     }
@@ -41,7 +41,7 @@ class ScreenEventsStepTest {
     @Test
     fun `an already-enabled service still gets the Screen-events step first`() {
         val s = buildPermissionsUiState(allGranted, EventReceiptConsent.UNDECIDED, isDebugBuild = false)
-        assertEquals(listOf<PermissionStep>(PermissionStep.ScreenEvents), s.steps)
+        assertEquals(listOf<PermissionStep>(PermissionStep.ScreenEvents), s.pendingSteps)
         assertFalse(s.allGranted)
     }
 
@@ -49,7 +49,7 @@ class ScreenEventsStepTest {
     fun `a decision hands the chain to the accessibility grant (release - either answer)`() {
         for (consent in listOf(EventReceiptConsent.ALLOWED, EventReceiptConsent.DECLINED)) {
             val s = buildPermissionsUiState(nothingGranted, consent, isDebugBuild = false)
-            assertEquals(PermissionStep.Os(PermissionType.Accessibility), s.steps.first())
+            assertEquals(PermissionStep.Os(PermissionType.Accessibility), s.pendingSteps.first())
             assertFalse(s.screenEventsDue)
         }
     }
@@ -57,7 +57,7 @@ class ScreenEventsStepTest {
     @Test
     fun `debug ALLOWED proceeds to the grant`() {
         val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.ALLOWED, isDebugBuild = true)
-        assertEquals(PermissionStep.Os(PermissionType.Accessibility), s.steps.first())
+        assertEquals(PermissionStep.Os(PermissionType.Accessibility), s.pendingSteps.first())
     }
 
     @Test
@@ -71,7 +71,7 @@ class ScreenEventsStepTest {
     fun `before the consent is read the queue is EMPTY and nothing is all-granted (TT4)`() {
         for (debug in listOf(true, false)) {
             val s = buildPermissionsUiState(nothingGranted, null, isDebugBuild = debug)
-            assertTrue("no OS card may lead before the read", s.steps.isEmpty())
+            assertTrue("no OS card may lead before the read", s.pendingSteps.isEmpty())
             assertFalse(s.allGranted)
             assertFalse(PermissionType.Accessibility in s.missing)
         }
@@ -80,9 +80,9 @@ class ScreenEventsStepTest {
     @Test
     fun `once read, Screen-events heads the queue before every OS card (TT4)`() {
         val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.UNDECIDED, isDebugBuild = false)
-        assertEquals(PermissionStep.ScreenEvents, s.steps.first())
-        assertTrue(s.steps.drop(1).all { it is PermissionStep.Os })
-        assertEquals(5, s.steps.size) // Screen-events + the four non-accessibility OS cards
+        assertEquals(PermissionStep.ScreenEvents, s.pendingSteps.first())
+        assertTrue(s.pendingSteps.drop(1).all { it is PermissionStep.Os })
+        assertEquals(5, s.pendingSteps.size) // Screen-events + the four non-accessibility OS cards
     }
 
     // ---- ViewModel ------------------------------------------------------------------------
@@ -105,19 +105,19 @@ class ScreenEventsStepTest {
     @Test
     fun `the step's decision writes through the one owner and the queue moves on`() = runTest {
         val prefs = FakePrefs(EventReceiptConsent.UNDECIDED)
-        val vm = PermissionsViewModel({ nothingGranted }, prefs, isDebugBuild = false)
-        assertEquals(PermissionStep.ScreenEvents, vm.uiState.value.steps.first())
+        val vm = PermissionsViewModel({ nothingGranted }, prefs, isDebugBuild = false, PermissionDeferrals())
+        assertEquals(PermissionStep.ScreenEvents, vm.uiState.value.pendingSteps.first())
 
         vm.onScreenEventsDecision(allow = true)
 
         assertEquals(listOf(EventReceiptConsent.ALLOWED), prefs.writes)
-        assertEquals(PermissionStep.Os(PermissionType.Accessibility), vm.uiState.value.steps.first())
+        assertEquals(PermissionStep.Os(PermissionType.Accessibility), vm.uiState.value.pendingSteps.first())
     }
 
     @Test
     fun `refresh re-polls the OS`() = runTest {
         var poll = nothingGranted
-        val vm = PermissionsViewModel({ poll }, FakePrefs(EventReceiptConsent.ALLOWED), isDebugBuild = false)
+        val vm = PermissionsViewModel({ poll }, FakePrefs(EventReceiptConsent.ALLOWED), isDebugBuild = false, PermissionDeferrals())
         assertFalse(vm.uiState.value.allGranted)
         poll = allGranted
         vm.refresh()

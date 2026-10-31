@@ -25,14 +25,21 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
+import cloud.trotter.log.gig.core.designsystem.R
 
 /**
  * Expandable row with a `$/mi`-style [trailing] summary — Personal Economy cost accordions.
  * Caller owns the [expanded] state and the [onToggle] lambda (hoisted, pure).
+ *
+ * TalkBack (#1457): the header row is a button whose state reads "Expanded" or "Collapsed".
  */
 @Composable
 fun AppAccordion(
@@ -44,6 +51,7 @@ fun AppAccordion(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = AppTheme.colors
+    val state = stringResource(if (expanded) R.string.app_accordion_expanded else R.string.app_accordion_collapsed)
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
@@ -54,7 +62,8 @@ fun AppAccordion(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onToggle() }
+                    .clickable(role = Role.Button) { onToggle() }
+                    .semantics { stateDescription = state }
                     .padding(horizontal = 14.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),

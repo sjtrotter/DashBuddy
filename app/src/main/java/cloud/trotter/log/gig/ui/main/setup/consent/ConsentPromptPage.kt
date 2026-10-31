@@ -7,11 +7,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,8 +23,9 @@ import cloud.trotter.log.gig.feature.settings.capabilityCopy
 
 /**
  * Prompted per-capability automation consent (#843) — one page of the front door. Every
- * *undecided* automation is its own row — name, plain-language behavioral disclosure, source, and an
- * individual Allow / Don't-allow choice. There is NO "allow all" button (Play policy: each
+ * *undecided* automation is its own row — name, the delivery app (", downloaded" only for a
+ * downloaded source), what allowing changes, and an individual Allow / Don't-allow choice of equal
+ * weight (#1457). There is NO "allow all" button (Play policy: each
  * automation individually). Answers write THROUGH the grant store the fail-closed engine gate reads
  * (#417); this page is an acquisition surface, never a second gate. "Not now" (the door's own
  * button) defers the whole door for this foreground; a "Don't allow" persists a durable denial.
@@ -61,9 +61,9 @@ private fun ConsentPromptRowView(
 
     val copy = capabilityCopy(row.action, platformName)
     val sourceLabel = if (row.isBundled) {
-        stringResource(R.string.consent_prompt_source_bundled_format, platformName)
+        platformName
     } else {
-        stringResource(R.string.consent_prompt_source_downloaded_format, platformName)
+        stringResource(SettingsR.string.consent_source_downloaded_format, platformName)
     }
 
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -72,12 +72,6 @@ private fun ConsentPromptRowView(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        if (row.layoutCount > 1) {
-            Text(
-                text = stringResource(SettingsR.string.consent_layout_count_format, row.layoutCount),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
         Spacer(Modifier.height(2.dp))
         Text(
             text = sourceLabel,
@@ -95,11 +89,11 @@ private fun ConsentPromptRowView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = { onDecision(row.key, false) },
                 modifier = Modifier.weight(1f),
             ) { Text(stringResource(R.string.consent_prompt_deny)) }
-            Button(
+            FilledTonalButton(
                 onClick = { onDecision(row.key, true) },
                 modifier = Modifier.weight(1f),
             ) { Text(stringResource(R.string.consent_prompt_allow)) }

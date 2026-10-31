@@ -34,6 +34,7 @@ import cloud.trotter.log.gig.ui.main.settings.garage.VehicleAddScreen
 import cloud.trotter.log.gig.ui.main.settings.garage.VehicleDetailsScreen
 import cloud.trotter.log.gig.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
+import cloud.trotter.log.gig.feature.settings.PrivacyScreen
 import cloud.trotter.log.gig.feature.settings.DataExportScreen
 import cloud.trotter.log.gig.feature.settings.DeveloperSettingsScreen
 import cloud.trotter.log.gig.feature.settings.EvidenceSettingsScreen
@@ -220,6 +221,13 @@ class MainActivity : ComponentActivity() {
                         // 3a. Export Data (CSV, #319)
                         composable(Screen.DataExport.route) {
                             DataExportScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // 3d. Privacy (#1457 — what gig.log reads, saves and sends)
+                        composable(Screen.PrivacySettings.route) {
+                            PrivacyScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }

@@ -63,6 +63,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [Permission and consent screens say only what each one does (#1457)](checklist/open/1457-permission-and-consent-screens.md)
 - [One offer story, no score or verdict (#1442)](checklist/open/1442-one-offer-story-no-score-or-verdict.md)
 
 - [🆕 NEW — after a GPS dash, the delivery drill-down's rows carry an arrival odometer and…](checklist/open/1310-after-a-gps-dash-the-delivery-drill-down-s-rows.md)

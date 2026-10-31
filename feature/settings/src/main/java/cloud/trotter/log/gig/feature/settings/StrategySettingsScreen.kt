@@ -235,7 +235,8 @@ fun SwitchRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    note: String? = null
+    note: String? = null,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -251,6 +252,6 @@ fun SwitchRow(
             }
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }

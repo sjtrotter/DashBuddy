@@ -87,10 +87,9 @@ class ConsentPromptViewModelTest {
     fun `only undecided capabilities become rows`() {
         val state = buildConsentPromptState(
             capabilities = listOf(
-                cap("granted-k", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER),
-                cap("denied-k", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
-                cap("undecided-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS)
-                    .copy(layoutCount = 2),
+                cap("granted-k", "doordash.screen.offer_popup_confirm_decline", RuleAction.CONFIRM_DECLINE),
+                cap("denied-k", "doordash.screen.delivery_summary_expanded", RuleAction.EXPAND_EARNINGS),
+                cap("undecided-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS),
             ),
             grantedKeys = setOf("granted-k"),
             deniedKeys = setOf("denied-k"),
@@ -98,7 +97,6 @@ class ConsentPromptViewModelTest {
 
         assertEquals(1, state.rows.size)
         assertEquals("undecided-k", state.rows[0].key)
-        assertEquals("#1167: layout coverage reaches the prompt row", 2, state.rows[0].layoutCount)
         assertEquals(RuleAction.EXPAND_EARNINGS, state.rows[0].action)
         assertEquals(Platform.DoorDash, state.rows[0].platform)
         assertTrue(state.rows[0].isBundled)
@@ -108,8 +106,8 @@ class ConsentPromptViewModelTest {
     fun `all-decided yields no rows - the trigger predicate is false`() {
         val state = buildConsentPromptState(
             capabilities = listOf(
-                cap("a", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER),
-                cap("b", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
+                cap("a", "doordash.screen.offer_popup_confirm_decline", RuleAction.CONFIRM_DECLINE),
+                cap("b", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS),
             ),
             grantedKeys = setOf("a"),
             deniedKeys = setOf("b"),
@@ -118,26 +116,50 @@ class ConsentPromptViewModelTest {
     }
 
     @Test
-    fun `rows are deterministically ordered by action then rule id`() {
+    fun `actions with no automatic trigger are never asked for (#1457)`() {
         val state = buildConsentPromptState(
             capabilities = listOf(
-                cap("decline-k", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
                 cap("accept-k", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER),
+                cap("decline-k", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
+                cap("expand-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS),
             ),
             grantedKeys = emptySet(),
             deniedKeys = emptySet(),
         )
-        // ACCEPT_OFFER (ordinal 0) before DECLINE_OFFER (ordinal 1).
-        assertEquals(RuleAction.ACCEPT_OFFER, state.rows[0].action)
-        assertEquals(RuleAction.DECLINE_OFFER, state.rows[1].action)
+        assertEquals(listOf("expand-k"), state.rows.map { it.key })
+
+        val onlyInactive = buildConsentPromptState(
+            capabilities = listOf(
+                cap("accept-k", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER),
+                cap("decline-k", "doordash.screen.offer_popup", RuleAction.DECLINE_OFFER),
+            ),
+            grantedKeys = emptySet(),
+            deniedKeys = emptySet(),
+        )
+        assertTrue("an undecided inactive key never opens the front door", onlyInactive.rows.isEmpty())
+    }
+
+    @Test
+    fun `rows are deterministically ordered by action then rule id`() {
+        val state = buildConsentPromptState(
+            capabilities = listOf(
+                cap("expand-k", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS),
+                cap("confirm-k", "doordash.screen.offer_popup_confirm_decline", RuleAction.CONFIRM_DECLINE),
+            ),
+            grantedKeys = emptySet(),
+            deniedKeys = emptySet(),
+        )
+        // CONFIRM_DECLINE (ordinal 2) before EXPAND_EARNINGS (ordinal 3).
+        assertEquals(RuleAction.CONFIRM_DECLINE, state.rows[0].action)
+        assertEquals(RuleAction.EXPAND_EARNINGS, state.rows[1].action)
     }
 
     @Test
     fun `a duplicate key across sources yields a single row`() {
         val state = buildConsentPromptState(
             capabilities = listOf(
-                cap("dupe", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "asset:rules/doordash.json"),
-                cap("dupe", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER, "cdn:https://x/doordash.json"),
+                cap("dupe", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json"),
+                cap("dupe", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "cdn:https://x/doordash.json"),
             ),
             grantedKeys = emptySet(),
             deniedKeys = emptySet(),
@@ -153,7 +175,7 @@ class ConsentPromptViewModelTest {
     fun `uiState lists only undecided rows reactively`() = runTest {
         val grants = FakeGrants()
         grants.setEnumeration(
-            listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER)),
+            listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS)),
         )
         val vm = ConsentPromptViewModel(grants)
 
@@ -166,7 +188,7 @@ class ConsentPromptViewModelTest {
     fun `Allow routes a grant through the store and drops the row`() = runTest {
         val grants = FakeGrants()
         grants.setEnumeration(
-            listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER)),
+            listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS)),
         )
         val vm = ConsentPromptViewModel(grants)
         vm.uiState.first { it.rows.isNotEmpty() }
@@ -182,7 +204,7 @@ class ConsentPromptViewModelTest {
     fun `Don't allow routes a denial through the store and drops the row`() = runTest {
         val grants = FakeGrants()
         grants.setEnumeration(
-            listOf(cap("k1", "doordash.screen.offer_popup", RuleAction.ACCEPT_OFFER)),
+            listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS)),
         )
         val vm = ConsentPromptViewModel(grants)
         vm.uiState.first { it.rows.isNotEmpty() }

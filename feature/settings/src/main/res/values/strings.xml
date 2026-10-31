@@ -37,20 +37,20 @@
     <string name="data_export_log_error_format">Bug report export failed (%1$s). Check the folder and try again.</string>
     <string name="consent_title">Automation &amp; consent</string>
     <string name="consent_disclosure_heading">Taps gig.log may make</string>
-    <string name="consent_disclosure_body">gig.log uses Android Accessibility to recognize offers, pickups and deliveries in the delivery apps you turn on, on your phone.\n\nEach automatic tap below stays off until you allow it. It asks when a new one appears, and again if that button\'s layout changes. Nothing built in or downloaded turns one on by itself. Taps stay in the delivery app and must match the button\'s label, except the pay-details arrow, which has none.\n\nTurning one off stops the automatic tap. Pressing Accept or Decline in gig.log still taps for you.\n\nChoices are saved on this phone with their time, app version and privacy notice version, until you clear app data or uninstall. Backup and phone transfer skip them, so a new phone asks again.</string>
+    <string name="consent_disclosure_body">Each automatic tap stays off until you allow it, and gig.log asks again when its instructions for finding that button change. Your own Accept and Decline presses work either way.</string>
     <string name="consent_empty">No automatic taps yet. They show up when a delivery app supports them.</string>
-    <string name="consent_layout_count_format">%1$d screen layouts</string>
     <string name="consent_platform_unknown">Delivery app</string>
-    <string name="consent_source_bundled_format">%1$s, built in</string>
     <string name="consent_source_downloaded_format">%1$s, downloaded</string>
     <string name="consent_cap_accept_title">Accept offers</string>
-    <string name="consent_cap_accept_desc">Press Accept in gig.log and it taps Accept or Add to route in %1$s, after checking the button\'s label there. Your press works even with this switched off.</string>
     <string name="consent_cap_decline_title">Decline offers</string>
-    <string name="consent_cap_decline_desc">Press Decline in gig.log and it taps Decline in %1$s, after checking the button\'s label there. Your press works even with this switched off.</string>
-    <string name="consent_cap_confirm_decline_title">Confirm a decline</string>
-    <string name="consent_cap_confirm_decline_desc">If quick declines and this are both on, gig.log taps the second Decline in %1$s after you start a decline. It checks the label and stays inside %1$s.</string>
-    <string name="consent_cap_expand_title">Open the pay breakdown</string>
-    <string name="consent_cap_expand_desc">gig.log taps the arrow on a finished %1$s delivery to read its pay breakdown for your records. The arrow has no label, so only the app is checked. Delivery, pay and settings don\'t change.</string>
+    <string name="consent_cap_confirm_decline_title">Confirm declines</string>
+    <string name="consent_cap_confirm_decline_desc">When %1$s asks you to confirm a decline, gig.log taps Decline again for you, after checking the label. Works only with Quick declines on in Offer rules.</string>
+    <string name="consent_cap_expand_title">Open pay details</string>
+    <!-- #1457: Accept and Decline have no automatic trigger. Settings lists them only while they
+         hold an earlier decision, with this note in place of what allowing changes. -->
+    <string name="consent_inactive_note">Not used yet. gig.log has no automatic accept or decline, so this choice changes nothing today.</string>
+    <string name="consent_status_undecided">Not decided</string>
+    <string name="consent_cap_expand_desc">After a %1$s delivery, gig.log taps the arrow that opens the pay details, so it can record them. The arrow has no label, so gig.log checks only that it is in %1$s.</string>
     <string name="fake_offer_pay_line_format" translatable="false">Pay %1$s, profit %2$s</string>
     <string name="fake_offer_pay_line_estimate_format" translatable="false">Pay %1$s, profit %2$s (default costs)</string>
     <string name="fake_offer_fuel_cost_format" translatable="false">-%1$s fuel</string>
@@ -95,19 +95,28 @@
     <string name="developer_settings_bubble_session_follow_explainer">Shows the delivery app you used last. A pick in the bubble\'s switcher holds until that app\'s shift ends, then the bubble follows again.</string>
     <string name="developer_settings_bubble_session_pinned_explainer">Your switcher pick stays until you change it, even across that app\'s next shift. While that app is offline, the bubble shows the app you used last.</string>
     <string name="developer_settings_bubble_session_merged_explainer">Test mode: one stack of cards from every app with a live shift, each labeled with its app. No switcher; the chat follows the app you used last.</string>
-    <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, shared by the permission chain's
-         first step (:app ScreenEventsCard), the Settings switch row below and the debug block; also
-         the prominent-disclosure shape #1138 M3 will reuse. -->
-    <string name="event_receipt_title">Screen events from other apps</string>
+    <!-- #1151 — the wide-event-receipt FEATURE consent. ONE copy, resolved by
+         eventReceiptDisclosureParts() (#1457) for the permission chain's first step (:app
+         ScreenEventsCard), the Automation & consent dialog and "What this does" section, and the
+         debug block; also the prominent-disclosure shape #1138 M3 will reuse. -->
+    <string name="event_receipt_title">Screen events</string>
     <!-- #1151 RR1 — the requirement note: PRODUCTION wording here; src/debug/res/values/strings.xml
-         overrides the SAME key with the debug wording (debug requires, release offers). Rendered
-         on the permission-chain step and on the Automation & Consent switch row. -->
-    <string name="event_receipt_requirement_note">Optional. If you don\'t allow it, gig.log still works, with events only from supported delivery apps. Change this in Settings > Data &amp; privacy > Automation &amp; consent.</string>
+         overrides the SAME key with the debug wording (debug requires, release offers). Where to
+         change the choice is the separate event_receipt_change_later_format (#1457). -->
+    <string name="event_receipt_requirement_note">Optional. gig.log still works without it, using screen changes from the delivery apps only.</string>
     <string name="event_receipt_settings_path">Settings > Data &amp; privacy > Automation &amp; consent</string>
-    <string name="event_receipt_body">Lets gig.log notice a delivery offer that pops up over another app, by getting screen events from every app.\n\nScreen content is read and saved only from delivery apps you turn on; for other apps, gig.log sees only which app is open.\n\nOffer screenshots are off unless you turn them on in Settings > Data &amp; privacy. A screenshot saves the whole screen, including any app behind the offer, to Pictures/gig.log. gig.log never uploads it, but gallery sync or sharing can. Screenshots stay after you uninstall; delete them in your gallery.\n\ngig.log records this choice on this phone with its time, app version and privacy notice version, and leaves it out of Android backup and phone transfer. The app log also notes each change; it leaves your phone only in a bug report you export. Turn Screen events off in %1$s.</string>
+    <string name="event_receipt_body">gig.log gets a signal from every app when its screen changes. It reads and saves screens only from the delivery apps you turn on; of other apps it sees only the name. Screenshots, if you turn them on, save the whole screen, including any app behind an offer.</string>
+    <string name="event_receipt_change_later_format">Change this later in %1$s.</string>
+    <string name="event_receipt_summary">Lets gig.log catch an offer that pops up over another app.</string>
+    <string name="event_receipt_what_this_does">What this does</string>
+    <string name="event_receipt_off_confirm_title">Turn off Screen events?</string>
+    <string name="event_receipt_off_confirm_body">In this test build, screen reading turns itself off and the app can\'t be used until you allow them again.</string>
+    <string name="event_receipt_off_confirm_action">Turn off</string>
+    <string name="event_receipt_off_confirm_cancel">Cancel</string>
     <string name="event_receipt_allow">Allow</string>
     <string name="event_receipt_deny">Don\'t allow</string>
-    <!-- The front door's ONE "Not now" (the :app FrontDoorSheet button; review NN6). -->
+    <!-- The ONE "Not now": the :app FrontDoorSheet button (review NN6) and the permission sheet's
+         steps 3 to 6 (#1457). -->
     <string name="consent_front_door_not_now">Not now</string>
     <string name="event_receipt_settings_section">Screen events</string>
     <string name="event_receipt_android11_caveat">On Android 11, this may not take effect.</string>
@@ -128,13 +137,34 @@
     <string name="developer_settings_census_share_captures_explainer">Sends the text of screens gig.log doesn\'t recognize to the census server while the server trusts this install. These screens get only the general privacy filters, so a capture can still hold customer details that the server\'s operator can read.</string>
     <string name="developer_settings_census_captures_status">Screen captures: %1$d waiting, %2$s</string>
     <string name="developer_settings_census_captures_sent">%1$d sent last run</string>
-    <string name="consent_receipt_format">%1$s %2$s, app %3$s, privacy notice %4$d</string>
+    <string name="consent_receipt_format">%1$s, %2$s, app %3$s, privacy notice %4$d</string>
     <string name="consent_receipt_allowed">Allowed</string>
     <string name="consent_receipt_denied">Not allowed</string>
-    <string name="consent_privacy_link">Privacy details</string>
+    <string name="consent_privacy_link">Full privacy notice</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
     <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a shift, and after one until you log a reading</string>
     <string name="developer_settings_add_on_title">Add-on figures</string>
     <string name="developer_settings_add_on_totals">Job totals</string>
     <string name="developer_settings_add_on_deltas">Only what it adds</string>
+    <!-- #1457 — the in-app privacy page (PrivacyScreen). PRIVACY.md is the engineering ground
+         truth: a change to a claim there updates the matching privacy_* string in the same PR. -->
+    <string name="privacy_title">Privacy</string>
+    <string name="privacy_reads_title">What gig.log reads</string>
+    <string name="privacy_reads_body">Screens of the delivery apps you turn on, through Android Accessibility, and with Screen events on, the name of the app in front. Those apps\' notifications; other apps\' are skipped unread. GPS during a shift. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift. Screen reading and calculations happen on your phone. Recognized banking, payment and ID screens, the ID camera and the signature pad are dropped unsaved. The filters work in English and can miss a screen.</string>
+    <string name="privacy_customers_title">Customers</string>
+    <string name="privacy_customers_body">Customer names and addresses in your history are saved as codes, so gig.log can tell customers apart without knowing who they are. Store names and addresses are saved as text. Screenshots are pictures and keep everything on screen.</string>
+    <string name="privacy_saves_title">What gig.log saves</string>
+    <string name="privacy_saves_body">From the screens and notifications it recognizes: shifts, offers, deliveries and pay. From what you enter: expenses, fill-ups, cash tips, notes, odometer readings, vehicles, your goal and settings. Also the miles GPS counted, and a log of main events that keeps only recent entries.</string>
+    <string name="privacy_leaves_title">What leaves your phone</string>
+    <string name="privacy_leaves_body">gig.log has no account and no ads ID, and includes no outside analytics code. Gas-price lookups: Android\'s address lookup may send your last location to its provider to find your region, and the U.S. Energy Information Administration gets a price request for that region, with no account or install ID. Daily updates are off on a new install, and an update keeps your setting; to stop them, set the bubble\'s gas price to manual, or turn off daily updates in setup and save. Vehicle lookup starts after you tap \"Look up my vehicle\". gig.log saves that choice. The year, make, model and EPA vehicle ID you pick go to fueleconomy.gov, with no account or install ID. \"Search Google for MPG\" opens Google with the year, make and model. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Exports go to the folder you choose, and a cloud folder may upload them; spreadsheets leave out customer codes, and bug reports replace known private details but can miss some.</string>
+    <string name="privacy_screenshots_title">Screenshots</string>
+    <string name="privacy_screenshots_body">Off unless turned on in Settings > Data &amp; privacy > Screenshots. A picture of the whole screen, including customer details and any app behind an offer, saved to Pictures/gig.log. gig.log never uploads it; gallery sync or sharing can. It stays after uninstall until you delete it.</string>
+    <string name="privacy_backup_title">Backup and new phones</string>
+    <string name="privacy_backup_body">Android backup and phone transfer may copy your history and settings and restore them. Consent choices and logs are left out, so a new phone asks again.</string>
+    <string name="privacy_retention_title">How long it stays</string>
+    <string name="privacy_retention_body">Until you clear app data or uninstall, though a backup can bring it back on a reinstall or a new phone. Logs keep only recent entries. Screenshots and exports stay until you delete them. There is no one-tap delete yet.</string>
+    <string name="privacy_choices_title">Your choices</string>
+    <string name="privacy_choices_body">Each choice on Automation &amp; consent is saved on this phone with its date, app version and privacy notice version. The app log notes each automatic-tap choice and leaves the phone only in a bug report you export; the saved records are not exported.</string>
+    <string name="privacy_test_builds_title">Test builds</string>
+    <string name="privacy_test_builds_body">This test build saves the text of the delivery apps\' screens and notifications on the phone. On screens it recognizes, its rules replace the customer details they know about; elsewhere the filters can miss them. Its log also keeps screen text. That text stays until removed or uninstalled, and backup and transfer leave it out. Census upload, off unless turned on in developer options, sends outlines of unrecognized screens and notifications, plus counts showing which screens gig.log recognizes and the app version, with this install\'s ID. Capture sharing, also off unless turned on, needs census upload and the server\'s trust; it sends the text of unrecognized screens, never notifications, and the server\'s operator can read it. Screen events are required: without them, screen reading turns itself off and the app can\'t be used.</string>
 </resources>

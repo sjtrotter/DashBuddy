@@ -14,6 +14,10 @@ the fail-closed action gates (#417): live `PermissionTierChecker` + the capabili
 automation-triggered `RuleAction`s (grant store: `RuleCapabilityRepository` over the
 `rule_capability_grants` DataStore; **no auto-grant (#843)** — `reconcile` only publishes the
 enumeration, every capability lands *undecided* until the user opts in via the consent prompt).
+Before the grant lookup, an AUTOMATION fire of an action with no automatic trigger
+(`RuleAction.hasAutomaticTrigger` false: Accept, Decline) is refused with a WARN (#1457); a grant on
+such an action never authorizes a tap, and `AutomationTriggerGuardTest` pins the `EffectMap`
+`DeferredAction` sites (the only AUTOMATION source) to flagged actions.
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).

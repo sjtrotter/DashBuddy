@@ -18,6 +18,17 @@ package cloud.trotter.log.gig.domain.action
  * tap time — see `UiInteractionHandler.performVerifiedClick`. Consent
  * (#422/#417) is keyed per (rule, action), the key pinned to the sorted set of
  * every branch's binding definition (#1167) via `RuleCapability`.
+ *
+ * [hasAutomaticTrigger] (#1457) says whether the app has any code path that fires this action by
+ * itself (an AUTOMATION trigger). Only those actions are asked for in the consent prompt, and
+ * `SideEffectEngine` refuses an AUTOMATION fire of an action without the flag. Accept and Decline
+ * are flagged off today: they fire only from the dasher's own press, which is its own consent.
+ *
+ * Future step, not built (#1457): before an action's automation ships, add a `consentEpoch` to this
+ * enum and join it to the capability key hash, omitted while it is 1 so today's keys stay
+ * byte-identical. Bumping it for an action changes every key for that action, including keys a
+ * ruleset that is not loaded right now computes when it returns, so old grants stop matching while
+ * other actions' decisions stay. The test then: a returning stale ruleset is undecided.
  */
 enum class RuleAction(
     val wire: String,
@@ -25,6 +36,8 @@ enum class RuleAction(
     val targetBindName: String,
     /** Tap-time expectation the resolved live node must satisfy. */
     val verification: TargetExpectation,
+    /** True when the app has an automatic trigger for this action (#1457); see the class doc. */
+    val hasAutomaticTrigger: Boolean,
 ) {
     /**
      * Tap the offer screen's Accept button. "Add to route" is DoorDash's
@@ -34,6 +47,7 @@ enum class RuleAction(
         wire = "accept_offer",
         targetBindName = "acceptButton",
         verification = TargetExpectation(labelPattern = Regex("(?i)\\baccept\\b|\\badd to route\\b")),
+        hasAutomaticTrigger = false,
     ),
 
     /**
@@ -45,6 +59,7 @@ enum class RuleAction(
         wire = "decline_offer",
         targetBindName = "declineButton",
         verification = TargetExpectation(labelPattern = Regex("(?i)\\bdecline\\b")),
+        hasAutomaticTrigger = false,
     ),
 
     /**
@@ -57,6 +72,7 @@ enum class RuleAction(
         wire = "confirm_decline",
         targetBindName = "confirmDeclineButton",
         verification = TargetExpectation(labelPattern = Regex("(?i)\\bdecline\\b")),
+        hasAutomaticTrigger = true,
     ),
 
     /**
@@ -69,6 +85,7 @@ enum class RuleAction(
         wire = "expand_earnings",
         targetBindName = "expandButton",
         verification = TargetExpectation(labelPattern = null),
+        hasAutomaticTrigger = true,
     ),
     ;
 

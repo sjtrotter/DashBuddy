@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #1457 — test-build overrides of src/main/res/values/bools.xml. -->
+    <bool name="privacy_show_test_builds">true</bool>
+    <bool name="event_receipt_off_confirm">true</bool>
+</resources>

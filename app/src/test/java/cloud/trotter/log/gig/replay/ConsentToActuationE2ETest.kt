@@ -219,11 +219,20 @@ class ConsentToActuationE2ETest {
     fun `a dasher-pressed Accept clicks without any grant - even with accept_offer denied`() {
         val replay = harness()
         val prompt = consentPrompt(replay)
-        val acceptRow = prompt.uiState.value.rows.singleOrNull { it.action == RuleAction.ACCEPT_OFFER && it.platform == Platform.DoorDash }
-        assertNotNull("accept_offer is a consentable capability", acceptRow)
-        prompt.onDecision(acceptRow!!.key, allow = false)
+        // #1457: accept_offer has no automatic trigger, so the prompt never asks for it; it is still
+        // enumerated, and a denial (from an earlier build, or Settings) sits in the grant store.
+        assertNull(
+            "the prompt does not ask for an action with no automatic trigger",
+            prompt.uiState.value.rows.singleOrNull { it.action == RuleAction.ACCEPT_OFFER },
+        )
+        val acceptKey = checkNotNull(
+            replay.grants.capabilities.value
+                .singleOrNull { it.action == RuleAction.ACCEPT_OFFER && Platform.fromRuleId(it.ruleId) == Platform.DoorDash }
+                ?.key,
+        ) { "accept_offer is an enumerated capability" }
+        replay.await { replay.grants.setGranted(acceptKey, false) }
         replay.settle()
-        assertTrue(acceptRow.key in replay.grants.deniedKeys.value)
+        assertTrue(acceptKey in replay.grants.deniedKeys.value)
         assertTrue("no capability is granted at all", replay.grants.grantedKeys.value.isEmpty())
 
         val offer = SessionReplay.loadSession(STACK).first { it.file.startsWith("01") }
