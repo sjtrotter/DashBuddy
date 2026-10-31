@@ -14,19 +14,27 @@ from pathlib import Path
 
 
 def log_lines(paths):
-    errors, failed_tasks = [], []
+    errors, failed_tasks, wrong = [], [], []
     for path in paths:
         try:
             text = Path(path).read_text(errors="replace")
         except OSError:
             continue  # a step that never ran leaves no log
-        for line in text.splitlines():
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
             if line.startswith("e: "):
                 errors.append(line[:300])
             match = re.search(r"Execution failed for task '([^']+)'", line)
             if match and match.group(1) not in failed_tasks:
                 failed_tasks.append(match.group(1))
-    return errors, failed_tasks
+            if line.startswith("* What went wrong:"):
+                # Configuration and resolution failures (a Maven 429) name no task.
+                for detail in lines[index + 1:index + 6]:
+                    if detail.startswith("* ") or not detail.strip():
+                        break
+                    if detail[:300] not in wrong:
+                        wrong.append(detail[:300])
+    return errors, failed_tasks, wrong
 
 
 def junit(root):
@@ -62,7 +70,7 @@ def main():
         print(__doc__.strip())
         return 2
     root = Path(sys.argv[1])
-    errors, failed_tasks = log_lines(sys.argv[2:])
+    errors, failed_tasks, wrong = log_lines(sys.argv[2:])
     modules, failures = junit(root)
 
     print("## Gate summary\n")
@@ -72,6 +80,9 @@ def main():
         print("\n".join(errors[:30]))
     if failed_tasks:
         print("Failed tasks: " + ", ".join(failed_tasks))
+    if wrong:
+        print("What went wrong:")
+        print("\n".join(wrong[:20]))
     if failures:
         print(f"Failing tests ({len(failures)}):")
         print("\n".join(failures[:60]))

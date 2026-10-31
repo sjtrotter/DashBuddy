@@ -67,8 +67,11 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        # #1450 — writes its cache only from master (the push run); PRs restore it read-only.
+        # #1450 — writes its cache only from the master push run; PRs and dispatches (which test
+        # unmerged code even when launched from master) restore it read-only.
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
 
       - name: Make gradlew executable
         run: chmod +x gradlew
