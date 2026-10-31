@@ -5,7 +5,9 @@ Read by `council`, `interrogate` and `sol-loop`; overrides `~/.claude/council.md
 ## Standing rule (dev, 2026-10-27)
 
 Every PR's adversarial review is `sol-loop`: one Sol seat, up to 3 rounds, stop at the first clean round. Use the
-full council (Sol plus the Claude seat below) only when the developer says "council".
+full council only when the developer says "council" (seats, dev 2026-10-31: Claude, Sol, Fable when the usage budget
+allows, and Astra only when added). The builder is an Opus subagent (CLAUDE.md model policy rule 3), so the Claude
+seat is a fresh context, never the builder's.
 
 Every round reviews the full base diff (CLAUDE.md review rule (f)); rounds 2 and 3 also get the finding ledger and
 the change since the last round. This overrides `sol-loop`'s "review only open ids and changed code".
@@ -24,6 +26,19 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
 - run: Agent tool, `subagent_type: general-purpose`, `model: opus`, a fresh context, read-only brief
 - effort: high
 - never beside a Gradle run (host memory, CLAUDE.local.md)
+
+## Fable (when available)
+
+- run: Agent tool, `subagent_type: general-purpose`, `model: fable`, a fresh context, read-only brief
+- effort: high
+- skip the seat and say so when the usage budget is tight or the call fails on a limit; never substitute a model
+- never beside a Gradle run (host memory, CLAUDE.local.md)
+
+## Astra (only when added)
+
+- run: `timeout 2400 codex exec -m gpt-6-astra -s read-only -c 'model_reasoning_effort="xhigh"' --json -o <plan-dir>/astra-round<N>-reply.md - < <plan-dir>/astra-round<N>.md`,
+  after the Sol seat finishes (one codex job at a time)
+- effort: xhigh
 
 ## Every brief adds
 

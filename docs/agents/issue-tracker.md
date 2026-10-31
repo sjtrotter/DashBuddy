@@ -36,7 +36,7 @@ operations. Workstation ids (project number, field and option ids) are in `CLAUD
 ## When a skill says "publish to the issue tracker"
 
 Create a GitHub issue as above (labels, project, plain-language body). A `to-spec` spec is also saved as
-`~/dashbuddy/design/<date>-<topic>/spec-<issue>.md`, the file the codex builder specs are derived from.
+`~/dashbuddy/design/<date>-<topic>/spec-<issue>.md`, the file the builder specs are derived from.
 
 ## When a skill says "fetch the relevant ticket"
 
