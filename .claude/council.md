@@ -18,8 +18,9 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
   started as a background Bash call from the PR's worktree
 - effort: xhigh
 - plan dir: `~/dashbuddy/design/<date>-<issue>/`
-- the sandbox cannot run Gradle; the brief points at the green PR CI run's `gate-summary.txt` (downloaded with
-  `gh run download <id> -n junit-results-<pr>`, #1450)
+- the sandbox cannot run Gradle; each round runs beside the PR CI run on the same head (#1455), and the brief names
+  that run and its `gate-summary.txt` once it ends (`gh run download <id> -n junit-results-<pr>`, #1450). Sol's
+  compile claims are candidates; CI settles them.
 
 ## Claude
 

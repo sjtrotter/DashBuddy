@@ -1180,8 +1180,11 @@ The user skills under `~/.claude/skills` run the PR loop in this repo, in this o
 3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
    into the branch now, and the author writes the design-goal review (the PR template's block). `deslop` the diff.
 4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
-   the full diff, after PR CI is green on the head it reviews; the brief points at that run's `gate-summary.txt`.
-   `blast-radius` when the change touches a shared path.
+   the full diff, side by side with PR CI (dev, 2026-10-31, #1455): each round is one push, and that head's CI run
+   and Sol round start together. Fix both sets of findings, then push once, which starts the next round. A PR is
+   ready when one head is both CI-green and Sol-clean (the stopping rule and three-round cap below are unchanged).
+   Sol cannot compile, so its compile claims are candidates CI settles; CI cannot judge design. The brief names the
+   head's run and, once it ends, its `gate-summary.txt`. `blast-radius` when the change touches a shared path.
 5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
    draft (`gh pr edit`, then `gh pr ready`).
 6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); the `master` ruleset requires `build-and-test`
