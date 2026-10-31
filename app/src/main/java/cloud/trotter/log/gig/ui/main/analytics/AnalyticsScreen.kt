@@ -29,6 +29,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.component.AppSegmented
+import cloud.trotter.log.gig.domain.analytics.OfferFilter
+import cloud.trotter.log.gig.domain.analytics.WindowGranularity
 import cloud.trotter.log.gig.ui.components.MoreNumbersToggle
 import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
 
@@ -61,6 +63,86 @@ fun AnalyticsScreen(
     // The #970 range picker (brief §3.2) — opened from the pager label or the `Custom…` chip.
     var showRangePicker by remember { mutableStateOf(false) }
 
+    AnalyticsContent(
+        uiState = uiState,
+        // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit the whole
+        // hub state); the content invokes this only inside the Offers tab, so it is collected only
+        // while that tab is on screen.
+        offersFeed = {
+            val offersFeed by viewModel.offersFeed.collectAsStateWithLifecycle()
+            offersFeed
+        },
+        onBack = onBack,
+        onExportCsv = onExportCsv,
+        onOpenSession = onOpenSession,
+        onStep = viewModel::stepWindow,
+        onOpenPicker = { showRangePicker = true },
+        onSelectGranularity = viewModel::setGranularity,
+        onSelectTab = viewModel::setTab,
+        onOpenNoSession = { showAssignSheet = true },
+        onOpenOrphanOffers = { showOrphanOfferSheet = true },
+        onSelectFilter = viewModel::setOfferFilter,
+        onShowAllOffers = viewModel::showAllOffers,
+        onToggleShowMore = { viewModel.setShowMore(!uiState.showMore) },
+    )
+
+    if (showAssignSheet) {
+        NoSessionAssignDialog(
+            orphans = uiState.noSessionDeliveries,
+            candidateSessionsFor = viewModel::candidateSessionsFor,
+            onAssign = viewModel::assignToSession,
+            onDismiss = { showAssignSheet = false },
+        )
+    }
+
+    if (showOrphanOfferSheet) {
+        OrphanOfferAttestDialog(
+            groups = uiState.orphanOfferGroups,
+            onResolve = viewModel::resolveOrphanOffer,
+            onDismiss = { showOrphanOfferSheet = false },
+        )
+    }
+
+    if (showRangePicker) {
+        val pickerMonth by viewModel.pickerMonth.collectAsStateWithLifecycle()
+        val pickerMonthDays by viewModel.pickerMonthDays.collectAsStateWithLifecycle()
+        RangePickerSheet(
+            window = uiState.window,
+            today = uiState.today,
+            month = pickerMonth,
+            monthDays = pickerMonthDays,
+            onMonthChange = viewModel::setPickerMonth,
+            onPickPreset = viewModel::setRelativeWindow,
+            onCommitRange = viewModel::setCustomRange,
+            onDismiss = { showRangePicker = false },
+        )
+    }
+}
+
+/**
+ * The hub's Scaffold: the pager, the recap hero, the tabs and the footer (#1463 hoisted it out of
+ * [AnalyticsScreen] so a screenshot test can render it without Hilt). Stateless: state down, intents
+ * up. [offersFeed] stays a composable read so the Offers list is collected only on the Offers tab;
+ * the dialogs stay in [AnalyticsScreen].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun AnalyticsContent(
+    uiState: AnalyticsUiState,
+    offersFeed: @Composable () -> OffersFeedState,
+    onBack: () -> Unit,
+    onExportCsv: () -> Unit,
+    onOpenSession: (String) -> Unit,
+    onStep: (Int) -> Unit,
+    onOpenPicker: () -> Unit,
+    onSelectGranularity: (WindowGranularity) -> Unit,
+    onSelectTab: (AnalyticsTab) -> Unit,
+    onOpenNoSession: () -> Unit,
+    onOpenOrphanOffers: () -> Unit,
+    onSelectFilter: (OfferFilter) -> Unit,
+    onShowAllOffers: () -> Unit,
+    onToggleShowMore: () -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -98,9 +180,9 @@ fun AnalyticsScreen(
                 today = uiState.today,
                 canStepBack = uiState.canStepBack,
                 canStepForward = uiState.canStepForward,
-                onStep = viewModel::stepWindow,
-                onOpenPicker = { showRangePicker = true },
-                onSelectGranularity = viewModel::setGranularity,
+                onStep = onStep,
+                onOpenPicker = onOpenPicker,
+                onSelectGranularity = onSelectGranularity,
             )
             Spacer(Modifier.height(16.dp))
             RecapHero(
@@ -121,7 +203,7 @@ fun AnalyticsScreen(
                     // Lookup happens against this already-resolved pairs list (#428 Half A), so
                     // selection stays keyed off the enum — not a raw resolved-string comparison
                     // that could collide across locales/tabs.
-                    tabOptions.firstOrNull { it.label == label }?.let { viewModel.setTab(it.tab) }
+                    tabOptions.firstOrNull { it.label == label }?.let { onSelectTab(it.tab) }
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -139,21 +221,20 @@ fun AnalyticsScreen(
                     dailyEarnings = uiState.dailyEarnings,
                     orphanOfferGroups = uiState.orphanOfferGroups,
                     onOpenSession = onOpenSession,
-                    onOpenNoSession = { showAssignSheet = true },
-                    onOpenOrphanOffers = { showOrphanOfferSheet = true },
+                    onOpenNoSession = onOpenNoSession,
+                    onOpenOrphanOffers = onOpenOrphanOffers,
                 )
 
                 // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit
                 // the whole hub state), collected only while this tab is on screen.
                 AnalyticsTab.Offers -> {
-                    val offersFeed by viewModel.offersFeed.collectAsStateWithLifecycle()
                     OffersTab(
                         showMore = uiState.showMore,
                         decisions = uiState.decisions,
                         estimateVsReality = uiState.estimateVsReality,
-                        offersFeed = offersFeed,
-                        onSelectFilter = viewModel::setOfferFilter,
-                        onShowAllOffers = viewModel::showAllOffers,
+                        offersFeed = offersFeed(),
+                        onSelectFilter = onSelectFilter,
+                        onShowAllOffers = onShowAllOffers,
                     )
                 }
 
@@ -173,42 +254,10 @@ fun AnalyticsScreen(
             // wording used to live on (part-2 review F1). The hub is period-scoped — no plan
             // projection to disclose, unlike Home's copy of the same footer.
             Spacer(Modifier.height(16.dp))
-            MoreNumbersToggle(showMore = uiState.showMore, onToggle = { viewModel.setShowMore(!uiState.showMore) })
+            MoreNumbersToggle(showMore = uiState.showMore, onToggle = onToggleShowMore)
             Spacer(Modifier.height(16.dp))
             HowNumbersWorkFooter(extraNotes = footerNotes(uiState))
         }
-    }
-
-    if (showAssignSheet) {
-        NoSessionAssignDialog(
-            orphans = uiState.noSessionDeliveries,
-            candidateSessionsFor = viewModel::candidateSessionsFor,
-            onAssign = viewModel::assignToSession,
-            onDismiss = { showAssignSheet = false },
-        )
-    }
-
-    if (showOrphanOfferSheet) {
-        OrphanOfferAttestDialog(
-            groups = uiState.orphanOfferGroups,
-            onResolve = viewModel::resolveOrphanOffer,
-            onDismiss = { showOrphanOfferSheet = false },
-        )
-    }
-
-    if (showRangePicker) {
-        val pickerMonth by viewModel.pickerMonth.collectAsStateWithLifecycle()
-        val pickerMonthDays by viewModel.pickerMonthDays.collectAsStateWithLifecycle()
-        RangePickerSheet(
-            window = uiState.window,
-            today = uiState.today,
-            month = pickerMonth,
-            monthDays = pickerMonthDays,
-            onMonthChange = viewModel::setPickerMonth,
-            onPickPreset = viewModel::setRelativeWindow,
-            onCommitRange = viewModel::setCustomRange,
-            onDismiss = { showRangePicker = false },
-        )
     }
 }
 

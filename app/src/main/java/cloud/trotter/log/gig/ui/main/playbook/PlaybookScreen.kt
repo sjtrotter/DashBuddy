@@ -58,6 +58,26 @@ fun PlaybookScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    PlaybookContent(
+        uiState = uiState,
+        onBack = onBack,
+        onOpenPlan = onOpenPlan,
+        onToggleShowMore = { viewModel.setShowMore(!uiState.showMore) },
+    )
+}
+
+/**
+ * The Playbook's Scaffold (#1463 hoisted it out of [PlaybookScreen] so a screenshot test can render it
+ * without Hilt). Stateless: state down, intents up.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PlaybookContent(
+    uiState: PlaybookUiState,
+    onBack: () -> Unit,
+    onOpenPlan: () -> Unit,
+    onToggleShowMore: () -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -107,7 +127,7 @@ fun PlaybookScreen(
             // #1024 part 3 follow-through: the plan-projection line ("lifetime aggregates of your
             // own record — not a guarantee") belongs on every screen that renders plan/best-stretch
             // rates. Home opts in; the Playbook renders the plan itself, so it opts in too.
-            MoreNumbersToggle(showMore = uiState.showMore, onToggle = { viewModel.setShowMore(!uiState.showMore) })
+            MoreNumbersToggle(showMore = uiState.showMore, onToggle = onToggleShowMore)
             Spacer(Modifier.height(16.dp))
             HowNumbersWorkFooter(
                 includePlanProjection = true,

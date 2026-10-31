@@ -34,6 +34,8 @@ re2j = "1.8"
 reorderable = "3.0.0"
 room = "2.8.4"
 robolectric = "4.16.1"
+# #1463: screenshot capture for the CI-rendered key screens (record only, never compared).
+roborazzi = "1.63.0"
 retrofit = "3.0.0"
 retrofitKotlinx = "1.0.0"
 timber = "5.0.1"
@@ -96,6 +98,7 @@ retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = 
 retrofit-kotlinx-serialization = { group = "com.jakewharton.retrofit", name = "retrofit2-kotlinx-serialization-converter", version.ref = "retrofitKotlinx" }
 re2j = { group = "com.google.re2j", name = "re2j", version.ref = "re2j" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
 

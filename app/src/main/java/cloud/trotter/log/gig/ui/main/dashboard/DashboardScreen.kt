@@ -136,6 +136,41 @@ fun DashboardScreen(
         FrontDoorHost()
     }
 
+    DashboardBody(
+        uiState = uiState,
+        hasPermissions = hasPermissions,
+        screenReadingOff = PermissionType.Accessibility in permissions.missing,
+        onContinueGate = {
+            permissionsViewModel.reopen()
+            showPermissionSheet = true
+        },
+        onNavigateToWizard = onNavigateToWizard,
+        onCompleteSetup = { viewModel.completeSetup() },
+        onShowBubble = { viewModel.showWelcomeBubble() },
+        onOpenRecap = openWeekRecap,
+        onNavigate = onNavigate,
+        onNavigateToSettings = onNavigateToSettings,
+    )
+}
+
+/**
+ * Home's body: the gate, first-run and ready states (#1463 hoisted it out of [DashboardScreen] so a
+ * screenshot test can render it without Hilt). Stateless: state down, intents up; the ViewModels,
+ * the permission sheet and the front door stay in [DashboardScreen].
+ */
+@Composable
+internal fun DashboardBody(
+    uiState: DashboardUiState,
+    hasPermissions: Boolean?,
+    screenReadingOff: Boolean,
+    onContinueGate: () -> Unit,
+    onNavigateToWizard: () -> Unit,
+    onCompleteSetup: () -> Unit,
+    onShowBubble: () -> Unit,
+    onOpenRecap: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onNavigateToSettings: () -> Unit,
+) {
     Scaffold { padding ->
         Column(
             modifier = Modifier
@@ -155,11 +190,8 @@ fun DashboardScreen(
                 // never Android settings directly).
                 hasPermissions == false -> {
                     PermissionGateCard(
-                        screenReadingOff = PermissionType.Accessibility in permissions.missing,
-                        onContinue = {
-                            permissionsViewModel.reopen()
-                            showPermissionSheet = true
-                        },
+                        screenReadingOff = screenReadingOff,
+                        onContinue = onContinueGate,
                     )
                     SettingsLink(onNavigateToSettings)
                 }
@@ -179,7 +211,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { viewModel.completeSetup() }
+                        onClick = onCompleteSetup
                     ) { Text(stringResource(R.string.dashboard_screen_skip_for_now_button)) }
                     SettingsLink(onNavigateToSettings)
                 }
@@ -194,7 +226,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     if (uiState.isDashing) {
-                        DashingStatusRow(onTap = { viewModel.showWelcomeBubble() })
+                        DashingStatusRow(onTap = onShowBubble)
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
@@ -215,12 +247,12 @@ fun DashboardScreen(
                         previousEconomics = uiState.previousWeekEconomics,
                         dailyEarnings = uiState.weekDailyEarnings,
                         plan = uiState.weeklyPlan,
-                        onOpenRecap = openWeekRecap,
+                        onOpenRecap = onOpenRecap,
                         onOpenPlan = { onNavigate(Screen.WeeklyPlan.route) },
                         reviewContent = rememberReviewSlot(
                             economics = uiState.weekEconomics,
                             orphanOfferGroups = uiState.orphanOfferGroups,
-                            onOpen = openWeekRecap,
+                            onOpen = onOpenRecap,
                         ),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -234,7 +266,7 @@ fun DashboardScreen(
 
                     Button(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { viewModel.showWelcomeBubble() }
+                        onClick = onShowBubble
                     ) { Text(stringResource(R.string.dashboard_screen_show_bubble_button)) }
 
                     // BLOCK 4 — the screen's one disclosure (#1024 rule 2).

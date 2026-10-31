@@ -1,0 +1,55 @@
+# #1463 — the screenshots PR CI expects, one per line: <path> <width dp> <height dp>.
+# Each path is rendered twice, <path>-light.png and <path>-dark.png, at 420 dpi.
+# The HUD (HudScreenshotsTest, :feature:bubble): the expanded bubble window.
+bubble/live-waiting 411 600
+bubble/live-pickup-navigating 411 600
+bubble/live-pickup-arrived 411 600
+bubble/live-shopping 411 600
+bubble/live-dropoff-navigating 411 600
+bubble/live-dropoff-arrived 411 600
+bubble/live-receipt 411 600
+bubble/live-cash-tips 411 600
+bubble/offer-standard 411 600
+bubble/offer-limit-notes 411 600
+bubble/offer-addon-job 411 600
+bubble/offer-addon-raw 411 600
+bubble/log 411 600
+bubble/resting 411 600
+bubble/resting-pending 411 600
+bubble/first-run 411 600
+bubble/sheet-cash-tip 411 600
+bubble/sheet-expense-pick 411 600
+bubble/sheet-expense-fuel 411 600
+bubble/sheet-odometer 411 600
+bubble/sheet-goal 411 600
+# The app (ScreenshotsTest, :app): a Pixel 7; the -full shots are a supplemental 2000 dp tall window.
+setup/step-1-screen-events 411 914
+setup/step-2-screen-reading 411 914
+setup/step-3-notification-access 411 914
+setup/step-4-location 411 914
+setup/step-5-notifications 411 914
+setup/step-6-bubbles 411 914
+setup/consent-prompt 411 914
+setup/debug-event-receipt-block 411 914
+settings/automation-consent 411 914
+settings/automation-consent-full 411 2000
+settings/event-receipt-dialog 411 914
+settings/event-receipt-off-confirm 411 914
+settings/privacy-test-build 411 914
+settings/privacy-test-build-full 411 2000
+home 411 914
+home-full 411 2000
+home-gate-screen-reading-off 411 914
+home-gate-setup 411 914
+home-first-run 411 914
+hub/money 411 914
+hub/money-full 411 2000
+hub/offers 411 914
+hub/offers-full 411 2000
+hub/time 411 914
+hub/time-full 411 2000
+playbook 411 914
+playbook-full 411 2000
+playbook-empty 411 914
+notification/offer-compact 411 914
+notification/offer-expanded 411 914

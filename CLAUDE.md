@@ -87,6 +87,12 @@ trusted installs; server #1157).
 
 # Build a specific core module
 ./gradlew :core:database:build
+
+# Render the key-screen screenshots (#1463; PR CI does this after the gate and uploads screenshots-<pr>).
+# Without -PscreenShots=true the *ScreenshotsTest classes compile but never run, so the gate stays free of them.
+# PNGs land in feature/bubble/build/outputs/screenshots and app/build/outputs/screenshots.
+./gradlew --continue :feature:bubble:testDebugUnitTest --tests '*ScreenshotsTest' \
+  :app:testDebugUnitTest --tests '*ScreenshotsTest' -PscreenShots=true
 ```
 
 Dependencies are managed via the version catalog at `gradle/libs.versions.toml`. Min SDK is 30
@@ -1191,6 +1197,10 @@ The user skills under `~/.claude/skills` run the PR loop in this repo, in this o
    compile) through `~/dashbuddy/tools/pr-loop/gt.sh`'s memory guard (what the skills' `free -m` check means here),
    never the full gate; a branch that adds snapshot fixtures runs the intake and corpus privacy tests locally before
    its first push, because a pushed fixture is public. Bugs go through `diagnosing-bugs` and `tdd`.
+   Screens: `gh run download <id> -n screenshots-<pr>` (light and dark PNGs of the key screens, recorded only, never
+   compared; #1463). The same run renders them after the gate, also when the gate is red as long as the build compiled;
+   `tools/ci/screenshots.txt` lists the expected files and `tools/ci/check_screenshots.py` fails the job only on a
+   missing or undecodable one (`screenshots-summary.txt` in the artifact names a crashed render).
 3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
    into the branch before a round's push (steps 2 and 4 repeat per round, and step 3's edits ride the next push), and
    the author writes the design-goal review (the PR template's block). `deslop` the diff.

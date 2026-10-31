@@ -50,7 +50,7 @@ internal abstract class HudScreenFixture {
         logOpen: Boolean = false, cashTipCue: Boolean = false, pending: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
-            Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
+            Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", SESSION_START)),
         flow = flow, platform = Platform.DoorDash, switchable = emptyList(), vehicleChip = vehicleChip,
         shift = when {
             first -> null
@@ -90,5 +90,9 @@ internal abstract class HudScreenFixture {
         compose.mainClock.advanceTimeBy(2_000)
     }
 
-    protected companion object { const val T0 = 1_700_000_000_000L }
+    protected companion object {
+        const val T0 = 1_700_000_000_000L
+        /** When the fixture's live shift started; a state card or ribbon built beside [state] shares it. */
+        const val SESSION_START = T0 - 160 * 60_000 - 30_000
+    }
 }

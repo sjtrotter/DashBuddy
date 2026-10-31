@@ -35,6 +35,26 @@ android {
         // Robolectric hosts bitmap, offer text and Compose UI tests;
         // compiled resources let it resolve a real manifest/Context.
         unitTests.isIncludeAndroidResources = true
+        // #1463: `-PscreenShots=true` renders the HUD screenshots (`*ScreenshotsTest`) into
+        // build/outputs/screenshots for PR CI's `screenshots-<pr>` artifact. Without the property the
+        // classes compile and never run, so the gate stays free of them.
+        val screenShots = providers.gradleProperty("screenShots").orNull == "true"
+        val shotsDir = layout.buildDirectory.dir("outputs/screenshots").get().asFile
+        unitTests.all { test ->
+            test.systemProperty("giglog.screenshots.dir", shotsDir.absolutePath)
+            test.systemProperty("roborazzi.test.record", screenShots.toString())
+            if (screenShots) {
+                // A cached test task must never stand in for a render, and the render's results go
+                // to their own directories so the gate's JUnit XML is never replaced.
+                test.outputs.dir(shotsDir)
+                test.outputs.upToDateWhen { false }
+                test.outputs.cacheIf { false }
+                test.reports.junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/screenshots"))
+                test.binaryResultsDirectory.set(layout.buildDirectory.dir("test-results/screenshots-bin"))
+            } else {
+                test.filter.excludeTestsMatching("*ScreenshotsTest")
+            }
+        }
     }
 }
 
@@ -61,6 +81,8 @@ dependencies {
     testImplementation(libs.junit)
     // Offer text and pay bar tests resolve Android resources under Robolectric.
     testImplementation(libs.robolectric)
+    // #1463: Roborazzi captures the HUD screenshots (HudScreenshotsTest, run only with -PscreenShots=true).
+    testImplementation(libs.roborazzi)
     // #1333: Compose UI tests under Robolectric (the HUD's reactivity rules are tested here).
     testImplementation(libs.androidx.ui.test.junit4)
     // Debug only: the Compose tests live in src/testDebug. :app's debug manifest keeps the host activity unexported.
