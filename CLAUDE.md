@@ -1177,14 +1177,22 @@ The user skills under `~/.claude/skills` run the PR loop in this repo, in this o
 
 1. **Plan:** `grilling`, then `to-spec` and `to-tickets` (the developer starts those two). The codex builder spec for
    each ticket follows `codex-harness` §3 and `CLAUDE.local.md` § Codex harness.
-2. **Build and prove:** Astra builds; Claude runs the local gate with `~/dashbuddy/tools/pr-loop/gt.sh` (the
-   skills' `free -m` check means that script's memory guard here). Bugs go through `diagnosing-bugs` and `tdd`.
+2. **Build and prove:** Astra builds; the session pushes the branch behind a draft PR, and PR CI
+   (`pr-check.yml`, `build-and-test`) is the gate (#1450: the laptop cannot run the full gate safely). Read a red run
+   with `gh run view <id> --log-failed` and its `gate-summary.txt` (`gh run download <id> -n junit-results-<pr>`;
+   `tools/ci/junit_summary.py` reads downloaded XML). Local Gradle is only small runs (`:domain:test`, one module's
+   compile) through `~/dashbuddy/tools/pr-loop/gt.sh`'s memory guard (what the skills' `free -m` check means here),
+   never the full gate; a branch that adds snapshot fixtures runs the intake and corpus privacy tests locally before
+   its first push, because a pushed fixture is public. Bugs go through `diagnosing-bugs` and `tdd`.
 3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
    into the branch now, and the author writes the design-goal review (the PR template's block). `deslop` the diff.
 4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
-   the full diff, after the local gate is green. `blast-radius` when the change touches a shared path.
-5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks.
-6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); PR CI confirms the local gate. Once it passes,
+   the full diff, after PR CI is green on the head it reviews; the brief points at that run's `gate-summary.txt`.
+   `blast-radius` when the change touches a shared path.
+5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
+   draft (`gh pr edit`, then `gh pr ready`).
+6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); the `master` ruleset requires `build-and-test`
+   on the head and allows merge commits only. Once it passes,
    merge with `~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>`: it runs `gh pr merge --merge`, removes
    the worktree, deletes the branch locally and on the remote, pulls master, sets the board to Done and drops
    `in-progress`. Merging needs no "full send" in this repo: the developer is the only author (dev, 2026-10-27).
@@ -1256,8 +1264,8 @@ branch" button, or the workstation agent's `gh pr merge … --delete-branch`).
 A PR that skips these is incomplete — future agents inherit their entire context from these
 two places.
 
-**Every PR gets a design-goal review — no exceptions.** After the local gate is green and before the
-adversarial review (PR CI confirms the gate after the push), review the **full diff** against the Development Principles and record the result
+**Every PR gets a design-goal review — no exceptions.** Before the adversarial review (it can be written
+while PR CI runs), review the **full diff** against the Development Principles and record the result
 in the PR description under a `### Design-goal review` heading (append it if the PR was opened
 without one):
 
@@ -1326,8 +1334,9 @@ adjudicator's job is to reject, not to relay.
 **Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
 `build-and-test` job when the **PR description (body)** contains the literal
 string **`[skip ci]`**. So for a PR that touches no compiled code (only
-Markdown/docs), put `[skip ci]` in the PR body to avoid a pointless ~6-minute
-build. Note the exact token is `[skip ci]` in the **body** — not `[no-ci]`, not a
+Markdown/docs), put `[skip ci]` in the PR body to avoid a pointless ~13-minute
+build. The token is read when a run starts: a code branch's early draft body must not carry it, and a later body
+edit (`file-pr`) neither re-runs CI nor skips it. Note the exact token is `[skip ci]` in the **body** — not `[no-ci]`, not a
 comment, not a label. Only use it when the diff genuinely has no code; when in
 doubt, let CI run. **Footgun (#902/#928):** the check is a bare `contains()`, so
 a code PR whose body merely *describes* the token skips its own CI — either
@@ -1336,8 +1345,11 @@ the body, which forces the run back on. And if Actions ever **refuses to
 dispatch** runs for a PR's tree (the 2026-07-27 class — no run object across
 shas/branches), use the `workflow_dispatch` escape hatch: Actions → PR Check →
 Run workflow → enter the PR number; it builds that PR's merge ref and reports a
-real `build-and-test` commit status onto the PR head, satisfying branch
-protection without an admin override.
+real `build-and-test` commit status onto the PR head it tested (pinned before the build, #1450),
+satisfying the required check without an admin override. **`master` is protected by a ruleset (#1450):** a PR is
+required, merge commits only, `build-and-test` must pass (a skipped run counts), no approvals, and the admin
+bypass applies to PRs only. The signing secrets live in the `release` environment, which only `v*.*.*` tags can
+use.
 
 **PR CI gates `:app:lintVitalRelease` (#907).** `pr-check.yml` used to build/test only the
 **debug** variant, so a release-only break (`ExtraTranslation` errors from the #98

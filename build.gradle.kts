@@ -38,6 +38,9 @@ subprojects {
         // whole module fits deterministically; version-independent, so CI (JDK 21) gets
         // the same headroom.
         maxHeapSize = "2g"
+        // #1450: tests read the generated rule assets off disk without declaring them as inputs, so a
+        // cached result could pass a rule change its tests never ran against.
+        outputs.doNotCacheIf("reads the generated rule assets as an undeclared input") { true }
         // #1093: print the assertion MESSAGE of a failing test, not just its class + line — the
         // PR CI log was the only test runner available (host memory-starved) and it showed
         // `AssertionError at …Test.kt:282` and nothing else, which is undebuggable at a distance.

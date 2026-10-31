@@ -3,6 +3,9 @@ name: PR Check
 on:
   pull_request:
     branches: [ master ]
+  # #1450 — a master push writes the Gradle cache PRs restore read-only, and catches merge skew.
+  push:
+    branches: [ master ]
   # #902 — escape hatch for a dispatch-refused PR (Actions refused to create runs for one
   # PR's tree across 4 shas/3 PRs on 2026-07-27; branch protection made it unmergeable).
   # Dispatch with the PR number: the job checks out that PR's MERGE ref (the same tree a
@@ -15,6 +18,12 @@ on:
         description: 'PR number to run against (checks out refs/pull/<pr>/merge, reports status to its head SHA)'
         required: true
         type: string
+
+# #1450 — PR CI is the pre-PR gate, so a new push supersedes the running check of the same PR.
+# The event name keeps a PR push from cancelling a #902 dispatch run or a master run.
+concurrency:
+  group: pr-check-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -41,6 +50,15 @@ jobs:
           # Empty ref (pull_request events) keeps the default merge-commit checkout; a
           # workflow_dispatch run substitutes the named PR's merge ref (#902).
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
+          # #1450 — a dispatch run needs the merge commit's parents to pin the head it tests.
+          fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 2 || 1 }}
+
+      - name: Pin the tested PR head (dispatch runs only)
+        # #1450 — the merge ref's second parent IS the head this run tests; reading the head from the
+        # API at report time could mark a commit pushed mid-run green.
+        id: pin
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: echo "head=$(git rev-parse --verify HEAD^2)" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -48,36 +66,32 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Set up Gradle
+        # #1450 — writes its cache only from the master push run; PRs and dispatches (which test
+        # unmerged code even when launched from master) restore it read-only.
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.m2/repository
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug
+      - name: Compile (main and test sources, every module reports)
+        # #1450 — a broken build fails here in minutes instead of after the whole gate.
+        shell: bash  # an explicit shell means -eo pipefail, so tee cannot mask the exit status
+        run: ./gradlew --continue compileDebugUnitTestKotlin :domain:compileTestKotlin 2>&1 | tee compile.log
 
-      - name: Run unit tests
+      - name: Gate (debug APK, unit tests, release lint)
+        # One invocation with --continue (#1450): a red module no longer hides the rest.
         # :domain is pure-JVM — its task is `test`, which the Android aggregate does NOT
         # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
         # #1173 review: :domain:test covers the census-contract included build's tests; the alias is harmless.
-        run: ./gradlew testDebugUnitTest :domain:test censusContractTest
-
-      - name: Release lint (lintVitalRelease)
-        # #907 — PR CI previously only ever built/tested the debug variant, so a release-only
-        # break (16 ExtraTranslation errors from the #98 :feature:setup extraction orphaning
-        # values-es-rUS translations) shipped invisibly and broke `./gradlew :app:build` on
-        # master for an unknown stretch of time. This is the class of break that hid; gate it
-        # here so it can't again.
-        run: ./gradlew :app:lintVitalRelease
+        # #907 — lintVitalRelease: PR CI once built/tested only the debug variant, so a release-only
+        # break (16 ExtraTranslation errors from the #98 :feature:setup extraction) shipped invisibly.
+        shell: bash
+        run: |
+          ./gradlew --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
+            :app:lintVitalRelease 2>&1 | tee gate.log
 
       - name: Schemas committed (Room export drift)
         # With the destructive fallback retired (#690), an uncommitted Room schema export is a
@@ -90,9 +104,16 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk-${{ github.event.pull_request.number || inputs.pr }}
+          name: debug-apk-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+
+      - name: Gate summary
+        # #1450 — failing tests and compile errors on the run page and in gate-summary.txt, the one file
+        # the session and the adversarial review read. Same script the session runs on downloaded results.
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python3 tools/ci/junit_summary.py . compile.log gate.log | tee gate-summary.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Print 20 slowest test classes
         if: always()
@@ -125,23 +146,26 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: junit-results-${{ github.event.pull_request.number || inputs.pr }}
+          name: junit-results-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: |
             **/build/test-results/**/*.xml
             test-timings.txt
+            gate-summary.txt
+            compile.log
+            gate.log
           retention-days: 7
 
       - name: Report status to PR head (dispatch runs only)
         # #902 — a workflow_dispatch run is not attached to the PR, so its result would never
         # satisfy the required `build-and-test` check. Post a commit status with that exact
         # context onto the PR's HEAD sha (branch protection accepts a commit status of the
-        # same name). `always()` so a red dispatch run reports failure, not silence.
-        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+        # same name). A red dispatch run reports failure, not silence; a cancelled one reports nothing,
+        # and the status goes only to the head pinned before the build (#1450).
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          HEAD_SHA=$(gh pr view "${{ inputs.pr }}" --repo "${{ github.repository }}" --json headRefOid -q .headRefOid)
-          gh api "repos/${{ github.repository }}/statuses/$HEAD_SHA" \
+          gh api "repos/${{ github.repository }}/statuses/${{ steps.pin.outputs.head }}" \
             -f state="${{ job.status == 'success' && 'success' || 'failure' }}" \
             -f context="build-and-test" \
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
