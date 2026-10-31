@@ -4,7 +4,8 @@ Read by `council`, `interrogate` and `sol-loop`; overrides `~/.claude/council.md
 
 ## Standing rule (dev, 2026-10-27)
 
-Every PR's adversarial review is `sol-loop`: one Sol seat, up to 3 rounds, stop at the first clean round. Use the
+Every PR's adversarial review is `sol-loop`: one Sol seat, up to 3 rounds, stop at the first round whose head is
+both Sol-clean and CI-green (CLAUDE.md delivery chain step 4, #1455). Use the
 full council only when the developer says "council" (seats, dev 2026-10-31: Claude, Sol, Fable when the usage budget
 allows, and Astra only when added). The builder is an Opus subagent (CLAUDE.md model policy rule 3), so the Claude
 seat is a fresh context, never the builder's.
@@ -18,8 +19,9 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
   started as a background Bash call from the PR's worktree
 - effort: xhigh
 - plan dir: `~/dashbuddy/design/<date>-<issue>/`
-- the sandbox cannot run Gradle; the brief points at the green PR CI run's `gate-summary.txt` (downloaded with
-  `gh run download <id> -n junit-results-<pr>`, #1450)
+- the sandbox cannot run Gradle; each round runs beside the PR CI run on the same head (#1455), and the brief names
+  that run and its `gate-summary.txt` once it ends (`gh run download <id> -n junit-results-<pr>`, #1450). Sol's
+  compile claims are candidates; CI settles them.
 
 ## Claude
 

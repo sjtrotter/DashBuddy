@@ -1178,10 +1178,17 @@ The user skills under `~/.claude/skills` run the PR loop in this repo, in this o
    never the full gate; a branch that adds snapshot fixtures runs the intake and corpus privacy tests locally before
    its first push, because a pushed fixture is public. Bugs go through `diagnosing-bugs` and `tdd`.
 3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
-   into the branch now, and the author writes the design-goal review (the PR template's block). `deslop` the diff.
+   into the branch before a round's push (steps 2 and 4 repeat per round, and step 3's edits ride the next push), and
+   the author writes the design-goal review (the PR template's block). `deslop` the diff.
 4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
-   the full diff, after PR CI is green on the head it reviews; the brief points at that run's `gate-summary.txt`.
-   `blast-radius` when the change touches a shared path.
+   the full diff, side by side with PR CI (dev, 2026-10-31, #1455): each round is one push of committed work, and
+   that head's CI run and Sol round start together on the same SHA; the worktree is not edited while the round runs.
+   Fix both sets of findings, then push once, which starts the next round. Any push that changes the diff starts a
+   round, a CI-only fix included, so a clean verdict never carries onto changed code. Stop at the first round whose
+   head is both CI-green and Sol-clean; the three-round cap counts every round, and at the cap with no such head the
+   developer decides. Sol cannot compile, so its compile claims are candidates CI settles; CI cannot judge design. The
+   brief names the head's SHA and run and, once it ends, its `gate-summary.txt`. `blast-radius` when the change
+   touches a shared path.
 5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
    draft (`gh pr edit`, then `gh pr ready`).
 6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); the `master` ruleset requires `build-and-test`
@@ -1316,7 +1323,8 @@ delta since the last adjudicated head and the finding ledger;
 wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding
 that REVERSES an earlier accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
 subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose verdict is MERGE /
-MERGE WITH FIXES with no confirmed defect is the last round. **(f) The stopping rule (dev, 2026-10-19, after S2f's 17 and 13 review rounds):** keep every review on the full diff, stop at the first clean independent round, cap at three rounds per reviewer, and treat a reviewer that never returns zero as miscalibrated rather than as evidence of defects; every reviewer answers "would you block this merge, and why", and the adjudicator fixes blocking findings in the PR and records the rest. **(e) Oscillation means redesign (dev, 2026-10-07):**
+MERGE WITH FIXES with no confirmed defect is the last round, provided its head is also CI-green (delivery chain
+step 4: a later push that changes the diff is a new round). **(f) The stopping rule (dev, 2026-10-19, after S2f's 17 and 13 review rounds):** keep every review on the full diff, stop at the first clean independent round on a CI-green head (delivery chain step 4 is the one definition), cap at three rounds per reviewer, and treat a reviewer that never returns zero as miscalibrated rather than as evidence of defects; every reviewer answers "would you block this merge, and why", and the adjudicator fixes blocking findings in the PR and records the rest. **(e) Oscillation means redesign (dev, 2026-10-07):**
 when a round finds a new defect of the SAME CLASS the previous fix was meant to close (widen an anchor → it
 over-matches; narrow it → the leak returns), stop patching. Write down what the rounds taught, then restart on a
 fresh branch with a redesigned approach that removes the fragile dependency (receipts: #1264's every-window
