@@ -69,7 +69,7 @@ class OfferHeadsUpViewsTest {
         // Deliberately stale snapshot: custom views must render the PendingOffer instead.
         val snapshot = FlowCardSnapshot.Offer(phaseStartedAt = 0L, offerHash = pending.offerHash, payAmount = 999.0)
         manager().postOfferNotification(snapshot, pending.evaluation!!, pending.platform,
-            refreshOnly = true, pending = pending, config = config, job = job, addOnSpeech = policy)
+            refreshOnly = true, pending = pending, config = config, job = job, addOnSpeech = policy, writeChat = false)
         val captor = argumentCaptor<Notification>()
         verify(notifications).notify(eq(BubbleManager.offerNotificationId(pending.offerHash)), captor.capture())
         return captor.firstValue

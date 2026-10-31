@@ -102,11 +102,14 @@ class SideEffectEngine @Inject constructor(
 
     /**
      * #1104: a delayed offer post still in its settle window. `fresh` = it owes the FIRST post's
-     * obligations (the chat summary + the one alert); a refresh-only post that supersedes a pending
+     * obligations (the one alert; the chat row is `chatOwed`'s); a refresh-only post that supersedes a pending
      * fresh one inherits them, or a deadline moving inside the 750 ms window would cancel the fresh
-     * post and the offer would surface with no summary at all (Astra #1104 r6).
+     * post and the offer would surface with no summary at all (Astra #1104 r6). `chatOwed` = it owes
+     * the presentation's ONE chat row: a fresh, non-re-quote post owes it, and any post that
+     * supersedes a pending owing post inherits it (a re-quote or refresh must neither drop nor
+     * duplicate the row).
      */
-    private class PendingOfferPost(val job: Job, val fresh: Boolean)
+    private class PendingOfferPost(val job: Job, val fresh: Boolean, val chatOwed: Boolean)
 
     companion object {
         /** Default throttle between repeated firings of the same action. */
@@ -523,6 +526,7 @@ class SideEffectEngine @Inject constructor(
                 superseded?.job?.cancel()
                 // #1104: a refresh that coalesces a still-pending FRESH post takes over its obligations.
                 val fresh = !effect.refreshOnly || (superseded?.fresh == true)
+                val chatOwed = (!effect.refreshOnly && !effect.requote) || (superseded?.chatOwed == true)
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
@@ -530,9 +534,10 @@ class SideEffectEngine @Inject constructor(
                         refreshOnly = !fresh, pending = effect.pending, job = effect.job,
                         config = strategyRepository.evaluationConfig.value,
                         requote = effect.requote, addOnSpeech = devSettingsRepository.addOnSpeech.value,
+                        writeChat = chatOwed,
                     )
                 }
-                val pending = PendingOfferPost(job, fresh)
+                val pending = PendingOfferPost(job, fresh, chatOwed)
                 job.invokeOnCompletion { pendingOfferNotifications.remove(hashKey, pending) }
                 pendingOfferNotifications[hashKey] = pending
                 job.start()

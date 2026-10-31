@@ -13,8 +13,6 @@ import androidx.compose.ui.text.TextLayoutResult
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
-import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.offer.OfferBadge
 import cloud.trotter.log.gig.feature.bubble.MutableClock
 import org.junit.After
@@ -136,7 +134,6 @@ class OfferCardTest {
         compose.runOnIdle { assertEquals(1, accepted); assertEquals(1, declined) }
     }
     @Test fun `combined add on shows the added chip, the job facts and the deltas`() {
-        val before = FlowCardSnapshot.Offer(0, 1, "before", evaluationScore = 60.0, outcome = AppEventType.OFFER_ACCEPTED)
         show(mapOffer(f.pending(f.addon()), f.job(), f.config))
         compose.onNodeWithText("Add-on").assertExists()
         compose.onNodeWithText("+$7.00 added").assertExists()

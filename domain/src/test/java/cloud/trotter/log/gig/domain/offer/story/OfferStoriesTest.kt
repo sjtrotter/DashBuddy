@@ -1,6 +1,8 @@
 package cloud.trotter.log.gig.domain.offer.story
 
 import cloud.trotter.log.gig.domain.evaluation.*
+import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import cloud.trotter.log.gig.domain.state.Platform
 import org.junit.Assert.*
 import org.junit.Test
@@ -40,6 +42,13 @@ class OfferStoriesTest {
         assertNull(delta.fact(FactKind.NET))
         assertEquals(StoryBasis.ADD_ON_DELTA, StoryFixtures.addOn(false).basis)
         assertEquals(s.added, StoryFixtures.addOn(false).facts)
+    }
+    @Test fun `a total-basis add-on carries no added figures`() {
+        val o = OfferFixtures.offer().copy(offerScope = OfferScope.ADD_ON, quoteBasis = OfferQuoteBasis.TOTAL)
+        val s = OfferStories.build(OfferFixtures.pending(o), null, OfferFixtures.config, Platform.DoorDash)
+        assertTrue(s.addOn)
+        assertEquals(StoryBasis.TOTAL, s.basis)
+        assertTrue(s.added.isEmpty())
     }
     @Test fun `all rule hits and requote survive independently of evaluator verdict`() {
         val s = OfferStories.build(OfferFixtures.pending(), null,

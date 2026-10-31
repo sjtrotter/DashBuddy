@@ -67,7 +67,7 @@
     <string name="strategy_settings_sim_dist_format">Distance %1$s mi</string>
     <string name="strategy_settings_global_overrides_title">Overrides</string>
     <string name="strategy_settings_protect_stats_label">Protect acceptance rate</string>
-    <string name="strategy_settings_protect_stats_subtitle">Every offer gets Accept, except shopping offers when Shopping offers is off</string>
+    <string name="strategy_settings_protect_stats_subtitle">Offers carry a Protect acceptance rate note. Nothing is tapped for you.</string>
     <string name="strategy_settings_allow_shopping_label">Shopping offers</string>
     <string name="strategy_settings_allow_shopping_subtitle">When off, shopping offers carry a Shopping off note. Nothing is tapped for you.</string>
     <string name="strategy_settings_quick_declines_label">Quick declines</string>

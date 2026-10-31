@@ -63,7 +63,26 @@ class BubbleManagerChatLogTest {
         assertNoChat(refreshOnly = false, requote = true)
     }
 
+    @Test
+    fun `a post that owes the chat row writes one summary even on a re-quote`() {
+        val (chatRepository, tree) = postOffer(writeChat = true, refreshOnly = false, requote = true)
+        org.mockito.kotlin.verifyBlocking(chatRepository, org.mockito.kotlin.timeout(5_000)) {
+            saveMessage(org.mockito.kotlin.eq("sess-1"), org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        }
+        check(tree.records.any { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
+            "the owed chat row must log its 'offer posted' milestone: ${tree.records}"
+        }
+    }
+
     private fun assertNoChat(refreshOnly: Boolean, requote: Boolean) {
+        val (chatRepository, tree) = postOffer(writeChat = false, refreshOnly = refreshOnly, requote = requote)
+        org.mockito.kotlin.verifyNoInteractions(chatRepository)
+        check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
+            "a refresh must not log an 'offer posted' milestone: ${tree.records}"
+        }
+    }
+
+    private fun postOffer(writeChat: Boolean, refreshOnly: Boolean, requote: Boolean): Pair<ChatRepository, RecordingTree> {
         val context = RuntimeEnvironment.getApplication()
         val notificationManager: NotificationManager = mock()
         val chatRepository: ChatRepository = mock()
@@ -95,15 +114,13 @@ class BubbleManagerChatLogTest {
                     cloud.trotter.log.gig.domain.state.ParsedFields.OfferFields(parsedOffer =
                         cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h1", payAmount = 14.75, distanceMiles = 8.5)),
                     1_000L, evaluation, returnFlow = cloud.trotter.log.gig.domain.state.Flow.TaskPickupNavigation),
-                config = null, addOnSpeech = cloud.trotter.log.gig.domain.offer.story.AddOnSpeech.JOB_TOTALS)
+                config = null, addOnSpeech = cloud.trotter.log.gig.domain.offer.story.AddOnSpeech.JOB_TOTALS,
+                writeChat = writeChat)
         } finally {
             Timber.uproot(tree)
         }
-        org.mockito.kotlin.verifyNoInteractions(chatRepository)
-        check(tree.records.none { it.priority == Log.INFO && it.tag == "Chat" && it.message.contains("offer posted") }) {
-            "a refresh must not log an 'offer posted' milestone: ${tree.records}"
-        }
         org.mockito.kotlin.verify(notificationManager).notify(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        return chatRepository to tree
     }
 
     @Test

@@ -477,8 +477,7 @@ class BubbleManager @Inject constructor(
         sessionId: String? = null,
         /**
          * #1104: a countdown-anchor REFRESH of an already-surfaced offer — update the existing
-         * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert) and write NO
-         * chat summary (a second "offer posted" row per moved deadline is not a milestone).
+         * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert).
          */
         refreshOnly: Boolean = false,
         pending: PendingOffer,
@@ -487,18 +486,24 @@ class BubbleManager @Inject constructor(
         job: DeliveryJob? = null,
         requote: Boolean = false,
         addOnSpeech: AddOnSpeech,
+        /**
+         * Write the presentation's one chat summary row. The engine decides it across coalesced
+         * posts (a re-quote or refresh that supersedes a pending first post inherits the row).
+         */
+        writeChat: Boolean,
     ) {
         val story = OfferStories.build(pending, job, config, platform, requote).forPresentation(addOnSpeech)
         val summary = OfferStoryText.line(story, context.resources)
         val persona = ChatPersona.Offer(OfferStoryText.title(story, context.resources))
-        if (refreshOnly || requote) {
-            Timber.tag("Chat").d("offer heads-up refreshed [%s] (countdown anchors)", persona.logLabel)
-        } else {
+        if (writeChat) {
             // #551 P7: the offer summary contains the merchant name (raw third-party UI text), so
             // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
             Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
             Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
             scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary, persona) }
+        } else {
+            Timber.tag("Chat").d("offer heads-up refreshed [%s] (%s)", persona.logLabel,
+                if (refreshOnly) "countdown anchors" else "re-quote")
         }
         val card = OfferCardMapper.map(story, pending, job)
         showOfferHeadsUp(card, pending.offerHash, summary, persona, platform, OfferStoryText.note(story, context.resources))

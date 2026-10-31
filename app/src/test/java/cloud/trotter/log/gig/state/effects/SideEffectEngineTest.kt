@@ -681,7 +681,7 @@ class SideEffectEngineTest {
         evaluationConfig.value = null
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null), anyOrNull(), any(), any())
+        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null), anyOrNull(), any(), any(), eq(true))
     }
 
     @Test fun `voice and notification receive the same selected add on policy`() = runTest {
@@ -701,7 +701,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
         verify(bubbleManager).postOfferNotification(any(), any(), eq(pending.platform), anyOrNull(), eq(false),
-            eq(pending), eq(evaluationConfig.value), eq(job), eq(false), eq(AddOnSpeech.DELTAS_ONLY))
+            eq(pending), eq(evaluationConfig.value), eq(job), eq(false), eq(AddOnSpeech.DELTAS_ONLY), eq(true))
     }
 
     private fun testOfferCard() = FlowCardSnapshot.Offer(
@@ -727,7 +727,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any(), any())
     }
 
     @Test
@@ -742,8 +742,8 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any())
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any(), eq(true))
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any(), any())
     }
 
     @Test
@@ -757,8 +757,63 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any())
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any(), eq(true))
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any(), eq(false))
+    }
+
+    private fun offerPost(refreshOnly: Boolean = false, requote: Boolean = false) = AppEffect.PostOfferNotification(
+        testEvaluation(), testOfferCard(), testPendingOffer(), offerHash = "hash-9", platform = Platform.DoorDash,
+        refreshOnly = refreshOnly, requote = requote)
+
+    /** How many landed posts wrote (or skipped) the presentation's chat row. */
+    private fun verifyChatRows(written: Int, skipped: Int) {
+        verify(bubbleManager, times(written)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any(), eq(true))
+        verify(bubbleManager, times(skipped)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any(), eq(false))
+    }
+
+    @Test
+    fun `a re-quote that supersedes a pending first post still writes the one chat row`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(offerPost())
+        runCurrent()
+        advanceTimeBy(200)
+        engine.process(offerPost(requote = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), eq(true), any(), eq(true))
+        verifyChatRows(written = 1, skipped = 0)
+    }
+
+    @Test
+    fun `a refresh that supersedes a pending re-quote writes no second chat row`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(offerPost())
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        engine.process(offerPost(requote = true))
+        runCurrent()
+        advanceTimeBy(200)
+        engine.process(offerPost(refreshOnly = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verifyChatRows(written = 1, skipped = 1)
+    }
+
+    @Test
+    fun `a lone re-quote or refresh with nothing pending writes no chat row`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(offerPost(requote = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        engine.process(offerPost(refreshOnly = true))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verifyChatRows(written = 0, skipped = 2)
     }
 
     @Test
@@ -770,7 +825,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any(), any())
     }
 
     @Test
@@ -782,7 +837,7 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull(), any(), any(), any())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()

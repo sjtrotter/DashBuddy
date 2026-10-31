@@ -55,7 +55,9 @@ object OfferStories {
         fun story(basis: StoryBasis, facts: List<Fact>, missing: Set<Missing>) = OfferStory(
             platform.appName, o.effectiveScope == OfferScope.ADD_ON,
             o.displayStores.firstOrNull { it.isNotBlank() }, basis, facts,
-            if (o.effectiveScope == OfferScope.ADD_ON) added else emptyList(), missing, rules, requote)
+            // A TOTAL-basis quote IS the total: its figures are never "added" ones.
+            if (o.effectiveScope == OfferScope.ADD_ON && o.quoteBasis == OfferQuoteBasis.INCREMENTAL) added
+            else emptyList(), missing, rules, requote)
         if (o.quoteBasis == OfferQuoteBasis.TOTAL) {
             val e = pending.evaluation?.takeIf { it.hasDistanceMetrics && o.payAmount != null }
             return story(StoryBasis.TOTAL, facts(o, e, OfferTargets.from(config, platform, o.isShop)),

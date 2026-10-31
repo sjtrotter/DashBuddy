@@ -324,9 +324,9 @@
 
     <!-- setup/wizard/WizardScreen.kt -->
     <string name="wizard_screen_goal_option1_title">Cherry picker</string>
-    <string name="wizard_screen_goal_option1_desc">Offers below your targets are flagged red.</string>
+    <string name="wizard_screen_goal_option1_desc">Rates below your targets show in amber.</string>
     <string name="wizard_screen_goal_option2_title">Protect acceptance rate</string>
-    <string name="wizard_screen_goal_option2_desc">Every offer gets Accept, except shopping offers you turned off.</string>
+    <string name="wizard_screen_goal_option2_desc">Every offer carries a Protect acceptance rate note.</string>
     <string name="wizard_screen_goal_option3_title">Manual</string>
     <string name="wizard_screen_goal_option3_desc">Numbers only. You decide.</string>
     <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
@@ -335,8 +335,8 @@
     <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
     <string name="wizard_screen_min_payout_footer_auto">Offers below this are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_min_payout_footer_flag">Offers below this are flagged red.</string>
-    <string name="wizard_screen_hourly_footer_auto">Offers below this rate are flagged to decline. Nothing is declined for you.</string>
-    <string name="wizard_screen_hourly_footer_flag">Offers below this rate are flagged red.</string>
+    <string name="wizard_screen_hourly_footer_auto">Rates below this show in amber.</string>
+    <string name="wizard_screen_hourly_footer_flag">Rates below this show in amber.</string>
     <string name="wizard_screen_distance_footer_auto">Offers past this distance are flagged to decline. Nothing is declined for you.</string>
     <string name="wizard_screen_distance_footer_flag">Offers past this distance are flagged red.</string>
     <string name="wizard_screen_content_desc_success">Success</string>
