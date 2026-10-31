@@ -1168,9 +1168,9 @@ Single-context: a root `GLOSSARY.md` (created when the first term is settled) an
 
 The user skills under `~/.claude/skills` run the PR loop in this repo, in this order:
 
-1. **Plan:** `grilling`, then `to-spec` and `to-tickets` (the developer starts those two). The codex builder spec for
-   each ticket follows `codex-harness` §3 and `CLAUDE.local.md` § Codex harness.
-2. **Build and prove:** Astra builds; the session pushes the branch behind a draft PR, and PR CI
+1. **Plan:** `grilling`, then `to-spec` and `to-tickets` (the developer starts those two). The builder spec for
+   each ticket follows `codex-harness` §3 (the spec shape serves any builder).
+2. **Build and prove:** an Opus subagent builds (model policy rule 3); the session pushes the branch behind a draft PR, and PR CI
    (`pr-check.yml`, `build-and-test`) is the gate (#1450: the laptop cannot run the full gate safely). Read a red run
    with `gh run view <id> --log-failed` and its `gate-summary.txt` (`gh run download <id> -n junit-results-<pr>`;
    `tools/ci/junit_summary.py` reads downloaded XML). Local Gradle is only small runs (`:domain:test`, one module's
@@ -1283,8 +1283,8 @@ author's blind spots. So after it, and before
 the PR is filed, run the **`sol-loop`** skill: a read-only Sol (`gpt-6.1-sol`, xhigh) review of the
 diff (Sol may also read the field pulls under `~/dashbuddy/logs` when a claim rests on them, dev 2026-10-27), with the round ledger, the 3-round cap and the stopping rule below, adjudicated by the session (dev
 standing rule since 2026-10-27, replacing the `/code-review` + `/security-review` + Astra trio). The seats and
-the brief additions live in `.claude/council.md`; the full `council` runs only when the developer says
-"council". The adversary works three axes it must **not** take the author's framing on:
+the brief additions live in `.claude/council.md`; the full `council` (Claude, Sol, Fable when the budget
+allows, Astra when added) runs only when the developer says "council". The adversary works three axes it must **not** take the author's framing on:
 
 1. **Correctness** — bugs, edge cases, broken callers, reuse/simplification.
 2. **Design principles** — walk principles 1–8 + the Reactive UI rules hunting for violations the
@@ -1424,17 +1424,19 @@ Rules, in precedence order:
    verdicts — name the phase when spawning one. The deliverable of this phase is a plan
    bounded enough to hand down: named files, the expected change shape, acceptance criteria,
    and what the tests/review must prove.
-3. **The default BUILDER for everything else is the codex CLI (`gpt-6-astra`), not a Claude
-   subagent — dev decision 2026-09-30, after the third usage-limit collapse (06-25, 08-09,
-   09-30).** Fable writes the bounded spec to a scratchpad file (named files, exact change
-   shape, done criteria, which suites must go green), `timeout N codex exec -m gpt-6-astra
-   -s workspace-write -c 'model_reasoning_effort="high"' … - < spec.md` builds it in the
-   working tree, and the session commits, runs the suites and reviews. Codex spend is off
-   the Claude budget entirely. A Claude subagent (opus — set `model` explicitly, never
-   omit-to-inherit) is the FALLBACK builder only when codex cannot do the job: it needs
-   network/`gh`, needs gradle inside its loop, or the files carry real PII (codex builders never
-   see PII; Sol reviews may read the field pulls, see Git Workflow). Codex has no network and no repo memory, so the spec must be self-contained;
-   discovery-heavy prompts hang it.
+3. **The default BUILDER for everything else is a Claude Opus subagent (`model: opus`, set
+   explicitly, never omit-to-inherit) — dev decision 2026-10-31.** From 2026-09-30 it was the
+   codex CLI (`gpt-6-astra`), chosen after the third usage-limit collapse (06-25, 08-09, 09-30);
+   Astra's #1442 build then reached PR CI with compile breaks that CI found one per ~13-minute run.
+   Fable writes the bounded spec to a scratchpad file (named files, exact change shape, done
+   criteria, which suites must go green); the Opus subagent builds it in the PR's worktree, may run
+   a small compile or one module's tests through `gt.sh`'s memory guard (never the full gate, never
+   beside another Gradle run), and does not commit; the session commits, pushes to the draft PR and
+   reads PR CI. Builders never open `~/dashbuddy/logs` or raw captures (Sol reviews may, see Git
+   Workflow). The builder spends Claude budget again, so rule 5 applies at every delegation; when the
+   budget is tight, the codex Astra builder (`timeout N codex exec -m gpt-6-astra -s workspace-write
+   -c 'model_reasoning_effort="high"' … - < spec.md`, no network, no repo memory, a self-contained
+   spec) is the fallback.
 4. **Delegating to any lower tier — codex or sonnet — is allowed only for building
    well-bounded implementations from an already-vetted plan**, and only when confident the
    builder can execute: named files, an explicit expected change shape, and cheap
