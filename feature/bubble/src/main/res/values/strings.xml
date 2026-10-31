@@ -246,6 +246,9 @@
     <string name="offer_rule_shopping_off">Shopping off</string>
     <string name="offer_rule_review">Review store</string>
     <string name="offer_rule_protect">Protect acceptance rate</string>
+    <string name="offer_limit_net">Net under %1$s</string>
+    <string name="offer_limit_distance">Over %1$s mi</string>
+    <string name="offer_limit_items">Over %1$d items</string>
     <string name="offer_missing_distance">Distance unknown</string>
     <string name="offer_missing_pay">Pay unknown</string>
     <string name="offer_missing_estimate">Estimate pending</string>

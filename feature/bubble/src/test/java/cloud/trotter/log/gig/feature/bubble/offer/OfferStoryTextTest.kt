@@ -44,6 +44,20 @@ class OfferStoryTextTest {
         assertEquals("Pay unknown", OfferStoryText.note(StoryFixtures.payUnknown(), res))
         assertEquals("Distance unknown", OfferStoryText.note(StoryFixtures.distanceUnknown(), res))
     }
+    @Test fun `one preference order selects the note and lists every hit`() {
+        val all = StoryFixtures.netLimit().copy(rules = listOf(RuleHit.BLOCKED_STORE, RuleHit.PROTECT_RATE))
+        assertEquals("Blocked store", OfferStoryText.note(all, res))
+        assertEquals("H-E-B · Blocked store · Net under $7.00 · Protect acceptance rate · $24.50 pay · $22.48 net · 12.9 mi · 45 min · $22/hr",
+            OfferStoryText.line(all, res))
+        val limitAndProtect = StoryFixtures.netLimit().copy(rules = listOf(RuleHit.PROTECT_RATE), missing = setOf(Missing.ESTIMATE))
+        assertEquals("Net under $7.00", OfferStoryText.note(limitAndProtect, res))
+    }
+    @Test fun `limit notes name the limit the dasher set`() {
+        val s = StoryFixtures.total().copy(limits = listOf(LimitHit(LimitKind.DISTANCE, 10.0), LimitHit(LimitKind.ITEMS, 30.0)))
+        assertEquals("Over 10.0 mi", OfferStoryText.note(s, res))
+        assertEquals("H-E-B · Over 10.0 mi · Over 30 items · $24.50 pay · $22.48 net · 12.9 mi · 45 min · $22/hr",
+            OfferStoryText.line(s, res))
+    }
     @Test fun `loss is a signed net fact`() {
         assertEquals("H-E-B · $24.50 pay · -$3.75 net · 12.9 mi · 45 min · $22/hr",
             OfferStoryText.line(StoryFixtures.loss(), res))

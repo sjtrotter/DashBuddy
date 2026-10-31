@@ -61,7 +61,6 @@
     <string name="fake_offer_metric_miles_label">miles</string>
     <string name="fake_offer_metric_est_time_label">est. time</string>
     <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
-    <string name="fake_offer_warning_format">Warning: %1$s</string>
     <string name="strategy_settings_the_lab_title">Test offer</string>
     <string name="strategy_settings_sim_pay_format">Pay %1$s</string>
     <string name="strategy_settings_sim_dist_format">Distance %1$s mi</string>

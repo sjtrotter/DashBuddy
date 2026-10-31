@@ -47,6 +47,12 @@ class OfferCardMapperTest {
         val model = map(config = f.config.copy(allowShopping = false))
         assertEquals(OfferBadgeModel.Rule(RuleHit.SHOPPING_OFF), model.badges.first())
     }
+    @Test fun `badges list every preference hit in the shared order before the offer badges`() {
+        val config = StoryFixtures.limitConfig(net = 10f, miles = 5f).copy(allowShopping = false, protectStatsMode = true)
+        assertEquals(listOf(OfferBadgeModel.Rule(RuleHit.SHOPPING_OFF), OfferBadgeModel.Limit(LimitHit(LimitKind.NET, 10.0)),
+            OfferBadgeModel.Limit(LimitHit(LimitKind.DISTANCE, 5.0)), OfferBadgeModel.Rule(RuleHit.PROTECT_RATE),
+            OfferBadgeModel.Shop), map(config = config).badges)
+    }
     @Test fun `countdown anchor is the pending countdown expiry`() {
         assertEquals(p.countdownExpiresAt, map().head.expiresAt)
         assertNull(map(p.copy(countdownExpiresAt = null)).head.expiresAt)

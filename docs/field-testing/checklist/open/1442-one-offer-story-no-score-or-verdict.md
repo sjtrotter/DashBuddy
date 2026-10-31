@@ -11,4 +11,8 @@ issues: #1442
   "Blocked store" appears after the store in text and voice, and in the pop-up note.
   No score, ring or verdict should appear on any offer surface, the HUD log, analytics offers or the
   Settings offer preview. Unknown pay/distance must not appear or be spoken as zero.
+  Limits: an offer under your minimum net or past your max distance shows "Net under $X" / "Over N mi" as a
+  card badge and in the chat line, the pop-up note shows the first note (a store rule beats a limit, Protect
+  acceptance rate comes last), and the voice says one short clause ("Under your minimum net."). Setup says
+  "Minimum net" and "Offers with less net show a note."
   - Issue: #1442. Confirmed: 0/2 (awaiting field validation)

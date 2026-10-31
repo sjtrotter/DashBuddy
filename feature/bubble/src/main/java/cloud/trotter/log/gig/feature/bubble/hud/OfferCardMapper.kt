@@ -12,7 +12,12 @@ object OfferCardMapper {
         val o = p.offerFields.parsedOffer
         val head = OfferHead(story.store, story.fact(FactKind.PAY)?.value, p.presentedAt, p.countdownExpiresAt,
             if (story.basis == StoryBasis.ADD_ON_JOB) story.added.firstOrNull { it.kind == FactKind.PAY }?.value else null)
-        val badges = story.rules.map(OfferBadgeModel::Rule) + FlowCardSnapshot.Offer.badgesOf(o).map { name ->
+        val badges = story.preferences().map { hit ->
+            when (hit) {
+                is PreferenceHit.Rule -> OfferBadgeModel.Rule(hit.hit)
+                is PreferenceHit.Limit -> OfferBadgeModel.Limit(hit.hit)
+            }
+        } + FlowCardSnapshot.Offer.badgesOf(o).map { name ->
             when (name) {
                 FlowCardSnapshot.Offer.SHOP_BADGE -> OfferBadgeModel.Shop
                 else -> OfferBadge.entries.firstOrNull { it.name == name }?.let(OfferBadgeModel::Platform)

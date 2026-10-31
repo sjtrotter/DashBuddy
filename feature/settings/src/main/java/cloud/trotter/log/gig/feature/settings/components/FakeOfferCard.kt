@@ -146,19 +146,6 @@ fun FakeOfferCard(
                 }
             }
         }
-
-        // --- Warnings (#80) ---
-        if (evaluation.warnings.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            evaluation.warnings.forEach { warning ->
-                Text(
-                    text = stringResource(R.string.fake_offer_warning_format, warning),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-        }
     }
 }
 

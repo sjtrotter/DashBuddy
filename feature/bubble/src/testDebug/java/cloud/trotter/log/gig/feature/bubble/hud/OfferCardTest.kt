@@ -1,6 +1,9 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
+import cloud.trotter.log.gig.domain.offer.story.LimitHit
+import cloud.trotter.log.gig.domain.offer.story.LimitKind
 import cloud.trotter.log.gig.domain.offer.story.OfferFixtures
+import cloud.trotter.log.gig.domain.offer.story.RuleHit
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -200,6 +203,17 @@ class OfferCardTest {
         settle()
         compose.onNodeWithTag("offer.badges").assertExists()
         listOf("High paying", "Shop and deliver", "Add-on").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+    @Test fun `limit badges render the limit in the order given`() {
+        compose.setContent {
+            GigLogTheme { OfferBadges(listOf(OfferBadgeModel.Rule(RuleHit.BLOCKED_STORE),
+                OfferBadgeModel.Limit(LimitHit(LimitKind.NET, 7.0)), OfferBadgeModel.Limit(LimitHit(LimitKind.DISTANCE, 10.0)),
+                OfferBadgeModel.Limit(LimitHit(LimitKind.ITEMS, 30.0)), OfferBadgeModel.Rule(RuleHit.PROTECT_RATE))) }
+        }
+        settle()
+        val labels = listOf("Blocked store", "Net under $7.00", "Over 10.0 mi", "Over 30 items", "Protect acceptance rate")
+        val bounds = labels.map { compose.onNodeWithText(it).assertExists().getBoundsInRoot() }
+        assertTrue("badges keep their order", bounds.zipWithNext().all { (a, b) -> a.top < b.top || (a.top == b.top && a.left < b.left) })
     }
     @Test fun `overflow descriptions pluralize more stops`() {
         val overflow = mutableStateOf(1)

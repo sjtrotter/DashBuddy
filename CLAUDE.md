@@ -613,7 +613,12 @@ The offer card, heads-up, chat line and voice render one `:domain` `OfferStory` 
 scores and verdicts on every offer surface. The heads-up keeps the pay-bar bitmap and Accept/Decline
 actions, with a one-line note replacing both gauge images. `AddOnSpeech` in Developer options selects
 job totals (default) or quoted deltas across all four surfaces; the story retains both. Voice truncates
-displayed cents through `Formats.wholeDollars`, names losses, and speaks once per presentation.
+displayed cents through `Formats.wholeDollars`, names losses, and speaks once per presentation. The dasher's
+minimum net, max distance and max items become limit notes ("Net under $7.00", "Over 10.0 mi", "Over 30 items"),
+judged on the shown figures at displayed precision, never on an add-on's deltas; `OfferStory.preferences()` is the one
+order (store and shopping rules, limits, Protect last): the pop-up note and voice take the first (voice speaks one
+clause, never items or Protect), the card badges and chat line list all. One chat row per presentation: the engine
+carries `chatOwed` across coalesced posts.
 Re-quotes update the heads-up without adding a chat row. The evaluator and stored score/action/quality
 columns, folds and analytics readers remain unchanged.
 

@@ -65,6 +65,27 @@ class OfferSpeechTest {
             }
         }
     }
+    @Test fun `one preference clause at most in the shared order`() {
+        val tail = "Estimated net: 22 dollars. 12.9 miles. 45 minutes. 22 dollars an hour."
+        val all = StoryFixtures.netLimit().copy(rules = listOf(RuleHit.SHOPPING_OFF, RuleHit.BLOCKED_STORE, RuleHit.PROTECT_RATE))
+        assertEquals("Offer. H-E-B. Blocked store. $tail", speak(all, "en"))
+        assertEquals("Offer. H-E-B. Under your minimum net. $tail",
+            speak(StoryFixtures.netLimit().copy(rules = listOf(RuleHit.PROTECT_RATE)), "en"))
+        val distance = StoryFixtures.total().copy(limits = listOf(LimitHit(LimitKind.DISTANCE, 10.0)))
+        assertEquals("Offer. H-E-B. Over your max distance. $tail", speak(distance, "en"))
+        assertEquals("Oferta. H-E-B. Neto por debajo de tu mínimo. Neto estimado: 22 dólares. 12.9 millas. 45 minutos. 22 dólares por hora.",
+            speak(StoryFixtures.netLimit(), "es"))
+        assertEquals("Oferta. H-E-B. Más lejos que tu distancia máxima. Neto estimado: 22 dólares. 12.9 millas. 45 minutos. 22 dólares por hora.",
+            speak(distance, "es"))
+    }
+    @Test fun `an items limit is never spoken`() {
+        for (language in listOf("en", "es")) {
+            val items = StoryFixtures.total().copy(limits = listOf(LimitHit(LimitKind.ITEMS, 30.0)))
+            assertEquals(speak(StoryFixtures.total(), language), speak(items, language))
+        }
+        assertEquals(speak(StoryFixtures.netLimit(), "en"), speak(StoryFixtures.netLimit().copy(
+            limits = listOf(LimitHit(LimitKind.NET, 7.0), LimitHit(LimitKind.ITEMS, 30.0))), "en"))
+    }
     @Test fun `protect rate is written only and requotes add no spoken lead`() {
         for (language in listOf("en", "es")) {
             assertEquals(speak(StoryFixtures.total(), language),

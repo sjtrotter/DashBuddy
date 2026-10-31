@@ -120,6 +120,8 @@
     <string name="tts_rule_blocked">Tienda bloqueada.</string>
     <string name="tts_rule_shopping_off">Compras desactivadas.</string>
     <string name="tts_rule_review">Tienda para revisar.</string>
+    <string name="tts_limit_net">Neto por debajo de tu mínimo.</string>
+    <string name="tts_limit_distance">Más lejos que tu distancia máxima.</string>
     <plurals name="tts_net">
         <item quantity="one">Neto estimado: %1$d dólar.</item>
         <item quantity="other">Neto estimado: %1$d dólares.</item>

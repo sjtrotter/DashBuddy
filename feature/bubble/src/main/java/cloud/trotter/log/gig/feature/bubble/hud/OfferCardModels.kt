@@ -48,6 +48,7 @@ data class TripNode(val icon: TrackIcon, val added: Boolean = false, val overflo
 data class DeltaTiles(val minutes: Long?, val miles: Double?, val stops: Int?, val items: Int?)
 sealed interface OfferBadgeModel {
     data class Rule(val hit: cloud.trotter.log.gig.domain.offer.story.RuleHit) : OfferBadgeModel
+    data class Limit(val hit: cloud.trotter.log.gig.domain.offer.story.LimitHit) : OfferBadgeModel
     data class Platform(val badge: OfferBadge) : OfferBadgeModel
     data class Order(val badge: OrderBadge) : OfferBadgeModel
     data object Shop : OfferBadgeModel

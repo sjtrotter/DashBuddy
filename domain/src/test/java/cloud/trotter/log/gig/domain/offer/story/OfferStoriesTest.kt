@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.domain.offer.story
 
 import cloud.trotter.log.gig.domain.evaluation.*
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
+import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
 import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import cloud.trotter.log.gig.domain.state.Platform
 import org.junit.Assert.*
@@ -68,6 +69,60 @@ class OfferStoriesTest {
             e.copy(dollarsPerMile = 19.99, dollarsPerHour = 19.4)), null, config, Platform.Uber)
         assertEquals(Versus.BELOW, below.fact(FactKind.PER_MILE)!!.versus)
         assertEquals(Versus.BELOW, below.fact(FactKind.PER_HOUR)!!.versus)
+    }
+    private fun total(config: EvaluationConfig, e: OfferEvaluation? = StoryFixtures.evaluation,
+        offer: ParsedOffer = StoryFixtures.offer) =
+        OfferStories.build(OfferFixtures.pending(offer, e), null, config, Platform.DoorDash)
+    @Test fun `net limit is judged on the net as displayed`() {
+        val config = StoryFixtures.limitConfig(net = 7f)
+        assertEquals("6.995 displays as 7.00", emptyList<LimitHit>(),
+            total(config, StoryFixtures.evaluation.copy(netPayAmount = 6.995)).limits)
+        assertEquals(listOf(LimitHit(LimitKind.NET, 7.0)),
+            total(config, StoryFixtures.evaluation.copy(netPayAmount = 6.994)).limits)
+    }
+    @Test fun `distance limit is judged on the miles as displayed`() {
+        val config = StoryFixtures.limitConfig(miles = 10f)
+        assertEquals("10.04 displays as 10.0", emptyList<LimitHit>(),
+            total(config, StoryFixtures.evaluation.copy(distanceMiles = 10.04)).limits)
+        assertEquals(listOf(LimitHit(LimitKind.DISTANCE, 10.0)),
+            total(config, StoryFixtures.evaluation.copy(distanceMiles = 10.06)).limits)
+    }
+    @Test fun `items limit applies to shopping offers only`() {
+        val config = StoryFixtures.limitConfig(items = 30f)
+        val shop = StoryFixtures.offer.copy(itemCount = 31, orders = listOf(OfferFixtures.order("H-E-B", 31)))
+        assertEquals(listOf(LimitHit(LimitKind.ITEMS, 30.0)), total(config, offer = shop).limits)
+        assertEquals(emptyList<LimitHit>(), total(config, offer = shop.copy(itemCount = 30)).limits)
+        val pickup = shop.copy(itemCount = 40, orders = listOf(OfferFixtures.order("H-E-B", 40, shop = false)))
+        assertEquals(emptyList<LimitHit>(), total(config, offer = pickup).limits)
+    }
+    @Test fun `limits come in net distance items order`() {
+        val config = StoryFixtures.limitConfig(net = 30f, miles = 10f, items = 10f)
+        assertEquals(listOf(LimitKind.NET, LimitKind.DISTANCE, LimitKind.ITEMS), total(config).limits.map { it.kind })
+    }
+    @Test fun `an unknown figure or a disabled rule never hits`() {
+        assertEquals(emptyList<LimitHit>(), total(StoryFixtures.limitConfig(net = 30f, miles = 1f), e = null).limits)
+        assertEquals(emptyList<LimitHit>(), total(StoryFixtures.limitConfig(net = 30f, miles = 1f),
+            StoryFixtures.evaluation.copy(distanceMiles = 0.0), StoryFixtures.offer.copy(distanceMiles = null)).limits)
+        assertEquals(emptyList<LimitHit>(),
+            total(StoryFixtures.limitConfig(net = 30f, miles = 1f, items = 1f, enabled = false)).limits)
+    }
+    @Test fun `add on limits are judged on the job figures and dropped with them`() {
+        val config = StoryFixtures.limitConfig(net = 31f, miles = 10f)
+        val s = StoryFixtures.addOn(config = config)
+        assertEquals(StoryBasis.ADD_ON_JOB, s.basis)
+        assertEquals("job net 30.10 and job miles 15.2, not the added 3.1",
+            listOf(LimitHit(LimitKind.NET, 31.0), LimitHit(LimitKind.DISTANCE, 10.0)), s.limits)
+        assertEquals(emptyList<LimitHit>(), s.forPresentation(AddOnSpeech.DELTAS_ONLY).limits)
+        assertEquals(s.limits, s.forPresentation(AddOnSpeech.JOB_TOTALS).limits)
+        assertEquals(emptyList<LimitHit>(), StoryFixtures.addOn(jobKnown = false, config = config).limits)
+    }
+    @Test fun `preferences put store and shopping rules first and protect last`() {
+        val s = StoryFixtures.total().copy(
+            rules = listOf(RuleHit.SHOPPING_OFF, RuleHit.BLOCKED_STORE, RuleHit.PROTECT_RATE),
+            limits = listOf(LimitHit(LimitKind.DISTANCE, 10.0), LimitHit(LimitKind.NET, 7.0)))
+        assertEquals(listOf(PreferenceHit.Rule(RuleHit.BLOCKED_STORE), PreferenceHit.Rule(RuleHit.SHOPPING_OFF),
+            PreferenceHit.Limit(LimitHit(LimitKind.NET, 7.0)), PreferenceHit.Limit(LimitHit(LimitKind.DISTANCE, 10.0)),
+            PreferenceHit.Rule(RuleHit.PROTECT_RATE)), s.preferences())
     }
     @Test fun `registry identity never changes the economics path`() {
         for (platform in listOf(Platform.DoorDash, Platform.Uber)) {

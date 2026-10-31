@@ -330,15 +330,13 @@
     <string name="wizard_screen_goal_option3_title">Manual</string>
     <string name="wizard_screen_goal_option3_desc">Numbers only. You decide.</string>
     <string name="wizard_screen_shopping_value_format" translatable="false">%1$s items</string>
-    <string name="wizard_screen_shopping_footer">Used to estimate shopping time.</string>
+    <string name="wizard_screen_shopping_footer">Shopping offers with more items show a note.</string>
     <string name="wizard_screen_hourly_value_format" translatable="false">%1$s/hr</string>
     <string name="wizard_screen_distance_value_format" translatable="false">%1$s mi</string>
-    <string name="wizard_screen_min_payout_footer_auto">Offers below this are flagged to decline. Nothing is declined for you.</string>
-    <string name="wizard_screen_min_payout_footer_flag">Offers below this are flagged red.</string>
+    <string name="wizard_screen_min_payout_footer">Offers with less net show a note.</string>
     <string name="wizard_screen_hourly_footer_auto">Rates below this show in amber.</string>
     <string name="wizard_screen_hourly_footer_flag">Rates below this show in amber.</string>
-    <string name="wizard_screen_distance_footer_auto">Offers past this distance are flagged to decline. Nothing is declined for you.</string>
-    <string name="wizard_screen_distance_footer_flag">Offers past this distance are flagged red.</string>
+    <string name="wizard_screen_distance_footer">Offers with more miles show a note.</string>
     <string name="wizard_screen_content_desc_success">Success</string>
     <string name="wizard_screen_all_set_title">Setup done</string>
     <string name="wizard_screen_skipped_desc">Setup skipped; nothing changed. Run it again from Settings.</string>
@@ -921,6 +919,8 @@
     <string name="tts_rule_blocked">Blocked store.</string>
     <string name="tts_rule_shopping_off">Shopping off.</string>
     <string name="tts_rule_review">Review store.</string>
+    <string name="tts_limit_net">Under your minimum net.</string>
+    <string name="tts_limit_distance">Over your max distance.</string>
     <plurals name="tts_net">
         <item quantity="one">Estimated net: %1$d dollar.</item>
         <item quantity="other">Estimated net: %1$d dollars.</item>

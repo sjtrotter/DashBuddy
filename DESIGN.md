@@ -236,6 +236,8 @@ adds the gap below, and never leaves it worse.
   story feeds the card, pop-up, chat line and voice. Titles use the registry's plain app name. Add-ons default
   to job totals; Developer options can select only what the add-on adds across all four surfaces. Spoken
   amounts truncate displayed cents to whole dollars; hourly comes last. Re-quotes speak once per presentation.
+  The minimum net, max distance and max items targets show as notes in one order, Protect acceptance rate last
+  (council and dev, 2026-10-31).
 
 - #94, #313 (closed 2026-06-09): fixed brand palette, Hanken Grotesk and Space Grotesk, no dynamic colour, dark
   default that follows the system.

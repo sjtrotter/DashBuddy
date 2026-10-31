@@ -15,12 +15,21 @@ object OfferSpeech {
         }
         add(res.getString(if (s.addOn) R.string.tts_lead_addon else R.string.tts_lead_offer) + ".")
         s.store?.let { add("$it.") }
-        s.rules.forEach { hit -> when (hit) {
-            RuleHit.SHOPPING_OFF -> add(res.getString(R.string.tts_rule_shopping_off))
-            RuleHit.BLOCKED_STORE -> add(res.getString(R.string.tts_rule_blocked))
-            RuleHit.REVIEW_STORE -> add(res.getString(R.string.tts_rule_review))
-            RuleHit.PROTECT_RATE -> Unit
-        } }
+        // One preference clause at most: the first one spoken in the shared order. Protect is a standing
+        // mode and item counts are not spoken, so neither has a clause.
+        s.preferences().firstNotNullOfOrNull { hit -> when (hit) {
+            is PreferenceHit.Rule -> when (hit.hit) {
+                RuleHit.SHOPPING_OFF -> R.string.tts_rule_shopping_off
+                RuleHit.BLOCKED_STORE -> R.string.tts_rule_blocked
+                RuleHit.REVIEW_STORE -> R.string.tts_rule_review
+                RuleHit.PROTECT_RATE -> null
+            }
+            is PreferenceHit.Limit -> when (hit.hit.kind) {
+                LimitKind.NET -> R.string.tts_limit_net
+                LimitKind.DISTANCE -> R.string.tts_limit_distance
+                LimitKind.ITEMS -> null
+            }
+        } }?.let { add(res.getString(it)) }
         val pay = (if (s.basis == StoryBasis.ADD_ON_JOB) s.added.firstOrNull { it.kind == FactKind.PAY }
             else s.fact(FactKind.PAY))?.value
         val net = s.fact(FactKind.NET)?.value

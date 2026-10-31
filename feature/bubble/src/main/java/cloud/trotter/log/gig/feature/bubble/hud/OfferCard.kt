@@ -120,6 +120,8 @@ internal fun OfferBadges(badges: List<OfferBadgeModel>) {
         badges.forEach { badge ->
             val (label, ink) = when (badge) {
                 is OfferBadgeModel.Rule -> stringResource(cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText.ruleResource(badge.hit)) to c.neutral
+                is OfferBadgeModel.Limit -> stringResource(cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText.limitResource(badge.hit.kind),
+                    cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText.limitArg(badge.hit)) to c.neutral
                 OfferBadgeModel.AddOn -> stringResource(R.string.hud_offer_addon) to c.stOffer
                 OfferBadgeModel.Shop -> stringResource(R.string.flow_card_badge_shop_and_deliver) to c.stPickup
                 is OfferBadgeModel.Platform -> badgeMeta(badge.badge, c)
