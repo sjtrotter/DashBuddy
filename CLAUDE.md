@@ -1359,7 +1359,7 @@ and broke `./gradlew :app:build` on master. The `build-and-test` job now runs
 (`LocaleAllowlistGuardTest`, the `TimberTagGuardTest`/`IcuRegexGuardTest` doctrine)
 enforces the dev's locale allowlist — translate into `en` (default)/`es`/`fr` only,
 language-level, never a regional variant (`es-rUS`) — so the orphaned-translation class
-can't recreate itself silently. `values-es` is intentionally incomplete (~84/393 keys)
+can't recreate itself silently. `values-es` is intentionally incomplete (no count here: it drifts every PR)
 until the translation-completion work lands; that completeness gate is deferred, not
 forgotten. **Vital lint gates `NewApi` across every module (#1162):** vital lint evaluates FATAL
 issues only and `NewApi` is ERROR by default, so two real minSdk-30 crash classes shipped unseen

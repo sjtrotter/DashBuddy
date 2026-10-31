@@ -498,7 +498,7 @@ class BubbleManager @Inject constructor(
             // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
             Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
             Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
-            scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
+            scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary, persona) }
         }
         val card = OfferCardMapper.map(story, pending, job)
         showOfferHeadsUp(card, pending.offerHash, summary, persona, platform, OfferStoryText.note(story, context.resources))
