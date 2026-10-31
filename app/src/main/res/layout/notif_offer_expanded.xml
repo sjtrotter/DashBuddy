@@ -18,7 +18,9 @@
         <TextView android:id="@+id/notif_offer_hero" android:layout_width="0dp"
             android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1"
             android:includeFontPadding="false" android:textStyle="bold" />
-        <ImageView android:id="@+id/notif_offer_gauge" android:layout_width="64dp" android:layout_height="64dp" />
+        <TextView android:id="@+id/notif_offer_note" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+            android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
     </LinearLayout>
     <ImageView android:id="@+id/notif_offer_bar" android:layout_width="match_parent"
         android:layout_height="34dp" android:layout_marginTop="12dp" android:scaleType="fitXY" />

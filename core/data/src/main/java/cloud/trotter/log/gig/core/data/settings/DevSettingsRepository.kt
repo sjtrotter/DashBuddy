@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.data.settings
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
+import cloud.trotter.log.gig.domain.offer.story.AddOnSpeech
 import android.util.Log
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.domain.model.bubble.BubbleSessionMode
@@ -86,6 +87,12 @@ class DevSettingsRepository @Inject constructor(
     // ============================================================================================
     // PERSISTED STREAMS
     // ============================================================================================
+    val addOnSpeech = dataSource.addOnSpeech.map { wire ->
+        AddOnSpeech.entries.firstOrNull { it.name == wire } ?: AddOnSpeech.JOB_TOTALS
+    }.stateIn(scope, SharingStarted.Eagerly, AddOnSpeech.JOB_TOTALS)
+
+    suspend fun setAddOnSpeech(value: AddOnSpeech) = dataSource.setAddOnSpeech(value.name)
+
     val minLogLevel = dataSource.logLevel.map { level ->
         level ?: if (isDebug) Log.DEBUG else Log.INFO
     }.stateIn(scope, SharingStarted.Eagerly, if (isDebug) Log.DEBUG else Log.INFO)

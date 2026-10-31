@@ -222,4 +222,9 @@ class FormatsTest {
         Locale.setDefault(Locale.US)
         assertEquals("$1.00", Formats.moneyOrCents(0.999))
     }
+    @org.junit.Test fun `whole dollars truncate displayed cents toward zero`() {
+        org.junit.Assert.assertEquals(22L, Formats.wholeDollars(22.99))
+        org.junit.Assert.assertEquals(22L, Formats.wholeDollars(21.9999))
+        org.junit.Assert.assertEquals(-3L, Formats.wholeDollars(-3.75))
+    }
 }

@@ -53,7 +53,7 @@ internal fun PayBar(model: PayBarModel) {
         Row(Modifier.fillMaxSize().padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             if (profit != null || loss != null) {
-                PayPill(payBarMoney(profit ?: loss!!), stringResource(if (loss != null) R.string.hud_offer_loss else R.string.hud_offer_profit),
+                PayPill(payBarMoney(profit ?: loss!!), stringResource(if (loss != null) R.string.hud_offer_loss else R.string.hud_offer_net),
                     if (loss != null) c.bad else c.good, true)
                 car?.let { PayPill(payBarMoney(it), stringResource(R.string.hud_offer_car), c.warn, false) }
             } else if (model == PayBarModel.DistanceUnknown) {

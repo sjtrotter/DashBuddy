@@ -1,5 +1,6 @@
-package cloud.trotter.log.gig.feature.bubble.hud
+package cloud.trotter.log.gig.domain.offer.story
 
+import cloud.trotter.log.gig.domain.offer.story.OfferTargets
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -14,6 +15,14 @@ class OfferTargetsTest {
     }
     @Test fun `enabled per mile rule is the per mile target`() {
         assertEquals(1.5, from().perMile!!, 0.0)
+    }
+    @Test fun `enabled limit rules are the limits and disabled ones are none`() {
+        val on = from(StoryFixtures.limitConfig(net = 7f, miles = 10f, items = 30f))
+        assertEquals(7.0, on.minNet!!, 0.0)
+        assertEquals(10.0, on.maxMiles!!, 0.0)
+        assertEquals(30.0, on.maxItems!!, 0.0)
+        val off = from(StoryFixtures.limitConfig(net = 7f, miles = 10f, items = 30f, enabled = false))
+        assertEquals(listOf(null, null, null), listOf(off.minNet, off.maxMiles, off.maxItems))
     }
     @Test fun `disabled rule gives no target`() {
         val c = config.copy(rules = config.rules.map { (it as ScoringRule.MetricRule).copy(isEnabled = false) })

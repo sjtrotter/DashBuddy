@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.state.effects
 
+import cloud.trotter.log.gig.domain.offer.story.*
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import android.util.Log
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
@@ -112,6 +114,7 @@ class SideEffectEngineTest {
         on { hasBeenFired(any()) } doReturn false
     }
     private val ttsEffectHandler: TtsEffectHandler = mock()
+    private val addOnSpeech = MutableStateFlow(AddOnSpeech.JOB_TOTALS)
 
     /** Default: every tier granted — individual tests stub denial. */
     private val permissionTierChecker: PermissionTierChecker = mock {
@@ -133,6 +136,9 @@ class SideEffectEngineTest {
         screenShotHandler = screenShotHandler,
         uiInteractionHandler = uiInteractionHandler,
         effectsFiredDao = effectsFiredDao,
+        devSettingsRepository = mock<DevSettingsRepository> {
+            on { addOnSpeech } doReturn this@SideEffectEngineTest.addOnSpeech
+        },
         ttsEffectHandler = ttsEffectHandler,
         permissionTierChecker = permissionTierChecker,
         capabilityGrants = capabilityGrants,
@@ -158,11 +164,11 @@ class SideEffectEngineTest {
         val eval: OfferEvaluation = mock()
         doThrow(RuntimeException("boom")).whenever(ttsEffectHandler).speakOffer(any())
 
-        engine.process(AppEffect.SpeakOffer(eval))
+        engine.process(AppEffect.SpeakOffer(OfferFixtures.pending(e = eval), Platform.DoorDash, null))
         runCurrent()
 
         // Worker is still alive: the next effect executes normally.
-        engine.process(AppEffect.SpeakOffer(eval))
+        engine.process(AppEffect.SpeakOffer(OfferFixtures.pending(e = eval), Platform.DoorDash, null))
         runCurrent()
         verify(ttsEffectHandler, times(2)).speakOffer(any())
     }
@@ -188,7 +194,7 @@ class SideEffectEngineTest {
             val eval: OfferEvaluation = mock()
             doThrow(ExceptionInInitializerError()).whenever(ttsEffectHandler).speakOffer(any())
 
-            engine.process(AppEffect.SpeakOffer(eval))
+            engine.process(AppEffect.SpeakOffer(OfferFixtures.pending(e = eval), Platform.DoorDash, null))
             runCurrent()
 
             // The very next effect — and the durable event write in particular — still lands.
@@ -675,7 +681,27 @@ class SideEffectEngineTest {
         evaluationConfig.value = null
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), eq(pending), eq(null), anyOrNull())
+        verify(bubbleManager).postOfferNotification(any(), any(), any(), eq(false), eq(pending), eq(null), anyOrNull(), any(), any())
+    }
+
+    @Test fun `voice and notification receive the same selected add on policy`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val pending = OfferFixtures.pending(OfferFixtures.addon())
+        val job = OfferFixtures.job()
+        addOnSpeech.value = AddOnSpeech.DELTAS_ONLY
+        engine.process(AppEffect.SpeakOffer(pending, pending.platform, job))
+        runCurrent()
+        val spoken = argumentCaptor<OfferStory>()
+        verify(ttsEffectHandler).speakOffer(spoken.capture())
+        assertEquals(StoryBasis.ADD_ON_DELTA, spoken.firstValue.basis)
+        assertEquals(7.0, spoken.firstValue.fact(FactKind.PAY)!!.value!!, 0.0)
+        engine.process(AppEffect.PostOfferNotification(pending.evaluation!!, testOfferCard(), pending,
+            pending.offerHash, pending.platform, job = job))
+        runCurrent()
+        advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+        runCurrent()
+        verify(bubbleManager).postOfferNotification(any(), any(), eq(pending.platform), eq(false),
+            eq(pending), eq(evaluationConfig.value), eq(job), eq(false), eq(AddOnSpeech.DELTAS_ONLY))
     }
 
     private fun testOfferCard() = FlowCardSnapshot.Offer(
@@ -701,7 +727,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
     }
 
     @Test
@@ -716,8 +742,8 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
-        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, never()).postOfferNotification(any(), any(), any(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any())
     }
 
     @Test
@@ -731,8 +757,45 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(false), any(), anyOrNull(), anyOrNull())
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), eq(true), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), eq(false), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), eq(true), any(), anyOrNull(), anyOrNull(), any(), any())
+    }
+
+    private fun offerChat(pending: cloud.trotter.log.gig.domain.state.PendingOffer = testPendingOffer()) =
+        AppEffect.PostOfferChat(pending, Platform.DoorDash, job = null, sessionId = "sess-1")
+
+    @Test
+    fun `PostOfferChat writes the presentation's chat row once, immediately`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        val pending = testPendingOffer()
+        addOnSpeech.value = AddOnSpeech.DELTAS_ONLY
+        engine.process(offerChat(pending))
+        runCurrent()
+        // No settle delay: the row is written before the heads-up's debounce would have elapsed.
+        verify(bubbleManager, times(1)).postOfferChat(eq(pending), eq(Platform.DoorDash), eq(null), eq("sess-1"),
+            eq(evaluationConfig.value), eq(AddOnSpeech.DELTAS_ONLY))
+    }
+
+    @Test
+    fun `PostOfferChat is suppressed during crash-recovery replay`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        engine.process(offerChat(), recovering = true)
+        runCurrent()
+        verify(bubbleManager, never()).postOfferChat(any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), any())
+    }
+
+    @Test
+    fun `heads-up posts never write a chat row (fresh, re-quote, refresh)`() = runTest {
+        val engine = buildEngine(StandardTestDispatcher(testScheduler))
+        for ((refreshOnly, requote) in listOf(false to false, false to true, true to false)) {
+            engine.process(AppEffect.PostOfferNotification(testEvaluation(), testOfferCard(), testPendingOffer(),
+                offerHash = "hash-9", platform = Platform.DoorDash, refreshOnly = refreshOnly, requote = requote))
+            runCurrent()
+            advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
+            runCurrent()
+        }
+        verify(bubbleManager, times(3)).postOfferNotification(any(), any(), any(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
+        verify(bubbleManager, never()).postOfferChat(any(), any(), anyOrNull(), anyOrNull(), anyOrNull(), any())
     }
 
     @Test
@@ -744,7 +807,7 @@ class SideEffectEngineTest {
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
 
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
     }
 
     @Test
@@ -756,7 +819,7 @@ class SideEffectEngineTest {
         runCurrent()
         advanceTimeBy(SideEffectEngine.OFFER_NOTIFICATION_DELAY_MS + 100)
         runCurrent()
-        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), anyOrNull(), any(), any(), anyOrNull(), anyOrNull())
+        verify(bubbleManager, times(1)).postOfferNotification(any(), any(), any(), any(), any(), anyOrNull(), anyOrNull(), any(), any())
 
         engine.process(AppEffect.CancelOfferNotification(offerHash = "hash-9"))
         runCurrent()

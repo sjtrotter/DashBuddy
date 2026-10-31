@@ -289,7 +289,10 @@ class EffectMapTest {
         // Spoken read also fires on eval-landing, carrying the same evaluation.
         val spoken = effects.filterIsInstance<AppEffect.SpeakOffer>()
         assertEquals("Exactly one SpeakOffer", 1, spoken.size)
-        assertEquals("Speaks the landed evaluation", testEvaluation, spoken[0].evaluation)
+        assertEquals("Speaks the landed evaluation", testEvaluation, spoken[0].pending.evaluation)
+        assertEquals(posts[0].pending, spoken[0].pending)
+        assertEquals(posts[0].platform, spoken[0].platform)
+        assertEquals(posts[0].job, spoken[0].job)
         // Offer didn't just appear — only its evaluation landed — so don't re-evaluate.
         assertTrue("Should not re-evaluate", effects.none { it is AppEffect.EvaluateOffer })
     }
@@ -492,16 +495,16 @@ class EffectMapTest {
     }
 
     @Test
-    fun `the offer heads-up notification carries the resolving platform's session too (#867)`() {
-        // The eval-land step ALSO writes a chat line (the offer summary) via BubbleManager, so
-        // PostOfferNotification carries the same provenance.
+    fun `the offer chat row carries the resolving platform's session too (#867)`() {
+        // The eval-land step ALSO writes a chat line (the offer summary) via PostOfferChat, so it
+        // carries the same provenance.
         val uberOffer = testPendingOffer.copy(sourceRuleId = "uber.screen.offer")
         val prev = multiAppOfferState(uberOffer)
         val next = multiAppOfferState(uberOffer.copy(evaluation = testEvaluation))
 
         val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
-        val post = effects.effectsOfType<AppEffect.PostOfferNotification>().single()
-        assertEquals("uber-sess", post.sessionId)
+        val chat = effects.effectsOfType<AppEffect.PostOfferChat>().single()
+        assertEquals("uber-sess", chat.sessionId)
     }
 
     @Test

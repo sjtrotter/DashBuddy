@@ -38,7 +38,7 @@ import java.time.ZoneOffset
  * #867 (write-side): a chat line must be filed to the session it CAME FROM, not to whichever
  * platform happened to produce the last recognized frame.
  *
- * [BubbleManager.postMessage]/[BubbleManager.postOfferNotification] used to save every message to
+ * [BubbleManager.postMessage]/[BubbleManager.postOfferChat] used to save every message to
  * `activeSessionId.value` **at save time**. `AppState.activeSessionId()` is the session of
  * `regions.flow.activePlatform`, which flips on every app switch while multi-apping — so an Uber
  * offer's outcome line could be written into the DoorDash session's chat history (durable

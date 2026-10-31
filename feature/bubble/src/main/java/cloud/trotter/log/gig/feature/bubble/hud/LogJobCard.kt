@@ -42,15 +42,6 @@ internal fun LogJobCard(model: JobCardModel, onNow: () -> Unit, onUndo: (UndoTar
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(model.store, Modifier.weight(1f), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            model.score?.let { score ->
-                val ink = when (model.scoreTone) {
-                    ScoreTone.GOOD -> c.good; ScoreTone.WARN -> c.warn; ScoreTone.BAD -> c.bad; ScoreTone.NEUTRAL -> c.neutral
-                }
-                val description = stringResource(R.string.hud_log_score_cd, score)
-                Text(score.toString(), Modifier.background(ink.copy(alpha = .14f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp).semantics { contentDescription = description },
-                    style = AppTheme.num.smNum, color = ink)
-            }
             LogQuote(model.pay, model.miles, c.text)
         }
         model.lines.forEach { line ->

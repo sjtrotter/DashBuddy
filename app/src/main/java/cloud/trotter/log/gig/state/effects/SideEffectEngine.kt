@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.state.effects
 
+import cloud.trotter.log.gig.domain.offer.story.OfferStories
+import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.core.database.effects.EffectsFiredDao
@@ -58,6 +60,7 @@ class SideEffectEngine @Inject constructor(
     private val screenShotHandler: ScreenShotHandler,
     private val uiInteractionHandler: UiInteractionHandler,
     private val effectsFiredDao: EffectsFiredDao,
+    private val devSettingsRepository: DevSettingsRepository,
     private val ttsEffectHandler: TtsEffectHandler,
     private val permissionTierChecker: PermissionTierChecker,
     private val capabilityGrants: RuleCapabilityGrants,
@@ -99,9 +102,10 @@ class SideEffectEngine @Inject constructor(
 
     /**
      * #1104: a delayed offer post still in its settle window. `fresh` = it owes the FIRST post's
-     * obligations (the chat summary + the one alert); a refresh-only post that supersedes a pending
-     * fresh one inherits them, or a deadline moving inside the 750 ms window would cancel the fresh
-     * post and the offer would surface with no summary at all (Astra #1104 r6).
+     * obligations (the one alert); a refresh-only post that supersedes a pending fresh one inherits
+     * them, or a deadline moving inside the 750 ms window would cancel the fresh post and the offer
+     * would surface with no alert at all (Astra #1104 r6). The chat row is not a post's obligation:
+     * it is [AppEffect.PostOfferChat]'s, emitted once per presentation.
      */
     private class PendingOfferPost(val job: Job, val fresh: Boolean)
 
@@ -391,7 +395,16 @@ class SideEffectEngine @Inject constructor(
                 if (!dispatchRuleEffect(effect.effect)) return
             }
 
-            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(effect.evaluation)
+            // The presentation's one chat row: immediate, never behind the heads-up's hash-keyed
+            // debounce, so a re-quote that cancels the old hash's pending post cannot lose it.
+            is AppEffect.PostOfferChat -> bubbleManager.postOfferChat(
+                effect.pending, effect.platform, effect.job, effect.sessionId,
+                config = strategyRepository.evaluationConfig.value,
+                addOnSpeech = devSettingsRepository.addOnSpeech.value,
+            )
+
+            is AppEffect.SpeakOffer -> ttsEffectHandler.speakOffer(OfferStories.build(effect.pending, effect.job,
+                strategyRepository.evaluationConfig.value, effect.platform).forPresentation(devSettingsRepository.addOnSpeech.value))
 
             is AppEffect.StartSession -> {
                 bubbleManager.startSession(effect.sessionId, effect.platformName)
@@ -522,9 +535,10 @@ class SideEffectEngine @Inject constructor(
                 val job = engineScope.launch(start = CoroutineStart.LAZY) {
                     delay(OFFER_NOTIFICATION_DELAY_MS)
                     bubbleManager.postOfferNotification(
-                        effect.offer, effect.evaluation, effect.platform, effect.sessionId,
+                        effect.offer, effect.evaluation, effect.platform,
                         refreshOnly = !fresh, pending = effect.pending, job = effect.job,
                         config = strategyRepository.evaluationConfig.value,
+                        requote = effect.requote, addOnSpeech = devSettingsRepository.addOnSpeech.value,
                     )
                 }
                 val pending = PendingOfferPost(job, fresh)
@@ -841,6 +855,7 @@ class SideEffectEngine @Inject constructor(
         is AppEffect.EndSession,
         is AppEffect.ProcessTipNotification,
         is AppEffect.SpeakOffer,
+        is AppEffect.PostOfferChat,
         is AppEffect.PostOfferNotification,
         -> true
         else -> false

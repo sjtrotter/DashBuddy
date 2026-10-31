@@ -63,6 +63,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [One offer story, no score or verdict (#1442)](checklist/open/1442-one-offer-story-no-score-or-verdict.md)
+
 - [🆕 NEW — after a GPS dash, the delivery drill-down's rows carry an arrival odometer and…](checklist/open/1310-after-a-gps-dash-the-delivery-drill-down-s-rows.md)
 - [🆕 NEW — a 2-drop job's rows never exceed its odometer span and never show negative…](checklist/open/1108-a-2-drop-job-s-rows-never-exceed-its-odometer-span.md)
 - [🆕 NEW — no 5-second ghost dash after End dash (#1311)](checklist/open/1311-no-5-second-ghost-dash-after-end-dash.md)

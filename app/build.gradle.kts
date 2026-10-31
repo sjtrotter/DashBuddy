@@ -280,6 +280,7 @@ dependencies {
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
 
+    testImplementation(testFixtures(project(":domain")))
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)

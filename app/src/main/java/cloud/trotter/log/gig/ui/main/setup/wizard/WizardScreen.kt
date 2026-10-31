@@ -86,12 +86,8 @@ fun WizardScreen(
     val shoppingItemsFormat = stringResource(R.string.wizard_screen_shopping_value_format)
     val hourlyValueFormat = stringResource(R.string.wizard_screen_hourly_value_format)
     val distanceValueFormat = stringResource(R.string.wizard_screen_distance_value_format)
-    val minPayoutFooterAuto = stringResource(R.string.wizard_screen_min_payout_footer_auto)
-    val minPayoutFooterFlag = stringResource(R.string.wizard_screen_min_payout_footer_flag)
     val hourlyFooterAuto = stringResource(R.string.wizard_screen_hourly_footer_auto)
     val hourlyFooterFlag = stringResource(R.string.wizard_screen_hourly_footer_flag)
-    val distanceFooterAuto = stringResource(R.string.wizard_screen_distance_footer_auto)
-    val distanceFooterFlag = stringResource(R.string.wizard_screen_distance_footer_flag)
 
     Scaffold(
         topBar = {
@@ -234,7 +230,7 @@ fun WizardScreen(
                             step = currentStep, value = state.minPayout, valueRange = 2f..20f,
                             valueFormatter = { Formats.money(it.toDouble()) },
                             onValueChange = viewModel::updateMinPayout,
-                            footerText = if (isCherryPicker) minPayoutFooterAuto else minPayoutFooterFlag
+                            footerText = stringResource(R.string.wizard_screen_min_payout_footer)
                         )
                     }
 
@@ -252,7 +248,7 @@ fun WizardScreen(
                             step = currentStep, value = state.maxDistance, valueRange = 1f..25f,
                             valueFormatter = { distanceValueFormat.format(Formats.decimal(it.toDouble())) },
                             onValueChange = viewModel::updateMaxDistance,
-                            footerText = if (isCherryPicker) distanceFooterAuto else distanceFooterFlag
+                            footerText = stringResource(R.string.wizard_screen_distance_footer)
                         )
                     }
                 }

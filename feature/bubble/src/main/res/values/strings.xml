@@ -99,7 +99,7 @@
     <string name="hud_dock_cd_suggested">Suggested</string>
     <string name="hud_offer_left">left</string>
     <string name="hud_offer_cd_left">%1$s left</string>
-    <string name="hud_offer_profit">profit</string>
+    <string name="hud_offer_net">net</string>
     <string name="hud_offer_loss">loss</string>
     <string name="hud_offer_car">cost</string>
     <string name="hud_offer_distance_unknown">distance unknown</string>
@@ -107,12 +107,9 @@
     <plurals name="hud_offer_items"><item quantity="one">item</item><item quantity="other">items</item></plurals>
     <plurals name="hud_offer_stops"><item quantity="one">stop</item><item quantity="other">stops</item></plurals>
     <string name="hud_offer_added">+%1$s added</string>
-    <string name="hud_offer_was">was %1$d</string>
     <string name="hud_offer_addon">Add-on</string>
-    <string name="hud_offer_addon_note">Added to your current job. Unscored, since the card shows only what this stop adds.</string>
-    <string name="hud_offer_cd_score">Score %1$d</string>
-    <string name="hud_offer_cd_no_score">No score</string>
-    <string name="hud_offer_cd_bar">Profit %1$s, cost %2$s</string>
+    <string name="hud_offer_addon_note">Added to your current job. The delivery app shows only what it adds.</string>
+    <string name="hud_offer_cd_bar">Net %1$s, cost %2$s</string>
     <string name="hud_offer_cd_bar_loss">Loss %1$s, cost %2$s</string>
     <string name="hud_offer_cd_above">Above target</string>
     <string name="hud_offer_cd_below">Below target</string>
@@ -166,7 +163,6 @@
     <string name="hud_log_now_nodue_at_store">%1$s at the store</string>
     <string name="hud_log_now_nodue_at_door">%1$s at the door</string>
     <string name="hud_log_net">profit %1$s</string>
-    <string name="hud_log_score_cd">Score %1$d</string>
     <string name="hud_log_empty">Nothing logged yet this shift. Offers, deliveries and expenses appear here.</string>
     <string name="hud_hero_compact_cd">Profit %1$s</string>
     <string name="hud_log_minutes">%1$d min</string>
@@ -244,4 +240,22 @@
     <string name="hud_goal_profit_today">Profit today %1$s</string>
     <string name="hud_goal_met">Met</string>
     <string name="hud_goal_failed">Not saved. Try again.</string>
+    <string name="offer_title">%1$s offer</string>
+    <string name="offer_title_addon">%1$s add-on</string>
+    <string name="offer_rule_blocked">Blocked store</string>
+    <string name="offer_rule_shopping_off">Shopping off</string>
+    <string name="offer_rule_review">Review store</string>
+    <string name="offer_rule_protect">Protect acceptance rate</string>
+    <string name="offer_limit_net">Net under %1$s</string>
+    <string name="offer_limit_distance">Over %1$s mi</string>
+    <string name="offer_limit_items">Over %1$d items</string>
+    <string name="offer_missing_distance">Distance unknown</string>
+    <string name="offer_missing_pay">Pay unknown</string>
+    <string name="offer_missing_estimate">Estimate pending</string>
+    <string name="offer_line_pay">%1$s pay</string>
+    <string name="offer_line_net">%1$s net</string>
+    <string name="offer_line_job_net">Job %1$s net</string>
+    <string name="offer_line_rate">%1$s/hr</string>
+    <string name="offer_line_miles">%1$s mi</string>
+    <string name="offer_line_minutes">%1$s min</string>
 </resources>

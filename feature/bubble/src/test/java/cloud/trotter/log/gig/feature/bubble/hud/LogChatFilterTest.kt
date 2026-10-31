@@ -17,8 +17,8 @@ class LogChatFilterTest {
     }
     @Test fun `pickup dropoff and earnings personas are dropped`() {
         listOf(ChatPersona.Navigator, ChatPersona.Dropoff, ChatPersona.Shopper, ChatPersona.Earnings,
-            ChatPersona.Merchant("Panera Bread"), ChatPersona.GoodOffer, ChatPersona.BadOffer,
-            ChatPersona.Inspector, ChatPersona.Dasher).forEach { assertFalse(LogChatFilter.keep(logChat("Store", it))) }
+            ChatPersona.Merchant("Panera Bread"), ChatPersona.Offer("DoorDash offer"), ChatPersona.fromWire("GOOD_OFFER", "H-E-B"),
+            ChatPersona.fromWire("INSPECTOR", "H-E-B"), ChatPersona.Dasher).forEach { assertFalse(LogChatFilter.keep(logChat("Store", it))) }
     }
     @Test fun `customer persona is dropped for privacy`() {
         assertFalse(LogChatFilter.keep(logChat("Order ready", ChatPersona.Customer(""))))

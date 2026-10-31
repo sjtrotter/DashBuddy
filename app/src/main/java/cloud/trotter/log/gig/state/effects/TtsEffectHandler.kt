@@ -1,6 +1,5 @@
 package cloud.trotter.log.gig.state.effects
 
-import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import android.content.Context
 import android.content.res.Configuration
 import android.media.AudioAttributes
@@ -8,11 +7,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.domain.di.ApplicationScope
-import cloud.trotter.log.gig.domain.evaluation.OfferAction
-import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
 import cloud.trotter.log.gig.notice.TtsHealthNotifier
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -24,10 +20,9 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
-import cloud.trotter.log.gig.domain.format.Formats
 
 /**
- * Speaks the offer verdict aloud.
+ * Speaks the offer story aloud.
  *
  * **Liveness (#991).** The engine is built through [TtsEngineFactory] rather than inline, and every
  * way an utterance can be lost escalates through [TtsRecoveryPolicy] — rebuild, backed-off rebuild,
@@ -274,7 +269,7 @@ class TtsEffectHandler @Inject constructor(
      *
      * The in-flight utterance is NOT replayed: the offer that failed to speak is gone, and by the
      * time the new engine reports ready the card may not even be on screen. Losing it honestly and
-     * saying so beats speaking a stale verdict at a driving dasher.
+     * saying so beats speaking a stale offer at a driving dasher.
      */
     private fun reinitializeEngine() {
         val dead = synchronized(this) {
@@ -319,8 +314,8 @@ class TtsEffectHandler @Inject constructor(
         }
     }
 
-    /** Speak the offer's evaluation aloud — the verdict, then the card's headline economics. */
-    fun speakOffer(eval: OfferEvaluation) {
+    /** Speak the same facts as the offer card. */
+    fun speakOffer(story: cloud.trotter.log.gig.domain.offer.story.OfferStory) {
         val engine = synchronized(this) { if (isReady) tts else null }
         if (engine == null) {
             Timber.tag("Tts").w("not ready, skipping offer speech")
@@ -330,7 +325,7 @@ class TtsEffectHandler @Inject constructor(
             if (recovering || initFailed) onSpeechFailed()
             return
         }
-        val text = formatEvaluation(eval)
+        val text = OfferSpeech.speak(story, localizedContext(spokenLocale).resources)
         // #551 P7: the spoken text names merchants ("Accept. Target & Maple Street …"),
         // so the shareable INFO stream carries counts only; the raw utterance stays on the
         // DEBUG firehose.
@@ -406,54 +401,6 @@ class TtsEffectHandler @Inject constructor(
                 Timber.tag("Tts").e(t, "engine re-initialization failed")
             }
         }
-    }
-
-    private fun formatEvaluation(eval: OfferEvaluation): String {
-        // #428 Half B: the verdict word + template connectives are resolved through the EFFECTIVE
-        // locale's resources (via a localized Context) so the settings override changes the words as
-        // well as the voice. Formats.decimal(...) numeric formatting is unchanged — the SSOT locale
-        // policy in :domain (#358/#456/#467) still owns number/money formatting; the es voice reads
-        // those digits.
-        val localized = localizedContext(spokenLocale)
-        val verdict = localized.getString(
-            when (eval.action) {
-                OfferAction.ACCEPT -> R.string.tts_verdict_accept
-                OfferAction.DECLINE -> R.string.tts_verdict_decline
-                OfferAction.MANUAL_REVIEW -> R.string.tts_verdict_review
-                else -> R.string.tts_verdict_offer
-            }
-        )
-        // #936: an offer whose distance never parsed carries 0.0 placeholders in every rate field,
-        // so the scored template would speak "zero dollars an hour net … zero miles, score zero"
-        // — a fabricated verdict read aloud to a driving dasher. Speak the parsed pay and say
-        // there's no verdict instead.
-        if (eval.quoteBasis == OfferQuoteBasis.INCREMENTAL) {
-            return localized.getString(
-                R.string.tts_offer_addon_template,
-                eval.merchantName.trim(),
-                Formats.decimal(eval.payAmount, 2),
-                Formats.decimal(eval.distanceMiles),
-            ) + (eval.incrementalMinutes?.let {
-                " " + localized.resources.getQuantityString(R.plurals.tts_offer_addon_minutes, it.toInt(), it.toInt())
-            } ?: "")
-        }
-        if (!eval.hasDistanceMetrics) {
-            return localized.getString(
-                R.string.tts_offer_no_verdict_template,
-                verdict,
-                eval.merchantName.trim(),
-                Formats.decimal(eval.payAmount, 2),
-            )
-        }
-        return localized.getString(
-            R.string.tts_offer_evaluation_template,
-            verdict,
-            eval.merchantName.trim(),
-            Formats.decimal(eval.dollarsPerHour, 0),
-            Formats.decimal(eval.netPayAmount, 2),
-            Formats.decimal(eval.distanceMiles),
-            eval.score.toInt().toString(),
-        )
     }
 
     /** A [Context] whose resources resolve against [locale] — so the spoken strings match the

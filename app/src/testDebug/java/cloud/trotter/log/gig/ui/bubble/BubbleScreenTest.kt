@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.model.vehicle.Bicycle
+import cloud.trotter.log.gig.domain.offer.story.AddOnSpeech
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
@@ -72,6 +73,7 @@ class BubbleScreenTest {
         whenever(vm.isGasPriceRefreshing).thenReturn(MutableStateFlow(false))
         whenever(vm.cards).thenReturn(MutableStateFlow(BubbleCards.Empty))
         whenever(vm.evaluationConfig).thenReturn(MutableStateFlow(null))
+        whenever(vm.addOnSpeech).thenReturn(MutableStateFlow(AddOnSpeech.JOB_TOTALS))
         whenever(vm.switchablePlatforms).thenReturn(MutableStateFlow(emptyList()))
         whenever(vm.odometerLoaded).thenReturn(MutableStateFlow(true))
         whenever(vm.odometerPrompts).thenReturn(MutableStateFlow(false))

@@ -25,9 +25,9 @@
     <!-- copy-audit: retranslated es -->
     <string name="wizard_desc_shopping">Máximo de artículos para una oferta de compras.</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_title_min_payout">Ganancia mínima</string>
+    <string name="wizard_title_min_payout">Neto mínimo</string>
     <!-- copy-audit: retranslated es -->
-    <string name="wizard_desc_min_payout">La ganancia más baja que aceptarías en una oferta, después de los costos del vehículo.</string>
+    <string name="wizard_desc_min_payout">El neto estimado más bajo que aceptarías en una oferta, después de los costos del vehículo.</string>
     <!-- copy-audit: retranslated es -->
     <string name="wizard_title_hourly">Meta de ganancia/h</string>
     <!-- copy-audit: retranslated es -->

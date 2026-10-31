@@ -157,7 +157,7 @@ internal fun EffectMap.diffOfferLifecycle(
                     AppEffect.PostOfferNotification(
                         refreshOnly = true,
                         evaluation = eval, offer = offerCardOf(nextOffer, eval), pending = nextOffer, offerHash = nextOffer.offerHash,
-                        platform = nextOffer.platform, sessionId = sessionId, job = next.activeJob,
+                        platform = nextOffer.platform, job = next.activeJob,
                     )
                 )
             }
@@ -170,16 +170,19 @@ internal fun EffectMap.diffOfferLifecycle(
     ) {
         val offerCard = offerCardOf(nextOffer, landedEval)
         // The heads-up notification live-updates on EVERY landing (a re-quoted card should show the
-        // fresh numbers — a feature). The spoken read fires ONCE per physical presentation (#830):
-        // only when the PREVIOUS state had no eval-landed marker, so a churning offer that
-        // re-evaluates on each variant is read aloud exactly once, not on every re-quote.
+        // fresh numbers — a feature). The spoken read and the chat row fire ONCE per physical
+        // presentation (#830): only when the PREVIOUS state had no eval-landed marker, so a churning
+        // offer that re-evaluates on each variant is read aloud and logged exactly once.
         add(
             AppEffect.PostOfferNotification(
-                landedEval, offerCard, nextOffer, nextOffer.offerHash, nextOffer.platform, sessionId = sessionId,
-                job = next.activeJob,
+                landedEval, offerCard, nextOffer, nextOffer.offerHash, nextOffer.platform,
+                job = next.activeJob, requote = prevOffer.firstEvalLandedAt != null,
             )
         )
-        if (prevOffer.firstEvalLandedAt == null) add(AppEffect.SpeakOffer(landedEval))
+        if (prevOffer.firstEvalLandedAt == null) {
+            add(AppEffect.PostOfferChat(nextOffer, nextOffer.platform, next.activeJob, sessionId))
+            add(AppEffect.SpeakOffer(nextOffer, nextOffer.platform, next.activeJob))
+        }
     }
 
     // Offer resolved (accepted/declined/timeout) — the presented offer left presentation this step

@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.bubble
 
+import cloud.trotter.log.gig.domain.offer.story.*
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
@@ -139,6 +140,7 @@ class BubbleViewModelTest {
         whenever(appStateRepository.goalMetMark).thenReturn(flowOf(null))
         whenever(stateManager.state).thenReturn(state)
         whenever(strategyRepository.evaluationConfig).thenReturn(configFlow)
+        whenever(devSettingsRepository.addOnSpeech).thenReturn(MutableStateFlow(AddOnSpeech.JOB_TOTALS))
         whenever(devSettingsRepository.bubbleSessionMode).thenReturn(modeFlow)
         whenever(appEventRepo.getMostRecentSessionId()).thenReturn(flowOf(null))
         whenever(appEventRepo.getEventsForSession(any())).thenReturn(flowOf(emptyList()))
@@ -1090,7 +1092,7 @@ class BubbleViewModelTest {
         val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.focusedPlatform.collect {} }
         runCurrent()
         var evaluatedHash: String? = null
-        val displayed = OfferCardMapper.map(pending, active, emptyList(), vm.evaluationConfig.value) { offer, config ->
+        val displayed = mapOffer(pending, active, vm.evaluationConfig.value) { offer, config ->
             evaluatedHash = offer.offerHash
             OfferEvaluator().evaluate(offer, config)
         }
@@ -1128,3 +1130,8 @@ class BubbleViewModelTest {
     }
 
 }
+
+private fun mapOffer(pending: cloud.trotter.log.gig.domain.state.PendingOffer,
+    job: cloud.trotter.log.gig.domain.state.Job?, config: cloud.trotter.log.gig.domain.evaluation.EvaluationConfig?,
+    evaluate: (cloud.trotter.log.gig.domain.model.offer.ParsedOffer, cloud.trotter.log.gig.domain.evaluation.EvaluationConfig) -> cloud.trotter.log.gig.domain.evaluation.OfferEvaluation = cloud.trotter.log.gig.domain.evaluation.OfferEvaluator()::evaluate) =
+    OfferCardMapper.map(OfferStories.build(pending, job, config, pending.platform, evaluate = evaluate), pending, job)

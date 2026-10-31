@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
+import cloud.trotter.log.gig.domain.offer.story.OfferFixtures
 import org.junit.Assert.*
 import org.junit.Test
 

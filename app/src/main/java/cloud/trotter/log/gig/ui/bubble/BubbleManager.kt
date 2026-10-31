@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.ui.bubble
 
+import cloud.trotter.log.gig.domain.offer.story.*
+import cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText
 import android.app.Notification
 import androidx.compose.ui.graphics.toArgb
 import cloud.trotter.log.gig.core.designsystem.theme.darkAppColors
@@ -39,11 +41,7 @@ import cloud.trotter.log.gig.domain.model.chat.ChatPersona
 import cloud.trotter.log.gig.domain.state.OfferIntent
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.activeSessionId
-import cloud.trotter.log.gig.feature.bubble.scoreGaugeBitmap
 import cloud.trotter.log.gig.feature.bubble.formatters.getIconResId // <-- Your new UI Formatter!
-import cloud.trotter.log.gig.feature.bubble.formatters.notificationPersona
-import cloud.trotter.log.gig.feature.bubble.formatters.toNotificationSummary
-import cloud.trotter.log.gig.feature.bubble.formatters.offerScoreArgb
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.model.vehicle.VehicleOdometerReading
@@ -462,7 +460,7 @@ class BubbleManager @Inject constructor(
      * Post the offer evaluation. The offer reaches the dasher on three surfaces (#457):
      *  - the in-bubble offer **card** (state-driven `LiveCardBuilder`, shown when the bubble is open) —
      *    not touched here;
-     *  - the **chat stream** entry (saved below, the in-bubble history);
+     *  - the **chat stream** entry ([postOfferChat], its own once-per-presentation effect);
      *  - a **separate heads-up notification** with Accept/Decline ([showOfferHeadsUp]) — the
      *    actionable surface that pops over DoorDash.
      *
@@ -475,44 +473,73 @@ class BubbleManager @Inject constructor(
         offer: FlowCardSnapshot.Offer,
         evaluation: OfferEvaluation,
         platform: Platform,
-        /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
-        sessionId: String? = null,
         /**
          * #1104: a countdown-anchor REFRESH of an already-surfaced offer — update the existing
-         * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert) and write NO
-         * chat summary (a second "offer posted" row per moved deadline is not a milestone).
+         * notification in place (same per-offer id, `setOnlyAlertOnce`: no re-alert).
          */
         refreshOnly: Boolean = false,
         pending: PendingOffer,
         config: EvaluationConfig?,
         /** The platform's active job at the offer's step: an add-on maps to the bubble's COMBINED card. */
         job: DeliveryJob? = null,
+        requote: Boolean = false,
+        addOnSpeech: AddOnSpeech,
     ) {
-        val summary = evaluation.toNotificationSummary()
-        val persona = evaluation.notificationPersona()
-        if (refreshOnly) {
-            Timber.tag("Chat").d("offer heads-up refreshed [%s] (countdown anchors)", persona.logLabel)
-        } else {
-            // #551 P7: the offer summary ends with the merchant name (raw third-party UI text), so
-            // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
-            Timber.tag("Chat").i("offer posted [%s] (%d chars)", persona.logLabel, summary.length)
-            Timber.tag("Chat").d("[%s]: %s", persona.displayName, summary)
-            scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, summary.toString(), persona) }
-        }
-        val card = OfferCardMapper.map(pending, job = job, completed = emptyList(), config = config)
-        showOfferHeadsUp(card, pending.offerHash, summary, persona, platform)
+        val text = offerText(pending, job, config, platform, requote, addOnSpeech)
+        Timber.tag("Chat").d("offer heads-up posted [%s] (%s)", text.persona.logLabel,
+            if (refreshOnly) "refresh" else if (requote) "re-quote" else "first")
+        val card = OfferCardMapper.map(text.story, pending, job)
+        showOfferHeadsUp(card, pending.offerHash, text.summary, text.persona, platform, OfferStoryText.note(text.story, context.resources))
+    }
+
+    /**
+     * The presentation's one chat row: the offer summary line, saved to the chat stream. Its effect
+     * fires once per presentation beside the spoken read, so a re-quote or a deadline refresh writes
+     * no second row.
+     */
+    fun postOfferChat(
+        pending: PendingOffer,
+        platform: Platform,
+        job: DeliveryJob?,
+        /** The offer's own originating session (#867); null falls back to [activeSessionId]. */
+        sessionId: String?,
+        config: EvaluationConfig?,
+        addOnSpeech: AddOnSpeech,
+    ) {
+        val text = offerText(pending, job, config, platform, requote = false, addOnSpeech = addOnSpeech)
+        // #551 P7: the offer summary contains the merchant name (raw third-party UI text), so
+        // INFO carries a PII-safe milestone and the raw summary stays on the DEBUG firehose.
+        Timber.tag("Chat").i("offer posted [%s] (%d chars)", text.persona.logLabel, text.summary.length)
+        Timber.tag("Chat").d("[%s]: %s", text.persona.displayName, text.summary)
+        scope.launch { chatRepository.saveMessage(sessionId ?: activeSessionId.value, text.summary, text.persona) }
+    }
+
+    /** The story, its one-line summary and its persona: the one assembly both offer surfaces share. */
+    private class OfferText(val story: OfferStory, val summary: String, val persona: ChatPersona.Offer)
+
+    private fun offerText(
+        pending: PendingOffer,
+        job: DeliveryJob?,
+        config: EvaluationConfig?,
+        platform: Platform,
+        requote: Boolean,
+        addOnSpeech: AddOnSpeech,
+    ): OfferText {
+        val story = OfferStories.build(pending, job, config, platform, requote).forPresentation(addOnSpeech)
+        return OfferText(story, OfferStoryText.line(story, context.resources),
+            ChatPersona.Offer(OfferStoryText.title(story, context.resources)))
     }
 
     /**
      * #457/#578: the actionable offer surface — a separate, **non-bubble** heads-up notification (own
      * channel + id, no `BubbleMetadata`) that floats over DoorDash so Accept/Decline fire while the
      * offer window is still live. #578 makes it a rich "mini offer card" via `DecoratedCustomViewStyle`
-     * + custom [RemoteViews] (gross pay, ring, pay bar, rates, live countdown) instead of
+     * + custom [RemoteViews] (gross pay, note, pay bar, rates, live countdown) instead of
      * a plain text line. The custom views use ONLY RemoteViews-legal widgets, so they can't fail
      * inflation and regress the #457 action surface; `setContentText` keeps a text body for surfaces
      * that don't render custom views (Wear/Auto). Dismissed by [cancelOfferNotification].
      */
-    private fun showOfferHeadsUp(card: OfferCardModel, offerHash: String, summary: CharSequence, persona: ChatPersona, platform: Platform) {
+    private fun showOfferHeadsUp(card: OfferCardModel, offerHash: String, summary: CharSequence, persona: ChatPersona, platform: Platform, note: String) {
         val openBubble = Intent(context, BubbleActivity::class.java).apply { action = Intent.ACTION_VIEW }
         val contentIntent = PendingIntent.getActivity(
             context, REQUEST_CODE_OFFER_CONTENT, openBubble,
@@ -531,9 +558,9 @@ class BubbleManager @Inject constructor(
             .setAutoCancel(true)
             .setTimeoutAfter(OFFER_HEADS_UP_TIMEOUT_MS)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform))
-            .setCustomHeadsUpContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform))
-            .setCustomBigContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_expanded, expanded = true, platform))
+            .setCustomContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform, note))
+            .setCustomHeadsUpContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_compact, expanded = false, platform, note))
+            .setCustomBigContentView(buildOfferCardView(card, offerHash, R.layout.notif_offer_expanded, expanded = true, platform, note))
         // #583: Accept/Decline are now brand-styled TextViews INSIDE the custom card
         // (wired via setOnClickPendingIntent in buildOfferCardView), not the system action row —
         // the two can't coexist without doubling the buttons. Field-gated: if a dash shows the
@@ -549,6 +576,7 @@ class BubbleManager @Inject constructor(
         layoutRes: Int,
         expanded: Boolean,
         platform: Platform,
+        note: String,
     ): RemoteViews {
         val model = OfferNotificationModel.from(card)
         val colors = darkAppColors()
@@ -565,22 +593,16 @@ class BubbleManager @Inject constructor(
                 SystemClock.elapsedRealtime() + (expiresAt - System.currentTimeMillis()), null, true)
         }
         rv.setViewVisibility(R.id.notif_offer_countdown, if (expiresAt != null) View.VISIBLE else View.GONE)
-        model.ring?.let { ring ->
-            rv.setImageViewBitmap(R.id.notif_offer_gauge, scoreGaugeBitmap(ring.score,
-                ring.score?.let { offerScoreArgb(it.toDouble()) } ?: colors.neutral.toArgb(),
-                ((if (expanded) 64 else 40) * metrics.density).toInt()))
-            rv.setContentDescription(R.id.notif_offer_gauge, ring.score?.let {
-                context.getString(BubbleR.string.hud_offer_cd_score, it)
-            } ?: context.getString(BubbleR.string.hud_offer_cd_no_score))
-        }
-        rv.setViewVisibility(R.id.notif_offer_gauge, if (model.ring != null) View.VISIBLE else View.GONE)
+        rv.setTextViewText(R.id.notif_offer_note, note)
+        rv.setTextColor(R.id.notif_offer_note, colors.neutral.toArgb())
+        rv.setViewVisibility(R.id.notif_offer_note, if (note.isEmpty()) View.GONE else View.VISIBLE)
 
         // Preserve the per-offer action identity, including the native Accept-left/Decline-right order.
         rv.setOnClickPendingIntent(R.id.notif_btn_decline,
             offerActionPendingIntent(OfferIntent.DECLINE, platform, offerHash))
         rv.setOnClickPendingIntent(R.id.notif_btn_accept,
             offerActionPendingIntent(OfferIntent.ACCEPT, platform, offerHash))
-        val labels = PayBarLabels(context.getString(BubbleR.string.hud_offer_profit),
+        val labels = PayBarLabels(context.getString(BubbleR.string.hud_offer_net),
             context.getString(BubbleR.string.hud_offer_loss), context.getString(BubbleR.string.hud_offer_car),
             context.getString(BubbleR.string.hud_offer_distance_unknown))
         if (expanded) {

@@ -164,7 +164,7 @@ private fun OfferRow(offer: OfferListing) {
     }
 }
 
-/** `2:14 PM · 4.2 mi · est. $18.40/hr · score 7.1` — only the parts that exist. */
+/** `2:14 PM · 4.2 mi · est. $18.40/hr` — only the parts that exist. */
 @Composable
 private fun metaLine(offer: OfferListing): String {
     val separator = stringResource(R.string.offers_tab_row_meta_separator)
@@ -175,9 +175,6 @@ private fun metaLine(offer: OfferListing): String {
         }
         offer.estDollarsPerHour?.let {
             add(stringResource(R.string.offers_tab_row_est_rate_format, Formats.money(it)))
-        }
-        offer.score?.let {
-            add(stringResource(R.string.offers_tab_row_score_format, Formats.decimal(it, 1)))
         }
     }
     return parts.joinToString(separator)

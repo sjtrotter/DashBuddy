@@ -13,8 +13,8 @@
     <string name="wizard_desc_goal">Pick how offers are scored.</string>
     <string name="wizard_title_shopping">Shop &amp; Deliver</string>
     <string name="wizard_desc_shopping">Maximum items for a shopping offer.</string>
-    <string name="wizard_title_min_payout">Minimum profit</string>
-    <string name="wizard_desc_min_payout">Lowest profit you\'d take on an offer, after vehicle costs.</string>
+    <string name="wizard_title_min_payout">Minimum net</string>
+    <string name="wizard_desc_min_payout">Lowest estimated net you\'d take on an offer, after vehicle costs.</string>
     <string name="wizard_title_hourly">Target profit/hr</string>
     <string name="wizard_desc_hourly">The profit per hour you aim for while on a delivery.</string>
     <string name="wizard_title_distance">Max distance</string>

@@ -1,5 +1,9 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
+import cloud.trotter.log.gig.domain.offer.story.LimitHit
+import cloud.trotter.log.gig.domain.offer.story.LimitKind
+import cloud.trotter.log.gig.domain.offer.story.OfferFixtures
+import cloud.trotter.log.gig.domain.offer.story.RuleHit
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -12,8 +16,6 @@ import androidx.compose.ui.text.TextLayoutResult
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
-import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
-import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.offer.OfferBadge
 import cloud.trotter.log.gig.feature.bubble.MutableClock
 import org.junit.After
@@ -33,7 +35,7 @@ class OfferCardTest {
     private val clock = MutableClock(4_000)
     private lateinit var locale: Locale
     private val f = OfferFixtures
-    private fun standard() = OfferCardMapper.map(f.pending(), null, emptyList(), f.config)
+    private fun standard() = mapOffer(f.pending(), null, f.config)
 
     @Before fun setup() {
         locale = Locale.getDefault()
@@ -83,29 +85,29 @@ class OfferCardTest {
         assertEquals(56f, wholeLayout.single().layoutInput.style.fontSize.value, 0.0f)
         assertTrue(fractionLayout.single().layoutInput.style.fontSize.value < wholeLayout.single().layoutInput.style.fontSize.value)
     }
-    @Test fun `pay bar pills read profit and cost`() {
+    @Test fun `pay bar pills read net and cost`() {
         show()
         value("offer.bar", "$8.29").assertExists()
-        value("offer.bar", "profit").assertExists()
+        value("offer.bar", "net").assertExists()
         value("offer.bar", "$3.46").assertExists()
         value("offer.bar", "cost").assertExists()
-        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Profit $8.29, cost $3.46")
+        compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Net $8.29, cost $3.46")
     }
     @Test fun `loss bar shows the loss pill`() {
         val p = f.pending(f.offer().copy(payAmount = 6.0), f.evaluation().copy(netPayAmount = -1.67))
-        show(OfferCardMapper.map(p, null, emptyList(), f.config))
+        show(mapOffer(p, null, f.config))
         value("offer.bar", "$1.67").assertExists()
         value("offer.bar", "loss").assertExists()
         compose.onNodeWithTag("offer.bar").assertContentDescriptionEquals("Loss $1.67, cost $7.67")
     }
     @Test fun `distance unknown shows the flat bar and em dash rates`() {
-        show(OfferCardMapper.map(f.pending(f.offer().copy(distanceMiles = null)), null, emptyList(), f.config))
+        show(mapOffer(f.pending(f.offer().copy(distanceMiles = null)), null, f.config))
         value("offer.bar", "distance unknown").assertExists()
         GaugeKind.entries.forEach { kind ->
             compose.onAllNodes(hasText(EMPTY_VALUE) and hasAnyAncestor(hasTestTag("offer.gauge.$kind")),
                 useUnmergedTree = true).assertCountEquals(if (kind == GaugeKind.ITEM) 1 else 2)
         }
-        compose.onNodeWithTag("offer.ring").assertContentDescriptionEquals("No score")
+        compose.onNodeWithTag("offer.ring").assertDoesNotExist()
     }
     @Test fun `gauges show denominators and rates with units`() {
         show()
@@ -121,7 +123,7 @@ class OfferCardTest {
     }
     @Test fun `trip line draws one store per pickup and one house per drop`() {
         val o = f.offer().copy(orders = listOf(f.order(), f.order()))
-        show(OfferCardMapper.map(f.pending(o), null, emptyList(), f.config))
+        show(mapOffer(f.pending(o), null, f.config))
         compose.onAllNodesWithTag("offer.trip.node").assertCountEquals(4)
         compose.onAllNodesWithContentDescription("Pickup").assertCountEquals(1)
         compose.onAllNodesWithContentDescription("Drop-off").assertCountEquals(2)
@@ -134,41 +136,41 @@ class OfferCardTest {
         compose.onNodeWithTag("offer.decline").performClick()
         compose.runOnIdle { assertEquals(1, accepted); assertEquals(1, declined) }
     }
-    @Test fun `combined add on shows the added chip, the was score and the deltas`() {
-        val before = FlowCardSnapshot.Offer(0, 1, "before", evaluationScore = 60.0, outcome = AppEventType.OFFER_ACCEPTED)
-        show(OfferCardMapper.map(f.pending(f.addon()), f.job(), listOf(before), f.config))
+    @Test fun `combined add on shows the added chip, the job facts and the deltas`() {
+        show(mapOffer(f.pending(f.addon()), f.job(), f.config))
         compose.onNodeWithText("Add-on").assertExists()
         compose.onNodeWithText("+$7.00 added").assertExists()
-        compose.onNodeWithText("was 60").assertExists()
+        compose.onNodeWithText("was 60").assertDoesNotExist()
         value("offer.gauge.MILE", "+2.1").assertExists()
         value("offer.gauge.ITEM", "+3").assertExists()
         compose.onNodeWithTag("offer.addon.tiles").assertDoesNotExist()
     }
-    @Test fun `fallback add on shows four delta tiles and the unscored line`() {
-        show(OfferCardMapper.map(f.pending(f.addon()), null, emptyList(), f.config))
+    @Test fun `fallback add on shows four delta tiles and the added job note`() {
+        show(mapOffer(f.pending(f.addon()), null, f.config))
         listOf("12", "2.1", "2", "15").forEach { value("offer.addon.tiles", it).assertExists() }
-        compose.onNodeWithText("Added to your current job. Unscored, since the card shows only what this stop adds.").assertExists()
+        compose.onNodeWithText("Added to your current job. The delivery app shows only what it adds.").assertExists()
         compose.onNodeWithTag("offer.ring").assertDoesNotExist()
         compose.onNodeWithTag("offer.bar").assertDoesNotExist()
         GaugeKind.entries.forEach { compose.onNodeWithTag("offer.gauge.$it").assertDoesNotExist() }
     }
-    @Test fun `score ring reads its score`() {
-        show()
-        compose.onNodeWithTag("offer.ring").assertContentDescriptionEquals("Score 74")
+    @Test fun `rule badge reads the matching preference`() {
+        show(mapOffer(f.pending(), null, f.config.copy(allowShopping = false)))
+        compose.onNodeWithText("Shopping off").assertExists()
+        compose.onNodeWithTag("offer.ring").assertDoesNotExist()
     }
     @Test fun `offer badge copy uses sentence case`() {
         val o = f.offer().copy(badges = setOf(OfferBadge.HIGH_PAYING))
-        show(OfferCardMapper.map(f.pending(o), null, emptyList(), f.config))
+        show(mapOffer(f.pending(o), null, f.config))
         compose.onNodeWithText("High paying").assertExists()
         compose.onNodeWithText("Shop and deliver").assertExists()
     }
     @Test fun `unparsed pay shows an unknown hero`() {
-        show(OfferCardMapper.map(f.pending(f.offer().copy(payAmount = null)), null, emptyList(), f.config))
+        show(mapOffer(f.pending(f.offer().copy(payAmount = null)), null, f.config))
         value("offer.hero", EMPTY_VALUE).assertExists()
         compose.onNodeWithText("$0.00").assertDoesNotExist()
     }
     @Test fun `no countdown anchor draws no countdown`() {
-        show(OfferCardMapper.map(f.pending().copy(countdownExpiresAt = null), null, emptyList(), f.config))
+        show(mapOffer(f.pending().copy(countdownExpiresAt = null), null, f.config))
         compose.onNodeWithTag("offer.countdown").assertDoesNotExist()
     }
     @Test fun `offer state writes settle before the countdown clock advances`() {
@@ -179,7 +181,7 @@ class OfferCardTest {
             }
         }
         settle()
-        compose.runOnIdle { state.value = OfferCardMapper.map(f.pending().copy(countdownExpiresAt = 41_000), null, emptyList(), f.config) }
+        compose.runOnIdle { state.value = mapOffer(f.pending().copy(countdownExpiresAt = 41_000), null, f.config) }
         settle()
         tick(5_000)
         value("offer.countdown", "0:36").assertExists()
@@ -201,6 +203,17 @@ class OfferCardTest {
         settle()
         compose.onNodeWithTag("offer.badges").assertExists()
         listOf("High paying", "Shop and deliver", "Add-on").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+    @Test fun `limit badges render the limit in the order given`() {
+        compose.setContent {
+            GigLogTheme { OfferBadges(listOf(OfferBadgeModel.Rule(RuleHit.BLOCKED_STORE),
+                OfferBadgeModel.Limit(LimitHit(LimitKind.NET, 7.0)), OfferBadgeModel.Limit(LimitHit(LimitKind.DISTANCE, 10.0)),
+                OfferBadgeModel.Limit(LimitHit(LimitKind.ITEMS, 30.0)), OfferBadgeModel.Rule(RuleHit.PROTECT_RATE))) }
+        }
+        settle()
+        val labels = listOf("Blocked store", "Net under $7.00", "Over 10.0 mi", "Over 30 items", "Protect acceptance rate")
+        val bounds = labels.map { compose.onNodeWithText(it).assertExists().getBoundsInRoot() }
+        assertTrue("badges keep their order", bounds.zipWithNext().all { (a, b) -> a.top < b.top || (a.top == b.top && a.left < b.left) })
     }
     @Test fun `overflow descriptions pluralize more stops`() {
         val overflow = mutableStateOf(1)

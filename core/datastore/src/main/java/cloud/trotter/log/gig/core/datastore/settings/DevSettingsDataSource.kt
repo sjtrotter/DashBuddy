@@ -20,6 +20,7 @@ class DevSettingsDataSource @Inject constructor(
     @param:DevSettingsPreferences private val ds: DataStore<Preferences>
 ) {
     private object Keys {
+        val ADD_ON_SPEECH = stringPreferencesKey("add_on_speech")
         val IS_DEV_MODE_UNLOCKED = booleanPreferencesKey("is_dev_mode_unlocked")
         val LOG_LEVEL = intPreferencesKey("log_level")
         val CENSUS_SHARE_CAPTURES = booleanPreferencesKey("census_share_captures")
@@ -34,6 +35,9 @@ class DevSettingsDataSource @Inject constructor(
             .associateWith { intPreferencesKey("census_policy_$it") }
         val BUBBLE_SESSION_MODE = stringPreferencesKey("bubble_session_mode")
     }
+
+    val addOnSpeech: Flow<String?> = ds.data.map { it[Keys.ADD_ON_SPEECH] }
+    suspend fun setAddOnSpeech(value: String) { ds.edit { it[Keys.ADD_ON_SPEECH] = value } }
 
     val isDevModeUnlocked: Flow<Boolean?> = ds.data.map { it[Keys.IS_DEV_MODE_UNLOCKED] }
     val logLevel: Flow<Int?> = ds.data.map { it[Keys.LOG_LEVEL] }

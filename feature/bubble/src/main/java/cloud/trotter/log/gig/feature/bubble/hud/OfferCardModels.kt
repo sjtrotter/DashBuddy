@@ -10,18 +10,17 @@ sealed interface OfferCardModel {
     val trip: TripLineModel
 
     sealed interface Scored : OfferCardModel {
-        val ring: RingModel
         val bar: PayBarModel
         val gauges: List<GaugeModel>
     }
     data class Standard(
         override val head: OfferHead, override val badges: List<OfferBadgeModel>,
-        override val trip: TripLineModel, override val ring: RingModel,
+        override val trip: TripLineModel,
         override val bar: PayBarModel, override val gauges: List<GaugeModel>,
     ) : Scored
     data class Combined(
         override val head: OfferHead, override val badges: List<OfferBadgeModel>,
-        override val trip: TripLineModel, override val ring: RingModel,
+        override val trip: TripLineModel,
         override val bar: PayBarModel, override val gauges: List<GaugeModel>,
     ) : Scored
     data class AddOnRaw(
@@ -32,8 +31,6 @@ sealed interface OfferCardModel {
 
 data class OfferHead(val store: String?, val pay: Double?, val presentedAt: Long,
     val expiresAt: Long?, val addedPay: Double? = null)
-/** [was] is the folded accepted card's score: what the dasher saw, rather than today's re-evaluation. */
-data class RingModel(val score: Int?, val was: Int? = null)
 sealed interface PayBarModel {
     data class Split(val profitCents: Long, val carCents: Long, val profitFraction: Float) : PayBarModel
     data class Loss(val lossCents: Long, val carCents: Long) : PayBarModel
@@ -50,6 +47,8 @@ data class TripLineModel(val nodes: List<TripNode>)
 data class TripNode(val icon: TrackIcon, val added: Boolean = false, val overflow: Int? = null)
 data class DeltaTiles(val minutes: Long?, val miles: Double?, val stops: Int?, val items: Int?)
 sealed interface OfferBadgeModel {
+    data class Rule(val hit: cloud.trotter.log.gig.domain.offer.story.RuleHit) : OfferBadgeModel
+    data class Limit(val hit: cloud.trotter.log.gig.domain.offer.story.LimitHit) : OfferBadgeModel
     data class Platform(val badge: OfferBadge) : OfferBadgeModel
     data class Order(val badge: OrderBadge) : OfferBadgeModel
     data object Shop : OfferBadgeModel

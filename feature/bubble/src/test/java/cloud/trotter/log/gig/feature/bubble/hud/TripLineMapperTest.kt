@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
+import cloud.trotter.log.gig.domain.offer.story.OfferFixtures
+import cloud.trotter.log.gig.domain.offer.story.CombinedOffer
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -61,7 +63,7 @@ class TripLineMapperTest {
         assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
         assertEquals(stateStores.size, nodes.count { it.icon == TrackIcon.STORE })
         assertEquals(stateDrops, nodes.count { it.icon == TrackIcon.HOUSE })
-        assertEquals(listOf(offer.orders[1]), CombinedOffer.newOrders(owned, offer))
+        assertEquals(listOf(offer.orders[1].copy(orderIndex = 1)), CombinedOffer.build(owned, offer)!!.orders.drop(1))
         assertEquals(15, CombinedOffer.build(owned, offer)!!.itemCount)
     }
     @Test fun `unparsed stop count adds one house`() {
@@ -104,7 +106,7 @@ class TripLineMapperTest {
         val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
         assertEquals(1, nodes.count { it.icon == TrackIcon.STORE })
         assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
-        assertEquals(listOf("New"), CombinedOffer.newOrders(owned, offer).map { it.storeName })
+        assertEquals(listOf("New"), CombinedOffer.build(owned, offer)!!.orders.drop(1).map { it.storeName })
     }
     @Test fun `padded owned store keeps the historical added stop counts`() {
         val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)

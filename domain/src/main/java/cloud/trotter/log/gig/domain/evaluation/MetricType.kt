@@ -2,7 +2,7 @@ package cloud.trotter.log.gig.domain.evaluation
 
 enum class MetricType(val label: String, val unit: String, val isHigherBetter: Boolean) {
     // "Higher is Better" metrics
-    PAYOUT("Minimum profit", "$", true),
+    PAYOUT("Minimum net", "$", true),
     DOLLAR_PER_MILE("Profit per mile", "$/mi", true),
     ACTIVE_HOURLY("Profit per delivery hour", "$/hr", true),
 

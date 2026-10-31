@@ -1,11 +1,11 @@
-package cloud.trotter.log.gig.feature.bubble.hud
+package cloud.trotter.log.gig.domain.offer.story
 
 import cloud.trotter.log.gig.domain.evaluation.*
 import cloud.trotter.log.gig.domain.model.offer.*
 import cloud.trotter.log.gig.domain.model.order.*
 import cloud.trotter.log.gig.domain.state.*
 
-internal object OfferFixtures {
+object OfferFixtures {
     val config = EvaluationConfig(rules = listOf(
         ScoringRule.MetricRule("hour", metricType = MetricType.ACTIVE_HOURLY, targetValue = 18f),
         ScoringRule.MetricRule("mile", metricType = MetricType.DOLLAR_PER_MILE, targetValue = 1.5f)))

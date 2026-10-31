@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
+import cloud.trotter.log.gig.domain.offer.story.OfferFixtures
 import cloud.trotter.log.gig.feature.bubble.hud.undo.*
 import cloud.trotter.log.gig.feature.bubble.hud.cashtip.*
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord

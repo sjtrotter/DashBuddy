@@ -10,9 +10,7 @@ fun ChatPersona.getIconResId(): Int {
         is ChatPersona.Dasher -> R.drawable.ic_chat_person_pin_circle
         is ChatPersona.Merchant -> R.drawable.ic_chat_merchant
         is ChatPersona.Customer -> R.drawable.ic_chat_person_pin_circle
-        is ChatPersona.GoodOffer -> R.drawable.ic_chat_receipt_long_check_circle
-        is ChatPersona.BadOffer -> R.drawable.ic_chat_receipt_long_cancel_circle
-        is ChatPersona.Inspector -> R.drawable.ic_chat_receipt_long_search
+        is ChatPersona.Offer -> R.drawable.ic_chat_receipt_long
         is ChatPersona.Navigator -> R.drawable.ic_chat_navigation
         is ChatPersona.Dropoff -> R.drawable.ic_chat_navigation
         is ChatPersona.Shopper -> R.drawable.ic_chat_shopping_cart

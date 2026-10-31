@@ -124,6 +124,8 @@ class BubbleViewModel @Inject constructor(
     }
     fun vehicleSwapLocked() = vehicleSwapLock.locked()
 
+    val addOnSpeech = devSettingsRepository.addOnSpeech
+
     val evaluationConfig: StateFlow<EvaluationConfig?> = strategyRepository.evaluationConfig
 
     // Current app state — drives the mode card in the HUD

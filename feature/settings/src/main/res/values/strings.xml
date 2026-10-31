@@ -51,7 +51,6 @@
     <string name="consent_cap_confirm_decline_desc">If quick declines and this are both on, gig.log taps the second Decline in %1$s after you start a decline. It checks the label and stays inside %1$s.</string>
     <string name="consent_cap_expand_title">Open the pay breakdown</string>
     <string name="consent_cap_expand_desc">gig.log taps the arrow on a finished %1$s delivery to read its pay breakdown for your records. The arrow has no label, so only the app is checked. Delivery, pay and settings don\'t change.</string>
-    <string name="fake_offer_score_format" translatable="false">%1$s, score %2$d</string>
     <string name="fake_offer_pay_line_format" translatable="false">Pay %1$s, profit %2$s</string>
     <string name="fake_offer_pay_line_estimate_format" translatable="false">Pay %1$s, profit %2$s (default costs)</string>
     <string name="fake_offer_fuel_cost_format" translatable="false">-%1$s fuel</string>
@@ -62,15 +61,14 @@
     <string name="fake_offer_metric_miles_label">miles</string>
     <string name="fake_offer_metric_est_time_label">est. time</string>
     <string name="fake_offer_metric_est_time_value_format" translatable="false">~%1$d min</string>
-    <string name="fake_offer_warning_format">Warning: %1$s</string>
     <string name="strategy_settings_the_lab_title">Test offer</string>
     <string name="strategy_settings_sim_pay_format">Pay %1$s</string>
     <string name="strategy_settings_sim_dist_format">Distance %1$s mi</string>
     <string name="strategy_settings_global_overrides_title">Overrides</string>
     <string name="strategy_settings_protect_stats_label">Protect acceptance rate</string>
-    <string name="strategy_settings_protect_stats_subtitle">Every offer gets Accept, except shopping offers when Shopping offers is off</string>
+    <string name="strategy_settings_protect_stats_subtitle">Offers carry a Protect acceptance rate note. Nothing is tapped for you.</string>
     <string name="strategy_settings_allow_shopping_label">Shopping offers</string>
-    <string name="strategy_settings_allow_shopping_subtitle">When off, shopping offers score Decline. Nothing is tapped for you.</string>
+    <string name="strategy_settings_allow_shopping_subtitle">When off, shopping offers carry a Shopping off note. Nothing is tapped for you.</string>
     <string name="strategy_settings_quick_declines_label">Quick declines</string>
     <string name="strategy_settings_quick_declines_subtitle">After you tap Decline, gig.log taps the confirm button. Needs your OK under Automation &amp; Consent.</string>
     <string name="strategy_settings_priorities_title">Priorities</string>
@@ -136,4 +134,7 @@
     <string name="consent_privacy_link">Privacy details</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
     <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a shift, and after one until you log a reading</string>
+    <string name="developer_settings_add_on_title">Add-on figures</string>
+    <string name="developer_settings_add_on_totals">Job totals</string>
+    <string name="developer_settings_add_on_deltas">Only what it adds</string>
 </resources>

@@ -220,14 +220,30 @@ sealed class AppEffect {
         val requestedAt: Long,
     ) : AppEffect()
 
-    /** Speak the offer's evaluation aloud (verdict + headline economics). Fires on eval-landing. */
-    data class SpeakOffer(val evaluation: OfferEvaluation) : AppEffect()
+    /** Speak the offer story aloud. Fires on eval-landing. */
+    data class SpeakOffer(val pending: PendingOffer, val platform: Platform, val job: Job?) : AppEffect()
+
+    /**
+     * The presentation's one chat row (the offer summary line), emitted beside [SpeakOffer] under the
+     * same once-per-presentation rule: a re-quote, an enrich-as-variant hash change and a deadline
+     * refresh write no second row. Not debounced behind [PostOfferNotification], so cancelling an old
+     * hash's pending post can never lose it. [sessionId] is the originating session; null =
+     * genuinely session-less, falls back to the active session at save time. Same #867 contract as
+     * [UpdateBubble.sessionId], so the row is filed to the offer's own session rather than the
+     * last-recognized-frame active one.
+     */
+    data class PostOfferChat(
+        val pending: PendingOffer,
+        val platform: Platform,
+        val job: Job?,
+        val sessionId: String?,
+    ) : AppEffect()
 
     /**
      * Post the offer evaluation as a heads-up notification with Accept/Decline actions. Emitted by
      * [EffectMap] when the async evaluation lands on the pending offer (eval null → non-null) — not
      * fired inline from the [EvaluateOffer] loopback handler — so the offer's UI side-effects stay
-     * first-class and testable. The app layer formats the summary + persona from the evaluation.
+     * first-class and testable. The app layer builds the shared story for text, persona and figures.
      */
     data class PostOfferNotification(
         val evaluation: OfferEvaluation,
@@ -243,19 +259,13 @@ sealed class AppEffect {
          */
         val platform: Platform,
         /**
-         * The originating session; null = genuinely session-less, falls back to the active
-         * session at save time. Same #867 contract as [UpdateBubble.sessionId] — this effect's
-         * handler ALSO writes a chat message (the offer summary line), so it carries the same
-         * provenance rather than re-deriving it from the last-recognized-frame active session.
-         */
-        val sessionId: String? = null,
-        /**
          * #1104: true when this post only REFRESHES an already-surfaced offer's countdown anchors
          * (the card's deadline moved on a same-hash re-render) — the handler updates the existing
-         * notification silently and writes NO chat summary; a fresh post (false) alerts once and
-         * logs the summary as before. LAST so positional constructions stay valid.
+         * notification silently; a fresh post (false) alerts once. The chat row is
+         * [PostOfferChat]'s, never this post's. LAST so positional constructions stay valid.
          */
         val refreshOnly: Boolean = false,
+        val requote: Boolean = false,
         /**
          * S2g: the platform's active job at the same step as [pending], so the heads-up maps an add-on
          * to the same COMBINED card the bubble shows (the bubble passes `region.activeJob`). Null when

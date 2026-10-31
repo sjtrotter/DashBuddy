@@ -61,7 +61,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   app reports them, with no label, not changed by tips or costs (dev, 2026-10-30). Cash tips are shown apart from
   it, either as a small "$X cash" mark beside the hero or as the running cash total on the cash-tip button. The
   offer is the only bubble figure judged against vehicle costs.
-- **One offer, one story.** The offer card, the offer pop-up, the shift notification's line and the spoken offer
+- **One offer, one story.** The offer card, the offer pop-up, the chat line in the shift notification and the spoken offer
   name the same figures in the same words, produced by one owner. Each delivery app shapes what that owner can
   say (Uber's offers re-quote live and carry different fields), never a second copy of the wording.
 - **Leave for the main app** when the task needs reading, comparing or typing: history beyond the shift log,
@@ -226,13 +226,18 @@ adds the gap below, and never leaves it worse.
 - **Setup's first step has no Back button** (`WizardScreen`), though Home opens it.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state; `AppAccordion` no role or expanded state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
-- **The offer channels disagree:** the card has no verdict word, while the pop-up title and the spoken offer still
-  give one.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
 - **Undesigned states:** loading on Home, the hub, Ratings, shift detail and the Garage; paused in the bubble (an
   empty panel); a failed gas-price lookup; a permanently denied permission.
 
 ## Settled decisions
+
+- #1442 (2026-10-30): offer surfaces show facts and preference notes, with no score or verdict. One domain
+  story feeds the card, pop-up, chat line and voice. Titles use the registry's plain app name. Add-ons default
+  to job totals; Developer options can select only what the add-on adds across all four surfaces. Spoken
+  amounts truncate displayed cents to whole dollars; hourly comes last. Re-quotes speak once per presentation.
+  The minimum net, max distance and max items targets show as notes in one order, Protect acceptance rate last
+  (council and dev, 2026-10-31).
 
 - #94, #313 (closed 2026-06-09): fixed brand palette, Hanken Grotesk and Space Grotesk, no dynamic colour, dark
   default that follows the system.
@@ -261,8 +266,6 @@ adds the gap below, and never leaves it worse.
   the developer and lives outside the repo.
 - **Where cash tips show in the bubble:** a "$X cash" mark beside the hero, or the running cash total on the
   cash-tip button.
-- **Offer verdict and score.** Whether any surface says Accept or Decline or shows a score (with the council,
-  2026-10-30).
 - **Light theme colours.** On the light `bg`, small text in `accent` (3.0:1), `warn` (2.7:1), `good` (3.1:1) and
   `neutral` (4.0:1) falls under 4.5:1; those tokens change, or the surface is redesigned for light.
 - **Dropoff colour.** `stDropoff` is 3.8:1 on `surface2` in the dark theme; fine for the phase strip, too faint for
