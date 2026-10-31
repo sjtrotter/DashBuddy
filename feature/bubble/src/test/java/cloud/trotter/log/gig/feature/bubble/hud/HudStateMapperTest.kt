@@ -10,6 +10,8 @@ import cloud.trotter.log.gig.domain.model.cards.*
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 
 class HudStateMapperTest {
+    private companion object { const val T_NOW = 99_000_000L }
+
     private fun liveShift(earnings: Double? = 67.0, cash: Double? = 5.0) =
         DisplayedShift(Platform.DoorDash, "dash", live = true, earnings = earnings, cashTips = cash, record = null)
     private fun restedShift(row: SessionRecord = lastDash(), earnings: Double? = 67.0, cash: Double? = 0.0) =
@@ -112,8 +114,9 @@ class HudStateMapperTest {
         val doordash = lastDash().copy(deliveries = 7)
         val state = map(rest = true, shift = restedShift(doordash), last = uber)
         assertEquals(Platform.DoorDash, state.platform)
-        assertEquals(7, state.resting!!.deliveries)
-        assertEquals(doordash.startedAt, state.resting!!.startedAt)
+        val resting = state.resting!!
+        assertEquals(7, resting.deliveries)
+        assertEquals(doordash.startedAt, resting.startedAt)
         assertEquals(TopRowMapper.resting(doordash), state.top)
     }
 
@@ -123,7 +126,10 @@ class HudStateMapperTest {
         val state = map(rest = true, shift = pending)
         assertNull(state.hero.earnings)
         assertNull(state.hero.cashTips)
-        assertNull(state.resting)
+        // Pending shift data is em dashes, never the first-run "No shift yet" (a null model).
+        assertFalse(state.firstRun)
+        assertEquals(RestingModel(null, null, null, OnlineSpan.Unknown, null, null, null), state.resting)
+        assertNull(state.resting!!.earnedPerHour(T_NOW))
         assertEquals(TopRowMapper.firstRun(), state.top)
         assertEquals(Platform.DoorDash, state.platform)
     }
@@ -137,8 +143,22 @@ class HudStateMapperTest {
         assertEquals(HudMode.RESTING, state.mode)
         assertEquals(41.0, state.hero.earnings!!, 0.0)
         assertEquals(TopRowMapper.live(1_000, 20.0), state.top)
-        assertEquals(open.startedAt, state.resting!!.startedAt)
-        assertNull(state.resting!!.endedAt)
+        val resting = state.resting!!
+        assertEquals(open.startedAt, resting.startedAt)
+        assertNull(resting.endedAt)
+        // Earned/hr ticks from the live start until the shift ends: $41 over one hour, then two.
+        assertEquals(OnlineSpan.Ticking(1_000), resting.online)
+        assertEquals(41.0, resting.earnedPerHour(1_000 + 3_600_000)!!, 1e-9)
+        assertEquals(20.5, resting.earnedPerHour(1_000 + 7_200_000)!!, 1e-9)
+    }
+
+    @Test
+    fun `an end grace with the row still loading keeps the live start and earnings`() {
+        val graced = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Offline, session = Session("dash", 1_000))
+        val resting = map(rest = true, region = graced, shift = liveShift(earnings = 41.0)).resting!!
+        assertEquals(1_000L, resting.startedAt)
+        assertEquals(41.0, resting.earnedPerHour(1_000 + 3_600_000)!!, 1e-9)
+        assertNull(resting.deliveries)
     }
 
     @Test
@@ -149,13 +169,15 @@ class HudStateMapperTest {
 
     @Test
     fun `resting earned per hour is the shift's earnings over online hours`() {
-        assertEquals(Formats.money(33.5), map(rest = true).resting!!.earnedPerHour)
+        val resting = map(rest = true).resting!!
+        assertEquals(OnlineSpan.Fixed(7_200_000), resting.online)
+        assertEquals(33.5, resting.earnedPerHour(T_NOW)!!, 1e-9)
     }
 
     @Test
-    fun `resting earned per hour without an end or earnings is the em dash`() {
-        assertEquals(EMPTY_VALUE, map(rest = true, shift = restedShift(lastDash().copy(endedAt = null))).resting!!.earnedPerHour)
-        assertEquals(EMPTY_VALUE, map(rest = true, shift = restedShift(earnings = null)).resting!!.earnedPerHour)
+    fun `resting earned per hour without an end or earnings is unknown`() {
+        assertNull(map(rest = true, shift = restedShift(lastDash().copy(endedAt = null))).resting!!.earnedPerHour(T_NOW))
+        assertNull(map(rest = true, shift = restedShift(earnings = null)).resting!!.earnedPerHour(T_NOW))
     }
 
     @Test

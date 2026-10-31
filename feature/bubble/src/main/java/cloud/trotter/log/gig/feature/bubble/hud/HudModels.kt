@@ -43,14 +43,27 @@ data class DockModel(val items: List<DockItem>)
 data class DockItem(val kind: DockKind, val state: DockItemState)
 enum class DockKind { CASH_TIP, EXPENSE, ODOMETER, LOG, NOW, SETTINGS }
 enum class DockItemState { NORMAL, LIT, ACCENT, DISABLED }
+/**
+ * The resting card's shift (#1443). Null fields are unknown and render as the em dash: a shift whose row has not
+ * been projected yet is pending, never "No shift yet" (that copy is first run only, a null model). [online] is the
+ * Earned/hr span: fixed once the shift ended, ticking from the live start during an end grace.
+ */
 data class RestingModel(
-    val startedAt: Long,
+    val startedAt: Long?,
     val endedAt: Long?,
-    val earnedPerHour: String,
-    val deliveries: Int,
-    val offersAccepted: Int,
-    val offersReceived: Int,
-)
+    val earnings: Double?,
+    val online: OnlineSpan,
+    val deliveries: Int?,
+    val offersAccepted: Int?,
+    val offersReceived: Int?,
+) {
+    /** Earned/hr: [earnings] over the online time; a ticking span reads [now]. Null renders as the em dash. */
+    fun earnedPerHour(now: Long): Double? = perHour(earnings, when (val span = online) {
+        is OnlineSpan.Fixed -> span.ms
+        is OnlineSpan.Ticking -> now - span.startedAt
+        OnlineSpan.Unknown -> null
+    })
+}
 data class GasRowModel(
     val price: Float?,
     val auto: Boolean,

@@ -433,7 +433,8 @@ class BubbleViewModel @Inject constructor(
      * #1443: the displayed shift's identity. The focused platform (else the last shift's, at rest with nothing
      * focused) is read inside ONE `flatMapLatest`, so its region and its latest row restart together on a switch,
      * and a row read that has not emitted yet for the new platform is [LatestShiftRead.Loading], never the old
-     * platform's row. Shared so the detail read and [displayedShift] observe one copy.
+     * platform's row. Shared so the detail read and [displayedShift] observe one copy. Both reset to null when
+     * sharing stops ([SHIFT_SHARING]), so a resubscription never replays a shift the region has since moved past.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val shiftTarget: StateFlow<ShiftTarget?> = combine(focusedPlatform, lastSession) { focused, last ->
@@ -446,7 +447,7 @@ class BubbleViewModel @Inject constructor(
                 .map<_, LatestShiftRead> { LatestShiftRead.Loaded(it) }
                 .onStart { emit(LatestShiftRead.Loading) },
         ) { region, read -> DisplayedShifts.target(platform, region, read) }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.distinctUntilChanged().stateIn(viewModelScope, SHIFT_SHARING, null)
 
     /**
      * The one `sessionDetail` subscription, keyed by the displayed id: recorded pay, cash tips and the live row.
@@ -464,7 +465,7 @@ class BubbleViewModel @Inject constructor(
     /** #1443: the one shift every hero and resting input keys off; it follows the switcher. */
     val displayedShift: StateFlow<DisplayedShift?> = combine(shiftTarget, shiftDetail) { target, read ->
         target?.let { DisplayedShifts.resolve(it, read) }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.distinctUntilChanged().stateIn(viewModelScope, SHIFT_SHARING, null)
 
     val dailyGoal: StateFlow<Double?> = appPreferencesRepository.dailyGoalDollars
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -605,6 +606,13 @@ class BubbleViewModel @Inject constructor(
         _collapse.tryEmit(Unit)
     }
 }
+
+/**
+ * #1443: the displayed shift's sharing. The cached value is dropped the moment sharing stops, so a new subscription
+ * starts unknown (the em dash) and re-derives from the current region instead of replaying an older shift's figure,
+ * cash and cash-entry target.
+ */
+private val SHIFT_SHARING = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000, replayExpirationMillis = 0)
 
 /** Date and earnings travel together so midnight cannot pair a new date with the old total. */
 data class GoalDay(val date: LocalDate, val earned: Double?)

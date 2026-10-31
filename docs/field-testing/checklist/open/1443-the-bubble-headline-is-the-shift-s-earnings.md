@@ -9,6 +9,6 @@ issues: #1443, #1458, #1459, #1460
   the figure is DoorDash's summary total. Uber (no running total) shows its recorded delivery pay. The goal pill
   counts app earnings across both apps today (no cash, no costs), reads "Set goal" once on the first launch of this
   build, and switching the bubble between apps does not change it. With two apps, focusing the one that ended
-  shows that shift's figure, chip, stats and cash target, not the other app's. Known residuals: a receipt
+  shows that shift's figure, chip, stats and cash target, not the other app's. Reopening the bubble after a long collapse never flashes the previous shift's figure; right after a shift ends the resting card shows em dashes until the shift's row lands, never "No shift yet". Known residuals: a receipt
   re-entered after an offer pop-up can be counted twice on the headline (#1460); at an early end the resting
   figure can drop below the last live figure until #1459. — Confirmed: 0/2

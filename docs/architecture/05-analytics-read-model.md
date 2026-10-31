@@ -868,8 +868,14 @@ honest end instant). A rejected or still-loading row shows the em dash with no c
 cash-entry target, never an older shift. One `sessionDetail(id)` subscription keyed by the displayed
 id supplies recorded pay, cash and the live row; each emission is tagged with its id and an id change
 emits `(newId, null)` first, so the hero shows a figure or cash only from the displayed id's read. The
-platform chip, `RestingModel` (span, deliveries, offers, Earned/hr), the resting top row and the
-cash-tip sheet's target key off it; first run and the odometer cue stay on the cross-platform
+target and the shift share with `replayExpirationMillis = 0`: once the bubble stops collecting past the
+5 s timeout the cached value is dropped, so a reopened bubble starts unknown and re-derives from the
+current region, never replaying a shift the region has moved past. The platform chip, `RestingModel`
+(span, deliveries, offers, Earned/hr), the resting top row and the cash-tip sheet's target key off it.
+A pending shift (row loading, open or rejected) gives a `RestingModel` of em dashes; "No shift yet" is
+first run only (`lastSession` null). `RestingModel` carries anchors, not strings: during an end grace
+its Earned/hr span ticks from the live start (the card reads `rememberNow`), fixed once the shift has
+ended, and the waiting card's Earned/hr cell shows the em dash rather than disappearing; first run and the odometer cue stay on the cross-platform
 `lastSession`. The two shift reads live in `HudShiftDao`/`HudShiftRepository`, a small owner beside
 `AnalyticsDao` (no schema change). `AnalyticsRepository` depends on neither `LedgerRepository` nor
 `LedgerDao`; expenses and fuel are a separate ledger that never enters the headline or the goal

@@ -19,17 +19,18 @@ import cloud.trotter.log.gig.feature.bubble.R
 @Composable
 fun CompactHeroRow(model: HeroModel, onGoalClick: (() -> Unit)? = null) {
     val description = stringResource(R.string.hud_hero_cd, moneyOrEmpty(model.earnings))
-    Row(Modifier.fillMaxWidth().height(48.dp).testTag("hud.hero.compact"),
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("hud.hero.compact"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Row(Modifier.weight(1f).semantics { contentDescription = description }, verticalAlignment = Alignment.CenterVertically) {
-            val parts = model.earnings?.let { Formats.moneyParts(it) }
-            Text(parts?.let { it.sign + it.symbol + it.whole } ?: EMPTY_VALUE,
-                style = AppTheme.num.heroNum, color = AppTheme.colors.text, modifier = Modifier.alignByBaseline())
-            parts?.let { Text(it.fraction, style = AppTheme.num.lgNum, color = AppTheme.colors.text2,
-                modifier = Modifier.alignByBaseline()) }
-            model.cashTips?.let {
-                HeroCash(it, MaterialTheme.typography.labelMedium, Modifier.padding(start = 8.dp).alignByBaseline())
+        Column(Modifier.weight(1f)) {
+            Row(Modifier.semantics { contentDescription = description }, verticalAlignment = Alignment.CenterVertically) {
+                val parts = model.earnings?.let { Formats.moneyParts(it) }
+                Text(parts?.let { it.sign + it.symbol + it.whole } ?: EMPTY_VALUE,
+                    style = AppTheme.num.heroNum, color = AppTheme.colors.text, modifier = Modifier.alignByBaseline())
+                parts?.let { Text(it.fraction, style = AppTheme.num.lgNum, color = AppTheme.colors.text2,
+                    modifier = Modifier.alignByBaseline()) }
             }
+            // #1443: the cash mark sits under the figure, as on the full hero.
+            model.cashTips?.let { HeroCash(it, MaterialTheme.typography.labelSmall) }
         }
         GoalPill(model.goal, compact = true, onClick = onGoalClick, markLoading = model.markLoading)
     }

@@ -37,9 +37,9 @@ class DisplayedShiftsTest {
     @Test
     fun `a region holding a session is live even when a row read is loading`() {
         val live = Session("live", 100, runningEarnings = 12.5)
-        val target = target(region(live), LatestShiftRead.Loading)
-        assertEquals("live", target.sessionId)
-        val shift = DisplayedShifts.resolve(target, ShiftDetailRead("live", null))
+        val picked = target(region(live), LatestShiftRead.Loading)
+        assertEquals("live", picked.sessionId)
+        val shift = DisplayedShifts.resolve(picked, ShiftDetailRead("live", null))
         assertTrue(shift.live)
         assertEquals(12.5, shift.earnings!!, 0.0)
     }
@@ -48,8 +48,8 @@ class DisplayedShiftsTest {
     fun `live earnings are the larger of the running total and recorded pay`() {
         val live = Session("live", 100, runningEarnings = 12.5)
         val open = row("live", endedAt = null)
-        val target = target(region(live), LatestShiftRead.Loaded(open))
-        val ahead = DisplayedShifts.resolve(target, ShiftDetailRead("live", detail(open, 9.0 to PayBasis.DROP_SHARE,
+        val picked = target(region(live), LatestShiftRead.Loaded(open))
+        val ahead = DisplayedShifts.resolve(picked, ShiftDetailRead("live", detail(open, 9.0 to PayBasis.DROP_SHARE,
             8.5 to PayBasis.OFFER_PAY, cash = 4.0)))
         assertEquals(17.5, ahead.earnings!!, 0.0)
         assertEquals(4.0, ahead.cashTips!!, 0.0)
@@ -61,8 +61,8 @@ class DisplayedShiftsTest {
 
     @Test
     fun `a detail read for another id lends neither figure nor cash`() {
-        val target = target(region(Session("b", 100, runningEarnings = 6.0)), LatestShiftRead.Loading)
-        val foreign = DisplayedShifts.resolve(target, ShiftDetailRead("a", detail(row("a"), 40.0 to PayBasis.DROP_SHARE, cash = 9.0)))
+        val picked = target(region(Session("b", 100, runningEarnings = 6.0)), LatestShiftRead.Loading)
+        val foreign = DisplayedShifts.resolve(picked, ShiftDetailRead("a", detail(row("a"), 40.0 to PayBasis.DROP_SHARE, cash = 9.0)))
         assertNull(foreign.earnings)
         assertNull(foreign.cashTips)
         assertNull(foreign.record)
@@ -99,9 +99,9 @@ class DisplayedShiftsTest {
 
     @Test
     fun `a row read for another platform is still loading`() {
-        val target = target(null, LatestShiftRead.Loaded(row(platform = Platform.Uber)))
-        assertNull(target.sessionId)
-        assertNull(DisplayedShifts.resolve(target, ShiftDetailRead(null, null)).earnings)
+        val picked = target(null, LatestShiftRead.Loaded(row(platform = Platform.Uber)))
+        assertNull(picked.sessionId)
+        assertNull(DisplayedShifts.resolve(picked, ShiftDetailRead(null, null)).earnings)
         assertNull(target(null, LatestShiftRead.Loading).sessionId)
     }
 

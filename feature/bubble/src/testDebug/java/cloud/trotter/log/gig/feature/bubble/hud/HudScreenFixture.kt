@@ -47,13 +47,15 @@ internal abstract class HudScreenFixture {
         vehicleChip: cloud.trotter.log.gig.feature.bubble.hud.vehicle.VehicleChipModel? = null,
         flow: Flow = Flow.Idle, resting: Boolean = false, first: Boolean = false, paused: Boolean = false,
         earnings: Double? = 71.2, cash: Double? = null, goal: Double? = null, today: Double? = null,
-        logOpen: Boolean = false, cashTipCue: Boolean = false,
+        logOpen: Boolean = false, cashTipCue: Boolean = false, pending: Boolean = false,
     ) = HudStateMapper.map(
         region = if (resting || first) null else PlatformRegion(
             Platform.DoorDash, if (paused) Mode.Paused else Mode.Online, Session("live", T0 - 160 * 60_000 - 30_000)),
         flow = flow, platform = Platform.DoorDash, switchable = emptyList(), vehicleChip = vehicleChip,
         shift = when {
             first -> null
+            // A shift whose row has not been projected yet: no id, no figure, no row.
+            pending -> DisplayedShift(Platform.DoorDash, null, live = false, earnings = null, cashTips = null, record = null)
             resting -> DisplayedShift(Platform.DoorDash, "last", live = false, earnings = earnings, cashTips = cash, record = last())
             else -> DisplayedShift(Platform.DoorDash, "live", live = true, earnings = earnings, cashTips = cash, record = null)
         },

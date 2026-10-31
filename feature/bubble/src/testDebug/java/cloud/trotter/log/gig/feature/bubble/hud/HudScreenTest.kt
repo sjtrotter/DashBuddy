@@ -117,7 +117,10 @@ internal class HudScreenTest : HudScreenFixture() {
     @Test fun `the compact hero names its figure Earned and keeps the cash mark`() {
         show({ state(cash = 5.0, logOpen = true) })
         compose.onNodeWithContentDescription("Earned $71.20").assertIsDisplayed()
-        value("hud.hero.compact", "+$5.00 cash").assertIsDisplayed()
+        val cash = value("hud.hero.compact", "+$5.00 cash").assertIsDisplayed().getBoundsInRoot()
+        // Under the figure, as on the full hero, not beside it.
+        val figure = value("hud.hero.compact", "$71").getBoundsInRoot()
+        assertTrue(cash.top >= figure.bottom)
     }
 
     @Test fun `offer mode shows the offer slot and hides the chrome below the head`() {
@@ -182,6 +185,29 @@ internal class HudScreenTest : HudScreenFixture() {
         compose.onNodeWithTag("hud.dock.CASH_TIP").assertDoesNotExist()
         compose.onNodeWithTag("hud.dock.EXPENSE").assertIsEnabled()
         compose.onNodeWithTag("hud.dock.ODOMETER").assertIsEnabled()
+    }
+
+    @Test fun `a pending shift at rest shows em dashes, never the first-run copy`() {
+        show({ state(resting = true, pending = true) })
+        compose.onNodeWithText("Last shift").assertIsDisplayed()
+        compose.onNodeWithText("No shift yet").assertDoesNotExist()
+        compose.onNodeWithText("earned/hr").assertIsDisplayed()
+        compose.onNodeWithTag("hud.hero.cash").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Earned $EMPTY_VALUE").assertIsDisplayed()
+    }
+
+    @Test fun `an end grace rests with a ticking Earned per hour`() {
+        // One hour online at $41, then two: the rate ticks without a state change.
+        val start = T0 - 3_600_000
+        compose.setContent {
+            GigLogTheme { CompositionLocalProvider(LocalNowProvider provides clock) {
+                RestingCard(RestingModel(start, null, 41.0, OnlineSpan.Ticking(start), 2, 1, 2))
+            } }
+        }
+        settle()
+        compose.onNodeWithText("$41.00").assertIsDisplayed()
+        tick(3_600_000)
+        compose.onNodeWithText("$20.50").assertIsDisplayed()
     }
 
     @Test fun `ribbon is present live and absent at rest`() {

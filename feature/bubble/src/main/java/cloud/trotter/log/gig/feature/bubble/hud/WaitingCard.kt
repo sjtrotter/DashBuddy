@@ -22,12 +22,11 @@ internal fun WaitingCard(model: StateCardModel.Waiting, earned: Double?) {
         // The clock is read only when there is a time to draw: an anchorless card stays static.
         val now = if (model.since != null || (earned != null && model.sessionStartedAt != null)) rememberNow().value else null
         StateFigure(StateHeadline.waiting(model.since, now ?: 0L))
-        // #1443: Earned/hr is the hero's figure over the shift's online time.
-        perHour(earned, if (now != null) model.sessionStartedAt?.let { now - it } else null)?.let {
-            Column(horizontalAlignment = Alignment.End) {
-                StateNumber(moneyOrEmpty(it), AppTheme.colors.text, size = 18)
-                StateLabel(stringResource(R.string.hud_state_earned_hr))
-            }
+        // #1443: Earned/hr is the hero's figure over the shift's online time; unknown is the em dash.
+        val rate = perHour(earned, if (now != null) model.sessionStartedAt?.let { now - it } else null)
+        Column(horizontalAlignment = Alignment.End) {
+            StateNumber(moneyOrEmpty(rate), AppTheme.colors.text, size = 18)
+            StateLabel(stringResource(R.string.hud_state_earned_hr))
         }
     }
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {

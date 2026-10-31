@@ -31,17 +31,26 @@ object HudStateMapper {
         val atRest = mode == HudMode.RESTING
         val paused = !atRest && region?.mode == Mode.Paused
         val record = shift?.record
+        val liveStart = region?.session?.startedAt
         val top = when {
             firstRun -> TopRowMapper.firstRun()
             // An end grace rests the HUD while the session is still live: its span keeps ticking.
             atRest && region?.session == null -> record?.let(TopRowMapper::resting) ?: TopRowMapper.firstRun()
-            else -> TopRowMapper.live(region?.session?.startedAt, miles)
+            else -> TopRowMapper.live(liveStart, miles)
         }
-        val resting = record?.let { row ->
-            RestingModel(row.startedAt, row.endedAt,
-                moneyOrEmpty(perHour(shift?.earnings, row.endedAt?.minus(row.startedAt))),
-                row.deliveries, row.offersAccepted, row.offersReceived)
-        }
+        // First run alone shows "No shift yet"; a shift whose row is still loading shows em dashes.
+        val resting = if (firstRun) null else RestingModel(
+            startedAt = record?.startedAt ?: liveStart,
+            endedAt = record?.endedAt,
+            earnings = shift?.earnings,
+            // An end grace keeps the live start, so Earned/hr ticks until the shift ends.
+            online = liveStart?.let { OnlineSpan.Ticking(it) }
+                ?: record?.let { row -> row.endedAt?.let { OnlineSpan.Fixed(it - row.startedAt) } }
+                ?: OnlineSpan.Unknown,
+            deliveries = record?.deliveries,
+            offersAccepted = record?.offersAccepted,
+            offersReceived = record?.offersReceived,
+        )
         val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen,
             odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue, odometerShown = odometerShown)
         val goalState = GoalPillMapper.map(goal, todayEarned)

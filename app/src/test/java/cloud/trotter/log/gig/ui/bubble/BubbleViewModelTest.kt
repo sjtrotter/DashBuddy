@@ -695,8 +695,9 @@ class BubbleViewModelTest {
             null, null, hasActiveCard = false, hasOfferCard = false, logOpen = false,
             gas = cloud.trotter.log.gig.feature.bubble.hud.GasRowModel(null, true), odometerLoaded = true)
         assertEquals(Platform.Uber, hud.platform)
-        assertEquals(4, hud.resting!!.deliveries)
-        assertEquals(b.startedAt, hud.resting!!.startedAt)
+        val resting = hud.resting!!
+        assertEquals(4, resting.deliveries)
+        assertEquals(b.startedAt, resting.startedAt)
         assertEquals(22.0, hud.hero.earnings!!, 0.0)
     }
 
@@ -765,6 +766,34 @@ class BubbleViewModelTest {
         assertEquals("just", shift.sessionId)
         assertEquals(31.0, shift.earnings!!, 0.0)
         assertEquals(1.0, shift.cashTips!!, 0.0)
+    }
+
+    @Test
+    fun `a resubscription never replays a shown shift after a newer shift ended with both folds withheld`() = runTest {
+        // A is shown at rest; the bubble stops collecting past the sharing timeout; B starts and ends while the
+        // projector holds both of B's folds, so the latest row is still A; the bubble reopens.
+        val a = record("a", endedAt = 5_000L, reported = 50.0)
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flowOf(listOf(a)))
+        whenever(chatRepository.getMessages(any())).thenReturn(flowOf(emptyList()))
+        whenever(hudShiftRepository.latestShift(Platform.DoorDash)).thenReturn(flowOf(a))
+        whenever(analyticsRepository.sessionDetail("a")).thenReturn(flowOf(detailOf(a, 50.0, cash = 5.0)))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 5_000L))
+        val vm = viewModel()
+        val first = collectShift(vm)
+        runCurrent()
+        assertEquals("a", vm.displayedShift.value!!.sessionId)
+        assertEquals(50.0, vm.displayedShift.value!!.earnings!!, 0.0)
+        first.cancel()
+        advanceTimeBy(6_000L)
+        runCurrent()
+        state.value = shiftState(Platform.DoorDash, liveRegion(Platform.DoorDash, "b", running = 20.0, startedAt = 6_000L))
+        state.value = shiftState(Platform.DoorDash, restingRegion(Platform.DoorDash, lastEnd = 9_000L))
+        val emissions = mutableListOf<cloud.trotter.log.gig.feature.bubble.hud.DisplayedShift?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.displayedShift.collect { emissions += it } }
+        runCurrent()
+        assertTrue(emissions.isNotEmpty())
+        assertTrue(emissions.none { it?.sessionId == "a" || it?.earnings != null || it?.cashTips != null })
+        assertNull(vm.displayedShift.value!!.sessionId)
     }
 
     @Test
