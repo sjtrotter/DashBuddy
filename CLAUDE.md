@@ -1178,13 +1178,17 @@ The user skills under `~/.claude/skills` run the PR loop in this repo, in this o
    never the full gate; a branch that adds snapshot fixtures runs the intake and corpus privacy tests locally before
    its first push, because a pushed fixture is public. Bugs go through `diagnosing-bugs` and `tdd`.
 3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
-   into the branch now, and the author writes the design-goal review (the PR template's block). `deslop` the diff.
+   into the branch before a round's push (steps 2 and 4 repeat per round, and step 3's edits ride the next push), and
+   the author writes the design-goal review (the PR template's block). `deslop` the diff.
 4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
-   the full diff, side by side with PR CI (dev, 2026-10-31, #1455): each round is one push, and that head's CI run
-   and Sol round start together. Fix both sets of findings, then push once, which starts the next round. A PR is
-   ready when one head is both CI-green and Sol-clean (the stopping rule and three-round cap below are unchanged).
-   Sol cannot compile, so its compile claims are candidates CI settles; CI cannot judge design. The brief names the
-   head's run and, once it ends, its `gate-summary.txt`. `blast-radius` when the change touches a shared path.
+   the full diff, side by side with PR CI (dev, 2026-10-31, #1455): each round is one push of committed work, and
+   that head's CI run and Sol round start together on the same SHA; the worktree is not edited while the round runs.
+   Fix both sets of findings, then push once, which starts the next round. Any push that changes the diff starts a
+   round, a CI-only fix included, so a clean verdict never carries onto changed code. Stop at the first round whose
+   head is both CI-green and Sol-clean; the three-round cap counts every round, and at the cap with no such head the
+   developer decides. Sol cannot compile, so its compile claims are candidates CI settles; CI cannot judge design. The
+   brief names the head's SHA and run and, once it ends, its `gate-summary.txt`. `blast-radius` when the change
+   touches a shared path.
 5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
    draft (`gh pr edit`, then `gh pr ready`).
 6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); the `master` ruleset requires `build-and-test`

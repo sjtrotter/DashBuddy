@@ -4,7 +4,8 @@ Read by `council`, `interrogate` and `sol-loop`; overrides `~/.claude/council.md
 
 ## Standing rule (dev, 2026-10-27)
 
-Every PR's adversarial review is `sol-loop`: one Sol seat, up to 3 rounds, stop at the first clean round. Use the
+Every PR's adversarial review is `sol-loop`: one Sol seat, up to 3 rounds, stop at the first round whose head is
+both Sol-clean and CI-green (CLAUDE.md delivery chain step 4, #1455). Use the
 full council only when the developer says "council" (seats, dev 2026-10-31: Claude, Sol, Fable when the usage budget
 allows, and Astra only when added). The builder is an Opus subagent (CLAUDE.md model policy rule 3), so the Claude
 seat is a fresh context, never the builder's.
