@@ -97,6 +97,38 @@ android {
     }
 
     signingConfigs {
+        // #1469: the test build signs with one PRIVATE key, so every CI run and every local build signs it
+        // the same way and an update installs in place. Private because the test build holds real field
+        // data and census credentials: a published key would let anyone sign an accepted update. CI passes
+        // DEBUG_KEYSTORE_PATH + DEBUG_KEYSTORE_PASSWORD (repo secrets); the laptop sets
+        // giglog.debugKeystore.path + giglog.debugKeystore.passwordFile in ~/.gradle/gradle.properties.
+        // Without either, Android's default debug key signs, as before.
+        getByName("debug") {
+            fun nonBlank(value: String?) = value?.trim()?.takeIf { it.isNotEmpty() }
+            val envPath = nonBlank(System.getenv("DEBUG_KEYSTORE_PATH"))
+            val propPath = nonBlank(providers.gradleProperty("giglog.debugKeystore.path").orNull)
+            // One source at a time: CI's environment when it sets a path, else the laptop's properties.
+            val (path, password) = when {
+                envPath != null -> envPath to nonBlank(System.getenv("DEBUG_KEYSTORE_PASSWORD"))
+                propPath != null -> {
+                    val passFile = nonBlank(providers.gradleProperty("giglog.debugKeystore.passwordFile").orNull)
+                        ?.let { file(it) }
+                    require(passFile?.isFile == true) {
+                        "giglog.debugKeystore.path is set but giglog.debugKeystore.passwordFile is missing or unreadable"
+                    }
+                    propPath to nonBlank(passFile!!.readText())
+                }
+                else -> null to null // not configured: Android's default debug key signs
+            }
+            if (path != null) {
+                require(file(path).isFile) { "debug keystore not found at $path" }
+                require(password != null) { "debug keystore at $path has no password configured" }
+                storeFile = file(path)
+                storePassword = password
+                keyAlias = "giglogdebug"
+                keyPassword = password
+            }
+        }
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
                 ?: localProperties.getProperty("keystore.path")
