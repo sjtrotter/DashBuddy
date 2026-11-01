@@ -890,7 +890,7 @@ deliveredPay, 0)` in `grossAndUnattributed`, the SQL twin). Recorded pay is
 `OFFER_PAY` rows included), null unless a row is priced, so an unpriced shift shows the em dash
 (#1041); `deliveredPay` stays non-null for its accounting readers. `Session.accumulatedDeliveryPay` is
 never read (a receipt re-entry can add it twice, #1460). Nothing in the settle gate, `Session`,
-`ModeEffects` or any fold changed. Quoted pay at delivery recognition (#1458) is a separate issue. #1459:
+`ModeEffects` or any fold changed. A stacked or add-on job's quote reaches the headline at the job's close (its last drop's retire, or the next accept), not drop by drop: its rows land there, about one retire grace after the last drop (#1458, §3 of `03`). #1459:
 `rested` takes no max of its own; an early-ended shift's stale running total reaches it already floored at
 recorded pay through the effective report (`HudShiftDao.latestSession` and `endedSessionsBetween` carry the
 recorded pay to `toDomain`).
