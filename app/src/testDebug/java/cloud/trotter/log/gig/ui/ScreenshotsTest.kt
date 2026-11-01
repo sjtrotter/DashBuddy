@@ -236,10 +236,20 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun hubTime() = hub("hub/time", AnalyticsTab.Time, showMore = false,
         formatDuration(ScreenshotData.typicalGapMillis))
 
-    /** More numbers: the time split's average shift, computed from the week's online time. */
+    /**
+     * More numbers: the net per hour while working, computed by `NetPerHourPair.of` from the fixture's
+     * partitions and gaps. A working hour excludes the waits, so the rate must sit above the whole-shift
+     * rate, and within three times it, or the fixture's time semantics are wrong.
+     */
     @Test @Config(qualifiers = FULL)
-    fun hubTimeFull() = hub("hub/time-full", AnalyticsTab.Time, showMore = true,
-        formatDuration(ScreenshotData.time.avgDashMillis!!))
+    fun hubTimeFull() {
+        val pair = ScreenshotData.analytics(AnalyticsTab.Time, showMore = true).netPerHour
+        val working = pair.whileWorking!!
+        val wholeShift = pair.wholeShift!!
+        assertTrue("while working $working/hr against $wholeShift/hr for the whole shift",
+            working > wholeShift && working < 3 * wholeShift)
+        hub("hub/time-full", AnalyticsTab.Time, showMore = true, "${Formats.money(working)}/hr")
+    }
 
     // ── The Playbook ─────────────────────────────────────────────────────
 

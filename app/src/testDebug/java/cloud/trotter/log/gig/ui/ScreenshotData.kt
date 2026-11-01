@@ -141,13 +141,12 @@ internal object ScreenshotData {
      * the second drop of a stacked order. Every one of the week's 41 drop-offs is here, so the gaps
      * below are what `WorkGaps` measures over the same completions the Money tab counts.
      */
-    private class Timeline(val completions: List<SessionEvent>, val accepts: List<SessionEvent>, val deliveryMillis: Long)
+    private class Timeline(val completions: List<SessionEvent>, val accepts: List<SessionEvent>)
 
     private val timeline: Timeline = run {
         var sequence = 0L
         val completions = mutableListOf<SessionEvent>()
         val accepts = mutableListOf<SessionEvent>()
-        var deliveryMillis = 0L
         for (shift in recentSessions.sortedBy { it.startedAt }) {
             val slot = (shift.endedAt!! - shift.startedAt) / (shift.jobsCompleted + 1)
             val stacked = shift.deliveries - shift.jobsCompleted
@@ -156,16 +155,31 @@ internal object ScreenshotData {
                 accepts += SessionEvent(shift.sessionId, ++sequence, acceptedAt)
                 val drops = if (job < stacked) listOf(0.55, 0.70) else listOf(0.45 + 0.05 * (job % 4))
                 drops.forEach { completions += SessionEvent(shift.sessionId, ++sequence, acceptedAt + (it * slot).toLong()) }
-                deliveryMillis += (drops.last() * slot).toLong()
             }
         }
-        Timeline(completions, accepts, deliveryMillis)
+        Timeline(completions, accepts)
+    }
+
+    /**
+     * Σ per-delivery `realizedMinutes` over the same timeline, by the fold's own rule
+     * (`DeliveryFolds`): each drop-off, in sequence order, gets the time since the shift's completion
+     * high-water mark (the shift's start for its first drop), never negative. These partitions include
+     * the waits between jobs, which `NetPerHourPair.of` then subtracts as the gaps.
+     */
+    private val deliveryMinutes: Double = timeline.completions.groupBy { it.sessionId }.entries.sumOf { (id, drops) ->
+        val startedAt = recentSessions.first { it.sessionId == id }.startedAt
+        var highWater: Long? = null
+        drops.sortedBy { it.sequenceId }.sumOf { drop ->
+            val previousAt = highWater?.let { maxOf(it, startedAt) } ?: startedAt
+            highWater = maxOf(highWater ?: drop.timestamp, drop.timestamp)
+            (drop.timestamp - previousAt).coerceAtLeast(0L) / 60_000.0
+        }
     }
 
     val time = TimeEconomics(
         sessions = 4,
         onlineMillis = 81_000_000L,
-        deliveryMinutes = timeline.deliveryMillis / 60_000.0,
+        deliveryMinutes = deliveryMinutes,
         miles = 268.4,
         deliveryMiles = 231.0,
         deliveriesWithDeadline = 41,
