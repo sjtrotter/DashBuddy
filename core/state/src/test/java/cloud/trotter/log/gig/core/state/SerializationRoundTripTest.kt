@@ -32,6 +32,7 @@ import cloud.trotter.log.gig.domain.state.PendingWake
 import cloud.trotter.log.gig.domain.state.mintWakeId
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import cloud.trotter.log.gig.domain.evaluation.OfferQuality
@@ -66,6 +67,17 @@ class SerializationRoundTripTest {
         assertEquals(
             Session("s1", startedAt = 100L),
             StateJson.decodeFromString<Session>("""{"sessionId":"s1","startedAt":100}"""),
+        )
+    }
+
+    @Test
+    fun `the receipt episode key round-trips and an old blob decodes it null (#1460)`() {
+        val session = Session("s1", startedAt = 100L, accumulatedDeliveryPay = 8.50, receiptEpisodeKey = "J1|d1|850")
+        assertEquals(session, StateJson.decodeFromString<Session>(StateJson.encodeToString(session)))
+        assertNull(
+            StateJson.decodeFromString<Session>(
+                """{"sessionId":"s1","startedAt":100,"accumulatedDeliveryPay":8.5}""",
+            ).receiptEpisodeKey,
         )
     }
 
@@ -167,7 +179,12 @@ class SerializationRoundTripTest {
                                 returnFlow = Flow.Idle, lastClickIntent = "accept_offer",
                             ),
                         ),
-                        session = Session("session-doordash-1000-0", startedAt = 100L, runningEarnings = 41.25),
+                        session = Session(
+                            "session-doordash-1000-0",
+                            startedAt = 100L,
+                            runningEarnings = 41.25,
+                            receiptEpisodeKey = "job-doordash-1000-1|task-1|4125",
+                        ),
                         activeJob = Job(
                             jobId = "job-doordash-1000-1",
                             offerStoreHint = listOf("HEB"),

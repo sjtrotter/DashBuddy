@@ -21,4 +21,12 @@ data class Session(
     val earningMode: SessionType? = null,
     val runningEarnings: Double? = null,
     val accumulatedDeliveryPay: Double? = null,
+    /**
+     * The key (job, receipt subject, total in cents) of the receipt last added to
+     * [accumulatedDeliveryPay], held only while the flow stays on that receipt or on an offer
+     * overlay reached straight from it (#1460). An identical receipt re-entered from that overlay is
+     * not added twice; any other frame clears the key. Null outside an episode; an old blob decodes
+     * it null.
+     */
+    val receiptEpisodeKey: String? = null,
 )

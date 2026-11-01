@@ -103,7 +103,10 @@ class PlatformRegionStepper @Inject constructor() {
         policy: TransitionPolicy,
     ): PlatformStep {
         val sink = DecisionSink()
-        val region = stampLastActedFlow(
+        // #1460: the receipt episode ends on any frame that is neither the receipt nor its offer
+        // overlay. Run here, after stepCore (whose receipt entry reads and writes the key), so no
+        // early return can skip it; the edge is this region's acted flow before the frame.
+        val stepped = stampLastActedFlow(
             // #438 B3: the offer lifecycle runs FIRST, on THIS platform's owned pendingOffers, so an
             // accept-latched offer is marked accepted-pending-consumption before stepCore's task edge
             // consumes it (the old armAcceptStash mirror, run AFTER stepCore, is retired).
@@ -127,6 +130,9 @@ class PlatformRegionStepper @Inject constructor() {
                 ).let { requestArrivalEstimate(it, obs) },
             ),
             obs,
+        )
+        val region = SessionPaySettleGate.receiptEpisode(
+            stepped, actedFlowEdge(prev, prevFlow, obs).first, obs,
         )
         return PlatformStep(region, sink.build())
     }
@@ -824,7 +830,7 @@ class PlatformRegionStepper @Inject constructor() {
                 )
             }
             val postFields = obs.parsed as? ParsedFields.PostTaskFields
-            r = SessionPaySettleGate.receiptEntry(r, postFields, obs.timestamp)
+            r = SessionPaySettleGate.receiptEntry(r, postFields, prev, obs.timestamp)
         }
 
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
