@@ -51,6 +51,16 @@ class SessionPaySettleGateModuleTest {
         wakeId = PlatformRegion(Platform.DoorDash, wakeSeq = (7L) - 1L).mintWakeId().second,
     )
 
+    private fun screen(flow: Flow) = Observation.Screen(
+        timestamp = now,
+        captureId = null,
+        ruleId = "doordash.screen.any",
+        metadata = ReplayMetadata.EMPTY,
+        flow = flow,
+        modeHint = Mode.Online,
+        parsed = ParsedFields.None,
+    )
+
     private fun idleScreen(timestamp: Long) = Observation.Screen(
         timestamp = timestamp,
         captureId = null,
@@ -85,7 +95,7 @@ class SessionPaySettleGateModuleTest {
 
         assertEquals(
             before,
-            SessionPaySettleGate.receiptEntry(before, ParsedFields.PostTaskFields(totalPay = 8.0), now),
+            SessionPaySettleGate.receiptEntry(before, ParsedFields.PostTaskFields(totalPay = 8.0), Flow.TaskDropoffArrived, now),
         )
     }
 
@@ -105,13 +115,13 @@ class SessionPaySettleGateModuleTest {
                         session = before.session!!.copy(
                             accumulatedDeliveryPay = accumulated,
                             runningEarnings = running,
-                            // #1460: no dropoff on the region, so the receipt subject is "?".
-                            lastAccumulatedReceipt = "?|${Math.round(totalPay * 100)}",
+                            // #1460: job-1 owns it, and no dropoff on the region makes the subject "?".
+                            receiptEpisodeKey = "job-1|?|${Math.round(totalPay * 100)}",
                         ),
                         pendingSessionPay = null,
                     ),
                     SessionPaySettleGate.receiptEntry(
-                        before, ParsedFields.PostTaskFields(totalPay = totalPay), now,
+                        before, ParsedFields.PostTaskFields(totalPay = totalPay), Flow.TaskDropoffArrived, now,
                     ),
                 )
             }
@@ -119,18 +129,61 @@ class SessionPaySettleGateModuleTest {
     }
 
     @Test
-    fun `an identical receipt re-entry is not added again but still drops older parks`() {
+    fun `an identical receipt re-entered from the offer overlay is not added again but still drops older parks`() {
         val first = SessionPaySettleGate.receiptEntry(
-            region().copy(activeJob = liveJob), ParsedFields.PostTaskFields(totalPay = 8.0), now,
+            region().copy(activeJob = liveJob), ParsedFields.PostTaskFields(totalPay = 8.0), Flow.TaskDropoffArrived, now,
         )
         val before = first.copy(pendingSessionPay = park(now))
         val later = now + 2_000L
 
         assertEquals(
-            "#1460: same subject and total, so only the older park goes",
+            "#1460: same key, entered from the overlay, so only the older park goes",
             before.copy(pendingSessionPay = null),
-            SessionPaySettleGate.receiptEntry(before, ParsedFields.PostTaskFields(totalPay = 8.0), later),
+            SessionPaySettleGate.receiptEntry(
+                before, ParsedFields.PostTaskFields(totalPay = 8.0), Flow.OfferPresented, later,
+            ),
         )
+    }
+
+    @Test
+    fun `a matching key entered from anywhere but the overlay still adds`() {
+        val first = SessionPaySettleGate.receiptEntry(
+            region().copy(activeJob = liveJob), ParsedFields.PostTaskFields(totalPay = 8.0), Flow.TaskDropoffArrived, now,
+        )
+        val again = SessionPaySettleGate.receiptEntry(
+            first, ParsedFields.PostTaskFields(totalPay = 8.0), Flow.Idle, now + 2_000L,
+        )
+
+        assertEquals(26.0, again.session?.accumulatedDeliveryPay ?: Double.NaN, 0.0001)
+    }
+
+    @Test
+    fun `the receipt episode survives only the receipt and its overlay`() {
+        val keyed = region().let {
+            it.copy(session = it.session!!.copy(receiptEpisodeKey = "job-1|?|800"))
+        }
+        val kept = listOf(
+            Flow.PostTask to Flow.PostTask,
+            Flow.PostTask to Flow.OfferPresented,
+            Flow.OfferPresented to Flow.OfferPresented,
+            Flow.OfferPresented to Flow.PostTask,
+        )
+        for ((from, to) in kept) {
+            assertEquals("$from -> $to", keyed, SessionPaySettleGate.receiptEpisode(keyed, from, screen(to)))
+        }
+        val cleared = listOf(
+            Flow.PostTask to Flow.Idle,
+            Flow.OfferPresented to Flow.Idle,
+            Flow.OfferPresented to Flow.TaskPickupNavigation,
+            Flow.Idle to Flow.OfferPresented,
+        )
+        for ((from, to) in cleared) {
+            assertEquals(
+                "$from -> $to",
+                keyed.copy(session = keyed.session!!.copy(receiptEpisodeKey = null)),
+                SessionPaySettleGate.receiptEpisode(keyed, from, screen(to)),
+            )
+        }
     }
 
     @Test

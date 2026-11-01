@@ -73,10 +73,15 @@ internal object SessionPaySettleGate {
         return r
     }
 
-    /** PostTask-entry receipt total: ownership refusal, accumulation + max, and older-park drop. */
+    /**
+     * PostTask-entry receipt total: ownership refusal, accumulation + max, and older-park drop.
+     * [prevFlow] is the acted flow the entry came from; only an entry from the offer overlay can
+     * be the same receipt again (#1460, see [receiptEpisode]).
+     */
     fun receiptEntry(
         region: PlatformRegion,
         postFields: ParsedFields.PostTaskFields?,
+        prevFlow: Flow,
         now: Long,
     ): PlatformRegion {
         var r = region
@@ -92,18 +97,21 @@ internal object SessionPaySettleGate {
         if (postFields != null && postFields.totalPay > 0 && r.ownsReceiptJob()) {
             r.session?.let { session ->
                 // #1460: an offer pop-up over the receipt walks PostTask → OfferPresented → PostTask,
-                // and the second entry edge is the SAME receipt. The key is the receipt's subject AND
-                // its total, so another drop's receipt, or this drop's corrected one, still adds;
-                // only an identical re-entry is skipped. A wrong skip costs at most one drop's pay in
-                // the accumulated figure, and the headline also takes the max with recorded pay (#1443).
-                val key = "${r.receiptSubjectTaskId() ?: "?"}|${Formats.cents(postFields.totalPay)}"
-                if (key != session.lastAccumulatedReceipt) {
+                // and the second entry edge is the SAME receipt. It is skipped only on that direct
+                // hand-off: the entry comes from the overlay AND the episode key — kept only while the
+                // flow stays on the receipt or its overlay ([receiptEpisode]) — equals this receipt's.
+                // The key alone is not identity: with a job's task screens missed, the subject falls
+                // back to the PREVIOUS job's completed drop (or to "?"), so a key match on any other
+                // path could swallow a genuine receipt of the same total.
+                val key = receiptKey(r, postFields.totalPay)
+                val sameReceipt = prevFlow == Flow.OfferPresented && key == session.receiptEpisodeKey
+                if (!sameReceipt) {
                     val accumulated = (session.accumulatedDeliveryPay ?: 0.0) + postFields.totalPay
                     val best = maxOf(session.runningEarnings ?: 0.0, accumulated)
                     r = r.copy(session = session.copy(
                         accumulatedDeliveryPay = accumulated,
                         runningEarnings = best,
-                        lastAccumulatedReceipt = key,
+                        receiptEpisodeKey = key,
                     ))
                 }
                 // #1029: this is a NON-gated write of runningEarnings, so it supersedes every
@@ -123,6 +131,29 @@ internal object SessionPaySettleGate {
             }
         }
         return r
+    }
+
+    /**
+     * #1460: keep [Session.receiptEpisodeKey] only while the receipt episode is unbroken — this
+     * frame is the receipt itself, or the offer overlay reached straight from the receipt (or from
+     * the overlay). Any other flow-bearing frame ends the episode and clears the key, so a later
+     * entry is a new receipt even when its key matches. [prevFlow] is this region's acted flow
+     * BEFORE the frame. A flow-less observation (a timer, a click, a loopback) is not a frame on
+     * screen and leaves the key alone. Called from the step wrapper, so no early return skips it.
+     */
+    fun receiptEpisode(region: PlatformRegion, prevFlow: Flow, obs: Observation): PlatformRegion {
+        val next = (obs as? Observation.FlowObservation)?.flow ?: return region
+        val session = region.session ?: return region
+        if (session.receiptEpisodeKey == null) return region
+        val continues = next == Flow.PostTask ||
+            (next == Flow.OfferPresented && (prevFlow == Flow.PostTask || prevFlow == Flow.OfferPresented))
+        return if (continues) region else region.copy(session = session.copy(receiptEpisodeKey = null))
+    }
+
+    /** The receipt's job (open, or closed on it), its subject drop, and its total in cents. */
+    private fun receiptKey(region: PlatformRegion, totalPay: Double): String {
+        val job = region.activeJob?.jobId ?: region.lastClosedJobReceipt?.jobId ?: "?"
+        return "$job|${region.receiptSubjectTaskId() ?: "?"}|${Formats.cents(totalPay)}"
     }
 
     /** Dash-summary direct write of [total], superseding older parks. No session: unchanged. */

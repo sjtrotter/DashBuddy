@@ -71,13 +71,13 @@ class SerializationRoundTripTest {
     }
 
     @Test
-    fun `the last accumulated receipt key round-trips and an old blob decodes it null (#1460)`() {
-        val session = Session("s1", startedAt = 100L, accumulatedDeliveryPay = 8.50, lastAccumulatedReceipt = "d1|850")
+    fun `the receipt episode key round-trips and an old blob decodes it null (#1460)`() {
+        val session = Session("s1", startedAt = 100L, accumulatedDeliveryPay = 8.50, receiptEpisodeKey = "J1|d1|850")
         assertEquals(session, StateJson.decodeFromString<Session>(StateJson.encodeToString(session)))
         assertNull(
             StateJson.decodeFromString<Session>(
                 """{"sessionId":"s1","startedAt":100,"accumulatedDeliveryPay":8.5}""",
-            ).lastAccumulatedReceipt,
+            ).receiptEpisodeKey,
         )
     }
 
@@ -183,7 +183,7 @@ class SerializationRoundTripTest {
                             "session-doordash-1000-0",
                             startedAt = 100L,
                             runningEarnings = 41.25,
-                            lastAccumulatedReceipt = "task-1|4125",
+                            receiptEpisodeKey = "job-doordash-1000-1|task-1|4125",
                         ),
                         activeJob = Job(
                             jobId = "job-doordash-1000-1",

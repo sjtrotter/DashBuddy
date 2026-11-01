@@ -95,19 +95,29 @@ early on `Flow.SessionEnded` with a live session (to arm the authoritative SESSI
 instead one of the three reads `SessionPaySettleGate`'s private `Observation.sessionPayRead()`
 recognizes, which is what stops a pre-"End Dash" park committing on the summary frame and riding into
 the #596 close-out sweep's `DELIVERY_COMPLETED.sessionEarnings`.
-**#1460 — a receipt re-entered after an overlay is added once.** An offer pop-up over the receipt
-walks the acted flow PostTask → OfferPresented → PostTask, and `receiptEntry` runs on every PostTask
-entry edge, so the same receipt's `totalPay` used to land in `accumulatedDeliveryPay` twice (the
-`jobReceiptAnchors` stamp beside the call was already guarded against that re-entry; the pay was not).
-`Session.lastAccumulatedReceipt` holds the key last added — `receiptSubjectTaskId()` (or `?`) plus the
-total in cents (`Formats.cents`) — and an entry with the same key adds nothing. The key is subject AND
-pay so a genuinely different receipt still counts: another drop's receipt at the same total, or the
-same drop's corrected receipt at a new total. A wrong skip costs at most one drop's pay in the
-accumulated figure, and the headline also takes the max with recorded delivery pay (#1443). The
-ownership check, the #1103 refusal log and rule (c)'s park supersession are unchanged on a skipped
-entry: while the dash is Online the supersession is a no-op there (rule (a) already dropped any park
-when the flow left the receipt or arrived on it), and keeping it means no entry edge leaves an older
-park alive. A new session starts with the key null; an old snapshot decodes it null.
+**#1460 — a receipt re-entered from its offer overlay is added once.** An offer pop-up over the
+receipt walks the acted flow PostTask → OfferPresented → PostTask, and `receiptEntry` runs on every
+PostTask entry edge, so the same receipt's `totalPay` used to land in `accumulatedDeliveryPay` twice
+(the `jobReceiptAnchors` stamp beside the call was already guarded against that re-entry; the pay was
+not). The skip needs direct evidence of the same receipt EPISODE, not a matching key:
+`Session.receiptEpisodeKey` is the key of the receipt last added — the owning job (`activeJob`, else
+`lastClosedJobReceipt`), `receiptSubjectTaskId()` (or `?`) and the total in cents (`Formats.cents`) —
+and `SessionPaySettleGate.receiptEpisode`, run from the step wrapper so no early return skips it,
+keeps it only while each flow-bearing frame is the receipt (`PostTask`) or the overlay reached from
+the receipt or the overlay; any other frame clears it, and flow-less observations leave it alone. An
+entry is skipped only when it comes FROM `OfferPresented` and the stored key equals this receipt's.
+Why a key match alone is not enough (Sol round 1): with a job's task screens missed, the subject falls
+back to the PREVIOUS job's completed drop and ownership to its `lastClosedJobReceipt`, so a new job's
+receipt of the same total carries the same key, and a subject-less `?` key collides the same way;
+a key-only skip lost such receipts repeatedly, with no completion rows for recorded pay to rescue.
+Stated trade-off: receipt → overlay → any other screen → the same receipt adds again (the pre-#1460
+behaviour on that path), bounded by the headline's max with recorded delivery pay (#1443). Residual:
+an overlay over A's receipt followed directly by job B's receipt at the same total, with every one of
+B's frames missed in between, is still read as A's re-entry. The ownership check, the #1103 refusal
+log and rule (c)'s park supersession are unchanged on a skipped entry: while the dash is Online the
+supersession is a no-op there (rule (a) already dropped any park when the flow left the receipt or
+arrived on it), and keeping it means no entry edge leaves an older park alive. A new session starts
+with the key null; an old snapshot decodes it null.
 **(d) comparisons are cent-tolerant** (`accumulatedDeliveryPay + totalPay` is not bit-equal to the
 2-dp figure the wheel renders).
 **(e) a pending's own wake lapses it by IDENTITY; a frame lapses the park at-or-past** — the timer is

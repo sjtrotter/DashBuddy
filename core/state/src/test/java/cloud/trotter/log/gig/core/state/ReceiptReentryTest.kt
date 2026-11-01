@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.TaskSubFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -21,7 +22,9 @@ import org.junit.Test
  * ([SessionPaySettleGate.receiptEntry]). An offer pop-up over the receipt walks the acted flow
  * PostTask → OfferPresented → PostTask, and the second entry edge used to add the SAME receipt's
  * pay again. A genuinely different receipt — another drop's, or the same drop's with a different
- * total — must still add.
+ * total — must still add, and so must any receipt whose entry is not a direct hand-back from the
+ * overlay: the receipt key is not identity, because a job whose task screens were missed names the
+ * PREVIOUS job's drop (or no drop) as its subject.
  *
  * Driven through the real [PlatformRegionStepper]; the flow edge comes from the region's own
  * `lastActedFlow`, which the stepper stamps on every flow-bearing frame. Timestamps sit well inside
@@ -83,6 +86,14 @@ class ReceiptReentryTest {
         Flow.OfferPresented,
         "doordash.screen.offer_popup",
         ParsedFields.None,
+        timestamp,
+    )
+
+    /** The waiting-for-offers map: neither the receipt nor its overlay. */
+    private fun idle(timestamp: Long) = screen(
+        Flow.Idle,
+        "doordash.screen.waiting_for_offer",
+        ParsedFields.IdleFields(sessionPay = null),
         timestamp,
     )
 
@@ -164,5 +175,59 @@ class ReceiptReentryTest {
 
         assertEquals(18.25, accumulated(backOnReceipt), 0.0001)
         assertEquals(18.25, running(backOnReceipt), 0.0001)
+    }
+
+    @Test
+    fun `a new job's receipt naming the previous job's drop still adds`() {
+        // Job A's receipt, then A closes on the idle map. Job B is offered and accepted, and every
+        // one of B's task screens is missed, so B's receipt arrives straight from the offer screen.
+        // With no task of its own, B's receipt names A's drop as its subject and A's closed job as
+        // its owner: the same key as A's receipt. Only the broken episode tells them apart.
+        val start = region(dropoff("d1", "c1", arrivedAt = 3_500L))
+
+        val onA = step(start, Flow.PostTask, receipt(8.50, t0))
+        val idleAfterA = step(onA, Flow.Idle, idle(t0 + 1_000L))
+        assertNull("A closed on the idle map", idleAfterA.activeJob)
+        assertEquals("J1", idleAfterA.lastClosedJobReceipt?.jobId)
+
+        val offerB = step(idleAfterA, Flow.OfferPresented, offerOverlay(t0 + 2_000L))
+        val onB = step(offerB, Flow.PostTask, receipt(8.50, t0 + 3_000L))
+        assertEquals("B's receipt falls back to A's drop", "d1", onB.receiptSubjectTaskId())
+
+        assertEquals("B's receipt is new money", 17.00, accumulated(onB), 0.0001)
+        assertEquals(17.00, running(onB), 0.0001)
+    }
+
+    @Test
+    fun `two receipts with no subject and the same total both add`() {
+        // No dropoff was ever seen, so neither receipt names a subject.
+        val start = region(dropoff("d1", "c1")).let {
+            it.copy(activeTask = null, activeJob = it.activeJob?.copy(tasks = emptyList()))
+        }
+
+        val onFirst = step(start, Flow.PostTask, receipt(8.50, t0))
+        assertNull(onFirst.receiptSubjectTaskId())
+        val between = step(onFirst, Flow.Idle, idle(t0 + 1_000L))
+        val onSecond = step(between, Flow.PostTask, receipt(8.50, t0 + 2_000L))
+        assertNull(onSecond.receiptSubjectTaskId())
+
+        assertEquals(17.00, accumulated(onSecond), 0.0001)
+        assertEquals(17.00, running(onSecond), 0.0001)
+    }
+
+    @Test
+    fun `a receipt reached through another screen after the overlay adds again`() {
+        // The trade-off, stated: once any frame other than the receipt or its overlay lands, the
+        // machine can no longer tell the same receipt from a new one, so it adds (the pre-#1460
+        // behaviour on this path). The headline's max with recorded delivery pay (#1443) bounds it.
+        val start = region(dropoff("d1", "c1", arrivedAt = 3_500L))
+
+        val onReceipt = step(start, Flow.PostTask, receipt(8.50, t0))
+        val underOverlay = step(onReceipt, Flow.OfferPresented, offerOverlay(t0 + 1_000L))
+        val idleBetween = step(underOverlay, Flow.Idle, idle(t0 + 2_000L))
+        assertNull("the episode ended on the idle frame", idleBetween.session?.receiptEpisodeKey)
+        val backOnReceipt = step(idleBetween, Flow.PostTask, receipt(8.50, t0 + 3_000L))
+
+        assertEquals(17.00, accumulated(backOnReceipt), 0.0001)
     }
 }
