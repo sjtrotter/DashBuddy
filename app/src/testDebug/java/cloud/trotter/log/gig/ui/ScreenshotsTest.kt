@@ -78,6 +78,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -221,9 +222,10 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun hubMoney() = hub("hub/money", AnalyticsTab.Money, showMore = false,
         Formats.money(ScreenshotData.week.grossEarnings))
 
+    /** More numbers: the latest-shifts list shows the week's oldest shift, Monday's, with its reported total. */
     @Test @Config(qualifiers = FULL)
     fun hubMoneyFull() = hub("hub/money-full", AnalyticsTab.Money, showMore = true,
-        string(R.string.money_tab_recent_sessions_title))
+        Formats.money(ScreenshotData.recentSessions.last().reportedEarnings!!))
 
     @Test fun hubOffers() = hub("hub/offers", AnalyticsTab.Offers, showMore = false,
         Formats.percent(ScreenshotData.acceptanceRate))
@@ -234,9 +236,10 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun hubTime() = hub("hub/time", AnalyticsTab.Time, showMore = false,
         formatDuration(ScreenshotData.typicalGapMillis))
 
+    /** More numbers: the time split's average shift, computed from the week's online time. */
     @Test @Config(qualifiers = FULL)
     fun hubTimeFull() = hub("hub/time-full", AnalyticsTab.Time, showMore = true,
-        string(R.string.time_tab_time_split_title))
+        formatDuration(ScreenshotData.time.avgDashMillis!!))
 
     // ── The Playbook ─────────────────────────────────────────────────────
 
@@ -279,7 +282,7 @@ class ScreenshotsTest(private val theme: String) {
     }
 
     private fun receipt(granted: Boolean) = ConsentReceipt(
-        decidedAt = ScreenshotData.clock.millis() - 86_400_000L, appVersion = "0.230.0",
+        decidedAt = ScreenshotData.clock.millis() - 86_400_000L, appVersion = APP_VERSION,
         disclosureRevision = PrivacyDisclosure.REVISION, granted = granted,
     )
 
@@ -299,8 +302,12 @@ class ScreenshotsTest(private val theme: String) {
         CapabilityConsentScreen(onBack = {}, viewModel = viewModel)
     }
 
-    private fun automationConsent(path: String) = render(path,
-        assertion = { text(string(SettingsR.string.consent_title)).assertExists() }) {
+    /** The title, plus the declined capability's decision line with its receipt (decision, date, app version). */
+    private fun automationConsent(path: String) = render(path, assertion = {
+        text(string(SettingsR.string.consent_title)).assertExists()
+        text("${string(SettingsR.string.consent_receipt_denied)},").assertExists()
+        text("app $APP_VERSION").assertExists()
+    }) {
         ConsentScreen(EventReceiptConsent.ALLOWED)
     }
 
@@ -368,7 +375,10 @@ class ScreenshotsTest(private val theme: String) {
         whenever(state.state).thenReturn(MutableStateFlow(AppState()))
         val manager = BubbleManager(context, notifications, mock<ChatRepository>(), dagger.Lazy { state },
             preferences, garage, readings, ScreenshotData.clock)
-        val now = ScreenshotData.clock.millis()
+        // The countdown is a Chronometer whose base BubbleManager computes from the wall clock
+        // (System.currentTimeMillis()), not its injected Clock, so the expiry is anchored to that same
+        // wall clock here: 27 seconds left when the notification is posted.
+        val now = System.currentTimeMillis()
         val pending = OfferFixtures.pending().copy(presentedAt = now - 3_000, countdownExpiresAt = now + 27_000)
         val snapshot = FlowCardSnapshot.Offer(phaseStartedAt = pending.presentedAt, offerHash = pending.offerHash,
             payAmount = pending.offerFields.parsedOffer.payAmount)
@@ -381,11 +391,17 @@ class ScreenshotsTest(private val theme: String) {
 
     /**
      * The notification's own RemoteViews, inflated as SystemUI would, on the theme's surface. If inflation
-     * fails the shot fails, never skips: the hero view is asserted after the render.
+     * fails the shot fails, never skips: the hero view is asserted after the render, and the countdown
+     * must show time left, never a negative span.
      */
     private fun notification(path: String, remote: RemoteViews) {
         var inflated: View? = null
-        render(path, assertion = { assertNotNull(inflated?.findViewById<TextView>(R.id.notif_offer_hero)) }) {
+        render(path, assertion = {
+            assertNotNull(inflated?.findViewById<TextView>(R.id.notif_offer_hero))
+            val countdown = inflated?.findViewById<TextView>(R.id.notif_offer_countdown)?.text?.toString().orEmpty()
+            assertTrue("countdown \"$countdown\" must show time left", countdown.any(Char::isDigit) &&
+                countdown.none { it == '-' || it == '\u2212' })
+        }) {
             Box(Modifier.fillMaxSize().background(AppTheme.colors.bg).padding(16.dp)) {
                 AndroidView(factory = { ctx -> remote.apply(ctx, FrameLayout(ctx)).also { inflated = it } },
                     modifier = Modifier.fillMaxWidth())
@@ -429,6 +445,9 @@ class ScreenshotsTest(private val theme: String) {
     companion object {
         /** Supplemental tall window: a scrolling page shows all of its content. */
         const val FULL = "w411dp-h2000dp-420dpi"
+
+        /** The app version the consent receipts record. */
+        private const val APP_VERSION = "0.230.0"
 
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")

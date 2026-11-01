@@ -23,9 +23,11 @@ import cloud.trotter.log.gig.domain.analytics.PlanTarget
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
 import cloud.trotter.log.gig.domain.analytics.SavedPlanWindow
 import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
+import cloud.trotter.log.gig.domain.analytics.SessionEvent
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.StoreReportCard
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
+import cloud.trotter.log.gig.domain.analytics.WorkGaps
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanGrade
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
@@ -111,45 +113,8 @@ internal object ScreenshotData {
                 DailyEarnings(weekStart.plusDays(day.toLong()), gross, net, deliveries)
             }
 
-    private val time = TimeEconomics(
-        sessions = 4,
-        onlineMillis = 81_000_000L,
-        deliveryMinutes = 960.0,
-        miles = 268.4,
-        deliveryMiles = 231.0,
-        deliveriesWithDeadline = 41,
-        onTimeDeliveries = 38,
-        avgDeadlineMarginMillis = 330_000.0,
-        deliveries = 41,
-        dropoffDwellMillis = 41 * 95_000L,
-        dropoffsTimed = 41,
-        pickups = 38,
-        pickupDwellMillis = 38 * 420_000L,
-        pickupsTimed = 38,
-    )
-
-    private val gaps = GapStats(
-        count = 34,
-        totalMillis = 34 * 570_000L,
-        medianMillis = 480_000L,
-        p90Millis = 1_260_000L,
-        longestMillis = 2_100_000L,
-        longGapCount = 0,
-        completionsWithoutGap = 4,
-    )
-
-    private val decisions = DecisionEconomics(
-        received = 64, accepted = 38, declined = 22, timedOut = 4, acceptanceRate = 38.0 / 64.0,
-        declinedEstNet = 71.40, declinedWithEstimate = 22, avgScoreAccepted = 68.0, avgScoreDeclined = 41.0,
-        avgEstPerHourAccepted = 19.40, avgEstPerHourDeclined = 11.20,
-    )
-
-    private val estimateVsReality = EstimateVsReality(
-        acceptedOffers = 38, offers = 31, estPerHour = 19.40, realizedPerHour = 17.85, ratio = 17.85 / 19.40,
-    )
-
     /** The week's four shifts, newest first; they sum to [week]. */
-    private val recentSessions = listOf(
+    val recentSessions = listOf(
         session("s4", "2026-10-28T14:45:00Z", 3.0, 61.25, 38.2, 6, 6, 10, 6, 3, 1, 3.00),
         session("s3", "2026-10-27T16:00:00Z", 5.5, 112.40, 79.0, 11, 10, 17, 10, 6, 1, 6.00),
         session("s2", "2026-10-27T09:30:00Z", 4.5, 76.45, 52.2, 8, 8, 12, 8, 3, 1, 0.0),
@@ -169,6 +134,64 @@ internal object ScreenshotData {
             offersTimeout = timedOut, cashTips = cash,
         )
     }
+
+    /**
+     * The shifts' accepts and drop-offs, laid out evenly through each shift: a job every
+     * `length / (jobs + 1)`, its drop-offs part-way through its slot, the first jobs of a shift carrying
+     * the second drop of a stacked order. Every one of the week's 41 drop-offs is here, so the gaps
+     * below are what `WorkGaps` measures over the same completions the Money tab counts.
+     */
+    private class Timeline(val completions: List<SessionEvent>, val accepts: List<SessionEvent>, val deliveryMillis: Long)
+
+    private val timeline: Timeline = run {
+        var sequence = 0L
+        val completions = mutableListOf<SessionEvent>()
+        val accepts = mutableListOf<SessionEvent>()
+        var deliveryMillis = 0L
+        for (shift in recentSessions.sortedBy { it.startedAt }) {
+            val slot = (shift.endedAt!! - shift.startedAt) / (shift.jobsCompleted + 1)
+            val stacked = shift.deliveries - shift.jobsCompleted
+            for (job in 0 until shift.jobsCompleted) {
+                val acceptedAt = shift.startedAt + slot / 2 + job * slot
+                accepts += SessionEvent(shift.sessionId, ++sequence, acceptedAt)
+                val drops = if (job < stacked) listOf(0.55, 0.70) else listOf(0.45 + 0.05 * (job % 4))
+                drops.forEach { completions += SessionEvent(shift.sessionId, ++sequence, acceptedAt + (it * slot).toLong()) }
+                deliveryMillis += (drops.last() * slot).toLong()
+            }
+        }
+        Timeline(completions, accepts, deliveryMillis)
+    }
+
+    val time = TimeEconomics(
+        sessions = 4,
+        onlineMillis = 81_000_000L,
+        deliveryMinutes = timeline.deliveryMillis / 60_000.0,
+        miles = 268.4,
+        deliveryMiles = 231.0,
+        deliveriesWithDeadline = 41,
+        onTimeDeliveries = 38,
+        avgDeadlineMarginMillis = 330_000.0,
+        deliveries = 41,
+        dropoffDwellMillis = 41 * 95_000L,
+        dropoffsTimed = 41,
+        pickups = 38,
+        pickupDwellMillis = 38 * 420_000L,
+        pickupsTimed = 38,
+    )
+
+    /** Measured, not stated: one gap per drop-off followed by an accept in its shift (37), plus 4 shift tails. */
+    private val gaps: GapStats = WorkGaps.compute(timeline.completions, timeline.accepts,
+        recentSessions.associate { it.sessionId to it.endedAt!! })
+
+    private val decisions = DecisionEconomics(
+        received = 64, accepted = 38, declined = 22, timedOut = 4, acceptanceRate = 38.0 / 64.0,
+        declinedEstNet = 71.40, declinedWithEstimate = 22, avgScoreAccepted = 68.0, avgScoreDeclined = 41.0,
+        avgEstPerHourAccepted = 19.40, avgEstPerHourDeclined = 11.20,
+    )
+
+    private val estimateVsReality = EstimateVsReality(
+        acceptedOffers = 38, offers = 31, estPerHour = 19.40, realizedPerHour = 17.85, ratio = 17.85 / 19.40,
+    )
 
     /** The Offers list's first page under All. */
     val offersFeed = OffersFeedState(

@@ -183,6 +183,8 @@ jobs:
 
       - name: Upload screenshots
         if: ${{ !cancelled() && steps.compile.outcome == 'success' && github.event_name != 'push' }}
+        # Advisory: only a render crash or a checker failure turns the job red.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: screenshots-${{ github.event.pull_request.number || inputs.pr || github.sha }}
