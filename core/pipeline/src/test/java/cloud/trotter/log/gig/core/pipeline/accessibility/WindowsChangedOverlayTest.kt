@@ -55,6 +55,9 @@ class WindowsChangedOverlayTest : WindowResolverTestBase() {
 
     private val stats = PipelineStats()
 
+    /** #1471: AccessibilitySource holds its service weakly; hold the mocks here so a GC can't clear them mid-test. */
+    private val services = mutableListOf<AccessibilityService>()
+
     private fun emitted(windows: List<AccessibilityWindowInfo>, enabled: Set<String>): List<TreeSnapshot> {
         val res = displayResources()
         val service = mock<AccessibilityService> {
@@ -62,6 +65,7 @@ class WindowsChangedOverlayTest : WindowResolverTestBase() {
             on { packageName } doReturn "cloud.trotter.log.gig"
             on { resources } doReturn res
         }
+        services += service
         val source = AccessibilitySource(stats).apply { registerService(service) }
         val pipeline = WindowsChangedPipeline(source, FakePlatformPreferences(enabled), stats)
         val out = mutableListOf<TreeSnapshot>()
