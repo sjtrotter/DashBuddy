@@ -104,12 +104,25 @@ android {
         // giglog.debugKeystore.path + giglog.debugKeystore.passwordFile in ~/.gradle/gradle.properties.
         // Without either, Android's default debug key signs, as before.
         getByName("debug") {
-            val path = System.getenv("DEBUG_KEYSTORE_PATH")
-                ?: providers.gradleProperty("giglog.debugKeystore.path").orNull
-            val password = System.getenv("DEBUG_KEYSTORE_PASSWORD")
-                ?: providers.gradleProperty("giglog.debugKeystore.passwordFile").orNull
-                    ?.let { file(it).readText().trim() }
-            if (!path.isNullOrBlank() && !password.isNullOrBlank()) {
+            fun nonBlank(value: String?) = value?.trim()?.takeIf { it.isNotEmpty() }
+            val envPath = nonBlank(System.getenv("DEBUG_KEYSTORE_PATH"))
+            val propPath = nonBlank(providers.gradleProperty("giglog.debugKeystore.path").orNull)
+            // One source at a time: CI's environment when it sets a path, else the laptop's properties.
+            val (path, password) = when {
+                envPath != null -> envPath to nonBlank(System.getenv("DEBUG_KEYSTORE_PASSWORD"))
+                propPath != null -> {
+                    val passFile = nonBlank(providers.gradleProperty("giglog.debugKeystore.passwordFile").orNull)
+                        ?.let { file(it) }
+                    require(passFile?.isFile == true) {
+                        "giglog.debugKeystore.path is set but giglog.debugKeystore.passwordFile is missing or unreadable"
+                    }
+                    propPath to nonBlank(passFile!!.readText())
+                }
+                else -> null to null // not configured: Android's default debug key signs
+            }
+            if (path != null) {
+                require(file(path).isFile) { "debug keystore not found at $path" }
+                require(password != null) { "debug keystore at $path has no password configured" }
                 storeFile = file(path)
                 storePassword = password
                 keyAlias = "giglogdebug"

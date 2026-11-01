@@ -75,6 +75,9 @@ jobs:
 
       - name: Debug signing key (#1469)
         # One private key signs every test build, so CI APKs update the phone's install in place.
+        # Only trusted code gets it: master pushes and pull requests from this repository. A fork PR
+        # or a manual dispatch (which can build a fork's PR) signs with the default debug key.
+        if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
@@ -101,7 +104,8 @@ jobs:
         # break (16 ExtraTranslation errors from the #98 :feature:setup extraction) shipped invisibly.
         shell: bash
         env:
-          DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}  # #1469: only the step that signs
+          # #1469: only the step that signs, and only for trusted code (see "Debug signing key").
+          DEBUG_KEYSTORE_PASSWORD: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && secrets.DEBUG_KEYSTORE_PASSWORD || '' }}
         run: |
           ./gradlew --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
             :app:lintVitalRelease 2>&1 | tee gate.log
