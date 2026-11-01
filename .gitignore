@@ -40,3 +40,7 @@ local.properties
 !.claude/council.md
 CLAUDE.local.md
 codex-harness.local.md
+
+# Python bytecode (tools/ci scripts run in the worktree; retro 2026-10-31, #1467)
+__pycache__/
+*.pyc

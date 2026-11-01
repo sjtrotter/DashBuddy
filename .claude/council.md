@@ -48,6 +48,8 @@ the change since the last round. This overrides `sol-loop`'s "review only open i
   with principle 8 mandatory for `:core:state`, `:core:pipeline`, `:domain` and rule JSON; and security
   (fail-closed gates, bounded ingestion, no plaintext PII) for any diff touching recognition, capture, redaction,
   network or effects.
+- Walk each new rule through the intended main case (retro 2026-10-31, #1467: a "started before the last
+  shift end" rule would have rejected the shift that had just ended).
 - The question "would you block this merge, and why".
 - Sol may read the field pulls (`~/dashbuddy/logs`: logs, captures, the database) when a review needs the evidence
   behind a claim (dev, 2026-10-27). Briefs still keep personal data out of their own text, and nothing a reviewer

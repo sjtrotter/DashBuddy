@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def log_lines(paths):
-    errors, failed_tasks, wrong = [], [], []
+    errors, failed_tasks, wrong, warnings = [], [], [], []
     for path in paths:
         try:
             text = Path(path).read_text(errors="replace")
@@ -24,6 +24,8 @@ def log_lines(paths):
         for index, line in enumerate(lines):
             if line.startswith("e: "):
                 errors.append(line[:300])
+            if line.startswith("w: ") and line[:300] not in warnings:
+                warnings.append(line[:300])
             match = re.search(r"Execution failed for task '([^']+)'", line)
             if match and match.group(1) not in failed_tasks:
                 failed_tasks.append(match.group(1))
@@ -34,7 +36,10 @@ def log_lines(paths):
                         break
                     if detail[:300] not in wrong:
                         wrong.append(detail[:300])
-    return errors, failed_tasks, wrong
+    # A warning matters only when -Werror turned warnings into the failure (#1467): then it is the cause.
+    if not any("-Werror" in e for e in errors):
+        warnings = []
+    return errors, failed_tasks, wrong, warnings
 
 
 def junit(root):
@@ -70,7 +75,7 @@ def main():
         print(__doc__.strip())
         return 2
     root = Path(sys.argv[1])
-    errors, failed_tasks, wrong = log_lines(sys.argv[2:])
+    errors, failed_tasks, wrong, warnings = log_lines(sys.argv[2:])
     modules, failures = junit(root)
 
     print("## Gate summary\n")
@@ -78,6 +83,9 @@ def main():
     if errors:
         print(f"Compile errors ({len(errors)}):")
         print("\n".join(errors[:30]))
+    if warnings:
+        print(f"Warnings treated as errors ({len(warnings)}):")
+        print("\n".join(warnings[:30]))
     if failed_tasks:
         print("Failed tasks: " + ", ".join(failed_tasks))
     if wrong:
