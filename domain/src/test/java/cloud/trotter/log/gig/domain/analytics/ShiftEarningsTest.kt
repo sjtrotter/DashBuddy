@@ -30,8 +30,11 @@ class ShiftEarningsTest {
     @Test
     fun `a summary zero and a SET are reports and a CLEAR falls back to recorded pay`() {
         fun rested(machine: Double?, source: String?, mode: String?, override: Double?, recorded: Double?) =
-            ShiftEarnings.rested(SessionReportRule.effectiveReported(machine, source, mode, override), recorded)
+            ShiftEarnings.rested(SessionReportRule.effectiveReported(machine, source, mode, override, recorded), recorded)
         assertEquals(0.0, rested(0.0, SessionEndSource.SUMMARY_SCREEN, null, null, 9.0)!!, 0.0)
+        // #1459: an early end's stale running total gives way to the higher recorded pay; a summary total does not.
+        assertEquals(60.0, rested(40.0, SessionEndSource.EARLY_OFFLINE, null, null, 60.0)!!, 0.0)
+        assertEquals(40.0, rested(40.0, SessionEndSource.SUMMARY_SCREEN, null, null, 60.0)!!, 0.0)
         assertEquals(9.0, rested(0.0, SessionEndSource.EARLY_OFFLINE, null, null, 9.0)!!, 0.0)
         assertEquals(25.0, rested(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.SET, 25.0, 9.0)!!, 0.0)
         assertEquals(9.0, rested(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.CLEAR, null, 9.0)!!, 0.0)

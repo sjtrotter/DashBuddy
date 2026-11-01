@@ -372,6 +372,8 @@ class CsvExporterTest {
             session(id = "summary", reported = 30.0),
             session(id = "zero", reported = 0.0),
             session(id = "counter", reported = 20.0).copy(endSource = "early_offline"),
+            // #1459: a stale running total (12) below its recorded pay (16) reports the recorded pay.
+            session(id = "stale", reported = 12.0).copy(endSource = "early_offline"),
             session(id = "set", reported = 99.0).copy(reportOverrideMode = SessionReportOperation.SET, reportOverride = 25.0),
             session(id = "clear", reported = 99.0).copy(reportOverrideMode = SessionReportOperation.CLEAR),
             session(id = "none", reported = 0.0).copy(endSource = "early_offline"),
@@ -383,10 +385,15 @@ class CsvExporterTest {
             delivery(3, "S", pay = null).copy(sessionId = "empty"),
             delivery(4, "S", pay = 13.0).copy(sessionId = null),
             delivery(5, "S", pay = 25.0).copy(sessionId = "summary"),
+            delivery(6, "S", pay = 10.0).copy(sessionId = "stale"),
+            delivery(7, "S", pay = 6.0).copy(sessionId = "stale"),
         )
         val out = CsvExporter.export(deliveries, sessions, utc, generatedAt)
-        assertEquals(listOf("DASH_SUMMARY", "DASH_SUMMARY", "IN_DASH_COUNTER", "DRIVER_SET", "NONE", "NONE", "NONE"),
-            out.sessionsCsv.trim().lines().drop(1).map { it.split(",")[5] })
+        val rows = out.sessionsCsv.trim().lines().drop(1).map { it.split(",") }
+        assertEquals(listOf("DASH_SUMMARY", "DASH_SUMMARY", "IN_DASH_COUNTER", "RECORDED_PAY", "DRIVER_SET", "NONE", "NONE", "NONE"),
+            rows.map { it[5] })
+        assertEquals("16.00", rows[3][4])
+        assertTrue(out.summaryCsv.contains("total_recorded_pay_earnings,16.00\n"))
         assertTrue(out.summaryCsv.contains("total_dash_summary_earnings,30.00\n"))
         assertTrue(out.summaryCsv.contains("total_in_dash_counter_earnings,20.00\n"))
         assertTrue(out.summaryCsv.contains("total_driver_set_earnings,25.00\n"))

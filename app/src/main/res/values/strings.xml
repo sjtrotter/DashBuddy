@@ -492,6 +492,8 @@
     <string name="session_detail_no_deliveries_yet">No deliveries recorded. Add a missed delivery.</string>
     <string name="session_detail_gross_source_summary">From the shift summary</string>
     <string name="session_detail_gross_source_counter">From the app\'s running total</string>
+    <string name="session_detail_gross_source_recorded">Recorded pay</string>
+    <string name="session_detail_gross_source_recorded_sub">Above running total</string>
     <string name="session_detail_gross_source_driver">Entered by you</string>
     <string name="session_detail_gross_source_none">Added up by gig.log, no total from the app</string>
     <string name="session_detail_stat_miles">Miles</string>

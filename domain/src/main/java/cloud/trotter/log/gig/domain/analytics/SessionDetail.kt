@@ -27,7 +27,7 @@ data class SessionDetail(
      * `$0.00` stays `0.0`. [deliveredPay] stays non-null for its accounting readers.
      */
     val recordedPay: Double?
-        get() = deliveries.mapNotNull { it.realizedPay }.takeIf { it.isNotEmpty() }?.sum()
+        get() = SessionReportRule.recordedPayOf(deliveries.map { it.realizedPay })
 
     /**
      * Σ driver-entered cash tips for THIS session (#688). Added to the displayed gross/net as its
@@ -36,10 +36,14 @@ data class SessionDetail(
      */
     val cashTips: Double get() = deliveries.sumOf { it.cashTip ?: 0.0 }
 
-    /** This dash's effective report; [SessionReportRule] owns the override and machine trust rule. */
+    /**
+     * This dash's effective report; [SessionReportRule] owns the override and machine trust rule, and floors a
+     * non-summary running total at [recordedPay] (#1459), so such a dash reads 0 [overAttributedPay].
+     */
     private val reportedEarningsOrNull: Double?
         get() = SessionReportRule.effectiveReported(
             session.machineReportedEarnings, session.endSource, session.reportOverrideMode, session.reportOverride,
+            recordedPay,
         )
 
     /**

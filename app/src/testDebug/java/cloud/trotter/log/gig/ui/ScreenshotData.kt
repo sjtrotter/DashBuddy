@@ -70,7 +70,7 @@ internal object ScreenshotData {
         netPerMile = 328.50 / 268.4,
         fuelCost = 58.00,
         nonFuelCost = 44.00,
-        grossSources = GrossSources(412.50, 4, 0.0, 0, 0.0, 0, 0.0, 0, 0, 18.00),
+        grossSources = GrossSources(412.50, 4, 0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 18.00),
     )
 
     /** Last week, for the delta chips. */
@@ -83,7 +83,7 @@ internal object ScreenshotData {
         netPerMile = 356.80 / 301.0,
         fuelCost = 64.40,
         nonFuelCost = 49.00,
-        grossSources = GrossSources(452.20, 5, 0.0, 0, 0.0, 0, 0.0, 0, 0, 18.00),
+        grossSources = GrossSources(452.20, 5, 0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 18.00),
     )
 
     /** Today, Wednesday: one three-hour shift that ended at 17:45. */
@@ -96,7 +96,7 @@ internal object ScreenshotData {
         netPerMile = 49.70 / 38.2,
         fuelCost = 8.25,
         nonFuelCost = 6.30,
-        grossSources = GrossSources(61.25, 1, 0.0, 0, 0.0, 0, 0.0, 0, 0, 3.00),
+        grossSources = GrossSources(61.25, 1, 0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 3.00),
     )
 
     /** Base pay + platform tips = the recorded $412.50; every delivery itemized. */

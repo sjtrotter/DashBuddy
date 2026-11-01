@@ -109,11 +109,37 @@ class SessionDetailViewModelTest {
             val viewModel = buildViewModel(record.sessionId)
             val job = launch { viewModel.uiState.collect {} }
             testScheduler.advanceUntilIdle()
-            val loaded = viewModel.uiState.value.detail!!.session
-            assertEquals(record, loaded)
+            val loaded = viewModel.uiState.value.detail!!
+            assertEquals(record, loaded.session)
             assertEquals(label, sessionGrossSourceLabel(loaded))
+            assertNull(sessionGrossSourceSub(loaded))
             job.cancel()
         }
+    }
+
+    @Test
+    fun `a stale early running total below recorded pay is labelled recorded pay (#1459)`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        // The repository's effective report is already floored at recorded pay (16); the machine column keeps 12.
+        val record = session("stale").copy(reportedEarnings = 16.0, machineReportedEarnings = 12.0,
+            endSource = SessionEndSource.EARLY_OFFLINE)
+        val detail = SessionDetail(record, listOf(
+            delivery("stale").copy(eventSequenceId = 1L, realizedPay = 10.0),
+            delivery("stale").copy(eventSequenceId = 2L, realizedPay = 6.0),
+        ))
+        whenever(analyticsRepository.sessionDetail(eq("stale"))).thenReturn(flowOf(detail))
+        val viewModel = buildViewModel("stale")
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+        val loaded = viewModel.uiState.value.detail!!
+        assertEquals(R.string.session_detail_gross_source_recorded, sessionGrossSourceLabel(loaded))
+        assertEquals(R.string.session_detail_gross_source_recorded_sub, sessionGrossSourceSub(loaded))
+        assertEquals(0.0, loaded.overAttributedPay, 1e-9)
+        assertEquals(0.0, loaded.unattributedPay, 1e-9)
+        // A tie stays the running total.
+        val tie = SessionDetail(record.copy(reportedEarnings = 16.0, machineReportedEarnings = 16.0), detail.deliveries)
+        assertEquals(R.string.session_detail_gross_source_counter, sessionGrossSourceLabel(tie))
+        job.cancel()
     }
 
     @Test

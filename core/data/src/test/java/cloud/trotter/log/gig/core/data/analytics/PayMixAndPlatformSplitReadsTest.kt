@@ -59,7 +59,7 @@ class PayMixAndPlatformSplitReadsTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao, db.appEventDao())
+        repo = AnalyticsRepository(dao, db.appEventDao(), db.hudShiftDao())
     }
 
     @After
@@ -315,6 +315,8 @@ internal suspend fun seedMoneySources(dao: AnalyticsDao, start: Long): List<Deli
             session("summary", 30.0),
             session("zero", 0.0),
             session("counter", 20.0, SessionEndSource.EARLY_OFFLINE),
+            // #1459: an early end whose stale running total (12) is below its recorded pay (16).
+            session("stale", 12.0, SessionEndSource.EARLY_OFFLINE),
             session("set", 99.0, SessionEndSource.EARLY_OFFLINE).copy(
                 reportOverrideMode = SessionReportOperation.SET, reportOverride = 25.0 * scale),
             session("clear", 99.0).copy(reportOverrideMode = SessionReportOperation.CLEAR),
@@ -337,6 +339,7 @@ internal suspend fun seedMoneySources(dao: AnalyticsDao, start: Long): List<Deli
             delivery("summary", 25.0, PayBasis.RECEIPT_TOTAL, base = 10.0, tip = 15.0, cash = 3.0),
             delivery("zero", 4.0, PayBasis.RECEIPT_TOTAL, base = 1.0, tip = 3.0),
             delivery("counter", 18.0, PayBasis.OFFER_PAY),
+            delivery("stale", 16.0, PayBasis.DROP_SHARE),
             delivery("set", 20.0, PayBasis.RECEIPT_TOTAL),
             delivery("clear", 7.0, PayBasis.OFFER_PAY),
             delivery("unreported", 11.0, PayBasis.DROP_SHARE),
@@ -364,6 +367,8 @@ internal fun assertMoneySources(e: PeriodEconomics, parts: PayMixParts, scale: D
     assertEquals(2 * copies, sources.summaryDashes)
     assertEquals(20.0 * scale, sources.counterReported, 0.001)
     assertEquals(copies, sources.counterDashes)
+    assertEquals(16.0 * scale, sources.recordedPayReported, 0.001)
+    assertEquals(copies, sources.recordedPayDashes)
     assertEquals(25.0 * scale, sources.driverSetReported, 0.001)
     assertEquals(copies, sources.driverSetDashes)
     assertEquals(18.0 * scale, sources.recordedWithoutReport, 0.001)
@@ -371,17 +376,18 @@ internal fun assertMoneySources(e: PeriodEconomics, parts: PayMixParts, scale: D
     assertEquals(copies, sources.unreportedDashesNoPay)
     assertEquals(3.0 * scale, sources.sessionCash, 0.001)
     assertEquals(15.0 * scale, e.noSessionPay, 0.001)
-    assertEquals(111.0 * scale, e.grossEarnings, 0.001)
+    assertEquals(127.0 * scale, e.grossEarnings, 0.001)
     assertEquals(e.grossEarnings, sources.sum(e.noSessionPay), 0.001)
     assertEquals(25.0 * scale, parts.offerEstimatePay, 0.001)
     assertEquals(2 * copies, parts.offerEstimateDeliveries)
     assertEquals(copies, parts.paylessDeliveries)
-    assertEquals(8 * copies, parts.deliveries)
+    assertEquals(9 * copies, parts.deliveries)
     assertEquals(3 * copies, parts.deliveriesWithBreakdown)
     val mix = PayMix.of(e, parts)
-    assertEquals(98.0 * scale, mix.recorded, 0.001)
-    assertEquals(56.0 * scale, mix.notItemized, 0.001)
+    assertEquals(114.0 * scale, mix.recorded, 0.001)
+    assertEquals(72.0 * scale, mix.notItemized, 0.001)
     assertEquals(12.0 * scale, mix.notMatched, 0.001)
+    // Without the #1459 floor the stale shift would add 4 here (8 per scale).
     assertEquals(4.0 * scale, mix.recordedAboveReported, 0.001)
     assertEquals(e.grossEarnings, mix.basePay + mix.tipsTotal + mix.notItemized + mix.notMatched - mix.recordedAboveReported, 0.001)
     assertFalse(mix.unreconciled)

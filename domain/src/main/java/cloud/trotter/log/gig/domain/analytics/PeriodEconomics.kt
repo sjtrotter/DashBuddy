@@ -96,8 +96,10 @@ data class PeriodEconomics(
 
 /**
  * Read-time sources of Earned. To [ANALYTICS_MONEY_EPSILON],
- * `summaryReported + counterReported + driverSetReported + recordedWithoutReport + sessionCash +
- * noSessionPay == grossEarnings`. Session cash excludes the cash already in no-session pay.
+ * `summaryReported + counterReported + recordedPayReported + driverSetReported + recordedWithoutReport +
+ * sessionCash + noSessionPay == grossEarnings`. Session cash excludes the cash already in no-session pay.
+ * [recordedPayReported] (#1459) is the reports of shifts whose running total gave way to their higher recorded
+ * pay (`ReportSource.RECORDED_PAY`); each reported shift sits in exactly one source bucket.
  */
 data class GrossSources(
     val summaryReported: Double,
@@ -106,17 +108,19 @@ data class GrossSources(
     val counterDashes: Int,
     val driverSetReported: Double,
     val driverSetDashes: Int,
+    val recordedPayReported: Double,
+    val recordedPayDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
     /** Dashes with no report and NO recorded pay (a pay-less #1133-class delivery still counts here — this is a pay predicate, not a delivery count). */
     val unreportedDashesNoPay: Int,
     val sessionCash: Double,
 ) {
-    fun sum(noSessionPay: Double): Double = summaryReported + counterReported + driverSetReported +
-        recordedWithoutReport + sessionCash + noSessionPay
+    fun sum(noSessionPay: Double): Double = summaryReported + counterReported + recordedPayReported +
+        driverSetReported + recordedWithoutReport + sessionCash + noSessionPay
 
     companion object {
-        val EMPTY = GrossSources(0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 0.0)
+        val EMPTY = GrossSources(0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 0.0)
     }
 }
 

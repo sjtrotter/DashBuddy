@@ -41,8 +41,8 @@ class TodayEarningsTest {
 
     @Test
     fun `an ended shift counts its effective report and a SET wins`() {
-        val set = SessionReportRule.effectiveReported(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.SET, 32.0)
-        val cleared = SessionReportRule.effectiveReported(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.CLEAR, null)
+        val set = SessionReportRule.effectiveReported(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.SET, 32.0, 20.0)
+        val cleared = SessionReportRule.effectiveReported(40.0, SessionEndSource.SUMMARY_SCREEN, SessionReportOperation.CLEAR, null, 9.0)
         val ended = listOf(
             EndedShiftPay("set", start + 1, set, 20.0),
             EndedShiftPay("clear", start + 2, cleared, 9.0),

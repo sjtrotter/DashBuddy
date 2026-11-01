@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
 import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEntity
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
+import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.SESSION_DELIVERY_JOIN_SQL
 import cloud.trotter.log.gig.core.database.event.AppEventDao
 import cloud.trotter.log.gig.core.database.event.AppEventEntity
 import cloud.trotter.log.gig.domain.analytics.AnalyticsEventFixtures.acceptedOffer
@@ -587,7 +588,7 @@ class AnalyticsProjectorTest {
         val deliverySeq = seedCorrectableSession(deliveryPay = 10.0, reportedEarnings = 20.0)
         projector().catchUp()
 
-        val repo = AnalyticsRepository(analyticsDao, eventDao)
+        val repo = AnalyticsRepository(analyticsDao, eventDao, db.hudShiftDao())
         assertEquals("before: reported 20 − captured 10", 10.0, repo.sessionDetail("S1").first()!!.unattributedPay, 1e-9)
 
         // The driver re-prices the captured delivery up to $15 (a mis-captured tip).
@@ -1585,7 +1586,7 @@ class AnalyticsProjectorTest {
         assertEquals(MilesBasis.UNKNOWN, overflow.toDomain().milesBasis)
         val known = analyticsDao.deliveryRecord(knownId)!!
         val expectedCost = known.realizedPay!! - known.netProfit!!
-        val reader = AnalyticsRepository(analyticsDao, eventDao)
+        val reader = AnalyticsRepository(analyticsDao, eventDao, db.hudShiftDao())
         for (platform in listOf(null, Platform.DoorDash)) {
             val economics = reader.periodEconomics(AnalyticsPeriod.LIFETIME, platform = platform).first()
             assertEquals(22.0, economics.grossEarnings, 1e-9)
@@ -1791,7 +1792,7 @@ class AnalyticsProjectorTest {
             assertEquals(machine.reportedEarnings, row.reportedEarnings)
             assertEquals(machine.lastEventAt, row.lastEventAt)
             assertEquals(machine.endedAt, row.endedAt)
-            assertEquals(effective, row.toDomain().reportedEarnings)
+            assertEquals(effective, row.toDomain(null).reportedEarnings)
             assertEquals(0, row.deliveries)
             assertTrue(analyticsDao.deliveriesBetween(0, Long.MAX_VALUE).isEmpty())
         }
@@ -1879,48 +1880,123 @@ class AnalyticsProjectorTest {
     }
 
     @Test
-    fun `SQL effective report agrees with Kotlin for the full source machine override matrix`() = runBlocking {
+    fun `SQL effective report agrees with Kotlin for the full source machine override delivered matrix`() = runBlocking {
         seedEmptyReportSession()
         projector().catchUp()
         val template = analyticsDao.sessionRecord("483")!!
+        val hudShiftDao = db.hudShiftDao()
+        // #1459: the delivered dimension, as the session's delivery rows (netProfit null, so day.net is the unattributed
+        // remainder alone): no rows, one unpriced row, a negative, zero, below, an exact 40.14 tie, above, and a
+        // two-row float tie (0.10 + 0.20 against the 0.30 running total).
+        val deliveredRows: List<List<Double?>> = listOf(
+            emptyList(), listOf(null), listOf(-5.0), listOf(0.0), listOf(20.0), listOf(40.14), listOf(60.0), listOf(0.10, 0.20),
+        )
         for (source in listOf(SessionEndSource.SUMMARY_SCREEN, SessionEndSource.EARLY_OFFLINE, null)) {
-            for (machine in listOf(null, 0.0, 40.14, -5.0)) { // -5.0: Astra r1 P2 — a negative non-summary value is no report
-                for ((mode, value) in listOf(
-                    null to null,
-                    SessionReportOperation.SET to 12.5,
-                    SessionReportOperation.SET to 0.0,
-                    SessionReportOperation.SET to null,
-                    SessionReportOperation.CLEAR to null,
-                )) {
-                    val row = template.copy(reportedEarnings = machine, endSource = source,
-                        reportOverrideMode = mode, reportOverride = value)
-                    analyticsDao.upsertSession(row)
-                    val effective = SessionReportRule.effectiveReported(machine, source, mode, value)
-                    val expected = effective ?: 0.0
-                    // The unattributed remainder (and the per-day net that folds it in) is floored at 0 by design —
-                    // a negative summary-screen report counts in gross but never as "unattributed".
-                    val expectedUnattributed = maxOf(expected, 0.0)
-                    val label = "source=$source machine=$machine mode=$mode value=$value"
-                    val expectedSource = ReportSource.of(machine, source, mode, value)
-                    db.openHelper.readableDatabase.query(
-                        "SELECT ($REPORT_SOURCE_SQL) FROM session_records s WHERE s.sessionId = '483'",
-                    ).use { cursor ->
-                        assertTrue(cursor.moveToFirst())
-                        assertEquals(label, expectedSource.wire, cursor.getString(0))
+            for (machine in listOf(null, 0.0, 40.14, -5.0, 0.30)) { // -5.0: Astra r1 P2 — a negative non-summary value is no report
+                for (pays in deliveredRows) {
+                    analyticsDao.deleteAllDeliveries()
+                    pays.forEachIndexed { i, pay -> analyticsDao.upsertDelivery(matrixDelivery(9_000L + i, template.platform, pay)) }
+                    val delivered = SessionReportRule.recordedPayOf(pays)
+                    for ((mode, value) in listOf(
+                        null to null,
+                        SessionReportOperation.SET to 12.5,
+                        SessionReportOperation.SET to 0.0,
+                        SessionReportOperation.SET to null,
+                        SessionReportOperation.CLEAR to null,
+                    )) {
+                        val row = template.copy(reportedEarnings = machine, endSource = source,
+                            reportOverrideMode = mode, reportOverride = value)
+                        analyticsDao.upsertSession(row)
+                        val effective = SessionReportRule.effectiveReported(machine, source, mode, value, delivered)
+                        val recorded = delivered ?: 0.0
+                        val expected = effective ?: recorded
+                        // The unattributed remainder (and the per-day net that folds it in) is floored at 0 by design —
+                        // a negative summary-screen report counts in gross but never as "unattributed".
+                        val expectedUnattributed = effective?.let { maxOf(it - recorded, 0.0) } ?: 0.0
+                        val expectedOverAttributed = effective?.let { maxOf(recorded - it, 0.0) } ?: 0.0
+                        val label = "source=$source machine=$machine delivered=$pays mode=$mode value=$value"
+                        val expectedSource = ReportSource.of(machine, source, mode, value, delivered)
+                        db.openHelper.readableDatabase.query(
+                            "SELECT ($REPORT_SOURCE_SQL) FROM session_records s $SESSION_DELIVERY_JOIN_SQL WHERE s.sessionId = '483'",
+                        ).use { cursor ->
+                            assertTrue(cursor.moveToFirst())
+                            assertEquals(label, expectedSource.wire, cursor.getString(0))
+                        }
+                        val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
+                        assertEquals(label, expected, totals.gross, 1e-9)
+                        assertEquals(label, expectedUnattributed, totals.unattributed, 1e-9)
+                        assertEquals(label, expectedOverAttributed, totals.overAttributed, 1e-9)
+                        val recordedPayBucket = if (expectedSource == ReportSource.RECORDED_PAY) effective!! else 0.0
+                        assertEquals(label, recordedPayBucket, totals.recordedPayReported, 1e-9)
+                        assertEquals(label, if (expectedSource == ReportSource.RECORDED_PAY) 1 else 0, totals.recordedPayDashes)
+                        assertEquals(label, totals.gross, totals.summaryReported + totals.counterReported +
+                            totals.recordedPayReported + totals.driverSetReported + totals.recordedWithoutReport +
+                            totals.sessionCash, 1e-9)
+                        assertEquals(label, effective, row.toDomain(delivered).reportedEarnings)
+                        val platform = analyticsDao.grossAndUnattributedByPlatform(0, 5_000).first().single()
+                        assertEquals(label, expected, platform.gross, 1e-9)
+                        assertEquals(label, expectedUnattributed, platform.unattributed, 1e-9)
+                        assertEquals(label, expectedOverAttributed, platform.overAttributed, 1e-9)
+                        assertEquals(label, recordedPayBucket, platform.recordedPayReported, 1e-9)
+                        val day = analyticsDao.sessionGrossRows(0, 5_000).first().single()
+                        assertEquals(label, expected, day.gross, 1e-9)
+                        assertEquals(label, expectedUnattributed, day.net, 1e-9)
+                        // The row reads that map a session through toDomain carry the same recorded pay (#1459 council).
+                        // SQLite may sum the float tie with compensation, so these compare to a tolerance.
+                        val recent = analyticsDao.recentSessions(1).first().single()
+                        assertNear(label, delivered, recent.deliveredPay)
+                        assertNear(label, effective, recent.toDomain().reportedEarnings)
+                        assertNear(label, effective, hudShiftDao.latestSession(template.platform).first()!!.toDomain().reportedEarnings)
+                        assertNear(label, effective, hudShiftDao.endedSessionsBetween(0, 5_000).first().single().toDomain().reportedEarnings)
                     }
-                    val totals = analyticsDao.grossAndUnattributed(0, 5_000).first()
-                    assertEquals(label, expected, totals.gross, 1e-9)
-                    assertEquals(label, expectedUnattributed, totals.unattributed, 1e-9)
-                    assertEquals(label, effective, row.toDomain().reportedEarnings)
-                    val platform = analyticsDao.grossAndUnattributedByPlatform(0, 5_000).first().single()
-                    assertEquals(label, expected, platform.gross, 1e-9)
-                    assertEquals(label, expectedUnattributed, platform.unattributed, 1e-9)
-                    val day = analyticsDao.sessionGrossRows(0, 5_000).first().single()
-                    assertEquals(label, expected, day.gross, 1e-9)
-                    assertEquals(label, expectedUnattributed, day.net, 1e-9)
                 }
             }
         }
+    }
+
+    private fun assertNear(label: String, expected: Double?, actual: Double?) {
+        if (expected == null) assertNull(label, actual) else assertEquals(label, expected, actual!!, 1e-9)
+    }
+
+    /** One matrix delivery row on session "483": no net, no cash, so only its pay moves the reads. */
+    private fun matrixDelivery(seq: Long, platform: String, pay: Double?) = DeliveryRecordEntity(
+        eventSequenceId = seq, sessionId = "483", platform = platform, jobId = "J$seq", taskId = "T$seq",
+        storeName = null, customerHash = null, addressHash = null, phaseStartedAt = 1_500, arrivedAt = null,
+        completedAt = 1_800, deadlineMillis = null, realizedPay = pay, payBasis = "DROP_SHARE", tip = null,
+        basePay = null, odometerAtCompletion = null, realizedMiles = null, realizedMinutes = null,
+        frozenCostPerMile = null, netProfit = null, costBasis = "NONE",
+    )
+
+    @Test
+    fun `a delivery assign and unassign move a past early shift's effective report (#1459)`() = runBlocking {
+        seedEmptyReportSession(reported = 12.0) // EARLY_OFFLINE with a stale running total of 12
+        val orphanSeq = insertOrphanDelivery(pay = 16.0)
+        projector().catchUp()
+        val reader = AnalyticsRepository(analyticsDao, eventDao, db.hudShiftDao())
+        assertEquals(12.0, analyticsDao.grossAndUnattributed(0, 5_000).first().gross, 1e-9)
+        assertEquals(12.0, reader.recentSessions(1).first().single().reportedEarnings!!, 1e-9)
+
+        insert(AppEventType.DELIVERY_SESSION_ASSIGN, "483", 6_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = "483"))
+        projector().catchUp()
+        val assigned = analyticsDao.grossAndUnattributed(0, 5_000).first()
+        assertEquals("recorded pay 16 floors the stale 12", 16.0, assigned.gross, 1e-9)
+        assertEquals(0.0, assigned.unattributed, 1e-9)
+        assertEquals(0.0, assigned.overAttributed, 1e-9)
+        assertEquals(16.0, assigned.recordedPayReported, 1e-9)
+        assertEquals(1, assigned.recordedPayDashes)
+        assertEquals(16.0, reader.recentSessions(1).first().single().reportedEarnings!!, 1e-9)
+        assertEquals(16.0, reader.sessionDetail("483").first()!!.session.reportedEarnings!!, 1e-9)
+        assertEquals(12.0, analyticsDao.sessionRecord("483")!!.reportedEarnings!!, 1e-9) // the machine column stays
+
+        insert(AppEventType.DELIVERY_SESSION_ASSIGN, null, 7_000,
+            DeliverySessionAssignPayload(targetEventSequenceId = orphanSeq, newSessionId = null))
+        projector().catchUp()
+        val unassigned = analyticsDao.grossAndUnattributed(0, 5_000).first()
+        assertEquals(12.0, unassigned.gross, 1e-9)
+        assertEquals(12.0, unassigned.counterReported, 1e-9)
+        assertEquals(0, unassigned.recordedPayDashes)
+        assertEquals(12.0, reader.recentSessions(1).first().single().reportedEarnings!!, 1e-9)
     }
 
     @Test

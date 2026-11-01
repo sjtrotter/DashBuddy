@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.EFFECTIVE_REPORTED_SQL
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
+import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.SESSION_DELIVERY_JOIN_SQL
 import cloud.trotter.log.gig.domain.analytics.PayBasis
 import kotlinx.coroutines.flow.Flow
 
@@ -481,6 +482,9 @@ interface AnalyticsDao {
      * #1134: a driver SET / CLEAR override wins; `SessionReportRule.effectiveReported` owns the rule.
      * #1443: `gross`'s `COALESCE(effective, deliveredPay, 0)` is the SQL twin of `ShiftEarnings.rested`,
      * the bubble's at-rest figure (a CLEAR is no report there too, so both fall back to delivered pay).
+     * #1459: the effective report floors a non-summary running total at the shift's recorded pay, so such a
+     * shift reads 0 `overAttributed`; `recordedPayReported`/`recordedPayDashes` are its `GrossSources` bucket. The
+     * per-session `d` is [SessionReportSql.SESSION_DELIVERY_JOIN_SQL].
      *
      * **A stored `0.0` on a non-summary end source is no-report (#1030)** — the read-side mirror of
      * `SessionReportRule.effectiveReported`, which owns the rule, kept here for pre-refold rows and
@@ -509,15 +513,14 @@ interface AnalyticsDao {
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN 1 ELSE 0 END), 0) AS counterDashes,
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS driverSetReported,
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'RECORDED_PAY' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS recordedPayReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'RECORDED_PAY' THEN 1 ELSE 0 END), 0) AS recordedPayDashes,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
                   COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
-           LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
-             FROM delivery_records GROUP BY sessionId
-           ) d ON d.sessionId = s.sessionId
+           $SESSION_DELIVERY_JOIN_SQL
            WHERE s.startedAt >= :start AND s.startedAt < :end"""
     )
     fun grossAndUnattributed(start: Long, end: Long): Flow<GrossTotalsRow>
@@ -543,15 +546,14 @@ interface AnalyticsDao {
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'IN_DASH_COUNTER' THEN 1 ELSE 0 END), 0) AS counterDashes,
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS driverSetReported,
                   COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'DRIVER_SET' THEN 1 ELSE 0 END), 0) AS driverSetDashes,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'RECORDED_PAY' THEN ($EFFECTIVE_REPORTED_SQL) ELSE 0 END), 0) AS recordedPayReported,
+                  COALESCE(SUM(CASE WHEN ($REPORT_SOURCE_SQL) = 'RECORDED_PAY' THEN 1 ELSE 0 END), 0) AS recordedPayDashes,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL THEN COALESCE(d.deliveredPay, 0) ELSE 0 END), 0) AS recordedWithoutReport,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) > 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesWithPay,
                   COALESCE(SUM(CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NULL AND COALESCE(d.deliveredPay, 0) = 0 THEN 1 ELSE 0 END), 0) AS unreportedDashesNoPay,
                   COALESCE(SUM(COALESCE(d.cashTip, 0)), 0) AS sessionCash
            FROM session_records s
-           LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip
-             FROM delivery_records GROUP BY sessionId
-           ) d ON d.sessionId = s.sessionId
+           $SESSION_DELIVERY_JOIN_SQL
            WHERE s.startedAt >= :start AND s.startedAt < :end
            GROUP BY s.platform"""
     )
@@ -645,11 +647,7 @@ interface AnalyticsDao {
                            ELSE 0 END AS net,
                   COALESCE(d.deliveries, 0) AS deliveries
            FROM session_records s
-           LEFT JOIN (
-             SELECT sessionId, SUM(realizedPay) AS deliveredPay, SUM(cashTip) AS cashTip,
-                    SUM(netProfit) AS net, COUNT(*) AS deliveries
-             FROM delivery_records GROUP BY sessionId
-           ) d ON d.sessionId = s.sessionId
+           $SESSION_DELIVERY_JOIN_SQL
            WHERE s.startedAt >= :start AND s.startedAt < :end
            ORDER BY s.startedAt ASC"""
     )
@@ -979,14 +977,13 @@ interface AnalyticsDao {
      * cash tips (#688 F7). The cash comes from a LEFT-JOINed `GROUP BY sessionId` subquery (one row
      * per session, no fan-out — the same shape as [sessionGrossRows]); a session with no cash rows
      * gets `cash = 0`. Cash is a SEPARATE column, never folded into the session's reported earnings,
-     * so the list can render a "+cash" marker while the reported number stays verbatim.
+     * so the list can render a "+cash" marker while the reported number stays verbatim. #1459: the row also
+     * carries the session's recorded pay (`d.deliveredPay`), which the mapper's effective report needs.
      */
     @Query(
-        """SELECT s.*, COALESCE(d.cash, 0) AS cash
+        """SELECT s.*, COALESCE(d.cashTip, 0) AS cash, d.deliveredPay AS deliveredPay
            FROM session_records s
-           LEFT JOIN (
-             SELECT sessionId, SUM(cashTip) AS cash FROM delivery_records GROUP BY sessionId
-           ) d ON d.sessionId = s.sessionId
+           $SESSION_DELIVERY_JOIN_SQL
            ORDER BY s.startedAt DESC LIMIT :limit"""
     )
     fun recentSessions(limit: Int): Flow<List<SessionWithCashRow>>
