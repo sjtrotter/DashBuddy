@@ -41,14 +41,16 @@ internal class CashTipHud(
         // Re-key the collected state so an old dash's rows can never enter a new dash's picker.
         key(dashId) {
             val deliveries by source.collectAsStateWithLifecycle(emptyList())
+            // Read during composition: a read inside SideEffect is untracked, so a later emission never reached rows (#1496).
+            val current = deliveries
             SideEffect {
                 if (entry.open && entry.dashId != dashId) dismiss()
                 sessionId = dashId
                 if (entry.open && entry.selectedDeliveryId == null) {
-                    entry.selectedDeliveryId = deliveries.maxWithOrNull(
+                    entry.selectedDeliveryId = current.maxWithOrNull(
                         compareBy<DeliveryRecord> { it.completedAt }.thenBy { it.eventSequenceId })?.eventSequenceId
                 }
-                rows = deliveries
+                rows = current
             }
         }
         LaunchedEffect(viewModel) {

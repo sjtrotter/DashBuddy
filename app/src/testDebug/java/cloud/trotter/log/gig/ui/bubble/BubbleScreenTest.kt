@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.model.vehicle.Bicycle
@@ -229,6 +230,24 @@ class BubbleScreenTest {
             compose.onNodeWithTag("hud.slot.log").assertDoesNotExist()
             compose.onNodeWithTag("hud.sheet").assertDoesNotExist()
         }
+    }
+
+    /** #1496: a delivery the query emits after the screen composed reaches the cash tip sheet, preselected. */
+    @Test fun `a delivery completed during the shift shows in the cash tip sheet`() {
+        val deliveries = MutableStateFlow(emptyList<DeliveryRecord>())
+        val vm = model()
+        whenever(vm.cashTipDeliveries("dash")).thenReturn(deliveries)
+        show(vm)
+        deliveries.value = listOf(DeliveryRecord(9, "dash", Platform.DoorDash, "job", "task", "Sample Pizza",
+            clock.millis(), 8.0, "OFFER_PAY", 6.0, null, null, null, null))
+        settle()
+        compose.onNodeWithTag("hud.dock.CASH_TIP").performClick(); settle()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("cashTip.title").assertIsDisplayed()
+        compose.onNodeWithTag("cashTip.deliveryRow.9").assertIsDisplayed()
+        compose.onNodeWithText("Sample Pizza").assertIsDisplayed()
+        compose.onNodeWithTag("cashTip.delivery.9").assertIsSelected()
+        compose.onNodeWithText("No completed deliveries in this shift").assertDoesNotExist()
     }
 
     @Test fun `the live dock with no vehicle opens the Garage Add form without a sheet`() {
