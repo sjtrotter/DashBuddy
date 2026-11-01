@@ -50,6 +50,13 @@ class WindowVerdictCacheTest {
             OverlayGeometry.FULL_SCREEN,
         )
 
+    /**
+     * #1471: [AccessibilitySource] holds its service through a WeakReference (the framework owns the real
+     * one). A mock nothing else references can be collected before the read, and then `getWindows()` is
+     * empty and `ownPackage()` null. The test instance keeps every service it registers alive.
+     */
+    private val services = mutableListOf<AccessibilityService>()
+
     private fun source(windows: List<AccessibilityWindowInfo>): AccessibilitySource {
         val res = displayResources()
         val service = mock<AccessibilityService> {
@@ -57,6 +64,7 @@ class WindowVerdictCacheTest {
             on { resources } doReturn res
             on { packageName } doReturn ownPkg
         }
+        services += service
         return AccessibilitySource().apply { registerService(service) }
     }
 
@@ -91,7 +99,7 @@ class WindowVerdictCacheTest {
 
         repeat(2) {
             val front = src.frames.foregroundWindow { it == ddPkg }
-            assertTrue(front is Foreground.Found)
+            assertTrue("foregroundWindow returned $front, expected DoorDash's window", front is Foreground.Found)
         }
         verify(bubble, times(1)).root
         verify(dd, times(2)).root // a READ window's root is always fetched fresh
