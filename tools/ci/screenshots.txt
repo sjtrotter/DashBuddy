@@ -1,0 +1,56 @@
+# #1463 — the screenshots PR CI expects, one per line: <path> <width px> <height px>.
+# Each path is rendered twice, <path>-light.png and <path>-dark.png, at 420 dpi (sizes measured on
+# the first CI artifact; a size that differs by more than 2 px is a warning, never a failure).
+# The HUD (HudScreenshotsTest, :feature:bubble): the expanded bubble window, 411 x 600 dp.
+bubble/live-waiting 1078 1575
+bubble/live-pickup-navigating 1078 1575
+bubble/live-pickup-arrived 1078 1575
+bubble/live-shopping 1078 1575
+bubble/live-dropoff-navigating 1078 1575
+bubble/live-dropoff-arrived 1078 1575
+bubble/live-receipt 1078 1575
+bubble/live-cash-tips 1078 1575
+bubble/offer-standard 1078 1575
+bubble/offer-limit-notes 1078 1575
+bubble/offer-addon-job 1078 1575
+bubble/offer-addon-raw 1078 1575
+bubble/log 1078 1575
+bubble/resting 1078 1575
+bubble/resting-pending 1078 1575
+bubble/first-run 1078 1575
+bubble/sheet-cash-tip 1078 1575
+bubble/sheet-expense-pick 1078 1575
+bubble/sheet-expense-fuel 1078 1575
+bubble/sheet-odometer 1078 1575
+bubble/sheet-goal 1078 1575
+# The app (ScreenshotsTest, :app): a Pixel 7, 411 x 914 dp; the -full shots are a supplemental 411 x 2000 dp window.
+setup/step-1-screen-events 1078 2399
+setup/step-2-screen-reading 1078 2399
+setup/step-3-notification-access 1078 2399
+setup/step-4-location 1078 2399
+setup/step-5-notifications 1078 2399
+setup/step-6-bubbles 1078 2399
+setup/consent-prompt 1078 2399
+setup/debug-event-receipt-block 1078 2399
+settings/automation-consent 1078 2399
+settings/automation-consent-full 1078 5250
+settings/event-receipt-dialog 1078 2399
+settings/event-receipt-off-confirm 1078 2399
+settings/privacy-test-build 1078 2399
+settings/privacy-test-build-full 1078 5250
+home 1078 2399
+home-full 1078 5250
+home-gate-screen-reading-off 1078 2399
+home-gate-setup 1078 2399
+home-first-run 1078 2399
+hub/money 1078 2399
+hub/money-full 1078 5250
+hub/offers 1078 2399
+hub/offers-full 1078 5250
+hub/time 1078 2399
+hub/time-full 1078 5250
+playbook 1078 2399
+playbook-full 1078 5250
+playbook-empty 1078 2399
+notification/offer-compact 1078 2399
+notification/offer-expanded 1078 2399

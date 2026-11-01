@@ -152,8 +152,27 @@ android {
         // @StringRes id via a real Context — e.g. AnalyticsTabTest's resolved-label guard (#428).
         // Without this, Context.getString() throws Resources.NotFoundException in a unit test.
         unitTests.isIncludeAndroidResources = true
+        // #1463: `-PscreenShots=true` renders the key-screen screenshots (`*ScreenshotsTest`) into
+        // build/outputs/screenshots for PR CI's `screenshots-<pr>` artifact. Without the property the
+        // classes compile and never run, so the gate stays free of them.
+        val screenShots = providers.gradleProperty("screenShots").orNull == "true"
+        val shotsDir = layout.buildDirectory.dir("outputs/screenshots").get().asFile
         unitTests.all { test ->
             test.jvmArgs("-XX:+EnableDynamicAgentLoading")
+
+            test.systemProperty("giglog.screenshots.dir", shotsDir.absolutePath)
+            test.systemProperty("roborazzi.test.record", screenShots.toString())
+            if (screenShots) {
+                // A cached test task must never stand in for a render, and the render's results go
+                // to their own directories so the gate's JUnit XML is never replaced.
+                test.outputs.dir(shotsDir)
+                test.outputs.upToDateWhen { false }
+                test.outputs.cacheIf { false }
+                test.reports.junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/screenshots"))
+                test.binaryResultsDirectory.set(layout.buildDirectory.dir("test-results/screenshots-bin"))
+            } else {
+                test.filter.excludeTestsMatching("*ScreenshotsTest")
+            }
 
             // Forward the parse-output golden regen flag to the forked test JVM
             // (#433/#462): `-DupdateParseGolden=true` is set on the Gradle JVM,
@@ -254,6 +273,8 @@ dependencies {
     testImplementation(libs.androidx.work.testing)
     testImplementation(libs.okhttp)
     testImplementation(libs.robolectric)
+    // #1463: Roborazzi captures the key-screen screenshots (ScreenshotsTest, run only with -PscreenShots=true).
+    testImplementation(libs.roborazzi)
     // #1333: Compose UI tests under Robolectric (the HUD's reactivity rules are tested here).
     testImplementation(libs.androidx.ui.test.junit4)
     // Debug only: the Compose tests live in src/testDebug. :app's debug manifest keeps the host activity unexported.
