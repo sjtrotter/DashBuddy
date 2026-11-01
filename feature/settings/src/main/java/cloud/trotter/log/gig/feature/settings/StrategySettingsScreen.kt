@@ -16,12 +16,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -41,21 +48,53 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.feature.settings.R
+import cloud.trotter.log.gig.domain.config.OfferAutomationConfig
+import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.evaluation.OfferSimulation
+import cloud.trotter.log.gig.domain.evaluation.ScoringRule
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.feature.settings.components.DraggableRuleRow
 import cloud.trotter.log.gig.feature.settings.components.FakeOfferCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StrategySettingsScreen(
+    onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val config by viewModel.evaluationConfig.collectAsStateWithLifecycle()
     val automation by viewModel.automationConfig.collectAsStateWithLifecycle() // #577
 
+    StrategySettingsContent(
+        config = config,
+        automation = automation,
+        onBack = onBack,
+        onReorder = { viewModel.reorderRules(it) },
+        onToggleProtect = { viewModel.toggleProtectStats(it) },
+        onToggleShopping = { viewModel.toggleAllowShopping(it) },
+        onToggleQuickDeclines = { viewModel.toggleQuickDeclines(it) },
+        onUpdateRule = { viewModel.updateRule(it) },
+    )
+}
+
+/**
+ * Offer rules, stateless (#1447 hoisted it out of [StrategySettingsScreen] so a screenshot test
+ * renders it without Hilt). The page sits below a tab, so it has a title bar with a back button;
+ * "Test offer" stays the sticky section heading under it.
+ */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun StrategySettingsContent(
+    config: EvaluationConfig,
+    automation: OfferAutomationConfig,
+    onBack: () -> Unit,
+    onReorder: (List<ScoringRule>) -> Unit,
+    onToggleProtect: (Boolean) -> Unit,
+    onToggleShopping: (Boolean) -> Unit,
+    onToggleQuickDeclines: (Boolean) -> Unit,
+    onUpdateRule: (ScoringRule) -> Unit,
+) {
     // Local Sim State
     var simPay by remember { mutableFloatStateOf(6.50f) }
     var simDist by remember { mutableFloatStateOf(3.2f) }
@@ -83,145 +122,163 @@ fun StrategySettingsScreen(
             val newList = rules.toMutableList()
             newList.add(toIndex, newList.removeAt(fromIndex))
 
-            viewModel.reorderRules(newList)
+            onReorder(newList)
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // --- STICKY HEADER ---
-        Surface(
-            shadowElevation = 4.dp,
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.zIndex(1f)
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    stringResource(R.string.strategy_settings_the_lab_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                FakeOfferCard(evaluation = simulationResult)
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            MaterialTheme.shapes.small
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.strategy_settings_sim_pay_format, Formats.money(simPay.toDouble())),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Slider(
-                            value = simPay,
-                            onValueChange = { simPay = it },
-                            valueRange = 2f..30f
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.strategy_settings_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
                         )
                     }
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.strategy_settings_sim_dist_format, Formats.decimal(simDist.toDouble())),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Slider(
-                            value = simDist,
-                            onValueChange = { simDist = it },
-                            valueRange = 0.5f..20f
-                        )
+                },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            // --- STICKY HEADER ---
+            Surface(
+                shadowElevation = 4.dp,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.zIndex(1f)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.strategy_settings_the_lab_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    FakeOfferCard(evaluation = simulationResult)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.strategy_settings_sim_pay_format, Formats.money(simPay.toDouble())),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            Slider(
+                                value = simPay,
+                                onValueChange = { simPay = it },
+                                valueRange = 2f..30f
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.strategy_settings_sim_dist_format, Formats.decimal(simDist.toDouble())),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            Slider(
+                                value = simDist,
+                                onValueChange = { simDist = it },
+                                valueRange = 0.5f..20f
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // --- RULE LIST ---
-        LazyColumn(
-            state = listState, // FIX 3: Use the explicitly created listState
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
-        ) {
+            // --- RULE LIST ---
+            LazyColumn(
+                state = listState, // FIX 3: Use the explicitly created listState
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
+            ) {
 
-            // Index 0
-            item {
-                Text(
-                    stringResource(R.string.strategy_settings_global_overrides_title),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(8.dp))
-                SwitchRow(
-                    label = stringResource(R.string.strategy_settings_protect_stats_label),
-                    subtitle = stringResource(R.string.strategy_settings_protect_stats_subtitle),
-                    checked = config.protectStatsMode,
-                    onCheckedChange = { viewModel.toggleProtectStats(it) }
-                )
-                SwitchRow(
-                    label = stringResource(R.string.strategy_settings_allow_shopping_label),
-                    subtitle = stringResource(R.string.strategy_settings_allow_shopping_subtitle),
-                    checked = config.allowShopping,
-                    onCheckedChange = { viewModel.toggleAllowShopping(it) }
-                )
-                SwitchRow(
-                    label = stringResource(R.string.strategy_settings_quick_declines_label),
-                    subtitle = stringResource(R.string.strategy_settings_quick_declines_subtitle),
-                    checked = automation.quickDeclinesEnabled,
-                    onCheckedChange = { viewModel.toggleQuickDeclines(it) }
-                )
-                HorizontalDivider(Modifier.padding(vertical = 16.dp))
-            }
+                // Index 0
+                item {
+                    Text(
+                        stringResource(R.string.strategy_settings_global_overrides_title),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SwitchRow(
+                        label = stringResource(R.string.strategy_settings_protect_stats_label),
+                        subtitle = stringResource(R.string.strategy_settings_protect_stats_subtitle),
+                        checked = config.protectStatsMode,
+                        onCheckedChange = onToggleProtect
+                    )
+                    SwitchRow(
+                        label = stringResource(R.string.strategy_settings_allow_shopping_label),
+                        subtitle = stringResource(R.string.strategy_settings_allow_shopping_subtitle),
+                        checked = config.allowShopping,
+                        onCheckedChange = onToggleShopping
+                    )
+                    SwitchRow(
+                        label = stringResource(R.string.strategy_settings_quick_declines_label),
+                        subtitle = stringResource(R.string.strategy_settings_quick_declines_subtitle),
+                        checked = automation.quickDeclinesEnabled,
+                        onCheckedChange = onToggleQuickDeclines
+                    )
+                    HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                }
 
-            // Index 1
-            item {
-                Text(
-                    stringResource(R.string.strategy_settings_priorities_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    stringResource(R.string.strategy_settings_priorities_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppTheme.colors.text3
-                )
-                Spacer(Modifier.height(16.dp))
-            }
+                // Index 1
+                item {
+                    Text(
+                        stringResource(R.string.strategy_settings_priorities_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        stringResource(R.string.strategy_settings_priorities_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppTheme.colors.text3
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
 
-// Index 2+ (Draggable Items)
-            items(rules, key = { it.id }) { rule ->
-                ReorderableItem(reorderableState, key = rule.id) { isDragging ->
-                    val elevation = if (isDragging) 8.dp else 0.dp
+                // Index 2+ (Draggable Items)
+                items(rules, key = { it.id }) { rule ->
+                    ReorderableItem(reorderableState, key = rule.id) { isDragging ->
+                        val elevation = if (isDragging) 8.dp else 0.dp
 
-                    // Create the modifier for the HANDLE
-                    val handleModifier = Modifier.draggableHandle()
+                        // Create the modifier for the HANDLE
+                        val handleModifier = Modifier.draggableHandle()
 
-                    // Create the modifier for the ROW (Animations only)
-                    val rowModifier = Modifier.graphicsLayer {
-                        scaleX = if (isDragging) 1.05f else 1f
-                        scaleY = if (isDragging) 1.05f else 1f
-                        translationY = if (isDragging) 4f else 0f
-                        shadowElevation = elevation.value
-                    }
+                        // Create the modifier for the ROW (Animations only)
+                        val rowModifier = Modifier.graphicsLayer {
+                            scaleX = if (isDragging) 1.05f else 1f
+                            scaleY = if (isDragging) 1.05f else 1f
+                            translationY = if (isDragging) 4f else 0f
+                            shadowElevation = elevation.value
+                        }
 
-                    Box(modifier = rowModifier) { // Wrap in a Box to apply graphicsLayer
-                        DraggableRuleRow(
-                            rule = rule,
-                            modifier = handleModifier, // <--- Pass handle logic here
-                            onUpdate = { updatedRule -> viewModel.updateRule(updatedRule) }
-                        )
+                        Box(modifier = rowModifier) { // Wrap in a Box to apply graphicsLayer
+                            DraggableRuleRow(
+                                rule = rule,
+                                modifier = handleModifier, // <--- Pass handle logic here
+                                onUpdate = onUpdateRule
+                            )
+                        }
                     }
                 }
             }

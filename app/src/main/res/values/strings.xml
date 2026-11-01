@@ -213,9 +213,6 @@
     <string name="ratings_screen_empty_fallback_platform">your delivery app</string>
     <string name="ratings_screen_empty_desc_format">Open the Ratings page in %1$s while gig.log is running.</string>
 
-    <!-- main/MainActivity.kt -->
-    <string name="main_activity_developer_options_title">Developer options</string>
-
     <!-- setup/wizard/cards/VehicleCard.kt -->
 
     <!-- settings/SettingsHomeScreen.kt -->
@@ -224,7 +221,6 @@
     <string name="settings_home_item_gig_apps_title">Delivery apps</string>
     <string name="settings_home_item_gig_apps_subtitle">Which apps gig.log reads</string>
     <string name="settings_home_group_automation">Offers and costs</string>
-    <string name="settings_home_item_strategy_title">Offer rules</string>
     <string name="settings_home_item_strategy_subtitle">Rules, priorities, test offer</string>
     <string name="settings_home_economy_true_cost_format" translatable="false">Estimated cost: %1$s/mi</string>
     <string name="settings_home_economy_defaults_suffix_format">, %1$d left at default</string>
@@ -246,7 +242,6 @@
     <string name="settings_home_item_rerun_wizard_subtitle">Vehicle and offer targets</string>
     <string name="settings_home_item_about_title">About</string>
     <string name="settings_home_item_about_subtitle">Version, support and developer</string>
-    <string name="settings_home_item_debug_menu_title">Debug menu</string>
     <string name="settings_home_item_debug_menu_subtitle">Bubble app display and census upload</string>
 
     <!-- settings/StrategySettingsScreen.kt -->
@@ -383,13 +378,11 @@
          flows), so it carries a navigation label rather than the hub's in-place action wording.
          #1024 D4: one label for the whole row, since every flag's action was already this one. -->
     <string name="dashboard_review_action">Review</string>
-    <!-- #1024 D5: one row of four destinations. dashboard_screen_entry_strategy/_economy went with
-         the two tiles they labelled — both pages live one tap inside Settings, and Home is a glance
-         surface rather than a menu of every route. -->
-    <string name="dashboard_screen_entry_analytics">Analytics</string>
-    <string name="dashboard_screen_entry_playbook">Playbook</string>
-    <string name="dashboard_screen_entry_ratings">Ratings</string>
-    <string name="dashboard_screen_entry_settings">Settings</string>
+    <!-- #1447: the entry tiles went with the bottom bar (Analytics and Playbook are tabs, Settings
+         is the title bar's gear). Ratings is one row on Home. -->
+    <string name="dashboard_ratings_action">Open</string>
+    <!-- #1447: Home's title bar and its bottom-bar tab label. -->
+    <string name="home_screen_title">Home</string>
 
     <!-- components/economy/EconomyEditor.kt -->
     <string name="economy_editor_per_mile_format" translatable="false">%1$s/mi</string>

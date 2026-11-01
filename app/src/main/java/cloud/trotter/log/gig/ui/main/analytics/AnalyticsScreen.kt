@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,7 +51,7 @@ import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
-    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onExportCsv: () -> Unit,
     onOpenSession: (String) -> Unit,
     viewModel: AnalyticsViewModel = hiltViewModel(),
@@ -72,7 +72,7 @@ fun AnalyticsScreen(
             val offersFeed by viewModel.offersFeed.collectAsStateWithLifecycle()
             offersFeed
         },
-        onBack = onBack,
+        onOpenSettings = onOpenSettings,
         onExportCsv = onExportCsv,
         onOpenSession = onOpenSession,
         onStep = viewModel::stepWindow,
@@ -130,7 +130,7 @@ fun AnalyticsScreen(
 internal fun AnalyticsContent(
     uiState: AnalyticsUiState,
     offersFeed: @Composable () -> OffersFeedState,
-    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onExportCsv: () -> Unit,
     onOpenSession: (String) -> Unit,
     onStep: (Int) -> Unit,
@@ -146,20 +146,19 @@ internal fun AnalyticsContent(
     Scaffold(
         topBar = {
             TopAppBar(
+                // A tab root (#1447): no back button; Settings is the gear after export.
                 title = { Text(stringResource(R.string.analytics_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_content_desc_back),
-                        )
-                    }
-                },
                 actions = {
                     IconButton(onClick = onExportCsv) {
                         Icon(
                             Icons.Default.FileDownload,
                             contentDescription = stringResource(R.string.analytics_screen_content_desc_export_csv),
+                        )
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.settings_home_title),
                         )
                     }
                 },

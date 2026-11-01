@@ -22,6 +22,13 @@
     <string name="wizard_bottom_bar_back">Back</string>
     <string name="wizard_bottom_bar_finish_and_save">Save setup</string>
     <string name="wizard_bottom_bar_next">Next</string>
+    <!-- #1447: the wizard's title bar. -->
+    <string name="wizard_title">Setup</string>
+    <!-- common_content_desc_back is a shared common string with a copy in :app. This feature-module -->
+    <!-- copy exists only because non-transitive R classes hide :app's R from a library. On APK -->
+    <!-- resource merge the :app copy WINS, so editing THIS copy is silently ignored at runtime — -->
+    <!-- edit the :app copy and keep this one byte-identical (the :feature:settings pattern, #99). -->
+    <string name="common_content_desc_back">Back</string>
     <string name="wizard_top_bar_step_of_total">Step %1$d of %2$d</string>
     <string name="wizard_top_bar_skip_setup">Skip setup</string>
     <string name="wizard_metric_slider_default_footer">Used to score offers.</string>

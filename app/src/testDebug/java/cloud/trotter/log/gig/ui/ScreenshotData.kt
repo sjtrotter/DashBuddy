@@ -29,6 +29,13 @@ import cloud.trotter.log.gig.domain.analytics.StoreReportCard
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
 import cloud.trotter.log.gig.domain.analytics.WorkGaps
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanGrade
+import cloud.trotter.log.gig.core.data.vehicle.Garage
+import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
+import cloud.trotter.log.gig.domain.evaluation.MetricType
+import cloud.trotter.log.gig.domain.evaluation.ScoringRule
+import cloud.trotter.log.gig.domain.evaluation.UserEconomy
+import cloud.trotter.log.gig.domain.model.vehicle.GasCar
+import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
@@ -365,6 +372,22 @@ internal object ScreenshotData {
 
     /** The one deliberate thin-data shot: nothing on record yet. */
     val playbookEmpty = PlaybookUiState(loading = false)
+
+    /** Offer rules (#1447): the app's default rule list (`StrategyRepository`'s), shopping allowed. */
+    val evaluationConfig = EvaluationConfig(
+        rules = listOf(
+            ScoringRule.MetricRule("pay", true, MetricType.PAYOUT, 7.0f),
+            ScoringRule.MetricRule("dpm", true, MetricType.DOLLAR_PER_MILE, 1.5f),
+            ScoringRule.MetricRule("dist", true, MetricType.MAX_DISTANCE, 10.0f),
+            ScoringRule.MetricRule("hr", true, MetricType.ACTIVE_HOURLY, 22.0f),
+            ScoringRule.MetricRule("items", false, MetricType.ITEM_COUNT, 50.0f),
+        ),
+    )
+
+    /** Settings home (#1447): one active car and the default costs. */
+    private val car = Vehicle("car", "Sample car", 1L, GasCar(year = "2020", make = "Honda", model = "Civic"))
+    val garage = Garage(listOf(car), car.id, readable = true)
+    val userEconomy = UserEconomy()
 
     /** The Time tab's typical gap, as its tile reports it. */
     val typicalGapMillis: Long get() = gaps.medianMillis!!

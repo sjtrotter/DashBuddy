@@ -163,7 +163,15 @@ plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, w
 `BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`; a sheet host such as S2f's `OdometerHud`, a remembered `@Stable` object with composable slot members, collects its own sheet-local state, the shape S3's sheets copy; since #1425 all four sheets register with one `BubbleSheetHost`, which owns exclusive open, Back delegation, the newest-undo band and completion routing: a save closes a sheet only while it is still open with the same `entryId`), `BubbleManager` and
 `BubbleViewModel` (`displayedShift`, `dailyGoal`, `todayEarned`) stay in `:app`, which consumes the moved renderers
 as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytics/*`) is a separate
-sibling surface, left for a future extraction.
+sibling surface, left for a future extraction. **Navigation (#1447):** a Material 3 bottom bar with three tabs, Home,
+Analytics and Playbook (`TopLevel`), over one flat graph (`mainGraph`, every `Screen.graphRoutes` entry); the tab
+navigator (`TopLevel`, `RouteTarget`/`routeTarget`, `MainNavigator`'s `NavController` extensions, `MainNavActions`,
+one method per intent) lives in `:app` `ui/main/navigation/`, the shell (`MainScaffold`, `MainNavHost`) in `ui/main/`.
+Tab switches, parking (`popBackStack(root, inclusive, saveState)`) and fresh clears start only at a tab root and
+fail closed (WARN) elsewhere, so a parked tab is one lone root and no editor or draft is ever popped; a deep link off
+a root only pushes; Dashboard is never a saved-state key; never call `clearBackStack(String)` (in 2.9.7 it drops
+Dashboard's empty mapping and a later save then stacks another tab over Home). The hub's tab, Offers filter and page
+size live in its `SavedStateHandle`.
 
 - **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
   the #1194 `region` package (offline county-subdivision internal points (~36k), county→CBSA join, `RegionCell`, `PrimaryCellPolicy`;
@@ -800,7 +808,7 @@ Offers tab (#975;
 unfiltered accepted-offer LEFT JOIN as the stated denominator, applies its exclusions in the pure factory —
 null estimate, unlinked offer, a stack, missing realized net/minutes — and renders both bars as a MEAN of
 per-offer rates; `MAX_OFFER_PAGE` 250); Home = "Today" (#977; `DayPlanner` over the lifetime
-heatmap, `MIN_SAMPLED_HOURS` 5, `Recap →` writes the persisted selection before navigating); heatmap
+heatmap, `MIN_SAMPLED_HOURS` 5, `Recap →` writes the persisted selection, then opens Analytics fresh, #1447); heatmap
 Rate/Hours toggle + store leaderboard (#979, outlier ≥ 1.5× fleet median p50 dwell, ≥3 stores); **Weekly
 Plan (#981)** — `HourOfWeekSampler` (per-day (date, hour) samples off the heatmap's two lifetime reads) + `WeeklyPlanner`
 (median ranking with `MIN_SAMPLE_DAYS` 3 separate days per cell, ≥2 h/≤4 h runs, edits REPLAYED, every
@@ -812,8 +820,8 @@ accept in the same dash — never across dashes or days, an accept past the dash
 dropped, a dash's last drop is a tail not a gap, a gap ≥ 2 h is counted and STATED never excluded;
 `sequenceId` for "which", timestamps for "how long"; while-working vs
 whole-shift net/hr, null never `$0.00/hr`; `HourComposition` states coverage as a field); the **three
-destinations (#1024)**: Home = today, the hub (Money · Offers · Time) = the past, the Playbook = the next
-move. **Two presentation tiers (#1255)** share the `app_prefs.analytics_show_more` boolean (default false):
+destinations (#1024)**, the bottom bar's three tabs since #1447: Home = today, the hub (Money · Offers · Time) =
+the past, the Playbook = the next move. **Two presentation tiers (#1255)** share the `app_prefs.analytics_show_more` boolean (default false):
 compact tiles on the hub, and the plan summary, Rate heatmap and top three stores on the Playbook;
 More numbers reveals the remaining figures and controls. Both ViewModels read the same preference flow,
 with no optimistic local copy. `HowNumbersWorkFooter` owns base and screen-specific notes in one disclosure;

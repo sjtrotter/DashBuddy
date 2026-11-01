@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,6 +38,7 @@ import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
+import cloud.trotter.log.gig.domain.config.OfferAutomationConfig
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.format.formatDuration
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
@@ -52,14 +54,18 @@ import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
 import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
+import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
+import cloud.trotter.log.gig.ui.main.MainScaffold
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
+import cloud.trotter.log.gig.ui.main.navigation.TopLevel
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookContent
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
+import cloud.trotter.log.gig.ui.main.settings.SettingsHomeContent
 import cloud.trotter.log.gig.ui.main.setup.consent.ConsentPromptPage
 import cloud.trotter.log.gig.ui.main.setup.consent.ConsentPromptRow
 import cloud.trotter.log.gig.ui.main.setup.consent.DebugEventReceiptBlock
@@ -69,6 +75,8 @@ import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionDeferrals
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionType
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsViewModel
+import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
+import cloud.trotter.log.gig.ui.main.setup.wizard.wizardViewModelForTest
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -97,13 +105,15 @@ import java.util.Locale
 import java.util.TimeZone
 import cloud.trotter.log.gig.feature.dashboard.R as DashboardR
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
+import cloud.trotter.log.gig.feature.setup.R as SetupR
 
 /**
  * #1463 — the app's key screens, light and dark, rendered for PR CI's `screenshots-<pr>` artifact
  * (`<area>/<name>-<theme>.png`). Recorded only, never compared. Runs only with `-PscreenShots=true`;
  * the normal gate compiles it and excludes it.
  *
- * Each shot composes the real screen body without Hilt (the three hoisted bodies, the settings and
+ * Each shot composes the real screen body without Hilt (the hoisted bodies — the three tabs inside the
+ * app shell's frame with its bottom bar (#1447), Settings home and Offer rules — the settings and
  * consent screens with in-file fakes, the permission sheet over its real ViewModel) on the Pixel 7
  * at 18:00 UTC on Wednesday 2026-10-28, over [ScreenshotData]. Sheets and dialogs are their own
  * windows, so those shots capture the whole screen. `-full` shots are supplemental: a 2000 dp tall
@@ -162,6 +172,15 @@ class ScreenshotsTest(private val theme: String) {
         }
     }
 
+    /** #1447: the wizard's first step, with its "Setup" title bar and back arrow. */
+    @Test fun setupWizardStep1() {
+        val viewModel = wizardViewModelForTest()
+        render("setup/wizard-step-1", assertion = {
+            text(string(SetupR.string.wizard_title)).assertExists()
+            compose.onNodeWithContentDescription(string(SetupR.string.common_content_desc_back)).assertExists()
+        }) { WizardScreen(viewModel = viewModel, onComplete = {}, onExit = {}) }
+    }
+
     /** A debug build whose Screen events were declined. */
     @Test fun setupDebugEventReceiptBlock() = render("setup/debug-event-receipt-block",
         assertion = { text(string(R.string.debug_event_receipt_block_title)).assertExists() }) {
@@ -169,6 +188,29 @@ class ScreenshotsTest(private val theme: String) {
     }
 
     // ── Settings: Automation & consent, Privacy ──────────────────────────
+
+    /** #1447: Settings home below a tab — a title bar with a back button. */
+    @Test fun settingsHome() = render("settings/home", assertion = {
+        text(string(R.string.settings_home_title)).assertExists()
+        compose.onNodeWithContentDescription(string(R.string.common_content_desc_back)).assertExists()
+    }) {
+        SettingsHomeContent(
+            isDevUnlocked = false, garage = ScreenshotData.garage, userEconomy = ScreenshotData.userEconomy,
+            onNavigate = {}, onBack = {},
+        )
+    }
+
+    /** #1447: Offer rules — its own title bar, "Test offer" the sticky heading under it. */
+    @Test fun settingsOfferRules() = render("settings/offer-rules", assertion = {
+        text(string(SettingsR.string.strategy_settings_title)).assertExists()
+        text(string(SettingsR.string.strategy_settings_the_lab_title)).assertExists()
+    }) {
+        StrategySettingsContent(
+            config = ScreenshotData.evaluationConfig, automation = OfferAutomationConfig(), onBack = {},
+            onReorder = {}, onToggleProtect = {}, onToggleShopping = {}, onToggleQuickDeclines = {},
+            onUpdateRule = {},
+        )
+    }
 
     @Test fun settingsAutomationConsent() = automationConsent("settings/automation-consent")
 
@@ -216,6 +258,10 @@ class ScreenshotsTest(private val theme: String) {
         assertion = { text(string(R.string.dashboard_screen_first_run_title)).assertExists() }) {
         HomeBody(ScreenshotData.dashboard(isFirstRun = true), hasPermissions = true)
     }
+
+    /** #1447: Home at 200 % text, the bar's labels included (§5 font scale). */
+    @Test @Config(fontScale = 2f)
+    fun homeFont200() = home("home-font-200")
 
     // ── The Analytics hub ────────────────────────────────────────────────
 
@@ -346,31 +392,44 @@ class ScreenshotsTest(private val theme: String) {
         text(string(DashboardR.string.dashboard_weekly_plan_pointer_action)).assertExists()
     }) { HomeBody(ScreenshotData.dashboard(), hasPermissions = true) }
 
+    /** Home in the app shell's frame, so the bottom bar shows under it (#1447). */
     @Composable
     private fun HomeBody(state: DashboardUiState, hasPermissions: Boolean?, screenReadingOff: Boolean = false) =
-        DashboardBody(
-            uiState = state, hasPermissions = hasPermissions, screenReadingOff = screenReadingOff,
-            onContinueGate = {}, onNavigateToWizard = {}, onCompleteSetup = {}, onShowBubble = {},
-            onOpenRecap = {}, onNavigate = {}, onNavigateToSettings = {},
-        )
+        MainScaffold(selectedTab = TopLevel.HOME, onSelectTab = {}) { modifier ->
+            Box(modifier) {
+                DashboardBody(
+                    uiState = state, hasPermissions = hasPermissions, screenReadingOff = screenReadingOff,
+                    onContinueGate = {}, onOpenWizard = {}, onCompleteSetup = {}, onShowBubble = {},
+                    onOpenRecap = {}, onOpenPlan = {}, onOpenRatings = {}, onOpenSettings = {},
+                )
+            }
+        }
 
     private fun hub(path: String, tab: AnalyticsTab, showMore: Boolean, row: String) = render(path, assertion = {
         text(string(tab.labelRes)).assertExists()
         text(row).assertExists()
     }) {
-        AnalyticsContent(
-            uiState = ScreenshotData.analytics(tab, showMore),
-            offersFeed = { ScreenshotData.offersFeed },
-            onBack = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
-            onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {}, onOpenOrphanOffers = {},
-            onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
-        )
+        MainScaffold(selectedTab = TopLevel.ANALYTICS, onSelectTab = {}) { modifier ->
+            Box(modifier) {
+                AnalyticsContent(
+                    uiState = ScreenshotData.analytics(tab, showMore),
+                    offersFeed = { ScreenshotData.offersFeed },
+                    onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
+                    onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {}, onOpenOrphanOffers = {},
+                    onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
+                )
+            }
+        }
     }
 
     private fun playbook(path: String, state: PlaybookUiState, row: String) = render(path, assertion = {
         text(string(R.string.playbook_screen_title)).assertExists()
         text(row).assertExists()
-    }) { PlaybookContent(uiState = state, onBack = {}, onOpenPlan = {}, onToggleShowMore = {}) }
+    }) {
+        MainScaffold(selectedTab = TopLevel.PLAYBOOK, onSelectTab = {}) { modifier ->
+            Box(modifier) { PlaybookContent(uiState = state, onOpenSettings = {}, onOpenPlan = {}, onToggleShowMore = {}) }
+        }
+    }
 
     /** `OfferHeadsUpViewsTest`'s `post()`: the real `BubbleManager` builds the notification for the HUD's standard offer. */
     private fun offerNotification(): Notification {

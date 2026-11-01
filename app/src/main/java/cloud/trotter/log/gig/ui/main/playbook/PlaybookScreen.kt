@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,14 +45,14 @@ import cloud.trotter.log.gig.ui.components.MoreNumbersToggle
  * Simple mode shows the plan summary, Rate heatmap and top three stores by net; More reveals
  * per-window progress, the Hours mode and the full sortable store list.
  *
- * UDF: immutable state down, one navigation lambda up. No reads of its own — every source already ships
+ * UDF: immutable state down, navigation lambdas up. No reads of its own — every source already ships
  * (see [PlaybookViewModel]). The only ticking value on the screen is the plan card's own hour boundary,
  * derived at that composable (Reactive-UI rule 2).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaybookScreen(
-    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenPlan: () -> Unit,
     viewModel: PlaybookViewModel = hiltViewModel(),
 ) {
@@ -60,7 +60,7 @@ fun PlaybookScreen(
 
     PlaybookContent(
         uiState = uiState,
-        onBack = onBack,
+        onOpenSettings = onOpenSettings,
         onOpenPlan = onOpenPlan,
         onToggleShowMore = { viewModel.setShowMore(!uiState.showMore) },
     )
@@ -74,19 +74,20 @@ fun PlaybookScreen(
 @Composable
 internal fun PlaybookContent(
     uiState: PlaybookUiState,
-    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenPlan: () -> Unit,
     onToggleShowMore: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
+                // A tab root (#1447): no back button; Settings is the gear.
                 title = { Text(stringResource(R.string.playbook_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_content_desc_back),
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.settings_home_title),
                         )
                     }
                 },

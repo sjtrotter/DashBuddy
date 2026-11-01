@@ -30,7 +30,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 | Reading time | About 2 seconds per glance | As long as the dasher wants |
 | Code | `feature/bubble` (`hud/*`), hosted by `app/.../ui/bubble` (`BubbleActivity`, `BubbleScreen`) | `app/.../ui/main`, `feature/dashboard`, `feature/settings`, `feature/setup` |
 | Window | An Android bubble over the delivery app, dismissed by a tap. The app asks for 600 dp of height; about 510 dp shows in practice (10-21 screenshots) | Full screen, edge to edge |
-| Structure | A fixed frame (phase strip, head, top row, earnings hero, goal pill, a body, dock) whose body changes by state | Screens on a navigation stack: Home (today), the analytics hub (the past), the Playbook (the next move), Settings |
+| Structure | A fixed frame (phase strip, head, top row, earnings hero, goal pill, a body, dock) whose body changes by state | Three tabs in a bottom navigation bar: Home (today), Analytics (the past), Playbook (the next move). Settings opens from a gear in each tab's title bar. Screens below a tab sit on that tab's stack. |
 | Input | Taps on large targets; amounts from a keypad or preset buttons; no typing beyond a short note | Any Material input, including text fields |
 | Mistakes | Save on the commit tap; an undo window where the entry can be taken back | Save as you go with a snackbar Undo; a confirm dialog for a step with lasting effect |
 | Colour | Brand tokens (`AppTheme.colors`) | Material roles (`MaterialTheme.colorScheme`), brand tokens for meaning colours |
@@ -76,8 +76,11 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 ### Main app rules
 - **Material first.** Use the stock Material 3 component for the job (`Scaffold`, `TopAppBar`, `ListItem`,
   `Switch`, `ModalBottomSheet`, `SnackbarHost`, `AlertDialog`) before writing a custom one.
-- **One screen, one job,** stated in the screen's title bar, with a back button on every screen below Home. Home is
-  today, the hub is the past, the Playbook is the next move (#1024).
+- **One screen, one job,** stated in its title bar. The three tabs have no back button; every screen below a tab
+  has a title bar and a back button. Back from Analytics or Playbook returns to Home, then leaves the app. The bar
+  shows on the three tabs only; switching tabs keeps each tab's place; Recap and Plan open their tab fresh from a
+  tab. Off a tab (from a screen below one) the plan notification opens the plan over the current screen, so no
+  unsaved edit is lost (#1024, #1447).
 - **Two tiers of detail.** Compact by default; "More numbers" reveals the remaining figures and controls on the
   hub and the Playbook (#1255). One disclosure per screen holds the caveats (`HowNumbersWorkFooter`).
 - **Save as you go.** On a vehicle's details page a finished field saves, there is no Save button, and a snackbar
@@ -218,7 +221,8 @@ It lists the known gaps, not every one: when a change meets code that breaks a r
 adds the gap below, and never leaves it worse.
 
 - **`text3` carries words** in about 157 places, including `AppStatTile`'s labels and subtitles and the bubble's
-  state labels, gas row and gauge units.
+  state labels, gas row and gauge units. Home's row titles ("THIS WEEK", the Ratings row) and its "TODAY" label
+  moved to `text2` in #1447.
 - **Words under 12 sp:** `labelSmall` is 10 sp and `bodySmall` 11 sp in `AppTypography`, and the `xs` number style
   is 11 sp.
 - **Targets under 48 dp:** keypad keys (38 dp), the offer pop-up's Accept and Decline (36 and 40 dp, in fixed-height
@@ -229,7 +233,6 @@ adds the gap below, and never leaves it worse.
 - **Bubble text the driving multiplier misses:** the offer card's literal `20.sp` text and `14.sp` countdown label
   (`OfferCard.kt`) skip `glanceSp`.
 - **Fixed-height rows holding text:** `CompactHeroRow` (48 dp) and `GasRow` (56 dp), besides the offer pop-up.
-- **Setup's first step has no Back button** (`WizardScreen`), though Home opens it.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
@@ -245,6 +248,9 @@ adds the gap below, and never leaves it worse.
   Not now; closing the sheet puts off every pending step until Home's gate card or a cold start. A refused runtime
   permission with no rationale points to Android settings. Accept and Decline are not asked for until gig.log can
   tap them by itself (council and dev, 2026-10-31).
+
+- #1447 (2026-11-01): a Material 3 navigation bar with Home, Analytics and Playbook, always labelled; Settings a
+  gear; Ratings a row on Home; no bar below a tab (council and dev).
 
 - #1442 (2026-10-30): offer surfaces show facts and preference notes, with no score or verdict. One domain
   story feeds the card, pop-up, chat line and voice. Titles use the registry's plain app name. Add-ons default
@@ -291,7 +297,6 @@ adds the gap below, and never leaves it worse.
   small text on a sheet.
 - **`AppSegmented`** follows the segmented button, which current Material no longer recommends: replace it with the
   connected button group, or keep it as a brand component.
-- **Navigation.** The hub and the Playbook hang off Home and do not link to each other; a bottom bar is one option.
 
 ## Sources
 

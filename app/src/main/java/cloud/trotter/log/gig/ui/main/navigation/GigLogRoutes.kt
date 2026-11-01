@@ -7,15 +7,15 @@ sealed class Screen(val route: String) {
     data object Dashboard : Screen("dashboard")
     data object Wizard : Screen("wizard")
 
-    // Analytics surfaces (home-screen entry tiles, epic #320)
+    // Ratings (epic #320): a row on Home since #1447.
     data object Ratings : Screen("ratings")
     // Analytics hub (#315 H1) — Money tab v1; Patterns/Decisions/Time tabs stubbed.
     data object Analytics : Screen("analytics")
 
     /**
-     * Weekly Plan (#981, redesign stage 6) — reached from the Sunday-evening notification's deep link
-     * and from the Home pointer row, never from a tab. Static route: it takes no arguments, which is
-     * what lets it sit in [allRoutes] and be a legal deep-link target.
+     * Weekly Plan (#981, redesign stage 6) — reached from the Sunday-evening notification's deep link,
+     * Home's pointer row and the Playbook's plan card; it sits on the Playbook tab's stack (#1447). Static
+     * route: it takes no arguments, which is what lets it sit in [allRoutes] and be a legal deep-link target.
      */
     data object WeeklyPlan : Screen("plan/week")
 
@@ -77,5 +77,13 @@ sealed class Screen(val route: String) {
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
             PlatformSettings.route,
         ) }
+
+        /**
+         * Every route the one flat graph registers (#1447 `mainGraph`): the deep-link allowlist plus
+         * the routes no external link may target — the wizard, Ratings and the two argument routes.
+         */
+        val graphRoutes: Set<String> by lazy {
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, VehicleEdit.route)
+        }
     }
 }

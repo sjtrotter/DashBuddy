@@ -1,26 +1,24 @@
 package cloud.trotter.log.gig.ui.main.dashboard
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,9 +37,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
+import cloud.trotter.log.gig.core.designsystem.component.AppCard
 import cloud.trotter.log.gig.feature.dashboard.components.DashboardRow
+import cloud.trotter.log.gig.feature.dashboard.components.DashboardRowTitle
 import cloud.trotter.log.gig.feature.dashboard.components.DashingStatusRow
-import cloud.trotter.log.gig.feature.dashboard.components.EntryTile
 import cloud.trotter.log.gig.feature.dashboard.components.StatusCard
 import cloud.trotter.log.gig.feature.dashboard.components.TodayCard
 import cloud.trotter.log.gig.feature.dashboard.components.TodayHeader
@@ -50,7 +49,6 @@ import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
 import cloud.trotter.log.gig.ui.main.analytics.ReviewItem
 import cloud.trotter.log.gig.ui.main.analytics.ReviewList
 import cloud.trotter.log.gig.ui.main.analytics.reviewTexts
-import cloud.trotter.log.gig.ui.main.navigation.Screen
 import cloud.trotter.log.gig.ui.main.setup.consent.FrontDoorHost
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionType
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsBottomSheet
@@ -60,11 +58,12 @@ import kotlinx.coroutines.launch
 /**
  * Home — **"Today"** since #977, decluttered to **four blocks** by #1024 section D.
  *
- * Top to bottom: header (date · live clock · status pill) · **Today** (kept, the four supporting
- * figures, a hairline, then today's plan strip) · **This week** (net + delta + sparkline + `Recap →`,
- * the weekly-plan pointer, the review items — three hairline rows of one card) · one row of four
- * entry tiles (Analytics · Playbook · Ratings · Settings) · the shared **"How these numbers work"**
- * footer, the screen's single disclosure affordance (#1024 rule 2).
+ * Top to bottom: the "Home" title bar with the Settings gear (#1447) · header (date · live clock ·
+ * status pill) · **Today** (kept, the four supporting figures, a hairline, then today's plan strip) ·
+ * **This week** (net + delta + sparkline + `Recap →`, the weekly-plan pointer, the review items —
+ * three hairline rows of one card) · the Ratings row · the shared **"How these numbers work"**
+ * footer, the screen's single disclosure affordance (#1024 rule 2). Analytics and Playbook are the
+ * bottom bar's other two tabs (#1447), so Home no longer carries entry tiles for them.
  *
  * Read-side only — nothing here writes to the state machine, and #1024 D added no read: the merge is
  * subtraction and re-composition of surfaces that already shipped.
@@ -80,23 +79,25 @@ import kotlinx.coroutines.launch
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
-    onNavigate: (String) -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToWizard: () -> Unit
+    onOpenAnalytics: () -> Unit,
+    onOpenPlan: () -> Unit,
+    onOpenRatings: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenWizard: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // `Recap →` and every review-item action land on the same place: the Analytics hub, anchored on
-    // the week Home was just describing. The selection write is ordered BEFORE the navigation so the
-    // hub opens already on that window rather than flickering through its last one.
+    // the week Home was just describing, opened fresh (#1447). The selection write is ordered BEFORE
+    // the navigation so the hub opens already on that window rather than flickering through its last one.
     // Remembered so it is a STABLE lambda: the review section keys its slot on it, and a fresh
     // instance every recomposition would defeat that memo.
-    val openWeekRecap: () -> Unit = remember(scope, viewModel, onNavigate) {
+    val openWeekRecap: () -> Unit = remember(scope, viewModel, onOpenAnalytics) {
         {
             scope.launch {
                 viewModel.selectWeekRecapWindow()
-                onNavigate(Screen.Analytics.route)
+                onOpenAnalytics()
             }
             Unit
         }
@@ -144,12 +145,13 @@ fun DashboardScreen(
             permissionsViewModel.reopen()
             showPermissionSheet = true
         },
-        onNavigateToWizard = onNavigateToWizard,
+        onOpenWizard = onOpenWizard,
         onCompleteSetup = { viewModel.completeSetup() },
         onShowBubble = { viewModel.showWelcomeBubble() },
         onOpenRecap = openWeekRecap,
-        onNavigate = onNavigate,
-        onNavigateToSettings = onNavigateToSettings,
+        onOpenPlan = onOpenPlan,
+        onOpenRatings = onOpenRatings,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -157,21 +159,40 @@ fun DashboardScreen(
  * Home's body: the gate, first-run and ready states (#1463 hoisted it out of [DashboardScreen] so a
  * screenshot test can render it without Hilt). Stateless: state down, intents up; the ViewModels,
  * the permission sheet and the front door stay in [DashboardScreen].
+ *
+ * The title bar (#1447) shows in every state, the loading one included, so Settings — and with it
+ * Data & privacy's log export — is one tap away even while a permission step is open.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DashboardBody(
     uiState: DashboardUiState,
     hasPermissions: Boolean?,
     screenReadingOff: Boolean,
     onContinueGate: () -> Unit,
-    onNavigateToWizard: () -> Unit,
+    onOpenWizard: () -> Unit,
     onCompleteSetup: () -> Unit,
     onShowBubble: () -> Unit,
     onOpenRecap: () -> Unit,
-    onNavigate: (String) -> Unit,
-    onNavigateToSettings: () -> Unit,
+    onOpenPlan: () -> Unit,
+    onOpenRatings: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
-    Scaffold { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.home_screen_title)) },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.settings_home_title),
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -193,7 +214,6 @@ internal fun DashboardBody(
                         screenReadingOff = screenReadingOff,
                         onContinue = onContinueGate,
                     )
-                    SettingsLink(onNavigateToSettings)
                 }
 
                 // CASE 2: Permissions Granted, first run (The Guide)
@@ -206,14 +226,13 @@ internal fun DashboardBody(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = onNavigateToWizard
+                        onClick = onOpenWizard
                     ) { Text(stringResource(R.string.dashboard_screen_personalize_strategy_button)) }
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onCompleteSetup
                     ) { Text(stringResource(R.string.dashboard_screen_skip_for_now_button)) }
-                    SettingsLink(onNavigateToSettings)
                 }
 
                 // CASE 3: Ready — the "Today" screen (brief §2, decluttered by #1024 D).
@@ -248,7 +267,7 @@ internal fun DashboardBody(
                         dailyEarnings = uiState.weekDailyEarnings,
                         plan = uiState.weeklyPlan,
                         onOpenRecap = onOpenRecap,
-                        onOpenPlan = { onNavigate(Screen.WeeklyPlan.route) },
+                        onOpenPlan = onOpenPlan,
                         reviewContent = rememberReviewSlot(
                             economics = uiState.weekEconomics,
                             orphanOfferGroups = uiState.orphanOfferGroups,
@@ -257,11 +276,9 @@ internal fun DashboardBody(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // BLOCK 3 — the app's destinations.
-                    EntryTileRow(
-                        onNavigate = onNavigate,
-                        onNavigateToSettings = onNavigateToSettings,
-                    )
+                    // BLOCK 3 — Ratings, the one destination below Home (#1447: Analytics and
+                    // Playbook are tabs, Settings is the title bar's gear).
+                    RatingsRow(onOpenRatings = onOpenRatings)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
@@ -320,49 +337,16 @@ private fun ReviewRow(items: List<ReviewItem>, onOpen: () -> Unit) {
     }
 }
 
-/**
- * The app's four destinations in one row (#1024 D5): Analytics · Playbook · Ratings · Settings.
- *
- * Settings moved off the floating action button and into the row so every destination is reached the
- * same way — a FAB beside four tiles was a fifth affordance for a peer of the other four. Strategy and
- * Economy lost their tiles: both are settings pages, both are one tap inside Settings, and Home is a
- * glance surface, not a menu of every route.
- */
+/** Ratings as one row of its own card (#1447): its title, then "Open". */
 @Composable
-private fun EntryTileRow(onNavigate: (String) -> Unit, onNavigateToSettings: () -> Unit) {
-    Row(
-        // Four tiles of one height whatever their labels do: without an intrinsic-min row, a wrapped
-        // "Analytics" would stand taller than "Ratings" and the row would go ragged (worse at a
-        // large font scale). EntryTile caps and ellipsizes the label; this keeps the boxes equal.
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        EntryTile(
-            icon = Icons.Filled.BarChart,
-            label = stringResource(R.string.dashboard_screen_entry_analytics),
-            modifier = Modifier.weight(1f),
-            onClick = { onNavigate(Screen.Analytics.route) },
-        )
-        EntryTile(
-            icon = Icons.Filled.Map,
-            label = stringResource(R.string.dashboard_screen_entry_playbook),
-            modifier = Modifier.weight(1f),
-            onClick = { onNavigate(Screen.Playbook.route) },
-        )
-        EntryTile(
-            icon = Icons.Filled.Star,
-            label = stringResource(R.string.dashboard_screen_entry_ratings),
-            modifier = Modifier.weight(1f),
-            onClick = { onNavigate(Screen.Ratings.route) },
-        )
-        EntryTile(
-            icon = Icons.Filled.Settings,
-            label = stringResource(R.string.dashboard_screen_entry_settings),
-            modifier = Modifier.weight(1f),
-            onClick = onNavigateToSettings,
-        )
+private fun RatingsRow(onOpenRatings: () -> Unit) {
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        DashboardRow(
+            actionLabel = stringResource(R.string.dashboard_ratings_action),
+            onClick = onOpenRatings,
+        ) {
+            DashboardRowTitle(stringResource(R.string.ratings_screen_title))
+        }
     }
 }
 
@@ -396,21 +380,4 @@ private fun PermissionGateCard(screenReadingOff: Boolean, onContinue: () -> Unit
             ),
         )
     }
-}
-
-/**
- * The way into Settings from the two gated states (#1024 review item 1).
- *
- * D5 moved Settings from a floating action button — which rendered in EVERY state — into the entry
- * tile row, which renders only once the screen is ready. That silently stranded the driver exactly
- * when they most need Settings: a revoked permission or an unfinished first run is also when Data &
- * Privacy (log export, the bug-report path) matters. So the gated cards carry their own link.
- */
-@Composable
-private fun SettingsLink(onNavigateToSettings: () -> Unit) {
-    Spacer(Modifier.height(8.dp))
-    TextButton(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onNavigateToSettings,
-    ) { Text(stringResource(R.string.dashboard_screen_entry_settings)) }
 }
