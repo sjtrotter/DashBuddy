@@ -97,14 +97,24 @@ android {
     }
 
     signingConfigs {
-        // #1469: the test build signs with one committed key, so every CI run and every local build
-        // signs it the same way and an update installs in place. A debug key is not a secret; the
-        // Play key below stays in the CI `release` environment.
+        // #1469: the test build signs with one PRIVATE key, so every CI run and every local build signs it
+        // the same way and an update installs in place. Private because the test build holds real field
+        // data and census credentials: a published key would let anyone sign an accepted update. CI passes
+        // DEBUG_KEYSTORE_PATH + DEBUG_KEYSTORE_PASSWORD (repo secrets); the laptop sets
+        // giglog.debugKeystore.path + giglog.debugKeystore.passwordFile in ~/.gradle/gradle.properties.
+        // Without either, Android's default debug key signs, as before.
         getByName("debug") {
-            storeFile = rootProject.file("app/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            val path = System.getenv("DEBUG_KEYSTORE_PATH")
+                ?: providers.gradleProperty("giglog.debugKeystore.path").orNull
+            val password = System.getenv("DEBUG_KEYSTORE_PASSWORD")
+                ?: providers.gradleProperty("giglog.debugKeystore.passwordFile").orNull
+                    ?.let { file(it).readText().trim() }
+            if (!path.isNullOrBlank() && !password.isNullOrBlank()) {
+                storeFile = file(path)
+                storePassword = password
+                keyAlias = "giglogdebug"
+                keyPassword = password
+            }
         }
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
