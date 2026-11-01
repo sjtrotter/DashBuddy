@@ -1112,6 +1112,10 @@ class PlatformRegionStepper @Inject constructor() {
         ) {
             completeActiveJob(sink, retired, observedAt)
         } else {
+            // #1458: a dropoff retire that leaves its job open says why (DEBUG only; nothing reads it).
+            if (job != null && completed.phase == TaskPhase.DROPOFF) {
+                logJobLeftOpen(job, recentTasks, completed, armedFromOffer = armedFromFlow == Flow.OfferPresented)
+            }
             retired
         }
     }

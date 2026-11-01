@@ -686,6 +686,30 @@ ARRIVED-then-abandoned drop today (pre-existing #1101-class behavior). A delayed
 whichever drop is active; the click's own `screenIs` gate bounds it to a drop-off surface.
 The nullable defaults are additive to kotlinx JSON snapshots; no migration.
 
+**A stacked job's quote counts at its completion edge (#1458).** A stacked or add-on job's
+`DELIVERY_COMPLETED` rows land at the job's close, never drop by drop, so its quote counts once the whole
+job is judged delivered. The judge is `isJobPhysicallyComplete` at the two edges: T1
+(`retireActiveTask`: a dropoff retire commits and the job is complete; a retire armed on an offer card,
+`armedFromFlow == OfferPresented`, never closes) and T2 (`consumeAcceptIntoJob`: an accept over a
+complete job commits any pending retire inline and closes it). The close-out mint in
+`DeliveryCompletionEffects` then writes one row per qualified drop, priced by `closeAttribution` or the
+cached receipt; the projector folds them within one tick, so the headline moves about one retire grace
+(10 s) after the last drop. An intermediate drop credits nothing, whether it was displaced by the next
+drop's or the next pickup's screen or retired by its own grace. An add-on's drops join `Job.tasks`, so
+the job waits for them too; an unassigned order never blocks the close and keeps its share off the
+delivered drops. **Cannot judge** means no edge fired (an outstanding placeholder, a drop with no arrival
+or tap, or the offer-card provenance): today's close stands, at the next accept (T2) or `endSession`
+(#1489 tracks the never-activated-placeholder job). When a dropoff retire commits and its job stays
+open, `logJobLeftOpen` writes one DEBUG line (tag `StateMachine`): the job and drop ids, the
+outstanding, unevidenced and finished dropoff counts, the first failed #749 coverage gate
+(`CoverageGate`), and whether the retire was armed on an offer card. It reads `completenessGap`, the pure
+sibling of `isJobPhysicallyComplete` (one evaluation of each arm, null exactly when the predicate is
+true); no decision reads it. Pinned by `StackedJobCloseTimingTest` (the October shapes J1–J6, add-on,
+unassigned, offer-card last retire, single), `CompletenessGapTest`, and `StackedJobCloseE2ETest` (J2
+through the engine, Room and the projector). Pre-existing and unchanged: a mid-stack PostTask exit with
+no pay mints its drop inline as NONE and the close can never price it (#1490), and a split receipt
+re-price group can show a transient double count (#1491).
+
 **Unassign-via-help** (`Flow.TaskUnassigned` = wire `task:unassigned`, #736) is an **inline
 (ungraced) abandon** of the active task: `abandonActiveTask` marks `Task.unassignedAt` and leaves
 `completedAt` **null**. The `PICKUP_CONFIRMED` close-out sweep's `unassignedAt == null` FILTER is

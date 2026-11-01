@@ -45,7 +45,7 @@ import timber.log.Timber
  * This includes a confirmed-store re-visit that mints another pickup at the same store, not only
  * orders at distinct stores. Combined with the resume-collapse invariant
  * (at most one dropoff taskId per customer hash), "every customer hash has a finished drop with delivery evidence"
- * ⟺ "every physical drop is done" — placeholder count is then irrelevant. See [perCustomerCoverage].
+ * ⟺ "every physical drop is done" — placeholder count is then irrelevant. See [perCustomerCoverageGap].
  *
  * Fail direction is absorption / fail-null everywhere: coverage unproven → strict arm only (today's
  * behavior — same-store multi-order jobs, hash-less GoPuff bin-scan pickups, the unparsed-offer
@@ -81,6 +81,120 @@ internal fun isJobPhysicallyComplete(
     justRetired: Task?,
 ): Boolean {
     // ---- Strict arm (#596/#615/#752/#1315) ----
+    if (strictArm(job, recentTasks, justRetired).holds) return true
+
+    // ---- Per-customer coverage arm (#749) — evaluated ONLY when the strict arm failed ----
+    if (perCustomerCoverageGap(job, recentTasks, justRetired) == null) {
+        // DEBUG (firehose only, P7): jobId + counts only — no raw store/customer text.
+        Timber.tag("StateMachine").d(
+            "#749 coverage arm closed job %s: per-customer coverage complete (pickups=%d dropoffs=%d)",
+            job.jobId,
+            job.tasks.count { it.phase == TaskPhase.PICKUP && it.unassignedAt == null },
+            job.tasks.count { it.phase == TaskPhase.DROPOFF && it.unassignedAt == null },
+        )
+        return true
+    }
+    return false
+}
+
+/**
+ * #1458: WHY [job] is not judged physically complete — the diagnostic sibling of
+ * [isJobPhysicallyComplete], over the same two arms (one evaluation each, no copy of either), so it is
+ * null exactly when that predicate is true. A value for a DEBUG line only: no decision reads it, and it
+ * logs nothing itself. Counts and an enum, never task text (P7).
+ */
+internal fun completenessGap(
+    job: Job,
+    recentTasks: List<Task>,
+    justRetired: Task?,
+): CompletenessGap? {
+    val strict = strictArm(job, recentTasks, justRetired)
+    if (strict.holds) return null
+    val coverage = perCustomerCoverageGap(job, recentTasks, justRetired) ?: return null
+    val finishedCopies = (recentTasks + listOfNotNull(justRetired)).filter {
+        it.jobId == job.jobId && it.phase == TaskPhase.DROPOFF &&
+            it.completedAt != null && it.unassignedAt == null
+    }
+    return CompletenessGap(
+        outstandingDropoffs = strict.outstandingIds.size,
+        unevidencedDropoffs = strict.outstandingIds.count { id -> finishedCopies.any { it.taskId == id } },
+        finishedDropoffs = strict.finished,
+        coverageGate = coverage,
+    )
+}
+
+/**
+ * #1458: the stepper's DEBUG line when a dropoff retire commits and its job stays open, so the job's rows
+ * wait for a later close (the next accept or the shift end). Kept beside [completenessGap], whose value it
+ * prints, so the oversized stepper carries only the call. Firehose only, tag `StateMachine`, ids, counts
+ * and enum names only (P7). `gap` is null when only the offer-card provenance refused the close
+ * ([armedFromOffer]); the coverage field then reads `-`.
+ */
+internal fun logJobLeftOpen(job: Job, recentTasks: List<Task>, retired: Task, armedFromOffer: Boolean) {
+    val gap = completenessGap(job, recentTasks, justRetired = retired)
+    Timber.tag("StateMachine").d(
+        "#1458 job %s left open after drop %s retired: outstanding=%d unevidenced=%d finished=%d " +
+            "coverage=%s armedFromOffer=%b",
+        job.jobId, retired.taskId,
+        gap?.outstandingDropoffs ?: 0, gap?.unevidencedDropoffs ?: 0, gap?.finishedDropoffs ?: 0,
+        gap?.coverageGate?.name ?: "-", armedFromOffer,
+    )
+}
+
+/**
+ * #1458: the reason value [completenessGap] returns. [outstandingDropoffs] are the job's dropoff
+ * placeholders the strict arm could not account for (never activated, still live, unassigned, or
+ * finished without evidence); [unevidencedDropoffs] are those of them that finished (a `completedAt`,
+ * not unassigned) with neither an arrival nor a surviving completion tap (#615/#1315);
+ * [finishedDropoffs] counts the job's dropoffs with delivery evidence (zero fails the strict arm on
+ * its own); [coverageGate] names the first #749 coverage gate that failed.
+ */
+internal data class CompletenessGap(
+    val outstandingDropoffs: Int,
+    val unevidencedDropoffs: Int,
+    val finishedDropoffs: Int,
+    val coverageGate: CoverageGate,
+)
+
+/** #1458: the #749 coverage-arm gates, in evaluation order (see [perCustomerCoverageGap]). */
+internal enum class CoverageGate {
+    /** No (non-unassigned) pickup placeholder on the job. */
+    NO_PICKUP,
+
+    /** Pickup and dropoff placeholder counts differ, so pickups do not map 1:1 to orders. */
+    PICKUP_DROPOFF_MISMATCH,
+
+    /** A pickup resolved no customer hash. */
+    PICKUP_UNHASHED,
+
+    /** A pickup was never confirmed. */
+    PICKUP_UNCONFIRMED,
+
+    /** No dropoff of the job finished with delivery evidence. */
+    NO_FINISHED_DROP,
+
+    /** A pickup's customer has no finished drop (`C ⊄ F`). */
+    CUSTOMER_NOT_FINISHED,
+
+    /** An observed dropoff customer has no finished drop (`A ⊄ F`). */
+    DROP_NOT_FINISHED,
+}
+
+/**
+ * The strict arm's one evaluation (#596/#615/#752/#1315), shared by [isJobPhysicallyComplete] and
+ * [completenessGap]. [outstandingIds] are the dropoff placeholders on [Job.tasks] not accounted for;
+ * [finished] counts the job's evidenced dropoffs. The arm holds when nothing is outstanding and at
+ * least one dropoff finished (a zero-dropoff job never qualifies).
+ */
+private class StrictArm(val outstandingIds: List<String>, val finished: Int) {
+    val holds: Boolean get() = outstandingIds.isEmpty() && finished >= 1
+}
+
+private fun strictArm(
+    job: Job,
+    recentTasks: List<Task>,
+    justRetired: Task?,
+): StrictArm {
     // #752: an UNASSIGNED dropoff is never "delivered" even when a retire grace stamped its
     // `completedAt` (and, in the arrived-then-unassigned shape, its `arrivedAt`). The cross-frame
     // retro-mark now stamps `unassignedAt` on grace-retired DROPOFFs too, so this predicate — which
@@ -103,26 +217,14 @@ internal fun isJobPhysicallyComplete(
 
     // Every dropoff the job owns must be accounted; any outstanding (incl. a customer-TBD
     // placeholder that never resolved) → not complete under the strict arm.
-    val allDropoffsAccounted = job.tasks
+    val outstandingIds = job.tasks
         .filter { it.phase == TaskPhase.DROPOFF }
-        .all { it.taskId in completedDropoffIds || it.taskId == retiredDropoffId }
+        .filterNot { it.taskId in completedDropoffIds || it.taskId == retiredDropoffId }
+        .map { it.taskId }
     // …and at least one dropoff actually finished (guards zero-dropoff jobs).
     val finished = completedDropoffIds.size +
         (if (retiredDropoffId != null && retiredDropoffId !in completedDropoffIds) 1 else 0)
-    if (allDropoffsAccounted && finished >= 1) return true
-
-    // ---- Per-customer coverage arm (#749) — evaluated ONLY when the strict arm failed ----
-    if (perCustomerCoverage(job, recentTasks, justRetired)) {
-        // DEBUG (firehose only, P7): jobId + counts only — no raw store/customer text.
-        Timber.tag("StateMachine").d(
-            "#749 coverage arm closed job %s: per-customer coverage complete (pickups=%d dropoffs=%d)",
-            job.jobId,
-            job.tasks.count { it.phase == TaskPhase.PICKUP && it.unassignedAt == null },
-            job.tasks.count { it.phase == TaskPhase.DROPOFF && it.unassignedAt == null },
-        )
-        return true
-    }
-    return false
+    return StrictArm(outstandingIds, finished)
 }
 
 /**
@@ -144,6 +246,8 @@ internal fun isJobPhysicallyComplete(
  *
  * Complete ⇔ `|P_pick| ≥ 1 ∧ |P_pick| == |P_drop| ∧ every pickup hashed AND CONFIRMED ∧ C ⊆ F ∧
  * A ⊆ F ∧ F ≠ ∅`. Every gate fails toward absorption (stay open), never toward a fabricated close.
+ * Returns null when the arm holds, else the first gate that failed (#1458 — the [CoverageGate] the
+ * diagnostic reports; the predicate reads only its nullness).
  *
  * Every pickup must be CONFIRMED (`completedAt != null` on some observed copy), not merely hashed
  * (#759 review F1): a pickup stamps its hash at activation/arrival — minutes before pickup-confirm —
@@ -152,11 +256,11 @@ internal fun isJobPhysicallyComplete(
  * (a same-customer distinct-store add-on: drop 1 delivered, pickup 2 arrived-but-not-picked-up)
  * satisfies every other gate (`C ⊆ F` trivially — same hash) and reads complete mid-route.
  */
-private fun perCustomerCoverage(
+private fun perCustomerCoverageGap(
     job: Job,
     recentTasks: List<Task>,
     justRetired: Task?,
-): Boolean {
+): CoverageGate? {
     // Non-unassigned copies of this job's tasks across the three pools (#752 exclusion).
     val mirror = job.tasks.filter { it.unassignedAt == null }
     val jobRecent = recentTasks.filter { it.jobId == job.jobId && it.unassignedAt == null }
@@ -169,7 +273,8 @@ private fun perCustomerCoverage(
     // Coverage gate: ≥1 pickup, and pickups map 1:1 to orders (one trip per order), including a
     // confirmed-store re-visit; their hash set IS the customer set. A same-store multi-order stack
     // (|P_pick| < |P_drop|) or the unparsed-offer / GoPuff-bin-scan shape fails here → strict-only.
-    if (pickupIds.isEmpty() || pickupIds.size != dropoffIds.size) return false
+    if (pickupIds.isEmpty()) return CoverageGate.NO_PICKUP
+    if (pickupIds.size != dropoffIds.size) return CoverageGate.PICKUP_DROPOFF_MISMATCH
 
     val allCopies = mirror + jobRecent + listOfNotNull(retired)
     fun observedHashes(taskId: String): Set<String> =
@@ -181,7 +286,8 @@ private fun perCustomerCoverage(
     // physically owed, so it can never serve as completion evidence).
     fun isConfirmed(taskId: String): Boolean =
         allCopies.any { it.taskId == taskId && it.completedAt != null }
-    if (pickupIds.any { observedHashes(it).isEmpty() || !isConfirmed(it) }) return false
+    if (pickupIds.any { observedHashes(it).isEmpty() }) return CoverageGate.PICKUP_UNHASHED
+    if (pickupIds.any { !isConfirmed(it) }) return CoverageGate.PICKUP_UNCONFIRMED
 
     // C = the job's customer set, from the pickups (1:1 with orders under the gate above).
     val customerHashes: Set<String> = pickupIds.flatMapTo(HashSet()) { observedHashes(it) }
@@ -192,7 +298,7 @@ private fun perCustomerCoverage(
         .filter { it.phase == TaskPhase.DROPOFF && it.isDeliveredEvidenced() }
         .mapNotNull { it.customerNameHash }
         .toSet()
-    if (finishedDropHashes.isEmpty()) return false // F ≠ ∅
+    if (finishedDropHashes.isEmpty()) return CoverageGate.NO_FINISHED_DROP // F ≠ ∅
 
     // A = every observed dropoff hash — a live mid-route drop's hash sits here but not in F → blocked.
     val observedDropHashes: Set<String> = allCopies.asSequence()
@@ -201,7 +307,9 @@ private fun perCustomerCoverage(
         .toSet()
 
     // C ⊆ F (every known customer delivered) ∧ A ⊆ F (no activated drop outstanding).
-    return finishedDropHashes.containsAll(customerHashes) && finishedDropHashes.containsAll(observedDropHashes)
+    if (!finishedDropHashes.containsAll(customerHashes)) return CoverageGate.CUSTOMER_NOT_FINISHED
+    if (!finishedDropHashes.containsAll(observedDropHashes)) return CoverageGate.DROP_NOT_FINISHED
+    return null
 }
 
 /** #615/#1315: a grace stamp needs a positive delivery witness; abandonment always excludes it. */

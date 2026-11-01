@@ -3,8 +3,8 @@ issues: #1443, #1458, #1459, #1460
 
 - **The bubble headline is the shift's earnings (#1443):** the big unlabelled figure matches DoorDash's own
   running total, or runs ahead of it right after a delivery while DoorDash's total lags, then DoorDash's total
-  catches up and takes over. A dash-along-the-way delivery counts once its quote-priced row lands (at job close
-  today; delivery-time landing is #1458). A cash tip shows as `+$X cash` under the figure and never changes the
+  catches up and takes over. A dash-along-the-way delivery counts once its quote-priced row lands, when the whole
+  job is judged delivered (#1458). A cash tip shows as `+$X cash` under the figure and never changes the
   figure. The top row is Online and Miles only; the waiting card and resting card read Earned/hr. After the shift
   the figure is DoorDash's summary total. Uber (no running total) shows its recorded delivery pay. The goal pill
   counts app earnings across both apps today (no cash, no costs), reads "Set goal" once on the first launch of this

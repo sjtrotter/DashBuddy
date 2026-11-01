@@ -349,6 +349,16 @@ class E2ESessionReplay(
     }
 
     /**
+     * #1458: feed a SYNTHESIZED recognizer output at its own timestamp, through the same forward as a
+     * classified frame — for a job shape no committed capture holds. Only the sensor's output is
+     * synthetic; the state machine, engine, timers, Room and projector downstream are the real ones.
+     */
+    fun observe(obs: Observation.FlowObservation, label: String = "synthetic ${obs.flow ?: obs.ruleId}") {
+        advanceTo(obs.timestamp)
+        forward(obs.timestamp, label, obs)
+    }
+
+    /**
      * Tap the posted offer heads-up's [action] button at [atMs]: the action's own PendingIntent is
      * delivered to the production [OfferActionReceiver.onReceive], as SystemUI would.
      */
