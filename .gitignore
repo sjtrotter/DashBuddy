@@ -31,6 +31,8 @@ local.properties
 # Release keystore — never commit
 *.jks
 *.keystore
+# The test build's fixed debug key is committed on purpose (#1469); it signs debug builds only.
+!/app/debug.keystore
 
 # Kotlin compiler cache and build error logs
 .kotlin/

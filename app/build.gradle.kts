@@ -97,6 +97,15 @@ android {
     }
 
     signingConfigs {
+        // #1469: the test build signs with one committed key, so every CI run and every local build
+        // signs it the same way and an update installs in place. A debug key is not a secret; the
+        // Play key below stays in the CI `release` environment.
+        getByName("debug") {
+            storeFile = rootProject.file("app/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_PATH")
                 ?: localProperties.getProperty("keystore.path")
