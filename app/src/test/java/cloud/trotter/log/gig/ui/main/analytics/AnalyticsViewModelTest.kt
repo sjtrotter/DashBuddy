@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.analytics
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
@@ -207,8 +208,8 @@ class AnalyticsViewModelTest {
         offersDeclined = 2, offersTimeout = 0,
     )
 
-    private fun buildViewModel() =
-        AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository)
+    private fun buildViewModel(handle: SavedStateHandle = SavedStateHandle()) =
+        AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository, handle)
 
 
     /**
@@ -217,9 +218,12 @@ class AnalyticsViewModelTest {
      * KDoc: `runTest`'s own teardown drains the scheduler, and the hub's midnight re-anchor flow
      * never runs dry while its scope is alive.
      */
-    private fun TestScope.runWithViewModel(block: (AnalyticsViewModel) -> Unit) {
+    private fun TestScope.runWithViewModel(
+        handle: SavedStateHandle = SavedStateHandle(),
+        block: (AnalyticsViewModel) -> Unit,
+    ) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = buildViewModel()
+        val viewModel = buildViewModel(handle)
         val collector = launch { viewModel.uiState.collect {} }
         // #975: the Offers list feed is a SEPARATE WhileSubscribed StateFlow, so it stays cold until
         // something collects it — subscribe here so its intents are observable in a test.
@@ -623,6 +627,47 @@ class AnalyticsViewModelTest {
 
             assertEquals(lastWeek(), viewModel.uiState.value.window)
             assertEquals(AnalyticsRepository.DEFAULT_OFFER_PAGE, viewModel.offersFeed.value.offers.size)
+        }
+    }
+
+    // ── #1447 N3: the hub's local selection lives in saved state ─────────
+
+    @Test
+    fun `a ViewModel built on a saved handle restores the tab, the filter and the page`() = runTest {
+        offerListings = (1L..40L).map { offerListing(it, OfferOutcome.DECLINED) }
+        val handle = SavedStateHandle(
+            mapOf(
+                AnalyticsViewModel.KEY_TAB to AnalyticsTab.Offers,
+                AnalyticsViewModel.KEY_OFFER_FILTER to OfferFilter.DECLINED,
+                AnalyticsViewModel.KEY_OFFER_PAGE_SIZE to AnalyticsRepository.MAX_OFFER_PAGE,
+            ),
+        )
+
+        runWithViewModel(handle) { viewModel ->
+            assertEquals(AnalyticsTab.Offers, viewModel.uiState.value.selectedTab)
+            assertEquals(OfferFilter.DECLINED, viewModel.offersFeed.value.filter)
+            // The whole window: the restored page is MAX_OFFER_PAGE, not the default page.
+            assertEquals(40, viewModel.offersFeed.value.offers.size)
+        }
+    }
+
+    @Test
+    fun `the selection intents write the saved handle`() = runTest {
+        val handle = SavedStateHandle()
+
+        runWithViewModel(handle) { viewModel ->
+            viewModel.setTab(AnalyticsTab.Time)
+            viewModel.setOfferFilter(OfferFilter.ACCEPTED)
+            viewModel.showAllOffers()
+            testScheduler.runCurrent()
+
+            assertEquals(AnalyticsTab.Time, handle.get<AnalyticsTab>(AnalyticsViewModel.KEY_TAB))
+            assertEquals(OfferFilter.ACCEPTED, handle.get<OfferFilter>(AnalyticsViewModel.KEY_OFFER_FILTER))
+            assertEquals(
+                AnalyticsRepository.MAX_OFFER_PAGE,
+                handle.get<Int>(AnalyticsViewModel.KEY_OFFER_PAGE_SIZE),
+            )
+            assertEquals(AnalyticsTab.Time, viewModel.uiState.value.selectedTab)
         }
     }
 }

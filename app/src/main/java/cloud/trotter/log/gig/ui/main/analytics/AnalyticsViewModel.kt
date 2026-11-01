@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.analytics
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
@@ -75,10 +76,17 @@ class AnalyticsViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val correctionRepository: CorrectionRepository,
     private val appPreferencesRepository: AppPreferencesRepository,
+    /**
+     * The one owner of the hub's local selection (#1447 N3): the visible tab, the Offers filter and
+     * the Offers page size. Saved state, so a tab switch that parks the hub and a process death both
+     * bring them back; a fresh open (Recap) starts a new entry and resets them by design. The window
+     * stays in DataStore.
+     */
+    private val handle: SavedStateHandle,
 ) : ViewModel() {
 
-    /** UDF intent target — the visible tab (transient; only the window is persisted). */
-    private val selectedTab = MutableStateFlow(AnalyticsTab.Money)
+    /** UDF intent target — the visible tab (saved state; only the window is persisted). */
+    private val selectedTab: StateFlow<AnalyticsTab> = handle.getStateFlow(KEY_TAB, AnalyticsTab.Money)
 
     /** The persisted window selection — DataStore is the SSOT; intents write, this reads back. */
     private val selection: StateFlow<AnalyticsWindowSelection> =
@@ -188,7 +196,7 @@ class AnalyticsViewModel @Inject constructor(
             noSessionDeliveries = data.extras.orphanDeliveries,
             orphanOfferGroups = data.extras.orphanOfferGroups,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState(loaded = false))
 
     /**
      * The previous-equivalent window's economics, or a `null` emission for a window that has no
@@ -203,10 +211,11 @@ class AnalyticsViewModel @Inject constructor(
     // ── The Offers tab's list feed (#975 / brief §7.4) ───────────────────
 
     /** Which outcome the list is filtered to — list-local selection, deliberately not persisted. */
-    private val offerFilter = MutableStateFlow(OfferFilter.ALL)
+    private val offerFilter: StateFlow<OfferFilter> = handle.getStateFlow(KEY_OFFER_FILTER, OfferFilter.ALL)
 
     /** How many rows the list is asking for; the `See all` footer grows it, the read clamps it. */
-    private val offerPageSize = MutableStateFlow(AnalyticsRepository.DEFAULT_OFFER_PAGE)
+    private val offerPageSize: StateFlow<Int> =
+        handle.getStateFlow(KEY_OFFER_PAGE_SIZE, AnalyticsRepository.DEFAULT_OFFER_PAGE)
 
     /**
      * The visible offers page + the window's total under the same filter (#975 / brief §7.4).
@@ -227,13 +236,13 @@ class AnalyticsViewModel @Inject constructor(
                     analyticsRepository.offerCount(w, filter),
                 ) { rows, total -> OffersFeedState(filter = filter, offers = rows, total = total) }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState(loaded = false))
 
     /** UDF intent — the filter chips. Re-collapses the page: a new filter is a new list. */
     fun setOfferFilter(filter: OfferFilter) {
         if (offerFilter.value == filter) return
-        offerFilter.value = filter
-        offerPageSize.value = AnalyticsRepository.DEFAULT_OFFER_PAGE
+        handle[KEY_OFFER_FILTER] = filter
+        handle[KEY_OFFER_PAGE_SIZE] = AnalyticsRepository.DEFAULT_OFFER_PAGE
     }
 
     /**
@@ -243,7 +252,7 @@ class AnalyticsViewModel @Inject constructor(
      * the request to its own ceiling, so a Lifetime window can't turn this into an unbounded read.
      */
     fun showAllOffers() {
-        offerPageSize.value = AnalyticsRepository.MAX_OFFER_PAGE
+        handle[KEY_OFFER_PAGE_SIZE] = AnalyticsRepository.MAX_OFFER_PAGE
     }
 
     // ── The range picker's calendar (brief §3.2) ─────────────────────────
@@ -276,7 +285,7 @@ class AnalyticsViewModel @Inject constructor(
 
     /** UDF intent — switch the visible tab. */
     fun setTab(tab: AnalyticsTab) {
-        selectedTab.value = tab
+        handle[KEY_TAB] = tab
     }
 
     /**
@@ -328,7 +337,7 @@ class AnalyticsViewModel @Inject constructor(
         // The ONE funnel every window change goes through, so it is also the one place the Offers
         // list re-collapses: a different window is a different list, and carrying a 250-row page
         // across the pager would make each step an unbounded read (#975).
-        offerPageSize.value = AnalyticsRepository.DEFAULT_OFFER_PAGE
+        handle[KEY_OFFER_PAGE_SIZE] = AnalyticsRepository.DEFAULT_OFFER_PAGE
         viewModelScope.launch {
             try {
                 appPreferencesRepository.setAnalyticsWindow(selection)
@@ -420,5 +429,10 @@ class AnalyticsViewModel @Inject constructor(
     companion object {
         internal const val RECENT_SESSIONS_LIMIT = 10
         private const val TAG = "AnalyticsVm"
+
+        // SavedStateHandle keys for the hub's local selection (#1447 N3).
+        internal const val KEY_TAB = "analytics.tab"
+        internal const val KEY_OFFER_FILTER = "analytics.offerFilter"
+        internal const val KEY_OFFER_PAGE_SIZE = "analytics.offerPageSize"
     }
 }

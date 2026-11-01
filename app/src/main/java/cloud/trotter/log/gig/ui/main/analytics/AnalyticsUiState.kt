@@ -71,6 +71,12 @@ enum class AnalyticsTab(@param:StringRes val labelRes: Int) {
  * fields are read-model-only — nothing here re-enters the pure state machine.
  */
 data class AnalyticsUiState(
+    /**
+     * False only for the ViewModel's placeholder before the first read emits (#1447): the screen
+     * composes its scrolling column only once loaded, so a restored scroll offset is never clamped
+     * against the short placeholder content.
+     */
+    val loaded: Boolean = true,
     val showMore: Boolean = false,
     val selectedTab: AnalyticsTab = AnalyticsTab.Money,
     /**
@@ -169,6 +175,8 @@ data class AnalyticsUiState(
  * gesture.
  */
 data class OffersFeedState(
+    /** False only for the placeholder before the first page emits; see [AnalyticsUiState.loaded]. */
+    val loaded: Boolean = true,
     /** Which chip is active — `ALL` shows every outcome. */
     val filter: OfferFilter = OfferFilter.ALL,
     /** The visible page, newest decision first. Every figure is a frozen decision-time estimate. */

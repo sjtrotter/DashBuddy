@@ -59,7 +59,8 @@ fun TodayCard(
         Text(
             text = stringResource(R.string.dashboard_today_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            // text2, the pair of "THIS WEEK" (#1447 N4): a label is information, never text3.
+            color = c.text2,
         )
         Spacer(Modifier.height(6.dp))
         Text(

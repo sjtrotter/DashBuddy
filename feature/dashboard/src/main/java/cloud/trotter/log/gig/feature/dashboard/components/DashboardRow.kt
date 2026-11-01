@@ -77,7 +77,8 @@ fun DashboardRow(
 
 /**
  * A row's heading. [warn] raises it to the review tone — the one the analytics hub's card already
- * uses for "needs a look", so a flagged row reads the same wherever it is rendered.
+ * uses for "needs a look", so a flagged row reads the same wherever it is rendered. The default tone
+ * is `text2` (#1447 N4): a heading is information, and DESIGN.md keeps `text3` off information.
  */
 @Composable
 fun DashboardRowTitle(text: String, modifier: Modifier = Modifier, warn: Boolean = false) {
@@ -85,7 +86,7 @@ fun DashboardRowTitle(text: String, modifier: Modifier = Modifier, warn: Boolean
         text = text,
         modifier = modifier,
         style = MaterialTheme.typography.labelMedium,
-        color = if (warn) AppTheme.colors.warn else AppTheme.colors.text3,
+        color = if (warn) AppTheme.colors.warn else AppTheme.colors.text2,
     )
 }
 

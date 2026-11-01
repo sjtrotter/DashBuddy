@@ -26,12 +26,12 @@ class WizardScreenTest {
     private val state = MutableStateFlow(WizardState())
     private val vm: WizardViewModel = mock()
     private var savedCost: Double? = null
-    private fun show() {
+    private fun show(steps: List<WizardStep> = listOf(WizardStep.ECONOMY_COSTS), onExit: () -> Unit = {}) {
         val draft: VehicleDraft = mock()
         whenever(draft.state).thenReturn(MutableStateFlow(VehicleDraftState()))
         whenever(vm.vehicleDraft).thenReturn(draft)
         whenever(vm.state).thenReturn(state)
-        whenever(vm.steps).thenReturn(MutableStateFlow(listOf(WizardStep.ECONOMY_COSTS)))
+        whenever(vm.steps).thenReturn(MutableStateFlow(steps))
         whenever(vm.vehicleSaveFailed).thenReturn(MutableSharedFlow())
         whenever(vm.updateOilCost(any())).thenAnswer {
             state.value = state.value.copy(wear = state.value.wear.copy(oilCost = it.getArgument(0)),
@@ -41,7 +41,7 @@ class WizardScreenTest {
             savedCost = state.value.wear.oilCost
             it.getArgument<() -> Unit>(0)()
         }
-        compose.setContent { GigLogTheme { WizardScreen(vm, {}) } }
+        compose.setContent { GigLogTheme { WizardScreen(vm, onComplete = {}, onExit = onExit) } }
     }
     @Test fun `Finish includes the unfinished focused cost while edits remain staged`() {
         show()
@@ -68,5 +68,22 @@ class WizardScreenTest {
         verify(vm, never()).saveAndFinish(any())
         verify(vm, never()).updateOilCost(any())
         assertNull(savedCost)
+    }
+
+    /** #1447 N5: the title bar's arrow runs system Back's handler — exit on step 1, the previous step after. */
+    @Test fun `the back arrow exits on step 1 and goes to the previous step after`() {
+        var exits = 0
+        show(steps = listOf(WizardStep.GOAL, WizardStep.SHOPPING), onExit = { exits++ })
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+        assertEquals(1, exits)
+
+        compose.onNodeWithText("Next").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Step 2 of 2").assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Step 1 of 2").assertExists()
+        assertEquals(1, exits)
     }
 }

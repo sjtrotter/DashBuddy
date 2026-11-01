@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DirectionsCar
 import cloud.trotter.log.gig.domain.model.vehicle.vehicleType
 import cloud.trotter.log.gig.ui.components.vehicle.vehicleTypeLabel
@@ -31,22 +32,27 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.core.data.vehicle.Garage
+import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.feature.settings.SettingsMenuViewModel
+import cloud.trotter.log.gig.feature.settings.R as SettingsR
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import cloud.trotter.log.gig.domain.format.Formats
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,22 +68,41 @@ fun SettingsHomeScreen(
     val garage by viewModel.garage.collectAsStateWithLifecycle(initialValue = null)
     val userEconomy by viewModel.userEconomy.collectAsStateWithLifecycle(initialValue = null)
 
+    SettingsHomeContent(
+        isDevUnlocked = isDevUnlocked,
+        garage = garage,
+        userEconomy = userEconomy,
+        onNavigate = onNavigate,
+        onBack = onBack,
+    )
+}
+
+/**
+ * Settings home's menu, stateless (#1447 hoisted it out of [SettingsHomeScreen] so a screenshot test
+ * renders it without Hilt). Settings sits below a tab, so it has a title bar with a back button.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsHomeContent(
+    isDevUnlocked: Boolean,
+    garage: Garage?,
+    userEconomy: UserEconomy?,
+    onNavigate: (String) -> Unit,
+    onBack: () -> Unit,
+) {
     Scaffold(
         topBar = {
-            Surface(shadowElevation = 2.dp) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringResource(R.string.settings_home_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_home_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_content_desc_back),
+                        )
+                    }
+                },
+            )
         }
     ) { padding ->
         Column(
@@ -104,7 +129,7 @@ fun SettingsHomeScreen(
             SettingsGroup(title = stringResource(R.string.settings_home_group_automation)) {
                 SettingsNavItem(
                     icon = Icons.Default.Tune,
-                    title = stringResource(R.string.settings_home_item_strategy_title),
+                    title = stringResource(SettingsR.string.strategy_settings_title),
                     subtitle = stringResource(R.string.settings_home_item_strategy_subtitle),
                     onClick = { onNavigate(Screen.StrategySettings.route) }
                 )
@@ -201,10 +226,12 @@ fun SettingsHomeScreen(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(16.dp))
-                    SettingsGroup(title = stringResource(R.string.main_activity_developer_options_title)) {
+                    // One name for the page (#1447 N13/R6): the item reads the page's own title, so the
+                    // group needs no heading of its own.
+                    SettingsGroup(title = null) {
                         SettingsNavItem(
                             icon = Icons.Default.BugReport,
-                            title = stringResource(R.string.settings_home_item_debug_menu_title),
+                            title = stringResource(SettingsR.string.developer_settings_title),
                             subtitle = stringResource(R.string.settings_home_item_debug_menu_subtitle),
                             onClick = { onNavigate(Screen.DeveloperSettings.route) }
                         )
@@ -219,16 +246,18 @@ fun SettingsHomeScreen(
 
 @Composable
 fun SettingsGroup(
-    title: String,
+    title: String?,
     content: @Composable () -> Unit
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-        )
+        if (title != null) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+        }
         Surface(
             modifier = Modifier
                 .fillMaxWidth()

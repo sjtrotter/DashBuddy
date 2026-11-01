@@ -56,7 +56,8 @@ import cloud.trotter.log.gig.domain.format.Formats
 @Composable
 fun WizardScreen(
     viewModel: WizardViewModel = hiltViewModel(),
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    onExit: () -> Unit,
 ) {
     val steps by viewModel.steps.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -66,11 +67,19 @@ fun WizardScreen(
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()
     val costsSession = remember(viewModel) { EditSession(coroutineScope) }
-    androidx.activity.compose.BackHandler(enabled = pagerState.currentPage > 0) {
-        coroutineScope.launch {
-            if (costsSession.finishAll()) pagerState.animateScrollToPage(pagerState.currentPage - 1)
+    // One Back (#1447 N5): the title bar's arrow runs exactly what system Back runs. On a later step
+    // it finishes the open cost fields, then goes to the previous page; on step 1 the BackHandler is
+    // off, system Back pops the wizard, and the arrow calls [onExit] — nothing is written.
+    val back: () -> Unit = {
+        if (pagerState.currentPage > 0) {
+            coroutineScope.launch {
+                if (costsSession.finishAll()) pagerState.animateScrollToPage(pagerState.currentPage - 1)
+            }
+        } else {
+            onExit()
         }
     }
+    androidx.activity.compose.BackHandler(enabled = pagerState.currentPage > 0) { back() }
 
     val isCherryPicker = state.strategy == OfferStrategy.CHERRY_PICKER
 
@@ -94,6 +103,7 @@ fun WizardScreen(
             WizardTopBar(
                 currentStep = pagerState.currentPage,
                 totalSteps = steps.size,
+                onBack = back,
                 onSkip = {
                     costsSession.discardAll()
                     skippedSetup = true

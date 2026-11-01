@@ -54,3 +54,7 @@ playbook-full 1078 5250
 playbook-empty 1078 2399
 notification/offer-compact 1078 2399
 notification/offer-expanded 1078 2399
+settings/offer-rules 1078 2399
+settings/home 1078 2399
+setup/wizard-step-1 1078 2399
+home-font-200 1078 2399
