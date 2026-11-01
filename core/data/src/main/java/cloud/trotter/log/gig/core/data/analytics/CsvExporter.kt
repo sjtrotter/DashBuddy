@@ -86,6 +86,9 @@ object CsvExporter {
      * stable, chronological export). [zone] is the device's local zone (passed in so this stays
      * pure/testable); [generatedAtMillis] stamps the summary's export time.
      * [dashVehicles] supplies each dash's stamped vehicle; [vehicles] includes retired entries.
+     * [recordedPay] is each session's recorded pay over ALL its deliveries (#1459), the input of its effective report
+     * and source; the default derives it from [deliveries], which is complete for an all-time export. A bounded
+     * export passes the full map, since a shift's deliveries can fall outside the window.
      */
     fun export(
         deliveries: List<DeliveryRecordEntity>,
@@ -96,10 +99,11 @@ object CsvExporter {
         fuel: List<FuelRecord> = emptyList(),
         dashVehicles: List<DashVehicle> = emptyList(),
         vehicles: List<Vehicle> = emptyList(),
+        recordedPay: Map<String, Double?> = recordedPayBySession(deliveries),
     ): Bundle = Bundle(
         deliveriesCsv = deliveriesCsv(deliveries.sortedBy { it.completedAt }, zone),
-        sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone, dashVehicles, vehicles),
-        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel, dashVehicles, vehicles),
+        sessionsCsv = sessionsCsv(sessions.sortedBy { it.startedAt }, zone, dashVehicles, vehicles, recordedPay),
+        summaryCsv = summaryCsv(deliveries, sessions, zone, generatedAtMillis, expenses, fuel, dashVehicles, vehicles, recordedPay),
         expensesCsv = expensesCsv(expenses.sortedBy { it.occurredAt }, zone, vehicles),
         fuelCsv = fuelCsv(fuel.sortedBy { it.occurredAt }, zone, vehicles),
     )
@@ -125,6 +129,15 @@ object CsvExporter {
         }
         return floors
     }
+
+    /**
+     * #1459: each session's recorded pay ([SessionReportRule.recordedPayOf]) over [deliveries], keyed by session id;
+     * null for a session whose rows are all unpriced. Session-less rows are skipped.
+     */
+    fun recordedPayBySession(deliveries: List<DeliveryRecordEntity>): Map<String, Double?> = deliveries
+        .mapNotNull { row -> row.sessionId?.let { it to row.realizedPay } }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, pays) -> SessionReportRule.recordedPayOf(pays) }
 
     private fun platformName(wire: String): String = Platform.fromWire(wire)?.displayName ?: wire
 
@@ -191,11 +204,13 @@ object CsvExporter {
         zone: ZoneId,
         dashVehicles: List<DashVehicle>,
         vehicles: List<Vehicle>,
+        recordedPay: Map<String, Double?>,
     ): String {
         val sb = StringBuilder()
         sb.append(Csv.row(SESSION_HEADER.map { Csv.textField(it) })).append('\n')
         for (s in rows) {
             val vehicle = sessionVehicle(s, dashVehicles, vehicles)
+            val delivered = recordedPay[s.sessionId]
             // Online duration: to the close if known, else the last event seen (still-live / orphaned).
             val durationMillis = (s.endedAt ?: s.lastEventAt) - s.startedAt
             sb.append(
@@ -205,8 +220,14 @@ object CsvExporter {
                         Csv.isoDateTime(s.endedAt, zone),
                         Csv.textField(platformName(s.platform)),
                         Csv.millisToMinutes(durationMillis),
-                        Csv.money(SessionReportRule.effectiveReported(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride)),
-                        Csv.textField(ReportSource.of(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride).wire),
+                        Csv.money(
+                            SessionReportRule.effectiveReported(
+                                s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride, delivered,
+                            ),
+                        ),
+                        Csv.textField(
+                            ReportSource.of(s.reportedEarnings, s.endSource, s.reportOverrideMode, s.reportOverride, delivered).wire,
+                        ),
                         Csv.int(s.deliveries),
                         Csv.int(s.offersReceived),
                         Csv.int(s.offersAccepted),
@@ -284,6 +305,7 @@ object CsvExporter {
         fuel: List<FuelRecord>,
         dashVehicles: List<DashVehicle>,
         vehicles: List<Vehicle>,
+        recordedPay: Map<String, Double?>,
     ): String {
         // Deductible miles grouped by the session's own local tax year (ascending).
         val milesByYear: Map<Int, Double> = sessions
@@ -291,10 +313,12 @@ object CsvExporter {
             .mapValues { (_, group) -> group.sumOf { sessionMiles(it) ?: 0.0 } }
             .toSortedMap()
         val sessionsBySource = sessions.groupBy {
-            ReportSource.of(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride)
+            ReportSource.of(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride, recordedPay[it.sessionId])
         }
         fun reported(source: ReportSource): Double = sessionsBySource[source].orEmpty().sumOf {
-            SessionReportRule.effectiveReported(it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride) ?: 0.0
+            SessionReportRule.effectiveReported(
+                it.reportedEarnings, it.endSource, it.reportOverrideMode, it.reportOverride, recordedPay[it.sessionId],
+            ) ?: 0.0
         }
         val payBySession = deliveries.groupBy { it.sessionId }
             .mapValues { (_, rows) -> rows.sumOf { it.realizedPay ?: 0.0 } }
@@ -339,6 +363,7 @@ object CsvExporter {
         line("total_deliveries", Csv.int(deliveries.size))
         line("total_dash_summary_earnings", Csv.money(reported(ReportSource.DASH_SUMMARY)))
         line("total_in_dash_counter_earnings", Csv.money(reported(ReportSource.IN_DASH_COUNTER)))
+        line("total_recorded_pay_earnings", Csv.money(reported(ReportSource.RECORDED_PAY)))
         line("total_driver_set_earnings", Csv.money(reported(ReportSource.DRIVER_SET)))
         line("total_recorded_without_report", Csv.money(recordedWithoutReport))
         line("total_realized_delivery_pay", Csv.money(totalRealized))

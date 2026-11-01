@@ -19,7 +19,8 @@ object ShiftEarnings {
      * An ended shift: its effective report ([SessionReportRule]: a driver SET wins, a summary-screen total is
      * authoritative, a summary `$0.00` included), else its recorded pay. A driver CLEAR makes the effective report
      * null, so a cleared shift falls back to recorded pay. The SQL twin is analytics gross's
-     * `COALESCE(effective, deliveredPay, 0)` in `AnalyticsDao.grossAndUnattributed`.
+     * `COALESCE(effective, deliveredPay, 0)` in `AnalyticsDao.grossAndUnattributed`. #1459: the effective report
+     * already floors a non-summary running total at recorded pay, so this takes no max of its own.
      */
     fun rested(effectiveReport: Double?, recordedPay: Double?): Double? = effectiveReport ?: recordedPay
 }

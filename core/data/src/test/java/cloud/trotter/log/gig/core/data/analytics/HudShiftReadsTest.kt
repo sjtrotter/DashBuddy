@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.core.database.analytics.FuelRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.domain.analytics.EndedShiftPay
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.ShiftEarnings
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.log.gig.domain.state.Platform
@@ -50,7 +51,7 @@ class HudShiftReadsTest {
             .build()
         dao = db.analyticsDao()
         shifts = HudShiftRepository(db.hudShiftDao())
-        analytics = AnalyticsRepository(dao, db.appEventDao())
+        analytics = AnalyticsRepository(dao, db.appEventDao(), db.hudShiftDao())
     }
 
     @After
@@ -187,6 +188,25 @@ class HudShiftReadsTest {
             collector.cancelAndJoin()
             emissions.close()
         }
+    }
+
+    @Test
+    fun `an early shift's stale running total gives way to its recorded pay and a CLEAR falls back to it (#1459)`() = runBlocking {
+        val stale = session("stale", reportedEarnings = 12.0, endSource = SessionEndSource.EARLY_OFFLINE)
+        dao.upsertSession(stale)
+        dao.upsertDelivery(delivery(1, "stale", 10.0, cashTip = 3.0))
+        dao.upsertDelivery(delivery(2, "stale", 6.0).copy(sessionAssigned = 1)) // an assigned row counts too
+        val latest = shifts.latestShift(Platform.DoorDash).first()!!
+        assertEquals(16.0, latest.reportedEarnings!!, 0.0)
+        assertEquals(12.0, latest.machineReportedEarnings!!, 0.0)
+        assertEquals(listOf(EndedShiftPay("stale", base, 16.0, 16.0)), shifts.endedShiftsBetween(base, dayEnd).first())
+        assertEquals(16.0, ShiftEarnings.rested(latest.reportedEarnings, 16.0)!!, 0.0)
+
+        dao.upsertSession(stale.copy(reportOverrideMode = SessionReportOperation.CLEAR))
+        val cleared = shifts.latestShift(Platform.DoorDash).first()!!
+        assertNull(cleared.reportedEarnings)
+        assertEquals(listOf(EndedShiftPay("stale", base, null, 16.0)), shifts.endedShiftsBetween(base, dayEnd).first())
+        assertEquals(16.0, ShiftEarnings.rested(cleared.reportedEarnings, 16.0)!!, 0.0)
     }
 
     @Test

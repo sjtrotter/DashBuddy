@@ -12,7 +12,10 @@ import javax.inject.Singleton
 /** #1443: the bubble's shift reads, a small owner of its own beside [AnalyticsRepository]. */
 @Singleton
 class HudShiftRepository @Inject constructor(private val dao: HudShiftDao) {
-    /** [platform]'s newest shift row by start, open rows included; null before its first shift folds. */
+    /**
+     * [platform]'s newest shift row by start, open rows included; null before its first shift folds. Its effective
+     * report is floored at its recorded pay (#1459), so a stale running total gives way at rest.
+     */
     fun latestShift(platform: Platform): Flow<SessionRecord?> =
         dao.latestSession(platform.wire).map { it?.toDomain() }
 
@@ -23,7 +26,7 @@ class HudShiftRepository @Inject constructor(private val dao: HudShiftDao) {
     fun endedShiftsBetween(start: Long, end: Long): Flow<List<EndedShiftPay>> =
         dao.endedSessionsBetween(start, end).map { rows ->
             rows.map { row ->
-                val session = row.session.toDomain()
+                val session = row.toDomain()
                 EndedShiftPay(session.sessionId, session.startedAt, session.reportedEarnings, row.recordedPay)
             }
         }

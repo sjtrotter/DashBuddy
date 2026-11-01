@@ -4,6 +4,7 @@ import cloud.trotter.log.gig.domain.analytics.ExpenseRecord
 import cloud.trotter.log.gig.domain.analytics.FuelRecord
 import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
 import cloud.trotter.log.gig.core.database.analytics.DeliveryTimeTotalsRow
+import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.OutcomeCountRow
 import cloud.trotter.log.gig.core.database.analytics.PickupDwellTotalsRow
@@ -37,6 +38,7 @@ import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionEvent
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.analytics.SessionSpan
 import cloud.trotter.log.gig.domain.analytics.StoreReportCard
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
@@ -57,6 +59,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -89,6 +92,9 @@ class AnalyticsRepository @Inject constructor(
     // source-of-truth log) to enumerate a job's accepted offers — a DAO read, no economy dependency,
     // so the "net is the frozen stored value" posture above is preserved.
     private val appEventDao: AppEventDao,
+    // #1459: the orphan picker's candidates come from the shift read that carries recorded pay, so each
+    // candidate's effective report has the input its floor needs (kept out of the oversized AnalyticsDao).
+    private val hudShiftDao: HudShiftDao,
 ) {
     val projectionWatermark: Flow<Long?>
         get() = analyticsDao.watermark().map { it?.watermarkSequenceId }
@@ -158,6 +164,8 @@ class AnalyticsRepository @Inject constructor(
                             counterDashes = g.counterDashes,
                             driverSetReported = g.driverSetReported,
                             driverSetDashes = g.driverSetDashes,
+                            recordedPayReported = g.recordedPayReported,
+                            recordedPayDashes = g.recordedPayDashes,
                             recordedWithoutReport = g.recordedWithoutReport,
                             unreportedDashesWithPay = g.unreportedDashesWithPay,
                             unreportedDashesNoPay = g.unreportedDashesNoPay,
@@ -231,6 +239,8 @@ class AnalyticsRepository @Inject constructor(
                                     counterDashes = it.counterDashes,
                                     driverSetReported = it.driverSetReported,
                                     driverSetDashes = it.driverSetDashes,
+                                    recordedPayReported = it.recordedPayReported,
+                                    recordedPayDashes = it.recordedPayDashes,
                                     recordedWithoutReport = it.recordedWithoutReport,
                                     unreportedDashesWithPay = it.unreportedDashesWithPay,
                                     unreportedDashesNoPay = it.unreportedDashesNoPay,
@@ -795,22 +805,22 @@ class AnalyticsRepository @Inject constructor(
      * sessions within ±48 h of [completedAt], same [platform] (ALL platforms when the orphan's platform
      * is [Platform.Unknown]), nearest-in-**span** first. A one-shot snapshot fetched when the driver opens
      * the picker (not a live surface — the picker is a transient dialog); the projector's ended-session
-     * guard is the authority, this is the UI-policy pre-filter over the existing [AnalyticsDao.sessionsBetween]
-     * raw read (no new DAO query). No economy dependency, no new PII surface (session metadata only).
+     * guard is the authority, this is the UI-policy pre-filter over the existing [HudShiftDao.endedSessionsBetween]
+     * read (no new DAO query), which carries each shift's recorded pay for its effective report (#1459). No economy
+     * dependency, no new PII surface (session metadata only).
      *
      * **Ranked by distance to the session's [startedAt, endedAt] SPAN, not to its start instant** — a
      * mid-dash-restart orphan completes hours INTO its real dash, so sorting on `abs(startedAt −
      * completedAt)` would rank a short later dash above the long dash that actually contains the orphan.
      * A completion inside the span scores 0 (the containing dash always wins); otherwise it scores the
      * gap to the nearer endpoint. Tie-break by [startedAt] so the ordering is deterministic when two
-     * candidates are equidistant. `endedAt` is non-null here (the ENDED filter above ran first).
+     * candidates are equidistant. `endedAt` is non-null here (the read returns ENDED shifts only).
      */
     suspend fun candidateSessionsForOrphan(completedAt: Long, platform: Platform): List<SessionRecord> {
         val start = completedAt - CANDIDATE_WINDOW_MILLIS
         val end = completedAt + CANDIDATE_WINDOW_MILLIS
-        return analyticsDao.sessionsBetween(start, end)
+        return hudShiftDao.endedSessionsBetween(start, end).first()
             .map { it.toDomain() }
-            .filter { it.endedAt != null }
             .filter { platform == Platform.Unknown || it.platform == platform }
             .sortedWith(compareBy({ spanDistance(it, completedAt) }, { it.startedAt }))
     }
@@ -840,7 +850,10 @@ class AnalyticsRepository @Inject constructor(
             analyticsDao.sessionRecordFlow(sessionId),
             analyticsDao.deliveriesForSession(sessionId),
         ) { session, deliveries ->
-            session?.let { SessionDetail(it.toDomain(), deliveries.map { row -> row.toDomain() }) }
+            session?.let {
+                val records = deliveries.map { row -> row.toDomain() }
+                SessionDetail(it.toDomain(SessionReportRule.recordedPayOf(records.map { row -> row.realizedPay })), records)
+            }
         }
 
     /**
@@ -865,11 +878,16 @@ class AnalyticsRepository @Inject constructor(
     ): CsvExporter.Bundle {
         val deliveries = analyticsDao.deliveriesBetween(start, end)
         val sessions = analyticsDao.sessionsBetween(start, end)
+        // #1459: an exported shift's effective report reads its recorded pay over ALL its deliveries, so a bounded
+        // export (a shift's deliveries can complete outside the window) reads every delivery for that map.
+        val allTime = start == Long.MIN_VALUE && end == Long.MAX_VALUE
+        val everyDelivery = if (allTime) deliveries else analyticsDao.deliveriesBetween(Long.MIN_VALUE, Long.MAX_VALUE)
         return CsvExporter.export(
             deliveries, sessions, zone, generatedAtMillis,
             expenses.filter { it.occurredAt >= start && it.occurredAt < end },
             fuel.filter { it.occurredAt >= start && it.occurredAt < end },
             dashVehicles, vehicles,
+            recordedPay = CsvExporter.recordedPayBySession(everyDelivery),
         )
     }
 

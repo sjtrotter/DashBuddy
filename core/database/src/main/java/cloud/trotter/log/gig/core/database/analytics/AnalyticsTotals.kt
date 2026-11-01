@@ -20,6 +20,8 @@ import androidx.room.Embedded
 data class SessionWithCashRow(
     @Embedded val session: SessionRecordEntity,
     val cash: Double,
+    /** #1459: the session's recorded pay, `SUM(realizedPay)`, null when nothing is priced; the effective report's floor. */
+    val deliveredPay: Double?,
 )
 
 /**
@@ -116,6 +118,8 @@ data class GrossTotalsRow(
     val counterDashes: Int,
     val driverSetReported: Double,
     val driverSetDashes: Int,
+    val recordedPayReported: Double,
+    val recordedPayDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
     val unreportedDashesNoPay: Int,
@@ -134,6 +138,8 @@ data class PlatformGrossTotalsRow(
     val counterDashes: Int,
     val driverSetReported: Double,
     val driverSetDashes: Int,
+    val recordedPayReported: Double,
+    val recordedPayDashes: Int,
     val recordedWithoutReport: Double,
     val unreportedDashesWithPay: Int,
     val unreportedDashesNoPay: Int,

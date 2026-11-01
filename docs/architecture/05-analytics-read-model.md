@@ -214,17 +214,19 @@ never floored), `estimatedFromOffers` names the `OFFER_PAY` subset of it, `notMa
 unattributedPay`, `recordedAboveReported = overAttributedPay` (a stated deduction), and `unreconciled`
 is a should-never-fire guard the UI states. Vocabulary (one word per concept, every screen): Earned /
 Reported / Recorded / Not matched / Recorded above reported / Not itemized / Kept — "bonus" is never
-said unless the platform said it. `ReportSource {DASH_SUMMARY, IN_DASH_COUNTER, DRIVER_SET, NONE}`
+said unless the platform said it. `ReportSource {DASH_SUMMARY, IN_DASH_COUNTER, RECORDED_PAY, DRIVER_SET, NONE}`
 (`:domain`) is the Kotlin statement of WHERE a dash's effective reported total came from (the
 #1030/#1134 trust rule; `SessionReportRule.effectiveReported` stays the VALUE owner), mirrored by
 `SessionReportSql.REPORT_SOURCE_SQL` (matrix-tested, wire literals pinned to `ReportSource.wire`);
-`PeriodEconomics.grossSources` (`GrossSources`: per-source Σ + dash counts + `recordedWithoutReport` +
+`PeriodEconomics.grossSources` (`GrossSources`: per-source Σ + dash counts, `recordedPayReported` /
+`recordedPayDashes` for #1459's RECORDED_PAY included, + `recordedWithoutReport` +
 `sessionCash`) rides the SAME gross query as added columns, with the invariant `Σ sources + sessionCash
 + noSessionPay == grossEarnings`. `payMixTotals` adds `offerEstimatePay`/`offerEstimateDeliveries`/
 `paylessDeliveries` (the `'OFFER_PAY'` wire interpolated from `PayBasis.OFFER_PAY`). The session
 detail header labels its figure by source; `sessions.csv` gains `report_source` and `summary.csv`
 splits `total_reported_earnings` into `total_dash_summary_earnings` / `total_in_dash_counter_earnings`
-/ `total_driver_set_earnings` / `total_recorded_without_report` (free-tier export FORMAT change).
+/ `total_driver_set_earnings` / `total_recorded_without_report` (free-tier export FORMAT change); #1459 adds
+`total_recorded_pay_earnings` after `total_in_dash_counter_earnings`.
 `basePay`/`tip` are stamped only on a job's SOLE drop, so partial coverage is NORMAL:
 `deliveriesWithBreakdown`/`deliveries` drive a stated caveat (explanation behind the #1024 B1
 disclosure) + an "at least N%" tips insight; ZERO coverage now renders the bar with the recorded pay
@@ -725,6 +727,39 @@ event type is absent from history.
 Day-one use: clear session 483's phantom $40.14 (`early_offline`, zero deliveries). The Sep 7–13
 week drops from $646.34 to $606.20; Restore detected value brings the machine $40.14 back.
 
+**A non-summary running total is floored at recorded pay (#1459).** A shift ended without its summary screen
+(`early_offline`, or no `DASH_STOP` at all) keeps the app's last running total, which can lag the deliveries
+the shift actually recorded. `SessionReportRule.effectiveReported` now takes a REQUIRED `deliveredPay` (the
+shift's recorded pay, `SessionReportRule.recordedPayOf`: Σ non-null `realizedPay` over ALL rows with the
+session's id, assigned rows included, cash-free, null when nothing is priced) and, on a non-summary end with a
+positive running total, returns the recorded pay when `recordedPayAbove(running, delivered)` (more than
+`ANALYTICS_MONEY_EPSILON` above, so a float sum of whole cents that ties the total, 0.10 + 0.20 against 0.30,
+stays the running total), else the running total. SET still wins, CLEAR is still no report, a summary total
+stays authoritative even when lower, and an absent or non-positive running total stays no report (decision
+D1: gross already falls back to recorded pay, so only the label would differ). It is applied at read time: no
+schema change, no `PROJECTOR_VERSION` bump, and past shifts change, including after a delivery-only change
+(a re-price or an assign). `ReportSource.RECORDED_PAY` names the case (session detail: "Recorded pay" with
+the context line "Above running total"); a tie stays `IN_DASH_COUNTER`. The SET dialog pre-fills the floored
+value, the figure the screen shows.
+
+The SQL mirror needs the shift's recorded pay beside `s`, so every `s`-anchored read joins ONE const,
+`SessionReportSql.SESSION_DELIVERY_JOIN_SQL` — alias `d`, one row per session, columns `deliveredPay`,
+`cashTip`, `net`, `deliveries` — and both `EFFECTIVE_REPORTED_SQL` and `REPORT_SOURCE_SQL` use one fragment,
+`RECORDED_PAY_ABOVE_SQL` (`d.deliveredPay > s.reportedEarnings + 0.005`, the epsilon written out and pinned by
+`ReportSourceSqlTest`). A read that maps a session row to the domain carries the recorded pay to
+`SessionRecordEntity.toDomain(deliveredPay)` (required): `recentSessions` projects `d.deliveredPay`, the two
+`HudShiftDao` reads project it as `recordedPay` (the orphan picker's candidates reuse
+`HudShiftDao.endedSessionsBetween`), `sessionDetail` passes `recordedPayOf` over the rows it already reads, and
+the CSV export passes `CsvExporter.recordedPayBySession` over ALL deliveries even for a bounded export (a
+shift's deliveries can complete outside the window). Per session `eff ≥ COALESCE(delivered, 0)` on a floored
+early end, so `overAttributed` is 0 there; gross rises by exactly the `overAttributed` it loses, net and
+`unattributed` are unchanged, and the pay-mix identity holds as is. The matrix gains a fourth dimension,
+delivered ∈ {no rows, one unpriced row, −5, 0, 20, the 40.14 tie, 60, 0.10 + 0.20} with a 0.30 machine value,
+asserted on all three aggregate reads plus `recentSessions` and both `HudShiftDao` reads.
+
+Field basis (#1459, the 2026-10-31 field pull): 12 early-ended shifts, 11 with no running total (unchanged, D1) and 1 with a
+running total below its recorded pay; 124 summary shifts, none below their recorded pay.
+
 
 ### Ledger: expenses, fuel fill-ups, cash tips from the HUD (#1333, ADR-0012)
 Decided in [ADR-0012](../adr/ADR-0012-dasher-ledger.md); built in #1333 slice 1 (Room v20).
@@ -855,8 +890,10 @@ deliveredPay, 0)` in `grossAndUnattributed`, the SQL twin). Recorded pay is
 `OFFER_PAY` rows included), null unless a row is priced, so an unpriced shift shows the em dash
 (#1041); `deliveredPay` stays non-null for its accounting readers. `Session.accumulatedDeliveryPay` is
 never read (a receipt re-entry can add it twice, #1460). Nothing in the settle gate, `Session`,
-`ModeEffects` or any fold changed. The early-ended shift's reported total (#1459) and quoted pay at
-delivery recognition (#1458) are separate issues.
+`ModeEffects` or any fold changed. Quoted pay at delivery recognition (#1458) is a separate issue. #1459:
+`rested` takes no max of its own; an early-ended shift's stale running total reaches it already floored at
+recorded pay through the effective report (`HudShiftDao.latestSession` and `endedSessionsBetween` carry the
+recorded pay to `toDomain`).
 
 `BubbleViewModel.displayedShift` is the one shift every hero and resting input reads. Its identity
 (`DisplayedShifts.target`, `:feature:bubble`) is built inside one `flatMapLatest` on the focused

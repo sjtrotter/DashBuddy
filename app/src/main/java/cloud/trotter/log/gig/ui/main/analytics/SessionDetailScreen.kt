@@ -51,7 +51,6 @@ import cloud.trotter.log.gig.domain.analytics.MilesBasis
 import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.ReportSource
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
-import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.format.formatClockTime
 import cloud.trotter.log.gig.domain.format.formatDuration
@@ -216,15 +215,22 @@ private fun DashDetailContent(
     }
 }
 
-/** Source labels share the trust-rule owner used by CSV and the DAO mirror. */
-internal fun sessionGrossSourceLabel(session: SessionRecord): Int = when (ReportSource.of(
-    session.machineReportedEarnings, session.endSource, session.reportOverrideMode, session.reportOverride,
-)) {
+/** Source labels share the trust-rule owner used by CSV and the DAO mirror; [SessionDetail.recordedPay] feeds the #1459 floor. */
+private fun sessionGrossSource(detail: SessionDetail): ReportSource = with(detail.session) {
+    ReportSource.of(machineReportedEarnings, endSource, reportOverrideMode, reportOverride, detail.recordedPay)
+}
+
+internal fun sessionGrossSourceLabel(detail: SessionDetail): Int = when (sessionGrossSource(detail)) {
     ReportSource.DASH_SUMMARY -> R.string.session_detail_gross_source_summary
     ReportSource.IN_DASH_COUNTER -> R.string.session_detail_gross_source_counter
+    ReportSource.RECORDED_PAY -> R.string.session_detail_gross_source_recorded
     ReportSource.DRIVER_SET -> R.string.session_detail_gross_source_driver
     ReportSource.NONE -> R.string.session_detail_gross_source_none
 }
+
+/** #1459: the context line under a figure that is recorded pay above the app's running total, else none. */
+internal fun sessionGrossSourceSub(detail: SessionDetail): Int? =
+    R.string.session_detail_gross_source_recorded_sub.takeIf { sessionGrossSource(detail) == ReportSource.RECORDED_PAY }
 
 @Composable
 private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
@@ -262,9 +268,10 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppStatTile(
-                label = stringResource(sessionGrossSourceLabel(session)),
+                label = stringResource(sessionGrossSourceLabel(detail)),
                 value = Formats.money(gross),
                 modifier = Modifier.weight(1f),
+                sub = sessionGrossSourceSub(detail)?.let { stringResource(it) },
             )
             AppStatTile(
                 label = stringResource(R.string.session_detail_stat_miles),

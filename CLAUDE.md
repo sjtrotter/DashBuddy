@@ -746,6 +746,11 @@ no-ops when the row already matches, never overwrites a DRIVER-owned row
 report only when the end source is the summary screen; the stamp is `takeIf { > 0.0 }`, the fold
 normalizes, `SessionEndedFields.totalEarnings` is nullable, and the DAO mirrors the source-keyed rule on
 every `reportedEarnings` arm (a blanket `NULLIF` was rejected).
+#1459: on a non-summary end, `SessionReportRule` floors a positive running total at the shift's recorded pay
+(`max`, at read time, past shifts included; "above" means by more than `ANALYTICS_MONEY_EPSILON`, one predicate
+`recordedPayAbove` and its SQL twin); SET wins, CLEAR is no report, a summary total stays authoritative even when
+lower, and an absent or non-positive running total stays no report; `ReportSource.RECORDED_PAY` names the case. Every
+`s`-anchored read joins `SessionReportSql.SESSION_DELIVERY_JOIN_SQL` for the recorded pay.
 
 **Store entity resolution (#159, #773, #887, #1000):** pure `StoreResolver`/`StoreKeys`; deterministic
 `storeKey = platform|normalizedChain|runningKey`; resolve-from-rows inside the batch transaction;
@@ -763,7 +768,7 @@ a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against th
 row exists, row is null-session or already-assigned, target is a real ENDED session, platform
 coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
 `SESSION_REPORT_CORRECTION` (CLEAR / SET / RESTORE_MACHINE — a dash's platform-reported total;
-machine column never rewritten; `SessionReportRule` is the one owner the DAO's CASE mirrors; Room v17, #1134),
+machine column never rewritten; `SessionReportRule` is the one owner the DAO's CASE mirrors (floors a non-summary total at recorded pay, #1459); Room v17, #1134),
 and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
 Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
 anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the

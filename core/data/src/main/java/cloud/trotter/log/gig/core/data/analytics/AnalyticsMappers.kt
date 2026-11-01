@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.OfferListRow
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionWithCashRow
+import cloud.trotter.log.gig.core.database.analytics.ShiftPayRow
 import cloud.trotter.log.gig.domain.analytics.AcceptedOfferOutcomeSample
 import cloud.trotter.log.gig.domain.analytics.MilesBasis
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
@@ -44,12 +45,18 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     receiptRepriced = receiptRepricedAt != null,
 )
 
-internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
+/**
+ * Session row → domain. [deliveredPay] is the session's recorded pay ([SessionReportRule.recordedPayOf], or the
+ * SQL `d.deliveredPay`), REQUIRED so every caller supplies the input the effective report's #1459 floor needs.
+ */
+internal fun SessionRecordEntity.toDomain(deliveredPay: Double?): SessionRecord = SessionRecord(
     sessionId = sessionId,
     platform = Platform.fromWire(platform) ?: Platform.Unknown,
     startedAt = startedAt,
     endedAt = endedAt,
-    reportedEarnings = SessionReportRule.effectiveReported(reportedEarnings, endSource, reportOverrideMode, reportOverride),
+    reportedEarnings = SessionReportRule.effectiveReported(
+        reportedEarnings, endSource, reportOverrideMode, reportOverride, deliveredPay,
+    ),
     machineReportedEarnings = reportedEarnings,
     reportOverrideMode = reportOverrideMode,
     reportOverride = reportOverride,
@@ -73,7 +80,10 @@ internal fun SessionRecordEntity.toDomain(): SessionRecord = SessionRecord(
  * Recent-dashes row → domain (#688 F7): the embedded session row mapped as usual, with its Σ cash
  * tips carried onto [SessionRecord.cashTips] for the additive "+cash" marker.
  */
-internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain().copy(cashTips = cash)
+internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain(deliveredPay).copy(cashTips = cash)
+
+/** Shift row with its recorded pay → domain (#1443/#1459): the recorded pay floors the effective report. */
+internal fun ShiftPayRow.toDomain(): SessionRecord = session.toDomain(recordedPay)
 
 /**
  * Offers-list row → domain (#975 / brief §7.4). Platform is registry-resolved and the stored

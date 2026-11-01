@@ -74,7 +74,10 @@ data class SessionRecord(
     val platform: Platform,
     val startedAt: Long,
     val endedAt: Long?,
-    /** The effective report: driver SET/CLEAR, else the trusted machine value; [machineReportedEarnings] is the verbatim column. */
+    /**
+     * The effective report: driver SET/CLEAR, else the trusted machine value, a non-summary running total floored at
+     * the session's recorded pay (#1459); [machineReportedEarnings] is the verbatim column.
+     */
     val reportedEarnings: Double?,
     val machineReportedEarnings: Double? = reportedEarnings,
     val reportOverrideMode: String? = null,

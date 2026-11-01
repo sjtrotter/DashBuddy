@@ -44,7 +44,7 @@ class AnalyticsRepositoryTest {
             .allowMainThreadQueries()
             .build()
         dao = db.analyticsDao()
-        repo = AnalyticsRepository(dao, db.appEventDao())
+        repo = AnalyticsRepository(dao, db.appEventDao(), db.hudShiftDao())
     }
 
     @After
@@ -270,6 +270,54 @@ class AnalyticsRepositoryTest {
         val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
         assertEquals("frozen net 0 (null) + unattributed 0 + cash 4", 4.0, eco.netProfit, 1e-9)
         assertEquals("gross = delivered 8 + cash 4", 12.0, eco.grossEarnings, 1e-9)
+    }
+
+    /**
+     * #1459: an early-ended shift whose running total (12) is below its recorded pay (16, an assigned row
+     * included) reads 16 through every repository read that maps it, with its cash (3) kept apart.
+     */
+    @Test
+    fun `a stale early running total reads as recorded pay through recent, candidate and detail reads (#1459)`() = runBlocking {
+        dao.upsertSession(session("STALE", base, reportedEarnings = 12.0, durationMillis = 2 * hour, startOdo = 0.0,
+            lastOdo = 0.0, deliveries = 2, jobsCompleted = 2, endSource = "early_offline"))
+        dao.upsertDelivery(delivery(1, "STALE", "J1", "Wendys", pay = 10.0, net = 7.0, completedAt = base + hour, cashTip = 3.0))
+        dao.upsertDelivery(delivery(2, "STALE", "J2", "Chipotle", pay = 6.0, net = 4.0, completedAt = base + 90 * 60_000L,
+            sessionAssigned = 1))
+
+        val recent = repo.recentSessions(limit = 10).first().single()
+        assertEquals(16.0, recent.reportedEarnings!!, 1e-9)
+        assertEquals("cash stays its own field", 3.0, recent.cashTips, 1e-9)
+        val candidate = repo.candidateSessionsForOrphan(base + hour, cloud.trotter.log.gig.domain.state.Platform.DoorDash).single()
+        assertEquals(16.0, candidate.reportedEarnings!!, 1e-9)
+        val detail = repo.sessionDetail("STALE").first()!!
+        assertEquals(16.0, detail.session.reportedEarnings!!, 1e-9)
+        assertEquals(0.0, detail.unattributedPay, 1e-9)
+        assertEquals(0.0, detail.overAttributedPay, 1e-9)
+        val economics = repo.periodEconomics(AnalyticsPeriod.LIFETIME).first()
+        assertEquals("gross = floored report 16 + cash 3", 19.0, economics.grossEarnings, 1e-9)
+        assertEquals(0.0, economics.overAttributedPay, 1e-9)
+        assertEquals(16.0, economics.grossSources.recordedPayReported, 1e-9)
+        assertEquals(economics.grossEarnings, economics.grossSources.sum(economics.noSessionPay), 1e-9)
+
+        // A delivery-only change (a re-price of row 2) moves the past shift's report with it.
+        dao.upsertDelivery(delivery(2, "STALE", "J2", "Chipotle", pay = 9.0, net = 7.0, completedAt = base + 90 * 60_000L,
+            sessionAssigned = 1))
+        assertEquals(19.0, repo.recentSessions(limit = 10).first().single().reportedEarnings!!, 1e-9)
+    }
+
+    /** #1459 council: a bounded CSV export floors a shift at ALL its recorded pay, not only the window's deliveries. */
+    @Test
+    fun `a bounded CSV export reads a shift's full recorded pay`() = runBlocking {
+        dao.upsertSession(session("STALE", base, reportedEarnings = 12.0, durationMillis = 2 * hour, startOdo = 0.0,
+            lastOdo = 0.0, deliveries = 2, jobsCompleted = 2, endSource = "early_offline"))
+        dao.upsertDelivery(delivery(1, "STALE", "J1", "Wendys", pay = 10.0, net = 7.0, completedAt = base + hour))
+        dao.upsertDelivery(delivery(2, "STALE", "J2", "Chipotle", pay = 6.0, net = 4.0, completedAt = base + 3 * hour))
+        val out = repo.buildCsvExport(java.time.ZoneId.of("UTC"), base, start = base, end = base + 2 * hour)
+        assertEquals(1, out.deliveriesCsv.trim().lines().size - 1) // only row 1 completes inside the window
+        val row = out.sessionsCsv.trim().lines()[1].split(",")
+        assertEquals("16.00", row[4])
+        assertEquals("RECORDED_PAY", row[5])
+        assertTrue(out.summaryCsv.lines().contains("total_recorded_pay_earnings,16.00"))
     }
 
     /** F7: the recent-dashes read path carries each session's Σ cash tips (never folded into reportedEarnings). */
