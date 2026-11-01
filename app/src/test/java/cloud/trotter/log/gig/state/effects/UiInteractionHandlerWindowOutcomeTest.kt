@@ -268,11 +268,19 @@ class UiInteractionHandlerWindowOutcomeTest : UiInteractionHandlerTapTestKit() {
             on { isInPictureInPictureMode } doReturn false
         }
 
+    /**
+     * #1471: AccessibilitySource holds its service only weakly (the framework keeps the real one alive), and
+     * Mockito holds mocks weakly too, so an unreferenced service mock can be collected mid-test. A collected
+     * service reads as no windows, which these tests' `false` outcomes would accept for the wrong reason.
+     */
+    private val services = mutableListOf<android.accessibilityservice.AccessibilityService>()
+
     private fun realHandler(rootInActive: AccessibilityNodeInfo?, windows: List<android.view.accessibility.AccessibilityWindowInfo>): UiInteractionHandler {
         val service = mock<android.accessibilityservice.AccessibilityService> {
             on { rootInActiveWindow } doReturn rootInActive
             on { this.windows } doReturn windows
         }
+        services += service
         return UiInteractionHandler(AccessibilitySource().apply { registerService(service) })
     }
 

@@ -38,8 +38,13 @@ class AccessibilitySourceWindowRootsTest {
     private fun window(node: AccessibilityNodeInfo?): AccessibilityWindowInfo =
         mock { on { root } doReturn node }
 
-    private fun sourceFor(service: AccessibilityService): AccessibilitySource =
-        AccessibilitySource().apply { registerService(service) }
+    /** #1471: AccessibilitySource holds its service weakly; hold the mocks here so a GC can't clear them mid-test. */
+    private val services = mutableListOf<AccessibilityService>()
+
+    private fun sourceFor(service: AccessibilityService): AccessibilitySource {
+        services += service
+        return AccessibilitySource().apply { registerService(service) }
+    }
 
     @Test
     fun `active-window root enumerated twice is deduped, active still first`() {

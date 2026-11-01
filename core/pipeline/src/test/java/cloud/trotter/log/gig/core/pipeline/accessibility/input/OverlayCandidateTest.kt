@@ -57,12 +57,16 @@ class OverlayCandidateTest {
         bounds,
     )
 
+    /** #1471: AccessibilitySource holds its service weakly; hold the mocks here so a GC can't clear them mid-test. */
+    private val services = mutableListOf<AccessibilityService>()
+
     private fun source(windows: List<AccessibilityWindowInfo> = emptyList(), res: Resources? = displayResources()): AccessibilitySource {
         val service = mock<AccessibilityService> {
             on { this.windows } doReturn windows
             on { resources } doReturn res
             on { packageName } doReturn "cloud.trotter.log.gig"
         }
+        services += service
         return AccessibilitySource(stats).apply { registerService(service) }
     }
 
