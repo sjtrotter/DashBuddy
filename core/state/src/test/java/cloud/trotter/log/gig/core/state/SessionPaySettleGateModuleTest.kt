@@ -105,6 +105,8 @@ class SessionPaySettleGateModuleTest {
                         session = before.session!!.copy(
                             accumulatedDeliveryPay = accumulated,
                             runningEarnings = running,
+                            // #1460: no dropoff on the region, so the receipt subject is "?".
+                            lastAccumulatedReceipt = "?|${Math.round(totalPay * 100)}",
                         ),
                         pendingSessionPay = null,
                     ),
@@ -114,6 +116,21 @@ class SessionPaySettleGateModuleTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `an identical receipt re-entry is not added again but still drops older parks`() {
+        val first = SessionPaySettleGate.receiptEntry(
+            region().copy(activeJob = liveJob), ParsedFields.PostTaskFields(totalPay = 8.0), now,
+        )
+        val before = first.copy(pendingSessionPay = park(now))
+        val later = now + 2_000L
+
+        assertEquals(
+            "#1460: same subject and total, so only the older park goes",
+            before.copy(pendingSessionPay = null),
+            SessionPaySettleGate.receiptEntry(before, ParsedFields.PostTaskFields(totalPay = 8.0), later),
+        )
     }
 
     @Test

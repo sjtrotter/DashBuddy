@@ -21,4 +21,10 @@ data class Session(
     val earningMode: SessionType? = null,
     val runningEarnings: Double? = null,
     val accumulatedDeliveryPay: Double? = null,
+    /**
+     * The receipt key (receipt subject task id and total in cents) last added to
+     * [accumulatedDeliveryPay], so an identical re-entry after an overlay is not added twice
+     * (#1460). Null until a receipt is added; an old blob decodes it null.
+     */
+    val lastAccumulatedReceipt: String? = null,
 )

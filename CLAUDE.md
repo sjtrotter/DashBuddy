@@ -511,7 +511,7 @@ stood its window commits on the departure frame), a flow-LESS observation checks
 re-based UNCONFIRMED on the way back (a fresh agreeing read on its own surface is required to commit).
 Crash recovery DROPS any restored park. `Session.runningEarnings` /
 `accumulatedDeliveryPay` are nullable — null is never-parsed and renders as the em dash, never `$0.00`
-(#1041).
+(#1041); a receipt re-entered after an overlay is not added again (#1460, keyed by receipt subject and total).
 
 **Timer identity (#1054):** every arm from `ModeEffects.diffDeadlineTimer` carries
 `ObservationPayload.GraceWake(wakeId)`, a per-region generation from `PlatformRegion.wakeSeq` via

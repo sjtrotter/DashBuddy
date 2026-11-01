@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
 import cloud.trotter.log.gig.domain.state.Flow
@@ -90,17 +91,34 @@ internal object SessionPaySettleGate {
         }
         if (postFields != null && postFields.totalPay > 0 && r.ownsReceiptJob()) {
             r.session?.let { session ->
-                val accumulated = (session.accumulatedDeliveryPay ?: 0.0) + postFields.totalPay
-                val best = maxOf(session.runningEarnings ?: 0.0, accumulated)
-                r = r.copy(session = session.copy(
-                    accumulatedDeliveryPay = accumulated,
-                    runningEarnings = best,
-                ))
+                // #1460: an offer pop-up over the receipt walks PostTask → OfferPresented → PostTask,
+                // and the second entry edge is the SAME receipt. The key is the receipt's subject AND
+                // its total, so another drop's receipt, or this drop's corrected one, still adds;
+                // only an identical re-entry is skipped. A wrong skip costs at most one drop's pay in
+                // the accumulated figure, and the headline also takes the max with recorded pay (#1443).
+                val key = "${r.receiptSubjectTaskId() ?: "?"}|${Formats.cents(postFields.totalPay)}"
+                if (key != session.lastAccumulatedReceipt) {
+                    val accumulated = (session.accumulatedDeliveryPay ?: 0.0) + postFields.totalPay
+                    val best = maxOf(session.runningEarnings ?: 0.0, accumulated)
+                    r = r.copy(session = session.copy(
+                        accumulatedDeliveryPay = accumulated,
+                        runningEarnings = best,
+                        lastAccumulatedReceipt = key,
+                    ))
+                }
                 // #1029: this is a NON-gated write of runningEarnings, so it supersedes every
                 // park older than itself — otherwise a park made before the receipt could
                 // expire afterwards and overwrite it. `since >= now` is load-bearing: the
                 // receipt's OWN wheel read was parked by updateSessionFields a few lines
                 // above, on THIS same frame, and that park must survive.
+                //
+                // #1460: a skipped re-entry still supersedes, as every entry edge did before. With no
+                // write there is no newer figure to protect, but while the dash is Online the drop is
+                // a no-op: a park is owned by its flow ([lapse]), so leaving the receipt for the
+                // overlay already dropped any receipt park, and a park from another surface was
+                // dropped when the flow moved to PostTask. A frozen (non-Online) park is dropped here
+                // exactly as it was before this fix. Either way an entry edge leaves no older park
+                // alive, whichever branch ran.
                 r = r.supersedeParksOlderThan(now)
             }
         }
