@@ -165,6 +165,10 @@ internal fun AnalyticsContent(
             )
         },
     ) { padding ->
+        // #1447: the scrolling column waits for its content. Composed over the placeholder, a
+        // restored scroll offset would be clamped to the short content and lost.
+        val feed = if (uiState.selectedTab == AnalyticsTab.Offers) offersFeed() else null
+        if (!uiState.loaded || feed?.loaded == false) return@Scaffold
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -231,7 +235,7 @@ internal fun AnalyticsContent(
                         showMore = uiState.showMore,
                         decisions = uiState.decisions,
                         estimateVsReality = uiState.estimateVsReality,
-                        offersFeed = offersFeed(),
+                        offersFeed = requireNotNull(feed),
                         onSelectFilter = onSelectFilter,
                         onShowAllOffers = onShowAllOffers,
                     )

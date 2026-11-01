@@ -84,7 +84,9 @@ import cloud.trotter.log.gig.ui.main.settings.garage.VehicleDetailsViewModel
 import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.log.gig.ui.main.setup.wizard.wizardViewModelForTest
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -483,7 +485,8 @@ class MainNavigationTest {
         assertSame(vm, created.single())
         compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_not_saved))
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_retry)).performClick()
+        // The inline Try again sits under the "Not saved." line, below the fold on a small screen.
+        compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_retry)).performScrollTo().performClick()
         compose.waitUntil { vm.failure.value == GarageWriteFailure.NONE }
         runBlocking { verify(repository, times(2)).updateProfile(any(), any<(VehicleProfile) -> VehicleProfile>()) }
     }
@@ -521,7 +524,8 @@ class MainNavigationTest {
         assertSame(vm, created.single())
         compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_not_saved))
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_retry)).performClick()
+        // The inline Try again sits under the "Not saved." line, below the fold on a small screen.
+        compose.onNodeWithText(compose.activity.getString(R.string.vehicle_details_retry)).performScrollTo().performClick()
         compose.waitUntil { vm.failure.value == GarageWriteFailure.NONE }
     }
 
@@ -558,6 +562,9 @@ class MainNavigationTest {
     private val hubRepository: AnalyticsRepository = mock()
     private val hubPreferences: AppPreferencesRepository = mock()
 
+    /** Holds the offers read back while false, as a slow Room query would after a restore. */
+    private val offersReady = MutableStateFlow(true)
+
     /** `AnalyticsViewModelTest`'s stubs, every window read served, forty declined offers listed. */
     private fun stubHub() {
         val listings = (1L..40L).map { seq ->
@@ -565,7 +572,8 @@ class MainNavigationTest {
                 decidedAt = seq, payAmount = 8.0, distanceMiles = 3.0, estDollarsPerHour = 18.0, score = 6.0,
                 outcome = OfferOutcome.DECLINED)
         }
-        whenever(hubPreferences.analyticsShowMore).thenReturn(MutableStateFlow(false))
+        // The Offers list sits in the More numbers tier (`OffersTab`), so the hub shows more.
+        whenever(hubPreferences.analyticsShowMore).thenReturn(MutableStateFlow(true))
         whenever(hubPreferences.analyticsWindow).thenReturn(MutableStateFlow(AnalyticsWindowSelection.DEFAULT))
         with(hubRepository) {
             whenever(periodEconomics(any<AnalyticsWindow>(), anyOrNull(), any<ZoneId>()))
@@ -580,7 +588,7 @@ class MainNavigationTest {
             whenever(platformEconomics(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(emptyList<PlatformEconomics>()) }
             whenever(estimateVsReality(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(EstimateVsReality.EMPTY) }
             whenever(offers(any<AnalyticsWindow>(), any(), any(), any(), any<ZoneId>()))
-                .thenAnswer { flowOf(listings.take(it.getArgument<Int>(2))) }
+                .thenAnswer { inv -> offersReady.filter { it }.map { listings.take(inv.getArgument<Int>(2)) } }
             whenever(offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>())).thenAnswer { flowOf(listings.size) }
             whenever(recentSessions(any())).thenReturn(flowOf(emptyList()))
         }
@@ -623,6 +631,7 @@ class MainNavigationTest {
 
         bar(TopLevel.PLAYBOOK)
         owner = Owner()
+        offersReady.value = false
         tester.emulateSavedInstanceStateRestore()
         compose.waitForIdle()
         assertEquals(playbook, current())
@@ -630,6 +639,10 @@ class MainNavigationTest {
         bar(TopLevel.ANALYTICS)
         val restored = created.last()
         assertNotSame(first, restored)
+        // The offers read is still pending: nothing scrollable is composed to clamp the offset.
+        compose.onNode(verticalScroll).assertDoesNotExist()
+        offersReady.value = true
+        compose.waitForIdle()
         assertEquals(AnalyticsTab.Offers, restored.uiState.value.selectedTab)
         assertEquals(OfferFilter.DECLINED, restored.offersFeed.value.filter)
         assertEquals(AnalyticsRepository.MAX_OFFER_PAGE.coerceAtMost(40), restored.offersFeed.value.offers.size)

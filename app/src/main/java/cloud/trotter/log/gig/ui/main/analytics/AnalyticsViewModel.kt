@@ -196,7 +196,7 @@ class AnalyticsViewModel @Inject constructor(
             noSessionDeliveries = data.extras.orphanDeliveries,
             orphanOfferGroups = data.extras.orphanOfferGroups,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState(loaded = false))
 
     /**
      * The previous-equivalent window's economics, or a `null` emission for a window that has no
@@ -236,7 +236,7 @@ class AnalyticsViewModel @Inject constructor(
                     analyticsRepository.offerCount(w, filter),
                 ) { rows, total -> OffersFeedState(filter = filter, offers = rows, total = total) }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState(loaded = false))
 
     /** UDF intent — the filter chips. Re-collapses the page: a new filter is a new list. */
     fun setOfferFilter(filter: OfferFilter) {

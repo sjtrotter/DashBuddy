@@ -5,11 +5,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.performSemanticsAction
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
@@ -52,8 +53,13 @@ class TabScreensTest {
         compose.mainClock.advanceTimeBy(2_000)
     }
 
-    private fun click(node: androidx.compose.ui.test.SemanticsNodeInteraction) {
-        node.performClick()
+    /**
+     * Click through the node's OnClick action. Home ticks, so its clock is paused; under a paused
+     * clock a scroll (performScrollTo animates) never finishes and waitForIdle spins forever, so a
+     * row below the fold is clicked by its action rather than scrolled to and tapped.
+     */
+    private fun click(node: SemanticsNodeInteraction) {
+        node.performSemanticsAction(SemanticsActions.OnClick)
         compose.mainClock.advanceTimeBy(2_000)
     }
 
@@ -82,7 +88,7 @@ class TabScreensTest {
         // Ready: no entry tiles; Ratings is one row.
         compose.onNodeWithText(context.getString(R.string.analytics_screen_title)).assertDoesNotExist()
         compose.onNodeWithText(context.getString(R.string.playbook_screen_title)).assertDoesNotExist()
-        compose.onNodeWithText(context.getString(R.string.ratings_screen_title)).performScrollTo()
+        compose.onNodeWithText(context.getString(R.string.ratings_screen_title)).assertExists()
         click(compose.onNodeWithText(context.getString(R.string.dashboard_ratings_action)))
         assertEquals("ratings", calls.last())
     }

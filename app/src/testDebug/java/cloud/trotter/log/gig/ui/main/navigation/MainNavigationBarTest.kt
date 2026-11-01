@@ -1,7 +1,5 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -16,17 +14,18 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /** #1447 — the bottom bar: three labelled tabs, the selected one marked, taps reported, 200 % text fits. */
 @RunWith(RobolectricTestRunner::class)
@@ -37,13 +36,8 @@ class MainNavigationBarTest {
     private val tabNode = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
     private var tapped: TopLevel? = null
 
-    private fun show(selected: TopLevel, fontScale: Float = 1f) = compose.setContent {
-        GigLogTheme {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-                MainNavigationBar(selectedTab = selected, onSelectTab = { tapped = it })
-            }
-        }
+    private fun show(selected: TopLevel) = compose.setContent {
+        GigLogTheme { MainNavigationBar(selectedTab = selected, onSelectTab = { tapped = it }) }
     }
 
     private fun label(tab: TopLevel) = RuntimeEnvironment.getApplication().getString(tab.labelRes)
@@ -75,14 +69,33 @@ class MainNavigationBarTest {
         for (entry in TopLevel.entries) tab(entry).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
     }
 
-    @Test fun `at 200 percent text no label overflows`() {
-        show(TopLevel.HOME, fontScale = 2f)
+    /**
+     * 200 % text on the phone DESIGN.md's rules are written for (the Pixel 7 the screenshots use, 411 dp
+     * wide), at the system font scale, with real font metrics: the default (legacy) graphics measure
+     * "Home" at 4.5 px.
+     *
+     * A label fits when its one-line width fits the width the bar gives it and it never wraps past its
+     * lines. `didOverflowWidth` is not the check: a centred label is laid out across its slot, so its
+     * box is narrower than its paragraph whenever it is shorter than the slot.
+     */
+    @Test @Config(qualifiers = PIXEL_7, fontScale = 2f) @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun `at 200 percent text no label overflows`() {
+        show(TopLevel.HOME)
         for (entry in TopLevel.entries) {
             val results = mutableListOf<TextLayoutResult>()
             labelNode(entry).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
             val layout = results.single()
+            val width = layout.multiParagraph.maxIntrinsicWidth
+            val slot = layout.layoutInput.constraints.maxWidth
+            assertEquals(2f, layout.layoutInput.density.fontScale, 0f)
+            assertTrue("${entry.name} label is $width px, wider than its $slot px slot", width <= slot)
+            assertEquals("${entry.name} label wraps", 1, layout.lineCount)
             assertFalse("${entry.name} label overflows its height", layout.didOverflowHeight)
-            assertFalse("${entry.name} label overflows its width", layout.didOverflowWidth)
         }
+    }
+
+    private companion object {
+        /** The Pixel 7 the key-screen screenshots render on (`RobolectricDeviceQualifiers.Pixel7`'s size). */
+        const val PIXEL_7 = "w411dp-h914dp-420dpi"
     }
 }
