@@ -219,7 +219,7 @@ class ReceiptReentryTest {
     fun `a receipt reached through another screen after the overlay adds again`() {
         // The trade-off, stated: once any frame other than the receipt or its overlay lands, the
         // machine can no longer tell the same receipt from a new one, so it adds (the pre-#1460
-        // behaviour on this path). The headline's max with recorded delivery pay (#1443) bounds it.
+        // behaviour on this path): an over-count the headline's max with recorded pay does not cap.
         val start = region(dropoff("d1", "c1", arrivedAt = 3_500L))
 
         val onReceipt = step(start, Flow.PostTask, receipt(8.50, t0))

@@ -111,13 +111,17 @@ back to the PREVIOUS job's completed drop and ownership to its `lastClosedJobRec
 receipt of the same total carries the same key, and a subject-less `?` key collides the same way;
 a key-only skip lost such receipts repeatedly, with no completion rows for recorded pay to rescue.
 Stated trade-off: receipt → overlay → any other screen → the same receipt adds again (the pre-#1460
-behaviour on that path), bounded by the headline's max with recorded delivery pay (#1443). Residual:
+behaviour on that path: an over-count, which the headline's max with recorded pay does not cap). Residual:
 an overlay over A's receipt followed directly by job B's receipt at the same total, with every one of
 B's frames missed in between, is still read as A's re-entry. The ownership check, the #1103 refusal
 log and rule (c)'s park supersession are unchanged on a skipped entry: while the dash is Online the
 supersession is a no-op there (rule (a) already dropped any park when the flow left the receipt or
 arrived on it), and keeping it means no entry edge leaves an older park alive. A new session starts
-with the key null; an old snapshot decodes it null.
+with the key null; an old snapshot decodes it null. Replay across the upgrade (Sol r2, developer decision
+2026-11-01): a journal tail recorded by the pre-#1460 reducer replays with the skip, which can shift `wakeSeq`; in the
+narrow case of receipt → overlay → the same receipt → pause → safety wake → offer inside that tail, a session end can be
+lost. Accepted rather than versioning the reducer: install this build with no shift running, so the tail since the last
+snapshot holds no live receipt sequence.
 **(d) comparisons are cent-tolerant** (`accumulatedDeliveryPay + totalPay` is not bit-equal to the
 2-dp figure the wheel renders).
 **(e) a pending's own wake lapses it by IDENTITY; a frame lapses the park at-or-past** — the timer is
