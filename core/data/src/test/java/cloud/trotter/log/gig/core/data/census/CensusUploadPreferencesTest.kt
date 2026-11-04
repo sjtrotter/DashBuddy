@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.NotificationSkeletonSchema
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +84,27 @@ class CensusUploadPreferencesTest {
         repo.setCensusUploadEnabled(true)
         assertTrue(repo.censusUploadEnabled.first())
         assertFalse(repo.censusShareCaptures.first())
+    }
+
+    @Test fun `enrol rejection reason roundtrips decodes an unknown stored token fail closed and clears`() = runTest {
+        val ds = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                transform(data.value).also { data.value = it }
+        }
+        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler))
+        val run = CensusLastRun(5L, CensusRunOutcome.ENROL_REJECTED, 422, reason = CensusEnrolRejectReason.UNSUPPORTED_SCHEMA)
+        repo.setCensusLastRun(run)
+        assertEquals(run, repo.censusLastRun.first())
+        assertEquals("enrol_rejected 422 unsupported_schema", repo.censusLastRun.first()?.token())
+        ds.edit { it[stringPreferencesKey("census_last_run_reason")] = "raw server text" }
+        assertEquals(CensusEnrolRejectReason.UNKNOWN_REASON, repo.censusLastRun.first()?.reason)
+        assertEquals("enrol_rejected 422 unknown_reason", repo.censusLastRun.first()?.token())
+        repo.setCensusLastRun(CensusLastRun(6L, CensusRunOutcome.ENROLLED))
+        assertNull(repo.censusLastRun.first()?.reason)
+        repo.setCensusLastRun(run)
+        repo.recordCensusReset(CensusLastRun(7L, CensusRunOutcome.RESET))
+        assertEquals(CensusLastRun(7L, CensusRunOutcome.RESET), repo.censusLastRun.first())
     }
 
     @Test fun `legacy last run without envelope count reads zero`() = runTest {

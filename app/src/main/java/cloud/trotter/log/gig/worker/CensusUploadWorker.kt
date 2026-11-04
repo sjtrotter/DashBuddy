@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import cloud.trotter.log.gig.BuildConfig
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore.Credential
+import cloud.trotter.log.gig.core.data.census.CensusEnrolSchemas
 import cloud.trotter.log.gig.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.log.gig.core.data.census.CensusSpool
 import cloud.trotter.log.gig.core.data.census.PersistentHealthSink
@@ -22,6 +23,7 @@ import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
@@ -75,6 +77,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private class RunRecord {
         var outcome: CensusRunOutcome = CensusRunOutcome.FAILURE
         var detail: Int? = null
+        var reason: CensusEnrolRejectReason? = null
         var skeletonSpoolEmpty = false
         var envelopesPosted = 0
         var envelopesRejected = 0
@@ -85,7 +88,9 @@ class CensusUploadWorker @AssistedInject constructor(
         var healthPosted = 0
         var healthRejected = 0
         var healthFailed = 0
-        fun set(outcome: CensusRunOutcome, detail: Int? = null) { this.outcome = outcome; this.detail = detail }
+        fun set(outcome: CensusRunOutcome, detail: Int? = null, reason: CensusEnrolRejectReason? = null) {
+            this.outcome = outcome; this.detail = detail; this.reason = reason
+        }
     }
 
     override suspend fun doWork(): Result = uploadLock.mutex.withLock {
@@ -129,7 +134,7 @@ class CensusUploadWorker @AssistedInject constructor(
         // exactly what the status line exists to explain.
         if (record.outcome != CensusRunOutcome.DISABLED) {
             try {
-                preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), record.outcome, record.detail, record.envelopesPosted))
+                preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), record.outcome, record.detail, record.envelopesPosted, record.reason))
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -175,13 +180,25 @@ class CensusUploadWorker @AssistedInject constructor(
             logStoredDeadline(remainingSeconds)
             return Enrollment.Stop(Result.success())
         }
+        // #1522: read the policy first and declare only what it accepts; a failed read declares screens only and
+        // never replaces the stored policy. Both attempts below declare the same list.
+        val declared = when (val policy = api.policy()) {
+            is PolicyResult.Available -> {
+                preferences.setCensusPolicy(policy.policy)
+                CensusEnrolSchemas.declared(policy.policy)
+            }
+            is PolicyResult.Unavailable, is PolicyResult.TransportFailure -> CensusEnrolSchemas.declared(null)
+        }
+        if (declared.isEmpty()) {
+            return Enrollment.Stop(enrolRejected(record, null, CensusEnrolRejectReason.UNSUPPORTED_SCHEMA))
+        }
         var credential = initial
         repeat(2) { attempt ->
             if (!preferences.censusUploadEnabled.first()) {
                 record.set(CensusRunOutcome.DISABLED)
                 return Enrollment.Stop(Result.success())
             }
-            when (val result = api.enrol(credential.bearer(), BuildConfig.VERSION_NAME)) {
+            when (val result = api.enrol(credential.bearer(), BuildConfig.VERSION_NAME, declared)) {
                 is EnrolResult.Enrolled -> {
                     preferences.setCensusPolicy(result.policy)
                     credentials.markEnrolled()
@@ -205,7 +222,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 EnrolResult.Revoked -> return Enrollment.Stop(revoke(record))
                 is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter, DeferCause.ENROL_RATE_LIMIT))
                 EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(record, 401))
-                is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status))
+                is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status, result.reason))
                 is EnrolResult.ServerUnavailable, is EnrolResult.TransportFailure ->
                     return Enrollment.Stop(failure(record))
             }
@@ -556,11 +573,12 @@ class CensusUploadWorker @AssistedInject constructor(
         return Result.success()
     }
 
-    private fun enrolRejected(record: RunRecord, status: Int): Result {
-        record.set(CensusRunOutcome.ENROL_REJECTED, status)
+    /** [status] is null when the app refused locally (no schema overlaps the policy); [reason] is the closed enum only. */
+    private fun enrolRejected(record: RunRecord, status: Int?, reason: CensusEnrolRejectReason? = null): Result {
+        record.set(CensusRunOutcome.ENROL_REJECTED, status, reason)
         stats.enrolRejected.incrementAndGet()
         if (enrolRejectedWarned.compareAndSet(false, true)) {
-            Timber.tag(TAG).w("census enrol rejected status=%d", status)
+            Timber.tag(TAG).w("census enrol rejected status=%s reason=%s", status?.toString() ?: "none", reason?.wire ?: "none")
         }
         return Result.success()
     }

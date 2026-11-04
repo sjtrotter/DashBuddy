@@ -6,7 +6,7 @@ enum class CensusRunOutcome(val wire: String) {
     DEFERRED("deferred"),            // detail = seconds until the stored deadline, when known
     ENROLLED("enrolled"),
     ENROL_CONFLICT("enrol_conflict"),
-    ENROL_REJECTED("enrol_rejected"), // detail = HTTP status
+    ENROL_REJECTED("enrol_rejected"), // detail = HTTP status (none when no schema overlaps); reason = server reason
     KEYSTORE_TRANSIENT("keystore_transient"),
     HEALTH_POSTED("health_posted"), // detail = reports accepted this run
     HEALTH_REJECTED("health_rejected"), // detail = reports rejected this run
@@ -33,13 +33,31 @@ enum class CensusRunOutcome(val wire: String) {
     }
 }
 
+/**
+ * Why the server refused an enrolment, decoded from its `error` field through this closed set (#1522). Any other
+ * string becomes [UNKNOWN_REASON]; the raw server text is never stored or logged.
+ */
+enum class CensusEnrolRejectReason(val wire: String) {
+    UNSUPPORTED_SCHEMA("unsupported_schema"),
+    BAD_REQUEST("bad_request"),
+    UNAUTHORIZED("unauthorized"),
+    UNKNOWN_REASON("unknown_reason");
+
+    companion object {
+        /** Fail-closed decode of a server reply or a stored token: null stays null, anything unknown is UNKNOWN_REASON. */
+        fun fromWire(wire: String?): CensusEnrolRejectReason? =
+            wire?.let { entries.firstOrNull { reason -> reason.wire == it } ?: UNKNOWN_REASON }
+    }
+}
+
 /** The last uploader run (or identity reset), persisted in developer settings so it survives process death. */
 data class CensusLastRun(
     val atMillis: Long,
     val outcome: CensusRunOutcome,
     val detail: Int? = null,
     val envelopesPosted: Int = 0,
+    val reason: CensusEnrolRejectReason? = null,
 ) {
-    /** Developer-screen token, e.g. `uploaded 12`, `enrol_rejected 401`, `unauthorized`. */
-    fun token(): String = if (detail == null) outcome.wire else "${outcome.wire} $detail"
+    /** Developer-screen token, e.g. `uploaded 12`, `enrol_rejected 422 unsupported_schema`, `unauthorized`. */
+    fun token(): String = listOfNotNull(outcome.wire, detail?.toString(), reason?.wire).joinToString(" ")
 }

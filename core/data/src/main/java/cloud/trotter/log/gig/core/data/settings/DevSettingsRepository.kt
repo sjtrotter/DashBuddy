@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.core.data.settings
 
+import cloud.trotter.log.gig.core.data.census.CensusEnrolSchemas
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
@@ -16,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import cloud.trotter.census.contract.SkeletonSchema
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -45,9 +46,12 @@ class DevSettingsRepository @Inject constructor(
     }
     val censusAvailable: Boolean get() = isDebug
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
-        raw?.let { (at, wire, detail, envelopes) -> CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes) }
+        raw?.let { (at, wire, detail, envelopes, reason) ->
+            CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes, CensusEnrolRejectReason.fromWire(reason))
+        }
     }
-    suspend fun setCensusLastRun(run: CensusLastRun) = dataSource.setCensusLastRun(run.atMillis, run.outcome.wire, run.detail, run.envelopesPosted)
+    suspend fun setCensusLastRun(run: CensusLastRun) =
+        dataSource.setCensusLastRun(run.atMillis, run.outcome.wire, run.detail, run.envelopesPosted, run.reason?.wire)
     suspend fun recordCensusReset(run: CensusLastRun) = dataSource.recordCensusReset(run.atMillis, run.outcome.wire)
 
     /** Consent OFF also turns capture sharing OFF; the data source enforces this atomically. */
@@ -59,9 +63,7 @@ class DevSettingsRepository @Inject constructor(
             val number = element as? JsonPrimitive
             number?.takeUnless { it.isString }?.intOrNull?.let { key to it }
         }.toMap(),
-        (value["acceptedSchemaIds"] as? JsonArray).orEmpty().mapNotNull {
-            (it as? JsonPrimitive)?.takeIf { id -> id.isString }?.content
-        }.toSet(),
+        CensusEnrolSchemas.acceptedIn(value),
     )
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())

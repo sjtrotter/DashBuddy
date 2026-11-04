@@ -39,6 +39,9 @@ import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.domain.census.EnvelopeProjection
+import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
@@ -124,15 +127,18 @@ class CensusUploadWorkerTest {
         val enrollments = ArrayDeque<EnrolResult>()
         val uploads = ArrayDeque<UploadResult>()
         val enrolledIds = mutableListOf<String>()
+        val declaredSchemaIds = mutableListOf<List<String>>()
         val batches = mutableListOf<String>()
         val bodies = mutableListOf<List<String>>()
         var beforeUpload: (String, List<String>) -> Unit = { _, _ -> }
-        override suspend fun enrol(cred: Bearer.Credential, appVersion: String): EnrolResult {
+        override suspend fun enrol(cred: Bearer.Credential, appVersion: String, schemaIds: List<String>): EnrolResult {
             enrolledIds += cred.installId
+            declaredSchemaIds += schemaIds
             return enrollments.removeFirst()
         }
         var policyResult: PolicyResult = PolicyResult.Unavailable(503)
-        override suspend fun policy(): PolicyResult = policyResult
+        var policyCalls = 0
+        override suspend fun policy(): PolicyResult = policyResult.also { policyCalls++ }
         override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
             stages += "skeletons"
             beforeUpload(batchId, itemsJson)
@@ -428,7 +434,7 @@ class CensusUploadWorkerTest {
         val tree = warningTree(warnings)
         Timber.plant(tree)
         try {
-            for (rejection in listOf(EnrolResult.RequestRejected(400), EnrolResult.Unauthorized)) {
+            for (rejection in listOf(EnrolResult.RequestRejected(400, CensusEnrolRejectReason.BAD_REQUEST), EnrolResult.Unauthorized)) {
                 val h = harness()
                 h.initialize()
                 whenever(h.credentials.current()).thenReturn(null)
@@ -444,9 +450,88 @@ class CensusUploadWorkerTest {
                 verify(h.credentials, never()).markEnrolled()
                 verify(h.spool, never()).take(any(), any())
             }
-            assertEquals(listOf("census enrol rejected status=400"), warnings)
+            assertEquals(listOf("census enrol rejected status=400 reason=bad_request"), warnings)
         } finally {
             Timber.uproot(tree)
+        }
+    }
+
+    private fun policyOf(json: String) = Json.parseToJsonElement(json).jsonObject
+
+    private suspend fun Harness.pendingIdentity() {
+        initialize()
+        whenever(credentials.current()).thenReturn(null)
+        whenever(credentials.pending()).thenReturn(credential.copy(enrolled = false))
+    }
+
+    @Test fun `a screen only policy is read first and both enrol attempts declare screens only`() = runTest {
+        val h = harness()
+        h.pendingIdentity()
+        whenever(h.credentials.mint()).thenReturn(h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false))
+        val screenOnly = policyOf("""{"acceptedSchemaIds":["uinode.skeleton.v1"],"k":10}""")
+        h.api.policyResult = PolicyResult.Available(screenOnly)
+        h.api.enrollments += EnrolResult.InstallExists
+        h.api.enrollments += EnrolResult.Enrolled(screenOnly)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.policyCalls)
+        assertEquals(listOf(listOf(SkeletonSchema.SCHEMA_ID), listOf(SkeletonSchema.SCHEMA_ID)), h.api.declaredSchemaIds)
+        assertEquals(CensusRunOutcome.ENROLLED, h.preferences.censusLastRun.first()?.outcome)
+        assertEquals(setOf(SkeletonSchema.SCHEMA_ID), h.preferences.acceptedSchemaIds.first())
+        verify(h.credentials).markEnrolled()
+    }
+
+    @Test fun `a two schema policy declares both and is stored before enrolment`() = runTest {
+        val h = harness()
+        h.pendingIdentity()
+        val both = policyOf("""{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"]}""")
+        h.api.policyResult = PolicyResult.Available(both)
+        h.api.enrollments += EnrolResult.ServerUnavailable(503)
+        assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
+        assertEquals(listOf(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS), h.api.declaredSchemaIds)
+        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
+    }
+
+    @Test fun `a failed policy read declares screens only and leaves the stored policy alone`() = runTest {
+        for (failure in listOf(PolicyResult.Unavailable(503), PolicyResult.TransportFailure("IOException"))) {
+            val h = harness()
+            h.pendingIdentity()
+            h.preferences.setCensusPolicy(policyOf("""{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"],"k":10}"""))
+            h.api.policyResult = failure
+            h.api.enrollments += EnrolResult.ServerUnavailable(503)
+            assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
+            assertEquals(listOf(listOf(SkeletonSchema.SCHEMA_ID)), h.api.declaredSchemaIds)
+            assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
+            assertEquals(mapOf("k" to 10), h.preferences.censusPolicy.first())
+            verify(h.preferences, times(1)).setCensusPolicy(any())
+        }
+    }
+
+    @Test fun `a policy with nothing this app builds stops without enrolling`() = runTest {
+        val h = harness()
+        h.pendingIdentity()
+        h.api.policyResult = PolicyResult.Available(policyOf("""{"acceptedSchemaIds":["future.skeleton.v9"]}"""))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.api.enrolledIds.isEmpty())
+        val lastRun = requireNotNull(h.preferences.censusLastRun.first())
+        assertEquals(CensusRunOutcome.ENROL_REJECTED, lastRun.outcome)
+        assertNull(lastRun.detail)
+        assertEquals("enrol_rejected unsupported_schema", lastRun.token())
+        assertEquals(1L, h.stats.enrolRejected.get())
+        verify(h.credentials, never()).markEnrolled()
+        verify(h.spool, never()).take(any(), any())
+    }
+
+    @Test fun `an enrol refusal persists the closed reason on the status line`() = runTest {
+        for ((reason, token) in listOf(
+            CensusEnrolRejectReason.UNSUPPORTED_SCHEMA to "enrol_rejected 422 unsupported_schema",
+            CensusEnrolRejectReason.UNKNOWN_REASON to "enrol_rejected 422 unknown_reason",
+        )) {
+            val h = harness()
+            h.pendingIdentity()
+            h.api.enrollments += EnrolResult.RequestRejected(422, reason)
+            assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+            assertEquals(reason, h.preferences.censusLastRun.first()?.reason)
+            assertEquals(token, h.preferences.censusLastRun.first()?.token())
         }
     }
 

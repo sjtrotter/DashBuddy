@@ -424,8 +424,10 @@ delta are written in M3 against the screen they belong to (moved out of M0 by de
 A trusted install is a device the operator owns (the dev's phone; later, any self-hoster's phone
 against their own server) **running a capture-enabled build** — the redacted envelope it uploads
 exists only where a real `CaptureBus` is bound, and every release build binds `NoOpCaptureBus`
-(`captureScreen` returns before building anything). A release build therefore cannot be enrolled as
-trusted; the server refuses a trusted enrolment that does not declare the capture capability, and a
+(`captureScreen` returns before building anything). A release build therefore has no envelope to upload
+even if its key were trusted. Trust is the operator's setting on the server, made with the operator's TOTP code;
+enrolment declares no capture capability and the server checks none (corrected by #1522). Capture upload is gated
+in the app: only a debug build binds the envelope sink, and release binds the no-op. A
 self-hoster runs the same debug/dev flavour the developer does. It is enrolled explicitly — a per-install key marked trusted server-side
 and a dev-settings switch on the client that is never reachable from the consent screen. A trusted
 install uploads the **existing redacted capture envelope** for UNKNOWN frames (today's
