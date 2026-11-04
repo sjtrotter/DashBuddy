@@ -180,7 +180,8 @@ class CensusApiTest {
     @Test fun `all enrollment statuses map and malformed response is transport failure`() = runTest {
         val cases = listOf(
             Triple(409, "install_exists", EnrolResult.InstallExists),
-            Triple(401, "unauthorized", EnrolResult.Unauthorized),
+            Triple(401, "unauthorized", EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNAUTHORIZED)),
+            Triple(401, "something_new", EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNKNOWN_REASON)),
             Triple(401, "revoked", EnrolResult.Revoked),
             Triple(429, "rate_limited", EnrolResult.RateLimited(17)),
             Triple(408, "request_timeout", EnrolResult.ServerUnavailable(408)),

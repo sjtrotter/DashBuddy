@@ -181,7 +181,8 @@ class CensusUploadWorker @AssistedInject constructor(
             return Enrollment.Stop(Result.success())
         }
         // #1522: read the policy first and declare only what it accepts; a failed read declares screens only and
-        // never replaces the stored policy. Both attempts below declare the same list.
+        // never replaces the stored policy. Both attempts below declare the same list. A successful enrolment still
+        // stores the policy the server returns with it, as before: that reply is the server's current policy.
         val declared = when (val policy = api.policy()) {
             is PolicyResult.Available -> {
                 preferences.setCensusPolicy(policy.policy)
@@ -221,7 +222,6 @@ class CensusUploadWorker @AssistedInject constructor(
                 }
                 EnrolResult.Revoked -> return Enrollment.Stop(revoke(record))
                 is EnrolResult.RateLimited -> return Enrollment.Stop(defer(record, result.retryAfter, DeferCause.ENROL_RATE_LIMIT))
-                EnrolResult.Unauthorized -> return Enrollment.Stop(enrolRejected(record, 401))
                 is EnrolResult.RequestRejected -> return Enrollment.Stop(enrolRejected(record, result.status, result.reason))
                 is EnrolResult.ServerUnavailable, is EnrolResult.TransportFailure ->
                     return Enrollment.Stop(failure(record))

@@ -357,7 +357,7 @@ class CensusUploadWorkerTest {
             if (mints == 1) pending else replacement
         }
         h.api.enrollments += EnrolResult.InstallExists
-        h.api.enrollments += EnrolResult.Unauthorized
+        h.api.enrollments += EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNAUTHORIZED)
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(1L, h.stats.enrolRejected.get())
         verify(h.credentials, times(2)).mint()
@@ -434,7 +434,7 @@ class CensusUploadWorkerTest {
         val tree = warningTree(warnings)
         Timber.plant(tree)
         try {
-            for (rejection in listOf(EnrolResult.RequestRejected(400, CensusEnrolRejectReason.BAD_REQUEST), EnrolResult.Unauthorized)) {
+            for (rejection in listOf(EnrolResult.RequestRejected(400, CensusEnrolRejectReason.BAD_REQUEST), EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNAUTHORIZED))) {
                 val h = harness()
                 h.initialize()
                 whenever(h.credentials.current()).thenReturn(null)

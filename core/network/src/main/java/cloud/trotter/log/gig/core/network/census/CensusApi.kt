@@ -45,7 +45,6 @@ interface CensusTransport {
 sealed interface EnrolResult {
     data class Enrolled(val policy: JsonObject) : EnrolResult
     data object InstallExists : EnrolResult
-    data object Unauthorized : EnrolResult
     data object Revoked : EnrolResult
     data class RateLimited(val retryAfter: Long) : EnrolResult
     data class ServerUnavailable(val status: Int) : EnrolResult
@@ -131,18 +130,20 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         when (response.status) {
             200 -> EnrolResult.Enrolled(response.json())
             409 -> EnrolResult.InstallExists
-            401 -> if (response.isRevoked()) EnrolResult.Revoked else EnrolResult.Unauthorized
+            401 -> if (response.isRevoked()) EnrolResult.Revoked else response.rejected()
             429 -> EnrolResult.RateLimited(response.retryAfter)
             408, in 500..599 -> EnrolResult.ServerUnavailable(response.status)
-            // The body is already bounded by MAX_RESPONSE_BYTES; only the closed enum leaves this method.
-            else -> EnrolResult.RequestRejected(response.status,
-                CensusEnrolRejectReason.fromWire(response.error()) ?: CensusEnrolRejectReason.UNKNOWN_REASON)
+            else -> response.rejected()
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         EnrolResult.TransportFailure(e.failureToken())
     }
+
+    // The body is already bounded by MAX_RESPONSE_BYTES; only the closed enum leaves this method.
+    private fun Reply.rejected(): EnrolResult = EnrolResult.RequestRejected(status,
+        CensusEnrolRejectReason.fromWire(error()) ?: CensusEnrolRejectReason.UNKNOWN_REASON)
 
     override suspend fun policy(): PolicyResult = try {
         val response = execute(Request.Builder().url("$baseUrl/v1/policy").header("User-Agent", USER_AGENT).get().build())
