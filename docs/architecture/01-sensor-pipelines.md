@@ -766,8 +766,15 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
 - *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
   release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
-  Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool and are advertised at
-  enrollment; rejection codes derive from the contract enum. Screens and notifications share the
+  Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool; rejection codes derive from
+  the contract enum. **Enrolment declares what the policy accepts (#1522):** a pending identity first reads
+  `GET /v1/policy` and declares `SUPPORTED_SCHEMA_IDS` filtered to the policy's `acceptedSchemaIds`, in
+  `SUPPORTED_SCHEMA_IDS` order (`CensusEnrolSchemas.declared`, `:core:data`, the one owner; the stored policy's
+  accepted-id parse is the same object's `acceptedIn`). A fetched policy is stored as the enrolled refresh stores
+  it; a failed read declares screens only and never writes the stored policy. Both attempts of the
+  install-exists re-mint declare the same list. An empty intersection (the server accepts nothing this app
+  builds) does not call enrol and records `enrol_rejected unsupported_schema`, with no HTTP status. Before
+  #1522 a new identity always declared both schemas and a screens-only server refused it with 422 forever. Screens and notifications share the
   server-authoritative 300/day ledger and common 429 deferral; no client daily counter is introduced.
   The spool retains at most 2,000 records / 20 MiB, dropping oldest first; corrupt and oversized
   records are deleted and counted. Every 50 appends or at 100 queued items requests unique KEEP
@@ -813,14 +820,17 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   backoff cannot swallow it), which mints + enrols a fresh id (the old server install is orphaned, not
   withdrawn). The worker's "identity unknown to server" WARN latch is keyed to the current install id
   (`unauthorizedWarnedFor`: a changed identity re-arms it). Every run persists ONE
-  `CensusLastRun(atMillis, CensusRunOutcome, detail?)` into developer settings (`:domain` vocabulary, wire
+  `CensusLastRun(atMillis, CensusRunOutcome, detail?, envelopesPosted, reason?)` into developer settings (`:domain` vocabulary, wire
   strings `deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|stale_removed|
   uploaded|duplicate|rejected|oversized|bad_request|unauthorized|clock_skew|revoked|failure|reset`, decode
   fail-closed to `unknown`), EXCEPT a consent-off no-op (`disabled`), which writes nothing so the terminal
   outcome it would overwrite (`revoked`, `enrol_rejected`…) stays readable; the last decisive site wins, an
   otherwise idle run keeps `enrolled`, accepted/duplicate/rejected/stale totals summarize at the end of a
   drain, and three exhausted batches never claim `spool_empty`; an unresigned non-skew 401 is the consent
-  check short-circuiting, recorded as nothing rather than `unauthorized`. The screen renders it raw as
+  check short-circuiting, recorded as nothing rather than `unauthorized`. An enrol 4xx carries the server's
+  `error` decoded through the closed `CensusEnrolRejectReason` (`unsupported_schema|bad_request|unauthorized`,
+  anything else `unknown_reason`; a stored unknown token decodes to `unknown_reason`), so the token reads e.g.
+  `enrol_rejected 422 unsupported_schema`; the raw server string is never stored or logged (#1522). The screen renders it raw as
   `Last run <ago> · <token [detail]> · Queued: <n>` beside the identity line, with the queued count observed
   from the spool's own `queued` flow (the one owner of the count, fail-open to 0 if the directory is
   unavailable); the one new log line is INFO `census identity reset`, identifier-free. Census HTTP logging is VERBOSE, headers only, with bearer and signature redacted;

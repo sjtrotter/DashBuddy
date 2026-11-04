@@ -234,6 +234,19 @@ class PrivacyExportE2ETest {
         }
     }
 
+    @Test fun `a screen only server enrols a new identity that declares and stores screens only`() = runTest(timeout = 20.seconds) {
+        replay().use { h ->
+            h.start()
+            h.acceptedSchemaIds = listOf(SkeletonSchema.SCHEMA_ID)
+            h.preferences.setCensusUploadEnabled(true); h.settle()
+            h.worker()
+            assertEquals("the policy is read before enrolling", listOf("/v1/policy", "/v1/enroll"), h.requests.map { it.path }.take(2))
+            assertNotNull(h.credentials.current())
+            assertEquals(listOf(SkeletonSchema.SCHEMA_ID), declaredSchemaIds(h))
+            assertEquals(setOf(SkeletonSchema.SCHEMA_ID), h.preferences.acceptedSchemaIds.first())
+        }
+    }
+
     /** Each configuration gets fresh directories beneath Robolectric's actual internal/external roots. */
     private fun TestScope.replay(captures: Boolean = true, census: Boolean = true, debug: Boolean = true): PrivacyExportReplay {
         val app = RuntimeEnvironment.getApplication() as ReplayApplication
@@ -250,7 +263,12 @@ class PrivacyExportE2ETest {
         h.worker()
         assertNotNull(h.credentials.current())
         assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
+        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS, declaredSchemaIds(h))
     }
+    /** #1522: the schema ids the one enrol request declared, read from its transmitted bytes. */
+    private fun declaredSchemaIds(h: PrivacyExportReplay): List<String> =
+        json("request/v1/enroll", h.requests.single { it.path == "/v1/enroll" }.body.toByteArray())
+            .getValue("schemaIds").jsonArray.map { it.jsonPrimitive.content }
 
     /** Hash independently with the JDK, then match actual forwarded parses to actual capture IDs. */
     private fun recognized(h: PrivacyExportReplay) {

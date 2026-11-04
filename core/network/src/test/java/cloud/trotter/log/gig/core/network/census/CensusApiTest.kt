@@ -3,6 +3,9 @@ package cloud.trotter.log.gig.core.network.census
 import android.util.Log
 import cloud.trotter.log.gig.core.network.di.ClientProfile
 import cloud.trotter.log.gig.core.network.di.NetworkClientFactory
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
+import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.InstallSecret
@@ -67,7 +70,7 @@ class CensusApiTest {
 
     @Test fun `enrol is bearer only and policy remains available`() = runTest {
         respond(200, "{\"installIdPrefix\":\"12345678\",\"acceptedSchemaIds\":[\"uinode.skeleton.v1\"]}")
-        assertTrue(api.enrol(credential, "test") is EnrolResult.Enrolled)
+        assertTrue(api.enrol(credential, "test", CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS) is EnrolResult.Enrolled)
         val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
         assertNull(request.headers[CensusHeaders.TIMESTAMP])
         assertNull(request.headers[CensusHeaders.SIGNATURE])
@@ -83,6 +86,29 @@ class CensusApiTest {
         assertEquals("dashbuddy-census/1", policyRequest.headers["User-Agent"])
         respond(503, "{\"error\":\"db_unavailable\"}")
         assertEquals(PolicyResult.Unavailable(503), api.policy())
+    }
+
+    @Test fun `enrol declares exactly the schema ids it is given`() = runTest {
+        respond(200, "{\"installIdPrefix\":\"12345678\",\"acceptedSchemaIds\":[\"uinode.skeleton.v1\"]}")
+        assertTrue(api.enrol(credential, "test", listOf(SkeletonSchema.SCHEMA_ID)) is EnrolResult.Enrolled)
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals("{\"installId\":\"${credential.installId}\",\"appVersion\":\"test\",\"schemaIds\":[\"uinode.skeleton.v1\"]}",
+            requireNotNull(request.body).utf8())
+    }
+
+    @Test fun `enrol refusal reason decodes through the closed set and never carries server text`() = runTest {
+        val cases = listOf(
+            Triple(422, "{\"error\":\"unsupported_schema\"}", CensusEnrolRejectReason.UNSUPPORTED_SCHEMA),
+            Triple(400, "{\"error\":\"bad_request\"}", CensusEnrolRejectReason.BAD_REQUEST),
+            Triple(403, "{\"error\":\"unauthorized\"}", CensusEnrolRejectReason.UNAUTHORIZED),
+            Triple(422, "{\"error\":\"untrusted response text\"}", CensusEnrolRejectReason.UNKNOWN_REASON),
+            Triple(422, "{}", CensusEnrolRejectReason.UNKNOWN_REASON),
+            Triple(422, "not json", CensusEnrolRejectReason.UNKNOWN_REASON),
+        )
+        for ((status, body, reason) in cases) {
+            respond(status, body)
+            assertEquals(EnrolResult.RequestRejected(status, reason), api.enrol(credential, "test", listOf(SkeletonSchema.SCHEMA_ID)))
+        }
     }
 
     @Test fun `all upload statuses map without internal retry`() = runTest {
@@ -154,17 +180,18 @@ class CensusApiTest {
     @Test fun `all enrollment statuses map and malformed response is transport failure`() = runTest {
         val cases = listOf(
             Triple(409, "install_exists", EnrolResult.InstallExists),
-            Triple(401, "unauthorized", EnrolResult.Unauthorized),
+            Triple(401, "unauthorized", EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNAUTHORIZED)),
+            Triple(401, "something_new", EnrolResult.RequestRejected(401, CensusEnrolRejectReason.UNKNOWN_REASON)),
             Triple(401, "revoked", EnrolResult.Revoked),
             Triple(429, "rate_limited", EnrolResult.RateLimited(17)),
             Triple(408, "request_timeout", EnrolResult.ServerUnavailable(408)),
             Triple(500, "internal_error", EnrolResult.ServerUnavailable(500)),
             Triple(503, "db_unavailable", EnrolResult.ServerUnavailable(503)),
-            Triple(400, "bad_request", EnrolResult.RequestRejected(400)),
+            Triple(400, "bad_request", EnrolResult.RequestRejected(400, CensusEnrolRejectReason.BAD_REQUEST)),
         )
         for ((status, error, expected) in cases) {
             respond(status, "{\"error\":\"$error\"}")
-            assertEquals(expected, api.enrol(credential, "test"))
+            assertEquals(expected, api.enrol(credential, "test", CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS))
         }
         respond(200, "not json")
         assertTrue(api.uploadSkeletons(credential, "batch", listOf("{}")) is UploadResult.TransportFailure)
@@ -187,7 +214,7 @@ class CensusApiTest {
                 server.enqueue(response.build())
             }
             enqueue()
-            assertEquals(EnrolResult.TransportFailure("oversized_response"), api.enrol(credential, "test"))
+            assertEquals(EnrolResult.TransportFailure("oversized_response"), api.enrol(credential, "test", CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS))
             enqueue()
             assertEquals(PolicyResult.TransportFailure("oversized_response"), api.policy())
             enqueue()

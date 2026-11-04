@@ -1,12 +1,12 @@
 package cloud.trotter.log.gig.core.network.census
 
-import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.census.contract.SkeletonRejectionReason
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.RequestSigner
 import cloud.trotter.log.gig.core.network.di.ClientProfile
 import cloud.trotter.log.gig.core.network.di.NetworkClientFactory
+import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
@@ -34,7 +34,8 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 interface CensusTransport {
-    suspend fun enrol(cred: Bearer.Credential, appVersion: String): EnrolResult
+    /** [schemaIds] is what this identity declares it can produce (#1522: the caller narrows it to the policy). */
+    suspend fun enrol(cred: Bearer.Credential, appVersion: String, schemaIds: List<String>): EnrolResult
     suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult
     suspend fun policy(): PolicyResult
     suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
@@ -44,11 +45,10 @@ interface CensusTransport {
 sealed interface EnrolResult {
     data class Enrolled(val policy: JsonObject) : EnrolResult
     data object InstallExists : EnrolResult
-    data object Unauthorized : EnrolResult
     data object Revoked : EnrolResult
     data class RateLimited(val retryAfter: Long) : EnrolResult
     data class ServerUnavailable(val status: Int) : EnrolResult
-    data class RequestRejected(val status: Int) : EnrolResult
+    data class RequestRejected(val status: Int, val reason: CensusEnrolRejectReason) : EnrolResult
     data class TransportFailure(val failureClass: String) : EnrolResult
 }
 
@@ -123,23 +123,27 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         }
         .build()
 
-    override suspend fun enrol(cred: Bearer.Credential, appVersion: String): EnrolResult = try {
+    override suspend fun enrol(cred: Bearer.Credential, appVersion: String, schemaIds: List<String>): EnrolResult = try {
         val body = "{\"installId\":${JsonPrimitive(cred.installId)},\"appVersion\":${JsonPrimitive(appVersion)}," +
-            "\"schemaIds\":[${CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.joinToString(",") { JsonPrimitive(it).toString() }}]}"
+            "\"schemaIds\":[${schemaIds.joinToString(",") { JsonPrimitive(it).toString() }}]}"
         val response = execute(request("/v1/enroll", body.toByteArray(Charsets.UTF_8), cred, signed = false))
         when (response.status) {
             200 -> EnrolResult.Enrolled(response.json())
             409 -> EnrolResult.InstallExists
-            401 -> if (response.isRevoked()) EnrolResult.Revoked else EnrolResult.Unauthorized
+            401 -> if (response.isRevoked()) EnrolResult.Revoked else response.rejected()
             429 -> EnrolResult.RateLimited(response.retryAfter)
             408, in 500..599 -> EnrolResult.ServerUnavailable(response.status)
-            else -> EnrolResult.RequestRejected(response.status)
+            else -> response.rejected()
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         EnrolResult.TransportFailure(e.failureToken())
     }
+
+    // The body is already bounded by MAX_RESPONSE_BYTES; only the closed enum leaves this method.
+    private fun Reply.rejected(): EnrolResult = EnrolResult.RequestRejected(status,
+        CensusEnrolRejectReason.fromWire(error()) ?: CensusEnrolRejectReason.UNKNOWN_REASON)
 
     override suspend fun policy(): PolicyResult = try {
         val response = execute(Request.Builder().url("$baseUrl/v1/policy").header("User-Agent", USER_AGENT).get().build())

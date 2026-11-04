@@ -30,6 +30,7 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
         val CENSUS_LAST_RUN_ENVELOPES = intPreferencesKey("census_last_run_envelopes")
         val CENSUS_LAST_RUN_DETAIL = intPreferencesKey("census_last_run_detail")
+        val CENSUS_LAST_RUN_REASON = stringPreferencesKey("census_last_run_reason")
         val CENSUS_ACCEPTED_SCHEMA_IDS = stringSetPreferencesKey("census_policy_accepted_schema_ids")
         val CENSUS_POLICY = listOf("dailySkeletonBudget", "maxBatchItems", "maxBatchBytes", "maxSkeletonBytes", "k")
             .associateWith { intPreferencesKey("census_policy_$it") }
@@ -71,22 +72,25 @@ class DevSettingsDataSource @Inject constructor(
     /** Null distinguishes no cached policy from an explicitly empty accepted set. */
     val censusAcceptedSchemaIds: Flow<Set<String>?> = ds.data.map { it[Keys.CENSUS_ACCEPTED_SCHEMA_IDS] }
 
-    data class RawCensusLastRun(val atMillis: Long, val outcomeWire: String?, val detail: Int?, val envelopesPosted: Int)
+    data class RawCensusLastRun(
+        val atMillis: Long, val outcomeWire: String?, val detail: Int?, val envelopesPosted: Int, val reasonWire: String?,
+    )
 
     /** Raw fields of the last census run; the repository owns the fail-closed decode. */
     val censusLastRun: Flow<RawCensusLastRun?> = ds.data.map { prefs ->
         prefs[Keys.CENSUS_LAST_RUN_AT]?.let {
             RawCensusLastRun(it, prefs[Keys.CENSUS_LAST_RUN_OUTCOME], prefs[Keys.CENSUS_LAST_RUN_DETAIL],
-                prefs[Keys.CENSUS_LAST_RUN_ENVELOPES] ?: 0)
+                prefs[Keys.CENSUS_LAST_RUN_ENVELOPES] ?: 0, prefs[Keys.CENSUS_LAST_RUN_REASON])
         }
     }
 
-    suspend fun setCensusLastRun(atMillis: Long, outcomeWire: String, detail: Int?, envelopesPosted: Int) {
+    suspend fun setCensusLastRun(atMillis: Long, outcomeWire: String, detail: Int?, envelopesPosted: Int, reasonWire: String?) {
         ds.edit {
             it[Keys.CENSUS_LAST_RUN_ENVELOPES] = envelopesPosted
             it[Keys.CENSUS_LAST_RUN_AT] = atMillis
             it[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
             if (detail != null) it[Keys.CENSUS_LAST_RUN_DETAIL] = detail else it.remove(Keys.CENSUS_LAST_RUN_DETAIL)
+            if (reasonWire != null) it[Keys.CENSUS_LAST_RUN_REASON] = reasonWire else it.remove(Keys.CENSUS_LAST_RUN_REASON)
         }
     }
 
@@ -102,6 +106,7 @@ class DevSettingsDataSource @Inject constructor(
             prefs[Keys.CENSUS_LAST_RUN_AT] = atMillis
             prefs[Keys.CENSUS_LAST_RUN_OUTCOME] = outcomeWire
             prefs.remove(Keys.CENSUS_LAST_RUN_DETAIL)
+            prefs.remove(Keys.CENSUS_LAST_RUN_REASON)
         }
     }
 
