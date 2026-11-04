@@ -443,7 +443,7 @@ class CensusUploadWorkerTest {
                 repeat(2) { assertEquals(ListenableWorker.Result.success(), h.worker().doWork()) }
                 val lastRun = h.preferences.censusLastRun.first()
                 assertEquals(CensusRunOutcome.ENROL_REJECTED, lastRun?.outcome)
-                assertEquals(if (rejection is EnrolResult.RequestRejected) rejection.status else 401, lastRun?.detail)
+                assertEquals(rejection.status, lastRun?.detail)
                 assertEquals(2L, h.stats.enrolRejected.get())
                 assertEquals(0L, h.stats.uploadFailures.get())
                 verify(h.credentials, never()).mint()
