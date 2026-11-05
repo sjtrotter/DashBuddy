@@ -81,14 +81,14 @@ fun FakeOfferCard(
                         Text(
                             text = stringResource(R.string.fake_offer_fuel_cost_format, Formats.money(evaluation.fuelCostEstimate)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = animatedContentColor.copy(alpha = 0.65f)
+                            color = animatedContentColor
                         )
                     }
                     if (hasNonFuelCost) {
                         Text(
                             text = stringResource(R.string.fake_offer_nonfuel_cost_format, Formats.money(evaluation.nonFuelCostEstimate)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = animatedContentColor.copy(alpha = 0.65f)
+                            color = animatedContentColor
                         )
                     }
                 } else {
@@ -161,7 +161,7 @@ private fun MetricCell(label: String, value: String, color: Color) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = color.copy(alpha = 0.65f)
+            color = color
         )
     }
 }

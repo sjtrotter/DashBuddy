@@ -35,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -401,14 +400,13 @@ private fun evidenceLine(window: PlannedWindow): String {
     )
 }
 
-/** A weekday the plan left alone, dimmed, with the reason it was left alone. */
+/** A weekday the plan left alone, with the reason; the "Not picked" chip marks it, at full contrast (#1444). */
 @Composable
 private fun NotPickedRow(day: UnpickedDay) {
     val c = AppTheme.colors
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(NOT_PICKED_ALPHA),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -444,6 +442,3 @@ private fun unpickedReasonText(day: UnpickedDay): String {
         UnpickedReason.REMOVED_BY_YOU -> stringResource(R.string.weekly_plan_reason_removed)
     }
 }
-
-/** Windows the plan didn't pick stay legible but visibly out of it — the brief's dimmed rows. */
-private const val NOT_PICKED_ALPHA = 0.55f
