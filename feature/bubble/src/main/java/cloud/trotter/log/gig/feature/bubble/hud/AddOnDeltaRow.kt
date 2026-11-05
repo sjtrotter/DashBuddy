@@ -25,7 +25,7 @@ internal fun AddOnDeltaRow(tiles: DeltaTiles) {
         values.forEach { (value, label) ->
             Column(Modifier.weight(1f)) {
                 Text(value, style = AppTheme.num.xlNum, color = AppTheme.colors.text)
-                Text(label, fontSize = 12.sp, color = AppTheme.colors.text3)
+                Text(label, fontSize = 12.sp, color = AppTheme.colors.neutral)
             }
         }
     }

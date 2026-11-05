@@ -251,7 +251,7 @@ fun StrategySettingsContent(
                     Text(
                         stringResource(R.string.strategy_settings_priorities_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppTheme.colors.text3
+                        color = AppTheme.colors.neutral
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -307,7 +307,7 @@ fun SwitchRow(
             if (note != null) {
                 Text(note, style = MaterialTheme.typography.bodySmall)
             }
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.neutral)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }

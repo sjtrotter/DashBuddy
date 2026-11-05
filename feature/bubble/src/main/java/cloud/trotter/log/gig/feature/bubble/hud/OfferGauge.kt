@@ -42,7 +42,7 @@ internal fun OfferGauge(model: GaugeModel) {
         Column(Modifier.width(76.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
                 Text(model.denominatorText, style = AppTheme.num.lgNum, color = c.text)
-                Text(unit, color = c.text3, fontSize = 12.sp)
+                Text(unit, color = c.neutral, fontSize = 12.sp)
             }
             model.deltaText?.let { Text(it, style = AppTheme.num.smNum, color = c.stOffer) }
         }
@@ -65,7 +65,7 @@ internal fun OfferGauge(model: GaugeModel) {
         }
         Row(Modifier.width(84.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) {
             Text(rate.value, style = AppTheme.num.lgNum, color = ink)
-            Text(rate.unit, color = c.text3, fontSize = 11.sp)
+            Text(rate.unit, color = c.neutral, fontSize = 11.sp)
         }
     }
 }

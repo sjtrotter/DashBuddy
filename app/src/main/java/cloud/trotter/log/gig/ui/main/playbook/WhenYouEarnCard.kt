@@ -81,7 +81,7 @@ fun WhenYouEarnCard(
                 if (mode == HeatmapMode.RATE) R.string.patterns_tab_heatmap_title else R.string.patterns_tab_heatmap_title_hours,
             ),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -89,7 +89,7 @@ fun WhenYouEarnCard(
             Text(
                 text = stringResource(R.string.patterns_tab_heatmap_no_data),
                 style = MaterialTheme.typography.bodyMedium,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
             return@AppCard
@@ -146,7 +146,7 @@ fun WhenYouEarnCard(
             Text(
                 text = stringResource(R.string.playbook_heatmap_plan_outline_caption),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
     }
@@ -182,14 +182,14 @@ private fun HeatmapLegend() {
     val c = AppTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         LegendSwatch(c.surface3)
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_insufficient), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_insufficient), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         Spacer(Modifier.width(8.dp))
         LegendSwatch(c.badBg, border = c.bad)
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_zero), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_zero), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         Spacer(Modifier.width(8.dp))
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(AppHeatScale.ramp(f.toFloat(), c)) }
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.neutral)
     }
 }
 
@@ -202,11 +202,11 @@ private fun HeatmapHoursLegend() {
     val c = AppTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         LegendSwatch(c.surface3)
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_hours_none), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_hours_none), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         Spacer(Modifier.width(8.dp))
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_low), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         listOf(0.0, 0.5, 1.0).forEach { f -> LegendSwatch(AppHeatScale.ramp(f.toFloat(), c)) }
-        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = stringResource(R.string.patterns_tab_heatmap_legend_high), style = MaterialTheme.typography.labelSmall, color = c.neutral)
     }
 }
 

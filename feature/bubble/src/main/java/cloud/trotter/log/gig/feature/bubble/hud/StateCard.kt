@@ -82,7 +82,7 @@ internal fun JobColumn(facts: JobFacts) {
 }
 
 @Composable
-internal fun StateLabel(text: String, color: Color = AppTheme.colors.text3, size: Int = 14) {
+internal fun StateLabel(text: String, color: Color = AppTheme.colors.neutral, size: Int = 14) {
     Text(text, color = color, style = AppTheme.num.cardLabel.copy(fontSize = glanceSp(size)))
 }
 

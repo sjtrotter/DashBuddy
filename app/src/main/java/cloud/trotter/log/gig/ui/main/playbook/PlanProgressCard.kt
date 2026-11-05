@@ -82,13 +82,13 @@ fun PlanProgressCard(
             Text(
                 text = stringResource(R.string.playbook_plan_title),
                 style = MaterialTheme.typography.labelMedium,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = stringResource(R.string.weekly_plan_week_of_format, formatMonthDay(weekStart)),
                 style = MaterialTheme.typography.labelMedium,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -118,7 +118,7 @@ fun PlanProgressCard(
                     Formats.money(progress.keptOutsideWindows),
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         Spacer(Modifier.height(12.dp))
@@ -181,7 +181,7 @@ private fun PlanHeadline(progress: PlanProgress) {
             )
         },
         style = MaterialTheme.typography.bodySmall,
-        color = c.text3,
+        color = c.neutral,
     )
 }
 
@@ -206,7 +206,7 @@ private fun PlanWindowRow(progress: PlannedWindowProgress) {
             Text(
                 text = windowDetail(progress),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (progress.missed) c.warn else c.text3,
+                color = if (progress.missed) c.warn else c.neutral,
             )
         }
         Spacer(Modifier.width(8.dp))
@@ -262,7 +262,7 @@ private fun NoPlanBody(onOpenPlan: () -> Unit) {
         Text(
             text = stringResource(R.string.playbook_plan_none_body),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
         Text(
             text = stringResource(R.string.playbook_plan_none_action),

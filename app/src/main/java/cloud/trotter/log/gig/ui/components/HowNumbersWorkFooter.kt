@@ -63,6 +63,6 @@ private fun DisclosureNote(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = AppTheme.colors.text3,
+        color = AppTheme.colors.neutral,
     )
 }

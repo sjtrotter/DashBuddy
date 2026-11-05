@@ -133,7 +133,7 @@ private fun DeliveryRow(row: DeliveryRecord, selected: Boolean, enabled: Boolean
             Column(Modifier.weight(1f)) {
                 Text(row.storeName ?: stringResource(R.string.hud_cash_tip_delivery), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = AppTheme.colors.text, style = MaterialTheme.typography.labelLarge)
-                Text(formatClockTime(row.completedAt), color = AppTheme.colors.text3, style = MaterialTheme.typography.labelSmall)
+                Text(formatClockTime(row.completedAt), color = AppTheme.colors.neutral, style = MaterialTheme.typography.labelSmall)
             }
             Text(row.realizedPay?.let(Formats::money) ?: EMPTY_VALUE, color = AppTheme.colors.text2,
                 style = AppTheme.num.cardNum)

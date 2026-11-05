@@ -20,6 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,7 +80,7 @@ internal fun GasQuickEdit(
                 Text(
                     text = stringResource(R.string.bubble_mode_idle_gas_manual),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = AppTheme.colors.neutral,
                 )
             }
             IconButton(
@@ -131,14 +132,14 @@ private fun GasPriceAutoDisplay(price: Float, onTakeManualControl: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.Edit,
                 contentDescription = stringResource(R.string.bubble_mode_idle_gas_take_control),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = AppTheme.colors.neutral,
                 modifier = Modifier.size(12.dp),
             )
         }
         Text(
             text = stringResource(R.string.bubble_mode_idle_gas_auto),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            color = AppTheme.colors.neutral,
         )
     }
 }

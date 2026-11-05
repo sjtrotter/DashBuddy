@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.Color
  * components render on-brand.
  *
  * `*Bg` tokens are the base color at 14% (dark) / 12% (light) alpha.
+ *
+ * The light theme is held to the same contrast rules as dark: every text colour meets 4.5:1 on
+ * the surfaces it sits on, checked for both themes by `AppColorsContrastTest`.
  */
 @Immutable
 data class AppColors(
@@ -69,12 +72,12 @@ fun darkAppColors(): AppColors = AppColors(
     goodBg = Color(0x243DDC84),       // 14%
     warn = Color(0xFFFFC24B),
     warnBg = Color(0x24FFC24B),
-    bad = Color(0xFFFF5D5D),
-    badBg = Color(0x24FF5D5D),
-    neutral = Color(0xFF8B97A4),
-    neutralBg = Color(0x248B97A4),
-    stOffer = Color(0xFF5B9DFF),
-    stOfferBg = Color(0x295B9DFF),    // 16%
+    bad = Color(0xFFFF6868),
+    badBg = Color(0x24FF6868),
+    neutral = Color(0xFF949FAB),
+    neutralBg = Color(0x24949FAB),
+    stOffer = Color(0xFF65A3FF),
+    stOfferBg = Color(0x2965A3FF),    // 16%
     stPickup = Color(0xFFB78BFF),
     stPickupBg = Color(0x29B78BFF),
     stDropoff = Color(0xFF6A6CFF),
@@ -96,26 +99,29 @@ fun lightAppColors(): AppColors = AppColors(
     text2 = Color(0xFF46555F),
     text3 = Color(0xFF8593A0),
     textInv = Color(0xFFFFFFFF),
-    accent = Color(0xFF0B9E8C),
+    accent = Color(0xFF087366),
     accentDim = Color(0xFFC8EFE9),
     accentText = Color(0xFFFFFFFF),
-    good = Color(0xFF1D9E54),
-    goodBg = Color(0x1F1D9E54),       // 12%
-    warn = Color(0xFFC98400),
-    warnBg = Color(0x1FC98400),
-    bad = Color(0xFFD23B3B),
-    badBg = Color(0x1FD23B3B),
-    neutral = Color(0xFF6C7884),
-    neutralBg = Color(0x1F6C7884),
-    stOffer = Color(0xFF2F6FE0),
-    stOfferBg = Color(0x1F2F6FE0),
-    stPickup = Color(0xFF7A4EE0),
-    stPickupBg = Color(0x1F7A4EE0),
+    good = Color(0xFF15703C),
+    goodBg = Color(0x1F15703C),       // 12%
+    warn = Color(0xFF865700),
+    warnBg = Color(0x1F865700),
+    bad = Color(0xFFB62929),
+    badBg = Color(0x1FB62929),
+    neutral = Color(0xFF5A636D),
+    neutralBg = Color(0x1F5A636D),
+    stOffer = Color(0xFF1E5BC8),
+    stOfferBg = Color(0x1F1E5BC8),
+    stPickup = Color(0xFF6D3DDD),
+    stPickupBg = Color(0x1F6D3DDD),
     stDropoff = Color(0xFF4B4DD9),
     stDropoffBg = Color(0x1F4B4DD9),
     rest = Color(0xFF8593A0),
     isDark = false,
 )
+
+/** The one owner of which palette a surface draws with: the app theme and the offer notification. */
+fun appColors(dark: Boolean): AppColors = if (dark) darkAppColors() else lightAppColors()
 
 /** Brand semantic tokens. Provided by [GigLogTheme]; read via `AppTheme.colors`. */
 val LocalAppColors = staticCompositionLocalOf { darkAppColors() }

@@ -62,7 +62,7 @@ fun ColumnScope.OdometerSheet(
                         Text(stringResource(R.string.hud_state_mi), color = AppTheme.colors.text2, style = MaterialTheme.typography.labelSmall)
                     }
                     val warning = model.check is OdometerCheck.Lower || model.check is OdometerCheck.FewerThanTracked || model.check is OdometerCheck.LargeJump
-                    Text(odometerCopy(model), color = if (warning) AppTheme.colors.warn else AppTheme.colors.text3,
+                    Text(odometerCopy(model), color = if (warning) AppTheme.colors.warn else AppTheme.colors.neutral,
                         style = MaterialTheme.typography.labelSmall)
                     if (model.check is OdometerCheck.FewerThanTracked) {
                         TextButton(onClick = onShowAddVehicle, enabled = !model.saving) { Text(stringResource(R.string.hud_odometer_add_vehicle)) }

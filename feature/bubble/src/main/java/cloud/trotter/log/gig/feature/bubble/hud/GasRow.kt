@@ -31,11 +31,11 @@ fun GasRow(model: GasRowModel, onSetPrice: (Float) -> Unit, onRefresh: () -> Uni
             Icon(Icons.Outlined.LocalGasStation, null, tint = c.text2, modifier = Modifier.size(20.dp))
             Text(stringResource(R.string.hud_gas_label), color = c.text2, style = MaterialTheme.typography.labelMedium)
             Text(moneyOrEmpty(model.price?.toDouble()), color = c.text, style = AppTheme.num.mdNum)
-            Text(stringResource(R.string.hud_gas_per_gal), color = c.text3, style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.hud_gas_per_gal), color = c.neutral, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.weight(1f))
-            Text(stringResource(if (model.auto) R.string.hud_gas_auto else R.string.hud_gas_manual), color = c.text3,
+            Text(stringResource(if (model.auto) R.string.hud_gas_auto else R.string.hud_gas_manual), color = c.neutral,
                 style = MaterialTheme.typography.labelSmall)
-            Icon(Icons.Outlined.Edit, null, tint = c.text3, modifier = Modifier.size(16.dp))
+            Icon(Icons.Outlined.Edit, null, tint = c.neutral, modifier = Modifier.size(16.dp))
         }
         if (editing) GasQuickEdit(model.price, model.auto, model.refreshing, model.refreshError, onSetPrice, onRefresh, onResumeAuto)
     }

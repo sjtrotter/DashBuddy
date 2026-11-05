@@ -32,11 +32,11 @@ fun RestingCard(model: RestingModel?) {
                     val minutes by remember(ended) { derivedStateOf { (now.value - ended).coerceAtLeast(0) / 60_000 } }
                     val hm = HoursMinutes.of(minutes * 60_000)
                     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(stringResource(R.string.hud_rest_ended), style = MaterialTheme.typography.labelSmall, color = c.text3)
-                        if (hm.hours > 0) Text("${hm.hours} ${stringResource(R.string.hud_unit_hr)}", style = AppTheme.num.xsNum, color = c.text3)
-                        Text(hm.minutes.toString(), style = AppTheme.num.xsNum, color = c.text3)
+                        Text(stringResource(R.string.hud_rest_ended), style = MaterialTheme.typography.labelSmall, color = c.neutral)
+                        if (hm.hours > 0) Text("${hm.hours} ${stringResource(R.string.hud_unit_hr)}", style = AppTheme.num.xsNum, color = c.neutral)
+                        Text(hm.minutes.toString(), style = AppTheme.num.xsNum, color = c.neutral)
                         Text(stringResource(R.string.hud_rest_ago, stringResource(R.string.hud_unit_min)),
-                            style = MaterialTheme.typography.labelSmall, color = c.text3)
+                            style = MaterialTheme.typography.labelSmall, color = c.neutral)
                     }
                 }
             }
@@ -59,10 +59,10 @@ fun RestingCard(model: RestingModel?) {
             }
             val time = rememberTimeFormatter()
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(model.startedAt?.let(time) ?: EMPTY_VALUE, color = c.text3, style = MaterialTheme.typography.labelSmall)
+                Text(model.startedAt?.let(time) ?: EMPTY_VALUE, color = c.neutral, style = MaterialTheme.typography.labelSmall)
                 model.endedAt?.let {
-                    Text(stringResource(R.string.hud_rest_span_to), color = c.text3, style = MaterialTheme.typography.labelSmall)
-                    Text(time(it), color = c.text3, style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.hud_rest_span_to), color = c.neutral, style = MaterialTheme.typography.labelSmall)
+                    Text(time(it), color = c.neutral, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

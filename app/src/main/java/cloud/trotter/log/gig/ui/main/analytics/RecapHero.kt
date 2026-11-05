@@ -59,7 +59,7 @@ fun RecapHero(
         Text(
             text = stringResource(R.string.analytics_hero_kept_label),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(4.dp))
         Text(text = Formats.money(economics.netProfit), style = AppTheme.num.heroNum, color = netColor)
@@ -83,7 +83,7 @@ fun RecapHero(
                     )
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -100,7 +100,7 @@ private fun deltaColor(economics: PeriodEconomics, previous: PeriodEconomics?) =
     when (NetDelta.delta(economics.netProfit, previous?.netProfit).direction) {
         NetDelta.Direction.UP, NetDelta.Direction.FROM_ZERO -> AppTheme.colors.good
         NetDelta.Direction.DOWN -> AppTheme.colors.bad
-        NetDelta.Direction.FLAT, NetDelta.Direction.NONE -> AppTheme.colors.text3
+        NetDelta.Direction.FLAT, NetDelta.Direction.NONE -> AppTheme.colors.neutral
     }
 
 /** "▲ 12% vs Jul 6 – 12" and friends — the previous window is named by its RANGE, never by a guess. */

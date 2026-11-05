@@ -250,7 +250,7 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
                 Text(
                     text = "${formatClockTime(session.startedAt)}–$endText",
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // Platform label is registry-resolved (never a literal) — Principle 8.
@@ -263,7 +263,7 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
                 dashDuration(session.startedAt, session.endedAt, session.reportedDurationMillis),
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -285,7 +285,7 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
             )
         }
         if (session.reportCorrectedAt != null) {
-            Text(stringResource(R.string.session_detail_report_corrected), style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(stringResource(R.string.session_detail_report_corrected), style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
         TextButton(onClick = onCorrectTotal, enabled = session.endedAt != null) {
             Text(stringResource(R.string.session_detail_correct_total))
@@ -323,7 +323,7 @@ private fun DeliveriesCard(
 ) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.session_detail_deliveries_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.session_detail_deliveries_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         if (deliveries.isEmpty()) {
             EmptyRow(stringResource(R.string.session_detail_no_deliveries_yet))
@@ -361,10 +361,10 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
             Text(
                 text = formatClockTime(delivery.completedAt),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
             travelLine(delivery)?.let {
-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
+                Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.neutral)
             }
             val mileageDisclosure = when {
                 delivery.milesBasis == MilesBasis.BUDGET_CAPPED ||
@@ -380,7 +380,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 Text(
                     text = mileageDisclosure,
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // #660 piece 2 disclosure: a driver-categorized orphan (parity with the OFFER_PAY
@@ -403,7 +403,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 Text(
                     text = stringResource(R.string.session_detail_tip_included_format, Formats.money(it)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // Driver-entered cash tip (#688) — its own line; added to net below (display-level only).
@@ -420,7 +420,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 Text(
                     text = stringResource(R.string.session_detail_est_offer_pay),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // #1033 layer 2: this row started on that estimate and was corrected from the receipt
@@ -431,7 +431,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 Text(
                     text = stringResource(R.string.session_detail_receipt_repriced),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // #1133: a receipt-less drop that drove miles carries net = −cost with NO pay; say so
@@ -441,7 +441,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 Text(
                     text = stringResource(R.string.session_detail_unpaid_drop),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
             // Net includes the cash tip at display level only (the frozen netProfit column stays
@@ -451,7 +451,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
                 text = stringResource(R.string.session_detail_net_format, net?.let { Formats.money(it) } ?: EMPTY_VALUE),
                 style = MaterialTheme.typography.bodySmall,
                 color = when {
-                    net == null -> c.text3
+                    net == null -> c.neutral
                     net >= 0.0 -> c.good
                     else -> c.bad
                 },
@@ -462,7 +462,7 @@ private fun DeliveryRow(delivery: DeliveryRecord, deliveredDrops: Int, onAdjust:
             Icon(
                 Icons.Default.Edit,
                 contentDescription = stringResource(R.string.session_detail_content_desc_adjust),
-                tint = AppTheme.colors.text3,
+                tint = AppTheme.colors.neutral,
             )
         }
     }
@@ -492,7 +492,7 @@ private fun travelLine(delivery: DeliveryRecord): String? {
 @Composable
 private fun CenteredMessage(text: String, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.text3)
+        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.neutral)
     }
 }
 
@@ -656,7 +656,7 @@ private fun AdjustDeliveryDialog(
                             Text(
                                 text = stringResource(R.string.session_detail_remove_cash_locked_supporting),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = AppTheme.colors.text3,
+                                color = AppTheme.colors.neutral,
                             )
                         }
                     }

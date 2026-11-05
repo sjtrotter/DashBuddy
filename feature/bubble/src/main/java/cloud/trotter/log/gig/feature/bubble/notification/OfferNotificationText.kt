@@ -9,13 +9,12 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import androidx.compose.ui.graphics.toArgb
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
-import cloud.trotter.log.gig.core.designsystem.theme.darkAppColors
+import cloud.trotter.log.gig.core.designsystem.theme.AppColors
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.feature.bubble.hud.GaugeTone
 
 /** Android spans keep the same money parts as OfferHero, including the sign and currency symbol. */
-fun offerNotificationHero(pay: Double?, expanded: Boolean, scaledDensity: Float = 1f): CharSequence {
-    val colors = darkAppColors()
+fun offerNotificationHero(pay: Double?, expanded: Boolean, colors: AppColors, scaledDensity: Float = 1f): CharSequence {
     val wholeSize = if (expanded) 44 else 24
     val unitSize = if (expanded) 24 else 15
     val parts = pay?.let(Formats::moneyParts)
@@ -29,8 +28,7 @@ fun offerNotificationHero(pay: Double?, expanded: Boolean, scaledDensity: Float 
     }
 }
 
-fun offerNotificationRate(rate: RateText, scaledDensity: Float = 1f): CharSequence {
-    val colors = darkAppColors()
+fun offerNotificationRate(rate: RateText, colors: AppColors, scaledDensity: Float = 1f): CharSequence {
     val ink = when (rate.tone) {
         GaugeTone.GOOD -> colors.good
         GaugeTone.WARN -> colors.warn

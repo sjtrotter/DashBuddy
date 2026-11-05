@@ -30,7 +30,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
         Text(
             text = stringResource(R.string.money_tab_pay_mix_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -40,7 +40,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
             Text(
                 text = stringResource(R.string.money_tab_pay_mix_no_insight),
                 style = MaterialTheme.typography.bodyMedium,
-                color = c.text3,
+                color = c.neutral,
             )
             return@Column
         }
@@ -54,7 +54,7 @@ internal fun PayMixSection(mix: PayMix, modifier: Modifier = Modifier) {
             Text(
                 text = stringResource(R.string.money_tab_pay_mix_estimated_format, Formats.money(mix.estimatedFromOffers)),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         if (mix.notItemizedNegative) {

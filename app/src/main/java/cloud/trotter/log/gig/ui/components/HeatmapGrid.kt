@@ -71,7 +71,7 @@ internal fun HeatmapGrid(
                 Text(
                     text = day.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
                     style = MaterialTheme.typography.labelSmall,
-                    color = c.text3,
+                    color = c.neutral,
                     modifier = Modifier.width(DAY_LABEL_WIDTH),
                 )
                 Row(
@@ -119,9 +119,9 @@ internal fun HeatmapHourAxis() {
         Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
             // labelSmall, no raw fontSize override — matches the sibling AppBarChart axis-label treatment.
             listOf(0, 6, 12, 18).forEach { h ->
-                Text(text = hourOfDayLabel(h), style = MaterialTheme.typography.labelSmall, color = c.text3)
+                Text(text = hourOfDayLabel(h), style = MaterialTheme.typography.labelSmall, color = c.neutral)
             }
-            Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.text3)
+            Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.neutral)
         }
     }
 }

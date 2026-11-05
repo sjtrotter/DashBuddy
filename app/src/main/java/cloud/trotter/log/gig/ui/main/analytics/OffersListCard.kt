@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -41,9 +40,8 @@ import java.time.ZoneId
  * offers, filterable (All / Accepted / Declined / Timed out), newest decision first, with a
  * `See all N offers` footer.
  *
- * **Declined and timed-out rows render at reduced opacity** (brief §5). That is a *de-emphasis*, not
- * a hiding: the row keeps every figure, because "what did I turn down" is exactly the question this
- * list exists to answer — the dimming only says "you didn't take this one".
+ * **Declined and timed-out rows keep full contrast** (#1444): "what did I turn down" is exactly the question
+ * this list exists to answer, and the status pill already says "you didn't take this one".
  *
  * **Every economic column is a frozen decision-time figure** — the pay/distance the card quoted and
  * the verdict's own est. $/hr and score (the tab's standing disclosure covers all of them, §9). A
@@ -65,7 +63,7 @@ fun OffersListCard(
         Text(
             text = stringResource(R.string.offers_tab_list_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -99,7 +97,7 @@ fun OffersListCard(
                 Text(
                     text = formatWeekdayMonthDay(date),
                     style = MaterialTheme.typography.labelSmall,
-                    color = c.text3,
+                    color = c.neutral,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(6.dp))
@@ -126,11 +124,9 @@ fun OffersListCard(
 @Composable
 private fun OfferRow(offer: OfferListing) {
     val c = AppTheme.colors
-    val dimmed = offer.outcome != OfferOutcome.ACCEPTED
     Row(
         Modifier
-            .fillMaxWidth()
-            .alpha(if (dimmed) DECLINED_ALPHA else 1f),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -145,7 +141,7 @@ private fun OfferRow(offer: OfferListing) {
             Text(
                 text = metaLine(offer),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -188,7 +184,7 @@ private fun OutcomePill(outcome: OfferOutcome?) {
         OfferOutcome.ACCEPTED -> R.string.offers_tab_segment_accepted to c.good
         OfferOutcome.DECLINED -> R.string.offers_tab_segment_declined to c.bad
         OfferOutcome.TIMED_OUT -> R.string.offers_tab_segment_timed_out to c.neutral
-        null -> R.string.offers_tab_pill_unknown to c.text3
+        null -> R.string.offers_tab_pill_unknown to c.neutral
     }
     AppChip(text = stringResource(labelRes), color = color, container = c.surface3)
 }
@@ -221,13 +217,13 @@ private fun OffersFooter(feed: OffersFeedState, onShowAll: () -> Unit) {
                 Formats.commaInt(feed.total),
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
 
         else -> Text(
             text = stringResource(R.string.offers_tab_showing_all_format, Formats.commaInt(feed.total)),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }
@@ -249,6 +245,3 @@ private fun filterOptions(): List<FilterOption> = OfferFilter.entries.map { filt
         ),
     )
 }
-
-/** Declined / timed-out rows are de-emphasised, never hidden (brief §5). */
-private const val DECLINED_ALPHA = 0.55f

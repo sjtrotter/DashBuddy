@@ -4,7 +4,7 @@ import cloud.trotter.log.gig.domain.offer.story.*
 import cloud.trotter.log.gig.feature.bubble.offer.OfferStoryText
 import android.app.Notification
 import androidx.compose.ui.graphics.toArgb
-import cloud.trotter.log.gig.core.designsystem.theme.darkAppColors
+import cloud.trotter.log.gig.core.designsystem.theme.appColors
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.state.Job as DeliveryJob
 import cloud.trotter.log.gig.domain.state.PendingOffer
@@ -21,6 +21,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ShortcutInfo
+import android.content.res.Configuration
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.LocusIdCompat
@@ -579,12 +580,13 @@ class BubbleManager @Inject constructor(
         note: String,
     ): RemoteViews {
         val model = OfferNotificationModel.from(card)
-        val colors = darkAppColors()
+        val colors = appColors(dark = (context.resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
         val metrics = context.resources.displayMetrics
         // Pixels per sp at the user's font scale (DisplayMetrics.scaledDensity is deprecated on API 34+).
         val pxPerSp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1f, metrics)
         val rv = RemoteViews(context.packageName, layoutRes)
-        rv.setTextViewText(R.id.notif_offer_hero, offerNotificationHero(model.pay, expanded, pxPerSp))
+        rv.setTextViewText(R.id.notif_offer_hero, offerNotificationHero(model.pay, expanded, colors, pxPerSp))
         rv.setTextColor(R.id.notif_offer_countdown, colors.good.toArgb())
         val expiresAt = model.expiresAt
         if (expiresAt != null) {
@@ -614,7 +616,7 @@ class BubbleManager @Inject constructor(
             rv.setViewVisibility(R.id.notif_offer_left, if (expiresAt != null) View.VISIBLE else View.GONE)
             val bitmap = model.bar?.let {
                 payBarBitmap(it, (metrics.widthPixels - (8 + 8 + 16 + 16) * metrics.density).toInt(),
-                    (34 * metrics.density).toInt(), metrics.density, labels)
+                    (34 * metrics.density).toInt(), metrics.density, labels, colors)
             }
             rv.setImageViewBitmap(R.id.notif_offer_bar, bitmap)
             rv.setViewVisibility(R.id.notif_offer_bar, if (bitmap != null) View.VISIBLE else View.GONE)
@@ -631,7 +633,7 @@ class BubbleManager @Inject constructor(
                 .forEachIndexed { index, id ->
                     val rate = model.rates.getOrNull(index)
                     rv.setViewVisibility(id, if (rate != null) View.VISIBLE else View.GONE)
-                    rate?.let { rv.setTextViewText(id, offerNotificationRate(it, pxPerSp)) }
+                    rate?.let { rv.setTextViewText(id, offerNotificationRate(it, colors, pxPerSp)) }
                 }
             rv.setViewVisibility(R.id.notif_offer_addon, if (model.addOnFigures != null) View.VISIBLE else View.GONE)
             rv.setTextViewText(R.id.notif_offer_addon, model.addOnFigures)

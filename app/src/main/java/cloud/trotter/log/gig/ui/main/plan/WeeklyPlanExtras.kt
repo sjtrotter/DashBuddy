@@ -52,7 +52,7 @@ fun PlanProvenanceCard(heatmap: EarningsHeatmap, plan: WeeklyPlan) {
         Text(
             text = stringResource(R.string.weekly_plan_provenance_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         HeatmapGrid(
@@ -67,7 +67,7 @@ fun PlanProvenanceCard(heatmap: EarningsHeatmap, plan: WeeklyPlan) {
         Text(
             text = stringResource(R.string.weekly_plan_provenance_caption),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }
@@ -133,7 +133,7 @@ private fun LockedRow(badge: String, title: String, body: String, alpha: Float) 
                 Text(text = title, style = MaterialTheme.typography.bodyLarge, color = c.text)
             }
             Spacer(Modifier.height(6.dp))
-            Text(text = body, style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(text = body, style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
     }
 }
@@ -160,7 +160,7 @@ fun SavePlanCard(isSaved: Boolean, canSave: Boolean, onSave: () -> Unit) {
         Text(
             text = stringResource(R.string.weekly_plan_save_note),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }
@@ -181,7 +181,7 @@ fun LastWeekGradeCard(grade: WeeklyPlanGrade) {
         Text(
             text = stringResource(R.string.weekly_plan_grade_title, formatMonthDay(grade.weekStart)),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(8.dp))
         if (grade.unworked) {
@@ -219,7 +219,7 @@ fun LastWeekGradeCard(grade: WeeklyPlanGrade) {
                     Formats.money(grade.keptOutsideWindows),
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
     }
@@ -239,7 +239,7 @@ fun NoRecordCard() {
         Text(
             text = stringResource(R.string.weekly_plan_no_record_body),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }

@@ -70,7 +70,7 @@ fun AppAccordion(
             ) {
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = c.text)
                 if (trailing != null) Text(trailing, style = AppTheme.num.smNum, color = c.text2)
-                Chevron(expanded, c.text3)
+                Chevron(expanded, c.neutral)
             }
             if (expanded) {
                 Column(
@@ -106,7 +106,7 @@ private fun AppAccordionPreview() = GigLogTheme {
             trailing = "$0.016/mi",
             modifier = Modifier.padding(16.dp),
         ) {
-            Text("Set cost ÷ lifetime miles.", style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
+            Text("Set cost ÷ lifetime miles.", style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.neutral)
         }
     }
 }

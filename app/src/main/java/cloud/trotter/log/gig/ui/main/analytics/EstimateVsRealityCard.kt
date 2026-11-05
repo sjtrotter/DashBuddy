@@ -47,7 +47,7 @@ fun EstimateVsRealityCard(comparison: EstimateVsReality, modifier: Modifier = Mo
         Text(
             text = stringResource(R.string.offers_tab_est_vs_reality_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -95,7 +95,7 @@ fun EstimateVsRealityCard(comparison: EstimateVsReality, modifier: Modifier = Mo
                 offerNoun(comparison.acceptedOffers),
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
 
         if (comparison.isThinData) {

@@ -78,7 +78,7 @@ fun EarningsByDayCard(
         Text(
             text = stringResource(R.string.money_tab_earnings_by_day_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         if (days.all { it.gross <= 0.0 }) {
@@ -208,7 +208,7 @@ fun PlatformSplitCard(rows: List<PlatformEconomics>, modifier: Modifier = Modifi
         Text(
             text = stringResource(R.string.money_tab_platform_split_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         rows.forEachIndexed { index, row ->
@@ -237,7 +237,7 @@ private fun PlatformSplitRow(row: PlatformEconomics, maxNet: Double) {
                         stringResource(R.string.time_tab_delivery_plural)
                     },
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -283,7 +283,7 @@ fun RecentDashesCard(
         Text(
             text = stringResource(R.string.money_tab_recent_sessions_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         if (sessions.isEmpty()) {
@@ -308,7 +308,7 @@ fun RecentDashesCard(
                                 if (session.deliveries == 1) stringResource(R.string.time_tab_delivery_singular)
                                 else stringResource(R.string.time_tab_delivery_plural),
                             style = MaterialTheme.typography.bodySmall,
-                            color = c.text3,
+                            color = c.neutral,
                         )
                     }
                     // Platform label is registry-resolved (never a literal) — Principle 8.

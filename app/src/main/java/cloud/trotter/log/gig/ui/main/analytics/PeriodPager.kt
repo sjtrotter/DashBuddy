@@ -198,7 +198,7 @@ fun PeriodPager(
                     Text(
                         text = range,
                         style = MaterialTheme.typography.bodySmall,
-                        color = c.text3,
+                        color = c.neutral,
                         textAlign = TextAlign.Center,
                     )
                 }

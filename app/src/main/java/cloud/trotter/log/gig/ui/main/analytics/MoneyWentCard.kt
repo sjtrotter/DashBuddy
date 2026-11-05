@@ -133,7 +133,7 @@ fun MoneyWentCard(economics: PeriodEconomics, payMix: PayMix, modifier: Modifier
         Text(
             text = stringResource(R.string.money_tab_where_went_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         val segments = moneyWentSegments(split)

@@ -38,7 +38,7 @@ fun Dock(model: DockModel, onClick: (DockKind) -> Unit) {
                 DockItemState.NORMAL -> c.text2
                 DockItemState.LIT -> c.accent
                 DockItemState.ACCENT -> c.accentText
-                DockItemState.DISABLED -> c.text3
+                DockItemState.DISABLED -> c.text3 // text3: disabled
             }
             val background = when (item.state) {
                 DockItemState.ACCENT -> c.accent

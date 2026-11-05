@@ -94,13 +94,13 @@ private fun OrphanListDialog(
                 Text(
                     text = stringResource(R.string.no_session_assign_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
                 if (orphans.isEmpty()) {
                     Text(
                         text = stringResource(R.string.no_session_assign_empty),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = c.text3,
+                        color = c.neutral,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 } else {
@@ -124,7 +124,7 @@ private fun OrphanListDialog(
                                     // domain time-format SSOT.
                                     text = "${formatShortDate(o.completedAt)} · ${formatClockTime(o.completedAt)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = c.text3,
+                                    color = c.neutral,
                                 )
                             }
                             Text(
@@ -171,13 +171,13 @@ private fun SessionPickerDialog(
                     list == null -> Text(
                         text = stringResource(R.string.no_session_assign_loading),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = c.text3,
+                        color = c.neutral,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                     list.isEmpty() -> Text(
                         text = stringResource(R.string.no_session_assign_no_candidates),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = c.text3,
+                        color = c.neutral,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                     else -> list.forEach { s ->
@@ -208,7 +208,7 @@ private fun SessionPickerDialog(
                                         deliveryWord,
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = c.text3,
+                                    color = c.neutral,
                                 )
                             }
                             Text(

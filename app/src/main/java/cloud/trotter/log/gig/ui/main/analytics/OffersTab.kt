@@ -82,7 +82,7 @@ private fun OfferTopPairCard(decisions: DecisionEconomics) {
         Text(
             text = stringResource(R.string.offers_tab_offer_funnel_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -117,7 +117,7 @@ private fun SaidNoHalf(decisions: DecisionEconomics, modifier: Modifier = Modifi
         Text(
             text = stringResource(R.string.offers_tab_said_no_title),
             style = MaterialTheme.typography.labelSmall,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(2.dp))
         when {
@@ -127,7 +127,7 @@ private fun SaidNoHalf(decisions: DecisionEconomics, modifier: Modifier = Modifi
                 Text(
                     text = stringResource(R.string.offers_tab_no_declines_yet),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
 
@@ -143,7 +143,7 @@ private fun SaidNoHalf(decisions: DecisionEconomics, modifier: Modifier = Modifi
                         declineNoun(decisions.declined),
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
 
@@ -165,7 +165,7 @@ private fun SaidNoHalf(decisions: DecisionEconomics, modifier: Modifier = Modifi
                         declineNoun(decisions.declined),
                     ),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             }
         }
@@ -180,7 +180,7 @@ private fun OfferRatesCard(decisions: DecisionEconomics) {
         Text(
             text = stringResource(R.string.offers_tab_rates_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         if (decisions.received == 0) {
@@ -191,7 +191,7 @@ private fun OfferRatesCard(decisions: DecisionEconomics) {
         ComparisonRow(
             label = "",
             perHour = stringResource(R.string.offers_tab_est_per_hour_header),
-            labelColor = c.text3,
+            labelColor = c.neutral,
             valueStyleHeader = true,
         )
         Spacer(Modifier.height(8.dp))
@@ -218,7 +218,7 @@ private fun ComparisonRow(
 ) {
     val c = AppTheme.colors
     val valueStyle = if (valueStyleHeader) MaterialTheme.typography.labelSmall else AppTheme.num.smNum
-    val valueColor = if (valueStyleHeader) c.text3 else c.text
+    val valueColor = if (valueStyleHeader) c.neutral else c.text
     Row(Modifier.fillMaxWidth()) {
         Text(
             text = label,

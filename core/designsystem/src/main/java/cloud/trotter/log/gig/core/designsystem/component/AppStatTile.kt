@@ -39,14 +39,14 @@ fun AppStatTile(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
-                color = AppTheme.colors.text3,
+                color = AppTheme.colors.neutral,
             )
         }
         Spacer(Modifier.height(6.dp))
         Text(text = value, style = AppTheme.num.xlNum, color = valueColor)
         if (sub != null) {
             Spacer(Modifier.height(4.dp))
-            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
+            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.neutral)
         }
     }
 }

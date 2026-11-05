@@ -103,7 +103,7 @@ fun VehicleChip(
             val type = model.shown?.profile?.vehicleType
             Icon(type?.let(::vehicleTypeIcon) ?: Icons.Outlined.DirectionsCar,
                 contentDescription = type?.let { stringResource(vehicleTypeLabel(it)) },
-                tint = if (type == null) colors.text3 else colors.text2, modifier = Modifier.size(18.dp))
+                tint = if (type == null) colors.text3 else colors.text2, modifier = Modifier.size(18.dp)) // text3: decorative
             Spacer(Modifier.width(6.dp))
             Text(chipName(name), style = MaterialTheme.typography.labelLarge,
                 color = if (model.shown == null) colors.text2 else colors.text, maxLines = 1)

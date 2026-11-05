@@ -81,7 +81,7 @@ fun TimeTab(
 private fun TimeSplitCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.time_tab_time_split_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_time_split_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         if (time.onlineMillis == 0L) {
             EmptyRow(stringResource(R.string.time_tab_no_sessions_yet))
@@ -124,7 +124,7 @@ private fun TimeSplitCard(time: TimeEconomics) {
 private fun DeadheadCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.time_tab_deadhead_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_deadhead_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         if (time.miles <= 0.0) {
             EmptyRow(stringResource(R.string.time_tab_no_miles_measured_yet))
@@ -137,7 +137,7 @@ private fun DeadheadCard(time: TimeEconomics) {
         Text(
             text = stringResource(R.string.time_tab_deadhead_caption),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(14.dp))
 
@@ -159,7 +159,7 @@ private fun DeadheadCard(time: TimeEconomics) {
 private fun OnTimeCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.time_tab_on_time_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_on_time_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         val rate = time.onTimeRate
         if (rate == null) {
@@ -183,7 +183,7 @@ private fun OnTimeCard(time: TimeEconomics) {
                 else stringResource(R.string.time_tab_delivery_plural),
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
 
         // Average finish margin (deadline − completedAt): positive ⇒ typically early.
@@ -206,7 +206,7 @@ private fun OnTimeCard(time: TimeEconomics) {
 private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.time_tab_mileage_tax_title), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(R.string.time_tab_mileage_tax_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         if (time.miles <= 0.0) {
             EmptyRow(stringResource(R.string.time_tab_no_miles_measured_yet))
@@ -226,11 +226,11 @@ private fun MileageTaxCard(time: TimeEconomics, window: AnalyticsWindow) {
         Text(text = labels.deductionLine, style = MaterialTheme.typography.bodyMedium, color = c.text)
         labels.disclaimer?.let {
             Spacer(Modifier.height(4.dp))
-            Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
         labels.spansYearsNote?.let {
             Spacer(Modifier.height(4.dp))
-            Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
     }
 }

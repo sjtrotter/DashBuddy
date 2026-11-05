@@ -45,13 +45,13 @@ internal fun DisclosureRow(text: String, expanded: Boolean, onToggle: () -> Unit
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
             modifier = Modifier.weight(1f),
         )
         Text(
             text = if (expanded) "⌃" else "⌄",
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }

@@ -55,6 +55,6 @@ fun DashRibbon(model: RibbonModel) {
                 drawCircle(c.bg, 6.dp.toPx(), Offset(x, y), style = Stroke(2.dp.toPx()))
             }
         }
-        Text(start, style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(start, style = MaterialTheme.typography.labelSmall, color = c.neutral)
     }
 }

@@ -35,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -83,7 +82,7 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
         Text(
             text = stringResource(R.string.weekly_plan_target_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         AppSegmented(
@@ -106,7 +105,7 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
             Text(
                 text = stringResource(R.string.weekly_plan_target_dollars_selected, Formats.money(target.amount)),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
     }
@@ -209,7 +208,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
                     (plan.target as? PlanTarget.Hours)?.hours ?: plan.totalHours,
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         if (plan.hasUnpricedHours) {
@@ -220,7 +219,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
                     plan.totalHours - plan.pricedHours,
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
 
@@ -229,7 +228,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
         Text(
             text = stringResource(R.string.weekly_plan_provenance),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }
@@ -260,7 +259,7 @@ fun SuggestedWindowsCard(
             Text(
                 text = stringResource(R.string.weekly_plan_windows_title),
                 style = MaterialTheme.typography.labelMedium,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.weight(1f),
             )
             if (plan.edits.isNotEmpty()) {
@@ -350,7 +349,7 @@ private fun WindowRow(window: PlannedWindow, onMove: (PlannedWindow, Int) -> Uni
             Text(
                 text = evidenceLine(window),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (window.dollarsPerHour == null || window.hasThinEvidence) c.warn else c.text3,
+                color = if (window.dollarsPerHour == null || window.hasThinEvidence) c.warn else c.neutral,
             )
         }
         Text(
@@ -366,14 +365,14 @@ private fun WindowRow(window: PlannedWindow, onMove: (PlannedWindow, Int) -> Uni
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = stringResource(R.string.weekly_plan_window_earlier),
-                tint = c.text3,
+                tint = c.neutral,
             )
         }
         IconButton(onClick = { onMove(window, +1) }) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = stringResource(R.string.weekly_plan_window_later),
-                tint = c.text3,
+                tint = c.neutral,
             )
         }
     }
@@ -401,14 +400,13 @@ private fun evidenceLine(window: PlannedWindow): String {
     )
 }
 
-/** A weekday the plan left alone, dimmed, with the reason it was left alone. */
+/** A weekday the plan left alone, with the reason; the "Not picked" chip marks it, at full contrast (#1444). */
 @Composable
 private fun NotPickedRow(day: UnpickedDay) {
     val c = AppTheme.colors
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(NOT_PICKED_ALPHA),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -421,7 +419,7 @@ private fun NotPickedRow(day: UnpickedDay) {
             Text(
                 text = unpickedReasonText(day),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         AppChip(text = stringResource(R.string.weekly_plan_not_picked))
@@ -444,6 +442,3 @@ private fun unpickedReasonText(day: UnpickedDay): String {
         UnpickedReason.REMOVED_BY_YOU -> stringResource(R.string.weekly_plan_reason_removed)
     }
 }
-
-/** Windows the plan didn't pick stay legible but visibly out of it — the brief's dimmed rows. */
-private const val NOT_PICKED_ALPHA = 0.55f
