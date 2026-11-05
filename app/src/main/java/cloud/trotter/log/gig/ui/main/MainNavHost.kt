@@ -1,9 +1,7 @@
 package cloud.trotter.log.gig.ui.main
 
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -23,7 +21,6 @@ import cloud.trotter.log.gig.ui.main.dashboard.DashboardScreen
 import cloud.trotter.log.gig.ui.main.navigation.MainNavActions
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import cloud.trotter.log.gig.ui.main.navigation.ScreenTransition
-import cloud.trotter.log.gig.ui.main.navigation.SharedAxisSpecs
 import cloud.trotter.log.gig.ui.main.navigation.enter
 import cloud.trotter.log.gig.ui.main.navigation.exit
 import cloud.trotter.log.gig.ui.main.navigation.mainGraph
@@ -46,20 +43,16 @@ import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
 @Composable
 fun MainNavHost(navController: NavHostController, actions: MainNavActions, modifier: Modifier = Modifier) {
     val reducedMotion = rememberReducedMotion()
-    val motionScheme = MaterialTheme.motionScheme
-    val specs = remember(motionScheme) {
-        SharedAxisSpecs(motionScheme.defaultSpatialSpec(), motionScheme.defaultEffectsSpec())
-    }
     fun AnimatedContentTransitionScope<NavBackStackEntry>.transition(isPop: Boolean): ScreenTransition =
         screenTransition(initialState.destination.route, targetState.destination.route, isPop, reducedMotion)
     NavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
         modifier = modifier,
-        enterTransition = { transition(isPop = false).enter(specs) },
-        exitTransition = { transition(isPop = false).exit(specs) },
-        popEnterTransition = { transition(isPop = true).enter(specs) },
-        popExitTransition = { transition(isPop = true).exit(specs) },
+        enterTransition = { transition(isPop = false).enter() },
+        exitTransition = { transition(isPop = false).exit() },
+        popEnterTransition = { transition(isPop = true).enter() },
+        popExitTransition = { transition(isPop = true).exit() },
     ) {
         mainGraph { route, _ -> MainScreen(route, actions) }
     }
