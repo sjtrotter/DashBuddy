@@ -46,6 +46,7 @@ import cloud.trotter.log.gig.feature.dashboard.components.TodayCard
 import cloud.trotter.log.gig.feature.dashboard.components.TodayHeader
 import cloud.trotter.log.gig.feature.dashboard.components.WeekCard
 import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
+import cloud.trotter.log.gig.ui.components.LoadingBody
 import cloud.trotter.log.gig.ui.main.analytics.ReviewItem
 import cloud.trotter.log.gig.ui.main.analytics.ReviewList
 import cloud.trotter.log.gig.ui.main.analytics.reviewTexts
@@ -193,6 +194,11 @@ internal fun DashboardBody(
             )
         },
     ) { padding ->
+        // CASE 0: Loading, the permission check or the setup flag not read yet (#1524).
+        if (hasPermissions == null || (hasPermissions && uiState.isFirstRun == null)) {
+            LoadingBody(Modifier.padding(padding))
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -201,11 +207,6 @@ internal fun DashboardBody(
                 .fillMaxSize()
         ) {
             when {
-                // CASE 0: Loading — prevents the flicker.
-                hasPermissions == null -> {
-                    // Empty state while calculating.
-                }
-
                 // CASE 1: Permissions Missing (The Gate). #1457: the button forgets every
                 // deferral and reopens the sheet at its first pending step (the disclosure card,
                 // never Android settings directly).
@@ -217,7 +218,7 @@ internal fun DashboardBody(
                 }
 
                 // CASE 2: Permissions Granted, first run (The Guide)
-                uiState.isFirstRun -> {
+                uiState.isFirstRun == true -> {
                     StatusCard(
                         title = stringResource(R.string.dashboard_screen_first_run_title),
                         subtitle = stringResource(R.string.dashboard_screen_first_run_subtitle),

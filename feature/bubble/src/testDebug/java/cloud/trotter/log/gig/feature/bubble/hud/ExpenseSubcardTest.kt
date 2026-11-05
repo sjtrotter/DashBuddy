@@ -10,6 +10,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
+import cloud.trotter.log.gig.core.designsystem.motion.LocalReducedMotion
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.domain.analytics.ExpenseCategory
 import cloud.trotter.log.gig.feature.bubble.hud.expense.*

@@ -1,4 +1,4 @@
-package cloud.trotter.log.gig.feature.bubble.hud
+package cloud.trotter.log.gig.core.designsystem.motion
 
 import android.animation.ValueAnimator
 import androidx.compose.runtime.Composable

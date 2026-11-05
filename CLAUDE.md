@@ -166,7 +166,9 @@ as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytic
 sibling surface, left for a future extraction. **Navigation (#1447):** a Material 3 bottom bar with three tabs, Home,
 Analytics and Playbook (`TopLevel`), over one flat graph (`mainGraph`, every `Screen.graphRoutes` entry); the tab
 navigator (`TopLevel`, `RouteTarget`/`routeTarget`, `MainNavigator`'s `NavController` extensions, `MainNavActions`,
-one method per intent) lives in `:app` `ui/main/navigation/`, the shell (`MainScaffold`, `MainNavHost`) in `ui/main/`.
+one method per intent) lives in `:app` `ui/main/navigation/`, the shell (`MainScaffold`, `MainNavHost`) in `ui/main/`;
+route changes animate through `ScreenTransitions` (fade through between tabs, shared axis inside a tab, none under
+reduced motion, #1524).
 Tab switches, parking (`popBackStack(root, inclusive, saveState)`) and fresh clears start only at a tab root and
 fail closed (WARN) elsewhere, so a parked tab is one lone root and no editor or draft is ever popped; a deep link off
 a root only pushes; Dashboard is never a saved-state key; never call `clearBackStack(String)` (in 2.9.7 it drops

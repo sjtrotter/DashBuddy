@@ -113,7 +113,9 @@ rules with their sources; the rules below are the ones that come up most.
   predictive back is on (`enableOnBackInvokedCallback`).
 - **Edge to edge** in the main app (`enableEdgeToEdge`), with content kept out of the system bars' insets.
 - **Motion:** new motion uses Material's spring tokens, and all motion respects the system's reduced-motion setting
-  (`ValueAnimator.areAnimatorsEnabled()`, `hud/ReducedMotion.kt`).
+  (`ValueAnimator.areAnimatorsEnabled()`, `core/designsystem/.../motion/ReducedMotion.kt`). Screen changes fade
+  through between tabs and slide on a shared axis within a tab, owned by `ScreenTransitions.kt`, and are off under
+  reduced motion. Each tab shows a loading body until its first data (#1524).
 - **Current Material 3 no longer recommends** segmented buttons (use the connected button group), the small FAB,
   and surface tint (use the surface container roles). New work avoids all three.
 - **Chips filter or suggest; buttons finish a task.** An amount that commits an entry is a button.
@@ -236,8 +238,8 @@ adds the gap below, and never leaves it worse.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
-- **Undesigned states:** loading on Home, the hub, Ratings, shift detail and the Garage; paused in the bubble (an
-  empty panel); a failed gas-price lookup.
+- **Undesigned states:** loading on Ratings, shift detail and the Garage; paused in the bubble (an empty panel); a
+  failed gas-price lookup.
 
 ## Settled decisions
 

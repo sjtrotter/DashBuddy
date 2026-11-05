@@ -33,6 +33,7 @@ import cloud.trotter.log.gig.domain.analytics.OfferFilter
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
 import cloud.trotter.log.gig.ui.components.MoreNumbersToggle
 import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
+import cloud.trotter.log.gig.ui.components.LoadingBody
 
 /**
  * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
@@ -168,7 +169,10 @@ internal fun AnalyticsContent(
         // #1447: the scrolling column waits for its content. Composed over the placeholder, a
         // restored scroll offset would be clamped to the short content and lost.
         val feed = if (uiState.selectedTab == AnalyticsTab.Offers) offersFeed() else null
-        if (!uiState.loaded || feed?.loaded == false) return@Scaffold
+        if (!uiState.loaded || feed?.loaded == false) {
+            LoadingBody(Modifier.padding(padding))
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .padding(padding)

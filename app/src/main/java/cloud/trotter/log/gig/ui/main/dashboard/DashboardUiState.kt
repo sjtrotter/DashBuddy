@@ -36,7 +36,8 @@ import java.time.LocalDate
  * intentionally NOT modelled here.
  */
 data class DashboardUiState(
-    val isFirstRun: Boolean = true,
+    /** Null until the setup flag is read (#1524): Home shows its loading body, never the first-run card. */
+    val isFirstRun: Boolean? = null,
     /**
      * The home status headline — a `@StringRes` id (#428 Half A), resolved with
      * `stringResource(...)` at the Compose layer so this Context-free `@HiltViewModel` never

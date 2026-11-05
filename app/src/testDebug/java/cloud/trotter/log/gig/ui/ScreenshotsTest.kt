@@ -29,6 +29,7 @@ import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.log.gig.core.designsystem.motion.LocalReducedMotion
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
@@ -48,7 +49,6 @@ import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.Platform
-import cloud.trotter.log.gig.feature.bubble.hud.LocalReducedMotion
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
@@ -60,6 +60,7 @@ import cloud.trotter.log.gig.ui.bubble.BubbleManager
 import cloud.trotter.log.gig.ui.main.MainScaffold
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
+import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.navigation.TopLevel
@@ -309,6 +310,20 @@ class ScreenshotsTest(private val theme: String) {
     /** The one deliberate thin-data shot: no plan, no hours, no stores. */
     @Test fun playbookEmpty() = playbook("playbook-empty", ScreenshotData.playbookEmpty, string(R.string.patterns_tab_no_stores))
 
+    // ── Loading (#1524): each tab before its first data, past the loading body's 400 ms delay ──
+
+    @Test fun homeLoading() = loading("home-loading") {
+        HomeBody(ScreenshotData.dashboard().copy(isFirstRun = null), hasPermissions = true)
+    }
+
+    @Test fun hubLoading() = loading("hub/loading") {
+        HubBody(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false).copy(loaded = false))
+    }
+
+    @Test fun playbookLoading() = loading("playbook/loading") {
+        PlaybookBody(ScreenshotData.playbook(showMore = false).copy(loading = true))
+    }
+
     // ── The offer heads-up notification ──────────────────────────────────
 
     @Suppress("DEPRECATION") // The Notification RemoteViews fields are the only window onto what SystemUI inflates.
@@ -408,11 +423,15 @@ class ScreenshotsTest(private val theme: String) {
     private fun hub(path: String, tab: AnalyticsTab, showMore: Boolean, row: String) = render(path, assertion = {
         text(string(tab.labelRes)).assertExists()
         text(row).assertExists()
-    }) {
+    }) { HubBody(ScreenshotData.analytics(tab, showMore)) }
+
+    /** The hub in the app shell's frame. */
+    @Composable
+    private fun HubBody(state: AnalyticsUiState) =
         MainScaffold(selectedTab = TopLevel.ANALYTICS, onSelectTab = {}) { modifier ->
             Box(modifier) {
                 AnalyticsContent(
-                    uiState = ScreenshotData.analytics(tab, showMore),
+                    uiState = state,
                     offersFeed = { ScreenshotData.offersFeed },
                     onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
                     onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {}, onOpenOrphanOffers = {},
@@ -420,16 +439,23 @@ class ScreenshotsTest(private val theme: String) {
                 )
             }
         }
-    }
 
     private fun playbook(path: String, state: PlaybookUiState, row: String) = render(path, assertion = {
         text(string(R.string.playbook_screen_title)).assertExists()
         text(row).assertExists()
-    }) {
+    }) { PlaybookBody(state) }
+
+    /** The Playbook in the app shell's frame. */
+    @Composable
+    private fun PlaybookBody(state: PlaybookUiState) =
         MainScaffold(selectedTab = TopLevel.PLAYBOOK, onSelectTab = {}) { modifier ->
             Box(modifier) { PlaybookContent(uiState = state, onOpenSettings = {}, onOpenPlan = {}, onToggleShowMore = {}) }
         }
-    }
+
+    /** A tab's loading body: the spinner shows, since [render] runs two seconds of frames first. */
+    private fun loading(path: String, content: @Composable () -> Unit) = render(path, assertion = {
+        compose.onNodeWithContentDescription(string(R.string.common_loading)).assertExists()
+    }, content = content)
 
     /** `OfferHeadsUpViewsTest`'s `post()`: the real `BubbleManager` builds the notification for the HUD's standard offer. */
     private fun offerNotification(): Notification {
