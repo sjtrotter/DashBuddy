@@ -78,6 +78,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [#1524 screens change fast and Home never flashes the setup card](checklist/open/1524-screen-transitions.md)
 - [#1522 the census identity enrols after a reinstall](checklist/open/census-enrol-after-reinstall.md)
 - [#1459 an early-ended shift never reports less than its recorded pay](checklist/open/1459-early-ended-shift-reads-its-recorded-pay.md)
 - [#1407 the rewritten copy reads right on a shift](checklist/open/1407-plain-copy-reads-right-on-a-shift.md)

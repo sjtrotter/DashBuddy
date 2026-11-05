@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
+import cloud.trotter.log.gig.core.designsystem.motion.LocalReducedMotion
 import cloud.trotter.log.gig.core.designsystem.text.EMPTY_VALUE
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider

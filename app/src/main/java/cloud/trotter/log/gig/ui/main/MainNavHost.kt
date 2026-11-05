@@ -1,9 +1,12 @@
 package cloud.trotter.log.gig.ui.main
 
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import cloud.trotter.log.gig.core.designsystem.motion.rememberReducedMotion
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
 import cloud.trotter.log.gig.feature.settings.DataExportScreen
 import cloud.trotter.log.gig.feature.settings.DeveloperSettingsScreen
@@ -17,7 +20,11 @@ import cloud.trotter.log.gig.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardScreen
 import cloud.trotter.log.gig.ui.main.navigation.MainNavActions
 import cloud.trotter.log.gig.ui.main.navigation.Screen
+import cloud.trotter.log.gig.ui.main.navigation.ScreenTransition
+import cloud.trotter.log.gig.ui.main.navigation.enter
+import cloud.trotter.log.gig.ui.main.navigation.exit
 import cloud.trotter.log.gig.ui.main.navigation.mainGraph
+import cloud.trotter.log.gig.ui.main.navigation.screenTransition
 import cloud.trotter.log.gig.ui.main.plan.WeeklyPlanScreen
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookScreen
 import cloud.trotter.log.gig.ui.main.ratings.RatingsScreen
@@ -31,11 +38,22 @@ import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
 
 /**
  * The app's NavHost (#1447, moved out of `MainActivity`): the one flat [mainGraph], start destination
- * Home, each screen wired only to [MainNavActions].
+ * Home, each screen wired only to [MainNavActions]. Route changes animate through [screenTransition] (#1524).
  */
 @Composable
 fun MainNavHost(navController: NavHostController, actions: MainNavActions, modifier: Modifier = Modifier) {
-    NavHost(navController = navController, startDestination = Screen.Dashboard.route, modifier = modifier) {
+    val reducedMotion = rememberReducedMotion()
+    fun AnimatedContentTransitionScope<NavBackStackEntry>.transition(isPop: Boolean): ScreenTransition =
+        screenTransition(initialState.destination.route, targetState.destination.route, isPop, reducedMotion)
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Dashboard.route,
+        modifier = modifier,
+        enterTransition = { transition(isPop = false).enter() },
+        exitTransition = { transition(isPop = false).exit() },
+        popEnterTransition = { transition(isPop = true).enter() },
+        popExitTransition = { transition(isPop = true).exit() },
+    ) {
         mainGraph { route, _ -> MainScreen(route, actions) }
     }
 }

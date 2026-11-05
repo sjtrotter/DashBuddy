@@ -12,6 +12,7 @@ import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.model.vehicle.Bicycle
 import cloud.trotter.log.gig.domain.offer.story.AddOnSpeech
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
+import cloud.trotter.log.gig.core.designsystem.motion.LocalReducedMotion
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.domain.state.*

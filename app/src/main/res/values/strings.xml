@@ -803,6 +803,7 @@
     <string name="offers_tab_est_vs_reality_mean_note">Table and bar figures are the average $/hr across offers.</string>
     <string name="common_more_numbers">More numbers</string>
     <string name="common_fewer_numbers">Fewer numbers</string>
+    <string name="common_loading">Loading</string>
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
     <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>

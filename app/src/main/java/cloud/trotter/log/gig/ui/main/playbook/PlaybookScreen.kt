@@ -24,6 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
+import cloud.trotter.log.gig.ui.components.LoadingBody
 import cloud.trotter.log.gig.ui.components.MoreNumbersToggle
 
 /**
@@ -94,6 +95,15 @@ internal fun PlaybookContent(
             )
         },
     ) { padding ->
+        // F1 (#1024 review): no block renders until the first read-model emission. Every block
+        // below has an honest empty state, and on a cold open they would ALL be true for a frame —
+        // "No plan saved for this week" over a plan the driver saved yesterday is not an honest
+        // empty state, it is a wrong one shown briefly. Waiting is the honest option (§9); #1524
+        // shows the loading body meanwhile.
+        if (uiState.loading) {
+            LoadingBody(Modifier.padding(padding))
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -101,12 +111,6 @@ internal fun PlaybookContent(
                 .padding(16.dp)
                 .fillMaxSize(),
         ) {
-            // F1 (#1024 review): nothing renders until the first read-model emission. Every block
-            // below has an honest empty state, and on a cold open they would ALL be true for a frame —
-            // "No plan saved for this week" over a plan the driver saved yesterday is not an honest
-            // empty state, it is a wrong one shown briefly. Waiting is the honest option (§9).
-            if (uiState.loading) return@Column
-
             PlanProgressCard(
                 showMore = uiState.showMore,
                 grade = uiState.planGrade,
