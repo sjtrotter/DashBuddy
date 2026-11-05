@@ -140,8 +140,8 @@ private fun AmountField(text: String, unit: String, leading: Boolean, active: Bo
         .semantics { selected = active; contentDescription = description }
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        if (leading) Text(unit, color = AppTheme.colors.text3)
+        if (leading) Text(unit, color = AppTheme.colors.neutral)
         Text(text, Modifier.weight(1f), textAlign = TextAlign.End, style = AppTheme.num.mdNum, color = AppTheme.colors.text)
-        if (!leading) Text(unit, Modifier.padding(start = 4.dp), color = AppTheme.colors.text3)
+        if (!leading) Text(unit, Modifier.padding(start = 4.dp), color = AppTheme.colors.neutral)
     }
 }

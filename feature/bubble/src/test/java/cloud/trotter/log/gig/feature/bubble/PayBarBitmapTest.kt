@@ -19,7 +19,7 @@ class PayBarBitmapTest {
     private val colors = darkAppColors()
 
     @Test fun `split draws the net and car tint at the requested size`() {
-        val bitmap = payBarBitmap(PayBarModel.Split(829, 346, 0.7f), 360, 34, 1f, labels)!!
+        val bitmap = payBarBitmap(PayBarModel.Split(829, 346, 0.7f), 360, 34, 1f, labels, colors)!!
         assertEquals(360, bitmap.width)
         assertEquals(34, bitmap.height)
         // Middle of the outermost columns avoids rounded corners and the pills' 5 dp inset.
@@ -28,11 +28,11 @@ class PayBarBitmapTest {
     }
 
     @Test fun `unscored omits the bitmap`() {
-        assertNull(payBarBitmap(PayBarModel.Unscored, 360, 34, 1f, labels))
+        assertNull(payBarBitmap(PayBarModel.Unscored, 360, 34, 1f, labels, colors))
     }
 
     @Test fun `unknown distance stays neutral without good or warn pixels`() {
-        val bitmap = payBarBitmap(PayBarModel.DistanceUnknown, 360, 34, 1f, labels)!!
+        val bitmap = payBarBitmap(PayBarModel.DistanceUnknown, 360, 34, 1f, labels, colors)!!
         val forbidden = setOf(colors.good.toArgb(), colors.warn.toArgb(),
             colors.good.copy(alpha = 0.28f).compositeOver(colors.surface3).toArgb(),
             colors.warn.copy(alpha = 0.28f).compositeOver(colors.surface3).toArgb())

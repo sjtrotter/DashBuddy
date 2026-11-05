@@ -51,7 +51,7 @@ fun Keypad(onDigit: (Int) -> Unit, onPoint: (() -> Unit)?, onBackspace: () -> Un
                                 modifier = Modifier.size(22.dp))
                             Key.Point, is Key.Digit -> Text(if (key is Key.Digit) key.n.toString() else ".",
                                 style = AppTheme.num.mdNum,
-                                color = if (enabled) AppTheme.colors.text else AppTheme.colors.text3)
+                                color = if (enabled) AppTheme.colors.text else AppTheme.colors.text3) // text3: disabled
                         }
                     }
                 }

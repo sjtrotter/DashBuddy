@@ -35,7 +35,7 @@
             android:background="@drawable/notif_btn_accept"
             android:gravity="center"
             android:text="Accept"
-            android:textColor="#0B0F14"
+            android:textColor="@color/notif_accept_text"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -48,7 +48,7 @@
             android:background="@drawable/notif_btn_decline"
             android:gravity="center"
             android:text="Decline"
-            android:textColor="#E6EDF3"
+            android:textColor="@color/notif_decline_text"
             android:textSize="14sp" />
     </LinearLayout>
 </LinearLayout>

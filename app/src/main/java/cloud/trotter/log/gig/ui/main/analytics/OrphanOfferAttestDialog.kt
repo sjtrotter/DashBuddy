@@ -60,13 +60,13 @@ fun OrphanOfferAttestDialog(
                 Text(
                     text = stringResource(R.string.orphan_offers_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
                 if (groups.isEmpty()) {
                     Text(
                         text = stringResource(R.string.orphan_offers_empty),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = c.text3,
+                        color = c.neutral,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 } else {
@@ -112,7 +112,7 @@ private fun OfferRow(
             Text(
                 text = offer.storeName ?: stringResource(R.string.orphan_offers_unknown_store),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (offer.resolved) c.text3 else c.text,
+                color = if (offer.resolved) c.neutral else c.text,
             )
             Text(
                 text = if (offer.resolved) {
@@ -122,13 +122,13 @@ private fun OfferRow(
                     "${formatShortDate(offer.decidedAt)} · ${formatClockTime(offer.decidedAt)}"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         Text(
             text = offer.payAmount?.let { Formats.money(it) } ?: EMPTY_VALUE,
             style = AppTheme.num.smNum,
-            color = if (offer.resolved) c.text3 else c.text,
+            color = if (offer.resolved) c.neutral else c.text,
         )
     }
 }

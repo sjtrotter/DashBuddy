@@ -85,13 +85,13 @@ fun WhereYouEarnCard(cards: List<StoreReportCard>, showMore: Boolean, modifier: 
     }
 
     AppCard(modifier = modifier.fillMaxWidth()) {
-        Text(text = stringResource(if (showMore) R.string.patterns_tab_stores_title else R.string.patterns_tab_stores_title_by_net), style = MaterialTheme.typography.labelMedium, color = c.text3)
+        Text(text = stringResource(if (showMore) R.string.patterns_tab_stores_title else R.string.patterns_tab_stores_title_by_net), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
         if (cards.isEmpty()) {
             Text(
                 text = stringResource(R.string.patterns_tab_no_stores),
                 style = MaterialTheme.typography.bodyMedium,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         } else {
@@ -164,7 +164,7 @@ private fun LeaderboardRow(rank: Int, card: StoreReportCard, maxNet: Double, out
         Text(
             text = stringResource(R.string.patterns_tab_leaderboard_rank_format, rank),
             style = AppTheme.num.smNum,
-            color = c.text3,
+            color = c.neutral,
             modifier = Modifier.width(30.dp),
         )
         Column(Modifier.weight(1f)) {
@@ -194,13 +194,13 @@ private fun LeaderboardRow(rank: Int, card: StoreReportCard, maxNet: Double, out
                 Text(
                     text = "${Formats.commaInt(card.deliveries)} $deliveriesWord · ",
                     style = MaterialTheme.typography.bodySmall,
-                    color = c.text3,
+                    color = c.neutral,
                 )
                 Text(
                     text = card.p50DwellMillis?.let { "${formatDuration(it)} ${stringResource(R.string.patterns_tab_leaderboard_wait_suffix)}" }
                         ?: stringResource(R.string.patterns_tab_leaderboard_no_wait),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (outlier) c.warn else c.text3,
+                    color = if (outlier) c.warn else c.neutral,
                 )
             }
         }
@@ -214,7 +214,7 @@ private fun LeaderboardRow(rank: Int, card: StoreReportCard, maxNet: Double, out
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = c.text3,
+            tint = c.neutral,
             modifier = Modifier.size(20.dp),
         )
     }
@@ -250,7 +250,7 @@ private fun StoreDetailSheet(card: StoreReportCard, onDismiss: () -> Unit) {
                 StoreLocationChip(card)
             }
             card.address?.let {
-                Text(text = it, style = MaterialTheme.typography.bodyMedium, color = c.text3)
+                Text(text = it, style = MaterialTheme.typography.bodyMedium, color = c.neutral)
             }
 
             HorizontalDivider(color = c.line)
@@ -274,13 +274,13 @@ private fun StoreDetailSheet(card: StoreReportCard, onDismiss: () -> Unit) {
             Text(
                 text = stringResource(R.string.patterns_tab_store_detail_wait_title),
                 style = MaterialTheme.typography.labelMedium,
-                color = c.text3,
+                color = c.neutral,
             )
             if (card.avgDwellMillis == null) {
                 Text(
                     text = stringResource(R.string.patterns_tab_store_dwell_none),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = c.text3,
+                    color = c.neutral,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -316,7 +316,7 @@ private fun StoreDetailSheet(card: StoreReportCard, onDismiss: () -> Unit) {
                     formatShortDate(card.lastSeenAt),
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
     }
@@ -351,7 +351,7 @@ private fun StoreLocationChip(card: StoreReportCard) {
 @Composable
 private fun StoreStat(label: String, value: String, valueColor: Color = AppTheme.colors.text) {
     Column {
-        Text(text = label.uppercase(), style = AppTheme.num.chip, color = AppTheme.colors.text3)
+        Text(text = label.uppercase(), style = AppTheme.num.chip, color = AppTheme.colors.neutral)
         Text(text = value, style = AppTheme.num.smNum, color = valueColor, textAlign = TextAlign.Start)
     }
 }

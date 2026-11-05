@@ -117,7 +117,7 @@ fun AboutScreen(
                 Text(
                     text = stringResource(R.string.about_screen_build_format, BuildConfig.VERSION_CODE.toString()),
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppTheme.colors.text3
+                    color = AppTheme.colors.neutral
                 )
             }
 

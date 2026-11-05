@@ -56,7 +56,7 @@ fun GigLogTheme(
     glance: Float = 1f,
     content: @Composable () -> Unit,
 ) {
-    val dash = if (darkTheme) darkAppColors() else lightAppColors()
+    val dash = appColors(darkTheme)
     CompositionLocalProvider(
         LocalAppColors provides dash,
         // #318: the numeric HUD style family (AppTheme.num.*) scales by `glance` on top of

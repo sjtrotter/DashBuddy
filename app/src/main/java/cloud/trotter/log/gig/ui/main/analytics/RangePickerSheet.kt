@@ -98,7 +98,7 @@ fun RangePickerSheet(
             Text(
                 text = stringResource(R.string.analytics_picker_presets),
                 style = MaterialTheme.typography.labelMedium,
-                color = AppTheme.colors.text3,
+                color = AppTheme.colors.neutral,
             )
             Spacer(Modifier.height(8.dp))
             PresetRow(
@@ -143,7 +143,7 @@ fun RangePickerSheet(
             Text(
                 text = stringResource(R.string.analytics_picker_dot_legend),
                 style = MaterialTheme.typography.bodySmall,
-                color = AppTheme.colors.text3,
+                color = AppTheme.colors.neutral,
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -153,7 +153,7 @@ fun RangePickerSheet(
                     stringResource(R.string.analytics_picker_pick_end)
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = AppTheme.colors.text3,
+                color = AppTheme.colors.neutral,
             )
 
             Spacer(Modifier.height(16.dp))
@@ -248,7 +248,7 @@ private fun WeekdayHeader() {
                 text = day.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelSmall,
-                color = AppTheme.colors.text3,
+                color = AppTheme.colors.neutral,
                 textAlign = TextAlign.Center,
             )
         }
@@ -342,7 +342,7 @@ private fun DayCell(
                 text = date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = when {
-                    isFuture -> c.text3
+                    isFuture -> c.text3 // text3: disabled
                     isSelectionEdge -> c.accentText
                     isToday -> c.accent
                     else -> c.text

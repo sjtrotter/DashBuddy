@@ -83,7 +83,7 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
         Text(
             text = stringResource(R.string.weekly_plan_target_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
         AppSegmented(
@@ -106,7 +106,7 @@ fun TargetSelectorCard(target: PlanTarget, onSelect: (PlanTarget) -> Unit) {
             Text(
                 text = stringResource(R.string.weekly_plan_target_dollars_selected, Formats.money(target.amount)),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
     }
@@ -209,7 +209,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
                     (plan.target as? PlanTarget.Hours)?.hours ?: plan.totalHours,
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         if (plan.hasUnpricedHours) {
@@ -220,7 +220,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
                     plan.totalHours - plan.pricedHours,
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
 
@@ -229,7 +229,7 @@ fun PlanValueCard(plan: WeeklyPlan) {
         Text(
             text = stringResource(R.string.weekly_plan_provenance),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }
@@ -260,7 +260,7 @@ fun SuggestedWindowsCard(
             Text(
                 text = stringResource(R.string.weekly_plan_windows_title),
                 style = MaterialTheme.typography.labelMedium,
-                color = c.text3,
+                color = c.neutral,
                 modifier = Modifier.weight(1f),
             )
             if (plan.edits.isNotEmpty()) {
@@ -350,7 +350,7 @@ private fun WindowRow(window: PlannedWindow, onMove: (PlannedWindow, Int) -> Uni
             Text(
                 text = evidenceLine(window),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (window.dollarsPerHour == null || window.hasThinEvidence) c.warn else c.text3,
+                color = if (window.dollarsPerHour == null || window.hasThinEvidence) c.warn else c.neutral,
             )
         }
         Text(
@@ -366,14 +366,14 @@ private fun WindowRow(window: PlannedWindow, onMove: (PlannedWindow, Int) -> Uni
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = stringResource(R.string.weekly_plan_window_earlier),
-                tint = c.text3,
+                tint = c.neutral,
             )
         }
         IconButton(onClick = { onMove(window, +1) }) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = stringResource(R.string.weekly_plan_window_later),
-                tint = c.text3,
+                tint = c.neutral,
             )
         }
     }
@@ -421,7 +421,7 @@ private fun NotPickedRow(day: UnpickedDay) {
             Text(
                 text = unpickedReasonText(day),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
         AppChip(text = stringResource(R.string.weekly_plan_not_picked))

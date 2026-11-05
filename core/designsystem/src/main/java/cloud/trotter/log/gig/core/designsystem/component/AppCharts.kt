@@ -109,7 +109,7 @@ fun AppBarChart(
                     b.label,
                     Modifier.weight(1f),
                     style = MaterialTheme.typography.labelSmall,
-                    color = c.text3,
+                    color = c.neutral,
                     textAlign = TextAlign.Center,
                 )
             }

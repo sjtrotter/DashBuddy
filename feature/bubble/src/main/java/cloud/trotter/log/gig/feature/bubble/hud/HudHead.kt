@@ -25,7 +25,7 @@ fun HudHead(platform: Platform?, switchable: List<Platform>, paused: Boolean, on
             else Text(platform?.displayName.orEmpty(), style = MaterialTheme.typography.labelLarge, color = AppTheme.colors.text2)
             if (paused) {
                 // Separate nodes so the paused label reads (and is found) as itself.
-                Text(" · ", style = MaterialTheme.typography.labelLarge, color = AppTheme.colors.text3)
+                Text(" · ", style = MaterialTheme.typography.labelLarge, color = AppTheme.colors.neutral)
                 Text(stringResource(R.string.hud_head_paused),
                     style = MaterialTheme.typography.labelLarge, color = AppTheme.colors.warn)
             }

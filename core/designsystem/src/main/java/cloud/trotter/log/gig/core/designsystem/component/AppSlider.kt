@@ -48,9 +48,9 @@ fun AppSlider(
             ),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(format(valueRange.start), style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(format(valueRange.start), style = MaterialTheme.typography.bodySmall, color = c.neutral)
             Text(format(value), style = AppTheme.num.smNum, color = c.accent)
-            Text(format(valueRange.endInclusive), style = MaterialTheme.typography.bodySmall, color = c.text3)
+            Text(format(valueRange.endInclusive), style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
     }
 }

@@ -17,4 +17,10 @@
     <color name="log_level_info">#FFCCCCCC</color>  <!-- A light gray -->
     <color name="log_level_warn">#FFFFAB40</color>  <!-- An orange/amber -->
     <color name="log_level_error">#FFFF5252</color>  <!-- A soft red -->
+    <!-- #1445: offer notification buttons; values-night holds the dark-theme pair. -->
+    <color name="notif_accept_bg">#15723D</color>
+    <color name="notif_accept_text">#FFFFFF</color>
+    <color name="notif_decline_bg">#E7EDF1</color>
+    <color name="notif_decline_stroke">#C9D3DB</color>
+    <color name="notif_decline_text">#111A22</color>
 </resources>

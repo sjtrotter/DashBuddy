@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #1445: offer notification buttons in the dark theme; values/colors.xml holds the light pair. -->
+    <color name="notif_accept_bg">#3DDC84</color>
+    <color name="notif_accept_text">#0B0F14</color>
+    <color name="notif_decline_bg">#243240</color>
+    <color name="notif_decline_stroke">#3A4A5A</color>
+    <color name="notif_decline_text">#E6EDF3</color>
+</resources>

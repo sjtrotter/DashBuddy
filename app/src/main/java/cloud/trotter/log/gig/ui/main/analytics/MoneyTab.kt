@@ -66,7 +66,7 @@ internal fun EmptyRow(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = AppTheme.colors.text3,
+        color = AppTheme.colors.neutral,
         modifier = Modifier.padding(vertical = 4.dp),
     )
 }

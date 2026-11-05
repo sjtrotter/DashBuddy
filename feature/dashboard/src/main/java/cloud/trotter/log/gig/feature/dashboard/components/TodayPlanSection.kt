@@ -139,10 +139,10 @@ private fun HourAxis() {
             Text(
                 text = hourOfDayLabel(hour),
                 style = MaterialTheme.typography.labelSmall,
-                color = c.text3,
+                color = c.neutral,
             )
         }
-        Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = hourOfDayLabel(0), style = MaterialTheme.typography.labelSmall, color = c.neutral)
     }
 }
 

@@ -53,7 +53,7 @@ fun NetPerHourPairCard(rates: NetPerHourPair, modifier: Modifier = Modifier) {
         Text(
             text = stringResource(R.string.time_tab_rate_pair_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -90,7 +90,7 @@ fun TypicalOnlineHourCard(composition: HourComposition, rates: NetPerHourPair, m
         Text(
             text = stringResource(R.string.time_tab_typical_hour_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -154,7 +154,7 @@ fun GapsBetweenJobsCard(gaps: GapStats, modifier: Modifier = Modifier) {
         Text(
             text = stringResource(R.string.time_tab_gaps_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -219,5 +219,5 @@ internal fun pluralGap(count: Int): String =
 /** The tab's small explanatory line — one style, so every caption on these cards reads the same. */
 @Composable
 private fun Caption(text: String) {
-    Text(text = text, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.text3)
+    Text(text = text, style = MaterialTheme.typography.bodySmall, color = AppTheme.colors.neutral)
 }

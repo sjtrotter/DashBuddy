@@ -65,7 +65,7 @@ fun OffersListCard(
         Text(
             text = stringResource(R.string.offers_tab_list_title),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -99,7 +99,7 @@ fun OffersListCard(
                 Text(
                     text = formatWeekdayMonthDay(date),
                     style = MaterialTheme.typography.labelSmall,
-                    color = c.text3,
+                    color = c.neutral,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(6.dp))
@@ -145,7 +145,7 @@ private fun OfferRow(offer: OfferListing) {
             Text(
                 text = metaLine(offer),
                 style = MaterialTheme.typography.bodySmall,
-                color = c.text3,
+                color = c.neutral,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -188,7 +188,7 @@ private fun OutcomePill(outcome: OfferOutcome?) {
         OfferOutcome.ACCEPTED -> R.string.offers_tab_segment_accepted to c.good
         OfferOutcome.DECLINED -> R.string.offers_tab_segment_declined to c.bad
         OfferOutcome.TIMED_OUT -> R.string.offers_tab_segment_timed_out to c.neutral
-        null -> R.string.offers_tab_pill_unknown to c.text3
+        null -> R.string.offers_tab_pill_unknown to c.neutral
     }
     AppChip(text = stringResource(labelRes), color = color, container = c.surface3)
 }
@@ -221,13 +221,13 @@ private fun OffersFooter(feed: OffersFeedState, onShowAll: () -> Unit) {
                 Formats.commaInt(feed.total),
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
 
         else -> Text(
             text = stringResource(R.string.offers_tab_showing_all_format, Formats.commaInt(feed.total)),
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
     }
 }

@@ -156,10 +156,13 @@ Rules:
   have no Material role, so they are read from `AppTheme.colors`. The bubble reads `AppTheme.colors` throughout.
 - Surfaces step up one level per layer of containment: window `bg`, card `surface`, sheet `surface2`, control
   `surface3`.
-- **Text that carries information uses `text` or `text2`.** `text3` is 4.2:1 on `bg` and 3.4:1 on `surface2` in
-  the dark theme, under the 4.5:1 small-text minimum, so it is for disabled states and decorative marks (icon
-  strokes, the drag handle). Small labels use `neutral` (5.2 to 6.4:1) or `text2` (dev, 2026-10-30; first adopted
-  for the bubble in #1333). The code does not follow it yet.
+- **Text that carries information uses `text`, `text2` or `neutral`.** `text3` is for decorative marks (dividers,
+  tracks, the drag handle) and disabled content only. Every remaining `text3` line in main sources ends with a
+  `// text3: decorative` or `// text3: disabled` marker, and `Text3GuardTest` fails on one without it (#1444).
+- **Every text colour meets 4.5:1 on the surfaces it sits on, in both themes.** `AppColorsContrastTest` checks each
+  text token on `bg`, `surface` and `surface2`, the status chips on their own tints, and the Material on-colours
+  (#1444). The offer notification follows the phone's theme through `appColors(dark)` and night colour resources
+  (#1445).
 - The phase strip's colours: waiting `good`, offer `stOffer`, pickup `stPickup`, dropoff `stDropoff`, off shift
   and paused `rest`. The head's "Paused" label is `warn`. Each phase also has a word on screen.
 - The `*Bg` tokens tint chips and badges: the status colours (`good`, `warn`, `bad`, `neutral`) at 14 % alpha in
@@ -220,14 +223,10 @@ Known gaps between the rules above and the code, found by the 2026-10-30 design 
 It lists the known gaps, not every one: when a change meets code that breaks a rule here, it fixes the code or
 adds the gap below, and never leaves it worse.
 
-- **`text3` carries words** in about 157 places, including `AppStatTile`'s labels and subtitles and the bubble's
-  state labels, gas row and gauge units. Home's row titles ("THIS WEEK", the Ratings row) and its "TODAY" label
-  moved to `text2` in #1447.
 - **Words under 12 sp:** `labelSmall` is 10 sp and `bodySmall` 11 sp in `AppTypography`, and the `xs` number style
   is 11 sp.
 - **Targets under 48 dp:** keypad keys (38 dp), the offer pop-up's Accept and Decline (36 and 40 dp, in fixed-height
   rows), expense label chips, goal buttons (44 dp), the hub's segments, "More numbers" and needs-a-look rows.
-- **The offer pop-up's colours** come from the dark palette whatever the phone's theme.
 - **Numbers outside a number style:** the setup sliders' values (`MetricSliderCard`, Material `displayMedium`) and
   the bubble's gas prices (`GasQuickEdit`, which also reads Material colour roles instead of `AppTheme.colors`).
 - **Bubble text the driving multiplier misses:** the offer card's literal `20.sp` text and `14.sp` countdown label
@@ -291,10 +290,8 @@ adds the gap below, and never leaves it worse.
 
 - **The bubble declutter.** A 2026-10-21 study proposes thinning the waiting and shift-start states. It waits on
   the developer and lives outside the repo.
-- **Light theme colours.** On the light `bg`, small text in `accent` (3.0:1), `warn` (2.7:1), `good` (3.1:1) and
-  `neutral` (4.0:1) falls under 4.5:1; those tokens change, or the surface is redesigned for light.
 - **Dropoff colour.** `stDropoff` is 3.8:1 on `surface2` in the dark theme; fine for the phase strip, too faint for
-  small text on a sheet.
+  small text on a sheet. Today it draws only the track and the phase strip, never text.
 - **`AppSegmented`** follows the segmented button, which current Material no longer recommends: replace it with the
   connected button group, or keep it as a brand component.
 

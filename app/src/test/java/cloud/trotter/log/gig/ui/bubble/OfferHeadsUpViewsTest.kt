@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
+import cloud.trotter.log.gig.core.designsystem.theme.darkAppColors
 import cloud.trotter.log.gig.core.state.StateManagerV2
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluator
@@ -83,7 +84,7 @@ class OfferHeadsUpViewsTest {
             notification.extras.getString(Notification.EXTRA_TITLE))
         val expanded = notification.bigContentView.apply(context, FrameLayout(context))
         assertEquals(model.store, expanded.findViewById<TextView>(R.id.notif_offer_store).text.toString())
-        assertEquals(offerNotificationHero(model.pay, true).toString(), expanded.findViewById<TextView>(R.id.notif_offer_hero).text.toString())
+        assertEquals(offerNotificationHero(model.pay, true, darkAppColors()).toString(), expanded.findViewById<TextView>(R.id.notif_offer_hero).text.toString())
         assertEquals(3, model.rates.size)
         listOf(R.id.notif_offer_rate_0, R.id.notif_offer_rate_1, R.id.notif_offer_rate_2).forEachIndexed { index, id ->
             val rate = model.rates[index]
@@ -94,7 +95,7 @@ class OfferHeadsUpViewsTest {
         assertRemoved(expanded)
         for (remote in listOf(notification.contentView, notification.headsUpContentView)) {
             val compact = remote.apply(context, FrameLayout(context))
-            assertEquals(offerNotificationHero(model.pay, false).toString(), compact.findViewById<TextView>(R.id.notif_offer_hero).text.toString())
+            assertEquals(offerNotificationHero(model.pay, false, darkAppColors()).toString(), compact.findViewById<TextView>(R.id.notif_offer_hero).text.toString())
             assertNotNull(compact.findViewById<TextView>(R.id.notif_offer_note))
             assertEquals(View.VISIBLE, compact.findViewById<TextView>(R.id.notif_offer_profit).visibility)
             assertRemoved(compact)
@@ -119,7 +120,7 @@ class OfferHeadsUpViewsTest {
         assertTrue("fixture must map to the combined card", card is cloud.trotter.log.gig.feature.bubble.hud.OfferCardModel.Combined)
         val model = OfferNotificationModel.from(card)
         val expanded = post(pending, job).bigContentView.apply(context, FrameLayout(context))
-        assertEquals("the combined gross, not the \$7.00 delta", offerNotificationHero(model.pay, true).toString(),
+        assertEquals("the combined gross, not the \$7.00 delta", offerNotificationHero(model.pay, true, darkAppColors()).toString(),
             expanded.findViewById<TextView>(R.id.notif_offer_hero).text.toString())
         assertEquals(View.VISIBLE, expanded.findViewById<View>(R.id.notif_offer_bar).visibility)
         assertEquals(View.GONE, expanded.findViewById<View>(R.id.notif_offer_note).visibility)

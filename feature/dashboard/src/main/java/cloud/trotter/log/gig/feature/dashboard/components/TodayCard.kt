@@ -59,7 +59,7 @@ fun TodayCard(
         Text(
             text = stringResource(R.string.dashboard_today_title),
             style = MaterialTheme.typography.labelMedium,
-            // text2, the pair of "THIS WEEK" (#1447 N4): a label is information, never text3.
+            // text2, the pair of "THIS WEEK" (#1447 N4): a label is information, never the faintest grey.
             color = c.text2,
         )
         Spacer(Modifier.height(6.dp))
@@ -72,7 +72,7 @@ fun TodayCard(
         Text(
             text = stringResource(R.string.dashboard_today_stat_kept),
             style = MaterialTheme.typography.labelMedium,
-            color = c.text3,
+            color = c.neutral,
         )
 
         Spacer(Modifier.height(ROW_GAP))
@@ -161,6 +161,6 @@ private fun InlineFigure(label: String, value: String, modifier: Modifier = Modi
     val c = AppTheme.colors
     Column(modifier = modifier) {
         Text(text = value, style = AppTheme.num.mdNum, color = c.text)
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = c.text3)
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = c.neutral)
     }
 }

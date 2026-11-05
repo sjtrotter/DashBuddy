@@ -7,7 +7,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
-import cloud.trotter.log.gig.core.designsystem.theme.darkAppColors
+import cloud.trotter.log.gig.core.designsystem.theme.AppColors
 import cloud.trotter.log.gig.feature.bubble.hud.PayBarLayout
 import cloud.trotter.log.gig.feature.bubble.hud.PayBarModel
 import cloud.trotter.log.gig.feature.bubble.hud.payBarMoney
@@ -15,11 +15,10 @@ import cloud.trotter.log.gig.feature.bubble.hud.payBarMoney
 /** Localised at the caller; drawing needs no Context. */
 data class PayBarLabels(val profit: String, val loss: String, val car: String, val distanceUnknown: String)
 
-fun payBarBitmap(model: PayBarModel, widthPx: Int, heightPx: Int, density: Float, labels: PayBarLabels): Bitmap? {
+fun payBarBitmap(model: PayBarModel, widthPx: Int, heightPx: Int, density: Float, labels: PayBarLabels, colors: AppColors): Bitmap? {
     if (model == PayBarModel.Unscored) return null
     val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val colors = darkAppColors()
     val width = widthPx.toFloat()
     val height = heightPx.toFloat()
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)

@@ -118,7 +118,7 @@ private fun WeekRow(
         Text(
             text = previousLine,
             style = MaterialTheme.typography.bodySmall,
-            color = c.text3,
+            color = c.neutral,
         )
 
         // Kept money per day (§7.3). Hidden below two points: a one-point "line" is a shape with no
