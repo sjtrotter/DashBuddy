@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -41,9 +40,8 @@ import java.time.ZoneId
  * offers, filterable (All / Accepted / Declined / Timed out), newest decision first, with a
  * `See all N offers` footer.
  *
- * **Declined and timed-out rows render at reduced opacity** (brief §5). That is a *de-emphasis*, not
- * a hiding: the row keeps every figure, because "what did I turn down" is exactly the question this
- * list exists to answer — the dimming only says "you didn't take this one".
+ * **Declined and timed-out rows keep full contrast** (#1444): "what did I turn down" is exactly the question
+ * this list exists to answer, and the status pill already says "you didn't take this one".
  *
  * **Every economic column is a frozen decision-time figure** — the pay/distance the card quoted and
  * the verdict's own est. $/hr and score (the tab's standing disclosure covers all of them, §9). A
@@ -126,11 +124,9 @@ fun OffersListCard(
 @Composable
 private fun OfferRow(offer: OfferListing) {
     val c = AppTheme.colors
-    val dimmed = offer.outcome != OfferOutcome.ACCEPTED
     Row(
         Modifier
-            .fillMaxWidth()
-            .alpha(if (dimmed) DECLINED_ALPHA else 1f),
+            .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -249,6 +245,3 @@ private fun filterOptions(): List<FilterOption> = OfferFilter.entries.map { filt
         ),
     )
 }
-
-/** Declined / timed-out rows are de-emphasised, never hidden (brief §5). */
-private const val DECLINED_ALPHA = 0.55f

@@ -46,7 +46,9 @@ class AppColorsContrastTest {
             Triple("neutral", c.neutral, c.neutralBg), Triple("stOffer", c.stOffer, c.stOfferBg),
             Triple("stPickup", c.stPickup, c.stPickupBg),
         ).forEach { (ink, fg, tint) ->
-            assertReadable(theme, "$ink on ${ink}Bg over surface2", fg, tint.compositeOver(c.surface2))
+            listOf("bg" to c.bg, "surface" to c.surface, "surface2" to c.surface2).forEach { (surface, under) ->
+                assertReadable(theme, "$ink on ${ink}Bg over $surface", fg, tint.compositeOver(under))
+            }
         }
     }
 

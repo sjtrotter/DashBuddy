@@ -46,14 +46,14 @@ fun PlatformSwitcherRow(
         Text(
             text = stringResource(R.string.bubble_switcher_label),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            color = c.neutral,
         )
         platforms.forEach { platform ->
             val isSelected = platform == selected
             AppChip(
                 text = platform.shortName,
                 color = if (isSelected) c.accent else c.neutral,
-                container = if (isSelected) c.accent.copy(alpha = 0.15f) else c.neutralBg,
+                container = if (isSelected) c.accentDim else c.neutralBg,
                 modifier = Modifier.clickable { onSelect(platform) },
             )
         }
