@@ -101,4 +101,14 @@ class EndShiftSheetTest {
         compose.onNodeWithText(string(R.string.end_shift_warning_activity)).assertExists()
         endButton().assertIsEnabled()
     }
+
+    @Test
+    fun `a selected shift that ended leaves the remaining shift pickable with a fresh confirmation`() {
+        show(EndShiftForm(sessionId = "session-gone", confirmed = true))
+        val row = compose.onNodeWithText(string(R.string.end_shift_pick_row, "DoorDash", ""), substring = true)
+        row.assertExists()
+        row.performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeBy(2_000)
+        endButton().assertIsNotEnabled()
+    }
 }

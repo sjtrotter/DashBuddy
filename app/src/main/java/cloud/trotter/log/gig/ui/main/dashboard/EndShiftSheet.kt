@@ -95,7 +95,7 @@ internal fun EndShiftContent(
             .padding(bottom = 24.dp),
     ) {
         Text(stringResource(R.string.end_shift_title), style = MaterialTheme.typography.titleLarge, color = c.text)
-        if (candidates.size > 1) {
+        if (candidates.size > 1 || selected == null) {
             Spacer(Modifier.height(8.dp))
             candidates.forEach { candidate ->
                 CandidateRow(candidate, candidate == selected, zone) {
