@@ -65,6 +65,7 @@ Dated field reports continue below; checklist policy is in CHECKLIST §0.
 
 ## Sessions
 
+- [2026-11-06 — desk analysis of the 11-06 pull: dashes 11-01 and 11-05; DoorDash 8.106.9 breaks the offline home, so a $0 shift never ended](sessions/2026-11-06-desk-analysis-of-the-11-06-pull-doordash-8-106-9.md)
 - [2026-10-26 — desk analysis of the 10-26 pull: dashes 10-18 evening to 10-25; two accepts recorded as timeouts cost $21.40; two…](sessions/2026-10-26-desk-analysis-of-the-10-26-pull-dashes-10-18.md)
 - [2026-10-19 — desk check of the S3a cash tip sheet on the first install with it: the pad does not match panel 11c](sessions/2026-10-19-desk-check-of-the-s3a-cash-tip-sheet-on-the-first.md)
 - [2026-10-18 — desk analysis of the 10-18 pull: dashes on 10-14, 10-16, 10-17 and 10-18; money reconciles on 7 of 8 summary dashes; a…](sessions/2026-10-18-desk-analysis-of-the-10-18-pull-dashes-on-10-14-10.md)
