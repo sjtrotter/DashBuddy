@@ -3097,6 +3097,34 @@
         "shape": null,
         "fields": {}
     },
+    "idle_map/2026-11-05_13-31-53-781__doordash__accessibility.window__idle_map__7853b4.json": {
+        "ruleId": "doordash.screen.idle_map",
+        "intent": "idle_map",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": null,
+            "sessionType": null,
+            "spotSaveDeadline": null,
+            "startingSession": false,
+            "waitTimeEstimate": null,
+            "zoneName": null
+        }
+    },
+    "idle_map/2026-11-05_18-00-21-913__doordash__accessibility.window__idle_map__0e4ddf.json": {
+        "ruleId": "doordash.screen.idle_map",
+        "intent": "idle_map",
+        "shape": "idle",
+        "fields": {
+            "isHeadingBackToZone": false,
+            "sessionPay": null,
+            "sessionType": null,
+            "spotSaveDeadline": null,
+            "startingSession": false,
+            "waitTimeEstimate": null,
+            "zoneName": null
+        }
+    },
     "idle_map/20260128_155954_491_MAIN_MAP_IDLE.json": {
         "ruleId": "doordash.screen.idle_map",
         "intent": "idle_map",
@@ -4138,6 +4166,12 @@
         "fields": {}
     },
     "on_dash_map/2026-09-24_18-28-13-562__doordash__accessibility.window__on_dash_map__203312.json": {
+        "ruleId": "doordash.screen.on_dash_map",
+        "intent": "on_dash_map",
+        "shape": null,
+        "fields": {}
+    },
+    "on_dash_map/2026-11-06_06-59-46-730__doordash__accessibility.window__on_dash_map__39a14b.json": {
         "ruleId": "doordash.screen.on_dash_map",
         "intent": "on_dash_map",
         "shape": null,

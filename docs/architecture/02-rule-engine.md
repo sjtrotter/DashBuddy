@@ -137,6 +137,18 @@ the default `standalone` says an accept starts a job and closes a stale live one
 prefixes only incremental hash inputs, leaving TOTAL bytes unchanged and Compose presentation keys
 null. The structural test is programmatic; real-capture intake and golden regeneration remain separate.
 
+
+**The 8.106.9 offline home (#1527, fielded 2026-11-05).** `doordash.screen.idle_map` used to require the
+earnings-mode control described `Earnings Mode Switcher`. DoorDash 8.106.9 renamed it `Earn by time`, dropped the
+`Time mode on` / `Time mode off` descriptions, and shows the control on the online home too, so `idle_map` matched
+nothing and a shift with no summary screen never ended. The new `offline_screen` / `offline_view_primary_action`
+ids are also on both homes. What tells them apart is the main button's whole label: `Dash` offline, `Return to
+Dash` online, with `You're dashing now` above it. `idle_map` now requires the side menu plus either the exact `Dash`
+label or the old `Earnings Mode Switcher` (offline-only before 8.106.9), and rejects `You're dashing now` beside
+`Return to dash`. The earnings mode is read when shown and is otherwise null; nothing requires it, since some zones
+have no such mode. An offline-home frame still drawing, without its button, stays UNKNOWN: one recognised frame
+ends the shift. `on_dash_map` and `waiting_for_offer` keep their `Earnings Mode Switcher` reject, inert on 8.106.9;
+adding `Earn by time` there would reject the online home.
 **Node predicates over the #1147 fields** (the TalkBack-study node semantics; see
 `01-sensor-pipelines.md` "Node model fields"): `hasPaneTitle`/`hasPaneTitleContaining`,
 `hasRoleDescription`, `hasClickActionLabel`/`hasClickActionLabelContaining`,
