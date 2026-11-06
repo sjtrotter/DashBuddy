@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import cloud.trotter.log.gig.core.database.analytics.SessionMilesSql.EFFECTIVE_MILES_SQL
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.EFFECTIVE_REPORTED_SQL
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.REPORT_SOURCE_SQL
 import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.SESSION_DELIVERY_JOIN_SQL
@@ -39,6 +40,10 @@ interface AnalyticsDao {
     /** #1134: the driver statement; machine reportedEarnings is never rewritten. */
     @Query("UPDATE session_records SET reportOverrideMode = :mode, reportOverride = :value, reportCorrectedAt = :correctedAt WHERE sessionId = :sessionId")
     suspend fun setSessionReportOverride(sessionId: String, mode: String?, value: Double?, correctedAt: Long?)
+
+    /** #1535: the driver's shift miles (null restores the tracked span); the odometer anchors are never rewritten. */
+    @Query("UPDATE session_records SET milesOverride = :miles WHERE sessionId = :sessionId")
+    suspend fun setSessionMilesOverride(sessionId: String, miles: Double?)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDelivery(record: DeliveryRecordEntity)
@@ -423,7 +428,7 @@ interface AnalyticsDao {
     fun storeDwellSamples(): Flow<List<StoreDwellSample>>
 
     @Query(
-        """SELECT COALESCE(SUM(MAX(lastOdometer - startOdometer, 0)), 0) AS miles,
+        """SELECT COALESCE(SUM($EFFECTIVE_MILES_SQL), 0) AS miles,
                   COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis,
                   COUNT(*) AS sessions
            FROM session_records
@@ -433,7 +438,7 @@ interface AnalyticsDao {
 
     @Query(
         """SELECT platform,
-                  COALESCE(SUM(MAX(lastOdometer - startOdometer, 0)), 0) AS miles,
+                  COALESCE(SUM($EFFECTIVE_MILES_SQL), 0) AS miles,
                   COALESCE(SUM(COALESCE(endedAt, lastEventAt) - startedAt), 0) AS onlineMillis,
                   COUNT(*) AS sessions
            FROM session_records

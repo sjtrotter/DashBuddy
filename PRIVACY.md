@@ -202,6 +202,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   existing expense note, and its fill-up GPS stamp is the existing `odometerMiles`. Recent-label
   chips are derived from non-voided expense notes, with no second label store. Expense actions
   keep labels out of diagnostic logs entirely; a failed write logs only the exception class at WARN.
+- Miles you correct for a shift stay on the device (#1535): a `SESSION_MILES_CORRECTION` event in the local
+  database and its value on the shift's read-model row. The tracked GPS figure is kept beside it, and the CSV export
+  marks each shift's miles as tracked or corrected.
 - Vehicles you add and odometer readings you type stay on the device. A vehicle is a name you type,
   an id and its creation time, in the `vehicles` preferences file alongside the active vehicle id; since #1355 it
   also carries the vehicle's profile by type (since #1358: a gas car, hybrid, EV, motorcycle, scooter or moped,
@@ -283,6 +286,8 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r13 (2026-11-06)** — §7: shift miles you correct are stored on the device beside the tracked figure, and
+  the CSV export marks which one each shift uses (#1535). The in-app privacy page lists them with what you enter.
 - **r12 (2026-10-31)** — §5: Accept and Decline are not asked for until gig.log can tap them by itself;
   earlier decisions stay listed and can only be turned off, and an automatic tap whose action has no
   automatic trigger is refused (#1457). §6: a text-to-speech row (spoken offers go to the phone's

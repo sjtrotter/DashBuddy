@@ -90,8 +90,12 @@ data class SessionRecord(
      */
     val endSource: String? = null,
     val reportedDurationMillis: Long?,
-    /** Odometer delta (lastOdometer − startOdometer), floored at 0; null when odometer never seen. */
+    /** The shift's effective miles ([SessionMilesRule.effective]): the driver override, else [machineMiles]. */
     val miles: Double?,
+    /** The tracked odometer span (lastOdometer − startOdometer), floored at 0; null when an anchor is missing. */
+    val machineMiles: Double? = miles,
+    /** #1535 driver override; non-null (zero included) means the driver corrected this shift's miles. */
+    val milesOverride: Double? = null,
     val deliveries: Int,
     val jobsCompleted: Int,
     val offersReceived: Int,

@@ -442,6 +442,23 @@ data class SessionReportCorrectionPayload(
     val note: String? = null,
 ) : AppEventPayload
 
+/** #1535: the operations a SESSION_MILES_CORRECTION may carry (wire strings; the codec stores them verbatim). */
+object SessionMilesOperation {
+    const val SET = "SET"
+    const val RESTORE_MACHINE = "RESTORE_MACHINE"
+}
+
+/** #1535: a driver's statement of a shift's miles. The machine odometer anchors are never rewritten. */
+@Serializable
+data class SessionMilesCorrectionPayload(
+    val sessionId: String,
+    /** One of [SessionMilesOperation]. */
+    val operation: String,
+    /** Required for SET (0 ≤ value ≤ 2 000, finite); null for RESTORE_MACHINE. */
+    val newMiles: Double? = null,
+    val note: String? = null,
+) : AppEventPayload
+
 /**
  * The wire vocabulary of `offer_records.outcomeResolved` (#810 B2) — the SSOT both the projector
  * writes and the read-side count-exclusion / UI derive from. A `null` column means "a normal offer /

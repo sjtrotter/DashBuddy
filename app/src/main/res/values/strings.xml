@@ -255,6 +255,7 @@
     <string name="time_tab_deadhead_title">EMPTY MILES</string>
     <string name="time_tab_no_miles_measured_yet">No miles tracked</string>
     <string name="time_tab_deadhead_caption">of miles with no delivery</string>
+    <string name="time_tab_delivery_miles_exceed_total">Delivery miles are more than shift miles, so no split is shown</string>
     <string name="time_tab_segment_deadhead">No delivery</string>
     <string name="time_tab_on_time_title">ON TIME</string>
     <string name="time_tab_no_deadline_deliveries_yet">No deliveries with a deadline</string>
@@ -792,6 +793,15 @@
     <string name="session_report_dialog_clear">No summary for this shift</string>
     <string name="session_report_dialog_restore">Use the total gig.log read</string>
     <string name="session_report_dialog_note">Note (optional)</string>
+    <string name="session_detail_correct_miles">Correct miles</string>
+    <string name="session_detail_miles_corrected">Corrected by you</string>
+    <string name="session_miles_dialog_title">Correct miles</string>
+    <string name="session_miles_dialog_field">Miles for this shift</string>
+    <string name="session_miles_dialog_save">Save</string>
+    <string name="session_miles_dialog_invalid">Enter a number from 0 to 2,000.</string>
+    <string name="session_miles_dialog_below_deliveries">This is less than the miles recorded on this shift\'s deliveries. Those keep their own miles.</string>
+    <string name="session_miles_dialog_restore_format">Use tracked miles (%1$s)</string>
+    <string name="session_miles_dialog_restore">Use tracked miles</string>
 
     <!-- #254: local per-platform time learning and independent global overrides. -->
     <string name="economy_time_title">Time estimates</string>

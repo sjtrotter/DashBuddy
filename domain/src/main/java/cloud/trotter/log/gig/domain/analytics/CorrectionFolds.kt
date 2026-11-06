@@ -11,6 +11,8 @@ import cloud.trotter.log.gig.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PayAdjustmentPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
 
 /**
@@ -18,7 +20,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionP
  * [LegFolds] is the same-package precedent). Pure — no Android / DB / wall clock. Covers the manual
  * missed-delivery mint ([foldManualDelivery]) and the decision-only re-apply folds
  * ([foldPayAdjustment] / [foldDeliveryAdjustment] / [foldDeliverySessionAssign] /
- * [foldSessionReportCorrection]) whose actual row
+ * [foldSessionReportCorrection] / [foldSessionMilesCorrection]) whose actual row
  * writes the orchestrator performs inside the batch transaction. The record-mint folds live in
  * [DeliveryFolds]; [RecordFolds] keeps the dispatcher, session-lifecycle folds, and — the ONE
  * top-level definition both new files derive from — the shared session helpers [resolveContext] /
@@ -265,6 +267,26 @@ internal object CorrectionFolds {
             return FoldOutcome(context = null, skip = "SESSION_REPORT_CORRECTION: target session unknown or not ended at this log position")
         }
         return FoldOutcome(context = null, sessionReportCorrection = SessionReportCorrectionFold(p.sessionId, p.operation, p.newReported))
+    }
+
+    /**
+     * #1535: the miles twin of [foldSessionReportCorrection], with the same safeguards: the envelope, the context and
+     * the payload name one session, which has ENDED at this log position; the outcome carries no context. It also
+     * judges the operation and the SET value here, so a malformed correction is a counted skip in any batch.
+     */
+    fun foldSessionMilesCorrection(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? SessionMilesCorrectionPayload
+            ?: return FoldOutcome(context = null, skip = "SESSION_MILES_CORRECTION: missing/malformed payload")
+        if (event.event.sessionId != p.sessionId || context == null || context.sessionId != p.sessionId || context.endedAt == null) {
+            return FoldOutcome(context = null, skip = "SESSION_MILES_CORRECTION: target session unknown or not ended at this log position")
+        }
+        val miles = when (p.operation) {
+            SessionMilesOperation.SET -> p.newMiles?.takeIf { SessionMilesRule.isValidSet(it) }
+                ?: return FoldOutcome(context = null, skip = "SESSION_MILES_CORRECTION: SET value out of bounds")
+            SessionMilesOperation.RESTORE_MACHINE -> null
+            else -> return FoldOutcome(context = null, skip = "SESSION_MILES_CORRECTION: unknown operation")
+        }
+        return FoldOutcome(context = null, sessionMilesCorrection = SessionMilesCorrectionFold(p.sessionId, p.operation, miles))
     }
 
     /**

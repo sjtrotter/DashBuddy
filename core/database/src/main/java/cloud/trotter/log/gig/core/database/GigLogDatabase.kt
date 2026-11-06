@@ -102,6 +102,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // the immutable correction events on any future refold. Additive ⇒ never wipes app_events or the
     // existing analytics rows.
     // v17→v18 (#254): seven nullable time-learning evidence columns; projector 13 backfills them.
+    // v21→v22 (#1535): one nullable REAL column, session_records.milesOverride, NULL on existing rows. No
+    // `PROJECTOR_VERSION` bump: SESSION_MILES_CORRECTION is a new event type that cannot exist in folded history.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -116,6 +118,7 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 18, to = 19), // #1108 machine mileage allocation basis
         AutoMigration(from = 19, to = 20), // #1333 ledger tables
         AutoMigration(from = 20, to = 21), // #1388 nullable vehicleId on both ledger tables; no refold
+        AutoMigration(from = 21, to = 22), // #1535 nullable session_records.milesOverride; no refold
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -146,7 +149,7 @@ abstract class GigLogDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 21
+        const val VERSION = 22
     }
 
 }

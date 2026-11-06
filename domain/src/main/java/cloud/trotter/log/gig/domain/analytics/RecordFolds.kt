@@ -280,6 +280,7 @@ data class FoldOutcome(
      */
     val sessionAssign: SessionAssignFold? = null,
     val sessionReportCorrection: SessionReportCorrectionFold? = null,
+    val sessionMilesCorrection: SessionMilesCorrectionFold? = null,
     /**
      * A JOB_ACCEPT_MISMATCH Tier-1 orphan-reconcile trigger (#810 B2): the pure fold cannot read the
      * job's committed offer/delivery rows here, so the orchestrator runs the store-evidence join
@@ -356,6 +357,9 @@ data class ReceiptRepriceFold(
 
 /** #1134 driver report decision; applied by session PK inside the projector transaction. */
 data class SessionReportCorrectionFold(val sessionId: String, val operation: String, val value: Double?)
+
+/** #1535 driver miles decision, already validated by the fold; applied by session PK inside the projector transaction. */
+data class SessionMilesCorrectionFold(val sessionId: String, val operation: String, val miles: Double?)
 
 /**
  * A driver's session-(re)attribution decision (#660 piece 2) — the pure fold's output for a
@@ -438,6 +442,7 @@ object RecordFolds {
         AppEventType.DELIVERY_SESSION_ASSIGN,
         AppEventType.OFFER_OUTCOME_CORRECTION,
         AppEventType.SESSION_REPORT_CORRECTION,
+        AppEventType.SESSION_MILES_CORRECTION,
     )
 
     fun foldEvent(
@@ -505,6 +510,7 @@ object RecordFolds {
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
             AppEventType.DELIVERY_RECEIPT_REPRICE -> CorrectionFolds.foldDeliveryReceiptReprice(event, context)
             AppEventType.SESSION_REPORT_CORRECTION -> CorrectionFolds.foldSessionReportCorrection(event, context)
+            AppEventType.SESSION_MILES_CORRECTION -> CorrectionFolds.foldSessionMilesCorrection(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)
             AppEventType.OFFER_OUTCOME_CORRECTION -> CorrectionFolds.foldOfferOutcomeCorrection(event, context)
             // #810 B2 Tier 1: emit the orphan-reconcile trigger (the orchestrator runs the store-evidence

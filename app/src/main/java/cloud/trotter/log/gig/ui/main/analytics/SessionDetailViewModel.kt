@@ -158,6 +158,19 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
+    /** #1535: state this shift's miles ([miles] non-null) or restore the tracked miles (null). */
+    fun correctShiftMiles(miles: Double?) {
+        viewModelScope.launch {
+            try {
+                if (miles != null) correctionRepository.setShiftMiles(sessionId, miles) else correctionRepository.restoreShiftMiles(sessionId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.tag(TAG).w("correctShiftMiles rejected for session %s", sessionId)
+            }
+        }
+    }
+
     private companion object {
         private const val TAG = "SessionDetailVm"
     }

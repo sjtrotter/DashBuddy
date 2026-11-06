@@ -84,6 +84,14 @@ data class TimeEconomics(
     val unattributedMiles: Double
         get() = (miles - (deliveryMiles ?: 0.0)).coerceAtLeast(0.0)
 
+    /**
+     * #1535: the deliveries' own miles exceed the period's shift miles by more than display precision, which a
+     * driver's shift miles correction below the deliveries' miles can cause (the deliveries keep their #1108
+     * allocation). The delivery / no-delivery split is then withheld rather than clamped.
+     */
+    val deliveryMilesExceedTotal: Boolean
+        get() = (deliveryMiles ?: 0.0) > miles + MILES_SPLIT_EPSILON
+
     /** Average online time per dash (ms), or `null` when no dashes in the period. */
     val avgDashMillis: Long?
         get() = if (sessions == 0) null else onlineMillis / sessions
@@ -105,6 +113,9 @@ data class TimeEconomics(
         get() = pickupsTimed + dropoffsTimed
 
     companion object {
+        /** Half the Time tab's one-decimal display step, so float noise between capped allocations never withholds. */
+        const val MILES_SPLIT_EPSILON = 0.05
+
         val EMPTY = TimeEconomics(
             sessions = 0,
             onlineMillis = 0L,

@@ -1,0 +1,5 @@
+status: active
+issues: #1535
+
+- **Correct a shift's miles (#1535):** before you start, note Home's week miles, Analytics miles for the week and, from Settings → Data & Privacy → Export Data, `summary.csv`'s `total_deductible_miles` and the vehicle's `vehicle_deductible_miles`. Open shift 1152 (11-05, 17:49, 59.4 miles) from Analytics. "Correct miles" sits beside "Correct total"; a live shift has no "Correct miles". Tap it: "Miles for this shift" reads 59.4 and Save stays grey until the number changes. Type 2000.5: one red line, Save grey. Type a number below the shift's delivery miles: an amber line says the deliveries keep their own miles, and Save still works. Save a real figure: the tile shows it with "Corrected by you", and Home, Analytics and both CSV totals each drop by 59.4 minus that figure, no more. In `sessions.csv` the shift's `miles` is your figure, `miles_source` is `corrected`, and `odometer_start`/`odometer_end` are unchanged. Open the dialog again and tap "Use tracked miles (59.4)": every figure returns to the starting value and `miles_source` reads `tracked`.
+  - Confirmed: 0/2

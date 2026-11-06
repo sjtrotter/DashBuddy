@@ -97,6 +97,7 @@ fun SessionDetailScreen(
                 onAdjustDelivery = viewModel::adjustDelivery,
                 onUnassignDelivery = viewModel::unassignDelivery,
                 onCorrectSessionReport = viewModel::correctSessionReport,
+                onCorrectShiftMiles = viewModel::correctShiftMiles,
                 modifier = Modifier
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
@@ -126,12 +127,15 @@ private fun DashDetailContent(
     ) -> Unit,
     onUnassignDelivery: (targetEventSequenceId: Long) -> Unit,
     onCorrectSessionReport: (String, Double?, String?) -> Unit,
+    onCorrectShiftMiles: (Double?) -> Unit,
     modifier: Modifier,
 ) {
     // Correction dialog state — hoisted here, stateless children below (Principle 1 / 3).
     var showReportDialog by remember(detail.session.sessionId) { mutableStateOf(false) }
     var reportAmount by remember(detail.session.sessionId) { mutableStateOf("") }
     var reportNote by remember(detail.session.sessionId) { mutableStateOf("") }
+    var showMilesDialog by remember(detail.session.sessionId) { mutableStateOf(false) }
+    var milesText by remember(detail.session.sessionId) { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var adjustTarget by remember { mutableStateOf<DeliveryRecord?>(null) }
 
@@ -146,6 +150,9 @@ private fun DashDetailContent(
             reportAmount = detail.session.reportedEarnings?.toString().orEmpty()
             reportNote = ""
             showReportDialog = true
+        }, onCorrectMiles = {
+            milesText = milesFieldText(detail.session.miles)
+            showMilesDialog = true
         })
         if (hasCallout) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -188,6 +195,23 @@ private fun DashDetailContent(
                 showReportDialog = false
             },
             onDismiss = { showReportDialog = false },
+        )
+    }
+    if (showMilesDialog) {
+        SessionMilesDialog(
+            session = detail.session,
+            deliveryMiles = detail.deliveryMiles,
+            miles = milesText,
+            onMilesChange = { milesText = it },
+            onSave = { miles ->
+                onCorrectShiftMiles(miles)
+                showMilesDialog = false
+            },
+            onRestore = {
+                onCorrectShiftMiles(null)
+                showMilesDialog = false
+            },
+            onDismiss = { showMilesDialog = false },
         )
     }
     if (showAddDialog) {
@@ -233,7 +257,7 @@ internal fun sessionGrossSourceSub(detail: SessionDetail): Int? =
     R.string.session_detail_gross_source_recorded_sub.takeIf { sessionGrossSource(detail) == ReportSource.RECORDED_PAY }
 
 @Composable
-private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
+private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit, onCorrectMiles: () -> Unit) {
     val c = AppTheme.colors
     val session = detail.session
     val gross = session.reportedEarnings ?: detail.deliveredPay
@@ -277,6 +301,7 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
                 label = stringResource(R.string.session_detail_stat_miles),
                 value = session.miles?.let { Formats.decimal(it) } ?: EMPTY_VALUE,
                 modifier = Modifier.weight(1f),
+                sub = if (session.milesOverride != null) stringResource(R.string.session_detail_miles_corrected) else null,
             )
             AppStatTile(
                 label = stringResource(R.string.session_detail_stat_deliveries),
@@ -287,8 +312,14 @@ private fun HeaderCard(detail: SessionDetail, onCorrectTotal: () -> Unit) {
         if (session.reportCorrectedAt != null) {
             Text(stringResource(R.string.session_detail_report_corrected), style = MaterialTheme.typography.bodySmall, color = c.neutral)
         }
-        TextButton(onClick = onCorrectTotal, enabled = session.endedAt != null) {
-            Text(stringResource(R.string.session_detail_correct_total))
+        Row {
+            TextButton(onClick = onCorrectTotal, enabled = session.endedAt != null) {
+                Text(stringResource(R.string.session_detail_correct_total))
+            }
+            // #1535: only an ended shift's miles can be corrected (the fold refuses a live one).
+            if (session.endedAt != null) {
+                TextButton(onClick = onCorrectMiles) { Text(stringResource(R.string.session_detail_correct_miles)) }
+            }
         }
         // Cash tips render as their OWN line (#688 F4) — the "Gross (reported)" tile stays cash-free
         // (it's the platform-reported total), so cash is never silently folded into a mislabelled tile.

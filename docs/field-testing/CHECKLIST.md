@@ -79,6 +79,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [#1535 correct a shift's miles](checklist/open/1535-correct-shift-miles.md)
 - [#1533 end a shift by hand from Home](checklist/open/1533-end-shift-by-hand.md)
 - [#1527 a shift with no earnings ends at the offline home](checklist/open/1527-offline-home-ends-shift.md)
 - [#1524 screens change fast and Home never flashes the setup card](checklist/open/1524-screen-transitions.md)

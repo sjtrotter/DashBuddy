@@ -118,14 +118,19 @@ private fun TimeSplitCard(time: TimeEconomics) {
  * Deadhead: the share of odometer miles not attributed to any delivery. Delivery miles are odometer
  * partition deltas anchored on drop completions, so they already include the approach legs between
  * drops — the deadhead here is the honest remainder (the tail after the last drop, and dashes with
- * no delivery at all).
+ * no delivery at all). Withheld, with its reason, when delivery miles exceed the shift miles (#1535).
  */
 @Composable
-private fun DeadheadCard(time: TimeEconomics) {
+internal fun DeadheadCard(time: TimeEconomics) {
     val c = AppTheme.colors
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text = stringResource(R.string.time_tab_deadhead_title), style = MaterialTheme.typography.labelMedium, color = c.neutral)
         Spacer(Modifier.height(10.dp))
+        // #1535: a corrected shift below its deliveries' miles; the split would understate delivery miles.
+        if (time.deliveryMilesExceedTotal) {
+            EmptyRow(stringResource(R.string.time_tab_delivery_miles_exceed_total))
+            return@AppCard
+        }
         if (time.miles <= 0.0) {
             EmptyRow(stringResource(R.string.time_tab_no_miles_measured_yet))
             return@AppCard
