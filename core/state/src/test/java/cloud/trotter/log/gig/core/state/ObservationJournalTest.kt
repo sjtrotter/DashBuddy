@@ -246,6 +246,43 @@ class ObservationJournalTest {
     }
 
     @Test
+    fun `an end-shift UiInput's session and end time survive the round-trip (#1533)`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        journal.start(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), StandardTestDispatcher(testScheduler))
+
+        journal.append(
+            Observation.UiInput(
+                timestamp = 9_000L, action = Observation.UiInput.ACTION_END_SHIFT,
+                targetPlatform = Platform.DoorDash, sessionId = "session-A", endAt = 4_000L,
+            ),
+            state(1),
+        )
+        advanceUntilIdle()
+        val ui = journal.tailAfter(0).single().observation as Observation.UiInput
+
+        assertEquals(Observation.UiInput.ACTION_END_SHIFT, ui.action)
+        assertEquals(Platform.DoorDash, ui.targetPlatform)
+        assertEquals("session-A", ui.sessionId)
+        assertEquals(4_000L, ui.endAt)
+    }
+
+    @Test
+    fun `an old UiInput row decodes with no session or end time (#1533)`() = runTest {
+        val dao = FakeObservationDao()
+        val journal = ObservationJournal(dao)
+        dao.inserted += ObservationEntity(
+            occurredAt = 7L, sessionId = null, pipelineId = "internal.ui", ruleId = null,
+            platform = Platform.DoorDash.name, flow = null, modeHint = null, parsedJson = "{}",
+            captureId = null, metadataJson = "{}", correlationVersion = 1L,
+            payloadJson = """{"action":"accept_offer","targetPlatform":"doordash"}""",
+        )
+        val ui = journal.tailAfter(0).single().observation as Observation.UiInput
+        assertNull(ui.sessionId)
+        assertNull(ui.endAt)
+    }
+
+    @Test
     fun `a Screen's offerSurface survives the round-trip (#1104)`() = runTest {
         val dao = FakeObservationDao()
         val journal = ObservationJournal(dao)

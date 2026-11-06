@@ -604,6 +604,25 @@
     <string name="dashboard_status_delivery_complete">Delivery complete</string>
     <string name="dashboard_status_active_job">On delivery</string>
 
+    <!-- ui/main/dashboard/EndShiftSheet.kt (#1533): end a live shift by hand. %1$s is the delivery app's name. -->
+    <string name="end_shift_title">End this shift</string>
+    <string name="end_shift_intro">Use this when %1$s\'s shift has ended but gig.log still shows you on one.</string>
+    <!-- %1$s is a date and time, e.g. "Nov 5, 5:49 PM". -->
+    <string name="end_shift_started">Started %1$s</string>
+    <!-- One row per live shift when more than one app has one: %1$s the app, %2$s its start. -->
+    <string name="end_shift_pick_row">%1$s, since %2$s</string>
+    <string name="end_shift_confirm_switch">I ended this shift in %1$s</string>
+    <string name="end_shift_ended_at">Ended at</string>
+    <string name="end_shift_suggested">Suggested</string>
+    <string name="end_shift_error_before_start">Pick a time after the shift started, %1$s.</string>
+    <string name="end_shift_error_after_now">Pick a time before now, %1$s.</string>
+    <string name="end_shift_warning_activity">gig.log recorded activity after this time. It stays on this shift.</string>
+    <string name="end_shift_open_delivery">A delivery is still open. Ending the shift stops tracking it; pay already recorded stays.</string>
+    <!-- %1$s is the chosen end: a time today, else a date and time. -->
+    <string name="end_shift_confirm">End shift at %1$s</string>
+    <string name="end_shift_cancel">Cancel</string>
+    <string name="end_shift_picker_ok">OK</string>
+
     <!-- ui/main/analytics/AnalyticsUiState.kt -->
     <string name="analytics_tab_money">Money</string>
     <string name="analytics_tab_offers">Offers</string>

@@ -19,6 +19,7 @@ import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
+import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.Mode
@@ -33,11 +34,14 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -66,11 +70,12 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val appStateRepository: AppStateRepository,
-    stateManager: StateManagerV2,
+    private val stateManager: StateManagerV2,
     private val analyticsRepository: AnalyticsRepository,
     private val appPreferencesRepository: AppPreferencesRepository,
     private val bubbleManager: BubbleManager,
     private val weeklyPlanRepository: WeeklyPlanRepository,
+    private val clock: Clock,
 ) : ViewModel() {
 
     /** The device's local date, re-emitting at midnight — the anchor the week + weekday resolve against. */
@@ -100,7 +105,24 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    val uiState: StateFlow<DashboardUiState> = combine(
+    /**
+     * #1533: every live shift (any platform, any mode, any day), each with its last recorded activity from
+     * the read model. Re-subscribes only when the set of shifts changes, not on every state emission.
+     */
+    private val endShiftCandidates: kotlinx.coroutines.flow.Flow<List<EndShiftCandidate>> = stateManager.state
+        .map { state -> state.regions.platforms.values.mapNotNull(EndShiftCandidate::of) }
+        .distinctUntilChanged()
+        .flatMapLatest { shifts ->
+            if (shifts.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(shifts.map { shift ->
+                    analyticsRepository.shiftLastActivityAt(shift.sessionId).map { shift.copy(lastActivityAt = it) }
+                }) { it.toList() }
+            }
+        }
+
+    private val homeState: kotlinx.coroutines.flow.Flow<DashboardUiState> = combine(
         stateManager.state,
         appStateRepository.isFirstRun,
         // The rolling enum overload, deliberately: "so far today" wants the *current* day with the
@@ -127,7 +149,27 @@ class DashboardViewModel @Inject constructor(
             // duration that stopped being true when the driver went offline.
             sessionStartedAt = region?.takeIf { it.mode != Mode.Offline }?.session?.startedAt,
         )
+    }
+
+    val uiState: StateFlow<DashboardUiState> = combine(homeState, endShiftCandidates) { home, candidates ->
+        home.copy(endShiftCandidates = candidates)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
+
+    /**
+     * #1533 intent: end [candidate]'s shift at [endAt]. A journaled command naming the shift; the state
+     * machine ignores it unless that exact shift is still live, and clamps [endAt] to its start and now.
+     */
+    fun endShift(candidate: EndShiftCandidate, endAt: Long) {
+        stateManager.dispatch(
+            Observation.UiInput(
+                timestamp = clock.millis(),
+                action = Observation.UiInput.ACTION_END_SHIFT,
+                targetPlatform = candidate.platform,
+                sessionId = candidate.sessionId,
+                endAt = endAt,
+            ),
+        )
+    }
 
     /**
      * The previous equivalent window's economics. A pay week always has a predecessor, so the null

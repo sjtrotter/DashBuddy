@@ -55,6 +55,7 @@ import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionType
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsBottomSheet
 import cloud.trotter.log.gig.ui.main.setup.permissions.PermissionsViewModel
 import kotlinx.coroutines.launch
+import cloud.trotter.log.gig.feature.dashboard.R as DashboardR
 
 /**
  * Home — **"Today"** since #977, decluttered to **four blocks** by #1024 section D.
@@ -66,8 +67,8 @@ import kotlinx.coroutines.launch
  * footer, the screen's single disclosure affordance (#1024 rule 2). Analytics and Playbook are the
  * bottom bar's other two tabs (#1447), so Home no longer carries entry tiles for them.
  *
- * Read-side only — nothing here writes to the state machine, and #1024 D added no read: the merge is
- * subtraction and re-composition of surfaces that already shipped.
+ * Read-side, except the #1533 end-shift sheet, which dispatches one journaled command through the
+ * ViewModel. #1024 D added no read: the merge is subtraction and re-composition of surfaces that already shipped.
  *
  * The host stays in `:app` (nav start destination, the `Screen` route table, the `:app`-owned
  * permission/consent sheets); the presentational blocks live in `:feature:dashboard`. The one
@@ -138,6 +139,25 @@ fun DashboardScreen(
         FrontDoorHost()
     }
 
+    // #1533: the end-shift sheet's state; null = closed. It closes on its own when no live shift is left.
+    var endShiftForm by remember { mutableStateOf<EndShiftForm?>(null) }
+    val endShiftCandidates = uiState.endShiftCandidates
+    LaunchedEffect(endShiftCandidates.isEmpty()) {
+        if (endShiftCandidates.isEmpty()) endShiftForm = null
+    }
+    endShiftForm?.let { form ->
+        EndShiftSheet(
+            candidates = endShiftCandidates,
+            form = form,
+            onFormChange = { endShiftForm = it },
+            onConfirm = { candidate, endAt ->
+                viewModel.endShift(candidate, endAt)
+                endShiftForm = null
+            },
+            onDismiss = { endShiftForm = null },
+        )
+    }
+
     DashboardBody(
         uiState = uiState,
         hasPermissions = hasPermissions,
@@ -153,6 +173,7 @@ fun DashboardScreen(
         onOpenPlan = onOpenPlan,
         onOpenRatings = onOpenRatings,
         onOpenSettings = onOpenSettings,
+        onEndShift = { endShiftForm = EndShiftForm.opening(endShiftCandidates) },
     )
 }
 
@@ -178,7 +199,10 @@ internal fun DashboardBody(
     onOpenPlan: () -> Unit,
     onOpenRatings: () -> Unit,
     onOpenSettings: () -> Unit,
+    onEndShift: () -> Unit = {},
 ) {
+    // #1533: offered whenever any shift is live, the permission gate included (design D5).
+    val endShift = onEndShift.takeIf { uiState.endShiftCandidates.isNotEmpty() }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -215,6 +239,11 @@ internal fun DashboardBody(
                         screenReadingOff = screenReadingOff,
                         onContinue = onContinueGate,
                     )
+                    if (endShift != null) {
+                        TextButton(modifier = Modifier.fillMaxWidth(), onClick = endShift) {
+                            Text(stringResource(DashboardR.string.dashboard_end_shift_action))
+                        }
+                    }
                 }
 
                 // CASE 2: Permissions Granted, first run (The Guide)
@@ -242,6 +271,7 @@ internal fun DashboardBody(
                         today = uiState.today,
                         statusText = stringResource(uiState.statusText),
                         dashing = uiState.isDashing,
+                        onEndShift = endShift,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 

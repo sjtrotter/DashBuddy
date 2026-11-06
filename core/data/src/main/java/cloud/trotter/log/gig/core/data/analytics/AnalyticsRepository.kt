@@ -837,6 +837,10 @@ class AnalyticsRepository @Inject constructor(
         }
     }
 
+    /** #1533: a shift's last recorded activity (`lastEventAt`), null before its row folds. */
+    fun shiftLastActivityAt(sessionId: String): Flow<Long?> =
+        analyticsDao.sessionRecordFlow(sessionId).map { it?.lastEventAt }
+
     /**
      * One dash fully expanded (#650 PR A drill-down): the session header + its deliveries in
      * completion order, as a [SessionDetail], or `null` when no session row exists for [sessionId]

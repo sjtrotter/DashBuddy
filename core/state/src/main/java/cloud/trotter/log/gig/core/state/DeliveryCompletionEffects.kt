@@ -232,6 +232,8 @@ internal fun EffectMap.diffDeliveryCompletion(
                 pickupConfirmSweepEffects(
                     sessionId, next, closedJob.jobId, obs,
                     jobOfferHashes = closedJob.parentOfferHashes,
+                    // #1533 D6: a manual end's force-stamped active pickup was never confirmed.
+                    excludeTaskId = ManualShiftEnd.forcedPickupId(p, next, obs),
                 ),
             )
         }

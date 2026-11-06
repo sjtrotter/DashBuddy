@@ -171,8 +171,17 @@ sealed interface Observation : cloud.trotter.log.gig.domain.model.state.StateEve
         val targetPlatform: Platform? = null,
         /** The offer this input targets (#438 item 8a) — correlates the tap to its offer. */
         val offerHash: String? = null,
+        /** The shift an [ACTION_END_SHIFT] command ends (#1533); it acts only on this exact live session. */
+        val sessionId: String? = null,
+        /** The dasher's chosen end instant for [ACTION_END_SHIFT] (#1533); null = the command's own time. */
+        val endAt: Long? = null,
     ) : Observation {
         override val platform: Platform get() = targetPlatform ?: Platform.fromRuleId(ruleId)
+
+        companion object {
+            /** The dasher ends a live shift by hand from Home (#1533). */
+            const val ACTION_END_SHIFT = "end_shift"
+        }
     }
 
     /** A loopback event from the side-effect engine back into the state machine. */

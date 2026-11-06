@@ -45,6 +45,9 @@ internal data class InternalObsPayload(
     val offerSurface: String? = null,
     // #1312: preserve the no-orders witness on replay; old rows default to null.
     val idleSurface: String? = null,
+    // #1533: the manual end-shift command's target session and chosen end; old rows default to null.
+    val sessionId: String? = null,
+    val endAt: Long? = null,
 )
 
 /**
@@ -144,6 +147,8 @@ class ObservationJournal @Inject constructor(
             action = obs.action,
             targetPlatform = obs.targetPlatform?.wire,
             offerHash = obs.offerHash,
+            sessionId = obs.sessionId,
+            endAt = obs.endAt,
         )
         is Observation.Loopback -> InternalObsPayload(
             effect = obs.effect,
@@ -213,6 +218,8 @@ class ObservationJournal @Inject constructor(
                 action = payload?.action ?: "replay",
                 targetPlatform = payload?.targetPlatform?.let(Platform::fromWire),
                 offerHash = payload?.offerHash,
+                sessionId = payload?.sessionId,
+                endAt = payload?.endAt,
             )
 
             "internal.loopback" -> Observation.Loopback(

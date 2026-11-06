@@ -207,6 +207,11 @@ class PlatformRegionStepper @Inject constructor() {
         // Resolve once before lazy expiry so this frame's evidence also governs a pending resume.
         val impliedMode = flowObs?.let { policy.resolveMode(it.flow, it.modeHint) }
 
+        // #1533: a manual end acts before lazy expiry, so an overdue grace cannot pre-empt its time.
+        if (obs is Observation.UiInput && ManualShiftEnd.isCommand(obs)) {
+            return ManualShiftEnd.apply(current, obs) { region, at -> endSession(sink, region, at, obs.timestamp) }
+        }
+
         // Lazy expiry: a pending destructive transition (dash-end / task-retire / job-abandon)
         // whose deadline has passed is confirmed — committed now. Driven by
         // obs.timestamp (never a wall clock) so crash-recovery replay matches.
