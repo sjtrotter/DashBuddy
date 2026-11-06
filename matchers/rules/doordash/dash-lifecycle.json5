@@ -947,6 +947,13 @@
             "hasText": "Return to dash"
           }
         },
+        // #1527: the online home's own line. A second guard, so the online home can never pass as
+        // offline even if DoorDash drops or renames its "Return to Dash" button.
+        {
+          "exists": {
+            "hasText": "You're dashing now"
+          }
+        },
         {
           "exists": {
             "any": [
@@ -962,9 +969,21 @@
       ],
       "require": {
         "all": [
+          // #1527: the earnings-mode control is not required. 8.106.9 renamed it "Earn by time" and
+          // shows it on the ONLINE home too, and some zones have no such mode. The offline cue is the
+          // main button's whole label, "Dash" (online it reads "Return to Dash"; hasText is a
+          // whole-label match). The old "Earnings Mode Switcher" stays as an alternative: before
+          // 8.106.9 it appeared only on the offline home.
           {
             "exists": {
-              "hasDesc": "Earnings Mode Switcher"
+              "any": [
+                {
+                  "hasText": "Dash"
+                },
+                {
+                  "hasDesc": "Earnings Mode Switcher"
+                }
+              ]
             }
           },
           {
