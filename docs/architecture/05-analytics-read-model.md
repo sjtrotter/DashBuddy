@@ -544,7 +544,7 @@ receives 8.817050829 mi; A retains its 5.998 mi arrival leg but receives 0 mi (B
 **A→B:** A claims the pending store leg, receives min(6.390 mi, R), and legacy B receives the
 remainder. Both orders conserve the same job span. The separate 9.507525650 mi job is unchanged;
 repaired session allocations total 18.324576479 mi ≤ the 18.700151870 mi session span.
-Session/period/IRS/CSV mileage totals remain odometer-span-anchored. Driver `newMiles` edits win
+Session/period/IRS/CSV mileage totals remain odometer-span-anchored, unless a driver set the shift miles (#1535). Driver `newMiles` edits win
 realized miles/net on event replay; neither measured legs nor machine basis is rewritten.
 
 **Per-drop minutes (#1108):** `LegState.completionHighWater` is the maximum machine
@@ -726,6 +726,48 @@ event type is absent from history.
 
 Day-one use: clear session 483's phantom $40.14 (`early_offline`, zero deliveries). The Sep 7–13
 week drops from $646.34 to $606.20; Restore detected value brings the machine $40.14 back.
+
+### Shift miles correction (#1535, Room v22)
+
+A shift's miles are its odometer span, `MAX(lastOdometer - startOdometer, 0)`, where `lastOdometer` is the last
+odometer stamp of any event attributed to the shift. A shift left open by mistake keeps absorbing every mile driven
+afterwards (shift 1152 read 59.4 miles, nearly all of it overnight GPS drift, after it was ended by hand under #1533).
+`SESSION_MILES_CORRECTION` is the earnings correction's twin for that figure: an append-only driver statement with
+two operations, SET (finite, 0 to 2 000, `SessionMilesRule.isValidSet`) and RESTORE_MACHINE. There is no CLEAR.
+
+- **Storage.** One nullable column, `session_records.milesOverride`: null means tracked, any value (zero included)
+  means corrected. "Corrected by you" derives from its presence; the event keeps the correction time, so there is no
+  `correctedAt` column. The machine `startOdometer` / `lastOdometer` columns and every delivery row are never
+  rewritten.
+- **Fold.** `CorrectionFolds.foldSessionMilesCorrection` keeps the #1134 safeguards: the envelope, the context and
+  the payload name the same session, which has ENDED at the correction's log position; the outcome carries no
+  context. It also judges the operation and the SET bounds, so a malformed correction is a counted fold skip in any
+  batch. The event is in `RecordFolds.BOOKKEEPING_EVENTS`, so an odometer stamp on it never measures the shift.
+- **Apply.** `SessionMilesApply.kt` writes the override by session PK inside the batch transaction, after the
+  session upserts and in event order, with the same skip-and-WARN guards (missing row, live row, bounds, unknown
+  operation; ids and enum names only). The written value is copied onto any cached context. The override rides the
+  context-to-entity and entity-to-context mappings, so a later lifecycle upsert of the row, in this batch or any later
+  one, keeps it. No `PROJECTOR_VERSION` bump: the event type cannot exist in folded history.
+- **One owner.** `SessionMilesRule.effective(start, last, override)` returns the override when present, even with a
+  missing anchor, else the floored span or null. Its SQL twin `SessionMilesSql.EFFECTIVE_MILES_SQL`,
+  `COALESCE(milesOverride, MAX(lastOdometer - startOdometer, 0))`, feeds both `AnalyticsDao` period sums (SQLite's
+  two-argument `MAX` is NULL on a missing anchor, so such a shift adds 0, as before); the entity mapper fills
+  `SessionRecord.miles` (effective), `machineMiles` (the tracked span) and `milesOverride`; `CsvExporter.sessionMiles`
+  feeds `sessions.csv` and the per-year and per-vehicle tax totals. Home, Analytics and the ended-shift HUD inherit
+  it. `SessionMilesSqlGuardTest` fails on any `:core:database` source that computes the span outside the twin;
+  `SessionMilesCorrectionProjectorTest` proves the sums, the mapper and the HUD reads equal the Kotlin rule and
+  count a corrected shift once.
+- **Not changed.** The live HUD miles (a correction needs an ended shift), the GPS-axis garage usage and
+  `MileageReconciliation`, and the #1108 allocation budgets, which allocate measured legs and keep the machine span.
+  A SET below the shift's Σ `realizedMiles` is accepted with a warning in the dialog; the deliveries keep their
+  own miles and net.
+- **Time tab.** When a window's delivery miles exceed its effective shift miles by more than 0.05
+  (`TimeEconomics.deliveryMilesExceedTotal`), the empty-miles card withholds its delivery / no-delivery split and
+  states why in its empty-row place, instead of clamping the remainder to 0.
+- **CSV.** `sessions.csv` miles is the effective figure, with a final `miles_source` column (`tracked` or
+  `corrected`); the odometer columns stay the machine anchors.
+
+Room v21→v22 adds only the nullable column (`AnalyticsMigration21to22Test`, instrumented).
 
 **A non-summary running total is floored at recorded pay (#1459).** A shift ended without its summary screen
 (`early_offline`, or no `DASH_STOP` at all) keeps the app's last running total, which can lag the deliveries

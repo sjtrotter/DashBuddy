@@ -12,6 +12,7 @@ import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.OfferListing
 import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.state.Platform
 
@@ -63,11 +64,9 @@ internal fun SessionRecordEntity.toDomain(deliveredPay: Double?): SessionRecord 
     reportCorrectedAt = reportCorrectedAt,
     endSource = endSource,
     reportedDurationMillis = reportedDurationMillis,
-    miles = if (startOdometer != null && lastOdometer != null) {
-        (lastOdometer!! - startOdometer!!).coerceAtLeast(0.0)
-    } else {
-        null
-    },
+    miles = SessionMilesRule.effective(startOdometer, lastOdometer, milesOverride),
+    machineMiles = SessionMilesRule.machine(startOdometer, lastOdometer),
+    milesOverride = milesOverride,
     deliveries = deliveries,
     jobsCompleted = jobsCompleted,
     offersReceived = offersReceived,

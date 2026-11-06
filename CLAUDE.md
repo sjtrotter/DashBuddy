@@ -784,6 +784,9 @@ row exists, row is null-session or already-assigned, target is a real ENDED sess
 coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
 `SESSION_REPORT_CORRECTION` (CLEAR / SET / RESTORE_MACHINE — a dash's platform-reported total;
 machine column never rewritten; `SessionReportRule` is the one owner the DAO's CASE mirrors (floors a non-summary total at recorded pay, #1459); Room v17, #1134),
+`SESSION_MILES_CORRECTION` (SET / RESTORE_MACHINE: a shift's miles, one nullable `session_records.milesOverride`;
+the odometer anchors are never rewritten; `SessionMilesRule` and its SQL twin `SessionMilesSql.EFFECTIVE_MILES_SQL`
+are the one owner of every shift-miles read, guarded by a source scan; Room v22, #1535),
 and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
 Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
 anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the
@@ -796,7 +799,7 @@ Arrived drops get min(leg sum, job remaining), legacy drops get job remaining, b
 remaining; untracked or unanchored zero-measured legacy drops stay null. The 128-job budget map evicts
 the oldest delivered job at capacity. `MilesBasis` is an enum (Room name, unknown-string fallback);
 the drill-down discloses BUDGET_CAPPED and LEGACY_SPAN beside mileage. `LegState` alone owns the
-serialized completion high-water. Session/period/IRS/CSV totals stay span-anchored; a driver
+serialized completion high-water. Session/period/IRS/CSV totals stay span-anchored (or the shift miles a driver set, #1535); a driver
 `newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
 `session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
 

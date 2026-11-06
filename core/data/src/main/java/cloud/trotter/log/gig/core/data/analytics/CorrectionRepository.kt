@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.data.analytics
 
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
+import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.model.event.AppEvent
 import cloud.trotter.log.gig.domain.model.event.AppEventType
@@ -9,6 +10,8 @@ import cloud.trotter.log.gig.domain.model.event.payload.DeliverySessionAssignPay
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportOperation
 import timber.log.Timber
@@ -222,6 +225,29 @@ class CorrectionRepository @Inject constructor(
             ),
         )
         Timber.tag(TAG).i("SESSION_REPORT_CORRECTION appended for session %s (op=%s)", sessionId, operation)
+    }
+
+    /** #1535: state a shift's miles. [miles] must pass [SessionMilesRule.isValidSet] (finite, 0..MAX_MILES). */
+    suspend fun setShiftMiles(sessionId: String, miles: Double, note: String? = null) {
+        require(SessionMilesRule.isValidSet(miles)) { "invalid shift miles" }
+        appendMilesCorrection(sessionId, SessionMilesOperation.SET, miles, note)
+    }
+
+    /** #1535: drop the driver's miles so the shift reads its tracked odometer span again. */
+    suspend fun restoreShiftMiles(sessionId: String) {
+        appendMilesCorrection(sessionId, SessionMilesOperation.RESTORE_MACHINE, null, null)
+    }
+
+    private suspend fun appendMilesCorrection(sessionId: String, operation: String, miles: Double?, note: String?) {
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.SESSION_MILES_CORRECTION,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = sessionId,
+                payload = SessionMilesCorrectionPayload(sessionId, operation, miles, note),
+            ),
+        )
+        Timber.tag(TAG).i("SESSION_MILES_CORRECTION appended for session %s (op=%s)", sessionId, operation)
     }
 
     private companion object {

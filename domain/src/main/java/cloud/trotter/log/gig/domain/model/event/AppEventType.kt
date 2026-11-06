@@ -62,6 +62,7 @@ enum class AppEventType {
     /** #1333: Voids an expense or fuel entry. */
     LEDGER_ENTRY_VOIDED,
     SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays
+    SESSION_MILES_CORRECTION, // A driver sets or restores a shift's miles (#1535); the odometer anchors stay
     DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session
                              // (#660 piece 2) — changes ATTRIBUTION only (never pay/net); the original event stays
     OFFER_OUTCOME_CORRECTION, // A driver attests (or undoes) which accepted offer was invisibly unassigned

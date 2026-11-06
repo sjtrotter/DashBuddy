@@ -9,6 +9,8 @@ import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
 import cloud.trotter.log.gig.domain.model.event.payload.AppEventPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryReceiptRepricePayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.log.gig.domain.model.pay.ParsedPay
@@ -209,6 +211,19 @@ class AppEventCodecTest {
         )) {
             val payload = SessionReportCorrectionPayload("483", op, value, "driver note")
             assertEquals(payload, roundTrip(AppEventType.SESSION_REPORT_CORRECTION, payload))
+        }
+    }
+
+    @Test
+    fun `session miles corrections round trip both operations and unknown wire strings`() {
+        for ((op, value) in listOf(
+            SessionMilesOperation.SET to 12.5,
+            SessionMilesOperation.SET to 0.0,
+            SessionMilesOperation.RESTORE_MACHINE to null,
+            "FUTURE" to null,
+        )) {
+            val payload = SessionMilesCorrectionPayload("1152", op, value, "driver note")
+            assertEquals(payload, roundTrip(AppEventType.SESSION_MILES_CORRECTION, payload))
         }
     }
 

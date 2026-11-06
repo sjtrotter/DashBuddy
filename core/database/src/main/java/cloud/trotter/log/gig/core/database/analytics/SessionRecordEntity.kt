@@ -14,7 +14,8 @@ import androidx.room.PrimaryKey
  * self-contained row is the "recent dashes" list item the future hub renders.
  *
  * Session **miles** and **delivered pay** are deliberately NOT columns (SSOT,
- * Principle 5): miles = `lastOdometer − startOdometer` (a SQL expression), pay =
+ * Principle 5): miles = the driver's [milesOverride], else `lastOdometer − startOdometer`
+ * (`SessionMilesSql.EFFECTIVE_MILES_SQL`, #1535), pay =
  * SUM over `delivery_records`. Storing them would be a second owner for the same
  * number. [reportedEarnings]/[reportedDurationMillis] are the platform's own
  * summary-screen totals (incl. bonuses/adjustments) — kept so the "unattributed"
@@ -62,6 +63,11 @@ data class SessionRecordEntity(
     val reportOverrideMode: String? = null,
     val reportOverride: Double? = null,
     val reportCorrectedAt: Long? = null,
+    /**
+     * #1535 driver miles override (v22); null means the tracked span. The odometer anchors are never rewritten by a
+     * correction. Read through `SessionMilesSql.EFFECTIVE_MILES_SQL` / `SessionMilesRule.effective`, never directly.
+     */
+    val milesOverride: Double? = null,
     /** SessionStopPayload.sessionDurationMillis. */
     val reportedDurationMillis: Long?,
     // Folded outcome counts:

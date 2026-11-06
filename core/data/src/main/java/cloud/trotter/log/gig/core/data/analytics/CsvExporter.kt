@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.domain.analytics.ExpenseRecord
 import cloud.trotter.log.gig.domain.analytics.FuelRecord
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.domain.analytics.ReportSource
+import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.export.Csv
 import cloud.trotter.log.gig.domain.export.IrsMileage
@@ -60,6 +61,10 @@ object CsvExporter {
     const val FUEL_FILENAME = "fuel.csv"
     const val UNKNOWN_VEHICLE = "Unknown vehicle"
 
+    /** #1535 `sessions.csv` miles_source values: the tracked odometer span or the driver's correction. */
+    const val MILES_TRACKED = "tracked"
+    const val MILES_CORRECTED = "corrected"
+
     private val DELIVERY_HEADER = listOf(
         "date", "time", "platform", "store", "gross_pay", "tip", "base_pay", "cash_tip",
         "miles", "miles_to_store", "miles_to_dropoff", "minutes", "frozen_cost_per_mile",
@@ -78,7 +83,7 @@ object CsvExporter {
     private val SESSION_HEADER = listOf(
         "start", "end", "platform", "duration_minutes", "reported_earnings", "report_source", "deliveries",
         "offers_received", "offers_accepted", "offers_declined", "offers_timeout",
-        "odometer_start", "odometer_end", "miles", "vehicle_id", "vehicle_label",
+        "odometer_start", "odometer_end", "miles", "vehicle_id", "vehicle_label", "miles_source",
     )
 
     /**
@@ -163,11 +168,9 @@ object CsvExporter {
         return SessionVehicle(id.orEmpty(), vehicle?.let(::vehicleLabel) ?: UNKNOWN_VEHICLE)
     }
 
-    private fun sessionMiles(s: SessionRecordEntity): Double? {
-        val start = s.startOdometer ?: return null
-        val last = s.lastOdometer ?: return null
-        return (last - start).coerceAtLeast(0.0)
-    }
+    /** #1535: the effective shift miles, one owner ([SessionMilesRule]); feeds sessions.csv and the tax-year totals. */
+    private fun sessionMiles(s: SessionRecordEntity): Double? =
+        SessionMilesRule.effective(s.startOdometer, s.lastOdometer, s.milesOverride)
 
     private fun deliveriesCsv(rows: List<DeliveryRecordEntity>, zone: ZoneId): String {
         val sb = StringBuilder()
@@ -238,6 +241,7 @@ object CsvExporter {
                         Csv.decimal(sessionMiles(s)),
                         Csv.textField(vehicle.id),
                         Csv.textField(vehicle.label),
+                        Csv.textField(if (s.milesOverride != null) MILES_CORRECTED else MILES_TRACKED),
                     )
                 )
             ).append('\n')

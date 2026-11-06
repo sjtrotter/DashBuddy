@@ -5,6 +5,8 @@ import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
+import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportOperation
 import kotlinx.coroutines.runBlocking
@@ -208,6 +210,33 @@ class CorrectionRepositoryTest {
             assertEquals(AppEventType.SESSION_REPORT_CORRECTION, event.type)
             assertEquals("483", event.sessionId)
             assertEquals(SessionReportCorrectionPayload("483", case.first, case.second, "note"), event.payload)
+        }
+    }
+
+    @Test
+    fun `shift miles reject an invalid value before appending`() = runTest {
+        for (bad in listOf(-0.1, 2_000.01, Double.NaN, Double.POSITIVE_INFINITY)) rejects { setShiftMiles("1152", bad) }
+        verify(appEventRepo, never()).appendUserEvent(any(), anyOrNull())
+    }
+
+    @Test
+    fun `shift miles append SET and RESTORE_MACHINE for the target shift`() = runTest {
+        repo.setShiftMiles("1152", 2.5, "note")
+        repo.setShiftMiles("1152", 0.0)
+        repo.restoreShiftMiles("1152")
+        val captor = argumentCaptor<cloud.trotter.log.gig.domain.model.event.AppEvent>()
+        verify(appEventRepo, times(3)).appendUserEvent(captor.capture(), anyOrNull())
+        assertEquals(
+            listOf(
+                SessionMilesCorrectionPayload("1152", SessionMilesOperation.SET, 2.5, "note"),
+                SessionMilesCorrectionPayload("1152", SessionMilesOperation.SET, 0.0),
+                SessionMilesCorrectionPayload("1152", SessionMilesOperation.RESTORE_MACHINE),
+            ),
+            captor.allValues.map { it.payload },
+        )
+        captor.allValues.forEach {
+            assertEquals(AppEventType.SESSION_MILES_CORRECTION, it.type)
+            assertEquals("1152", it.sessionId)
         }
     }
 

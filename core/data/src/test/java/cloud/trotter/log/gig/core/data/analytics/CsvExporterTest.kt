@@ -73,6 +73,7 @@ class CsvExporterTest {
         startOdo: Double? = 1000.0,
         lastOdo: Double? = 1042.0,
         reported: Double? = 55.00,
+        milesOverride: Double? = null,
     ) = SessionRecordEntity(
         sessionId = id,
         platform = "doordash",
@@ -83,6 +84,7 @@ class CsvExporterTest {
         startOdometer = startOdo,
         lastOdometer = lastOdo,
         reportedEarnings = reported,
+        milesOverride = milesOverride,
         reportedDurationMillis = 3_600_000,
         offersReceived = 5,
         offersAccepted = 3,
@@ -195,7 +197,7 @@ class CsvExporterTest {
         val lines = out.sessionsCsv.trim().lines()
         assertEquals(
             "start,end,platform,duration_minutes,reported_earnings,report_source,deliveries,offers_received," +
-                "offers_accepted,offers_declined,offers_timeout,odometer_start,odometer_end,miles,vehicle_id,vehicle_label",
+                "offers_accepted,offers_declined,offers_timeout,odometer_start,odometer_end,miles,vehicle_id,vehicle_label,miles_source",
             lines[0],
         )
         val cols = lines[1].split(",")
@@ -203,9 +205,9 @@ class CsvExporterTest {
         assertEquals("DASH_SUMMARY", cols[5])
         assertEquals("60.00", cols[3])        // 1h duration
         assertEquals("42.00", cols[13])    // 1042 - 1000 miles
-        assertEquals(listOf("", "Unknown vehicle"), cols.takeLast(2))
+        assertEquals(listOf("", "Unknown vehicle", "tracked"), cols.takeLast(3))
         assertEquals(
-            "2026-07-05T13:03:27,2026-07-05T14:03:27,DoorDash,60.00,55.00,DASH_SUMMARY,3,5,3,1,1,1000.00,1042.00,42.00,,Unknown vehicle",
+            "2026-07-05T13:03:27,2026-07-05T14:03:27,DoorDash,60.00,55.00,DASH_SUMMARY,3,5,3,1,1,1000.00,1042.00,42.00,,Unknown vehicle,tracked",
             lines[1],
         )
     }
@@ -228,9 +230,41 @@ class CsvExporterTest {
         assertEquals(
             listOf("My car", "2020 Toyota Prius", "Toyota", "Car", "Hybrid", "Electric car",
                 "Motorcycle", "Scooter or moped", "E-bike", "Bicycle"),
-            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").last() },
+            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").dropLast(1).last() },
         )
         assertEquals(vehicles.map { it.id }, out.sessionsCsv.trim().lines().drop(1).map { it.split(",")[14] })
+    }
+
+    @Test fun sessions_correctedMiles_replaceTheSpanOnceAndMoveTheTaxTotalsByTheCorrection() {
+        // #1535: shift "b" tracked 59.4 miles; the driver corrected it to 2.5 (and "z" to 0 with no anchors at all).
+        val zone = ZoneId.of("UTC")
+        fun rows(bOverride: Double?, zOverride: Double?) = listOf(
+            session("a", millisIn(2026), startOdo = 0.0, lastOdo = 10.0),
+            session("b", millisIn(2026) + 1, startOdo = 100.0, lastOdo = 159.4, milesOverride = bOverride),
+            session("z", millisIn(2026) + 2, startOdo = null, lastOdo = null, milesOverride = zOverride),
+        )
+        val stamps = listOf(DashVehicle("a", "car", 0, null), DashVehicle("b", "car", 0, null))
+        val vehicles = listOf(Vehicle("car", "Daily car", 0))
+        fun export(bOverride: Double?, zOverride: Double?) =
+            CsvExporter.export(emptyList(), rows(bOverride, zOverride), zone, generatedAt, dashVehicles = stamps, vehicles = vehicles)
+        fun metric(summary: String, name: String) = summary.lines().single { it.startsWith("$name,") }.substringAfter(',').toDouble()
+
+        val tracked = export(null, null)
+        val corrected = export(2.5, 0.0)
+        val trackedRows = tracked.sessionsCsv.trim().lines().drop(1).map { it.split(",") }
+        val correctedRows = corrected.sessionsCsv.trim().lines().drop(1).map { it.split(",") }
+        assertEquals(listOf("10.00", "59.40", ""), trackedRows.map { it[13] })
+        assertEquals(listOf("10.00", "2.50", "0.00"), correctedRows.map { it[13] })
+        assertEquals(listOf("tracked", "tracked", "tracked"), trackedRows.map { it.last() })
+        assertEquals(listOf("tracked", "corrected", "corrected"), correctedRows.map { it.last() })
+        // The machine anchors still export verbatim.
+        assertEquals(listOf("100.00", "159.40"), correctedRows[1].subList(11, 13))
+
+        assertEquals(69.4, metric(tracked.summaryCsv, "total_deductible_miles"), 1e-9)
+        assertEquals(69.4, metric(tracked.summaryCsv, "vehicle_deductible_miles"), 1e-9)
+        val delta = 2.5 - 59.4
+        assertEquals(69.4 + delta, metric(corrected.summaryCsv, "total_deductible_miles"), 1e-9)
+        assertEquals(69.4 + delta, metric(corrected.summaryCsv, "vehicle_deductible_miles"), 1e-9)
     }
 
     @Test fun sessions_unknownRetiredAndMissingVehicles_keepHistoricalAttribution() {
@@ -246,7 +280,7 @@ class CsvExporterTest {
         assertEquals(
             listOf(listOf("", "Unknown vehicle"), listOf("", "Unknown vehicle"),
                 listOf("retired", "Old car"), listOf("deleted-id", "Unknown vehicle")),
-            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").takeLast(2) },
+            out.sessionsCsv.trim().lines().drop(1).map { it.split(",").dropLast(1).takeLast(2) },
         )
     }
 
@@ -256,7 +290,7 @@ class CsvExporterTest {
             emptyList(), listOf(session()), utc, generatedAt,
             dashVehicles = listOf(DashVehicle("s1", vehicle.id, 0, null)), vehicles = listOf(vehicle),
         )
-        assertTrue(out.sessionsCsv.contains(",'=id,\"'=SUM(1,2)\"\n"))
+        assertTrue(out.sessionsCsv.contains(",'=id,\"'=SUM(1,2)\",tracked\n"))
         assertTrue(out.summaryCsv.contains("vehicle_id,'=id\nvehicle_label,\"'=SUM(1,2)\"\n"))
     }
 

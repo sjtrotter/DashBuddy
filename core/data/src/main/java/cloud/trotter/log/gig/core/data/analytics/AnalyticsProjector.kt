@@ -25,6 +25,7 @@ import cloud.trotter.log.gig.domain.analytics.PickupFold
 import cloud.trotter.log.gig.domain.analytics.RecordFolds
 import cloud.trotter.log.gig.domain.analytics.SessionAssignFold
 import cloud.trotter.log.gig.domain.analytics.SessionFoldContext
+import cloud.trotter.log.gig.domain.analytics.SessionMilesCorrectionFold
 import cloud.trotter.log.gig.domain.analytics.SessionReportCorrectionFold
 import cloud.trotter.log.gig.domain.analytics.StoreResolution
 import cloud.trotter.log.gig.domain.evaluation.NetProfit
@@ -211,6 +212,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.deliveryAdjustment?.let { adjustments += Adjustment.Delivery(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.receiptReprice?.let { adjustments += Adjustment.ReceiptReprice(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.sessionReportCorrection?.let { adjustments += Adjustment.SessionReportCorrect(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.sessionMilesCorrection?.let { adjustments += Adjustment.SessionMilesCorrect(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
@@ -262,6 +264,16 @@ class AnalyticsProjector @Inject constructor(
                                     reportOverride = written.value,
                                     reportCorrectedAt = written.correctedAt,
                                 )
+                            }
+                        }
+                        written == null
+                    }
+                    is Adjustment.SessionMilesCorrect -> {
+                        // #1535: the #1134 discipline: by-PK write, then the written override onto any in-memory context.
+                        val written = analyticsDao.applySessionMilesCorrection(adj.fold)
+                        if (written != null) {
+                            contexts[adj.fold.sessionId]?.let { ctx ->
+                                contexts[adj.fold.sessionId] = ctx.copy(milesOverride = written.miles)
                             }
                         }
                         written == null
@@ -334,6 +346,11 @@ class AnalyticsProjector @Inject constructor(
             override val sequenceId: Long,
             override val occurredAt: Long,
             val fold: SessionReportCorrectionFold,
+        ) : Adjustment
+        data class SessionMilesCorrect(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: SessionMilesCorrectionFold,
         ) : Adjustment
         data class SessionAssign(
             override val sequenceId: Long,
@@ -762,6 +779,7 @@ class AnalyticsProjector @Inject constructor(
         reportOverrideMode = reportOverrideMode,
         reportOverride = reportOverride,
         reportCorrectedAt = reportCorrectedAt,
+        milesOverride = milesOverride,
         reportedDurationMillis = reportedDurationMillis,
         offersReceived = offersReceived,
         offersAccepted = offersAccepted,
@@ -794,6 +812,7 @@ class AnalyticsProjector @Inject constructor(
         reportOverrideMode = reportOverrideMode,
         reportOverride = reportOverride,
         reportCorrectedAt = reportCorrectedAt,
+        milesOverride = milesOverride,
         reportedDurationMillis = reportedDurationMillis,
         offersAccepted = offersAccepted,
         offersDeclined = offersDeclined,

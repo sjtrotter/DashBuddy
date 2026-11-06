@@ -37,6 +37,12 @@ data class SessionDetail(
     val cashTips: Double get() = deliveries.sumOf { it.cashTip ?: 0.0 }
 
     /**
+     * #1535: Σ `realizedMiles` over this shift's deliveries (the #1108 allocation, never the raw legs). A driver's
+     * shift miles below this keep the deliveries' own miles; the miles dialog says so.
+     */
+    val deliveryMiles: Double get() = deliveries.sumOf { it.realizedMiles ?: 0.0 }
+
+    /**
      * This dash's effective report; [SessionReportRule] owns the override and machine trust rule, and floors a
      * non-summary running total at [recordedPay] (#1459), so such a dash reads 0 [overAttributedPay].
      */

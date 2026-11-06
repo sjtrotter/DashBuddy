@@ -34,6 +34,8 @@ data class SessionFoldContext(
     val reportOverrideMode: String? = null,
     val reportOverride: Double? = null,
     val reportCorrectedAt: Long? = null,
+    /** #1535 driver miles override; the odometer anchors are never rewritten by a correction. See [SessionMilesRule]. */
+    val milesOverride: Double? = null,
     val reportedDurationMillis: Long? = null,
     val offersAccepted: Int = 0,
     val offersDeclined: Int = 0,
