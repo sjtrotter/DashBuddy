@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -13,11 +14,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import cloud.trotter.log.gig.core.designsystem.component.AppChip
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.core.designsystem.time.rememberTimeFormatter
 import cloud.trotter.log.gig.domain.format.formatLongWeekdayMonthDay
+import cloud.trotter.log.gig.feature.dashboard.R
 import java.time.LocalDate
 
 /**
@@ -33,6 +36,8 @@ import java.time.LocalDate
  * [statusText] is resolved copy passed down by the host — the same `@StringRes` status vocabulary the
  * home screen has always shown (offline / looking for offers / heading to pickup / …), derived from
  * `AppState` in the ViewModel. This composable adds no status logic of its own.
+ *
+ * [onEndShift] (#1533), when non-null, shows "End shift…" under the status pill; the host decides when.
  */
 @Composable
 fun TodayHeader(
@@ -40,6 +45,7 @@ fun TodayHeader(
     statusText: String,
     dashing: Boolean,
     modifier: Modifier = Modifier,
+    onEndShift: (() -> Unit)? = null,
 ) {
     val c = AppTheme.colors
     val formatter = rememberTimeFormatter()
@@ -61,10 +67,15 @@ fun TodayHeader(
             )
             Text(text = clock, style = AppTheme.num.mdNum, color = c.text2)
         }
-        AppChip(
-            text = statusText,
-            color = if (dashing) c.good else c.neutral,
-            container = if (dashing) c.goodBg else c.neutralBg,
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            AppChip(
+                text = statusText,
+                color = if (dashing) c.good else c.neutral,
+                container = if (dashing) c.goodBg else c.neutralBg,
+            )
+            if (onEndShift != null) {
+                TextButton(onClick = onEndShift) { Text(stringResource(R.string.dashboard_end_shift_action)) }
+            }
+        }
     }
 }

@@ -530,6 +530,8 @@ object SessionEndSource {
     const val SUMMARY_SCREEN = "summary_screen"
     /** Went offline without a summary (grace expiry / early offline) — thin. */
     const val EARLY_OFFLINE = "early_offline"
+    /** The dasher ended the shift by hand in gig.log (#1533). */
+    const val MANUAL = "manual"
 }
 
 /**

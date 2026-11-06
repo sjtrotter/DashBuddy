@@ -42,7 +42,7 @@ data class SessionRecordEntity(
     val endedAt: Long?,
     /** Advanced on EVERY session event — open-session duration + inferred close. */
     val lastEventAt: Long,
-    /** "summary_screen" | "early_offline" | "inferred" | null. */
+    /** "summary_screen" | "early_offline" | "manual" | "inferred" | null. */
     val endSource: String?,
     /**
      * Provenance of the session's start: the DASH_START payload's `source` ("interaction"/"recovery")

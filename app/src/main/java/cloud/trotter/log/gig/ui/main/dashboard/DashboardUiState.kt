@@ -93,4 +93,6 @@ data class DashboardUiState(
      * `AppState` — no new read, and the composable owns the ticking.
      */
     val sessionStartedAt: Long? = null,
+    /** #1533: every live shift the dasher can end by hand, on any platform, in any mode. Empty hides the button. */
+    val endShiftCandidates: List<EndShiftCandidate> = emptyList(),
 )

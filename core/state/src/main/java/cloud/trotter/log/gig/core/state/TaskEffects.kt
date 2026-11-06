@@ -411,9 +411,12 @@ internal fun EffectMap.pickupConfirmSweepEffects(
     // `region` is `next`, whose activeJob is null/other-job by construction there, so it would learn
     // nothing on the normal edge AND silently open the close-out (suspicious-sample) path.
     ratioJob: Job? = null,
+    // #1533 D6: a task the caller knows was never confirmed (a manual end's force-stamped pickup).
+    excludeTaskId: String? = null,
 ): List<AppEffect> = buildList {
     if (jobId == null) return@buildList
     val lineage = (region.recentTasks + listOfNotNull(region.activeTask))
+        .filter { it.taskId != excludeTaskId }
         // #736: a pickup the dasher UNASSIGNED (marker set, completedAt left null) is NOT a
         // confirmable pickup — exclude it so a job that closes over an abandoned-but-arrived pickup
         // can never fabricate a PICKUP_CONFIRMED (the seq-71 fabrication). Load-bearing at the abandon

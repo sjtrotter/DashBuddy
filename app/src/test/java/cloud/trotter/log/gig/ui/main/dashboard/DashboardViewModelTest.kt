@@ -23,7 +23,11 @@ import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.log.gig.domain.analytics.PeriodTotals
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
+import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.state.AppState
+import cloud.trotter.log.gig.domain.state.DestructiveKind
+import cloud.trotter.log.gig.domain.state.PendingDestructive
+import cloud.trotter.log.gig.domain.state.mintWakeId
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.FlowRegion
 import cloud.trotter.log.gig.domain.state.Mode
@@ -51,12 +55,17 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 /**
  * #977 (redesign stage 4) — Home is **"Today"**: the ViewModel serves the rolling `TODAY` economics,
@@ -86,6 +95,10 @@ class DashboardViewModelTest {
     private val appPreferencesRepository: AppPreferencesRepository = mock()
     private val bubbleManager: BubbleManager = mock()
     private val weeklyPlanRepository: WeeklyPlanRepository = mock()
+    private val clock: Clock = Clock.fixed(Instant.ofEpochMilli(9_000_000L), ZoneOffset.UTC)
+
+    /** #1533: each shift's last recorded activity in the read model; unlisted shifts have none. */
+    private val lastActivity = mutableMapOf<String, Long>()
 
     /** The plan the stubbed repository serves for the current week; null ⇒ Home renders no pointer. */
     private var savedPlan: SavedWeeklyPlan? = null
@@ -121,6 +134,9 @@ class DashboardViewModelTest {
         // #981 — the weekly-plan pointer row's source. No saved plan by default, which is the
         // state every pre-#981 assertion here was written against.
         whenever(weeklyPlanRepository.planFor(any())).thenAnswer { flowOf(savedPlan) }
+        whenever(analyticsRepository.shiftLastActivityAt(any())).thenAnswer { invocation ->
+            flowOf(lastActivity[invocation.getArgument<String>(0)])
+        }
         whenever(appPreferencesRepository.analyticsWindow).thenReturn(selectionFlow)
         whenever(runBlocking { appPreferencesRepository.setAnalyticsWindow(any()) }).thenAnswer { invocation ->
             selectionFlow.value = invocation.getArgument(0)
@@ -167,6 +183,7 @@ class DashboardViewModelTest {
         appPreferencesRepository = appPreferencesRepository,
         bubbleManager = bubbleManager,
         weeklyPlanRepository = weeklyPlanRepository,
+        clock = clock,
     )
 
     /**
@@ -327,6 +344,68 @@ class DashboardViewModelTest {
     }
 
     /** A Monday-evening heatmap: hour 18 carries a $22/hr cell, everything else is masked. */
+    /** #1533 D5: every live shift is a candidate, an Offline one and another platform's included. */
+    @Test
+    fun `every live shift is an end-shift candidate with its suggested end`() = runTest {
+        val wake = PlatformRegion(Platform.Uber, wakeSeq = 1L).mintWakeId().second
+        val state = AppState(
+            regions = Regions(
+                flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
+                platforms = mapOf(
+                    Platform.DoorDash to PlatformRegion(
+                        platform = Platform.DoorDash, mode = Mode.Offline,
+                        session = Session(sessionId = "s1", startedAt = 1_000_000L),
+                    ),
+                    Platform.Uber to PlatformRegion(
+                        platform = Platform.Uber, mode = Mode.Online,
+                        session = Session(sessionId = "u1", startedAt = 2_000_000L),
+                        pendingDestructive = PendingDestructive(
+                            kind = DestructiveKind.SESSION_END, since = 2_500_000L, deadline = 2_600_000L, wakeId = wake,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        whenever(stateManager.state).thenReturn(MutableStateFlow(state))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+        lastActivity["s1"] = 1_500_000L
+        lastActivity["u1"] = 2_400_000L
+
+        runWithViewModel { viewModel ->
+            val byId = viewModel.uiState.value.endShiftCandidates.associateBy { it.sessionId }
+            assertEquals(setOf("s1", "u1"), byId.keys)
+            assertEquals("last recorded activity", 1_500_000L, byId.getValue("s1").suggestedEnd)
+            assertEquals("a pending end wins", 2_500_000L, byId.getValue("u1").suggestedEnd)
+        }
+    }
+
+    @Test
+    fun `no live shift means no end-shift candidate`() = runTest {
+        whenever(stateManager.state).thenReturn(MutableStateFlow(offlineState()))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+
+        runWithViewModel { viewModel -> assertTrue(viewModel.uiState.value.endShiftCandidates.isEmpty()) }
+    }
+
+    @Test
+    fun `ending a shift dispatches the command naming the shift and the chosen end`() = runTest {
+        whenever(stateManager.state).thenReturn(MutableStateFlow(onlineState()))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+
+        runWithViewModel { viewModel ->
+            val candidate = viewModel.uiState.value.endShiftCandidates.single()
+            viewModel.endShift(candidate, endAt = 1_200_000L)
+            val captor = argumentCaptor<Observation.UiInput>()
+            verify(stateManager).dispatch(captor.capture())
+            val cmd = captor.firstValue
+            assertEquals(Observation.UiInput.ACTION_END_SHIFT, cmd.action)
+            assertEquals(Platform.DoorDash, cmd.targetPlatform)
+            assertEquals("s1", cmd.sessionId)
+            assertEquals(1_200_000L, cmd.endAt)
+            assertEquals(9_000_000L, cmd.timestamp)
+        }
+    }
+
     private fun heatmapWithMondayEvening(): EarningsHeatmap {
         val cells = List(EarningsHeatmap.DAYS * EarningsHeatmap.HOURS) { index ->
             val day = index / EarningsHeatmap.HOURS

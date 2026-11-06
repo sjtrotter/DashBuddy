@@ -64,15 +64,35 @@ internal fun EffectMap.diffMode(
     return buildList {
         if (endedSession != null) {
             val endedSessionId = endedSession.sessionId
+            val manualEnd = ManualShiftEnd.isCommand(obs)
             // A rule-defined MODE_TO_OFFLINE override (only on an actual mode
             // flip to offline) replaces the default finalize, as before.
             val offlineOverride =
-                if (prev.mode != Mode.Offline && next.mode == Mode.Offline) {
+                if (!manualEnd && prev.mode != Mode.Offline && next.mode == Mode.Offline) {
                     triggerOverrideEffects(obs, TransitionTrigger.MODE_TO_OFFLINE)
                 } else {
                     null
                 }
-            if (offlineOverride != null) {
+            if (manualEnd) {
+                // #1533 D2: the dasher's end wins over a pending summary or early-offline end. The
+                // reducer's clamped instant is lastSessionEndedAt; a manual end is never a platform report.
+                add(
+                    logEffect(
+                        endedSessionId,
+                        AppEventType.DASH_STOP,
+                        obs.timestamp,
+                        SessionStopPayload(
+                            sessionId = endedSessionId,
+                            endedAt = next.lastSessionEndedAt ?: obs.timestamp,
+                            source = SessionEndSource.MANUAL,
+                            totalEarnings = null,
+                            platform = prev.platform.name,
+                        ),
+                    ),
+                )
+                add(AppEffect.UpdateBubble("Shift ended by hand.", ChatPersona.Dispatcher, sessionId = endedSessionId))
+                add(AppEffect.EndSession(prev.platform.name, sessionId = endedSessionId))
+            } else if (offlineOverride != null) {
                 addAll(offlineOverride)
             } else {
                 // Summary fields: from the committing observation when it IS

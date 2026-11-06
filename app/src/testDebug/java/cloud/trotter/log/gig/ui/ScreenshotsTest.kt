@@ -63,6 +63,9 @@ import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
+import cloud.trotter.log.gig.ui.main.dashboard.EndShiftCandidate
+import cloud.trotter.log.gig.ui.main.dashboard.EndShiftForm
+import cloud.trotter.log.gig.ui.main.dashboard.EndShiftSheet
 import cloud.trotter.log.gig.ui.main.navigation.TopLevel
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookContent
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
@@ -258,6 +261,17 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun homeFirstRun() = render("home-first-run",
         assertion = { text(string(R.string.dashboard_screen_first_run_title)).assertExists() }) {
         HomeBody(ScreenshotData.dashboard(isFirstRun = true), hasPermissions = true)
+    }
+
+    /** #1533: the end-shift sheet over Home, with the suggested time and an open delivery. */
+    @Test fun homeEndShiftSheet() = render("home/end-shift-sheet", window = true,
+        assertion = { text(string(R.string.end_shift_title)).assertExists() }) {
+        val now = ScreenshotData.clock.millis()
+        val candidate = EndShiftCandidate(Platform.DoorDash, "session-A", startedAt = now - 5_400_000L,
+            lastActivityAt = now - 1_800_000L, hasOpenDelivery = true)
+        HomeBody(ScreenshotData.dashboard().copy(endShiftCandidates = listOf(candidate)), hasPermissions = true)
+        EndShiftSheet(listOf(candidate), EndShiftForm.opening(listOf(candidate)), onFormChange = {},
+            onConfirm = { _, _ -> }, onDismiss = {})
     }
 
     /** #1447: Home at 200 % text, the bar's labels included (§5 font scale). */

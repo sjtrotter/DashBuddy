@@ -289,6 +289,22 @@ fresh `OFFER_EXPIRY`. (The third listed gap — "the Offline arm can overwrite a
 `TASK_RETIRE` with `SESSION_END`" — is CLOSED by #1078's absorb rule below; the re-based grace
 carries `absorbedRetireSince` across recovery, pinned by `StateManagerV2RecoveryHygieneTest`.)
 
+**A shift ended by hand (#1533).** When recognition misses a shift's end, the dasher ends it from Home's
+end-shift sheet. The sheet dispatches `Observation.UiInput(action = end_shift)` carrying `targetPlatform`,
+the `sessionId` it shows and the chosen `endAt`; the journal round-trips both new fields, so replay reproduces
+the end. `ManualShiftEnd` (called by `PlatformRegionStepper.stepCore` before lazy expiry, so an overdue grace
+cannot pre-empt it) acts only when the region's live session has that exact id; a mismatch, no session, or a
+repeated command returns the region unchanged. The end instant is `endAt` clamped to `[session.startedAt,
+obs.timestamp]`. It drops `pendingDestructive` and `pendingModeResume`, calls `endSession(timestamp = clamped,
+observedAt = obs.timestamp)`, then forces `Mode.Offline` with `pauseSafety` cleared, so the next Online frame
+mints a fresh session under the normal rules. `diffMode` emits one `DASH_STOP` (source `manual`, `endedAt =
+lastSessionEndedAt`, no reported total, occurredAt = the command time) ahead of a pending summary or
+early-offline end. The active pickup the teardown force-stamps is excluded from the close-out
+`PICKUP_CONFIRMED` sweep (no shop-rate sample); pickups completed earlier keep their confirmations. A dropped
+`TASK_RETIRE` or absorbed retire is force-stamped rather than honored, so it mints no completion. Backdating
+the end does not repair miles the open shift already accrued, nor split later shifts it absorbed: the stop fold
+keeps the odometer delta from the start.
+
 **Graces.** Destructive commits are graced through the unified `pendingDestructive` slot and woken
 by `GRACE_COMMIT` timers (#431), including short authoritative windows for the dash summary AND the
 delivery receipt, plus `JOB_ABANDON` after unassign → marked no-orders idle (#1312,

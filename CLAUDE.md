@@ -547,6 +547,10 @@ crash in between; a lagging snapshot is safe (keyed replay dedupes). `initialize
 payload-less `SESSION_PAUSED_SAFETY` fire is honoured when no armed net exists or it lands at/after
 the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
 
+**Manual end (#1533).** A dasher can end a live shift by hand from Home: a journaled `UiInput` (`end_shift`) naming the
+session and the end time, handled before lazy expiry, emitting `DASH_STOP` with source `manual`; backdating does not
+repair miles already accrued.
+
 **Notification neutrality (#1224).** `NotificationNeutralityTest` enumerates stateless, non-effect-intent
 push rules through the real classifier + state machine; lifecycle and pause/resume timers stay unchanged.
 The #1090 push→screen replay pins the screen as the sole pause/deadline writer.
