@@ -277,7 +277,7 @@ class ScreenshotsTest(private val theme: String) {
             onConfirm = { _, _ -> }, onDismiss = {})
     }
 
-    /** #1447: Home at 200 % text, the bar's labels included (§5 font scale). */
+    /** #1447: Home at 200 % text with the icon-only bar (§5 font scale). */
     @Test @Config(fontScale = 2f)
     fun homeFont200() = home("home-font-200")
 

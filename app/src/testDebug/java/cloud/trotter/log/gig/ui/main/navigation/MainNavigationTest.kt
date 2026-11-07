@@ -18,7 +18,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -176,7 +176,7 @@ class MainNavigationTest {
     private fun back() = ui { compose.activity.onBackPressedDispatcher.onBackPressed() }
 
     private fun bar(tab: TopLevel) {
-        compose.onNode(tabNode and hasText(compose.activity.getString(tab.labelRes))).performClick()
+        compose.onNode(tabNode and hasContentDescription(compose.activity.getString(tab.labelRes))).performClick()
         compose.waitForIdle()
     }
 

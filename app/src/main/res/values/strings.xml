@@ -132,7 +132,7 @@
     <!-- setup/wizard/cards/GasPriceCard.kt -->
 
     <!-- main/analytics/AnalyticsScreen.kt -->
-    <string name="analytics_screen_title">Analytics</string>
+    <string name="analytics_screen_title">Recap</string>
     <string name="analytics_screen_content_desc_export_csv">Export data as a spreadsheet</string>
 
 
@@ -382,7 +382,7 @@
     <!-- #1447: the entry tiles went with the bottom bar (Analytics and Playbook are tabs, Settings
          is the title bar's gear). Ratings is one row on Home. -->
     <string name="dashboard_ratings_action">Open</string>
-    <!-- #1447: Home's title bar and its bottom-bar tab label. -->
+    <!-- Home's title bar and its bottom-bar tab name (read by screen readers, shown on long press). -->
     <string name="home_screen_title">Home</string>
 
     <!-- components/economy/EconomyEditor.kt -->
@@ -762,7 +762,7 @@
          "worked" are measured presence from the driver's own record; hours "scheduled" are clock
          positions in the saved plan. Subtracting one from the other is meaningless, so the copy
          never puts them in a shape that invites it. -->
-    <string name="playbook_screen_title">Playbook</string>
+    <string name="playbook_screen_title">Plan</string>
     <string name="playbook_plan_title">THIS WEEK\'S PLAN</string>
     <string name="playbook_plan_headline_format">%1$sh worked in your windows, %2$s profit of %3$s projected</string>
     <string name="playbook_plan_hours_left_format">%1$d of %2$d scheduled hours left</string>
@@ -838,8 +838,8 @@
     <string name="records_rebuilding_title">Rebuilding records</string>
     <string name="records_rebuilding_body">Figures return when it finishes. Your shifts and deliveries are safe.</string>
     <!-- What CouldNotLoad names on each screen: "Couldn't load Analytics", "Couldn't load the Playbook". -->
-    <string name="analytics_could_not_load_what">Analytics</string>
-    <string name="playbook_could_not_load_what">the Playbook</string>
+    <string name="analytics_could_not_load_what">Recap</string>
+    <string name="playbook_could_not_load_what">Plan</string>
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
     <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>
