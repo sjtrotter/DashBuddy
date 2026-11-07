@@ -94,7 +94,7 @@ None of these are built yet.
 
 ## Getting a build
 
-No release has been published yet. A pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/DashBuddy/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>` when it runs and passes; a run skipped with the skip-ci token or failed uploads none. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
+No release has been published yet. A pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/DashBuddy/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>` once the build and tests pass. A run skipped with the skip-ci token, or one that fails before that step, uploads none. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
 
 A debug build is a developer build. It differs from a release build in three ways:
 
