@@ -54,11 +54,15 @@ private fun RowScope.NavTab(tab: TopLevel, selected: Boolean, onSelect: () -> Un
     var longPressed by remember { mutableStateOf(false) }
     LaunchedEffect(presses, longPressMs) {
         presses.interactions.collectLatest { interaction ->
-            if (interaction is PressInteraction.Press) {
-                longPressed = false
-                delay(longPressMs)
-                longPressed = true
-                scope.launch { tooltip.show() }
+            when (interaction) {
+                is PressInteraction.Press -> {
+                    longPressed = false
+                    delay(longPressMs)
+                    longPressed = true
+                    scope.launch { tooltip.show() }
+                }
+                // A cancelled press never clicks, so it must not leave the next click (TalkBack's) swallowed.
+                is PressInteraction.Cancel -> longPressed = false
             }
         }
     }

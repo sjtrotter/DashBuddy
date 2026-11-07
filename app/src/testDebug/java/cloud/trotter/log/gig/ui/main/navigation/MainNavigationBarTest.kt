@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
@@ -83,6 +85,19 @@ class MainNavigationBarTest {
         tab(TopLevel.PLAYBOOK).performTouchInput { longClick() }
         compose.waitForIdle()
         tab(TopLevel.PLAYBOOK).performClick()
+        compose.waitForIdle()
+        assertEquals(TopLevel.PLAYBOOK, tapped)
+    }
+
+    @Test fun `a long press cancelled after the tooltip leaves the next accessibility click working`() {
+        show(TopLevel.HOME)
+        compose.mainClock.autoAdvance = false
+        tab(TopLevel.PLAYBOOK).performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        tab(TopLevel.PLAYBOOK).performTouchInput { cancel() }
+        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.autoAdvance = true
+        tab(TopLevel.PLAYBOOK).performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
         assertEquals(TopLevel.PLAYBOOK, tapped)
     }
