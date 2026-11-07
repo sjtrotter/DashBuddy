@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.AppEventPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryRemovedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
@@ -120,6 +121,12 @@ class OfferRepairProjectorTest {
         DeliveryPayload(jobId = "J1", taskId = "T$at", storeName = "Sample Tacos", customerHash = "c", phaseStartedAt = at - 100,
             completedAt = at, dropRealizedPay = 7.5, jobOfferHashes = hashes),
     )
+
+    private suspend fun remove(sid: String, target: Long) = insert(
+        AppEventType.MANUAL_DELIVERY_REMOVED, sid, 9_000_000, ManualDeliveryRemovedPayload(target, sid),
+    )
+
+    private suspend fun shift(sid: String) = analyticsDao.sessionRecord(sid)!!.let { it.deliveries to it.jobsCompleted }
 
     private suspend fun unassignedAt(seq: Long) = analyticsDao.offerRecord(seq)!!.unassignedAt
     private suspend fun source(seq: Long) = analyticsDao.deliveryRecord(seq)!!.sourceOfferSeq
@@ -224,5 +231,99 @@ class OfferRepairProjectorTest {
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = watermark, projectorVersion = 18))
         projector().catchUp()
         assertEquals(incremental, analyticsDao.offersForSession("S1").first() to analyticsDao.deliveriesForSession("S1").first())
+    }
+
+    @Test
+    fun `removing the hand-added delivery deletes its row, lowers the shift's counts and reopens the offer`() = runBlocking {
+        start("S1", 1_000)
+        val accepted = offer("S1", 1_100, "a")
+        stop("S1", 2_000)
+        val delivery = manual("S1", 1_100, from = accepted)
+        projector().catchUp()
+        assertEquals(1 to 1, shift("S1"))
+        assertTrue(checks().checks("S1").first().isEmpty())
+
+        remove("S1", delivery)
+        val stats = projector().catchUp()
+        assertEquals(0, stats.adjustmentSkips)
+        assertNull(analyticsDao.deliveryRecord(delivery))
+        assertEquals(0 to 0, shift("S1"))
+        assertEquals(
+            listOf(ShiftCheck.NoDelivery(accepted), ShiftCheck.MoneyDiffers(MoneyCheck.Higher.APP_TOTAL, 7.5)),
+            checks().checks("S1").first(),
+        )
+    }
+
+    @Test
+    fun `a machine row, a missing row, another shift's removal and a second removal are counted skips`() = runBlocking {
+        start("S2", 100)
+        stop("S2", 300)
+        start("S1", 1_000)
+        val machine = completed("S1", 1_450, listOf("h"))
+        stop("S1", 2_000)
+        val hand = manual("S1", 1_500, from = null)
+        projector().catchUp()
+        val before = shift("S1")
+
+        remove("S1", machine)
+        remove("S1", 999_999)
+        remove("S2", hand)
+        remove("S1", hand)
+        remove("S1", hand)
+        val stats = projector().catchUp()
+
+        assertEquals(4, stats.adjustmentSkips)
+        assertTrue(analyticsDao.deliveryRecord(machine) != null)
+        assertNull(analyticsDao.deliveryRecord(hand))
+        assertEquals(before.first - 1 to before.second - 1, shift("S1"))
+        assertEquals(0 to 0, shift("S2"))
+    }
+
+    @Test
+    fun `a removal folds the same incrementally and from zero`() = runBlocking {
+        start("S1", 1_000)
+        val accepted = offer("S1", 1_100, "a")
+        completed("S1", 1_450, listOf("h"))
+        stop("S1", 2_000)
+        val delivery = manual("S1", 1_100, from = accepted)
+        projector().catchUp()
+        remove("S1", delivery)
+        projector().catchUp()
+        val incremental = Triple(
+            analyticsDao.sessionRecord("S1"),
+            analyticsDao.deliveriesForSession("S1").first(),
+            analyticsDao.offersForSession("S1").first(),
+        )
+
+        val watermark = analyticsDao.getWatermark()!!.watermarkSequenceId
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = watermark, projectorVersion = 18))
+        projector().catchUp()
+        assertEquals(
+            incremental,
+            Triple(
+                analyticsDao.sessionRecord("S1"),
+                analyticsDao.deliveriesForSession("S1").first(),
+                analyticsDao.offersForSession("S1").first(),
+            ),
+        )
+    }
+
+    @Test
+    fun `undoing the dasher's attestation reopens the offer and its check`() = runBlocking {
+        start("S1", 1_000)
+        val accepted = offer("S1", 1_100, "a")
+        stop("S1", 2_000)
+        insert(AppEventType.OFFER_OUTCOME_CORRECTION, null, 3_000,
+            OfferOutcomeCorrectionPayload(accepted, OfferOutcomeResolution.UNASSIGNED_ATTESTED))
+        projector().catchUp()
+        val card = ShiftTimelineRepository(analyticsDao).timeline("S1", running = false).first().filterIsInstance<JobCard>().single()
+        assertEquals(JobState.MARKED_UNASSIGNED, card.state)
+        assertEquals(listOf(accepted), card.markedOfferSeqs)
+        assertTrue(checks().checks("S1").first().none { it is ShiftCheck.NoDelivery })
+
+        insert(AppEventType.OFFER_OUTCOME_CORRECTION, null, 3_100, OfferOutcomeCorrectionPayload(accepted, null))
+        projector().catchUp()
+        assertNull(analyticsDao.offerRecord(accepted)!!.outcomeResolved)
+        assertTrue(ShiftCheck.NoDelivery(accepted) in checks().checks("S1").first())
     }
 }

@@ -273,7 +273,7 @@ class SessionDetailViewModelTest {
     }
 
     @Test
-    fun `the offer answers append the attestation or a missed delivery naming the offer at its time`() = runTest {
+    fun `the offer answers, their undo and the removal append through the repository`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         whenever(analyticsRepository.sessionDetail(eq("s1"))).thenReturn(flowOf(SessionDetail(session("s1"), emptyList())))
         val viewModel = buildViewModel("s1")
@@ -285,6 +285,11 @@ class SessionDetailViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verify(correctionRepository).correctOfferOutcome(13L, true, null)
+        viewModel.undoOfferUnassigned(13L)
+        viewModel.removeManualDelivery(102L)
+        testScheduler.advanceUntilIdle()
+        verify(correctionRepository).correctOfferOutcome(13L, false, null)
+        verify(correctionRepository).removeManualDelivery(102L, "s1", null)
         verify(correctionRepository).addManualDelivery(
             eq("s1"), eq("Sample Tacos"), eq(7.5), isNull(), isNull(), eq(1_700_001_000_000L), isNull(), isNull(), eq(13L),
         )

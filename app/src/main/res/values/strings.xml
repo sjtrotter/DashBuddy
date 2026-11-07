@@ -497,6 +497,10 @@
     <string name="session_detail_save_button">Save</string>
     <string name="session_detail_remove_from_dash">Remove from this shift</string>
     <string name="session_detail_remove_cash_locked_supporting">Clear the cash tip first, then remove</string>
+    <!-- A delivery the dasher added by hand: remove it, after a confirm. -->
+    <string name="session_detail_remove_delivery">Remove this delivery</string>
+    <string name="session_detail_remove_delivery_confirm">Remove this delivery? Its pay leaves this shift.</string>
+    <string name="session_detail_remove_button">Remove</string>
 
     <!-- The shift page: its money, then its timeline, and a job's sheet. -->
     <string name="shift_page_app_times_format">%1$s, %2$s to %3$s</string>
@@ -553,6 +557,7 @@
     <string name="shift_page_unassigned_at_format">Unassigned %1$s</string>
     <string name="shift_page_unassigned">Unassigned</string>
     <string name="shift_page_marked_unassigned">You marked it unassigned</string>
+    <string name="shift_page_undo">Undo</string>
     <!-- The shift's checks, one line each, under the money check. -->
     <plurals name="shift_check_no_delivery">
         <item quantity="one">%1$d accepted offer has no delivery recorded</item>

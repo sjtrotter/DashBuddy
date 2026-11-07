@@ -224,6 +224,34 @@ class SessionDetailViewModel @Inject constructor(
         }
     }
 
+    /** Undo "It was unassigned": the documented undo shape, `OFFER_OUTCOME_CORRECTION` with no resolution. */
+    fun undoOfferUnassigned(offerEventSequenceId: Long) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.correctOfferOutcome(offerEventSequenceId, attested = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "undoOfferUnassigned rejected for offer seq %d", offerEventSequenceId)
+            }
+        }
+    }
+
+    /** Remove a delivery the dasher added by hand (`MANUAL_DELIVERY_REMOVED`); the projector deletes its row. */
+    fun removeManualDelivery(deliveryEventSequenceId: Long) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.removeManualDelivery(deliveryEventSequenceId, sessionId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "removeManualDelivery rejected for delivery seq %d", deliveryEventSequenceId)
+            }
+        }
+    }
+
     fun correctSessionReport(operation: String, value: Double?, note: String?) {
         viewModelScope.launch {
             try {

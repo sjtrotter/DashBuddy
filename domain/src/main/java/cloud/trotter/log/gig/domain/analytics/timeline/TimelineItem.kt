@@ -38,6 +38,8 @@ data class JobCard(
     val openOffers: List<OpenOffer> = emptyList(),
     /** The first recorded unassign on the job ([JobState.UNASSIGNED]); null when none. */
     val unassignedAt: Long? = null,
+    /** The accepted offers the dasher marked unassigned, the targets of the card's Undo. */
+    val markedOfferSeqs: List<Long> = emptyList(),
     /** The recorded milestones for the job's sheet, in time order; a milestone not recorded is absent. */
     val milestones: List<Milestone>,
 ) : TimelineItem

@@ -43,6 +43,7 @@ class OrphanOfferSheetTest {
     private lateinit var locale: Locale
     private lateinit var zone: TimeZone
     private val marked = mutableListOf<Long>()
+    private val undone = mutableListOf<Long>()
     private val added = mutableListOf<List<Any?>>()
 
     @Before fun fix() {
@@ -67,6 +68,7 @@ class OrphanOfferSheetTest {
                         ShiftPageActions(
                             onBack = {},
                             onMarkOfferUnassigned = { marked += it },
+                            onUndoMarkedUnassigned = { undone += it },
                             onAddDeliveryForOffer = { seq, at, pay, tip, cash, store, note ->
                                 added += listOf(seq, at, pay, tip, cash, store, note)
                             },
@@ -144,6 +146,18 @@ class OrphanOfferSheetTest {
         assertEquals(1, count(string(R.string.shift_page_marked_unassigned)))
         assertEquals(0, count(string(R.string.shift_page_no_delivery)))
         assertEquals(0, count(context.resources.getQuantityString(R.plurals.shift_check_no_delivery, 1, 1)))
+    }
+
+    @Test fun `undo on a marked card takes the attestation back`() {
+        show(ShiftPageFixtures.orphanShift(OrphanAnswer.MARKED_UNASSIGNED))
+        compose.onNodeWithText(string(R.string.shift_page_undo)).click()
+        settle()
+        assertEquals(listOf(ShiftPageFixtures.ORPHAN_OFFER), undone)
+    }
+
+    @Test fun `an open card has no undo`() {
+        show(ShiftPageFixtures.orphanShift())
+        assertEquals(0, count(string(R.string.shift_page_undo)))
     }
 
     @Test fun `once the missed delivery is added the card shows it and the check line is gone`() {

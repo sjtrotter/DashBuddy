@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.domain.analytics
 
 import cloud.trotter.log.gig.domain.model.event.SequencedAppEvent
+import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryRemovedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.TaskUnassignedPayload
 
 /**
@@ -26,7 +27,18 @@ data class ManualSourceLinkFold(
     val offerSequenceId: Long,
 )
 
-/** The two offer-repair decisions' pure builders. */
+/**
+ * A hand-added delivery's removal: the projector deletes the row [targetEventSequenceId]. [inShift] is true when the
+ * shift's fold context still held the delivery, so the fold has already lowered the shift's counts; false is a
+ * refusal (a machine row, another shift, a missing or already removed row), applied as a counted skip.
+ */
+data class ManualDeliveryRemoveFold(
+    val targetEventSequenceId: Long,
+    val sessionId: String,
+    val inShift: Boolean,
+)
+
+/** The offer-repair decisions' pure builders. */
 internal object OfferRepairFolds {
 
     /** The stamp for a `TASK_UNASSIGNED` that names its job's offers, else null (no session or no hashes). */
@@ -36,5 +48,22 @@ internal object OfferRepairFolds {
         val hashes = p.jobOfferHashes.filter { it.isNotBlank() }.distinct()
         if (hashes.isEmpty()) return null
         return OfferUnassignFold(sid, hashes, p.unassignedAt, event.sequenceId)
+    }
+
+    /**
+     * `MANUAL_DELIVERY_REMOVED`: when [context] is the payload's shift and still holds the hand-added delivery's job,
+     * the delivery leaves the shift's counts here (deliveries and the delivered-job set, so jobs completed follows),
+     * the same in an incremental fold, which hydrates the set from the rows, and in a refold. Otherwise no context is
+     * returned, so the session row is not rewritten, and the decision is a refusal.
+     */
+    fun removeManual(event: SequencedAppEvent, context: SessionFoldContext?): FoldOutcome {
+        val p = event.event.payload as? ManualDeliveryRemovedPayload
+            ?: return FoldOutcome(context = null, skip = "MANUAL_DELIVERY_REMOVED: missing/malformed payload")
+        val jobId = MANUAL_JOB_PREFIX + p.targetEventSequenceId
+        val ctx = context?.takeIf { it.sessionId == p.sessionId && jobId in it.deliveredJobIds }
+        val fold = ManualDeliveryRemoveFold(p.targetEventSequenceId, p.sessionId, inShift = ctx != null)
+        if (ctx == null) return FoldOutcome(context = null, manualDeliveryRemove = fold)
+        val lowered = ctx.copy(deliveries = (ctx.deliveries - 1).coerceAtLeast(0), deliveredJobIds = ctx.deliveredJobIds - jobId)
+        return FoldOutcome(context = lowered, manualDeliveryRemove = fold)
     }
 }

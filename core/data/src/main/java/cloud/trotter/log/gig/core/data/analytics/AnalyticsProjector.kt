@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.domain.analytics.FuelFillupFold
 import cloud.trotter.log.gig.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.log.gig.domain.analytics.LegStateCodec
 import cloud.trotter.log.gig.domain.analytics.LedgerVoidFold
+import cloud.trotter.log.gig.domain.analytics.ManualDeliveryRemoveFold
 import cloud.trotter.log.gig.domain.analytics.ManualSourceLinkFold
 import cloud.trotter.log.gig.domain.analytics.OfferUnassignFold
 import cloud.trotter.log.gig.domain.analytics.OfferFold
@@ -261,6 +262,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerUnassign?.let { adjustments += Adjustment.OfferUnassign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.manualSourceLink?.let { adjustments += Adjustment.ManualSourceLink(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.manualDeliveryRemove?.let { adjustments += Adjustment.ManualDeliveryRemove(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -328,6 +330,12 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
                     is Adjustment.OfferUnassign -> analyticsDao.applyOfferUnassign(adj.fold) // #1517
                     is Adjustment.ManualSourceLink -> analyticsDao.applyManualSourceLink(adj.fold) // #1517
+                    is Adjustment.ManualDeliveryRemove -> {
+                        // #1517: the row goes; a store key only it held goes too (the #906 sweep).
+                        val removed = analyticsDao.applyManualDeliveryRemove(adj.fold)
+                        removed?.storeKey?.let { storeResolutionRunner.deleteStoreIfUnreferenced(it) }
+                        removed == null
+                    }
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -423,6 +431,11 @@ class AnalyticsProjector @Inject constructor(
             override val sequenceId: Long,
             override val occurredAt: Long,
             val fold: ManualSourceLinkFold,
+        ) : Adjustment
+        data class ManualDeliveryRemove(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ManualDeliveryRemoveFold,
         ) : Adjustment
     }
 

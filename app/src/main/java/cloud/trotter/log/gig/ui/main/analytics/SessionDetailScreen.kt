@@ -80,6 +80,8 @@ fun SessionDetailScreen(
             onCorrectShiftMiles = viewModel::correctShiftMiles,
             onMarkOfferUnassigned = viewModel::markOfferUnassigned,
             onAddDeliveryForOffer = viewModel::addMissedDeliveryForOffer,
+            onRemoveDelivery = viewModel::removeManualDelivery,
+            onUndoMarkedUnassigned = viewModel::undoOfferUnassigned,
         ),
     )
 }
@@ -113,6 +115,10 @@ internal class ShiftPageActions(
         storeName: String?,
         note: String?,
     ) -> Unit = { _, _, _, _, _, _, _ -> },
+    /** Removes a delivery the dasher added by hand. */
+    val onRemoveDelivery: (deliveryEventSequenceId: Long) -> Unit = {},
+    /** Undoes "It was unassigned" for one offer. */
+    val onUndoMarkedUnassigned: (offerEventSequenceId: Long) -> Unit = {},
 )
 
 /** The page's stateless body over [uiState]; tests and screenshots compose this. */
@@ -261,7 +267,11 @@ private fun ShiftPageBody(
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppTheme.colors.text2,
                     )
-                    is PageItem.Card -> JobCardRow(item.card, onOpen = { sheetKey = item.card.key })
+                    is PageItem.Card -> JobCardRow(
+                        item.card,
+                        onOpen = { sheetKey = item.card.key },
+                        onUndoMarked = { item.card.markedOfferSeqs.forEach(actions.onUndoMarkedUnassigned) },
+                    )
                     is PageItem.Run -> PassedRunRow(item.run, item.expanded, onToggle = {
                         expanded = if (item.expanded) expanded - item.run.key else expanded + item.run.key
                     })

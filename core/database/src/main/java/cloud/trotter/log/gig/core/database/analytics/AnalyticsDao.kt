@@ -152,6 +152,10 @@ interface AnalyticsDao {
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId AND eventSequenceId < :beforeSequenceId")
     suspend fun deliveryRecordsInSessionBefore(sessionId: String, beforeSequenceId: Long): List<DeliveryRecordEntity>
 
+    /** #1517: a removed hand-added delivery's row; returns the rows deleted. */
+    @Query("DELETE FROM delivery_records WHERE eventSequenceId = :eventSequenceId")
+    suspend fun deleteDeliveryRecord(eventSequenceId: Long): Int
+
     /** #1517: the accepted offer a missed delivery was added from; the offer row is never rewritten. */
     @Query("UPDATE delivery_records SET sourceOfferSeq = :offerSequenceId WHERE eventSequenceId = :deliverySequenceId")
     suspend fun setDeliverySourceOffer(deliverySequenceId: Long, offerSequenceId: Long)

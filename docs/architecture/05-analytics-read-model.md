@@ -1155,10 +1155,21 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   `MANUAL_DELIVERY` at the offer's decision time naming it; Close leaves it open. A group shows its line and no sheet.
   The Money tab's orphan dialog (`OrphanOfferAttestDialog`) and its hub read are gone; Home's review row still reads
   `orphanOfferGroups`, and Tier 1 (`JobAcceptMismatchResolver`) is unchanged.
-- **Not built.** There is no undo for a missed delivery: the existing remove path (`DELIVERY_SESSION_ASSIGN` to no
-  shift) refuses a session-bound MANUAL row, and moving it would keep its pay in "(No session)". The link lives on the
-  delivery row, so a future removal of that row restores the check by construction. The attestation also has no undo
-  on the shift page yet.
+- **Removing a hand-added delivery.** `MANUAL_DELIVERY_REMOVED` (`ManualDeliveryRemovedPayload`: the MANUAL row's
+  sequence id, its shift, an optional note; `RecordFolds.BOOKKEEPING_EVENTS`, so it measures no odometer and advances no
+  liveness) is the ledger void's twin for a delivery. The pure fold (`OfferRepairFolds.removeManual`) lowers the shift's
+  `deliveries` and removes `manual:<seq>` from its delivered-job set (so `jobsCompleted` follows) only when the context
+  is the payload's shift and still holds that job, and returns no context otherwise. The counts move in the context,
+  not as a relative SQL bump like `DELIVERY_SESSION_ASSIGN`'s: a hydrated context reads the set from the rows, so an
+  in-batch context upserted after a relative bump would have kept the removed job in `jobsCompleted`, and a refold
+  would differ. `ManualDeliveryRemoveApply.applyManualDeliveryRemove` then deletes the row (its `sourceOfferSeq` goes
+  with it, so the offer's NoDelivery check returns) and the projector sweeps a store key only that row held. Refused,
+  as a counted skip with a WARN of ids only: a missing or already removed row (the first removal wins), a row that is
+  not MANUAL (`originalPayBasis`), or a row of another shift. The Fix dialog (`AdjustDeliveryDialog`) shows "Remove this
+  delivery" only for a MANUAL row, behind the confirm "Remove this delivery? Its pay leaves this shift."
+- **Undo of "It was unassigned".** A MARKED_UNASSIGNED card carries `markedOfferSeqs` and an Undo that writes
+  `OFFER_OUTCOME_CORRECTION` with no resolution, the documented undo shape; the offer is open again and its check
+  returns.
 
 ### Records status (#1512)
 

@@ -607,6 +607,19 @@ data class FuelFillupPayload(
 @Serializable
 data class LedgerEntryVoidedPayload(val targetEventSequenceId: Long) : AppEventPayload
 
+/**
+ * Payload for `MANUAL_DELIVERY_REMOVED` (#1517): the dasher removes a delivery they added by hand. [targetEventSequenceId]
+ * is the `MANUAL_DELIVERY` event's sequence id (the delivery row's PK); [sessionId] is that delivery's shift. The
+ * projector deletes the row and lowers the shift's counts; the original event stays in the log. [note] is
+ * driver-authored text, never in INFO+ logs (P7).
+ */
+@Serializable
+data class ManualDeliveryRemovedPayload(
+    val targetEventSequenceId: Long,
+    val sessionId: String,
+    val note: String? = null,
+) : AppEventPayload
+
 /** Which saved vehicle drove a dash; the event itself has no session attribution. */
 @Serializable
 data class DashVehiclePayload(

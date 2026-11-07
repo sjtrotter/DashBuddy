@@ -258,7 +258,8 @@ Before changing a fold, a DAO read, a correction event, the ledger or a Recap or
   `AnalyticsRepository` is DAO-only. `cashTip` stays outside `realizedPay` and `netProfit` and is added only at read
   sites.
 - Corrections are append-only events, folded non-destructively; a machine re-price never overwrites a driver-owned
-  row.
+  row. A hand-added delivery is removed by its own event (`MANUAL_DELIVERY_REMOVED`); its `MANUAL_DELIVERY` stays
+  in the log.
 - Pay comes from the receipt, else an `OFFER_PAY` estimate. A receipt speaks only for the drops it described
   (`ReceiptCoverage`).
 - `ShiftEarnings` is the one owner of the bubble's headline. Expenses and fuel are a separate ledger that never

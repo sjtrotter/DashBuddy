@@ -132,6 +132,8 @@ object ShiftTimeline {
             offerEventSequenceIds = offers.map { it.eventSequenceId },
             openOffers = open.map { OpenOffer(it.eventSequenceId, it.decidedAt, it.payAmount, it.merchantName) },
             unassignedAt = unassignedAt,
+            markedOfferSeqs = offers.filter { it.outcomeResolved == OfferOutcomeResolution.UNASSIGNED_ATTESTED }
+                .map { it.eventSequenceId },
             milestones = milestones(offers, base, offerLine, addOns, pickups, drops, lines),
         )
     }

@@ -64,7 +64,9 @@ class ShiftChecksTest {
     @Test fun `the dasher's attestation raises none and its card says so`() {
         val marked = listOf(offer(1, resolved = OfferOutcomeResolution.UNASSIGNED_ATTESTED))
         assertTrue(checks(marked, emptyList()).isEmpty())
-        assertEquals(JobState.MARKED_UNASSIGNED, cards(marked, emptyList()).single().state)
+        val card = cards(marked, emptyList()).single()
+        assertEquals(JobState.MARKED_UNASSIGNED, card.state)
+        assertEquals(listOf(1L), card.markedOfferSeqs)
     }
 
     @Test fun `a stack with two deliveries raises none`() {

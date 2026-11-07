@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +51,7 @@ private const val SEPARATOR = " · "
  * delivery into one line with no second pay. Tapping opens the job's sheet.
  */
 @Composable
-internal fun JobCardRow(card: JobCard, onOpen: () -> Unit) {
+internal fun JobCardRow(card: JobCard, onOpen: () -> Unit, onUndoMarked: () -> Unit = {}) {
     val c = AppTheme.colors
     AppCard(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onOpen)) {
         Row(verticalAlignment = Alignment.Top) {
@@ -88,6 +89,10 @@ internal fun JobCardRow(card: JobCard, onOpen: () -> Unit) {
             }
         }
         supporting.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.text2) }
+        // The dasher's "It was unassigned" can be taken back here; the offer is open again once it folds.
+        if (card.state == JobState.MARKED_UNASSIGNED && card.markedOfferSeqs.isNotEmpty()) {
+            TextButton(onClick = onUndoMarked) { Text(stringResource(R.string.shift_page_undo)) }
+        }
     }
 }
 

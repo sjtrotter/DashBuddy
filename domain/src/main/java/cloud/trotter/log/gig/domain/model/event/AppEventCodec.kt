@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.ExpenseLoggedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.log.gig.domain.model.event.payload.LedgerEntryVoidedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryRemovedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PayAdjustmentPayload
@@ -56,6 +57,7 @@ object AppEventCodec {
         is OdometerReadingPayload -> json.encodeToString(payload)
         is FuelFillupPayload -> json.encodeToString(payload)
         is LedgerEntryVoidedPayload -> json.encodeToString(payload)
+        is ManualDeliveryRemovedPayload -> json.encodeToString(payload)
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
         is DeliveryReceiptRepricePayload -> json.encodeToString(payload)
         is SessionReportCorrectionPayload -> json.encodeToString(payload)
@@ -118,6 +120,8 @@ object AppEventCodec {
             AppEventType.FUEL_FILLUP -> json.decodeFromString<FuelFillupPayload>(payloadJson)
 
             AppEventType.LEDGER_ENTRY_VOIDED -> json.decodeFromString<LedgerEntryVoidedPayload>(payloadJson)
+
+            AppEventType.MANUAL_DELIVERY_REMOVED -> json.decodeFromString<ManualDeliveryRemovedPayload>(payloadJson)
 
             AppEventType.DELIVERY_ADJUSTMENT ->
                 json.decodeFromString<DeliveryAdjustmentPayload>(payloadJson)

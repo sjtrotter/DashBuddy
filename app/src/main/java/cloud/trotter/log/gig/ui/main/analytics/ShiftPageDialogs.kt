@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
+import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.timeline.OpenOffer
 
@@ -102,6 +103,14 @@ internal fun ShiftPageDialogs(detail: SessionDetail, state: ShiftPageDialogState
             onUnassign = {
                 actions.onUnassignDelivery(target.eventSequenceId)
                 state.adjustTarget = null
+            },
+            onRemove = if (target.payBasis == PayBasis.MANUAL) {
+                {
+                    actions.onRemoveDelivery(target.eventSequenceId)
+                    state.adjustTarget = null
+                }
+            } else {
+                null
             },
         )
     }
