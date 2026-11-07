@@ -1165,7 +1165,11 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   would differ. `ManualDeliveryRemoveApply.applyManualDeliveryRemove` then deletes the row (its `sourceOfferSeq` goes
   with it, so the offer's NoDelivery check returns) and the projector sweeps a store key only that row held. Refused,
   as a counted skip with a WARN of ids only: a missing or already removed row (the first removal wins), a row that is
-  not MANUAL (`originalPayBasis`), or a row of another shift. The Fix dialog (`AdjustDeliveryDialog`) shows "Remove this
+  not MANUAL (`originalPayBasis`), or a row of another shift. Every DB-loaded context is built by the projector's one
+  `hydrate(row)`, the inferred close of an open shift included: that path once built a bare row context with empty
+  delivered and receipted job sets and no last-drop odometer or frozen offer cost basis, so a fold after it in the same
+  batch (this removal, a late completion's #653/#691 guards, a manual delivery's frozen basis) and the shift's written
+  `jobsCompleted` depended on where the page boundary fell. The Fix dialog (`AdjustDeliveryDialog`) shows "Remove this
   delivery" only for a MANUAL row, behind the confirm "Remove this delivery? Its pay leaves this shift."
 - **Undo of "It was unassigned".** A MARKED_UNASSIGNED card carries `markedOfferSeqs` and an Undo that writes
   `OFFER_OUTCOME_CORRECTION` with no resolution, the documented undo shape; the offer is open again and its check

@@ -326,4 +326,37 @@ class OfferRepairProjectorTest {
         assertNull(analyticsDao.offerRecord(accepted)!!.outcomeResolved)
         assertTrue(ShiftCheck.NoDelivery(accepted) in checks().checks("S1").first())
     }
+
+    @Test
+    fun `a removal folds the same whether its shift was loaded by the inferred close or cached`() = runBlocking {
+        // S1 never stops: the next shift's start closes it by inference.
+        start("S1", 1_000)
+        completed("S1", 1_450, listOf("h"))
+        val hand = manual("S1", 1_500, from = null)
+        projector().catchUp()
+        assertEquals(2 to 2, shift("S1"))
+        suspend fun recordedPay() =
+            checkNotNull(AnalyticsRepository(analyticsDao, eventDao, db.hudShiftDao()).sessionDetail("S1").first()).recordedPay
+        assertEquals(15.0, recordedPay()!!, 1e-9)
+
+        // A second batch: S2's start loads the open S1 from the database and closes it, then the removal folds.
+        start("S2", 3_000)
+        remove("S1", hand)
+        val stats = projector().catchUp()
+        assertEquals(0, stats.adjustmentSkips)
+        assertNull(analyticsDao.deliveryRecord(hand))
+        assertEquals(1 to 1, shift("S1"))
+        assertEquals(7.5, recordedPay()!!, 1e-9)
+        val split = listOf(analyticsDao.sessionRecord("S1"), analyticsDao.sessionRecord("S2")) to
+            analyticsDao.deliveriesForSession("S1").first()
+
+        // The same log from zero in one batch: S1 is a cached context when S2 starts.
+        val watermark = analyticsDao.getWatermark()!!.watermarkSequenceId
+        analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = watermark, projectorVersion = 18))
+        assertEquals(0, projector().catchUp().adjustmentSkips)
+        assertEquals(
+            split,
+            listOf(analyticsDao.sessionRecord("S1"), analyticsDao.sessionRecord("S2")) to analyticsDao.deliveriesForSession("S1").first(),
+        )
+    }
 }

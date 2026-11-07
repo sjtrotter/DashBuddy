@@ -774,8 +774,16 @@ class AnalyticsProjector @Inject constructor(
 
     // ── Restart-correct context hydration (the record tables ARE the fold state) ──
 
-    private suspend fun hydrate(sessionId: String): SessionFoldContext? {
-        val session = analyticsDao.sessionRecord(sessionId) ?: return null
+    private suspend fun hydrate(sessionId: String): SessionFoldContext? =
+        analyticsDao.sessionRecord(sessionId)?.let { hydrate(it) }
+
+    /**
+     * The one restart-correct context for a stored session row: the row plus the sets and anchors the folds read
+     * (delivered and receipted job ids, the last drop's odometer, the last offer's frozen cost basis). Every DB load
+     * goes through here, the inferred close included (#1517), so a fold sees the same context whichever path loaded it.
+     */
+    private suspend fun hydrate(session: SessionRecordEntity): SessionFoldContext {
+        val sessionId = session.sessionId
         val lastDelivery = analyticsDao.lastDeliveryInSession(sessionId)
         return session.toContext(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
@@ -816,7 +824,7 @@ class AnalyticsProjector @Inject constructor(
         // DB rows still open for this platform, not already handled in this batch.
         for (row in analyticsDao.openSessions(fresh.platform.wire)) {
             if (row.sessionId == fresh.sessionId || contexts.containsKey(row.sessionId)) continue
-            contexts[row.sessionId] = row.toContext().copy(endedAt = row.lastEventAt, endSource = INFERRED)
+            contexts[row.sessionId] = hydrate(row).copy(endedAt = row.lastEventAt, endSource = INFERRED)
             touched += row.sessionId
             inferred += row.sessionId to fresh.platform.wire
         }
@@ -864,13 +872,14 @@ class AnalyticsProjector @Inject constructor(
         legStateJson = LegStateCodec.encode(legState),
     )
 
+    /** Row to context; every input the row lacks is required, so only [hydrate] builds one. */
     private fun SessionRecordEntity.toContext(
-        deliveredJobIds: Set<String> = emptySet(),
-        receiptedJobIds: Set<String> = emptySet(),
-        prevDropOdometer: Double? = null,
-        lastEvaluatedCostPerMile: Double? = null,
-        lastEvaluatedFuelPerMile: Double? = null,
-        lastEvaluatedNonFuelPerMile: Double? = null,
+        deliveredJobIds: Set<String>,
+        receiptedJobIds: Set<String>,
+        prevDropOdometer: Double?,
+        lastEvaluatedCostPerMile: Double?,
+        lastEvaluatedFuelPerMile: Double?,
+        lastEvaluatedNonFuelPerMile: Double?,
     ) = SessionFoldContext(
         sessionId = sessionId,
         platform = Platform.fromWire(platform) ?: Platform.Unknown,
