@@ -1082,6 +1082,29 @@ rows (session assignment, offer reconciliation, store-rename resolution) stay or
 Room entity, not the domain `DeliveryRecord`, which lacks the frozen cost per mile, original pay basis, driver-adjusted
 time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-receipt guard (tracked separately).
 
+### Records status (#1512)
+
+Every look-back screen reads one value, `RecordsStatus` (`:domain`): REBUILDING, UPDATING or UP_TO_DATE. Its one
+owner is `RecordsStatusRepository` (`:core:data`), which combines three flows through the pure `RecordsStatus.of`:
+the projector's in-memory `AnalyticsProjector.rebuilding` flag, `AnalyticsRepository.projectionWatermark` and
+`AppEventDao.maxSequenceId()`. The flag wins; a watermark below the latest event id (or none yet, over a non-empty log)
+is UPDATING; anything else is UP_TO_DATE.
+
+No stored value can show a rebuild: the version wipe writes the new `projectorVersion` and watermark 0 in the same
+transaction that deletes the tables, so after it the store looks like a first backfill. Hence the in-memory flag. Only
+the projector writes it: `rebuildIfVersionChanged` sets it just before the wipe, and the caller (`start`'s first pass
+or `catchUp`) clears it in a `finally` once the drain after the wipe has caught up, also when that refold throws. A
+supervised restart after a throw finds the version already current, so it does not set the flag again; the partial
+records then read as UPDATING until the drain catches up.
+
+The hub and the Playbook carry the status in their UI state (`records`) beside `failed`. While REBUILDING they hold
+back totals, comparisons and correction actions (the hub keeps only its pager, and an open correction dialog is hidden);
+UPDATING adds one "Updating records" line under the title bar; a failed read (a `catch` on the state flow, with
+`CancellationException` rethrown) shows the designsystem `CouldNotLoad` pattern, whose Retry bumps a ViewModel-owned
+attempt counter that re-subscribes every read. Before the first read they show `AppPlaceholder` blocks shaped like
+their figures (pulsing on the frame clock, still under reduced motion, read once as "Loading"); Home keeps
+`LoadingBody`.
+
 ## Database safety posture (`:core:database`)
 
 **Data-safety posture (#690):

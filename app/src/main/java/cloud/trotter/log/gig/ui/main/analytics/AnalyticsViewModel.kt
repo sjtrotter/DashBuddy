@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.analytics.currentLocalDateFlow
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
@@ -32,10 +33,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -76,6 +79,8 @@ class AnalyticsViewModel @Inject constructor(
     private val analyticsRepository: AnalyticsRepository,
     private val correctionRepository: CorrectionRepository,
     private val appPreferencesRepository: AppPreferencesRepository,
+    /** The records status every look-back screen reads; REBUILDING holds the hub's figures back. */
+    private val recordsStatusRepository: RecordsStatusRepository,
     /**
      * The one owner of the hub's local selection (#1447 N3): the visible tab, the Offers filter and
      * the Offers page size. Saved state, so a tab switch that parks the hub and a process death both
@@ -107,96 +112,118 @@ class AnalyticsViewModel @Inject constructor(
         viewModelScope.launch { appPreferencesRepository.setAnalyticsShowMore(show) }
     }
 
-    val uiState: StateFlow<AnalyticsUiState> = combine(
-        selectedTab,
-        // Re-anchor economics + decisions together on each window switch so a tile never renders one
-        // window's number under another's label. Decisions is collected unconditionally (not gated on
-        // the selected tab): the source is a cheap Room-invalidation aggregate and folding it in here
-        // keeps one immutable UiState re-anchored atomically with the window.
-        //
-        // #1024 B5 dropped `perStoreEconomics` from this fan-out with the Money tab's `TopStoresCard`:
-        // the store list is the Playbook's now, off its own lifetime `storeReportCards()` read, and a
-        // window read nothing renders is a query the hub runs on every page of the pager for nobody.
-        combine(window, today) { w, day -> w to day }.flatMapLatest { (w, day) ->
-            combine(
-                analyticsRepository.periodEconomics(w),
-                analyticsRepository.decisionEconomics(w),
-                // The Time tab's two window reads travel as ONE slot: the "typical online hour"
-                // composition and the while-working denominator are BOTH (time × gaps), so a slot
-                // that could deliver one without the other would let the card render a composition
-                // against a different window's gaps for a frame (#983).
+    /** Bumped by [retry]; every bump re-subscribes the hub's reads. */
+    private val attempts = MutableStateFlow(0)
+
+    /** UDF intent: the failure pattern's Retry. */
+    fun retry() {
+        attempts.value++
+    }
+
+    val uiState: StateFlow<AnalyticsUiState> = attempts.flatMapLatest { attempt ->
+        combine(
+            selectedTab,
+            // Re-anchor economics + decisions together on each window switch so a tile never renders one
+            // window's number under another's label. Decisions is collected unconditionally (not gated on
+            // the selected tab): the source is a cheap Room-invalidation aggregate and folding it in here
+            // keeps one immutable UiState re-anchored atomically with the window.
+            //
+            // #1024 B5 dropped `perStoreEconomics` from this fan-out with the Money tab's `TopStoresCard`:
+            // the store list is the Playbook's now, off its own lifetime `storeReportCards()` read, and a
+            // window read nothing renders is a query the hub runs on every page of the pager for nobody.
+            combine(window, today) { w, day -> w to day }.flatMapLatest { (w, day) ->
                 combine(
-                    analyticsRepository.timeEconomics(w),
-                    analyticsRepository.gapStats(w),
-                ) { time, gaps -> time to gaps },
-                // The typed `combine` tops out at 5 flows, so every remaining window-anchored read
-                // rides ONE nested pair of sub-combines into the 5th slot: the per-day chart + the
-                // "(No session)" orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2)
-                // on one side, and the previous-window economics (#970 §7.2) + the pay-mix parts +
-                // the platform split (#973 §4.2/§7.6) on the other. All window-anchored, so they
-                // re-anchor atomically with everything else.
-                combine(
+                    analyticsRepository.periodEconomics(w),
+                    analyticsRepository.decisionEconomics(w),
+                    // The Time tab's two window reads travel as ONE slot: the "typical online hour"
+                    // composition and the while-working denominator are BOTH (time × gaps), so a slot
+                    // that could deliver one without the other would let the card render a composition
+                    // against a different window's gaps for a frame (#983).
                     combine(
-                        analyticsRepository.dailyEarnings(w),
-                        analyticsRepository.noSessionDeliveries(w),
-                        analyticsRepository.orphanOfferGroups(w),
-                    ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
+                        analyticsRepository.timeEconomics(w),
+                        analyticsRepository.gapStats(w),
+                    ) { time, gaps -> time to gaps },
+                    // The typed `combine` tops out at 5 flows, so every remaining window-anchored read
+                    // rides ONE nested pair of sub-combines into the 5th slot: the per-day chart + the
+                    // "(No session)" orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2)
+                    // on one side, and the previous-window economics (#970 §7.2) + the pay-mix parts +
+                    // the platform split (#973 §4.2/§7.6) on the other. All window-anchored, so they
+                    // re-anchor atomically with everything else.
                     combine(
-                        previousEconomics(w),
-                        analyticsRepository.payMixParts(w),
-                        analyticsRepository.platformEconomics(w),
-                    ) { previous, payMixParts, platforms -> Triple(previous, payMixParts, platforms) },
-                    // #975 §7.5 — the Offers tab's est-vs-realized comparison. Window-anchored like
-                    // everything else here, so it re-anchors atomically with the funnel it sits under
-                    // (a card claiming "N of M accepted offers" must never quote a different window's M).
-                    analyticsRepository.estimateVsReality(w),
-                ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
-                    WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
-                },
-            ) { economics, decisions, timeAndGaps, extras ->
-                WindowData(w, day, economics, decisions, timeAndGaps.first, timeAndGaps.second, extras)
-            }
-        },
-        analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
-        appPreferencesRepository.analyticsShowMore,
-    ) { tab, data, sessions, more ->
-        AnalyticsUiState(
-            selectedTab = tab,
-            showMore = more,
-            window = data.window,
-            today = data.today,
-            canStepBack = AnalyticsWindows.canStepBack(data.window),
-            canStepForward = AnalyticsWindows.canStepForward(data.window, data.today),
-            economics = data.economics,
-            previousEconomics = data.extras.previousEconomics,
-            // The mix is composed HERE, against this window's own gross (#973): gross has exactly one
-            // owner (the repository's economics fold) and the not-itemized / not-matched terms are defined
-            // relative to it (#1135 PR 1), so composing at the read site is what keeps the earned bar reconciling
-            // with the "$X came in." clause it sits under rather than with a second, independently
-            // derived total (Principle 5). (Pre-#1024 this said "with the hero" — the hero stated
-            // gross then; since part 2 the money card is gross's only surface.)
-            payMix = PayMix.of(data.economics, data.extras.payMixParts).also { mix ->
-                // #1135: the identity guard is DEBUG-only — economics and parts arrive on separate flows, so one
-                // frame can pair a new gross with older parts (a cash-tip edit) and fire it legitimately.
-                if (mix.unreconciled) Timber.tag("Analytics").d("PayMix unreconciled: gross=%.2f parts=%.2f", mix.gross, mix.basePay + mix.tips + mix.cashTips + mix.notItemized + mix.notMatched - mix.recordedAboveReported)
+                        combine(
+                            analyticsRepository.dailyEarnings(w),
+                            analyticsRepository.noSessionDeliveries(w),
+                            analyticsRepository.orphanOfferGroups(w),
+                        ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
+                        combine(
+                            previousEconomics(w),
+                            analyticsRepository.payMixParts(w),
+                            analyticsRepository.platformEconomics(w),
+                        ) { previous, payMixParts, platforms -> Triple(previous, payMixParts, platforms) },
+                        // #975 §7.5 — the Offers tab's est-vs-realized comparison. Window-anchored like
+                        // everything else here, so it re-anchors atomically with the funnel it sits under
+                        // (a card claiming "N of M accepted offers" must never quote a different window's M).
+                        analyticsRepository.estimateVsReality(w),
+                    ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
+                        WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
+                    },
+                ) { economics, decisions, timeAndGaps, extras ->
+                    WindowData(w, day, economics, decisions, timeAndGaps.first, timeAndGaps.second, extras)
+                }
             },
-            platformSplit = data.extras.platformSplit,
-            recentSessions = sessions,
-            decisions = data.decisions,
-            estimateVsReality = data.extras.estimateVsReality,
-            time = data.time,
-            gaps = data.gaps,
-            // Composed HERE for the same reason the pay mix is (#973): both models need a value that
-            // already has an owner — the composition needs the window's measured time, the rate pair
-            // needs its FROZEN net — so composing at the read site is what keeps the Time tab
-            // reconciling with the hero above it instead of deriving a second total (Principle 5).
-            hourComposition = HourComposition.of(data.time, data.gaps),
-            netPerHour = NetPerHourPair.of(data.economics.netProfit, data.time, data.gaps),
-            dailyEarnings = data.extras.dailyEarnings,
-            noSessionDeliveries = data.extras.orphanDeliveries,
-            orphanOfferGroups = data.extras.orphanOfferGroups,
-        )
+            analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
+            appPreferencesRepository.analyticsShowMore,
+            recordsStatusRepository.status,
+        ) { tab, data, sessions, more, records ->
+            AnalyticsUiState(
+                records = records,
+                selectedTab = tab,
+                showMore = more,
+                window = data.window,
+                today = data.today,
+                canStepBack = AnalyticsWindows.canStepBack(data.window),
+                canStepForward = AnalyticsWindows.canStepForward(data.window, data.today),
+                economics = data.economics,
+                previousEconomics = data.extras.previousEconomics,
+                // The mix is composed HERE, against this window's own gross (#973): gross has exactly one
+                // owner (the repository's economics fold) and the not-itemized / not-matched terms are defined
+                // relative to it (#1135 PR 1), so composing at the read site is what keeps the earned bar reconciling
+                // with the "$X came in." clause it sits under rather than with a second, independently
+                // derived total (Principle 5). (Pre-#1024 this said "with the hero" — the hero stated
+                // gross then; since part 2 the money card is gross's only surface.)
+                payMix = PayMix.of(data.economics, data.extras.payMixParts).also { mix ->
+                    // #1135: the identity guard is DEBUG-only — economics and parts arrive on separate flows, so one
+                    // frame can pair a new gross with older parts (a cash-tip edit) and fire it legitimately.
+                    if (mix.unreconciled) Timber.tag("Analytics").d("PayMix unreconciled: gross=%.2f parts=%.2f", mix.gross, mix.basePay + mix.tips + mix.cashTips + mix.notItemized + mix.notMatched - mix.recordedAboveReported)
+                },
+                platformSplit = data.extras.platformSplit,
+                recentSessions = sessions,
+                decisions = data.decisions,
+                estimateVsReality = data.extras.estimateVsReality,
+                time = data.time,
+                gaps = data.gaps,
+                // Composed HERE for the same reason the pay mix is (#973): both models need a value that
+                // already has an owner — the composition needs the window's measured time, the rate pair
+                // needs its FROZEN net — so composing at the read site is what keeps the Time tab
+                // reconciling with the hero above it instead of deriving a second total (Principle 5).
+                hourComposition = HourComposition.of(data.time, data.gaps),
+                netPerHour = NetPerHourPair.of(data.economics.netProfit, data.time, data.gaps),
+                dailyEarnings = data.extras.dailyEarnings,
+                noSessionDeliveries = data.extras.orphanDeliveries,
+                orphanOfferGroups = data.extras.orphanOfferGroups,
+            )
+        }
+            .onStart { if (attempt > 0) emit(AnalyticsUiState(loaded = false)) }
+            .catch { e -> emit(failedRead(e, AnalyticsUiState(failed = true))) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState(loaded = false))
+
+    /** A failed read's state, after logging it. Cancellation is never a failed read. */
+    private fun <T> failedRead(e: Throwable, failed: T): T {
+        if (e is CancellationException) throw e
+        // P7: the failure class only, never record contents.
+        Timber.tag(TAG).w(e, "hub read failed")
+        return failed
+    }
 
     /**
      * The previous-equivalent window's economics, or a `null` emission for a window that has no
@@ -229,12 +256,13 @@ class AnalyticsViewModel @Inject constructor(
      * Both sources are Room-invalidation Flows, so the page refreshes as the projector folds.
      */
     val offersFeed: StateFlow<OffersFeedState> =
-        combine(window, offerFilter, offerPageSize) { w, filter, pageSize -> Triple(w, filter, pageSize) }
+        combine(attempts, window, offerFilter, offerPageSize) { _, w, filter, pageSize -> Triple(w, filter, pageSize) }
             .flatMapLatest { (w, filter, pageSize) ->
                 combine(
                     analyticsRepository.offers(w, filter, pageSize),
                     analyticsRepository.offerCount(w, filter),
                 ) { rows, total -> OffersFeedState(filter = filter, offers = rows, total = total) }
+                    .catch { e -> emit(failedRead(e, OffersFeedState(failed = true, filter = filter))) }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OffersFeedState(loaded = false))
 

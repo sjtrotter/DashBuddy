@@ -35,6 +35,9 @@ import cloud.trotter.log.gig.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -85,6 +88,16 @@ class AnalyticsProjector @Inject constructor(
      *  batch transaction against the job's committed rows. */
     private val storeResolutionRunner = StoreResolutionRunner(analyticsDao)
 
+    private val rebuildingFlag = MutableStateFlow(false)
+
+    /**
+     * True from a version rebuild's wipe until the refold after it has drained the log, and cleared
+     * even when that refold throws. Only this class writes it. The stored watermark cannot show a
+     * rebuild (the wipe writes the new version and watermark 0 in one transaction), so this is the one
+     * source `RecordsStatusRepository` reads for REBUILDING.
+     */
+    val rebuilding: StateFlow<Boolean> = rebuildingFlag.asStateFlow()
+
     /** Started from `GigLogApplication.onCreate` (NOT debug-gated). */
     fun start(scope: CoroutineScope) {
         scope.launch {
@@ -95,11 +108,13 @@ class AnalyticsProjector @Inject constructor(
             // back off, and resubscribe — resuming from where the watermark left off.
             while (isActive) {
                 try {
-                    rebuildIfVersionChanged()
-
                     // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
-                    val backfillFrom = currentWatermark()
-                    val backfill = drain()
+                    var backfillFrom = 0L
+                    val backfill = clearingRebuildFlag {
+                        rebuildIfVersionChanged()
+                        backfillFrom = currentWatermark()
+                        drain()
+                    }
                     if (backfillFrom == 0L && backfill.events > 0) {
                         Timber.tag(TAG).i(
                             "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
@@ -138,10 +153,18 @@ class AnalyticsProjector @Inject constructor(
      * `start` uses this shape for the first (backfill) pass; tests drive it directly for a
      * deterministic fold with no live `maxSequenceId` collector.
      */
-    suspend fun catchUp(): DrainStats {
+    suspend fun catchUp(): DrainStats = clearingRebuildFlag {
         rebuildIfVersionChanged()
-        return drain()
+        drain()
     }
+
+    /** Runs [block] (a version check and the drain after it) and clears [rebuilding] however it ends. */
+    private suspend fun <T> clearingRebuildFlag(block: suspend () -> T): T =
+        try {
+            block()
+        } finally {
+            rebuildingFlag.value = false
+        }
 
     /** Fold catch-up batches until the log is drained past the watermark. */
     private suspend fun drain(): DrainStats {
@@ -663,6 +686,8 @@ class AnalyticsProjector @Inject constructor(
             "projector version %d→%d: wiping records and refolding the log",
             state.projectorVersion, PROJECTOR_VERSION,
         )
+        // Set before the wipe; the caller's clearingRebuildFlag clears it once the refold drains.
+        rebuildingFlag.value = true
         db.withTransaction {
             ledgerDao.deleteAllExpenses()
             ledgerDao.deleteAllFuel()

@@ -101,6 +101,7 @@ class TabScreensTest {
                 onOpenSettings = { calls += "settings" }, onExportCsv = {}, onOpenSession = {}, onStep = {},
                 onOpenPicker = {}, onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
                 onOpenOrphanOffers = {}, onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
+                onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()
@@ -112,7 +113,7 @@ class TabScreensTest {
         show {
             PlaybookContent(
                 uiState = ScreenshotData.playbook(showMore = false),
-                onOpenSettings = { calls += "settings" }, onOpenPlan = {}, onToggleShowMore = {},
+                onOpenSettings = { calls += "settings" }, onOpenPlan = {}, onToggleShowMore = {}, onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()

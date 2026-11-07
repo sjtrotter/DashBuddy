@@ -265,6 +265,8 @@ Before changing a fold, a DAO read, a correction event, the ledger or an Analyti
   enters earnings or the daily goal.
 - Analytics reads are window-anchored (`AnalyticsWindow`, Monday weeks); the Playbook's heatmap, leaderboard and plan
   are lifetime under a declaring badge. The CSV export excludes customer and address hashes.
+- Look-back screens read `RecordsStatus` (`RecordsStatusRepository`); never render $0.00 or an empty period while
+  REBUILDING.
 
 ## Development Principles
 
