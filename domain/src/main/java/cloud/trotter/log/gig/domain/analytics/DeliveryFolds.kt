@@ -175,7 +175,7 @@ internal object DeliveryFolds {
         // DELIVERY_ADJUSTMENT supplying pay recomputes net using this row's miles and frozen cpm.
         val netProfit = NetProfit.realized(realizedPay, realizedMiles, frozenCpm)
 
-        val offerHashes = p.jobOfferHashes.takeIf { it.isNotEmpty() && it.all(String::isNotBlank) }?.distinct()
+        val offerHashes = validOfferHashes(p.jobOfferHashes)
         val delivery = DeliveryFold(
             eventSequenceId = event.sequenceId,
             sessionId = sid,
@@ -299,6 +299,7 @@ internal object DeliveryFolds {
             activity = p.activity,
             storeAddress = p.storeAddress,
             odometerAtConfirmation = event.metadata?.odometer,
+            jobOfferHashes = validOfferHashes(p.jobOfferHashes),
         )
         // #688: PICKUP_CONFIRMED advances the leg anchor only (parked — keeps the departure point
         // fresh for the to-dropoff leg), alongside the existing liveness advance.
@@ -306,4 +307,8 @@ internal object DeliveryFolds {
         val newCtx = ctx?.let { it.advance(e.occurredAt, odo).copy(legState = it.legState.advanceAnchor(odo)) }
         return FoldOutcome(context = newCtx, pickup = pickup)
     }
+
+    /** A payload's job offer hashes as the read model keeps them: distinct, or null when empty or any is blank. */
+    private fun validOfferHashes(hashes: List<String>): List<String>? =
+        hashes.takeIf { it.isNotEmpty() && it.all(String::isNotBlank) }?.distinct()
 }

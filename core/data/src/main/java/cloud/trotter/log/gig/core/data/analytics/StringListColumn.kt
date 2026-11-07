@@ -6,7 +6,7 @@ import kotlinx.serialization.json.Json
 import timber.log.Timber
 
 /**
- * A JSON string-array TEXT column (#1516 `delivery_records.jobOfferHashes`), encoded like `payoutStoreForms`.
+ * A JSON string-array TEXT column (#1516 `delivery_records` / `pickup_records.jobOfferHashes`), encoded like `payoutStoreForms`.
  * Null and empty both store as null; a malformed value decodes as null with a WARN that carries no value.
  */
 internal object StringListColumn {

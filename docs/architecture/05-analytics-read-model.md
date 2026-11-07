@@ -1086,22 +1086,24 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
 
 - **Columns.** `offer_records.offerScope` (`ParsedOffer.effectiveScope.name`, so a payload from before the scope field
   records its scope from the quote basis) and `offer_records.quoteBasis` (`ParsedOffer.quoteBasis.name`);
-  `delivery_records.jobOfferHashes`, the job's distinct, blank-free `DeliveryPayload.jobOfferHashes` as a JSON string
-  array (`StringListColumn`, the `payoutStoreForms` encoding), null when none and on MANUAL rows. All three are
-  nullable; the `PROJECTOR_VERSION` 17 to 18 refold fills them from the log, and corrections never touch them.
+  `delivery_records.jobOfferHashes` and `pickup_records.jobOfferHashes`, the job's distinct, blank-free
+  `DeliveryPayload` / `PickupPayload` (`PICKUP_CONFIRMED`) `jobOfferHashes` as a JSON string array (`StringListColumn`,
+  the `payoutStoreForms` encoding), null when none and on MANUAL rows. All four are nullable; the `PROJECTOR_VERSION` 17 to 18 refold fills them from the log, and corrections never touch them.
 - **Reads.** `AnalyticsDao.offersForSession` (every outcome, no `outcomeResolved` filter, by `decidedAt` then
   `eventSequenceId`), `pickupsForSession`, and the existing `deliveriesForSession`, mapped by
   `ShiftTimelineRepository` onto the `:domain` inputs `TimelineOffer` / `TimelinePickup` / `TimelineDelivery`.
 - **Fold.** `domain.analytics.timeline.ShiftTimeline.fold(offers, pickups, deliveries, running)` is the timeline's one
-  owner. An accepted offer joins the job whose delivery rows name its hash (the full set, else `soleOfferHash` on a
-  pre-18 row) when exactly one job does; else its `linkedJobId`, unless the hash names other jobs; else it is a card of
-  its own (`offer:<seq>`). No time or store inference. A job card carries its first offer (`OfferLine`, absent when
+  owner. An accepted offer joins the job whose delivery or pickup rows name its hash (a delivery's full set, else
+  `soleOfferHash` on a pre-18 row) when exactly one job does; else its `linkedJobId`, unless the hash names other
+  jobs; else it is a card of its own. The pickup hashes join a live job before its first delivery, before store
+  resolution stamps `linkedJobId`. No time or store inference. A card with an offer is keyed `offer:<first accepted
+  offer's seq>` from accept to delivery; a job with no joined offer is `job:<jobId>`. A job card carries its first offer (`OfferLine`, absent when
   the job has no offer or only add-on quotes), its later accepts as `AddOnLine.Incremental` (INCREMENTAL quote),
   `NewTotal` (TOTAL-basis add-on) or `Offered` (scope and basis not recorded), one `DeliveryLine` per drop with a
   `PaySource` (`PaySource.of(payBasis, pay, jobDeliveries)`: `DROP_SHARE` is RECEIPT on a sole drop and
   RECEIPT_SPLIT on a job of two or more), the paid total without cash, cash tips apart, a state (NORMAL, or
-  ACCEPTED_NO_DELIVERY_YET while the shift runs, else NO_DELIVERY) and the sheet's milestones from the offer, pickup
-  and delivery rows (missing ones absent). Cards sort by first offer, a card with no offer by its first delivery;
+  ACCEPTED_NO_DELIVERY_YET while the shift runs, else NO_DELIVERY) and the sheet's milestones (accepted, at store,
+  picked up, at customer, delivered) from the offer, pickup and delivery rows (missing ones absent). Cards sort by first offer, a card with no offer by its first delivery;
   every maximal stretch of declined and expired offers between cards is one `PassedRun` with separate counts. Ties
   fall to the event sequence id. The model has no estimate, score, rate or minutes field.
 

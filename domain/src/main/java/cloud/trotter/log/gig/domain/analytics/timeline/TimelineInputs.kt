@@ -35,6 +35,8 @@ data class TimelinePickup(
     val storeName: String,
     val arrivedAt: Long?,
     val confirmedAt: Long?,
+    /** The job's offer hashes at confirmation; null on a row folded before projector 18 or with none. */
+    val jobOfferHashes: List<String>?,
 )
 
 /** One delivery of the shift. */
@@ -42,6 +44,8 @@ data class TimelineDelivery(
     val eventSequenceId: Long,
     val jobId: String,
     val storeName: String?,
+    /** When the dasher arrived at the customer; null when not recorded. */
+    val arrivedAt: Long?,
     val completedAt: Long,
     val realizedPay: Double?,
     /** `delivery_records.payBasis` ([cloud.trotter.log.gig.domain.analytics.PayBasis]). */

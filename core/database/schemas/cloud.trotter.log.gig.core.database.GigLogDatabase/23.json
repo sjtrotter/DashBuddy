@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 23,
-    "identityHash": "da2dd49a1b2a2a7fcdf841e87f96e02a",
+    "identityHash": "231b42cadcb1cd98db25d068464cd875",
     "entities": [
       {
         "tableName": "app_events",
@@ -1226,7 +1226,7 @@
       },
       {
         "tableName": "pickup_records",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT NOT NULL, `storeKey` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `confirmedAt` INTEGER, `deadlineMillis` INTEGER, `activity` TEXT, `storeAddress` TEXT, `odometerAtConfirmation` REAL, PRIMARY KEY(`eventSequenceId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventSequenceId` INTEGER NOT NULL, `sessionId` TEXT, `platform` TEXT NOT NULL, `jobId` TEXT NOT NULL, `taskId` TEXT NOT NULL, `storeName` TEXT NOT NULL, `storeKey` TEXT, `phaseStartedAt` INTEGER NOT NULL, `arrivedAt` INTEGER, `confirmedAt` INTEGER, `deadlineMillis` INTEGER, `activity` TEXT, `storeAddress` TEXT, `odometerAtConfirmation` REAL, `jobOfferHashes` TEXT, PRIMARY KEY(`eventSequenceId`))",
         "fields": [
           {
             "fieldPath": "eventSequenceId",
@@ -1303,6 +1303,11 @@
             "fieldPath": "odometerAtConfirmation",
             "columnName": "odometerAtConfirmation",
             "affinity": "REAL"
+          },
+          {
+            "fieldPath": "jobOfferHashes",
+            "columnName": "jobOfferHashes",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -1344,7 +1349,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'da2dd49a1b2a2a7fcdf841e87f96e02a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '231b42cadcb1cd98db25d068464cd875')"
     ]
   }
 }

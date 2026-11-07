@@ -186,6 +186,8 @@ data class PickupFold(
     /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
     val storeAddress: String?,
     val odometerAtConfirmation: Double? = null,
+    /** The job's distinct, blank-free offer hashes (`PickupPayload.jobOfferHashes`); null when none (#1516). */
+    val jobOfferHashes: List<String>? = null,
 )
 
 /**

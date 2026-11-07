@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.AppEventPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
+import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionStartPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionStartSource
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
@@ -18,7 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** #1516: the fold records an offer's scope and quote basis and a drop's job offer hashes. */
+/** #1516: the fold records an offer's scope and quote basis and a drop's and a pickup's job offer hashes. */
 class TimelineColumnFoldTest {
     private var seq = 0L
 
@@ -51,7 +52,7 @@ class TimelineColumnFoldTest {
         assertEquals("ADD_ON" to "INCREMENTAL", offer(null, OfferQuoteBasis.INCREMENTAL).let { it.offerScope to it.quoteBasis })
     }
 
-    @Test fun `a drop records its job's distinct offer hashes, none when blank or absent`() {
+    @Test fun `a drop and a pickup record the job's distinct offer hashes, none when blank or absent`() {
         for ((hashes, expected) in listOf(
             listOf("a", "b", "a") to listOf("a", "b"),
             listOf("a") to listOf("a"),
@@ -63,6 +64,14 @@ class TimelineColumnFoldTest {
                 ctx, 0.3,
             ).delivery!!
             assertEquals(hashes.toString(), expected, drop.jobOfferHashes)
+            val pickup = RecordFolds.foldEvent(
+                ev(
+                    AppEventType.PICKUP_CONFIRMED, 60,
+                    PickupPayload(jobId = "J", taskId = "P", storeName = "S", phaseStartedAt = 20, confirmedAt = 60, jobOfferHashes = hashes),
+                ),
+                ctx, 0.3,
+            ).pickup!!
+            assertEquals(hashes.toString(), expected, pickup.jobOfferHashes)
         }
     }
 

@@ -104,8 +104,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // v17→v18 (#254): seven nullable time-learning evidence columns; projector 13 backfills them.
     // v21→v22 (#1535): one nullable REAL column, session_records.milesOverride, NULL on existing rows. No
     // `PROJECTOR_VERSION` bump: SESSION_MILES_CORRECTION is a new event type that cannot exist in folded history.
-    // v22→v23 (#1516): nullable offer_records.offerScope/quoteBasis and delivery_records.jobOfferHashes, NULL on
-    // existing rows; the `PROJECTOR_VERSION` 17→18 refold fills them from the logged offer and delivery payloads.
+    // v22→v23 (#1516): nullable offer_records.offerScope/quoteBasis and delivery_records/pickup_records.jobOfferHashes,
+    // NULL on existing rows; the `PROJECTOR_VERSION` 17→18 refold fills them from the logged offer and delivery payloads.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),

@@ -35,10 +35,16 @@ class ShiftTimelineTest {
         sole: String? = hashes?.singleOrNull(),
         store: String? = "Five Guys",
         cash: Double? = null,
-    ) = TimelineDelivery(seq, jobId, store, at, pay, basis, cash, hashes, sole)
+        arrived: Long? = null,
+    ) = TimelineDelivery(seq, jobId, store, arrived, at, pay, basis, cash, hashes, sole)
 
-    private fun pickup(seq: Long, jobId: String = "J1", arrived: Long? = 1_200, confirmed: Long? = 1_500) =
-        TimelinePickup(seq, jobId, "Five Guys", arrived, confirmed)
+    private fun pickup(
+        seq: Long,
+        jobId: String = "J1",
+        arrived: Long? = 1_200,
+        confirmed: Long? = 1_500,
+        hashes: List<String>? = null,
+    ) = TimelinePickup(seq, jobId, "Five Guys", arrived, confirmed, hashes)
 
     private fun fold(
         offers: List<TimelineOffer> = emptyList(),
@@ -52,7 +58,8 @@ class ShiftTimelineTest {
     @Test fun `one offer and one drop is one card with its pay and milestones`() {
         val items = fold(listOf(offer(1, 1_000)), listOf(pickup(2)), listOf(drop(3, 2_000)))
         val card = items.single() as JobCard
-        assertEquals("job:J1", card.key)
+        assertEquals("offer:1", card.key)
+        assertEquals("J1", card.jobId)
         assertEquals("Five Guys", card.stores)
         assertEquals(1_000L, card.firstOfferAt)
         assertEquals(OfferLine(9.75, 3.1), card.offerLine)
@@ -136,7 +143,8 @@ class ShiftTimelineTest {
         assertNull(first.offerLine)
         assertNull(first.firstOfferAt)
         assertEquals("Five Guys", first.stores)
-        assertEquals("job:J9", items[1].key)
+        assertEquals("offer:1", items[1].key)
+        assertEquals("J9", (items[1] as JobCard).jobId)
     }
 
     @Test fun `a run of one declined offer is one collapsed row`() {
@@ -169,7 +177,7 @@ class ShiftTimelineTest {
             ),
             deliveries = listOf(drop(10, 350, jobId = "A", hashes = listOf("a")), drop(11, 550, jobId = "B", hashes = listOf("b"))),
         )
-        assertEquals(listOf("run:1", "job:A", "run:4", "job:B", "run:6"), items.map { it.key })
+        assertEquals(listOf("run:1", "offer:3", "run:4", "offer:5", "run:6"), items.map { it.key })
         val first = items[0] as PassedRun
         assertEquals(1, first.declined)
         assertEquals(1, first.expired)
@@ -186,7 +194,7 @@ class ShiftTimelineTest {
             ),
             deliveries = listOf(drop(10, 500, jobId = "A", hashes = hashes)),
         )
-        assertEquals(listOf("job:A", "run:2"), items.map { it.key })
+        assertEquals(listOf("offer:1", "run:2"), items.map { it.key })
         assertEquals(2, (items[1] as PassedRun).declined)
     }
 
@@ -210,7 +218,8 @@ class ShiftTimelineTest {
 
     @Test fun `a linked offer with only a pickup carries the job and its store milestones`() {
         val card = fold(listOf(offer(1, 1_000, linkedJobId = "J1")), listOf(pickup(2)), running = true).single() as JobCard
-        assertEquals("job:J1", card.key)
+        assertEquals("offer:1", card.key)
+        assertEquals("J1", card.jobId)
         assertEquals(JobState.ACCEPTED_NO_DELIVERY_YET, card.state)
         assertEquals(listOf(MilestoneKind.ACCEPTED_OFFERED, MilestoneKind.AT_STORE, MilestoneKind.PICKED_UP), card.milestones.map { it.kind })
     }
@@ -230,12 +239,56 @@ class ShiftTimelineTest {
         assertEquals(listOf("offer:1", "job:A", "job:B"), ambiguous.map { it.key })
     }
 
+    @Test fun `a confirmed pickup joins its unlinked offer before any delivery`() {
+        val card = fold(listOf(offer(1, 1_000)), listOf(pickup(2, hashes = listOf("h1"))), running = true).single() as JobCard
+        assertEquals("offer:1", card.key)
+        assertEquals("J1", card.jobId)
+        assertEquals(JobState.ACCEPTED_NO_DELIVERY_YET, card.state)
+        assertEquals(listOf(MilestoneKind.ACCEPTED_OFFERED, MilestoneKind.AT_STORE, MilestoneKind.PICKED_UP), card.milestones.map { it.kind })
+    }
+
+    @Test fun `a pickup hash that names two jobs joins neither`() {
+        val items = fold(
+            listOf(offer(1, 1_000)),
+            listOf(pickup(2, jobId = "A", hashes = listOf("h1")), pickup(3, jobId = "B", hashes = listOf("h1"))),
+            running = true,
+        )
+        val card = items.single() as JobCard
+        assertNull(card.jobId)
+        assertTrue(card.milestones.none { it.kind == MilestoneKind.AT_STORE })
+    }
+
+    @Test fun `the card key holds from accept through pickup to delivery`() {
+        val accepted = fold(listOf(offer(1, 1_000)), running = true)
+        val pickedUp = fold(listOf(offer(1, 1_000)), listOf(pickup(2, hashes = listOf("h1"))), running = true)
+        val delivered = fold(listOf(offer(1, 1_000)), listOf(pickup(2, hashes = listOf("h1"))), listOf(drop(3, 2_000)))
+        assertEquals(listOf("offer:1"), accepted.map { it.key })
+        assertEquals(listOf("offer:1"), pickedUp.map { it.key })
+        assertEquals(listOf("offer:1"), delivered.map { it.key })
+    }
+
+    @Test fun `arriving at the customer is a milestone before delivered, absent when not recorded`() {
+        val card = fold(
+            listOf(offer(1, 1_000, store = "Five Guys & Chipotle")),
+            deliveries = listOf(drop(3, 2_000, arrived = 1_900), drop(4, 2_500)),
+        ).single() as JobCard
+        assertEquals(
+            listOf(MilestoneKind.ACCEPTED_OFFERED, MilestoneKind.AT_CUSTOMER, MilestoneKind.DELIVERED, MilestoneKind.DELIVERED),
+            card.milestones.map { it.kind },
+        )
+        assertEquals(3L, card.milestones[1].delivery!!.deliveryEventSequenceId)
+        assertEquals(1_900L, card.milestones[1].at)
+
+        val sameInstant = fold(listOf(offer(1, 1_000)), deliveries = listOf(drop(3, 2_000, arrived = 2_000))).single() as JobCard
+        assertEquals(listOf(MilestoneKind.AT_CUSTOMER, MilestoneKind.DELIVERED), sameInstant.milestones.drop(1).map { it.kind })
+    }
+
     @Test fun `ordering ties fall to the sequence id`() {
         val items = fold(
             listOf(offer(7, 1_000, hash = "b"), offer(3, 1_000, hash = "a"), offer(5, 1_000, OfferOutcome.DECLINED)),
             deliveries = listOf(drop(10, 2_000, jobId = "B", hashes = listOf("b")), drop(11, 2_000, jobId = "A", hashes = listOf("a"))),
         )
-        assertEquals(listOf("job:A", "run:5", "job:B"), items.map { it.key })
+        assertEquals(listOf("offer:3", "run:5", "offer:7"), items.map { it.key })
     }
 
     @Test fun `an offer-amount estimate marks its line and the card total`() {

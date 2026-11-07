@@ -72,6 +72,7 @@ internal fun PickupFold.toEntity() = PickupRecordEntity(
     activity = activity,
     storeAddress = storeAddress,
     odometerAtConfirmation = odometerAtConfirmation,
+    jobOfferHashes = StringListColumn.encode(jobOfferHashes),
 )
 
 internal fun OfferFold.toEntity() = OfferRecordEntity(

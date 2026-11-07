@@ -9,8 +9,9 @@ import cloud.trotter.log.gig.domain.model.offer.joinDisplayStores
  * The shift timeline's one owner (#1516): one shift's offers, pickups and deliveries folded into job cards and
  * runs of passed offers, in time order. Pure.
  *
- * - An accepted offer joins a job by hash first (its hash in exactly one job's delivery-row hash set), then by
- *   `linkedJobId`. Nothing is inferred from time or store; an offer that joins nothing is a card of its own.
+ * - An accepted offer joins a job by hash first (its hash in exactly one job's delivery- or pickup-row hash set),
+ *   then by `linkedJobId`. Nothing is inferred from time or store; an offer that joins nothing is a card of its own.
+ * - A card with an offer is keyed by its first offer, so the key holds as the job gains a pickup and deliveries.
  * - Job cards sort by their first accepted offer, a card with no offer by its first delivery, and passed offers
  *   by their own decision; ties fall to the event sequence id, which is unique across the log.
  * - Consecutive declined and expired offers between two cards, before the first or after the last, are one
@@ -30,8 +31,8 @@ object ShiftTimeline {
         val sortedOffers = offers.filter { it.outcome != null }.sortedWith(offerOrder)
         val deliveriesByJob = deliveries.sortedWith(deliveryOrder).groupBy { it.jobId }
         val pickupsByJob = pickups.sortedBy { it.eventSequenceId }.groupBy { it.jobId }
-        val jobsByHash = deliveries
-            .flatMap { d -> d.offerHashes.map { it to d.jobId } }
+        val jobsByHash = (deliveries.flatMap { d -> d.offerHashes.map { it to d.jobId } } +
+            pickups.flatMap { p -> p.jobOfferHashes.orEmpty().map { it to p.jobId } })
             .groupBy({ it.first }, { it.second })
             .mapValues { it.value.toSet() }
 
@@ -44,8 +45,9 @@ object ShiftTimeline {
 
         val placed = mutableListOf<Placed>()
         for (jobId in (offersByJob.keys + deliveriesByJob.keys)) {
+            val first = offersByJob[jobId]?.first()
             val card = card(
-                key = "job:$jobId", jobId = jobId,
+                key = first?.let { "offer:${it.eventSequenceId}" } ?: "job:$jobId", jobId = jobId,
                 offers = offersByJob[jobId].orEmpty(),
                 drops = deliveriesByJob[jobId].orEmpty(),
                 pickups = pickupsByJob[jobId].orEmpty(),
@@ -115,7 +117,7 @@ object ShiftTimeline {
             cashTips = cash.takeIf { it.isNotEmpty() }?.sum(),
             state = state,
             offerEventSequenceIds = offers.map { it.eventSequenceId },
-            milestones = milestones(offers, base, offerLine, addOns, pickups, lines),
+            milestones = milestones(offers, base, offerLine, addOns, pickups, drops, lines),
         )
     }
 
@@ -141,6 +143,7 @@ object ShiftTimeline {
         offerLine: OfferLine?,
         addOns: List<AddOnLine>,
         pickups: List<TimelinePickup>,
+        drops: List<TimelineDelivery>,
         lines: List<DeliveryLine>,
     ): List<Milestone> {
         val addOnBySeq = addOns.associateBy { it.eventSequenceId }
@@ -156,7 +159,10 @@ object ShiftTimeline {
             p.arrivedAt?.let { out += Milestone(MilestoneKind.AT_STORE, it, store = p.storeName) }
             p.confirmedAt?.let { out += Milestone(MilestoneKind.PICKED_UP, it, store = p.storeName) }
         }
-        lines.forEach { out += Milestone(MilestoneKind.DELIVERED, it.at, delivery = it) }
+        for ((d, line) in drops.zip(lines)) {
+            d.arrivedAt?.let { out += Milestone(MilestoneKind.AT_CUSTOMER, it, delivery = line) }
+            out += Milestone(MilestoneKind.DELIVERED, line.at, delivery = line)
+        }
         return out.sortedWith(compareBy({ it.at }, { it.kind.ordinal }))
     }
 

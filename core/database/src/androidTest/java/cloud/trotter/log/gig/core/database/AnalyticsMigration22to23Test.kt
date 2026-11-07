@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 
 /**
  * #1516: execute AutoMigration(22→23) against a populated v22 database. The log and every existing column
- * survive unchanged; offer_records.offerScope/quoteBasis and delivery_records.jobOfferHashes start NULL and
+ * survive unchanged; offer_records.offerScope/quoteBasis and delivery_records/pickup_records.jobOfferHashes start NULL and
  * nullable (the PROJECTOR_VERSION 18 refold fills them). Instrumented: requires the exported v23 schema.
  */
 @RunWith(AndroidJUnit4::class)
@@ -24,12 +24,13 @@ class AnalyticsMigration22to23Test {
         emptyList(), FrameworkSQLiteOpenHelperFactory(),
     )
 
-    @Test fun preservesLogAndRowsAndAddsThreeNullableColumns() {
+    @Test fun preservesLogAndRowsAndAddsFourNullableColumns() {
         val name = "migration-22-to-23"
         val platform = Platform.entries.first { it != Platform.Unknown }.wire
         val before = mutableMapOf<String, Map<String, String?>>()
         val newColumns = mapOf(
             "delivery_records" to listOf("jobOfferHashes"),
+            "pickup_records" to listOf("jobOfferHashes"),
             "offer_records" to listOf("offerScope", "quoteBasis"),
             "app_events" to emptyList(),
         )
@@ -40,6 +41,9 @@ class AnalyticsMigration22to23Test {
                 (eventSequenceId, sessionId, platform, jobId, taskId, phaseStartedAt, completedAt,
                  payBasis, costBasis, realizedPay, jobOfferCount, soleOfferHash)
                 VALUES (1, 'session', ?, 'job', 'drop', 540000, 1200000, 'DROP_SHARE', 'NONE', 12.5, 1, 'offer')""", arrayOf(platform))
+            db.execSQL("""INSERT INTO pickup_records
+                (eventSequenceId, sessionId, platform, jobId, taskId, storeName, phaseStartedAt, arrivedAt, confirmedAt, odometerAtConfirmation)
+                VALUES (2, 'session', ?, 'job', 'pickup', 'Store', 120000, 240000, 540000, 102.5)""", arrayOf(platform))
             db.execSQL("""INSERT INTO offer_records
                 (eventSequenceId, sessionId, platform, offerHash, outcome, presentedAt, decidedAt, itemCount, linkedJobId)
                 VALUES (3, 'session', ?, 'offer', ?, 1000, 60000, 1, 'job')""", arrayOf(platform, AppEventType.OFFER_ACCEPTED.name))

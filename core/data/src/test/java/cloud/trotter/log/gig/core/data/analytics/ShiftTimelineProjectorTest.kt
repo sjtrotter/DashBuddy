@@ -10,6 +10,8 @@ import cloud.trotter.log.gig.core.database.event.AppEventDao
 import cloud.trotter.log.gig.core.database.event.AppEventEntity
 import cloud.trotter.log.gig.domain.analytics.timeline.AddOnLine
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
+import cloud.trotter.log.gig.domain.analytics.timeline.JobState
+import cloud.trotter.log.gig.domain.analytics.timeline.MilestoneKind
 import cloud.trotter.log.gig.domain.analytics.timeline.OfferLine
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
 import cloud.trotter.log.gig.domain.analytics.timeline.PaySource
@@ -117,9 +119,10 @@ class ShiftTimelineProjectorTest {
         insert(AppEventType.DASH_STOP, 4_000, SessionStopPayload(SID, endedAt = 4_000, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 13.0))
     }
 
-    private suspend fun snapshot() = Pair(
+    private suspend fun snapshot() = Triple(
         analyticsDao.offersForSession(SID).first(),
         analyticsDao.deliveriesForSession(SID).first(),
+        analyticsDao.pickupsForSession(SID).first(),
     )
 
     @Test
@@ -134,7 +137,7 @@ class ShiftTimelineProjectorTest {
         assertEquals(listOf("TOTAL", "TOTAL", "INCREMENTAL"), offers.map { it.quoteBasis })
         assertEquals(2, drops.size)
         drops.forEach { assertEquals(hashes, StringListColumn.decode(it.jobOfferHashes)) }
-        assertEquals(1, analyticsDao.pickupsForSession(SID).first().size)
+        assertEquals(listOf("base"), StringListColumn.decode(analyticsDao.pickupsForSession(SID).first().single().jobOfferHashes))
     }
 
     @Test
@@ -147,6 +150,7 @@ class ShiftTimelineProjectorTest {
         // Rows as an older projector left them: the new columns null, the version behind.
         folded.first.forEach { analyticsDao.upsertOffer(it.copy(offerScope = null, quoteBasis = null)) }
         folded.second.forEach { analyticsDao.upsertDelivery(it.copy(jobOfferHashes = null)) }
+        folded.third.forEach { analyticsDao.upsertPickup(it.copy(jobOfferHashes = null)) }
         assertNull(analyticsDao.offersForSession(SID).first().first().offerScope)
         val watermark = analyticsDao.getWatermark()!!.watermarkSequenceId
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = watermark, projectorVersion = 17))
@@ -180,11 +184,28 @@ class ShiftTimelineProjectorTest {
         assertEquals(1, run.declined)
         val card = items[1] as JobCard
         assertEquals(2, items.size)
-        assertEquals("job:J1", card.key)
+        assertEquals("offer:${card.offerEventSequenceIds[0]}", card.key)
+        assertEquals("J1", card.jobId)
         assertEquals(OfferLine(9.75, 2.0), card.offerLine)
         assertEquals(listOf(AddOnLine.Incremental(card.offerEventSequenceIds[1], 4.0, 2.0)), card.addOns)
         assertEquals(listOf(PaySource.RECEIPT_SPLIT, PaySource.RECEIPT_SPLIT), card.deliveries.map { it.source })
         assertEquals(13.0, card.paidTotal!!, 1e-9)
+    }
+
+    @Test
+    fun `after a pickup and before any delivery the offer's card carries the store milestones`() = runBlocking {
+        seedFirstHalf()
+        projector().catchUp()
+
+        val card = ShiftTimelineRepository(analyticsDao).timeline(SID, running = true).first()
+            .filterIsInstance<JobCard>().single()
+        assertEquals("offer:${card.offerEventSequenceIds.single()}", card.key)
+        assertEquals("J1", card.jobId)
+        assertEquals(JobState.ACCEPTED_NO_DELIVERY_YET, card.state)
+        assertEquals(
+            listOf(MilestoneKind.ACCEPTED_OFFERED, MilestoneKind.AT_STORE, MilestoneKind.PICKED_UP),
+            card.milestones.map { it.kind },
+        )
     }
 
     private companion object {

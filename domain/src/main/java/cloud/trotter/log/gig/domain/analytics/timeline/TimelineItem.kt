@@ -11,8 +11,8 @@ sealed interface TimelineItem {
 }
 
 /**
- * A job: its accepted offer(s) and its deliveries. [key] is `job:<jobId>`, or `offer:<seq>` for an accepted
- * offer that names no job yet.
+ * A job: its accepted offer(s) and its deliveries. [key] is `offer:<seq>` of the job's first accepted offer, so
+ * it holds from the accept through the pickup and delivery; `job:<jobId>` for a job with no joined offer.
  */
 data class JobCard(
     override val key: String,
@@ -93,11 +93,12 @@ enum class JobState {
     NO_DELIVERY,
 }
 
-enum class MilestoneKind { ACCEPTED_OFFERED, AT_STORE, PICKED_UP, DELIVERED }
+/** In display order for equal times. */
+enum class MilestoneKind { ACCEPTED_OFFERED, AT_STORE, PICKED_UP, AT_CUSTOMER, DELIVERED }
 
 /**
  * One line of the job sheet. ACCEPTED_OFFERED carries [offer] or [addOn]; AT_STORE and PICKED_UP carry
- * [store]; DELIVERED carries [delivery] (its pay and source).
+ * [store]; AT_CUSTOMER and DELIVERED carry [delivery] (which drop; DELIVERED shows its pay and source).
  */
 data class Milestone(
     val kind: MilestoneKind,

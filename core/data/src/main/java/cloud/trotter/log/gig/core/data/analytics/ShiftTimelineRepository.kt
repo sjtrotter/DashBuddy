@@ -58,12 +58,14 @@ internal fun PickupRecordEntity.toTimeline() = TimelinePickup(
     storeName = storeName,
     arrivedAt = arrivedAt,
     confirmedAt = confirmedAt,
+    jobOfferHashes = StringListColumn.decode(jobOfferHashes),
 )
 
 internal fun DeliveryRecordEntity.toTimeline() = TimelineDelivery(
     eventSequenceId = eventSequenceId,
     jobId = jobId,
     storeName = storeName,
+    arrivedAt = arrivedAt,
     completedAt = completedAt,
     realizedPay = realizedPay,
     payBasis = payBasis,
