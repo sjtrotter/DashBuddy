@@ -36,11 +36,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.component.AppChip
+import cloud.trotter.log.gig.core.designsystem.component.CouldNotLoad
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindows
@@ -70,6 +72,15 @@ import java.util.Locale
  * them, since the dots are a repository read), and only the in-progress range selection is
  * sheet-local — it must not touch the hub's window until the driver commits.
  */
+/**
+ * Whether the calendar shows earning dots: [SHOWN] normally, [HELD_BACK] while the records rebuild
+ * (a half-rebuilt month would mark the wrong days), [FAILED] when the month's read failed.
+ */
+enum class PickerMarks { SHOWN, HELD_BACK, FAILED }
+
+/** Test tag on each earning dot. */
+internal const val EARNING_DOT_TAG = "rangePicker.earningDot"
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RangePickerSheet(
@@ -77,6 +88,8 @@ fun RangePickerSheet(
     today: LocalDate,
     month: YearMonth,
     monthDays: List<DailyEarnings>,
+    marks: PickerMarks,
+    onRetry: () -> Unit,
     onMonthChange: (YearMonth) -> Unit,
     onPickPreset: (WindowGranularity, Int) -> Unit,
     onCommitRange: (LocalDate, LocalDate) -> Unit,
@@ -120,7 +133,8 @@ fun RangePickerSheet(
             MonthGrid(
                 month = month,
                 today = today,
-                days = monthDays,
+                // Dots are records figures: none while the records rebuild or their read failed.
+                days = if (marks == PickerMarks.SHOWN) monthDays else emptyList(),
                 selectionStart = pendingStart,
                 selectionEnd = pendingEnd,
                 onPick = { picked ->
@@ -140,11 +154,18 @@ fun RangePickerSheet(
             )
 
             Spacer(Modifier.height(10.dp))
-            Text(
-                text = stringResource(R.string.analytics_picker_dot_legend),
-                style = MaterialTheme.typography.bodySmall,
-                color = AppTheme.colors.neutral,
-            )
+            when (marks) {
+                PickerMarks.SHOWN -> Text(
+                    text = stringResource(R.string.analytics_picker_dot_legend),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppTheme.colors.neutral,
+                )
+                PickerMarks.HELD_BACK -> Unit
+                PickerMarks.FAILED -> CouldNotLoad(
+                    what = stringResource(R.string.analytics_picker_could_not_load_what),
+                    onRetry = onRetry,
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = if (pendingStart == null || pendingEnd != null) {
@@ -355,6 +376,7 @@ private fun DayCell(
                 Spacer(Modifier.height(2.dp))
                 Box(
                     Modifier
+                        .testTag(EARNING_DOT_TAG)
                         .size(4.dp)
                         .clip(CircleShape)
                         .alpha((0.35f + 0.65f * earningWeight.toFloat()).coerceIn(0f, 1f))

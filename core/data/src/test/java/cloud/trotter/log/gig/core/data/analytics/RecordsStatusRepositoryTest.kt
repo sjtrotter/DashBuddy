@@ -9,28 +9,28 @@ import cloud.trotter.log.gig.core.database.event.AppEventEntity
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.domain.model.event.AppEventType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.any
 import org.mockito.kotlin.doReturn
-import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
 /**
- * The records status: the projector's rebuilding flag (set at the wipe, cleared once the refold has
- * drained, also when it throws) and the repository's REBUILDING / UPDATING / UP_TO_DATE flow.
+ * The records status: the projector's rebuilding flag (set at the wipe, cleared once a drain after it
+ * completes, kept through a refold that throws, cleared on cancellation) and the repository's
+ * REBUILDING / UPDATING / UP_TO_DATE flow.
  */
 @RunWith(RobolectricTestRunner::class)
 class RecordsStatusRepositoryTest {
@@ -121,26 +121,54 @@ class RecordsStatusRepositoryTest {
         assertEquals(listOf(false), seen)
     }
 
+    /** A refold failure the projector does not degrade (the economy read only absorbs Exceptions). */
+    private class RefoldFailure : Error("refold failed")
+
     @Test
-    fun `the flag clears when the refold throws`() = runBlocking {
+    fun `a refold that throws stays rebuilding until the retry completes`() = runBlocking {
         insertEvent(1_000)
         staleVersion()
-        val failingRepo = mock<AppEventRepo> {
-            on { getEventsAfter(any(), any()) } doThrow IllegalStateException("read failed")
+        var reads = 0
+        val prefs = mock<AppPreferencesRepository> {
+            on { userEconomy } doReturn flow {
+                if (++reads == 1) throw RefoldFailure()
+                emit(UserEconomy())
+            }
         }
-        val prefs = mock<AppPreferencesRepository> { on { userEconomy } doReturn flowOf(UserEconomy()) }
-        val projector = AnalyticsProjector(db, failingRepo, db.appEventDao(), db.analyticsDao(), prefs)
+        val projector = AnalyticsProjector(db, repo, db.appEventDao(), db.analyticsDao(), prefs)
+        val status = statusOf(projector)
 
         try {
             projector.catchUp()
             fail("the refold should have thrown")
-        } catch (e: IllegalStateException) {
-            assertEquals("read failed", e.message)
+        } catch (e: RefoldFailure) {
+            // expected: the wipe committed, the drain after it did not
+        }
+        assertEquals(0L, db.analyticsDao().getWatermark()!!.watermarkSequenceId)
+        assertTrue(projector.rebuilding.value)
+        assertEquals(RecordsStatus.REBUILDING, status.first())
+
+        projector.catchUp() // the supervised retry: the version is current, so only the drain runs
+
+        assertFalse(projector.rebuilding.value)
+        assertEquals(RecordsStatus.UP_TO_DATE, status.first())
+    }
+
+    @Test
+    fun `cancelling the projector clears the flag`() = runBlocking {
+        insertEvent(1_000)
+        staleVersion()
+        val prefs = mock<AppPreferencesRepository> {
+            on { userEconomy } doReturn flow<UserEconomy> { throw CancellationException("projector stopped") }
+        }
+        val projector = AnalyticsProjector(db, repo, db.appEventDao(), db.analyticsDao(), prefs)
+
+        try {
+            projector.catchUp()
+            fail("the cancellation should propagate")
+        } catch (e: CancellationException) {
+            assertEquals("projector stopped", e.message)
         }
         assertFalse(projector.rebuilding.value)
-        // The wipe committed, so the records now run behind the log: UPDATING, not REBUILDING.
-        val status = statusOf(projector)
-        assertEquals(RecordsStatus.UPDATING, status.first())
-        assertEquals(0L, db.analyticsDao().getWatermark()!!.watermarkSequenceId)
     }
 }

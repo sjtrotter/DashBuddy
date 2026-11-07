@@ -108,7 +108,7 @@ internal fun PlaybookContent(
         // empty state, it is a wrong one shown briefly. Waiting is the honest option (§9);
         // placeholders shaped like the cards show meanwhile.
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (uiState.records == RecordsStatus.UPDATING) UpdatingRecordsLine()
+            UpdatingRecordsLine(updating = uiState.records == RecordsStatus.UPDATING)
             when {
                 uiState.failed -> CouldNotLoad(
                     what = stringResource(R.string.playbook_could_not_load_what),

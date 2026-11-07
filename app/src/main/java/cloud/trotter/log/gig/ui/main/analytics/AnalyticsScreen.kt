@@ -92,9 +92,10 @@ fun AnalyticsScreen(
         onRetry = viewModel::retry,
     )
 
-    // Correction actions are held back while the records rebuild, an open dialog included.
-    val corrections = uiState.records != RecordsStatus.REBUILDING
-    if (showAssignSheet && corrections) {
+    // Correction actions and the picker's earning dots are held back while the records rebuild,
+    // an open dialog included.
+    val notRebuilding = uiState.records != RecordsStatus.REBUILDING
+    if (showAssignSheet && notRebuilding) {
         NoSessionAssignDialog(
             orphans = uiState.noSessionDeliveries,
             candidateSessionsFor = viewModel::candidateSessionsFor,
@@ -103,7 +104,7 @@ fun AnalyticsScreen(
         )
     }
 
-    if (showOrphanOfferSheet && corrections) {
+    if (showOrphanOfferSheet && notRebuilding) {
         OrphanOfferAttestDialog(
             groups = uiState.orphanOfferGroups,
             onResolve = viewModel::resolveOrphanOffer,
@@ -118,7 +119,13 @@ fun AnalyticsScreen(
             window = uiState.window,
             today = uiState.today,
             month = pickerMonth,
-            monthDays = pickerMonthDays,
+            monthDays = pickerMonthDays.days,
+            marks = when {
+                !notRebuilding -> PickerMarks.HELD_BACK
+                pickerMonthDays.failed -> PickerMarks.FAILED
+                else -> PickerMarks.SHOWN
+            },
+            onRetry = viewModel::retry,
             onMonthChange = viewModel::setPickerMonth,
             onPickPreset = viewModel::setRelativeWindow,
             onCommitRange = viewModel::setCustomRange,
@@ -178,7 +185,7 @@ internal fun AnalyticsContent(
         // restored scroll offset would be clamped to the short content and lost.
         val feed = if (uiState.selectedTab == AnalyticsTab.Offers) offersFeed() else null
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (uiState.records == RecordsStatus.UPDATING) UpdatingRecordsLine()
+            UpdatingRecordsLine(updating = uiState.records == RecordsStatus.UPDATING)
             when {
                 uiState.failed || feed?.failed == true -> CouldNotLoad(
                     what = stringResource(R.string.analytics_could_not_load_what),

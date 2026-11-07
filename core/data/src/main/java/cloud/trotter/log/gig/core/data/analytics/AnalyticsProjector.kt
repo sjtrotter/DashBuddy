@@ -91,10 +91,12 @@ class AnalyticsProjector @Inject constructor(
     private val rebuildingFlag = MutableStateFlow(false)
 
     /**
-     * True from a version rebuild's wipe until the refold after it has drained the log, and cleared
-     * even when that refold throws. Only this class writes it. The stored watermark cannot show a
-     * rebuild (the wipe writes the new version and watermark 0 in one transaction), so this is the one
-     * source `RecordsStatusRepository` reads for REBUILDING.
+     * True from a version rebuild's wipe until a drain after it completes. A refold that throws leaves
+     * it set: the wipe is committed and the stored version is already current, so the supervised retry
+     * would not set it again, and the partial records must stay held back until that retry's drain
+     * finishes. Cancellation of the projector clears it. Only this class writes it. The stored
+     * watermark cannot show a rebuild (the wipe writes the new version and watermark 0 in one
+     * transaction), so this is the one source `RecordsStatusRepository` reads for REBUILDING.
      */
     val rebuilding: StateFlow<Boolean> = rebuildingFlag.asStateFlow()
 
@@ -158,13 +160,20 @@ class AnalyticsProjector @Inject constructor(
         drain()
     }
 
-    /** Runs [block] (a version check and the drain after it) and clears [rebuilding] however it ends. */
-    private suspend fun <T> clearingRebuildFlag(block: suspend () -> T): T =
-        try {
+    /**
+     * Runs [block] (a version check and the drain after it) and clears [rebuilding] when it completes
+     * or is cancelled. Any other failure leaves an unfinished rebuild flagged for the next attempt.
+     */
+    private suspend fun <T> clearingRebuildFlag(block: suspend () -> T): T {
+        val result = try {
             block()
-        } finally {
+        } catch (e: CancellationException) {
             rebuildingFlag.value = false
+            throw e
         }
+        rebuildingFlag.value = false
+        return result
+    }
 
     /** Fold catch-up batches until the log is drained past the watermark. */
     private suspend fun drain(): DrainStats {
@@ -686,7 +695,7 @@ class AnalyticsProjector @Inject constructor(
             "projector version %d→%d: wiping records and refolding the log",
             state.projectorVersion, PROJECTOR_VERSION,
         )
-        // Set before the wipe; the caller's clearingRebuildFlag clears it once the refold drains.
+        // Set before the wipe; the caller's clearingRebuildFlag clears it once a drain completes.
         rebuildingFlag.value = true
         db.withTransaction {
             ledgerDao.deleteAllExpenses()

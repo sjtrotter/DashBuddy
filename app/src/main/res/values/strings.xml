@@ -654,6 +654,8 @@
     <string name="analytics_picker_previous_month">Previous month</string>
     <string name="analytics_picker_next_month">Next month</string>
     <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
+    <!-- CouldNotLoad on the range picker: "Couldn't load the earning dots". -->
+    <string name="analytics_picker_could_not_load_what">the earning dots</string>
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
     <string name="analytics_hero_kept_label">Profit</string>

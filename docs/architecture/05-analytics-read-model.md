@@ -1093,17 +1093,22 @@ is UPDATING; anything else is UP_TO_DATE.
 No stored value can show a rebuild: the version wipe writes the new `projectorVersion` and watermark 0 in the same
 transaction that deletes the tables, so after it the store looks like a first backfill. Hence the in-memory flag. Only
 the projector writes it: `rebuildIfVersionChanged` sets it just before the wipe, and the caller (`start`'s first pass
-or `catchUp`) clears it in a `finally` once the drain after the wipe has caught up, also when that refold throws. A
-supervised restart after a throw finds the version already current, so it does not set the flag again; the partial
-records then read as UPDATING until the drain catches up.
+or `catchUp`) clears it once a drain after the wipe completes, or when the projector is cancelled. A refold that
+throws leaves it set: the supervised retry finds the version already current and would not set it again, so the
+partial records stay held back until the retry's drain completes. A process death mid-refold loses the flag (it is
+in memory); the next launch reads the partial records as UPDATING until the drain catches up.
 
 The hub and the Playbook carry the status in their UI state (`records`) beside `failed`. While REBUILDING they hold
-back totals, comparisons and correction actions (the hub keeps only its pager, and an open correction dialog is hidden);
-UPDATING adds one "Updating records" line under the title bar; a failed read (a `catch` on the state flow, with
-`CancellationException` rethrown) shows the designsystem `CouldNotLoad` pattern, whose Retry bumps a ViewModel-owned
-attempt counter that re-subscribes every read. Before the first read they show `AppPlaceholder` blocks shaped like
-their figures (pulsing on the frame clock, still under reduced motion, read once as "Loading"); Home keeps
-`LoadingBody`.
+back totals, comparisons and correction actions: the hub keeps only its pager, an open correction dialog is hidden,
+and the range picker (opened from the pager) shows no earning dots and no dot legend (`PickerMarks.HELD_BACK`).
+UPDATING shows one "Updating records" line under the title bar, but only once the status has stayed UPDATING for
+`RECORDS_UPDATING_LINE_DELAY_MS` (2 s, a `LaunchedEffect` delay on the composition's clock), so an ordinary fold's
+brief lag never shifts the content; the status itself stays immediate. A failed read (a `catch` on the state flow,
+with `CancellationException` rethrown) shows the designsystem `CouldNotLoad` pattern, whose Retry bumps a
+ViewModel-owned attempt counter that re-subscribes every read: the hub state, the Offers feed and the picker's month
+read (`PickerMonthDays.failed`, shown as `CouldNotLoad` in the dot legend's place). Before the first read they show
+`AppPlaceholder` blocks shaped like their figures (pulsing on the frame clock, still under reduced motion, read once
+as "Loading"); Home keeps `LoadingBody`.
 
 ## Database safety posture (`:core:database`)
 

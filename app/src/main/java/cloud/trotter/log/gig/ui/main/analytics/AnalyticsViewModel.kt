@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -296,13 +297,16 @@ class AnalyticsViewModel @Inject constructor(
      * same arbitrary-window per-day read (#970 §7.1) the Money chart uses rather than a bespoke
      * query (Principle 5); a month is 28–31 days, well inside the read's bounded day axis.
      */
-    val pickerMonthDays: StateFlow<List<DailyEarnings>> = calendarMonth
-        .flatMapLatest { month ->
-            analyticsRepository.dailyEarnings(
-                AnalyticsWindows.custom(month.atDay(1), month.atEndOfMonth()),
-            )
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val pickerMonthDays: StateFlow<PickerMonthDays> =
+        combine(attempts, calendarMonth) { _, month -> month }
+            .flatMapLatest { month ->
+                analyticsRepository.dailyEarnings(
+                    AnalyticsWindows.custom(month.atDay(1), month.atEndOfMonth()),
+                )
+                    .map { PickerMonthDays(days = it) }
+                    .catch { e -> emit(failedRead(e, PickerMonthDays(failed = true))) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PickerMonthDays())
 
     /** UDF intent — page the picker's calendar to [month]. */
     fun setPickerMonth(month: YearMonth) {

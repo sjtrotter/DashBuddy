@@ -25,6 +25,7 @@ import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.ui.ScreenshotData
+import cloud.trotter.log.gig.ui.components.RECORDS_UPDATING_LINE_DELAY_MS
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
@@ -60,11 +61,11 @@ class RecordsStatusScreensTest {
         compose.mainClock.advanceTimeBy(2_000)
     }
 
-    /** A state write from the test thread, published to the composition, then two seconds of frames. */
-    private fun change(write: () -> Unit) {
+    /** A state write from the test thread, published to the composition, then [thenMs] of frames. */
+    private fun change(thenMs: Long = 2_000, write: () -> Unit) {
         write()
         Snapshot.sendApplyNotifications()
-        compose.mainClock.advanceTimeBy(2_000)
+        compose.mainClock.advanceTimeBy(thenMs)
     }
 
     @Composable
@@ -109,21 +110,33 @@ class RecordsStatusScreensTest {
         assertAbsent(string(R.string.patterns_tab_no_stores))
     }
 
-    @Test fun `the updating line follows the status on both screens`() {
-        var hub by mutableStateOf(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false).copy(records = RecordsStatus.UPDATING))
-        var playbook by mutableStateOf(ScreenshotData.playbook(showMore = false).copy(records = RecordsStatus.UPDATING))
+    @Test fun `a brief lag shows no updating line and a sustained one does, on both screens`() {
+        var hub by mutableStateOf(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false))
+        var playbook by mutableStateOf(ScreenshotData.playbook(showMore = false))
         var onHub by mutableStateOf(true)
         show { if (onHub) Hub(hub) else Playbook(playbook) }
         val line = string(R.string.records_updating)
 
-        compose.onNodeWithText(line).assertExists()
-        change { hub = hub.copy(records = RecordsStatus.UP_TO_DATE) }
-        compose.onNodeWithText(line).assertDoesNotExist()
+        fun status(records: RecordsStatus, thenMs: Long) = change(thenMs) {
+            if (onHub) hub = hub.copy(records = records) else playbook = playbook.copy(records = records)
+        }
 
-        change { onHub = false }
-        compose.onNodeWithText(line).assertExists()
-        change { playbook = playbook.copy(records = RecordsStatus.UP_TO_DATE) }
-        compose.onNodeWithText(line).assertDoesNotExist()
+        for (screen in listOf(true, false)) {
+            change { onHub = screen }
+            // A blip: an ordinary fold catches up well inside the delay, so the line never shows.
+            status(RecordsStatus.UPDATING, thenMs = RECORDS_UPDATING_LINE_DELAY_MS / 4)
+            compose.onNodeWithText(line).assertDoesNotExist()
+            status(RecordsStatus.UP_TO_DATE, thenMs = RECORDS_UPDATING_LINE_DELAY_MS * 2)
+            compose.onNodeWithText(line).assertDoesNotExist()
+
+            // A sustained lag: hidden just short of the delay, shown past it, gone once caught up.
+            status(RecordsStatus.UPDATING, thenMs = RECORDS_UPDATING_LINE_DELAY_MS - 500)
+            compose.onNodeWithText(line).assertDoesNotExist()
+            change(1_000) {}
+            compose.onNodeWithText(line).assertExists()
+            status(RecordsStatus.UP_TO_DATE, thenMs = 100)
+            compose.onNodeWithText(line).assertDoesNotExist()
+        }
     }
 
     @Test fun `a failed read shows Couldn't load and Retry asks again`() {

@@ -307,6 +307,31 @@ class AnalyticsViewModelTest {
     }
 
     @Test
+    fun `a failed calendar read marks the picker failed and retry reads it again`() = runTest {
+        val month = java.time.YearMonth.now()
+        val calendar = AnalyticsWindows.custom(month.atDay(1), month.atEndOfMonth())
+        var reads = 0
+        whenever(analyticsRepository.dailyEarnings(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { invocation ->
+            if (invocation.getArgument<AnalyticsWindow>(0) != calendar) return@thenAnswer flowOf(dailyEarnings)
+            reads++
+            if (reads == 1) flow<List<DailyEarnings>> { error("read failed") } else flowOf(dailyEarnings)
+        }
+        runWithViewModel { viewModel ->
+            val picker = launch { viewModel.pickerMonthDays.collect {} }
+            testScheduler.runCurrent()
+            try {
+                assertTrue(viewModel.pickerMonthDays.value.failed)
+                viewModel.retry()
+                testScheduler.runCurrent()
+                assertFalse(viewModel.pickerMonthDays.value.failed)
+                assertEquals(2, reads)
+            } finally {
+                picker.cancel()
+            }
+        }
+    }
+
+    @Test
     fun `show more intent round trips through the shared preference`() = runTest {
         runWithViewModel { viewModel ->
             assertEquals(false, viewModel.uiState.value.showMore)

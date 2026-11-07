@@ -200,3 +200,13 @@ data class OffersFeedState(
      */
     val cappedByCeiling: Boolean get() = total > AnalyticsRepository.MAX_OFFER_PAGE
 }
+
+/**
+ * The range picker's earning dots for its visible month: the per-day read, or [failed] when that read
+ * failed (the sheet then offers Retry in place of the dots' legend). Its own `StateFlow`, like
+ * [OffersFeedState], so paging the calendar never re-emits the hub.
+ */
+data class PickerMonthDays(
+    val days: List<DailyEarnings> = emptyList(),
+    val failed: Boolean = false,
+)
