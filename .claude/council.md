@@ -100,7 +100,7 @@ was superseded by (f) and is gone.
 ## Astra (only when added)
 
 - run: `timeout 2400 codex exec -m gpt-6-astra -s read-only -c 'model_reasoning_effort="xhigh"' --json -o <plan-dir>/astra-round<N>-reply.md - < <plan-dir>/astra-round<N>.md`,
-  after the Sol seat finishes (one codex job at a time)
+  beside the Sol seat or after it (codex jobs may run in parallel; the host limits are Gradle ones)
 - effort: xhigh
 
 ## Every brief adds
