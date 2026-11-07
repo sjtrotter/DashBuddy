@@ -40,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.location.OdometerRepository
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
@@ -61,6 +62,7 @@ import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
 import cloud.trotter.log.gig.domain.evaluation.SharedEconomy
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
@@ -561,6 +563,9 @@ class MainNavigationTest {
 
     private val hubRepository: AnalyticsRepository = mock()
     private val hubPreferences: AppPreferencesRepository = mock()
+    private val hubStatus: RecordsStatusRepository = mock {
+        on { status } doReturn MutableStateFlow(RecordsStatus.UP_TO_DATE)
+    }
 
     /** Holds the offers read back while false, as a slow Room query would after a restore. */
     private val offersReady = MutableStateFlow(true)
@@ -604,7 +609,7 @@ class MainNavigationTest {
         val created = mutableListOf<AnalyticsViewModel>()
         realScreens = mapOf(Screen.Analytics.route to { _ ->
             val vm = viewModel {
-                AnalyticsViewModel(hubRepository, correctionRepository, hubPreferences, createSavedStateHandle())
+                AnalyticsViewModel(hubRepository, correctionRepository, hubPreferences, hubStatus, createSavedStateHandle())
                     .also { created += it }
             }
             AnalyticsScreen(onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, viewModel = vm)

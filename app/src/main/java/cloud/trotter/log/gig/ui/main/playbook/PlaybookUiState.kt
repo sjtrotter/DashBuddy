@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.playbook
 
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
 import cloud.trotter.log.gig.domain.analytics.StoreReportCard
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanGrade
@@ -27,6 +28,10 @@ data class PlaybookUiState(
     val showMore: Boolean = false,
     /** True until the first read-model emission — the screen renders nothing rather than an empty plan. */
     val loading: Boolean = true,
+    /** A read failed: the screen shows the failure pattern and Retry instead of the cards. */
+    val failed: Boolean = false,
+    /** Where the records stand against the event log; REBUILDING holds every card back. */
+    val records: RecordsStatus = RecordsStatus.UP_TO_DATE,
     /**
      * This week's saved plan, frozen at save time. Null when the driver hasn't saved one **or** when
      * the decoded plan holds no windows at all (see [PlaybookViewModel] — a window-less plan is not a

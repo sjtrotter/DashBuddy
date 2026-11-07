@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -24,6 +25,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.core.designsystem.R as DesignR
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.core.data.chat.ChatRepository
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.vehicle.Garage
@@ -338,6 +341,24 @@ class ScreenshotsTest(private val theme: String) {
         PlaybookBody(ScreenshotData.playbook(showMore = false).copy(loading = true))
     }
 
+    // ── The records states: rebuilding holds every figure back; a failed read offers Retry ──
+
+    @Test fun hubRebuilding() = rebuilding("hub/rebuilding") {
+        HubBody(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false).copy(records = RecordsStatus.REBUILDING))
+    }
+
+    @Test fun hubFailed() = failed("hub/failed", R.string.analytics_could_not_load_what) {
+        HubBody(AnalyticsUiState(failed = true))
+    }
+
+    @Test fun playbookRebuilding() = rebuilding("playbook/rebuilding") {
+        PlaybookBody(ScreenshotData.playbook(showMore = false).copy(records = RecordsStatus.REBUILDING))
+    }
+
+    @Test fun playbookFailed() = failed("playbook/failed", R.string.playbook_could_not_load_what) {
+        PlaybookBody(PlaybookUiState(loading = false, failed = true))
+    }
+
     // ── The offer heads-up notification ──────────────────────────────────
 
     @Suppress("DEPRECATION") // The Notification RemoteViews fields are the only window onto what SystemUI inflates.
@@ -449,7 +470,7 @@ class ScreenshotsTest(private val theme: String) {
                     offersFeed = { ScreenshotData.offersFeed },
                     onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
                     onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {}, onOpenOrphanOffers = {},
-                    onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
+                    onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {}, onRetry = {},
                 )
             }
         }
@@ -463,12 +484,26 @@ class ScreenshotsTest(private val theme: String) {
     @Composable
     private fun PlaybookBody(state: PlaybookUiState) =
         MainScaffold(selectedTab = TopLevel.PLAYBOOK, onSelectTab = {}) { modifier ->
-            Box(modifier) { PlaybookContent(uiState = state, onOpenSettings = {}, onOpenPlan = {}, onToggleShowMore = {}) }
+            Box(modifier) {
+                PlaybookContent(uiState = state, onOpenSettings = {}, onOpenPlan = {}, onToggleShowMore = {}, onRetry = {})
+            }
         }
 
     /** A tab's loading body: the spinner shows, since [render] runs two seconds of frames first. */
     private fun loading(path: String, content: @Composable () -> Unit) = render(path, assertion = {
         compose.onNodeWithContentDescription(string(R.string.common_loading)).assertExists()
+    }, content = content)
+
+    /** The rebuilding body shows, and no money figure does. */
+    private fun rebuilding(path: String, content: @Composable () -> Unit) = render(path, assertion = {
+        text(string(R.string.records_rebuilding_title)).assertExists()
+        compose.onAllNodesWithText("$", substring = true).assertCountEquals(0)
+    }, content = content)
+
+    /** The failure pattern names what failed to load. */
+    private fun failed(path: String, @StringRes what: Int, content: @Composable () -> Unit) = render(path, assertion = {
+        text(string(DesignR.string.app_could_not_load, string(what))).assertExists()
+        text(string(DesignR.string.app_retry)).assertExists()
     }, content = content)
 
     /** `OfferHeadsUpViewsTest`'s `post()`: the real `BubbleManager` builds the notification for the HUD's standard offer. */

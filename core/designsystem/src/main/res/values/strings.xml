@@ -3,4 +3,9 @@
     <!-- AppAccordion's TalkBack state (#1457). -->
     <string name="app_accordion_expanded">Expanded</string>
     <string name="app_accordion_collapsed">Collapsed</string>
+    <!-- AppPlaceholder's TalkBack label. -->
+    <string name="app_placeholder_loading">Loading</string>
+    <!-- CouldNotLoad: %1$s names what failed to load, for example "Analytics". -->
+    <string name="app_could_not_load">Couldn\'t load %1$s</string>
+    <string name="app_retry">Retry</string>
 </resources>

@@ -1,10 +1,12 @@
 package cloud.trotter.log.gig.ui.main
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -63,7 +65,12 @@ class TabScreensTest {
         compose.mainClock.advanceTimeBy(2_000)
     }
 
-    private enum class HomeState { GATE, FIRST_RUN, READY }
+    /** Each Home state with the text only that state shows. */
+    private enum class HomeState(@param:StringRes val marker: Int) {
+        GATE(R.string.dashboard_screen_permissions_setup_title),
+        FIRST_RUN(R.string.dashboard_screen_first_run_title),
+        READY(R.string.ratings_screen_title),
+    }
 
     @Test fun `Home's gear opens Settings in every state and the Ratings row opens Ratings`() {
         var state by mutableStateOf(HomeState.GATE)
@@ -79,7 +86,13 @@ class TabScreensTest {
         }
         for (each in HomeState.entries) {
             state = each
+            // A test-thread write reaches the composition only once the snapshot is published.
+            Snapshot.sendApplyNotifications()
             compose.mainClock.advanceTimeBy(2_000)
+            compose.onNodeWithText(context.getString(each.marker)).assertExists()
+            HomeState.entries.filter { it != each }.forEach {
+                compose.onNodeWithText(context.getString(it.marker)).assertDoesNotExist()
+            }
             compose.onNodeWithContentDescription(back).assertDoesNotExist()
             click(compose.onNodeWithContentDescription(settings))
         }
@@ -100,6 +113,7 @@ class TabScreensTest {
                 onOpenSettings = { calls += "settings" }, onExportCsv = {}, onOpenSession = {}, onStep = {},
                 onOpenPicker = {}, onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
                 onOpenOrphanOffers = {}, onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
+                onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()
@@ -111,7 +125,7 @@ class TabScreensTest {
         show {
             PlaybookContent(
                 uiState = ScreenshotData.playbook(showMore = false),
-                onOpenSettings = { calls += "settings" }, onOpenPlan = {}, onToggleShowMore = {},
+                onOpenSettings = { calls += "settings" }, onOpenPlan = {}, onToggleShowMore = {}, onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()

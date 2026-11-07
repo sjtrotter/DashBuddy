@@ -35,6 +35,9 @@ import cloud.trotter.log.gig.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -85,6 +88,18 @@ class AnalyticsProjector @Inject constructor(
      *  batch transaction against the job's committed rows. */
     private val storeResolutionRunner = StoreResolutionRunner(analyticsDao)
 
+    private val rebuildingFlag = MutableStateFlow(false)
+
+    /**
+     * True from a version rebuild's wipe until a drain after it completes. A refold that throws leaves
+     * it set: the wipe is committed and the stored version is already current, so the supervised retry
+     * would not set it again, and the partial records must stay held back until that retry's drain
+     * finishes. Cancellation of the projector clears it. Only this class writes it. The stored
+     * watermark cannot show a rebuild (the wipe writes the new version and watermark 0 in one
+     * transaction), so this is the one source `RecordsStatusRepository` reads for REBUILDING.
+     */
+    val rebuilding: StateFlow<Boolean> = rebuildingFlag.asStateFlow()
+
     /** Started from `GigLogApplication.onCreate` (NOT debug-gated). */
     fun start(scope: CoroutineScope) {
         scope.launch {
@@ -93,34 +108,45 @@ class AnalyticsProjector @Inject constructor(
             // must not silence the projector for the rest of the process. The atomic watermark kept
             // the committed state intact through any rolled-back batch, so on a crash we log ERROR,
             // back off, and resubscribe — resuming from where the watermark left off.
-            while (isActive) {
-                try {
-                    rebuildIfVersionChanged()
+            // The supervision loop leaves only through cancellation (a scope stop, also mid-backoff after
+            // a failed refold), so that is where an unfinished rebuild's flag clears; a throw alone keeps
+            // it (clearingRebuildFlag) for the retry's drain to clear.
+            try {
+                while (isActive) {
+                    try {
+                        // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
+                        var backfillFrom = 0L
+                        val backfill = clearingRebuildFlag {
+                            rebuildIfVersionChanged()
+                            backfillFrom = currentWatermark()
+                            drain()
+                        }
+                        if (backfillFrom == 0L && backfill.events > 0) {
+                            Timber.tag(TAG).i(
+                                "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
+                                backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
+                            )
+                        }
 
-                    // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
-                    val backfillFrom = currentWatermark()
-                    val backfill = drain()
-                    if (backfillFrom == 0L && backfill.events > 0) {
-                        Timber.tag(TAG).i(
-                            "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
-                            backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
-                        )
+                        backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
+                        // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
+                        // collect() only returns on cancellation, so control leaves this block only via a
+                        // throw (caught below) or cancellation (rethrown).
+                        appEventDao.maxSequenceId().conflate().collect { drain() }
+                        return@launch
+                    } catch (e: CancellationException) {
+                        throw e // cooperative cancellation — never swallow it
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
+                        delay(backoffMs)
+                        backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
                     }
-
-                    backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
-                    // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
-                    // collect() only returns on cancellation, so control leaves this block only via a
-                    // throw (caught below) or cancellation (rethrown).
-                    appEventDao.maxSequenceId().conflate().collect { drain() }
-                    return@launch
-                } catch (e: CancellationException) {
-                    throw e // cooperative cancellation — never swallow it
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
-                    delay(backoffMs)
-                    backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
                 }
+            } catch (e: CancellationException) {
+                rebuildingFlag.value = false
+                throw e
             }
+            rebuildingFlag.value = false // the loop also ends when the scope is no longer active
         }
     }
 
@@ -138,9 +164,24 @@ class AnalyticsProjector @Inject constructor(
      * `start` uses this shape for the first (backfill) pass; tests drive it directly for a
      * deterministic fold with no live `maxSequenceId` collector.
      */
-    suspend fun catchUp(): DrainStats {
+    suspend fun catchUp(): DrainStats = clearingRebuildFlag {
         rebuildIfVersionChanged()
-        return drain()
+        drain()
+    }
+
+    /**
+     * Runs [block] (a version check and the drain after it) and clears [rebuilding] when it completes
+     * or is cancelled. Any other failure leaves an unfinished rebuild flagged for the next attempt.
+     */
+    private suspend fun <T> clearingRebuildFlag(block: suspend () -> T): T {
+        val result = try {
+            block()
+        } catch (e: CancellationException) {
+            rebuildingFlag.value = false
+            throw e
+        }
+        rebuildingFlag.value = false
+        return result
     }
 
     /** Fold catch-up batches until the log is drained past the watermark. */
@@ -663,6 +704,8 @@ class AnalyticsProjector @Inject constructor(
             "projector version %d→%d: wiping records and refolding the log",
             state.projectorVersion, PROJECTOR_VERSION,
         )
+        // Set before the wipe; the caller's clearingRebuildFlag clears it once a drain completes.
+        rebuildingFlag.value = true
         db.withTransaction {
             ledgerDao.deleteAllExpenses()
             ledgerDao.deleteAllFuel()
