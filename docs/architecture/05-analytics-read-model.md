@@ -1107,6 +1107,37 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   every maximal stretch of declined and expired offers between cards is one `PassedRun` with separate counts. Ties
   fall to the event sequence id. The model has no estimate, score, rate or minutes field.
 
+### Records status (#1512)
+
+Every look-back screen reads one value, `RecordsStatus` (`:domain`): REBUILDING, UPDATING or UP_TO_DATE. Its one
+owner is `RecordsStatusRepository` (`:core:data`), which combines three flows through the pure `RecordsStatus.of`:
+the projector's in-memory `AnalyticsProjector.rebuilding` flag, `AnalyticsRepository.projectionWatermark` and
+`AppEventDao.maxSequenceId()`. The flag wins; a watermark below the latest event id (or none yet, over a non-empty log)
+is UPDATING; anything else is UP_TO_DATE.
+
+No stored value can show a rebuild: the version wipe writes the new `projectorVersion` and watermark 0 in the same
+transaction that deletes the tables, so after it the store looks like a first backfill. Hence the in-memory flag. Only
+the projector writes it: `rebuildIfVersionChanged` sets it just before the wipe, and the caller (`start`'s first pass
+or `catchUp`) clears it once a drain after the wipe completes, or when the projector is cancelled (`start`'s
+supervision loop clears it on cancellation too, so a stop during the backoff after a failed refold clears it). A refold that
+throws leaves it set: the supervised retry finds the version already current and would not set it again, so the
+partial records stay held back until the retry's drain completes. A process death mid-refold loses the flag (it is
+in memory); the next launch reads the partial records as UPDATING until the drain catches up.
+
+The hub and the Playbook carry the status in their UI state (`records`) beside `failed`. While REBUILDING they hold
+back totals, comparisons and correction actions: the hub keeps only its pager, an open correction dialog is hidden,
+and the range picker (opened from the pager) shows no earning dots and no dot legend (`PickerMarks.HELD_BACK`). One
+rule decides both, `AnalyticsUiState.figuresShown()` (loaded, not failed, not REBUILDING), and the hub joins the
+status after its reads' `catch`, so a failed read keeps the real status rather than a default UP_TO_DATE.
+UPDATING shows one "Updating records" line under the title bar, but only once the status has stayed UPDATING for
+`RECORDS_UPDATING_LINE_DELAY_MS` (2 s, a `LaunchedEffect` delay on the composition's clock), so an ordinary fold's
+brief lag never shifts the content; the status itself stays immediate. A failed read (a `catch` on the state flow,
+with `CancellationException` rethrown) shows the designsystem `CouldNotLoad` pattern, whose Retry bumps a
+ViewModel-owned attempt counter that re-subscribes every read: the hub state, the Offers feed and the picker's month
+read (`PickerMonthDays.failed`, shown as `CouldNotLoad` in the dot legend's place). Before the first read they show
+`AppPlaceholder` blocks shaped like their figures (pulsing on the frame clock, still under reduced motion, read once
+as "Loading"); Home keeps `LoadingBody`.
+
 ## Database safety posture (`:core:database`)
 
 **Data-safety posture (#690):

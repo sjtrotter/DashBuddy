@@ -4,10 +4,12 @@ import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.analytics.WeeklyPlanRepository
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
 import cloud.trotter.log.gig.domain.analytics.HourOfWeekSamples
 import cloud.trotter.log.gig.domain.analytics.PlanTarget
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SampledDay
 import cloud.trotter.log.gig.domain.analytics.SavedPlanWindow
 import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
@@ -17,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,9 +32,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.time.LocalDate
@@ -51,6 +56,8 @@ class PlaybookViewModelTest {
     private val showMoreFlow = MutableStateFlow(false)
     private val weeklyPlanRepository: WeeklyPlanRepository = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
+    private val recordsStatus = MutableStateFlow(RecordsStatus.UP_TO_DATE)
+    private val recordsStatusRepository: RecordsStatusRepository = mock { on { status } doReturn recordsStatus }
 
     private val savedPlans = MutableStateFlow<List<SavedWeeklyPlan>>(emptyList())
 
@@ -96,7 +103,9 @@ class PlaybookViewModelTest {
 
     private fun TestScope.runWithViewModel(body: (PlaybookViewModel) -> Unit) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val viewModel = PlaybookViewModel(analyticsRepository, weeklyPlanRepository, appPreferencesRepository)
+        val viewModel = PlaybookViewModel(
+            analyticsRepository, weeklyPlanRepository, appPreferencesRepository, recordsStatusRepository,
+        )
         val collector = launch { viewModel.uiState.collect { } }
         testScheduler.runCurrent()
         try {
@@ -104,6 +113,34 @@ class PlaybookViewModelTest {
         } finally {
             collector.cancel()
             viewModel.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun `the records status rides the Playbook state`() = runTest {
+        runWithViewModel { viewModel ->
+            assertEquals(RecordsStatus.UP_TO_DATE, viewModel.uiState.value.records)
+            recordsStatus.value = RecordsStatus.REBUILDING
+            testScheduler.runCurrent()
+            assertEquals(RecordsStatus.REBUILDING, viewModel.uiState.value.records)
+        }
+    }
+
+    @Test
+    fun `a failed read becomes the failed state and retry reads again`() = runTest {
+        var reads = 0
+        whenever(analyticsRepository.storeReportCards()).thenAnswer {
+            reads++
+            if (reads == 1) flow<List<StoreReportCard>> { error("read failed") } else flowOf(emptyList())
+        }
+        runWithViewModel { viewModel ->
+            assertTrue(viewModel.uiState.value.failed)
+            assertFalse(viewModel.uiState.value.loading)
+            viewModel.retry()
+            testScheduler.runCurrent()
+            assertFalse(viewModel.uiState.value.failed)
+            assertFalse(viewModel.uiState.value.loading)
+            assertEquals(2, reads)
         }
     }
 

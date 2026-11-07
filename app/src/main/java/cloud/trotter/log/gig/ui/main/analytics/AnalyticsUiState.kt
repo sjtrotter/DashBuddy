@@ -19,6 +19,7 @@ import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
 import cloud.trotter.log.gig.domain.analytics.PayMix
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
 import java.time.LocalDate
@@ -77,6 +78,10 @@ data class AnalyticsUiState(
      * against the short placeholder content.
      */
     val loaded: Boolean = true,
+    /** A read failed: the screen shows the failure pattern and Retry instead of figures. */
+    val failed: Boolean = false,
+    /** Where the records stand against the event log; REBUILDING holds every figure back. */
+    val records: RecordsStatus = RecordsStatus.UP_TO_DATE,
     val showMore: Boolean = false,
     val selectedTab: AnalyticsTab = AnalyticsTab.Money,
     /**
@@ -177,6 +182,8 @@ data class AnalyticsUiState(
 data class OffersFeedState(
     /** False only for the placeholder before the first page emits; see [AnalyticsUiState.loaded]. */
     val loaded: Boolean = true,
+    /** The page read failed: the hub shows the failure pattern, see [AnalyticsUiState.failed]. */
+    val failed: Boolean = false,
     /** Which chip is active — `ALL` shows every outcome. */
     val filter: OfferFilter = OfferFilter.ALL,
     /** The visible page, newest decision first. Every figure is a frozen decision-time estimate. */
@@ -193,3 +200,13 @@ data class OffersFeedState(
      */
     val cappedByCeiling: Boolean get() = total > AnalyticsRepository.MAX_OFFER_PAGE
 }
+
+/**
+ * The range picker's earning dots for its visible month: the per-day read, or [failed] when that read
+ * failed (the sheet then offers Retry in place of the dots' legend). Its own `StateFlow`, like
+ * [OffersFeedState], so paging the calendar never re-emits the hub.
+ */
+data class PickerMonthDays(
+    val days: List<DailyEarnings> = emptyList(),
+    val failed: Boolean = false,
+)

@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.analytics
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,11 +30,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.component.AppSegmented
+import cloud.trotter.log.gig.core.designsystem.component.CouldNotLoad
 import cloud.trotter.log.gig.domain.analytics.OfferFilter
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
 import cloud.trotter.log.gig.ui.components.MoreNumbersToggle
 import cloud.trotter.log.gig.ui.components.HowNumbersWorkFooter
-import cloud.trotter.log.gig.ui.components.LoadingBody
+import cloud.trotter.log.gig.ui.components.RebuildingRecords
+import cloud.trotter.log.gig.ui.components.UpdatingRecordsLine
 
 /**
  * The Analytics hub (#315), **period-first** since #970. A `‹ ›` window pager + a recap hero own the
@@ -85,9 +89,13 @@ fun AnalyticsScreen(
         onSelectFilter = viewModel::setOfferFilter,
         onShowAllOffers = viewModel::showAllOffers,
         onToggleShowMore = { viewModel.setShowMore(!uiState.showMore) },
+        onRetry = viewModel::retry,
     )
 
-    if (showAssignSheet) {
+    // Correction actions and the picker's earning dots are held back while the records rebuild or a
+    // read has failed, an open dialog included.
+    val figuresShown = uiState.figuresShown()
+    if (showAssignSheet && figuresShown) {
         NoSessionAssignDialog(
             orphans = uiState.noSessionDeliveries,
             candidateSessionsFor = viewModel::candidateSessionsFor,
@@ -96,7 +104,7 @@ fun AnalyticsScreen(
         )
     }
 
-    if (showOrphanOfferSheet) {
+    if (showOrphanOfferSheet && figuresShown) {
         OrphanOfferAttestDialog(
             groups = uiState.orphanOfferGroups,
             onResolve = viewModel::resolveOrphanOffer,
@@ -111,7 +119,9 @@ fun AnalyticsScreen(
             window = uiState.window,
             today = uiState.today,
             month = pickerMonth,
-            monthDays = pickerMonthDays,
+            monthDays = pickerMonthDays.days,
+            marks = pickerMarks(uiState, pickerMonthDays),
+            onRetry = viewModel::retry,
             onMonthChange = viewModel::setPickerMonth,
             onPickPreset = viewModel::setRelativeWindow,
             onCommitRange = viewModel::setCustomRange,
@@ -143,6 +153,7 @@ internal fun AnalyticsContent(
     onSelectFilter: (OfferFilter) -> Unit,
     onShowAllOffers: () -> Unit,
     onToggleShowMore: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -169,102 +180,154 @@ internal fun AnalyticsContent(
         // #1447: the scrolling column waits for its content. Composed over the placeholder, a
         // restored scroll offset would be clamped to the short content and lost.
         val feed = if (uiState.selectedTab == AnalyticsTab.Offers) offersFeed() else null
-        if (!uiState.loaded || feed?.loaded == false) {
-            LoadingBody(Modifier.padding(padding))
-            return@Scaffold
-        }
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .fillMaxSize(),
-        ) {
-            // Period-first (#970): the window control and the recap hero own the top of the screen;
-            // the tabs below are detail views OF that window, not the primary navigation.
-            PeriodPager(
-                window = uiState.window,
-                today = uiState.today,
-                canStepBack = uiState.canStepBack,
-                canStepForward = uiState.canStepForward,
-                onStep = onStep,
-                onOpenPicker = onOpenPicker,
-                onSelectGranularity = onSelectGranularity,
-            )
-            Spacer(Modifier.height(16.dp))
-            RecapHero(
-                window = uiState.window,
-                today = uiState.today,
-                economics = uiState.economics,
-                previousEconomics = uiState.previousEconomics,
-                inProgress = !uiState.canStepForward && !uiState.window.isLifetime,
-            )
-            Spacer(Modifier.height(16.dp))
-
-            val tabOptions = tabOptions()
-            val selectedTabLabel = tabOptions.first { it.tab == uiState.selectedTab }.label
-            AppSegmented(
-                options = tabOptions.map { it.label },
-                selected = selectedTabLabel,
-                onSelect = { label ->
-                    // Lookup happens against this already-resolved pairs list (#428 Half A), so
-                    // selection stays keyed off the enum — not a raw resolved-string comparison
-                    // that could collide across locales/tabs.
-                    tabOptions.firstOrNull { it.label == label }?.let { onSelectTab(it.tab) }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(16.dp))
-
-            // Each tab is a detail view of the window selected above — the per-tab period selector is
-            // gone (#970); the pager at the top owns the window for all of them.
-            when (uiState.selectedTab) {
-                AnalyticsTab.Money -> MoneyTab(
-                    showMore = uiState.showMore,
-                    economics = uiState.economics,
-                    payMix = uiState.payMix,
-                    platformSplit = uiState.platformSplit,
-                    recentSessions = uiState.recentSessions,
-                    dailyEarnings = uiState.dailyEarnings,
-                    orphanOfferGroups = uiState.orphanOfferGroups,
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            UpdatingRecordsLine(updating = uiState.records == RecordsStatus.UPDATING && !uiState.failed)
+            when {
+                uiState.failed || feed?.failed == true -> CouldNotLoad(
+                    what = stringResource(R.string.analytics_could_not_load_what),
+                    onRetry = onRetry,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                !uiState.loaded || feed?.loaded == false -> HubPlaceholder()
+                // Totals, comparisons and correction actions are held back; the pager needs no records.
+                uiState.records == RecordsStatus.REBUILDING -> Column(Modifier.padding(16.dp)) {
+                    PeriodPager(
+                        window = uiState.window,
+                        today = uiState.today,
+                        canStepBack = uiState.canStepBack,
+                        canStepForward = uiState.canStepForward,
+                        onStep = onStep,
+                        onOpenPicker = onOpenPicker,
+                        onSelectGranularity = onSelectGranularity,
+                    )
+                    RebuildingRecords()
+                }
+                else -> HubFigures(
+                    uiState = uiState,
+                    feed = feed,
                     onOpenSession = onOpenSession,
+                    onStep = onStep,
+                    onOpenPicker = onOpenPicker,
+                    onSelectGranularity = onSelectGranularity,
+                    onSelectTab = onSelectTab,
                     onOpenNoSession = onOpenNoSession,
                     onOpenOrphanOffers = onOpenOrphanOffers,
+                    onSelectFilter = onSelectFilter,
+                    onShowAllOffers = onShowAllOffers,
+                    onToggleShowMore = onToggleShowMore,
                 )
+            }
+        }
+    }
+}
 
-                // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit
-                // the whole hub state), collected only while this tab is on screen.
-                AnalyticsTab.Offers -> {
-                    OffersTab(
-                        showMore = uiState.showMore,
-                        decisions = uiState.decisions,
-                        estimateVsReality = uiState.estimateVsReality,
-                        offersFeed = requireNotNull(feed),
-                        onSelectFilter = onSelectFilter,
-                        onShowAllOffers = onShowAllOffers,
-                    )
-                }
+/** The loaded hub: the pager, the recap hero, the tabs and the footer, in one scrolling column. */
+@Composable
+private fun ColumnScope.HubFigures(
+    uiState: AnalyticsUiState,
+    feed: OffersFeedState?,
+    onOpenSession: (String) -> Unit,
+    onStep: (Int) -> Unit,
+    onOpenPicker: () -> Unit,
+    onSelectGranularity: (WindowGranularity) -> Unit,
+    onSelectTab: (AnalyticsTab) -> Unit,
+    onOpenNoSession: () -> Unit,
+    onOpenOrphanOffers: () -> Unit,
+    onSelectFilter: (OfferFilter) -> Unit,
+    onShowAllOffers: () -> Unit,
+    onToggleShowMore: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+            .fillMaxWidth(),
+    ) {
+        // Period-first (#970): the window control and the recap hero own the top of the screen;
+        // the tabs below are detail views OF that window, not the primary navigation.
+        PeriodPager(
+            window = uiState.window,
+            today = uiState.today,
+            canStepBack = uiState.canStepBack,
+            canStepForward = uiState.canStepForward,
+            onStep = onStep,
+            onOpenPicker = onOpenPicker,
+            onSelectGranularity = onSelectGranularity,
+        )
+        Spacer(Modifier.height(16.dp))
+        RecapHero(
+            window = uiState.window,
+            today = uiState.today,
+            economics = uiState.economics,
+            previousEconomics = uiState.previousEconomics,
+            inProgress = !uiState.canStepForward && !uiState.window.isLifetime,
+        )
+        Spacer(Modifier.height(16.dp))
 
-                AnalyticsTab.Time -> TimeTab(
+        val tabOptions = tabOptions()
+        val selectedTabLabel = tabOptions.first { it.tab == uiState.selectedTab }.label
+        AppSegmented(
+            options = tabOptions.map { it.label },
+            selected = selectedTabLabel,
+            onSelect = { label ->
+                // Lookup happens against this already-resolved pairs list (#428 Half A), so
+                // selection stays keyed off the enum — not a raw resolved-string comparison
+                // that could collide across locales/tabs.
+                tabOptions.firstOrNull { it.label == label }?.let { onSelectTab(it.tab) }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(16.dp))
+
+        // Each tab is a detail view of the window selected above — the per-tab period selector is
+        // gone (#970); the pager at the top owns the window for all of them.
+        when (uiState.selectedTab) {
+            AnalyticsTab.Money -> MoneyTab(
+                showMore = uiState.showMore,
+                economics = uiState.economics,
+                payMix = uiState.payMix,
+                platformSplit = uiState.platformSplit,
+                recentSessions = uiState.recentSessions,
+                dailyEarnings = uiState.dailyEarnings,
+                orphanOfferGroups = uiState.orphanOfferGroups,
+                onOpenSession = onOpenSession,
+                onOpenNoSession = onOpenNoSession,
+                onOpenOrphanOffers = onOpenOrphanOffers,
+            )
+
+            // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit
+            // the whole hub state), collected only while this tab is on screen.
+            AnalyticsTab.Offers -> {
+                OffersTab(
                     showMore = uiState.showMore,
-                    time = uiState.time,
-                    gaps = uiState.gaps,
-                    hourComposition = uiState.hourComposition,
-                    netPerHour = uiState.netPerHour,
-                    window = uiState.window,
+                    decisions = uiState.decisions,
+                    estimateVsReality = uiState.estimateVsReality,
+                    offersFeed = requireNotNull(feed),
+                    onSelectFilter = onSelectFilter,
+                    onShowAllOffers = onShowAllOffers,
                 )
             }
 
-            // ONE disclosure affordance for the screen (#1024 rule 2), and it lives HERE rather
-            // than inside a tab: the recap hero states frozen net ABOVE the tab switch, so its
-            // qualifier has to be reachable from every tab, not just the one whose card the
-            // wording used to live on (part-2 review F1). The hub is period-scoped — no plan
-            // projection to disclose, unlike Home's copy of the same footer.
-            Spacer(Modifier.height(16.dp))
-            MoreNumbersToggle(showMore = uiState.showMore, onToggle = onToggleShowMore)
-            Spacer(Modifier.height(16.dp))
-            HowNumbersWorkFooter(extraNotes = footerNotes(uiState))
+            AnalyticsTab.Time -> TimeTab(
+                showMore = uiState.showMore,
+                time = uiState.time,
+                gaps = uiState.gaps,
+                hourComposition = uiState.hourComposition,
+                netPerHour = uiState.netPerHour,
+                window = uiState.window,
+            )
         }
+
+        // ONE disclosure affordance for the screen (#1024 rule 2), and it lives HERE rather
+        // than inside a tab: the recap hero states frozen net ABOVE the tab switch, so its
+        // qualifier has to be reachable from every tab, not just the one whose card the
+        // wording used to live on (part-2 review F1). The hub is period-scoped — no plan
+        // projection to disclose, unlike Home's copy of the same footer.
+        Spacer(Modifier.height(16.dp))
+        MoreNumbersToggle(showMore = uiState.showMore, onToggle = onToggleShowMore)
+        Spacer(Modifier.height(16.dp))
+        HowNumbersWorkFooter(extraNotes = footerNotes(uiState))
     }
 }
 

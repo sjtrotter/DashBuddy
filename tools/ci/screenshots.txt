@@ -52,10 +52,14 @@ hub/offers-full 1078 5250
 hub/time 1078 2399
 hub/time-full 1078 5250
 hub/loading 1078 2399
+hub/rebuilding 1078 2399
+hub/failed 1078 2399
 playbook 1078 2399
 playbook-full 1078 5250
 playbook-empty 1078 2399
 playbook/loading 1078 2399
+playbook/rebuilding 1078 2399
+playbook/failed 1078 2399
 notification/offer-compact 1078 2399
 notification/offer-expanded 1078 2399
 settings/offer-rules 1078 2399

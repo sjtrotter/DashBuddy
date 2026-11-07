@@ -654,6 +654,8 @@
     <string name="analytics_picker_previous_month">Previous month</string>
     <string name="analytics_picker_next_month">Next month</string>
     <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
+    <!-- CouldNotLoad on the range picker: "Couldn't load the earning dots". -->
+    <string name="analytics_picker_could_not_load_what">the earning dots</string>
 
     <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
     <string name="analytics_hero_kept_label">Profit</string>
@@ -833,6 +835,13 @@
     <string name="common_more_numbers">More numbers</string>
     <string name="common_fewer_numbers">Fewer numbers</string>
     <string name="common_loading">Loading</string>
+    <!-- ui/components/RecordsStatusViews.kt: the records states the hub and the Playbook share. -->
+    <string name="records_updating">Updating records</string>
+    <string name="records_rebuilding_title">Rebuilding records</string>
+    <string name="records_rebuilding_body">Figures return when it finishes. Your shifts and deliveries are safe.</string>
+    <!-- What CouldNotLoad names on each screen: "Couldn't load Analytics", "Couldn't load the Playbook". -->
+    <string name="analytics_could_not_load_what">Recap</string>
+    <string name="playbook_could_not_load_what">Plan</string>
     <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
     <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
     <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>

@@ -116,7 +116,9 @@ rules with their sources; the rules below are the ones that come up most.
   (`ValueAnimator.areAnimatorsEnabled()`, `core/designsystem/.../motion/ReducedMotion.kt`). Screen changes fade
   through between tabs and slide on a shared axis within a tab, owned by `ScreenTransitions.kt`, and are off under
   reduced motion. They use Material's fade-through and shared-axis timings as tweens, since Material 3 1.4 keeps
-  its motion scheme internal. Each tab shows a loading body until its first data (#1524).
+  its motion scheme internal. Home shows a loading body until its first data (#1524); Analytics and the
+  Playbook show placeholders shaped like their figures and share the records states: Updating records, Rebuilding
+  records (figures held back) and Couldn't load with Retry (#1512).
 - **Current Material 3 no longer recommends** segmented buttons (use the connected button group), the small FAB,
   and surface tint (use the surface container roles). New work avoids all three.
 - **Chips filter or suggest; buttons finish a task.** An amount that commits an entry is a button.

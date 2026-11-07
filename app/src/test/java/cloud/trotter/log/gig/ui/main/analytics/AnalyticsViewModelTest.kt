@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.ui.main.analytics
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindowSelection
@@ -18,6 +19,7 @@ import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PeriodTotals
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.TimeEconomics
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
@@ -26,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -43,6 +46,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.time.LocalDate
@@ -76,6 +80,8 @@ class AnalyticsViewModelTest {
     private val showMoreFlow = MutableStateFlow(false)
     private val correctionRepository: cloud.trotter.log.gig.core.data.analytics.CorrectionRepository = mock()
     private val appPreferencesRepository: AppPreferencesRepository = mock()
+    private val recordsStatus = MutableStateFlow(RecordsStatus.UP_TO_DATE)
+    private val recordsStatusRepository: RecordsStatusRepository = mock { on { status } doReturn recordsStatus }
 
     /** The persisted selection, round-tripped by the mocked prefs repository. */
     private val selectionFlow = MutableStateFlow(AnalyticsWindowSelection.DEFAULT)
@@ -209,7 +215,7 @@ class AnalyticsViewModelTest {
     )
 
     private fun buildViewModel(handle: SavedStateHandle = SavedStateHandle()) =
-        AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository, handle)
+        AnalyticsViewModel(analyticsRepository, correctionRepository, appPreferencesRepository, recordsStatusRepository, handle)
 
 
     /**
@@ -253,6 +259,91 @@ class AnalyticsViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `the records status rides the hub state`() = runTest {
+        runWithViewModel { viewModel ->
+            assertEquals(RecordsStatus.UP_TO_DATE, viewModel.uiState.value.records)
+            recordsStatus.value = RecordsStatus.UPDATING
+            testScheduler.runCurrent()
+            assertEquals(RecordsStatus.UPDATING, viewModel.uiState.value.records)
+            recordsStatus.value = RecordsStatus.REBUILDING
+            testScheduler.runCurrent()
+            assertEquals(RecordsStatus.REBUILDING, viewModel.uiState.value.records)
+        }
+    }
+
+    @Test
+    fun `a failed read becomes the failed state and retry reads again`() = runTest {
+        var reads = 0
+        whenever(analyticsRepository.recentSessions(any())).thenAnswer {
+            reads++
+            if (reads == 1) flow<List<SessionRecord>> { error("read failed") } else flowOf(emptyList())
+        }
+        runWithViewModel { viewModel ->
+            assertTrue(viewModel.uiState.value.failed)
+            viewModel.retry()
+            testScheduler.runCurrent()
+            assertFalse(viewModel.uiState.value.failed)
+            assertTrue(viewModel.uiState.value.loaded)
+            assertEquals(2, reads)
+        }
+    }
+
+    @Test
+    fun `a read failure while rebuilding keeps the status, the picker held back and corrections hidden`() = runTest {
+        recordsStatus.value = RecordsStatus.REBUILDING
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flow<List<SessionRecord>> { error("read failed") })
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertTrue(ui.failed)
+            assertEquals(RecordsStatus.REBUILDING, ui.records)
+            assertFalse(ui.figuresShown())
+            // Even with a readable month, the picker shows no earning dots.
+            assertEquals(PickerMarks.HELD_BACK, pickerMarks(ui, PickerMonthDays(days = dailyEarnings)))
+        }
+    }
+
+    @Test
+    fun `a failed offers page becomes the failed feed and retry reads it again`() = runTest {
+        var reads = 0
+        whenever(analyticsRepository.offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>())).thenAnswer {
+            reads++
+            if (reads == 1) flow<Int> { error("read failed") } else flowOf(0)
+        }
+        runWithViewModel { viewModel ->
+            assertTrue(viewModel.offersFeed.value.failed)
+            viewModel.retry()
+            testScheduler.runCurrent()
+            assertFalse(viewModel.offersFeed.value.failed)
+            assertEquals(2, reads)
+        }
+    }
+
+    @Test
+    fun `a failed calendar read marks the picker failed and retry reads it again`() = runTest {
+        val month = java.time.YearMonth.now()
+        val calendar = AnalyticsWindows.custom(month.atDay(1), month.atEndOfMonth())
+        var reads = 0
+        whenever(analyticsRepository.dailyEarnings(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { invocation ->
+            if (invocation.getArgument<AnalyticsWindow>(0) != calendar) return@thenAnswer flowOf(dailyEarnings)
+            reads++
+            if (reads == 1) flow<List<DailyEarnings>> { error("read failed") } else flowOf(dailyEarnings)
+        }
+        runWithViewModel { viewModel ->
+            val picker = launch { viewModel.pickerMonthDays.collect {} }
+            testScheduler.runCurrent()
+            try {
+                assertTrue(viewModel.pickerMonthDays.value.failed)
+                viewModel.retry()
+                testScheduler.runCurrent()
+                assertFalse(viewModel.pickerMonthDays.value.failed)
+                assertEquals(2, reads)
+            } finally {
+                picker.cancel()
+            }
+        }
+    }
 
     @Test
     fun `show more intent round trips through the shared preference`() = runTest {
