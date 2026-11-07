@@ -30,7 +30,7 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 | Reading time | About 2 seconds per glance | As long as the dasher wants |
 | Code | `feature/bubble` (`hud/*`), hosted by `app/.../ui/bubble` (`BubbleActivity`, `BubbleScreen`) | `app/.../ui/main`, `feature/dashboard`, `feature/settings`, `feature/setup` |
 | Window | An Android bubble over the delivery app, dismissed by a tap. The app asks for 600 dp of height; about 510 dp shows in practice (10-21 screenshots) | Full screen, edge to edge |
-| Structure | A fixed frame (phase strip, head, top row, earnings hero, goal pill, a body, dock) whose body changes by state | Three tabs in a bottom navigation bar: Home (today), Analytics (the past), Playbook (the next move). Settings opens from a gear in each tab's title bar. Screens below a tab sit on that tab's stack. |
+| Structure | A fixed frame (phase strip, head, top row, earnings hero, goal pill, a body, dock) whose body changes by state | Three tabs in a bottom navigation bar: Home (today), Recap (the past), Plan (the next move). Settings opens from a gear in each tab's title bar. Screens below a tab sit on that tab's stack. |
 | Input | Taps on large targets; amounts from a keypad or preset buttons; no typing beyond a short note | Any Material input, including text fields |
 | Mistakes | Save on the commit tap; an undo window where the entry can be taken back | Save as you go with a snackbar Undo; a confirm dialog for a step with lasting effect |
 | Colour | Brand tokens (`AppTheme.colors`) | Material roles (`MaterialTheme.colorScheme`), brand tokens for meaning colours |
@@ -77,12 +77,12 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
 - **Material first.** Use the stock Material 3 component for the job (`Scaffold`, `TopAppBar`, `ListItem`,
   `Switch`, `ModalBottomSheet`, `SnackbarHost`, `AlertDialog`) before writing a custom one.
 - **One screen, one job,** stated in its title bar. The three tabs have no back button; every screen below a tab
-  has a title bar and a back button. Back from Analytics or Playbook returns to Home, then leaves the app. The bar
+  has a title bar and a back button. Back from Recap or Plan returns to Home, then leaves the app. The bar
   shows on the three tabs only; switching tabs keeps each tab's place; Recap and Plan open their tab fresh from a
   tab. Off a tab (from a screen below one) the plan notification opens the plan over the current screen, so no
   unsaved edit is lost (#1024, #1447).
-- **Two tiers of detail.** Compact by default; "More numbers" reveals the remaining figures and controls on the
-  hub and the Playbook (#1255). One disclosure per screen holds the caveats (`HowNumbersWorkFooter`).
+- **Two tiers of detail.** Compact by default; "More numbers" reveals the remaining figures and controls on
+  Recap and Plan (#1255). One disclosure per screen holds the caveats (`HowNumbersWorkFooter`).
 - **Save as you go.** On a vehicle's details page a finished field saves, there is no Save button, and a snackbar
   offers Undo for the latest change (#1383, #1385). Rebuilt settings screens follow the same pattern.
 - **Confirm only what has a lasting effect.** A reset or a retirement asks first, as the vehicle page does today
@@ -251,8 +251,9 @@ adds the gap below, and never leaves it worse.
   permission with no rationale points to Android settings. Accept and Decline are not asked for until gig.log can
   tap them by itself (council and dev, 2026-10-31).
 
-- #1447 (2026-11-01): a Material 3 navigation bar with Home, Analytics and Playbook, always labelled; Settings a
-  gear; Ratings a row on Home; no bar below a tab (council and dev).
+- #1447 (2026-11-01): a Material 3 navigation bar with Home, Recap and Plan, icons only, named for screen readers
+  and on long press (developer, 2026-11-02); Settings a gear; Ratings a row on Home; no bar below a tab (council
+  and dev).
 
 - #1442 (2026-10-30): offer surfaces show facts and preference notes, with no score or verdict. One domain
   story feeds the card, pop-up, chat line and voice. Titles use the registry's plain app name. Add-ons default
@@ -267,7 +268,7 @@ adds the gap below, and never leaves it worse.
   never by itself.
 - #468 (closed 2026-06-13): design-system names use `App*`, never a platform word.
 - #318: driving mode enlarges the bubble's type by 1.12; the main app never scales.
-- #1024: three destinations: Home is today, the hub is the past, the Playbook is the next move.
+- #1024: three destinations: Home is today, Recap is the past, Plan is the next move.
 - #1255: two presentation tiers behind one "More numbers" setting.
 - `docs/design/copy-style.md` (adopted 2026-10-06) governs every user-facing word.
 - #1333: the bubble is one read-and-act surface. Profit was the hero, with Earned, Online and Miles in the top row

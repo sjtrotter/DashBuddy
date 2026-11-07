@@ -85,15 +85,14 @@ class TabScreensTest {
         }
         assertEquals(List(HomeState.entries.size) { "settings" }, calls)
 
-        // Ready: no entry tiles; Ratings is one row.
-        compose.onNodeWithText(context.getString(R.string.analytics_screen_title)).assertDoesNotExist()
-        compose.onNodeWithText(context.getString(R.string.playbook_screen_title)).assertDoesNotExist()
+        // Ready: Ratings is one row. (The Recap and Plan tab names are also Home's own week-block and
+        // plan-row actions, so the absence of the old entry tiles is no longer checked by text.)
         compose.onNodeWithText(context.getString(R.string.ratings_screen_title)).assertExists()
         click(compose.onNodeWithText(context.getString(R.string.dashboard_ratings_action)))
         assertEquals("ratings", calls.last())
     }
 
-    @Test fun `Analytics has a gear and no back button`() {
+    @Test fun `Recap has a gear and no back button`() {
         show {
             AnalyticsContent(
                 uiState = ScreenshotData.analytics(AnalyticsTab.Money, showMore = false),
@@ -108,7 +107,7 @@ class TabScreensTest {
         assertEquals(listOf("settings"), calls)
     }
 
-    @Test fun `Playbook has a gear and no back button`() {
+    @Test fun `Plan has a gear and no back button`() {
         show {
             PlaybookContent(
                 uiState = ScreenshotData.playbook(showMore = false),
