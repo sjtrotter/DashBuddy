@@ -1,10 +1,9 @@
-> **Detailed architecture reference — moved out of `CLAUDE.md` on 2026-09-07 (context-budget trim v3).**
-> This file is the full, receipt-level narrative for this layer: every rule, its issue/PR receipt, and the
-> reasoning that produced it. `CLAUDE.md` keeps the short summary an agent needs every session; this file is
-> where a change's history and invariants are recorded in depth. **The 'every PR ships with context updates'
-> rule applies here exactly as it does to `CLAUDE.md`:** when a PR changes an invariant described below, update
-> this file in the same PR (and the `CLAUDE.md` summary if it goes stale).
-> A `§N` reference below means the sibling numbered file here (or its `CLAUDE.md` summary).
+> **Detailed architecture reference** (moved out of `CLAUDE.md` by trim v3, 2026-09-07; trim v4, 2026-11-06,
+> moved the rest of the summary detail here). This file is the full, receipt-level narrative for this layer: every
+> rule, its issue/PR receipt, and the reasoning that produced it. `CLAUDE.md` keeps only the invariants that break
+> silently, plus a pointer here. When a PR changes an invariant described below, or adds or retires a rule, update
+> this file in the same PR; change a `CLAUDE.md` line only when the PR makes it wrong.
+> A `§N` reference below means the sibling numbered file here.
 
 # Side Effect Engine (`app/.../state/effects/`)
 
@@ -21,6 +20,10 @@ such an action never authorizes a tap, and `AutomationTriggerGuardTest` pins the
 Handlers: `OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
 `UiInteractionHandler` (package-scoped, label-verified `RuleAction` taps — the only path that ever
 clicks a third-party app, #425), `OfferActionReceiver` (notification Accept/Decline actions).
+
+`UiInteractionHandler` resolves the clickable OWNER first (`isClickable` OR an advertised `ACTION_CLICK`, one
+predicate with bind time's `UiNode.takesClick`), through one generic `actionOwner` walk shared by bind and fire
+(#1424). Its go/abort ladder is the pure `TapAbortPolicy` (#1424). The full tap rules are below.
 
 **One offer story (#1442).** `domain.offer.story.OfferStories` owns the landed figures, combined-job
 calculation, quoted add-on deltas, display-precision target comparisons, missing inputs and all preference
@@ -41,6 +44,13 @@ so applying the views preserves the action buttons. `OfferSpeech` uses localized
 `Formats.wholeDollars` for amounts, and hourly last. Losses are named explicitly, including under one dollar.
 Re-quotes update the pop-up but add no chat row and do not re-speak. The HUD log, analytics offer rows and
 Settings preview contain no scores or recommendations; persisted columns and their readers remain.
+
+`OfferStory.preferences()` is the one order of the dasher's preference hits (store and shopping rules, limits,
+Protect last): the pop-up note and voice take the first (voice speaks one clause, never items or Protect), and the
+card badges and chat line list all. The dasher's minimum net, max distance and max items become limit notes ("Net
+under $7.00", "Over 10.0 mi", "Over 30 items"), judged on the shown figures at displayed precision, never on an
+add-on's deltas. One chat row per presentation: `PostOfferChat`, emitted beside `SpeakOffer` under the same
+once-per-presentation rule, external (skipped on replay).
 
 **Barriers on the serialized queue (#1271 scenario 4).** Besides effects, the one drain worker runs
 `EffectExecutor.afterProcessed` actions in queue order — after every effect enqueued before them, before
@@ -377,3 +387,46 @@ never coordinates, so frozen bounds never aimed a tap — they decided WHICH nod
   The WARN vocabulary: `no clickable, fresh owner … (N stale)`, `semantic re-find inconclusive (N hit(s),
   incomplete)` (the |H| ≥ 1 ∧ I abort, also used for L5/J6), `semantic twins`; the L1 fall-through is DEBUG. The
   pre-existing `Could not find any live node` WARN no longer prints `ref.text` (moved to DEBUG, review I9a).
+
+## Logging levels and sinks
+
+Moved from `CLAUDE.md` principle 7 by trim v4; `CLAUDE.md` keeps the levels and the PII rule.
+
+**Semantic, PII-safe logging (principle 7, full text).** Log levels carry *meaning*, not volume convenience, and the log is
+two products: an on-device **DEBUG firehose** for us, and an **INFO+ slice a user can export as a
+bug report** to send to the developer. Pairs with #6 (the export is a privacy surface). The
+receipt was a 110k-line dash log under one Timber tag (`App`), per-frame `SCREEN:` spam at INFO
+drowning the real WARNs, and raw merchant names already leaking into INFO+ lines. The level
+taxonomy:
+- **VERBOSE** — per-frame trace (`SCREEN:` lines, tree-mapper `👻 NULL CHILDREN`). Firehose only;
+  never shipped or exported.
+- **DEBUG** — single reducer/effect steps (`PROCESSING: <Event>`, grace-resume, gate decisions,
+  capture writes). Firehose only.
+- **INFO** — user-meaningful milestones (offer received/accepted/declined, delivery completed,
+  crash recovery, periodic `PipelineStats`). This is the **shareable** stream and **must be PII-safe
+  by construction**: economics, counters, state names, `sha256` hashes only — **no raw
+  store/customer/address text** (the dasher's own first + last-initial is fine). Raw third-party UI
+  text lives at DEBUG/VERBOSE only.
+- **WARN** — a defended invariant fired (a suppressed phantom/ghost, a fail-closed gate denial, a
+  grace timer waking a commit, an unhandled event). Must not be drowned by benign noise — if it's
+  benign and frequent, it's VERBOSE.
+- **ERROR** — lost data or a crashed subsystem (pipeline restart, snapshot/journal write or decode
+  failure, recovery failure). Always shipped/exported.
+
+Every component logs under its own **stable tag** (`Timber.tag("Pipeline")`, `"StateMachine"`,
+`"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
+(#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
+`Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
+(`app/src/test/resources/timber-tag-guard-allowlist.txt`) is the visible debt list —
+tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
+list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
+tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
+privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
+test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
+(for INFO+) confirm it carries no raw PII. Shipped as two sinks in `LogRepository` (#551): the
+verbatim DEBUG firehose (`app.log`, on-device only) and the PII-safe INFO+ `shareable.log` a user
+exports as a bug report (Settings → Data & Privacy → Export Data), where every INFO+ line passes a
+**fail-closed scrub at the sink** — an injected `LogScrubber` bound to `SensitiveTextMarkers` (one
+marker SSOT, no `:core:data`→`:core:pipeline` edge), a hit/throw/unbound scrubber redacting to a
+`[scrubbed:<marker>]` placeholder rather than trusting call sites (the #590 replay gate patrols
+upstream; the sink is the last line).

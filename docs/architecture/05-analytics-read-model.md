@@ -1,10 +1,9 @@
-> **Detailed architecture reference — moved out of `CLAUDE.md` on 2026-09-07 (context-budget trim v3).**
-> This file is the full, receipt-level narrative for this layer: every rule, its issue/PR receipt, and the
-> reasoning that produced it. `CLAUDE.md` keeps the short summary an agent needs every session; this file is
-> where a change's history and invariants are recorded in depth. **The 'every PR ships with context updates'
-> rule applies here exactly as it does to `CLAUDE.md`:** when a PR changes an invariant described below, update
-> this file in the same PR (and the `CLAUDE.md` summary if it goes stale).
-> A `§N` reference below means the sibling numbered file here (or its `CLAUDE.md` summary).
+> **Detailed architecture reference** (moved out of `CLAUDE.md` by trim v3, 2026-09-07; trim v4, 2026-11-06,
+> moved the rest of the summary detail here). This file is the full, receipt-level narrative for this layer: every
+> rule, its issue/PR receipt, and the reasoning that produced it. `CLAUDE.md` keeps only the invariants that break
+> silently, plus a pointer here. When a PR changes an invariant described below, or adds or retires a rule, update
+> this file in the same PR; change a `CLAUDE.md` line only when the PR makes it wrong.
+> A `§N` reference below means the sibling numbered file here.
 
 # Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
 
@@ -1082,3 +1081,26 @@ reads, the missing-row skips, every log line byte-identical, the upsert and the 
 rows (session assignment, offer reconciliation, store-rename resolution) stay orchestrated there. The functions take the
 Room entity, not the domain `DeliveryRecord`, which lacks the frozen cost per mile, original pay basis, driver-adjusted
 time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-receipt guard (tracked separately).
+
+## Database safety posture (`:core:database`)
+
+**Data-safety posture (#690):
+no `fallbackToDestructiveMigration`.** `app_events` is the analytics source of truth (the
+read-model tables are a rebuildable projection of it), so an upgrade that Room has no path for must
+**fail loud** (`IllegalStateException`) rather than silently DROP-and-recreate the log — the dev
+backs up + resolves instead of losing history. The supported upgrade base is **v8+**: on-disk
+versions below v8, and downgrades (on-disk newer than the code), are an **intentional loud crash at
+startup**, each preceded by a fresh pre-crash snapshot. `DatabaseModule` **eagerly opens** the DB
+at injection time (`openHelper.writableDatabase`) so the failure is a deterministic startup crash,
+not a lazy first-query one that the projector/recovery supervision would swallow; just before the
+open it takes a pre-open file snapshot (`DatabaseBackup`, WAL-aware version read, dedup-marked,
+version-prefixed dirs, last 2, failure-tolerant) whenever the on-disk version ≠ the code version. Schema version is one SSOT const
+(`GigLogDatabase.VERSION`). **Release checklist when changing the schema: bump
+`GigLogDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
+`AutoMigration` (or a manual `Migration`) covering the new edge → add its `MigrationTestHelper`
+case** (`core/database/src/androidTest`). Two **real gates** enforce this: the CI
+`Schemas committed (Room export drift)` step fails if the build regenerated an uncommitted schema
+JSON, and `SchemaVersionGuardTest` (unit) source-scans the `@Database` migration edges (it's BINARY
+retention) to prove they chain v8 → `VERSION` with no gap — the forgotten-`AutoMigration` class the
+retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
+and do NOT gate the unit-only PR CI.

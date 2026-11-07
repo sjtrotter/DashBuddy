@@ -125,7 +125,7 @@ app-owned actions available for consent; rules still never declare actuation.
 keyed by the `sourceRuleId` + `action` carried by `PerformRuleAction`. Consent
 uses authoritative state rather than keys threaded through effect pipelines.
 
-Store schema v2 (#1167) cleared every pre-v2 grant and denial; the prompt re-collected.
+Store schema v2 (#1167) cleared every pre-v2 grant, denial and receipt together (the key shape changed); the prompt re-collected.
 
 **Actions with no automatic trigger (#1457).** `RuleAction.hasAutomaticTrigger` is true only for
 `CONFIRM_DECLINE` and `EXPAND_EARNINGS`, the two actions the app fires by itself (the only
@@ -180,6 +180,13 @@ gate: user-initiated taps (bubble / own-notification `UiInput`) express intent
 for that action; the *grant* check is for automation-initiated fires. Target
 verification (the dynamic half) applies to **both** — integrity is never
 skipped.
+
+Consent is collected by a prompt (`ConsentPromptPage` in the `FrontDoorSheet`, #843/#1151) that fires on app
+foreground whenever `capabilities − granted − denied ≠ ∅` among actions with an automatic trigger, one Allow /
+Don't-allow row per undecided capability and no "allow all"; "Not now" defers and a denial is durable. Decisions are
+reviewed and revoked in Settings → Data & Privacy → Automation & Consent (`CapabilityConsentScreen`/`ViewModel`,
+writing through `RuleCapabilityGrants.setGranted`); that screen is a consent record, never a second gate. (Carried
+from the `CLAUDE.md` principle 6 summary, trim v4.)
 
 ### Consent records (#170)
 

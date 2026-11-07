@@ -1,10 +1,9 @@
-> **Detailed architecture reference — moved out of `CLAUDE.md` on 2026-09-07 (context-budget trim v3).**
-> This file is the full, receipt-level narrative for this layer: every rule, its issue/PR receipt, and the
-> reasoning that produced it. `CLAUDE.md` keeps the short summary an agent needs every session; this file is
-> where a change's history and invariants are recorded in depth. **The 'every PR ships with context updates'
-> rule applies here exactly as it does to `CLAUDE.md`:** when a PR changes an invariant described below, update
-> this file in the same PR (and the `CLAUDE.md` summary if it goes stale).
-> A `§N` reference below means the sibling numbered file here (or its `CLAUDE.md` summary).
+> **Detailed architecture reference** (moved out of `CLAUDE.md` by trim v3, 2026-09-07; trim v4, 2026-11-06,
+> moved the rest of the summary detail here). This file is the full, receipt-level narrative for this layer: every
+> rule, its issue/PR receipt, and the reasoning that produced it. `CLAUDE.md` keeps only the invariants that break
+> silently, plus a pointer here. When a PR changes an invariant described below, or adds or retires a rule, update
+> this file in the same PR; change a `CLAUDE.md` line only when the PR makes it wrong.
+> A `§N` reference below means the sibling numbered file here.
 
 # JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
@@ -433,3 +432,19 @@ through same-id money/distance/time shapes: the money shape permits a trailing q
 accepts its approved `Deliver to ` prefix, normalizes and hashes the bare name, and masks the name,
 arrival address, populated sheet address, and instructions. The selected paths and coverage behavior
 are pinned in the gate KDoc.
+
+## Remote rule sources: signature before compile (#416)
+
+Moved from `CLAUDE.md` principle 6 by trim v4. Third-party UI and any remote rule source are untrusted input. Both get
+bounded ingestion (size/depth/node/regex caps; for a rule regex that means length 200, repeat/depth caps, and the
+compiled program measured at `programSize()` ≤ 1 000, since a linear-time match says nothing about compile cost or
+match-time stack depth and RE2J has no program-size ceiling), a linear-time regex engine so an accepted pattern's
+match time is bounded by construction rather than by a watchdog, an evaluation failure that is a distinguishable
+exception each boundary answers safely (redaction masks the whole node, never ships it raw), the Perl classes
+translated at compile so device class semantics are approximated rather than silently narrowed to ASCII (residual
+differences listed in #1053 / ADR-0010), fail-closed validation, and, for any remote rule source, signature and
+integrity verification before compile. `RulesetVerifier` (ECDSA P-256/SHA-256, no new crypto dependency) gates
+`JsonRuleInterpreter.load`, which accepts only a `VerifiedRulesetBytes` that only a passing signature check can mint,
+so compiling remote bytes is structurally unreachable without verification against the configured source's pinned
+key. Bundled assets are exempt (the APK signature covers them). Signing tooling: `matchers/tools/`.
+
