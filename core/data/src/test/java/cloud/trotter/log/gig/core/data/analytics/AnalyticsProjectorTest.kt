@@ -771,7 +771,7 @@ class AnalyticsProjectorTest {
             watermarkSequenceId = analyticsDao.getWatermark()!!.watermarkSequenceId, projectorVersion = 15))
         projector().catchUp()
         assertEquals(row, analyticsDao.deliveryRecord(seq))
-        assertEquals(17, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(18, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
     @Test
@@ -913,7 +913,7 @@ class AnalyticsProjectorTest {
         analyticsDao.upsertDelivery(initial.copy(netProfit = null))
         analyticsDao.setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = seq, projectorVersion = 11))
         projector().catchUp()
-        assertEquals(17, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(18, analyticsDao.getWatermark()!!.projectorVersion)
         assertEquals(initial, analyticsDao.deliveryRecord(seq))
 
         insert(
@@ -2067,7 +2067,7 @@ class AnalyticsProjectorTest {
         projector().catchUp()
         assertEquals(rows, dao.observations(AppEventType.OFFER_ACCEPTED.name).first())
         assertEquals(learned, TimeConstantRepository(dao).learnedTimeConstants.first())
-        assertEquals(17, analyticsDao.getWatermark()!!.projectorVersion)
+        assertEquals(18, analyticsDao.getWatermark()!!.projectorVersion)
     }
 
     @Test

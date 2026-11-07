@@ -162,6 +162,8 @@ data class DeliveryFold(
      * a re-arrival or re-sight never fills a missing reading.
      */
     val odometerAtArrival: Double? = null,
+    /** The job's distinct, blank-free offer hashes (`DeliveryPayload.jobOfferHashes`); null when none (#1516). */
+    val jobOfferHashes: List<String>? = null,
 )
 
 /**
@@ -184,6 +186,8 @@ data class PickupFold(
     /** Enriched store address (#159 D4) — the only row source for `stores.address`. */
     val storeAddress: String?,
     val odometerAtConfirmation: Double? = null,
+    /** The job's distinct, blank-free offer hashes (`PickupPayload.jobOfferHashes`); null when none (#1516). */
+    val jobOfferHashes: List<String>? = null,
 )
 
 /**
@@ -232,6 +236,10 @@ data class OfferFold(
     /** Every parsed entry proves one order (a store name or a type chip explicitly counting 1). */
     val orderCountProven: Boolean? = null,
     val isShop: Boolean? = null,
+    /** `ParsedOffer.effectiveScope.name`, so a payload from before the scope field still records its scope (#1516). */
+    val offerScope: String? = null,
+    /** `ParsedOffer.quoteBasis.name` (#1516). */
+    val quoteBasis: String? = null,
 )
 
 /**
@@ -663,6 +671,8 @@ object RecordFolds {
             isShop = parsed.isShop.takeIf {
                 parsed.orders.isNotEmpty() && parsed.orders.none { it.orderType == OrderType.UNKNOWN }
             },
+            offerScope = parsed.effectiveScope.name,
+            quoteBasis = parsed.quoteBasis.name,
         )
         val newCtx = ctx?.let {
             it.advance(e.occurredAt, event.metadata?.odometer)

@@ -52,4 +52,10 @@ data class PickupRecordEntity(
      */
     val storeAddress: String? = null,
     val odometerAtConfirmation: Double? = null,
+    /**
+     * The job's offer hashes at confirmation (`PickupPayload.jobOfferHashes`, distinct, blank-free) as a JSON
+     * string array, the `delivery_records.jobOfferHashes` encoding (#1516, v23). Null when the payload carried
+     * none and on rows folded before projector 18. Lets the shift timeline join a job before its first delivery.
+     */
+    val jobOfferHashes: String? = null,
 )

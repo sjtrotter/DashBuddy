@@ -210,4 +210,10 @@ data class DeliveryRecordEntity(
     val jobOfferCount: Int? = null,
     val soleOfferHash: String? = null,
     val odometerAtArrival: Double? = null,
+    /**
+     * Every offer hash of this drop's job (`DeliveryPayload.jobOfferHashes`, distinct, blank-free) as a JSON
+     * string array, the [payoutStoreForms] encoding (#1516, v23). Null when the payload carried none, on
+     * MANUAL rows, and on rows folded before projector 18. The shift timeline joins offers to jobs by it.
+     */
+    val jobOfferHashes: String? = null,
 )

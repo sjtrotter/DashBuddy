@@ -993,6 +993,14 @@ interface AnalyticsDao {
     )
     fun recentSessions(limit: Int): Flow<List<SessionWithCashRow>>
 
+    /** Every offer in a session, every outcome (no `outcomeResolved` filter), for the shift timeline (#1516). */
+    @Query("SELECT * FROM offer_records WHERE sessionId = :sessionId ORDER BY decidedAt ASC, eventSequenceId ASC")
+    fun offersForSession(sessionId: String): Flow<List<OfferRecordEntity>>
+
+    /** Every confirmed pickup in a session, for the shift timeline's milestones (#1516). */
+    @Query("SELECT * FROM pickup_records WHERE sessionId = :sessionId ORDER BY eventSequenceId ASC")
+    fun pickupsForSession(sessionId: String): Flow<List<PickupRecordEntity>>
+
     /** Every delivery in a session, in completion order — the per-dash breakdown. */
     @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId ORDER BY completedAt ASC")
     fun deliveriesForSession(sessionId: String): Flow<List<DeliveryRecordEntity>>

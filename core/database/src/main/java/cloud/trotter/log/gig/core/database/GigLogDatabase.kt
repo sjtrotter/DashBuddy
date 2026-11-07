@@ -104,6 +104,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // v17→v18 (#254): seven nullable time-learning evidence columns; projector 13 backfills them.
     // v21→v22 (#1535): one nullable REAL column, session_records.milesOverride, NULL on existing rows. No
     // `PROJECTOR_VERSION` bump: SESSION_MILES_CORRECTION is a new event type that cannot exist in folded history.
+    // v22→v23 (#1516): nullable offer_records.offerScope/quoteBasis and delivery_records/pickup_records.jobOfferHashes,
+    // NULL on existing rows; the `PROJECTOR_VERSION` 17→18 refold fills them from the logged offer and delivery payloads.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -119,6 +121,7 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 19, to = 20), // #1333 ledger tables
         AutoMigration(from = 20, to = 21), // #1388 nullable vehicleId on both ledger tables; no refold
         AutoMigration(from = 21, to = 22), // #1535 nullable session_records.milesOverride; no refold
+        AutoMigration(from = 22, to = 23), // #1516 offer scope/basis + delivery job offer hashes; refold 18
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -149,7 +152,7 @@ abstract class GigLogDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 22
+        const val VERSION = 23
     }
 
 }
