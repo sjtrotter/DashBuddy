@@ -28,13 +28,15 @@ sealed class Screen(val route: String) {
     data object Playbook : Screen("playbook")
 
     /**
-     * Per-dash drill-down (#650) — the read-only session detail for one dash. The [route] template
-     * carries the sessionId; [route] (the fun) URL-encodes it since a session id can hold arbitrary
-     * characters. The screen reads the id back from `SavedStateHandle`.
+     * The shift page: one shift's money and timeline. The [route] template carries the sessionId and an
+     * optional `row`, a timeline item key to land on (search and Recap's links); [route] (the fun) URL-encodes
+     * both, since a session id can hold arbitrary characters. The screen reads them back from `SavedStateHandle`.
      */
-    data object SessionDetail : Screen("analytics/session/{sessionId}") {
+    data object SessionDetail : Screen("analytics/session/{sessionId}?row={row}") {
         const val ARG_SESSION_ID = "sessionId"
-        fun route(sessionId: String): String = "analytics/session/${Uri.encode(sessionId)}"
+        const val ARG_ROW = "row"
+        fun route(sessionId: String, row: String? = null): String =
+            "analytics/session/${Uri.encode(sessionId)}" + (row?.let { "?row=${Uri.encode(it)}" } ?: "")
     }
 
     // Settings Hierarchy

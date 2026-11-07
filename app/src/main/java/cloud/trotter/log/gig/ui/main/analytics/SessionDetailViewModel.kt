@@ -5,50 +5,86 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
-import cloud.trotter.log.gig.domain.analytics.SessionDetail
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
+import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Clock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * State holder for the per-dash drill-down (#650) — one immutable [SessionDetailUiState] assembled
- * reactively from [AnalyticsRepository.sessionDetail] (Principle 1 — UDF, state out), plus the two
- * correction intents ([addManualDelivery] / [adjustDelivery], events up). The sessionId is read from
- * [SavedStateHandle] (the nav argument), so this VM needs no explicit initializer.
+ * State holder for the shift page: one immutable [SessionDetailUiState] assembled reactively from the shift's
+ * record and deliveries ([AnalyticsRepository.sessionDetail]), its folded timeline
+ * ([ShiftTimelineRepository.timeline]) and the records status (Principle 1, state out), plus the correction
+ * intents (events up). The sessionId and the optional landing row are nav arguments read from [SavedStateHandle].
  *
- * Reactive by construction: the source is a Room-invalidation `Flow`, so the header + rows re-emit
- * as the projector folds each delivery — a **review** surface, not a per-second tick (no
- * `rememberNow()` clock; same reframe as the hub #657). The corrections are **events, never
- * destructive edits**: an intent appends a `MANUAL_DELIVERY`/`DELIVERY_ADJUSTMENT` to the log via
- * [CorrectionRepository]; the projector folds it and Room invalidation refreshes this screen — there
- * is NO optimistic local mutation. Read-model only, no economy dependency, no new PII surface (store
- * names are driver-owned; no customer hashes are exposed).
+ * Reactive by construction: every source is a Room-invalidation `Flow`, so a correction or a newly folded
+ * delivery re-emits the page with no refresh. The corrections are **events, never destructive edits**: an intent
+ * appends to the log via [CorrectionRepository]; the projector folds it and Room invalidation refreshes this
+ * page; there is no optimistic local mutation. A failed read becomes [SessionDetailUiState.failed] (one WARN,
+ * the failure class only) and [retry] re-subscribes. Read-model only: store names, no customer data.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SessionDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    analyticsRepository: AnalyticsRepository,
+    private val analyticsRepository: AnalyticsRepository,
+    private val shiftTimelineRepository: ShiftTimelineRepository,
+    private val recordsStatusRepository: RecordsStatusRepository,
     private val correctionRepository: CorrectionRepository,
+    private val clock: Clock,
 ) : ViewModel() {
 
     private val sessionId: String =
         savedStateHandle[Screen.SessionDetail.ARG_SESSION_ID] ?: ""
 
-    val uiState: StateFlow<SessionDetailUiState> =
-        analyticsRepository.sessionDetail(sessionId)
-            .map { SessionDetailUiState(detail = it, loading = false) }
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5000),
-                SessionDetailUiState(),
-            )
+    /** The timeline row a link asked to land on, or null. */
+    val landingRow: String? = savedStateHandle.get<String>(Screen.SessionDetail.ARG_ROW)?.takeIf { it.isNotBlank() }
+
+    /** Bumped by [retry]; every bump re-subscribes the page's reads. */
+    private val attempts = MutableStateFlow(0)
+
+    /** UDF intent: the failure pattern's Retry. */
+    fun retry() {
+        attempts.value++
+    }
+
+    val uiState: StateFlow<SessionDetailUiState> = attempts.flatMapLatest { attempt ->
+        pageState()
+            .onStart { if (attempt > 0) emit(SessionDetailUiState()) }
+            .catch { e ->
+                if (e is CancellationException) throw e
+                // P7: the failure class only, never record contents.
+                Timber.tag(TAG).w(e, "shift page read failed")
+                emit(SessionDetailUiState(loading = false, failed = true))
+            }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SessionDetailUiState())
+
+    /** The timeline is folded as running while the shift has no end; it re-folds when the shift ends. */
+    private fun pageState(): Flow<SessionDetailUiState> {
+        val detail = analyticsRepository.sessionDetail(sessionId)
+        val timeline = detail.map { it?.session?.endedAt == null }
+            .distinctUntilChanged()
+            .flatMapLatest { running -> shiftTimelineRepository.timeline(sessionId, running) }
+        return combine(detail, timeline, recordsStatusRepository.status) { d, t, records ->
+            SessionDetailUiState(detail = d, timeline = t, loading = false, records = records)
+        }
+    }
 
     /**
      * Append a driver-entered missed delivery for this dash (#650). `completedAt` defaults to the
@@ -58,7 +94,7 @@ class SessionDetailViewModel @Inject constructor(
      */
     fun addManualDelivery(pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) {
         val session = uiState.value.detail?.session
-        val completedAt = session?.endedAt ?: session?.startedAt ?: System.currentTimeMillis()
+        val completedAt = session?.endedAt ?: session?.startedAt ?: clock.millis()
         viewModelScope.launch {
             // F4c: never crash the launch on a rejected correction (a validation `require` throwing, a
             // codec/write failure). Alpha-acceptable silent reject — the record simply doesn't append;
@@ -175,13 +211,3 @@ class SessionDetailViewModel @Inject constructor(
         private const val TAG = "SessionDetailVm"
     }
 }
-
-/**
- * Immutable state for the per-dash drill-down (#650 PR A). [loading] is the pre-first-emission
- * state; once the read-model emits, a `null` [detail] means the session row is absent (dash not
- * found / projector rebuild) and a present one is the full [SessionDetail].
- */
-data class SessionDetailUiState(
-    val detail: SessionDetail? = null,
-    val loading: Boolean = true,
-)

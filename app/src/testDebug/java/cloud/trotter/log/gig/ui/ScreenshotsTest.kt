@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
@@ -21,7 +20,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import cloud.trotter.log.gig.R
@@ -32,10 +30,7 @@ import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.core.data.vehicle.OdometerReadingRepository
-import cloud.trotter.log.gig.core.designsystem.motion.LocalReducedMotion
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
-import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
-import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.core.state.StateManagerV2
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
@@ -86,8 +81,6 @@ import cloud.trotter.log.gig.ui.main.setup.wizard.WizardScreen
 import cloud.trotter.log.gig.ui.main.setup.wizard.wizardViewModelForTest
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
-import com.github.takahirom.roborazzi.captureRoboImage
-import com.github.takahirom.roborazzi.captureScreenRoboImage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -107,7 +100,6 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.io.File
 import java.util.Locale
 import java.util.TimeZone
 import cloud.trotter.log.gig.feature.dashboard.R as DashboardR
@@ -559,32 +551,8 @@ class ScreenshotsTest(private val theme: String) {
     /** The first node showing [text], case-insensitively: a label can be upper-cased or appear twice. */
     private fun text(text: String) = compose.onAllNodesWithText(text, substring = true, ignoreCase = true)[0]
 
-    /**
-     * strength.log's procedure: a frozen frame clock, two seconds of frames, then the assertion and the
-     * capture. A sheet or dialog ([window]) runs a second round, so the capture never lands mid-slide,
-     * and is captured as the whole screen because it is its own window.
-     */
-    private fun render(path: String, window: Boolean = false, assertion: () -> Unit, content: @Composable () -> Unit) {
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            GigLogTheme(darkTheme = theme == "dark") {
-                CompositionLocalProvider(LocalNowProvider provides ScreenshotData.clock,
-                    LocalReducedMotion provides true, content = content)
-            }
-        }
-        compose.mainClock.advanceTimeBy(2_000)
-        compose.waitForIdle()
-        if (window) {
-            compose.mainClock.advanceTimeBy(2_000)
-            compose.waitForIdle()
-        }
-        assertion()
-        if (System.getProperty("roborazzi.test.record") == "true") {
-            val file = File(System.getProperty("giglog.screenshots.dir"), "$path-$theme.png")
-            file.parentFile?.mkdirs()
-            if (window) captureScreenRoboImage(file) else compose.onRoot().captureRoboImage(file)
-        }
-    }
+    private fun render(path: String, window: Boolean = false, assertion: () -> Unit, content: @Composable () -> Unit) =
+        compose.renderShot(theme, path, window, assertion, content)
 
     companion object {
         /** Supplemental tall window: a scrolling page shows all of its content. */

@@ -82,7 +82,15 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   tab. Off a tab (from a screen below one) the plan notification opens the plan over the current screen, so no
   unsaved edit is lost (#1024, #1447).
 - **Two tiers of detail.** Compact by default; "More numbers" reveals the remaining figures and controls on
-  Recap and Plan (#1255). One disclosure per screen holds the caveats (`HowNumbersWorkFooter`).
+  Recap and Plan (#1255). Home, Recap and Plan each end with one disclosure for the caveats
+  (`HowNumbersWorkFooter`); the shift page has none.
+- **The shift page** (#1516) is one shift's money above a timeline of its offers and deliveries, in one
+  `LazyColumn`: Earned with the cash inside it, three figures (stacked at 200 % text), a money check only against
+  an independent total (the app's summary or one the dasher set, never the fallback that equals delivery pay),
+  then job cards and runs of declined and expired offers. A card's trailing slot holds only money the dasher was
+  paid; offered figures sit in the supporting text. Every run is collapsed to one row by default and opens in
+  place. Tapping a job opens a sheet of its recorded milestones, with one "Fix this delivery" per delivery and no
+  estimates.
 - **Save as you go.** On a vehicle's details page a finished field saves, there is no Save button, and a snackbar
   offers Undo for the latest change (#1383, #1385). Rebuilt settings screens follow the same pattern.
 - **Confirm only what has a lasting effect.** A reset or a retirement asks first, as the vehicle page does today
@@ -116,8 +124,8 @@ rules with their sources; the rules below are the ones that come up most.
   (`ValueAnimator.areAnimatorsEnabled()`, `core/designsystem/.../motion/ReducedMotion.kt`). Screen changes fade
   through between tabs and slide on a shared axis within a tab, owned by `ScreenTransitions.kt`, and are off under
   reduced motion. They use Material's fade-through and shared-axis timings as tweens, since Material 3 1.4 keeps
-  its motion scheme internal. Home shows a loading body until its first data (#1524); Analytics and the
-  Playbook show placeholders shaped like their figures and share the records states: Updating records, Rebuilding
+  its motion scheme internal. Home shows a loading body until its first data (#1524); Recap, Plan and the shift
+  page show placeholders shaped like their figures and share the records states: Updating records, Rebuilding
   records (figures held back) and Couldn't load with Retry (#1512).
 - **Current Material 3 no longer recommends** segmented buttons (use the connected button group), the small FAB,
   and surface tint (use the surface container roles). New work avoids all three.
@@ -240,7 +248,7 @@ adds the gap below, and never leaves it worse.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
-- **Undesigned states:** loading on Ratings, shift detail and the Garage; paused in the bubble (an empty panel); a
+- **Undesigned states:** loading on Ratings and the Garage; paused in the bubble (an empty panel); a
   failed gas-price lookup.
 
 ## Settled decisions
