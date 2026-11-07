@@ -174,10 +174,8 @@ class AnalyticsViewModel @Inject constructor(
             },
             analyticsRepository.recentSessions(RECENT_SESSIONS_LIMIT),
             appPreferencesRepository.analyticsShowMore,
-            recordsStatusRepository.status,
-        ) { tab, data, sessions, more, records ->
+        ) { tab, data, sessions, more ->
             AnalyticsUiState(
-                records = records,
                 selectedTab = tab,
                 showMore = more,
                 window = data.window,
@@ -215,6 +213,10 @@ class AnalyticsViewModel @Inject constructor(
             )
         }
             .onStart { if (attempt > 0) emit(AnalyticsUiState(loaded = false)) }
+            .catch { e -> emit(failedRead(e, AnalyticsUiState(failed = true))) }
+            // The records status joins AFTER the reads' catch, so a failed read keeps the real status
+            // (a failure mid-rebuild still reads REBUILDING) rather than a default UP_TO_DATE.
+            .combine(recordsStatusRepository.status) { state, records -> state.copy(records = records) }
             .catch { e -> emit(failedRead(e, AnalyticsUiState(failed = true))) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AnalyticsUiState(loaded = false))
 

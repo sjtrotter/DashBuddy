@@ -14,6 +14,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withTimeout
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -170,5 +179,33 @@ class RecordsStatusRepositoryTest {
             assertEquals("projector stopped", e.message)
         }
         assertFalse(projector.rebuilding.value)
+    }
+
+    @Test
+    fun `stopping the projector during the backoff after a failed refold clears the flag`() = runBlocking {
+        insertEvent(1_000)
+        staleVersion()
+        val reads = AtomicInteger()
+        val failingRepo = mock<AppEventRepo> {
+            on { getEventsAfter(any(), any()) } doAnswer {
+                reads.incrementAndGet()
+                throw IllegalStateException("read failed")
+            }
+        }
+        val prefs = mock<AppPreferencesRepository> { on { userEconomy } doReturn flowOf(UserEconomy()) }
+        val projector = AnalyticsProjector(db, failingRepo, db.appEventDao(), db.analyticsDao(), prefs)
+        val job = SupervisorJob()
+
+        projector.start(CoroutineScope(job + Dispatchers.Default))
+        // The first refold fails after its wipe; the supervisor then backs off for a second.
+        withTimeout(10_000) { while (reads.get() == 0) delay(10) }
+        assertTrue("an unfinished rebuild stays flagged through the backoff", projector.rebuilding.value)
+        assertEquals(1, reads.get())
+
+        job.cancel()
+        job.join()
+
+        assertFalse(projector.rebuilding.value)
+        assertEquals("cancelled inside the backoff, before a retry", 1, reads.get())
     }
 }

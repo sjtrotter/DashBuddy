@@ -108,36 +108,45 @@ class AnalyticsProjector @Inject constructor(
             // must not silence the projector for the rest of the process. The atomic watermark kept
             // the committed state intact through any rolled-back batch, so on a crash we log ERROR,
             // back off, and resubscribe — resuming from where the watermark left off.
-            while (isActive) {
-                try {
-                    // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
-                    var backfillFrom = 0L
-                    val backfill = clearingRebuildFlag {
-                        rebuildIfVersionChanged()
-                        backfillFrom = currentWatermark()
-                        drain()
-                    }
-                    if (backfillFrom == 0L && backfill.events > 0) {
-                        Timber.tag(TAG).i(
-                            "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
-                            backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
-                        )
-                    }
+            // The supervision loop leaves only through cancellation (a scope stop, also mid-backoff after
+            // a failed refold), so that is where an unfinished rebuild's flag clears; a throw alone keeps
+            // it (clearingRebuildFlag) for the retry's drain to clear.
+            try {
+                while (isActive) {
+                    try {
+                        // The first drain from watermark 0 is the backfill/rebuild; log ONE INFO milestone.
+                        var backfillFrom = 0L
+                        val backfill = clearingRebuildFlag {
+                            rebuildIfVersionChanged()
+                            backfillFrom = currentWatermark()
+                            drain()
+                        }
+                        if (backfillFrom == 0L && backfill.events > 0) {
+                            Timber.tag(TAG).i(
+                                "Analytics backfill complete: %d events → %d deliveries, %d sessions, %d offers",
+                                backfill.events, backfill.deliveries, backfill.sessions, backfill.offers,
+                            )
+                        }
 
-                    backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
-                    // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
-                    // collect() only returns on cancellation, so control leaves this block only via a
-                    // throw (caught below) or cancellation (rethrown).
-                    appEventDao.maxSequenceId().conflate().collect { drain() }
-                    return@launch
-                } catch (e: CancellationException) {
-                    throw e // cooperative cancellation — never swallow it
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
-                    delay(backoffMs)
-                    backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
+                        backoffMs = INITIAL_BACKOFF_MS // healthy — reset the backoff before steady state
+                        // Steady state: every new max wakes an incremental drain (per-batch DEBUG only).
+                        // collect() only returns on cancellation, so control leaves this block only via a
+                        // throw (caught below) or cancellation (rethrown).
+                        appEventDao.maxSequenceId().conflate().collect { drain() }
+                        return@launch
+                    } catch (e: CancellationException) {
+                        throw e // cooperative cancellation — never swallow it
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Analytics projector crashed; resubscribing in %d ms", backoffMs)
+                        delay(backoffMs)
+                        backoffMs = (backoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
+                    }
                 }
+            } catch (e: CancellationException) {
+                rebuildingFlag.value = false
+                throw e
             }
+            rebuildingFlag.value = false // the loop also ends when the scope is no longer active
         }
     }
 

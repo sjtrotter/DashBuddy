@@ -291,6 +291,20 @@ class AnalyticsViewModelTest {
     }
 
     @Test
+    fun `a read failure while rebuilding keeps the status, the picker held back and corrections hidden`() = runTest {
+        recordsStatus.value = RecordsStatus.REBUILDING
+        whenever(analyticsRepository.recentSessions(any())).thenReturn(flow<List<SessionRecord>> { error("read failed") })
+        runWithViewModel { viewModel ->
+            val ui = viewModel.uiState.value
+            assertTrue(ui.failed)
+            assertEquals(RecordsStatus.REBUILDING, ui.records)
+            assertFalse(ui.figuresShown())
+            // Even with a readable month, the picker shows no earning dots.
+            assertEquals(PickerMarks.HELD_BACK, pickerMarks(ui, PickerMonthDays(days = dailyEarnings)))
+        }
+    }
+
+    @Test
     fun `a failed offers page becomes the failed feed and retry reads it again`() = runTest {
         var reads = 0
         whenever(analyticsRepository.offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>())).thenAnswer {
