@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
@@ -83,6 +84,12 @@ class ShiftPageScreenTest {
     private fun SemanticsNodeInteraction.click() = performSemanticsAction(SemanticsActions.OnClick)
 
     private fun count(text: String) = compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().size
+
+    @Test fun `a shift wiped by a rebuild shows the rebuilding message, not shift not found`() {
+        show(SessionDetailUiState(loading = false, detail = null, records = RecordsStatus.REBUILDING))
+        compose.onNodeWithText(string(R.string.records_rebuilding_title)).assertExists()
+        compose.onNodeWithText(string(R.string.session_detail_not_found)).assertDoesNotExist()
+    }
 
     @Test fun `a job card's trailing slot holds only paid money`() {
         show(ShiftPageFixtures.stackAndAddOn())

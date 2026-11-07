@@ -94,7 +94,8 @@ internal data class ShiftMoney(val earned: Double?, val cash: Double, val profit
             val earned = if (base == null && cash <= ANALYTICS_MONEY_EPSILON) null else (base ?: 0.0) + cash
             val nets = detail.deliveries.mapNotNull { it.netProfit }
             val unattributed = detail.unattributedPay
-            val profit = if (nets.isEmpty() && unattributed <= ANALYTICS_MONEY_EPSILON) null else nets.sum() + unattributed + cash
+            // No delivery net means no vehicle cost was ever taken off, so a profit would only be pay.
+            val profit = if (nets.isEmpty()) null else nets.sum() + unattributed + cash
             return ShiftMoney(earned, cash, profit)
         }
     }

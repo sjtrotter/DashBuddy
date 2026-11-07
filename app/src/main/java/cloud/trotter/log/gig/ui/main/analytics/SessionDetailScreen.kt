@@ -120,6 +120,8 @@ internal fun ShiftPageContent(uiState: SessionDetailUiState, landingRow: String?
             uiState.failed -> CouldNotLoad(
                 stringResource(R.string.shift_page_could_not_load_what), actions.onRetry, modifier.padding(horizontal = 16.dp),
             )
+            // A rebuild wipes the shift's row first, so a missing shift then is not a missing shift.
+            detail == null && uiState.records == RecordsStatus.REBUILDING -> RebuildingRecords(modifier)
             detail == null -> Box(modifier, contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.session_detail_not_found), style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.text2)
             }

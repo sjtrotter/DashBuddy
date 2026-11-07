@@ -2,6 +2,8 @@ package cloud.trotter.log.gig.ui.main.analytics
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -129,6 +131,7 @@ private fun CheckRow(label: String, value: String) {
 }
 
 /** The shift's corrections: add a missed delivery, set the app total and correct miles (ended shifts). Stacked at large text. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CorrectionButtons(ended: Boolean, onAddMissed: () -> Unit, onSetTotal: () -> Unit, onCorrectMiles: () -> Unit) {
     val buttons: List<Pair<Int, () -> Unit>> = buildList {
@@ -144,7 +147,8 @@ internal fun CorrectionButtons(ended: Boolean, onAddMissed: () -> Unit, onSetTot
     if (isLargeText()) {
         Column { buttons.forEach { button(it) } }
     } else {
-        Row { buttons.forEach { button(it) } }
+        // Wraps whole buttons to the next line instead of breaking a label across two.
+        FlowRow { buttons.forEach { button(it) } }
     }
 }
 

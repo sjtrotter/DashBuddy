@@ -170,6 +170,11 @@ class SessionDetailViewModelTest {
             endSource = null), emptyList()))
         assertNull(empty.earned)
         assertNull(empty.profit)
+        // An app total with no delivery net: costs were never taken off, so there is no profit to show.
+        val noNets = ShiftMoney.of(SessionDetail(record.copy(machineReportedEarnings = 40.0, reportedEarnings = 40.0), emptyList()))
+        assertEquals(40.0, noNets.earned!!, 1e-9)
+        assertNull(noNets.profit)
+        assertNull(noNets.profitPerHour(7_200_000L))
     }
 
     @Test
