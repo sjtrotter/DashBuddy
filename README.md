@@ -8,7 +8,7 @@ gig.log is alpha software with one developer and one test phone. DoorDash is the
 
 ## What it does today
 
-**Offers.** When an offer appears, gig.log shows its pay, miles, minutes, profit after vehicle costs, pay per mile and pay per hour. It can read the offer aloud. It compares the offer with limits you set (minimum profit, maximum miles, maximum items) and names any limit the offer crosses. If the offer has no distance, gig.log says so and does not estimate a profit. An add-on offer is shown with the whole job's new totals.
+**Offers.** When an offer appears, gig.log shows its pay, miles, minutes, profit after vehicle costs, pay per mile and pay per hour. It can read the offer aloud. It compares the offer with limits you set (minimum profit, maximum miles, maximum items) and names any limit the offer crosses. If the offer has no distance, gig.log says so and does not estimate a profit. An add-on offer is shown with the whole job's new totals when gig.log has the job's figures; otherwise it shows what the add-on adds.
 
 **Accept and Decline from gig.log.** For DoorDash, the offer notification and the bubble's offer card have Accept and Decline buttons. When you press one, gig.log finds the matching button in the DoorDash app, checks that it is the right one, and taps it. gig.log does not accept or decline offers on its own.
 
@@ -23,14 +23,14 @@ gig.log is alpha software with one developer and one test phone. DoorDash is the
 **History.** The app has three tabs.
 
 - Home shows today's profit, deliveries, miles and time online, the best stretch left today based on your past shifts, and this week so far.
-- Analytics shows a past period in three views. Money shows where the pay came from. Offers puts each offer's estimate next to what the delivery made. Time compares working time with waiting time and shows profit per hour.
+- Analytics shows a past period in three views. Money shows where the pay came from. Offers lists each offer with its estimate, and compares the estimated pay per hour of accepted offers with what those deliveries made, as an average over the period. Time compares working time with waiting time and shows profit per hour.
 - Playbook shows when and where you earn most, and a weekly plan built from your best hours. On Sunday evening gig.log grades the week against the plan.
 
-Each delivery keeps the cost figures that applied when it happened, so changing your costs later does not rewrite past profit.
+A delivery from an evaluated offer keeps the cost figures that applied when it happened, so changing your costs later does not rewrite its profit. A delivery with no evaluated offer is priced with your current costs.
 
 **Export.** Settings > Data & privacy > Export data saves your history as spreadsheet files to a folder you choose: deliveries, shifts, a summary with an estimated IRS mileage deduction, expenses and fill-ups. The files include store names. They leave out customer names and addresses. The same screen can save a bug report.
 
-**Screenshots.** gig.log can save a screenshot of an offer, a delivery receipt or a shift summary to your gallery. This is off by default.
+**Screenshots.** gig.log can save a screenshot of an offer, a delivery receipt or a shift summary to your gallery. This is off by default. A screenshot is the whole display, so it can show customer details and other apps, and a gallery that syncs can upload it.
 
 ## How it works
 
@@ -61,7 +61,7 @@ The full architecture is in [CLAUDE.md](CLAUDE.md) and, in more detail, in [`doc
 - Recognition, offer estimates and every money calculation run on the phone. There is no account, no analytics SDK and no advertising ID.
 - The accessibility service listens only to the delivery apps. A separate permission, Screen events, lets it see which app is in front. You are asked for it first, and you can say no.
 - Your own sensitive screens are dropped without being parsed or saved. That covers banking and DasherDirect balances and transfers, payment screens, your identity documents, the license-scan camera and the signature pad. Until the rules have loaded, every screen is dropped.
-- Customer names and addresses are replaced with a one-way hash before they are saved to your history. gig.log can tell two customers apart but does not keep who they are or where they live.
+- Customer names and addresses are replaced with a one-way hash before they are saved to your history. Your history can tell two customers apart but does not keep who they are or where they live. Screenshots (off by default) and debug-build captures are the exceptions; [PRIVACY.md](PRIVACY.md) explains them.
 - gig.log sends data off the phone only for features you turn on: the daily gas-price lookup (off by default on a new install) and the vehicle lookup in setup (it asks first). Spoken offers go to your phone's text-to-speech engine, which may use the network. Android backup and your own exports can also copy your history. PRIVACY.md lists each one with what is sent.
 - These filters match known layouts on English screens. PRIVACY.md lists what they can miss.
 
@@ -72,9 +72,9 @@ The full architecture is in [CLAUDE.md](CLAUDE.md) and, in more detail, in [`doc
 gig.log is alpha. One developer builds it and tests it on one phone while delivering. Expect screens it does not recognize and changes between builds.
 
 - DoorDash is the platform gig.log is built and field-tested against. Its rules cover offers, pickups, drop-offs, shift start and end, receipts and notifications.
-- Uber has a smaller rule set: the offer card, online and offline screens, trip screens, shift summaries and trip notifications. It has had much less field testing. gig.log cannot yet tell when an Uber offer was accepted ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)). The Uber rules do not point gig.log at Uber's Accept and Decline buttons, so pressing Accept or Decline in gig.log does not tap them in Uber.
+- Uber has a smaller rule set: the offer card, online and offline screens, trip screens, shift summaries and trip notifications. It has had much less field testing. gig.log infers an accepted Uber offer when Uber's trip screen follows the offer, but this detection is incomplete ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)). The Uber rules do not point gig.log at Uber's Accept and Decline buttons, so pressing Accept or Decline in gig.log does not tap them in Uber.
 - Instacart Shopper and Walmart Spark are listed in the code but have no rules, so they are not supported.
-- Recognition expects the delivery app to be in English. In another language, screens go unrecognized and gig.log shows a notice.
+- Recognition expects the delivery app to be in English. In another language, screens go unrecognized. If the phone itself is set to a language other than English, gig.log shows a notice once.
 
 ### Supported apps
 
@@ -86,7 +86,7 @@ None of these are built yet.
 
 - A Google Play release, closed testing first ([#1412](https://github.com/sjtrotter/DashBuddy/issues/1412)), with APKs on the GitHub Releases page ([#1415](https://github.com/sjtrotter/DashBuddy/issues/1415)).
 - A redesign of the history tabs as Home, Recap and Plan ([#1510](https://github.com/sjtrotter/DashBuddy/issues/1510), [#1511](https://github.com/sjtrotter/DashBuddy/issues/1511)).
-- Uber: detecting an accepted offer ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)) and handling several offers shown at once ([#251](https://github.com/sjtrotter/DashBuddy/issues/251)).
+- Uber: completing accepted-offer detection ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)) and handling several offers shown at once ([#251](https://github.com/sjtrotter/DashBuddy/issues/251)).
 - Accept and decline by voice ([#579](https://github.com/sjtrotter/DashBuddy/issues/579)).
 - The rules in their own repository, sent to the app as signed updates, so drivers can choose where their rules come from ([#192](https://github.com/sjtrotter/DashBuddy/issues/192)).
 - Opt-in, anonymized market figures built from many drivers' data ([#193](https://github.com/sjtrotter/DashBuddy/issues/193), [#1137](https://github.com/sjtrotter/DashBuddy/issues/1137)).
@@ -94,7 +94,7 @@ None of these are built yet.
 
 ## Getting a build
 
-No release has been published yet. Each pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/DashBuddy/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>`. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
+No release has been published yet. A pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/DashBuddy/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>` when it runs and passes; a run skipped with the skip-ci token or failed uploads none. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
 
 A debug build is a developer build. It differs from a release build in three ways:
 
